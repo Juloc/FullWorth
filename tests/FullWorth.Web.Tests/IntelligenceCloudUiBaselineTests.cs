@@ -24,7 +24,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
         Assert.DoesNotContain("download-only", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("upload-only", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("/cloud/enable", script);
-        Assert.Contains("/cloud/local-only", script);
+        Assert.Contains("/cloud/disable", script);
     }
 
     [Fact]
@@ -41,16 +41,18 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     }
 
     [Fact]
-    public void Cloud_sync_is_disabled_for_local_only_or_pending_reconsent()
+    public void Minimal_cloud_client_has_no_contribution_sync_or_outbox_ui()
     {
         var html = Read("intelligence", "index.html");
         var script = Read("intelligence", "cloud.js");
 
-        Assert.Contains("id=\"cloud-sync\" class=\"ghost\" type=\"button\" disabled", html);
+        // The self-hosted app ships only the minimal consent/connection client; the contribution
+        // sync + outbox UI lives in the private cloud service, not here.
+        Assert.DoesNotContain("cloud-sync", html);
+        Assert.DoesNotContain("cloud-outbox", html);
+        Assert.DoesNotContain("/cloud/sync", script);
+        Assert.DoesNotContain("/cloud/outbox", script);
         Assert.Contains("state.requiresSetupDecision", script);
-        Assert.Contains("cloudState.mode !== 'enabled'", script);
-        Assert.Contains("/cloud/sync", script);
-        Assert.Contains("/cloud/outbox", script);
     }
 
     [Fact]
