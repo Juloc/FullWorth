@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/FullWorth.Backend/FullWorth.Backend.csproj" />
+  <Project Path="src/FullWorth.Banking/FullWorth.Banking.csproj" />
+  <Project Path="src/FullWorth.Web/FullWorth.Web.csproj" />
+  <Project Path="tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj" />
+  <Project Path="tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj" />
+  <Project Path="tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj" />
+</Solution>

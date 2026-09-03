@@ -1,0 +1,557 @@
+import { money, converted, maskIdentifier, setMoneyLocale } from './ui/money.js';
+import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault, setPrivacyDefault } from './ui/privacy.js';
+import { confirmDialog } from './ui/confirm.js';
+import { initLock, openPinDialog } from './ui/lock.js';
+import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
+import { renderTransactions, bindTransactions } from './features/transactions.js';
+import { renderCategories, bindCategories } from './features/categories.js';
+import { renderRules, bindRules, newRule } from './features/rules.js';
+import { renderContracts, bindContracts, newContract } from './features/contracts.js';
+import { renderNetWorth, bindNetWorth, newAsset } from './features/networth.js';
+import { renderNotifications } from './features/notifications.js';
+import { renderLoans, bindLoans } from './features/loans.js';
+import { renderAnalytics, bindAnalytics } from './features/analytics.js';
+import { renderPurchases, bindPurchases } from './features/purchases.js';
+import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
+import { renderAudit, bindAudit } from './features/audit.js';
+import { renderSharing, bindSharing } from './features/sharing.js';
+
+const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null};
+// Mobile bottom nav shows exactly these four + "More" (UI_UX_SPEC §3.2); everything else lives in More.
+const MOBILE_PRIMARY=['dashboard','transactions','budgets','networth'];
+const ALL_VIEWS=['dashboard','transactions','accounts','budgets','contracts','networth','analytics','purchases','categories','rules','notifications','merchants','audit','settings'];
+const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
+// §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
+// only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
+// any of these paths and the app resolves the view from location.pathname on boot.
+const VIEW_PATH={dashboard:'/'};ALL_VIEWS.forEach(v=>{if(v!=='dashboard')VIEW_PATH[v]='/'+v});
+const pathForView=v=>VIEW_PATH[v]||'/';
+function viewFromPath(p){const seg=(p||'/').replace(/^\/+|\/+$/g,'').split('/')[0];return seg&&ALL_VIEWS.includes(seg)?seg:'dashboard'}
+// Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
+// in-page add control so there is a single code path.
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+const media=matchMedia('(prefers-color-scheme: dark)');
+const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
+
+async function boot(){
+  setMoneyLocale(state.lang);
+  $('#theme').value=state.theme;$('#language').value=state.lang;applyTheme();
+  await loadMessages();bind();syncPrivacyToggle();syncNavToggle();
+  const startView=handleConnectRedirect()||viewFromPath(location.pathname);
+  try{await loadSpaces()}catch(e){console.error(e);toast(get('common.error'))}
+  await showView(startView,{replace:true});
+  // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
+  initLock(ctx,{onUnlock:loadCurrent});
+}
+function handleConnectRedirect(){
+  const params=new URLSearchParams(location.search);
+  const connected=params.get('bankConnected');const error=params.get('bankError');
+  if(!connected&&!error)return null;
+  history.replaceState(null,'',location.pathname);
+  if(connected){toast(get('accounts.connected').replace('{name}',()=>connected),6000);return'accounts'}
+  const known={access_denied:'accounts.connectCancelled',app_invalid_callback:'accounts.connectExpired',app_not_configured:'accounts.notConfigured',app_missing_parameters:'accounts.connectFailed'};
+  toast(get(known[error]||'accounts.connectFailed'),8000);
+  return'accounts';
+}
+function get(path){return path.split('.').reduce((o,k)=>o?.[k],state.messages)||path}
+async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
+function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));
+  // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
+  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
+function renderPageHeader(){
+  const p=state.messages.pages?.[state.view];
+  if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle}
+  const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
+  if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
+}
+function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual}
+async function loadSpaces(){
+  const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
+  const saved=localStorage.getItem('finance.space');
+  state.space=state.spaces.find(s=>s.id===saved)||state.spaces[0]||null;
+  if(state.space)localStorage.setItem('finance.space',state.space.id);
+  renderUserBlock();
+  invalidateLayout(); // dashboard layout is per space
+}
+// Sidebar foot: current space name, currency and an avatar initial (§3.1 user block).
+function renderUserBlock(){
+  const sp=state.space;
+  $('#user-space-name').textContent=sp?.name||'';
+  $('#user-space-sub').textContent=sp?.baseCurrency||'';
+  $('#user-avatar').textContent=(sp?.name||'F').trim().charAt(0).toUpperCase()||'F';
+}
+function bind(){
+  $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
+  $('#theme').addEventListener('change',e=>{state.theme=e.target.value;localStorage.setItem('finance.theme',state.theme);applyTheme()});
+  // Sidebar light/dark toggle: flips the effective theme and keeps the Settings select in sync.
+  $('#theme-toggle')?.addEventListener('click',()=>{const effective=state.theme==='system'?(media.matches?'dark':'light'):state.theme;state.theme=effective==='dark'?'light':'dark';localStorage.setItem('finance.theme',state.theme);applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
+  media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
+  // `.sidebar button[data-view]` covers both #nav and the sidebar-foot (Settings) entry, so Settings
+  // is reachable on desktop; #bottom-nav is the mobile bar.
+  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+  // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
+  window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
+  $('#bottom-more').addEventListener('click',openMoreSheet);
+  $('#nav-collapse').addEventListener('click',toggleSidebar);
+  $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
+  $('#global-search').addEventListener('click',openSearch);
+  $$('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewJump)));
+  $('#refresh').addEventListener('click',loadCurrent);
+  bindTransactions(ctx);
+  $('#add-account').addEventListener('click',openAddAccountDialog);
+  $('#add-group')?.addEventListener('click',()=>openGroupDialog());
+  $('[data-action="new-budget"]').addEventListener('click',openBudgetDialog);
+  bindContracts(ctx);
+  bindNetWorth(ctx);
+  bindLoans(ctx);
+  bindAnalytics(ctx);
+  $('[data-action="new-category"]').addEventListener('click',openCategoryDialog);
+  bindCategories(ctx);
+  bindRules(ctx);
+  bindPurchases(ctx);
+  bindMerchants(ctx);
+  bindAudit(ctx);
+  bindSharing(ctx);
+  $('#export-data')?.addEventListener('click',downloadExport);
+  bindDashboard(ctx);
+  $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
+  $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
+  // Re-render on privacy change so every value on the current screen re-masks via the shared path.
+  onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
+  // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
+  document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
+}
+function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());$('#privacy-default').checked=privacyDefault()}
+function toggleSidebar(){const collapsed=!document.body.classList.contains('nav-collapsed');document.body.classList.toggle('nav-collapsed',collapsed);localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');syncNavToggle()}
+// Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
+function syncNavToggle(){const b=$('#nav-collapse');if(!b)return;const collapsed=document.body.classList.contains('nav-collapsed');b.textContent=collapsed?'›':'‹';const label=get(collapsed?'nav.expand':'nav.collapse');b.setAttribute('aria-label',label);b.title=label}
+async function showView(view,opts={}){
+  state.view=view;
+  // Keep the URL in sync so a reload/deep-link lands on this screen and Back/Forward work.
+  const path=pathForView(view);
+  if(!opts.fromHistory){
+    if(opts.replace||location.pathname===path)history.replaceState({view},'',path);
+    else history.pushState({view},'',path);
+  }
+  $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
+  $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  $$('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  $('#bottom-more').classList.toggle('active',MORE_VIEWS.includes(view));
+  renderPageHeader();await loadCurrent();
+}
+async function loadCurrent(){
+  try{
+    if(!state.space){await loadSpaces();if(!state.space){toast(get('common.error'));return}}
+    switch(state.view){
+      case'dashboard':return await loadDashboard();
+      case'transactions':return await renderTransactions(ctx);
+      case'accounts':return await loadAccountsView();
+      case'budgets':return await loadBudgets();
+      case'contracts':return await renderContracts(ctx);
+      case'networth':await renderNetWorth(ctx);return await renderLoans(ctx);
+      case'analytics':return await renderAnalytics(ctx);
+      case'purchases':return await renderPurchases(ctx);
+      case'categories':return await renderCategories(ctx);
+      case'rules':return await renderRules(ctx);
+      case'notifications':return await renderNotifications(ctx);
+      case'merchants':return await renderMerchants(ctx);
+      case'audit':return await renderAudit(ctx);
+      case'settings':return loadSettings();
+    }
+  }catch(e){console.error(e);toast(get('common.error'))}
+}
+async function fail(r){let message=`${r.status}`;try{const body=await r.json();message=body.message||body.error||body.title||message}catch{}throw new Error(message)}
+function withSpace(path){
+  if(!state.space)return path;
+  const [base,query='']=path.split('?');
+  const params=new URLSearchParams(query);
+  if(params.has('fullWorthSpaceId'))return path;
+  params.set('fullWorthSpaceId',state.space.id);
+  return `${base}?${params}`;
+}
+async function api(path,options){const r=await fetch(`/bff/backend/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
+async function bankApi(path,options){const r=await fetch(`/bff/banking/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
+const jsonBody=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
+function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(message||get('common.empty'))}</div></div>`}
+function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar"></div><div class="skel-bar short"></div></div>`).join('')}
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function acctId(last4){return last4?` · ${maskIdentifier(last4)}`:''}
+function toast(text,duration){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),duration||3200)}
+function dialog(html){const dlg=document.createElement('dialog');dlg.innerHTML=html;document.body.appendChild(dlg);dlg.addEventListener('close',()=>dlg.remove());return dlg}
+// §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
+// category under multiple parents with the same name is still distinguishable at a glance.
+async function categoryOptions(selected){const categories=await api('api/categories');const byId=new Map(categories.map(c=>[c.id,c]));const path=c=>{const chain=[];let cur=c;while(cur){chain.unshift(cur.name);cur=cur.parentId?byId.get(cur.parentId):null}return chain.join(' › ')};return categories.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${esc(path(c))}</option>`).join('')}
+
+function openMoreSheet(){
+  const items=MORE_VIEWS.map(view=>{
+    const source=$(`.sidebar button[data-view="${view}"]`);
+    const icon=source?source.querySelector('svg').outerHTML:'';
+    return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(get(`nav.${view}`))}</span></button>`;
+  }).join('');
+  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`);
+  dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
+  dlg.showModal();
+}
+
+// Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
+async function openSearch(){
+  const dlg=dialog(`<form method="dialog" class="dialog-card search-dialog"><div class="panel-head"><h2>${esc(get('search.title'))}</h2><button value="cancel" data-close>×</button></div><input id="search-input" type="search" autocomplete="off" data-i18n-placeholder="search.placeholder" placeholder="${esc(get('search.placeholder'))}"><div id="search-results" class="rows"></div></form>`);
+  const input=dlg.querySelector('#search-input');const results=dlg.querySelector('#search-results');
+  let timer;
+  input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>runSearch(input.value.trim(),results,dlg),220)});
+  dlg.addEventListener('close',()=>{});dlg.showModal();input.focus();
+}
+async function runSearch(query,results,dlg){
+  if(query.length<2){results.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(get('search.hint'))}</div></div>`;return}
+  skeleton(results,3);
+  try{
+    const [tx,accounts,categories,contracts,purchases,assets]=await Promise.all([
+      api(`api/transactions?limit=8&query=${encodeURIComponent(query)}`).catch(()=>({items:[]})),
+      api('api/accounts').catch(()=>[]),
+      api('api/categories').catch(()=>[]),
+      api('api/contracts').catch(()=>[]),
+      api('api/purchases').catch(()=>[]),
+      api('api/assets').catch(()=>[])]);
+    const q=query.toLowerCase();
+    const groups=[
+      [get('search.transactions'),(tx.items||[]).map(x=>({title:x.counterparty||'—',sub:`${date(x.bookingDate)} · ${money(x.amount,x.currency)}`,go:'transactions'}))],
+      [get('search.accounts'),(accounts||[]).filter(x=>(x.displayName||x.institutionName||'').toLowerCase().includes(q)).map(x=>({title:x.displayName||x.institutionName,sub:x.institutionName,go:'accounts'}))],
+      [get('nav.categories'),(categories||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:'',go:'categories'}))],
+      [get('nav.contracts'),(contracts||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.amount,x.currency),go:'contracts'}))],
+      [get('nav.purchases'),(purchases||[]).filter(x=>(x.merchant||x.externalOrderId||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.merchant||x.externalOrderId||'—',sub:`${date(x.purchaseDate)} · ${money(x.totalAmount,x.currency)}`,go:'purchases'}))],
+      [get('portfolio.assets'),(assets||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.currentValue,x.currency),go:'networth'}))],
+    ].filter(([,items])=>items.length);
+    if(!groups.length){empty(results,get('search.none'));return}
+    results.innerHTML=groups.map(([label,items])=>`<div class="search-group">${esc(label)}</div>`+items.map(i=>`<button type="button" class="row search-hit" data-go="${i.go}"><div class="row-main"><div class="row-title">${esc(i.title)}</div>${i.sub?`<div class="row-sub">${esc(i.sub)}</div>`:''}</div></button>`).join('')).join('');
+    results.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
+  }catch(err){empty(results,err.message||get('common.error'))}
+}
+
+// Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
+// app's single api()/formatting/dialog path instead of duplicating it.
+const ctx={$,$$,api,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`};
+async function loadDashboard(){await renderDashboard(ctx)}
+
+async function loadBudgets(){
+  const currency=state.space?.baseCurrency||'EUR';
+  const status=await api('api/analytics/budget-status');
+  const items=status.items||[];
+  const totalBudgeted=items.reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalSpent=items.reduce((s,x)=>s+Number(x.spent||0),0);
+  $('#budget-total').textContent=money(totalBudgeted,currency);
+  $('#budget-spent').textContent=money(totalSpent,currency);
+  $('#budget-remaining').textContent=money(totalBudgeted-totalSpent,currency);
+  const el=$('#budgets-list');el.innerHTML='';
+  if(!items.length){empty(el);return}
+  for(const x of items){
+    const pct=Math.max(0,Number(x.percent||0));
+    const clamped=Math.min(100,pct);
+    // Status from usage: over (>100), near (>=85), on track (§12.2).
+    const status=pct>100?'over':pct>=85?'near':'ontrack';
+    const cycleLabel=x.period&&x.period!=='monthly'?`${esc(get('budgets.period_'+x.period)||x.period)} · ${date(x.periodStart)}–${date(x.periodEnd)} · `:'';
+    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
+  }
+  // §18: flag when some spend was in a currency with no conversion rate (excluded from the figures).
+  if(status.incomplete)el.insertAdjacentHTML('afterbegin',`<div class="fx-incomplete">${esc(get('common.fxIncomplete'))}</div>`);
+  // Set bar widths via JS (avoids a source inline style; keeps the CSP inline-style budget at one).
+  el.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  // §12: each card opens the budget detail (window, forecast, contributing transactions).
+  el.querySelectorAll('.budget-card[data-id]').forEach(card=>{
+    const open=()=>openBudgetDetail(card.dataset.id);
+    card.addEventListener('click',open);
+    card.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open()}});
+  });
+}
+// §12 budget detail: cycle window, spend vs. budget, cycle-end forecast, and the transactions
+// contributing to this cycle. Reuses the shared api()/money()/dialog() path.
+async function openBudgetDetail(id){
+  let s;
+  try{s=await api(`api/budgets/${id}/status`)}catch(err){toast(err.message||get('common.error'));return}
+  if(!s){toast(get('common.error'));return}
+  const currency=s.currency||state.space?.baseCurrency||'EUR';
+  const pct=Math.max(0,Number(s.percentUsed||0));
+  const clamped=Math.min(100,pct);
+  const barStatus=pct>100?'over':pct>=85?'near':'ontrack';
+  // Hatched forecast segment = projected end-of-cycle spend beyond what's already spent (capped at 100%).
+  const projectedPct=Number(s.budgetAmount)>0?(Number(s.projectedEndSpend||0)/Number(s.budgetAmount))*100:0;
+  const forecastPct=Math.max(0,Math.min(100,projectedPct)-clamped);
+  const trend=(s.trend||'NoData');
+  const trendKey='budgets.trend_'+trend.toLowerCase();
+  const projOverUnder=Number(s.projectedOverUnder||0);
+  // Colour is reserved for money statements (design rule): the forecast figures carry sentiment,
+  // the trend text stays neutral (the % pill already signals status at a glance).
+  const forecastLine=trend==='NoData'?'':`<div class="budget-detail-forecast"><div class="kv"><span>${esc(get('budgets.projectedEnd'))}</span><strong class="amount">${money(s.projectedEndSpend,currency)}</strong></div><div class="kv"><span>${esc(get(projOverUnder>0?'budgets.projectedOver':'budgets.projectedUnder'))}</span><strong class="amount ${projOverUnder>0?'negative':'positive'}">${money(Math.abs(projOverUnder),currency)}</strong></div></div>`;
+  const rows=(s.contributing||[]).map(t=>`<div class="row"><div class="row-main"><div class="row-title">${esc(t.counterparty||'—')}</div><div class="row-sub">${t.bookingDate?date(t.bookingDate):''}${t.category?` · ${esc(t.category)}`:''}</div></div><div class="amount negative">${money(-Math.abs(Number(t.amount||0)),t.currency||currency)}</div></div>`).join('');
+  const cycleLabel=s.period&&s.period!=='monthly'?`${esc(get('budgets.period_'+s.period)||s.period)} · `:'';
+  const dlg=dialog(`<div class="dialog-card budget-detail">
+    <div class="panel-head"><h2>${esc(s.name)}</h2><div class="panel-head-actions"><button type="button" class="ghost" data-edit>${esc(get('common.edit'))}</button><button data-close aria-label="${esc(get('common.close'))}">×</button></div></div>
+    <div class="row-sub">${cycleLabel}${date(s.periodStart)}–${date(s.periodEnd)}</div>
+    <div class="budget-detail-stats">
+      <div class="kv"><span>${esc(get('budgets.spent'))}</span><strong class="amount">${money(s.spent,currency)}</strong></div>
+      <div class="kv"><span>${esc(get('budgets.budget'))}</span><strong class="amount">${money(s.budgetAmount,currency)}</strong></div>
+      <div class="kv"><span>${esc(get('budgets.remaining'))}</span><strong class="amount${Number(s.remaining)<0?' negative':''}">${money(s.remaining,currency)}</strong></div>
+    </div>
+    <div class="progress ${barStatus}"><span data-w="${clamped}"></span><span class="forecast" data-w="${forecastPct}"></span></div>
+    <div class="budget-detail-trend"><span class="budget-status ${barStatus}">${esc(Math.round(pct))}%</span><span>${esc(get(trendKey))}</span></div>
+    ${forecastLine}
+    <div class="row-group">${esc(get('budgets.contributing'))}</div>
+    <div class="budget-detail-rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('common.empty'))}</div></div>`}</div>
+  </div>`);
+  dlg.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  dlg.querySelector('[data-close]').addEventListener('click',()=>dlg.close());
+  dlg.querySelector('[data-edit]').addEventListener('click',()=>openBudgetEdit(s.budgetId,()=>dlg.close()));
+  dlg.showModal();
+}
+function renderRows(el,rows,map){el.innerHTML='';for(const x of rows||[]){const [title,sub,value]=map(x);el.insertAdjacentHTML('beforeend',`<div class="row"><div class="row-main"><div class="row-title">${esc(title)}</div><div class="row-sub">${esc(sub)}</div></div><div class="amount">${esc(value)}</div></div>`)}if(!(rows||[]).length)empty(el)}
+
+
+const ACCT_TRASH='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
+const ACCT_EDIT='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
+const ACCT_FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4Z"/></svg>';
+function accountRow(x,groups){
+  const isManual=x.provider==='manual'&&!x.bankConnectionId;
+  const kind=[x.product||x.accountType,isManual?get('accounts.manual'):null].filter(Boolean).join(' · ');
+  const nativeAmt=x.latestBalance?money(x.latestBalance.amount,x.latestBalance.currency):'—';
+  const convertedAmt=x.baseValue!=null?`<div class="amount-converted">${converted(x.baseValue,x.baseCurrency)}</div>`:'';
+  const row=document.createElement('div');row.className='row';
+  // The "move to group" affordance only appears once at least one group exists (otherwise the dialog
+  // would be a dead end offering only "Ungrouped").
+  const moveBtn=(groups||[]).length?`<button type="button" class="icon-button" data-move title="${esc(get('accounts.moveToGroup'))}" aria-label="${esc(get('accounts.moveToGroup'))}">${ACCT_FOLDER}</button>`:'';
+  const renameBtn=`<button type="button" class="icon-button" data-rename-account title="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}" aria-label="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}">${ACCT_EDIT}</button>`;
+  const balanceBtn=isManual?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
+  const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}</div>`;
+  row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
+  row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
+  row.querySelector('[data-edit-balance]')?.addEventListener('click',()=>openBalanceDialog(x));
+  row.querySelector('[data-delete]')?.addEventListener('click',()=>deleteAccount(x));
+  return row;
+}
+async function loadAccountsView(){
+  const [accounts,connections,groups]=await Promise.all([api('api/accounts'),api('api/bank-connections'),api('api/account-groups').catch(()=>[])]);
+  const list=$('#accounts-view-list');list.innerHTML='';
+  // Archived accounts (IsActive=false, e.g. a deleted manual account) are hidden from the list.
+  const visibleAccounts=(accounts||[]).filter(a=>a.isActive!==false);
+  const groupList=(groups||[]).slice().sort((a,b)=>(a.sortOrder-b.sortOrder)||a.name.localeCompare(b.name));
+  const baseCur=state.space?.baseCurrency||'EUR';
+  const collapsed=new Set(JSON.parse(localStorage.getItem('finance.groupsCollapsed')||'[]'));
+  const byGroup=new Map();
+  for(const a of visibleAccounts){const k=a.groupId||'';if(!byGroup.has(k))byGroup.set(k,[]);byGroup.get(k).push(a);}
+  // Group subtotal in the base currency: use the converted baseValue for foreign accounts, the native
+  // amount for base-currency accounts, and EXCLUDE a foreign account with no FX rate (baseValue null)
+  // rather than adding its foreign figure into a base-currency total.
+  const total=accts=>accts.reduce((s,a)=>a.baseValue!=null?s+Number(a.baseValue):(a.latestBalance&&a.latestBalance.currency===baseCur?s+Number(a.latestBalance.amount):s),0);
+  // Group header (g=null → the "Ungrouped" bucket). Collapse state persists in localStorage.
+  const renderBucket=(g,accts)=>{
+    const gid=g?g.id:'';const isCollapsed=collapsed.has(gid);
+    const head=document.createElement('div');head.className='row group-head';
+    head.innerHTML=`<div class="row-main"><button type="button" class="group-toggle" data-toggle>${isCollapsed?'▸':'▾'} ${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${money(total(accts),baseCur)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
+    head.querySelector('[data-toggle]').addEventListener('click',()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));loadAccountsView();});
+    head.querySelector('[data-rename]')?.addEventListener('click',()=>openGroupDialog(g));
+    head.querySelector('[data-delgroup]')?.addEventListener('click',()=>deleteGroup(g));
+    list.appendChild(head);
+    if(!isCollapsed)for(const a of accts)list.appendChild(accountRow(a,groupList));
+  };
+  if(!groupList.length){
+    // No groups defined: keep the flat list (unchanged for users who don't use groups).
+    for(const x of visibleAccounts)list.appendChild(accountRow(x,groupList));
+  }else{
+    for(const g of groupList)renderBucket(g,byGroup.get(g.id)||[]);
+    const ungrouped=byGroup.get('')||[];
+    if(ungrouped.length)renderBucket(null,ungrouped);
+  }
+  if(!visibleAccounts.length)empty(list);
+  const conns=$('#connections-list');conns.innerHTML='';
+  for(const x of connections||[]){
+    const health=x.healthStatus||'authorized';
+    const label=get(`accounts.health_${health}`);
+    const warn=['reauthorization_required','expired','error'].includes(health);
+    const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
+    const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${date(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${date(x.lastSyncedAt)}${esc(expiry)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+    row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
+    row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
+    row.querySelector('[data-disconnect]').addEventListener('click',ev=>disconnectConnection(x,ev.currentTarget));
+    conns.appendChild(row);
+  }
+  if(!(connections||[]).length)empty(conns);
+}
+async function syncConnection(id,button){
+  if(button)button.disabled=true;
+  try{
+    const r=await bankApi(`api/banking/connections/${id}/sync?force=true`,{method:'POST'});
+    const status=(r&&r.status)||'started';
+    const messages={started:'accounts.syncStarted',already_running:'accounts.syncRunning',cooldown:'accounts.syncCooldown',reauthorization_required:'accounts.syncReauth'};
+    toast(get(messages[status]||'accounts.syncStarted'));
+    await loadCurrent();
+  }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
+}
+function openAccountNameDialog(account){
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('common.edit'))}: ${esc(get('accounts.name'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" value="${esc(account.displayName||account.institutionName||'')}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const displayName=String(new FormData(e.currentTarget).get('name')||'').trim();
+    try{
+      await api(`api/accounts/${account.id}`,{...jsonBody({displayName,isActive:null,includeInNetWorth:null,sortOrder:null}),method:'PATCH'});
+      dlg.close();toast(get('common.saved'));await loadAccountsView();
+    }catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+// Delete (archive) a manual account; it then disappears from the list (archived accounts are hidden).
+async function deleteAccount(account){
+  const name=account.displayName||account.institutionName;
+  if(!await ctx.confirm(get('accounts.deleteConfirm').replace('{name}',()=>name),{destructive:true,confirmLabel:get('accounts.delete')}))return;
+  try{await api(`api/accounts/${account.id}`,{method:'DELETE'});toast(get('accounts.deleted'));await loadAccountsView()}
+  catch(err){toast(err.message||get('common.error'))}
+}
+// Create or rename an account group (§8.1).
+async function openGroupDialog(existing){
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get(existing?'accounts.renameGroup':'accounts.newGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groupName'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const name=new FormData(e.currentTarget).get('name');
+    try{
+      if(existing)await api(`api/account-groups/${existing.id}`,{...jsonBody({name,sortOrder:existing.sortOrder}),method:'PUT'});
+      else await api('api/account-groups',jsonBody({name,sortOrder:null}));
+      dlg.close();toast(get('common.saved'));await loadAccountsView();
+    }catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+async function deleteGroup(g){
+  if(!await ctx.confirm(get('accounts.deleteGroupConfirm').replace(/\{name\}/g,()=>g.name),{destructive:true,confirmLabel:get('accounts.deleteGroup')}))return;
+  try{await api(`api/account-groups/${g.id}`,{method:'DELETE'});toast(get('accounts.groupDeleted'));await loadAccountsView()}
+  catch(err){toast(err.message||get('common.error'))}
+}
+// Move an account into a group (or "Ungrouped" = clear). Owner-gated server-side.
+function openMoveToGroupDialog(account,groups){
+  const opts=[`<option value="">${esc(get('accounts.ungrouped'))}</option>`].concat((groups||[]).map(g=>`<option value="${g.id}"${account.groupId===g.id?' selected':''}>${esc(g.name)}</option>`)).join('');
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.moveToGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groups'))}<select name="group">${opts}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const groupId=new FormData(e.currentTarget).get('group')||null;
+    try{await api(`api/accounts/${account.id}/group`,{...jsonBody({groupId}),method:'PUT'});dlg.close();await loadAccountsView()}
+    catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+// Disconnect a bank: permanently deletes the connection and all of its synced accounts + data.
+async function disconnectConnection(connection,button){
+  if(!await ctx.confirm(get('accounts.disconnectConfirm').replace('{name}',()=>connection.institutionName),{destructive:true,confirmLabel:get('accounts.disconnect')}))return;
+  if(button)button.disabled=true;
+  try{await api(`api/bank-connections/${connection.id}`,{method:'DELETE'});toast(get('accounts.disconnected'));await loadAccountsView()}
+  catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
+}
+// §17: re-authorizes an expired/errored connection IN PLACE (reconnectConnectionId) instead of
+// creating a duplicate connection for the same institution.
+async function reconnectConnection(connection,button){
+  if(button)button.disabled=true;
+  try{
+    const result=await bankApi('api/banking/connect',jsonBody({institutionName:connection.institutionName,country:connection.country||'DE',validDays:180,authMethod:null,psuId:null,credentials:null,reconnectConnectionId:connection.id}));
+    location.href=result.authorizationUrl;
+  }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
+}
+function openAddAccountDialog(){
+  const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.add'))}</h2><button value="cancel" data-close>×</button></div><div class="choice-grid"><button type="button" data-choice="bank"><strong>${esc(get('accounts.addBank'))}</strong><span>${esc(get('accounts.addBankHint'))}</span></button><button type="button" data-choice="manual"><strong>${esc(get('accounts.addManual'))}</strong><span>${esc(get('accounts.addManualHint'))}</span></button></div></form>`);
+  dlg.querySelector('[data-choice="bank"]').addEventListener('click',async()=>{dlg.close();await openBankDialog()});
+  dlg.querySelector('[data-choice="manual"]').addEventListener('click',()=>{dlg.close();openManualAccountDialog()});
+  dlg.showModal();
+}
+function openManualAccountDialog(){
+  const currency=state.space?.baseCurrency||'EUR';
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.addManual'))}</h2><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" placeholder="${esc(get('accounts.namePlaceholder'))}"></label><label>${esc(get('accounts.institution'))}<input name="institution" maxlength="120" placeholder="${esc(get('accounts.institutionPlaceholder'))}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('accounts.startBalance'))}<input name="balance" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    if(!state.space){toast(get('common.error'));return}
+    try{
+      await api('api/accounts',jsonBody({fullWorthSpaceId:state.space.id,bankConnectionId:null,displayName:fd.get('name'),currency:fd.get('currency'),includeInNetWorth:true,sortOrder:0,institutionName:fd.get('institution')||null,initialBalance:fd.get('balance')===''?null:Number(fd.get('balance'))}));
+      dlg.close();toast(get('accounts.created'));await loadAccountsView();
+    }catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+function openBalanceDialog(account){
+  const current=account.latestBalance?account.latestBalance.amount:'';
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.updateBalance'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div><label>${esc(get('accounts.newBalance'))} (${esc(account.currency)})<input name="amount" type="number" step="0.01" inputmode="decimal" value="${current}" required></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.apply'))}</button></div></form>`);
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    try{await api(`api/accounts/${account.id}/balance`,{...jsonBody({amount:Number(fd.get('amount')),currency:null}),method:'PUT'});dlg.close();toast(get('accounts.balanceUpdated'));await loadAccountsView()}catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+
+// Create OR edit a budget: pass the existing budget object to pre-fill + switch to PUT, with a delete
+// action. Called with no argument for the "+ new budget" flow.
+async function openBudgetDialog(existing){
+  const currency=existing?.currency||state.space?.baseCurrency||'EUR';
+  let options;try{options=await categoryOptions(existing?.categoryId||undefined)}catch(err){toast(err.message||get('common.error'));return}
+  const periods=['monthly','weekly','biweekly','paycycle'].map(p=>`<option value="${p}"${existing?.period===p?' selected':''}>${esc(get(`budgets.period_${p}`))}</option>`).join('');
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get(existing?'budgets.edit':'budgets.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><label>${esc(get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${existing?esc(String(existing.amount)):''}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('budgets.period'))}<select name="period">${periods}</select></label><label>${esc(get('transactions.category'))}<select name="category"><option value="">${esc(get('common.all'))}</option>${options}</select></label><label class="check"><input name="carryOver" type="checkbox"${existing?.carryOver?' checked':''}>${esc(get('budgets.carryOver'))}</label><div class="dialog-actions">${existing?`<button type="button" class="ghost danger" data-delete>${esc(get('common.delete'))}</button>`:''}<button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-delete]')?.addEventListener('click',async()=>{
+    if(!await ctx.confirm(get('budgets.deleteConfirm').replace('{name}',()=>existing.name),{destructive:true,confirmLabel:get('common.delete')}))return;
+    try{await api(`api/budgets/${existing.id}`,{method:'DELETE'});dlg.close();toast(get('common.deleted'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
+  });
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    const body=jsonBody({name:fd.get('name'),categoryId:fd.get('category')||null,amount:Number(fd.get('amount')),currency:fd.get('currency'),period:fd.get('period'),carryOver:fd.get('carryOver')==='on',isActive:true,startDate:null,endDate:null});
+    try{await api(existing?`api/budgets/${existing.id}`:'api/budgets',existing?{...body,method:'PUT'}:body);dlg.close();toast(get('common.saved'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+async function openBudgetEdit(id,closeDrawer){
+  let budget;try{budget=await api(`api/budgets/${id}`)}catch(err){toast(err.message||get('common.error'));return}
+  closeDrawer?.();
+  openBudgetDialog(budget);
+}
+async function openCategoryDialog(){
+  let options;try{options=await categoryOptions()}catch(err){toast(err.message||get('common.error'));return}
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('categories.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120"></label><label>${esc(get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label><label>${esc(get('categories.parent'))}<select name="parent"><option value="">${esc(get('categories.topLevel'))}</option>${options}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    const name=fd.get('name').trim();const key=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||`cat-${Date.now()}`;
+    try{await api('api/categories',jsonBody({key,name,parentId:fd.get('parent')||null,icon:fd.get('icon')||null,sortOrder:null}));dlg.close();toast(get('common.saved'));await loadCategories()}catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+
+
+async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await renderSharing(ctx)}
+// Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
+// fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
+// which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
+async function downloadExport(){
+  const btn=$('#export-data');if(btn)btn.disabled=true;
+  try{
+    const r=await fetch(`/bff/backend/${withSpace('api/export/snapshot')}`);
+    if(!r.ok)await fail(r);
+    const blob=await r.blob();const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`finance-export-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    toast(get('export.done'));
+  }catch(err){toast(err.message||get('common.error'))}
+  finally{if(btn)btn.disabled=false}
+}
+
+async function openBankDialog(){
+  try{
+    const status=await bankApi('api/banking/status');
+    if(!status?.configured){toast(get('accounts.notConfigured'));return}
+  }catch(err){toast(err.message||get('common.error'));return}
+  let data;
+  try{data=await bankApi('api/banking/institutions?country=DE')}catch(err){toast(err.message||get('common.error'));return}
+  const banks=(data.aspsps||[]).sort((a,b)=>a.name.localeCompare(b.name));
+  const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.addBank'))}</h2><button value="cancel">×</button></div><input id="bank-search" type="search" placeholder="Bank"><div id="bank-options" class="bank-options"></div></form>`);
+  const box=dlg.querySelector('#bank-options');const draw=filter=>{box.innerHTML='';for(const bank of banks.filter(x=>!filter||x.name.toLowerCase().includes(filter.toLowerCase())).slice(0,80)){const b=document.createElement('button');b.type='button';b.textContent=bank.name;b.onclick=async()=>{try{const result=await bankApi('api/banking/connect',jsonBody({institutionName:bank.name,country:'DE',validDays:180,authMethod:null,psuId:null,credentials:null}));location.href=result.authorizationUrl}catch(err){toast(err.message||get('common.error'))}};box.appendChild(b)}};draw('');dlg.querySelector('#bank-search').oninput=e=>draw(e.target.value);dlg.showModal();
+}
+
+if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
+boot();

@@ -1,0 +1,10 @@
+.pi-analytics-filter{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.pi-analytics-filter label{display:grid;gap:4px;font-size:.8rem}
+.pi-analytics-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.pi-analytics-cards>div{padding:13px;border:1px solid var(--border,#d8d8d8);border-radius:12px}
+.pi-analytics-cards span{display:block;font-size:.76rem;opacity:.66}
+.pi-analytics-cards strong{display:block;margin-top:5px;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.pi-analytics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pi-analytics-note{margin:10px 0}
+@media(max-width:720px){.pi-analytics-cards,.pi-analytics-grid{grid-template-columns:1fr 1fr}.pi-analytics-filter>*{flex:1 1 130px}}
+@media(max-width:480px){.pi-analytics-cards,.pi-analytics-grid{grid-template-columns:1fr}}

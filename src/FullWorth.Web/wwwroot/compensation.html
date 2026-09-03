@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f6f7">
+  <title>Gehalt & Benefits · FullWorth</title>
+  <script src="/theme-init.js"></script>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/design-depth.css">
+  <link rel="stylesheet" href="/compensation.css">
+</head>
+<body class="comp-body">
+  <header class="comp-topbar">
+    <a class="comp-back" href="/" aria-label="Zurück zu FullWorth">←</a>
+    <div class="comp-brand"><span class="brand-mark">FW</span><div><strong>FullWorth</strong><small>Gehalt & Benefits</small></div></div>
+    <div class="comp-top-actions">
+      <label class="comp-space-label">Finanzbereich <select id="space-select"></select></label>
+      <button id="save-profile" class="primary-action" type="button">Profil speichern</button>
+    </div>
+  </header>
+
+  <main class="comp-shell">
+    <section class="comp-hero">
+      <div>
+        <p class="eyebrow">Vergütung verstehen</p>
+        <h1>Was ist dein Gehalt wirklich wert?</h1>
+        <p>Netto, Arbeitgeberkosten, Firmenwagen, bAV, Benefits und Kaufkraft in einer Rechnung.</p>
+      </div>
+      <div class="comp-hero-note">Planungsrechnung für Deutschland · Steuerjahr 2026</div>
+    </section>
+
+    <nav class="comp-tabs" aria-label="Bereiche">
+      <button class="active" data-tab="calculator" type="button">Rechner</button>
+      <button data-tab="benefits" type="button">Benefits</button>
+      <button data-tab="negotiation" type="button">Gehaltsgespräch</button>
+      <button data-tab="scenarios" type="button">Szenarien</button>
+    </nav>
+
+    <section id="tab-calculator" class="comp-tab active">
+      <div class="comp-layout">
+        <div class="comp-form-stack">
+          <article class="panel comp-card">
+            <div class="panel-head"><div><span class="step">1</span><h2>Gehalt</h2></div></div>
+            <div class="form-grid">
+              <label>Name<input id="profile-name" value="Aktuelles Gehalt"></label>
+              <label>Jahresbrutto<input id="annual-gross" type="number" min="0" step="100" value="60000"></label>
+              <label>Bonus pro Jahr<input id="annual-bonus" type="number" min="0" step="100" value="0"></label>
+              <label>Steuerklasse<select id="tax-class"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+              <label>Bundesland<select id="state-code">
+                <option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option>
+              </select></label>
+              <label>GKV Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"></label>
+              <label>Kinder unter 25<input id="children" type="number" min="0" max="10" step="1" value="0"></label>
+              <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"></label>
+              <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"></label>
+            </div>
+            <div class="check-row">
+              <label><input id="church-tax" type="checkbox"> Kirchensteuer</label>
+              <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
+            </div>
+          </article>
+
+          <article class="panel comp-card">
+            <div class="panel-head"><div><span class="step">2</span><h2>Firmenwagen</h2></div><label class="switch-row"><input id="car-enabled" type="checkbox"> aktiv</label></div>
+            <div id="car-fields" class="form-grid muted-fields">
+              <label>Bruttolistenpreis<input id="car-list-price" type="number" min="0" step="500" value="50000"></label>
+              <label>Bewertungsfaktor<select id="car-factor"><option value="1">1,0 % Regel</option><option value="0.5">0,5 % Regel</option><option value="0.25">0,25 % Regel</option></select></label>
+              <label>Einfacher Arbeitsweg km<input id="car-commute" type="number" min="0" step="1" value="0"></label>
+              <label>Eigenanteil / Monat<input id="car-contribution" type="number" min="0" step="10" value="0"></label>
+              <label>Arbeitgeberkosten / Monat<input id="car-employer-cost" type="number" min="0" step="10" value="0"></label>
+              <label>Privates Auto alternativ / Monat<input id="car-private-cost" type="number" min="0" step="10" value="0"></label>
+            </div>
+          </article>
+
+          <article class="panel comp-card">
+            <div class="panel-head"><div><span class="step">3</span><h2>Betriebliche Altersvorsorge</h2></div></div>
+            <div class="form-grid">
+              <label>Eigener Beitrag / Monat<input id="bav-employee" type="number" min="0" step="10" value="0"></label>
+              <label>Arbeitgeber / Monat<input id="bav-employer" type="number" min="0" step="10" value="0"></label>
+              <label>Projektion Jahre<input id="bav-years" type="number" min="1" max="60" step="1" value="30"></label>
+              <label>Annahme Rendite % p.a.<input id="bav-return" type="number" min="-20" max="20" step="0.1" value="3"></label>
+            </div>
+          </article>
+
+          <button id="calculate" class="primary-action comp-calculate" type="button">Neu berechnen</button>
+        </div>
+
+        <aside class="comp-results" aria-live="polite">
+          <article class="panel comp-result-primary">
+            <span>Geschätztes Netto</span>
+            <strong id="result-net-month">—</strong>
+            <small id="result-net-year">—</small>
+          </article>
+          <div class="metric-grid comp-metrics">
+            <article class="metric"><span>Arbeitgeberkosten</span><strong id="result-employer">—</strong></article>
+            <article class="metric"><span>FullWorth-Wert</span><strong id="result-fullworth">—</strong></article>
+            <article class="metric"><span>Nächste 100 € brutto</span><strong id="result-marginal">—</strong></article>
+            <article class="metric"><span>Wert pro Arbeitsstunde</span><strong id="result-hourly">—</strong></article>
+          </div>
+          <article class="panel comp-breakdown">
+            <h2>Abzüge pro Jahr</h2>
+            <div id="deduction-rows" class="result-rows"></div>
+          </article>
+          <article class="panel comp-breakdown">
+            <h2>Benefits</h2>
+            <div id="benefit-summary" class="result-rows"></div>
+          </article>
+          <article class="panel comp-assumptions">
+            <h2>Annahmen</h2>
+            <p id="assumptions">Noch keine Berechnung.</p>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="tab-benefits" class="comp-tab">
+      <article class="panel comp-card wide">
+        <div class="panel-head"><div><h2>Weitere Benefits</h2><p>Arbeitgeberkosten und dein tatsächlicher persönlicher Wert werden getrennt geführt.</p></div><button id="add-benefit" type="button">Benefit hinzufügen</button></div>
+        <div id="benefits-list" class="benefits-list"></div>
+      </article>
+    </section>
+
+    <section id="tab-negotiation" class="comp-tab">
+      <div class="comp-layout negotiation-layout">
+        <article class="panel comp-card">
+          <div class="panel-head"><div><h2>Gehaltsgespräch vorbereiten</h2><p>Nominale Erhöhung und reale Kaufkraft getrennt.</p></div></div>
+          <div class="form-grid">
+            <label>Gehalt damals<input id="neg-old-salary" type="number" min="1" step="100" value="50000"></label>
+            <label>Datum damals<input id="neg-old-date" type="date" value="2023-12-31"></label>
+            <label>Aktuelles Gehalt<input id="neg-current-salary" type="number" min="0" step="100" value="54000"></label>
+            <label>Gewünschtes Gehalt<input id="neg-desired-salary" type="number" min="0" step="100" value="57000"></label>
+            <label>Zusätzlicher realer Aufschlag %<input id="neg-real-adjustment" type="number" min="-50" max="100" step="0.1" value="3"></label>
+            <label>Vergleichsdatum<input id="neg-date" type="date" value="2026-07-31"></label>
+          </div>
+          <button id="analyze-negotiation" class="primary-action" type="button">Kaufkraft prüfen</button>
+        </article>
+        <aside class="comp-results">
+          <article class="panel comp-result-primary inflation-result"><span>Kaufkrafterhalt heute</span><strong id="neg-maintenance">—</strong><small id="neg-inflation">—</small></article>
+          <div class="metric-grid comp-metrics">
+            <article class="metric"><span>Aktuell nominal</span><strong id="neg-current-nominal">—</strong></article>
+            <article class="metric"><span>Aktuell real</span><strong id="neg-current-real">—</strong></article>
+            <article class="metric"><span>Wunsch real</span><strong id="neg-desired-real">—</strong></article>
+            <article class="metric"><span>Referenz + Aufschlag</span><strong id="neg-reference">—</strong></article>
+          </div>
+          <article class="panel comp-breakdown"><h2>Einordnung</h2><div id="neg-explanation" class="neg-explanation">Noch keine Analyse.</div></article>
+          <article class="panel comp-assumptions"><h2>Inflationsdaten</h2><p id="inflation-source">—</p></article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="tab-scenarios" class="comp-tab">
+      <div class="scenario-toolbar panel">
+        <div><h2>Szenarien</h2><p>Aktuellen Rechnerstand als Vertrag, Angebot oder Teilzeitmodell speichern.</p></div>
+        <div><input id="scenario-name" placeholder="z. B. Angebot A"><button id="save-scenario" class="primary-action" type="button">Szenario speichern</button></div>
+      </div>
+      <div id="scenario-list" class="scenario-grid"></div>
+      <article id="scenario-comparison" class="panel scenario-comparison" hidden>
+        <div class="panel-head"><h2>Vergleich</h2><button id="clear-comparison" type="button">Auswahl löschen</button></div>
+        <div id="comparison-content"></div>
+      </article>
+    </section>
+
+    <div id="comp-error" class="comp-toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="/security/browser-fetch.js"></script>
+  <script type="module" src="/features/compensation.js"></script>
+  <script type="module" src="/features/compensation-extended.js"></script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+name: CI
+
+# Cost policy: GitHub Actions must only run when explicitly started by a user.
+# Do not add push, pull_request, schedule, merge_group, or other automatic triggers
+# unless the repository owner explicitly changes this policy.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      # Command Timeout is raised well above the default 30s so a query that runs slowly while the
+      # 2-core runner is saturated (backend + web suites hammering one Postgres) does not surface as
+      # an intermittent "Npgsql TimeoutException: Timeout during reading attempt" flake.
+      FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Run PostgreSQL as a step (not a service container) so we can raise max_connections. The
+      # integration suite spins up many isolated WebApplicationFactory instances, each with its own
+      # Npgsql pool; the default 100-connection ceiling is exceeded as the suite grows.
+      # fsync/synchronous_commit/full_page_writes are disabled and shared_buffers raised: this is an
+      # ephemeral throwaway test database, and cutting per-commit disk sync keeps queries fast on the
+      # 2-core runner while the suite creates hundreds of databases, avoiding Npgsql read timeouts.
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            if docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1; then
+              echo "PostgreSQL is ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time"; docker logs fullworth-postgres; exit 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore FullWorth.slnx
+
+      - name: Build
+        run: dotnet build FullWorth.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test FullWorth.slnx --configuration Release --no-build

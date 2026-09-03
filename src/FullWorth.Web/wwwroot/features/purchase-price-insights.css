@@ -1,0 +1,9 @@
+.pa-price-insight{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:3px;font-size:.78rem;color:var(--text-muted)}
+.pa-price-original{text-decoration:line-through;color:var(--text-muted)}
+.pa-saving{color:var(--success,#2f8f62);font-weight:650}
+.pa-reference-note{font-size:.75rem;color:var(--text-muted)}
+.pa-price-insights-card{margin:12px 0}
+.pa-price-insights-card .pa-metrics{margin-bottom:0}
+.pa-price-insights-card .pa-card-head{margin-bottom:8px}
+.pa-history-extra{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap;margin-top:3px}
+.pa-savings-card .pa-analytics-row span{display:block}

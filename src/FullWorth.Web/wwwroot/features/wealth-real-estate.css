@@ -1,0 +1,145 @@
+.property-dialog {
+  width: min(960px, calc(100vw - 28px));
+  max-height: min(90vh, 920px);
+  overflow: auto;
+}
+
+.property-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.property-tabs button {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 11px;
+}
+
+.property-tabs button[aria-selected="true"] {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.property-pane[hidden] { display: none; }
+
+.property-pane {
+  padding-top: 14px;
+}
+
+.property-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-metric {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.property-metric span,
+.property-metric strong { display: block; }
+.property-metric span { color: var(--muted); font-size: .82rem; }
+.property-metric strong { margin-top: 4px; font-size: 1.08rem; }
+
+.property-address {
+  margin: 12px 0;
+  color: var(--muted);
+}
+
+.property-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.property-grid .wide { grid-column: 1 / -1; }
+
+.property-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.property-section h3 { margin: 0 0 10px; }
+
+.property-debt-card,
+.property-cost-row,
+.property-valuation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.property-debt-card:last-child,
+.property-cost-row:last-child,
+.property-valuation-row:last-child { border-bottom: 0; }
+
+.property-debt-main { min-width: 0; }
+.property-debt-main strong { display: block; }
+.property-debt-meta { color: var(--muted); font-size: .86rem; margin-top: 3px; }
+
+.property-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.property-amortization {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  color: var(--muted);
+  font-size: .88rem;
+}
+
+.property-fx-warning {
+  margin-top: 10px;
+  color: var(--warning, #f9891f);
+  font-size: .86rem;
+}
+
+@media (max-width: 760px) {
+  .property-dialog {
+    width: calc(100vw - 16px);
+    max-height: 94vh;
+  }
+
+  .property-metrics,
+  .property-grid,
+  .property-grid.two {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .property-grid .mobile-wide { grid-column: 1 / -1; }
+
+  .property-debt-card,
+  .property-cost-row,
+  .property-valuation-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .property-metrics,
+  .property-grid,
+  .property-grid.two {
+    grid-template-columns: 1fr;
+  }
+}

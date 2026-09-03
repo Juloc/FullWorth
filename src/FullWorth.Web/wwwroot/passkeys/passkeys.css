@@ -1,0 +1,32 @@
+/* Passkey management shell — FullWorth light-first design. Uses the same tokens and restrained depth
+   as the main app; security actions stay simple and high-contrast. */
+.passkey-body{margin:0;min-height:100dvh;background:radial-gradient(760px 420px at 72% 0,rgba(255,255,255,.96),transparent 72%),radial-gradient(520px 300px at 18% 28%,rgba(24,120,240,.04),transparent 72%),var(--bg);color:var(--text)}
+html[data-theme="dark"] .passkey-body{background:var(--bg)}
+.passkey-shell{width:min(760px,calc(100% - 32px));margin:0 auto;padding:40px 0 64px}
+.passkey-header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s6);margin-bottom:var(--s6);animation:passkey-enter .35s cubic-bezier(.2,.7,.2,1) both}
+.passkey-header h1{margin:var(--s2) 0;font-size:24px;font-weight:600;letter-spacing:-.02em}.passkey-header p{margin:0;color:var(--muted)}
+.passkey-brand{font-weight:600;text-decoration:none;color:inherit}.passkey-back{color:var(--accent);font-weight:600}
+.passkey-panel{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.985),rgba(255,255,255,.96));border:1px solid rgba(216,220,226,.95);border-radius:var(--radius-card);padding:var(--s4);margin-bottom:var(--s4);box-shadow:0 1px 2px rgba(16,24,40,.04),0 7px 20px rgba(16,24,40,.05),0 24px 58px rgba(16,24,40,.045);transition:transform .2s cubic-bezier(.2,.7,.2,1),box-shadow .2s ease,border-color .2s ease;animation:passkey-card-in .42s cubic-bezier(.2,.7,.2,1) both}
+.passkey-panel:nth-of-type(2){animation-delay:60ms}
+html[data-theme="dark"] .passkey-panel{background:var(--surface);border-color:var(--line);box-shadow:none}
+.passkey-panel:hover{transform:translateY(-2px);border-color:#d1d6dc;box-shadow:0 2px 5px rgba(16,24,40,.05),0 12px 28px rgba(16,24,40,.07),0 28px 60px rgba(16,24,40,.05)}
+html[data-theme="dark"] .passkey-panel:hover{transform:none;box-shadow:none;border-color:var(--line)}
+.passkey-panel h2{margin-top:0;font-size:15px;font-weight:600}.passkey-panel label{display:grid;gap:var(--s2);margin:var(--s4) 0 var(--s3)}
+.passkey-panel input{width:100%;box-sizing:border-box;padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-input);background:rgba(255,255,255,.86);color:var(--text);box-shadow:inset 0 1px 1px rgba(16,24,40,.02),0 1px 2px rgba(16,24,40,.025);transition:border-color .18s ease,box-shadow .18s ease}
+html[data-theme="dark"] .passkey-panel input{background:var(--bg)}
+.passkey-primary,.passkey-remove{min-height:40px;border-radius:var(--radius-pill);border:1px solid var(--line);padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;transition:transform .18s cubic-bezier(.2,.7,.2,1),box-shadow .18s ease,border-color .18s ease}
+.passkey-primary{background:linear-gradient(180deg,#2d3036,#1e2024);color:#fff;border-color:transparent;box-shadow:0 2px 5px rgba(16,24,40,.12),0 8px 18px rgba(16,24,40,.09),inset 0 1px 0 rgba(255,255,255,.13)}
+html[data-theme="dark"] .passkey-primary{background:var(--cta);color:var(--cta-text);box-shadow:none}
+.passkey-primary:hover,.passkey-remove:hover{transform:translateY(-1px)}
+.passkey-primary:hover{box-shadow:0 3px 7px rgba(16,24,40,.14),0 12px 25px rgba(16,24,40,.11),inset 0 1px 0 rgba(255,255,255,.14)}
+.passkey-remove{background:rgba(255,255,255,.76);color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.025)}
+html[data-theme="dark"] .passkey-remove{background:transparent;box-shadow:none}
+.passkey-primary:disabled,.passkey-remove:disabled{cursor:not-allowed;opacity:.6}.is-loading{cursor:wait}
+.passkey-primary:focus-visible,.passkey-remove:focus-visible,.passkey-back:focus-visible,.passkey-panel input:focus-visible{outline:2px solid var(--cta);outline-offset:2px}
+.passkey-status{padding:var(--s3) var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);margin:0 0 var(--s4);background:var(--surface);box-shadow:0 4px 14px rgba(16,24,40,.035)}
+.passkey-list{display:grid;gap:var(--s3)}.passkey-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s3) 0;border-top:1px solid var(--line);transition:background-color .16s ease}
+.passkey-row:first-child{border-top:0}.passkey-row strong{display:block;font-weight:600}.passkey-row p{margin:var(--s1) 0 0;color:var(--muted);font-size:.9rem}.passkey-empty{color:var(--muted)}
+@keyframes passkey-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes passkey-card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media(max-width:600px){.passkey-shell{width:min(100% - 24px,760px);padding-top:var(--s6)}.passkey-header,.passkey-row{align-items:stretch;flex-direction:column}.passkey-remove{width:100%}.passkey-panel:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.passkey-header,.passkey-panel,.passkey-primary,.passkey-remove{animation:none!important;transition:none!important;transform:none!important}}

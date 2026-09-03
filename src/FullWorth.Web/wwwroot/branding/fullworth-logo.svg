@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FullWorth">
+  <rect x="20" y="20" width="472" height="472" rx="112" fill="#fbf8f1" stroke="#eee8df" stroke-width="4"/>
+  <text x="78" y="374" font-family="Georgia, 'Times New Roman', serif" font-size="318" font-weight="700" fill="#173f35">F</text>
+  <path d="M176 337 L230 405 L286 324 L338 405" fill="none" stroke="#173f35" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M338 405 L414 245" fill="none" stroke="#c99443" stroke-width="27" stroke-linecap="round"/>
+  <path d="M397 250 L433 229 L427 270 Z" fill="#c99443"/>
+  <path d="M344 224 C344 199 359 179 382 170 C383 194 371 216 350 229 Z" fill="#9caf8a"/>
+  <path d="M337 237 C316 231 302 217 298 198 C318 200 334 211 342 229 Z" fill="#c2c39a"/>
+  <path d="M344 237 C347 218 355 202 367 187" fill="none" stroke="#a8b488" stroke-width="5" stroke-linecap="round"/>
+</svg>

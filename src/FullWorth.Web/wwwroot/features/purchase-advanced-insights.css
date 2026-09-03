@@ -1,0 +1,6 @@
+.pa-advanced-insight .pa-insight-kpi{font-size:1.35rem;font-weight:700}
+.pa-advanced-insight .pa-insight-note{font-size:.78rem;color:var(--text-muted);margin-top:5px}
+.pa-advanced-insight .pa-analytics-row strong.positive{color:var(--danger,#c74343)}
+.pa-advanced-insight .pa-analytics-row strong.negative{color:var(--success,#2f8f62)}
+.pa-restock-status{font-size:.74rem;border:1px solid var(--border);border-radius:999px;padding:2px 7px}
+.pa-restock-status.overdue,.pa-restock-status.due_soon{color:var(--warning,#a56b00);border-color:color-mix(in srgb,var(--warning,#a56b00) 45%,var(--border))}

@@ -1,0 +1,444 @@
+/* Finance/FullWorth app shell + component styles (UI_UX_SPEC §4 tokens, §3 shell, §5 privacy, §24 states).
+   Tokens follow the canonical "FullWorth Design System": Barlow Condensed only with tabular numerals,
+   monochrome and line-driven (no accent hue), a single dark-grey CTA colour, and colour ONLY where it
+   carries meaning — green income, amber "getting close", red overage. Persistent navigation shows its
+   active state as a plain grey fill (never the CTA colour) so colour stays reserved for money statements.
+   Components consume semantic tokens only, so themes restyle without touching markup/logic. */
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:swap;src:url("fonts/BarlowCondensed-400.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/BarlowCondensed-500.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url("fonts/BarlowCondensed-600.woff2") format("woff2")}
+:root{
+  --font:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+  /* spacing scale (§4.1) */
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
+  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--content-max:1600px;--sidebar-w:228px;--sidebar-w-collapsed:72px;
+  /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
+  --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
+  /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
+  --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
+  /* Category identity palette (§13): one strong base tone per super-category; deeper levels are
+     derived via color-mix with white. Brand hues — the same in light and dark. */
+  --cat-1:#5b47e0;--cat-2:#1878f0;--cat-3:#10c7a5;--cat-4:#ff8a0f;--cat-5:#e23fa8;--cat-6:#ffc91e;--cat-7:#66c61c;--cat-8:#8b95a6;
+  /* interactive: a single dark-grey call-to-action colour, no accent hue */
+  --cta:#272727;--cta-text:#ffffff;--accent:#272727;--accent-soft:#f7f7f7;
+  /* semantic tokens (§4.3) with matching soft backgrounds */
+  --positive:#17b45c;--positive-soft:#e6f8ec;--negative:#e03131;--negative-soft:#fdeaea;--warning:#f9891f;--warning-soft:#fdf1e3;
+  /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
+  --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f0f0f;--surface:#0f0f0f;--surface-2:#1f1f1f;--surface-3:#303030;--text:#f1f1f1;--muted:#a6a6a6;--line:#2e2e2e;
+  --k1:#f1f1f1;--k2:#c9c9c9;--k3:#a0a0a0;--k4:#777777;--k5:#4e4e4e;
+  --cta:#f1f1f1;--cta-text:#0f0f0f;--accent:#f1f1f1;--accent-soft:#1f1f1f;
+  --positive:#4ce089;--positive-soft:#102f1e;--negative:#ff6b5e;--negative-soft:#2e1716;--warning:#ffb256;--warning-soft:#312312;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2{margin:0}
+a{color:var(--accent)}
+a:hover{color:var(--muted)}
+
+.skip-link{position:fixed;top:-60px;left:8px;z-index:100;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-input);padding:10px 14px;transition:top .15s}
+.skip-link:focus{top:8px}
+
+.shell{min-height:100vh;display:grid;grid-template-columns:var(--sidebar-w) 1fr}
+body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
+
+/* Sidebar (§3.1) */
+.sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
+.brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
+.brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
+/* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
+   stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
+#nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
+#nav-collapse:hover{border-color:var(--cta)}
+body.nav-collapsed .brand strong{display:none}
+/* Collapsed rail (72px): stack the logo above the toggle, both centred, so the toggle stays a real,
+   clickable button that can re-open the sidebar (it used to be hidden, trapping the collapsed state). */
+body.nav-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
+body.nav-collapsed #nav-collapse{margin-left:0}
+#nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.sidebar-foot{margin-top:auto;padding-top:var(--s2);border-top:1px solid var(--line)}
+.sidebar button{display:flex;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:8px;color:var(--muted);font-weight:500;cursor:pointer}
+.sidebar button svg{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sidebar button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar button:hover{background:var(--surface-2);color:var(--text)}
+/* Active nav is a plain grey fill with full text contrast — never the CTA colour, so colour stays
+   reserved for money statements (a colourful nav would immediately devalue that rule). */
+.sidebar button.active{background:var(--surface-2);color:var(--text);font-weight:600}
+.sidebar button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+body.nav-collapsed .sidebar button{justify-content:center;padding:10px 0}
+body.nav-collapsed .sidebar button span{display:none}
+/* A divider separates the finance areas from the organization areas (categories/rules/settings). */
+.nav-sep{height:1px;background:var(--line);margin:var(--s2) 10px}
+/* User block + light/dark toggle at the foot of the sidebar (where account things are expected). */
+.sidebar-user{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) 8px 0}
+.sidebar-avatar{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;flex:0 0 auto}
+.sidebar-user-meta{flex:1;min-width:0}
+.sidebar-user-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-user-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#theme-toggle{width:32px;height:32px;flex:0 0 auto}
+body.nav-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-right:0}
+body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:none}
+
+/* Main + top header (§3.1) */
+main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max)}
+main:focus{outline:none}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
+.topbar-title h1{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.topbar-actions{display:flex;align-items:center;gap:var(--s2)}
+.icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
+.icon-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon-button:hover{border-color:var(--cta)}
+.icon-button.active{background:var(--surface-2);color:var(--text);border-color:var(--line)}
+#privacy-toggle .pv-on{display:none}
+#privacy-toggle.active .pv-on{display:block}
+#privacy-toggle.active .pv-off{display:none}
+.primary-action{border:0;background:var(--cta);color:var(--cta-text);border-radius:var(--radius-pill);padding:0 var(--s4);height:36px;font-weight:600;cursor:pointer}
+.primary-action:hover{opacity:.9}
+
+.view{display:none}
+.view.active{display:block}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Metrics + panels */
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4);margin-bottom:var(--s4)}
+.metric,.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);box-shadow:var(--shadow)}
+.metric{padding:var(--s5) var(--s6)}
+.metric span{display:block;color:var(--muted);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.metric strong{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
+.content-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
+.panel{padding:var(--s5)}
+.span-2{grid-column:span 2}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.panel h2,.panel-head h2,.panel-head h3{font-size:15px;font-weight:600;margin:0}
+.rows{display:grid}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row-main{min-width:0}
+.row-title{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-sub{color:var(--muted);font-size:12px;margin-top:3px}
+.row-end{display:flex;align-items:center;gap:var(--s2)}
+.amount{font-variant-numeric:tabular-nums;font-weight:600}
+.amount.negative{color:var(--negative)}
+.amount.positive{color:var(--positive)}
+button,input,select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-input);padding:9px 11px}
+/* Field focus thickens/recolours the border to the CTA — no glow, no shape change (Design System §07). */
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--cta)}
+input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--negative)}
+/* Search field is a pill on a grey fill; amount entry is right-aligned with tabular numerals. */
+input[type=search]{border-radius:var(--radius-pill);background:var(--surface-2)}
+input[type=number],input[inputmode=decimal]{text-align:right;font-variant-numeric:tabular-nums}
+button:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
+.panel button:not(.icon-button),.dialog-card button:not(.icon-button):not([data-close]){cursor:pointer}
+.panel-head button{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:var(--radius-pill);font-weight:600}
+.panel-head button:hover{background:var(--surface-2)}
+label{display:grid;gap:5px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:500}
+/* Checkbox labels are inline sentence-case, not the uppercase field-label style. */
+label.check{display:flex;align-items:center;gap:var(--s2);font-size:13px;text-transform:none;letter-spacing:normal;font-weight:400}
+label.check input{width:auto}
+/* A field paired with a small trigger button beside it (e.g. the category picker's search icon) */
+.field-inline{display:flex;align-items:center;gap:var(--s2)}
+.field-inline select{flex:1;min-width:0}
+.field-inline .icon-button{width:34px;height:34px;flex:0 0 auto}
+/* Sharing invite dialog: account picker + generated claim link */
+.share-accounts{border:1px solid var(--line);border-radius:var(--radius);padding:var(--s3);margin:0;display:grid;gap:var(--s2)}
+.share-accounts legend{padding:0 var(--s2);font-size:12px;color:var(--muted)}
+.share-accounts label.check{justify-content:space-between}
+.share-accounts label.check span{flex:1;min-width:0}
+.share-accounts .share-level{flex:0 0 auto;width:auto}
+.share-link-box{margin-top:var(--s3);display:grid;gap:var(--s2)}
+.share-link-box .share-link{font-family:var(--mono,monospace);font-size:12px}
+/* §18: a cross-currency total that couldn't fully convert (a rate was missing) — amber, never hidden */
+.fx-incomplete{font-size:11px;color:var(--warning);margin-top:6px}
+/* §18: native amount with a smaller converted base value underneath it */
+.amount-stack{display:flex;flex-direction:column;align-items:flex-end}
+.amount-converted{font-size:11px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+.toolbar{display:flex;gap:var(--s2);margin-bottom:var(--s3);flex-wrap:wrap}
+.toolbar input[type=search]{min-width:260px;flex:1}
+.table-panel{padding:0;overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px}
+th{color:var(--muted);font-weight:600;background:var(--surface-2);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
+.progress{display:flex;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin-top:7px}
+.progress>span{display:block;height:100%;background:var(--cta)}
+/* Forecast portion of a budget bar: same state colour, hatched to read as "projected, not yet spent". */
+.progress>.forecast{background:repeating-linear-gradient(45deg,var(--cta),var(--cta) 3px,transparent 3px,transparent 7px);opacity:.55}
+.progress.near>.forecast{background:repeating-linear-gradient(45deg,var(--warning),var(--warning) 3px,transparent 3px,transparent 7px)}
+.progress.over>.forecast{background:repeating-linear-gradient(45deg,var(--negative),var(--negative) 3px,transparent 3px,transparent 7px)}
+.chart-empty{min-height:220px;display:grid;place-items:center;color:var(--muted)}
+/* Dashboard widget grid (§6.2): 12-col on desktop, single column list on mobile (§6.3). */
+.dashboard-editbar{display:flex;gap:var(--s2);justify-content:flex-end;margin-bottom:var(--s3)}
+.dashboard-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s4);align-items:start}
+.widget{grid-column:span 12}
+.widget.span-4{grid-column:span 4}.widget.span-6{grid-column:span 6}.widget.span-8{grid-column:span 8}.widget.span-12{grid-column:span 12}
+.widget .widget-body{display:grid}
+.widget-metric strong{font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
+.widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:13px;margin-top:6px;flex-wrap:wrap}
+.widget-split.big{gap:var(--s6)}.widget-split.big strong{font-size:20px}
+/* Inline monthly bar chart inside a configurable income/expense widget. */
+.widget-chart{width:100%;height:96px;display:block}
+.widget-controls{display:flex;gap:4px}
+.widget-controls button{width:30px;height:30px;padding:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.widget-catalog button{text-align:left}
+/* Budget cards (§12) */
+.budget-cards{display:grid;gap:var(--s3)}
+.budget-card{padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.budget-card:last-child{border-bottom:0}
+.budget-card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:6px}
+.budget-card-foot{display:flex;justify-content:space-between;gap:var(--s2);color:var(--muted);font-size:12px;margin-top:6px;flex-wrap:wrap}
+.budget-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--muted)}
+/* A status pill signals with a coloured dot AND the word — never colour alone (Design System §10). */
+.budget-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.budget-status.ontrack{background:var(--positive-soft);color:var(--positive)}
+.budget-status.near{background:var(--warning-soft);color:var(--warning)}
+.budget-status.over{background:var(--negative-soft);color:var(--negative)}
+.progress.near>span{background:var(--warning)}
+.progress.over>span{background:var(--negative)}
+.budget-card[role=button]{cursor:pointer}
+.budget-card[role=button]:hover .row-title{text-decoration:underline}
+.budget-card[role=button]:focus-visible{outline:2px solid var(--cta);outline-offset:2px;border-radius:var(--radius-card)}
+/* Budget detail drawer (§12) */
+.budget-detail{min-width:min(440px,92vw)}
+.budget-detail-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2);margin:var(--s3) 0}
+.budget-detail .kv{display:flex;flex-direction:column;gap:2px}
+.budget-detail .kv span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.budget-detail .kv strong{font-size:17px;font-weight:600}
+.budget-detail-trend{display:flex;align-items:center;gap:var(--s2);margin-top:8px;font-size:13px}
+.budget-detail-forecast{display:flex;gap:var(--s4);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.budget-detail .row-group{margin-top:var(--s3)}
+.budget-detail-rows{max-height:40vh;overflow:auto}
+/* Category tree (§10) */
+.panel-head-actions{display:flex;align-items:center;gap:var(--s3)}
+label.check.inline{font-size:12px;color:var(--muted)}
+.cat-node{border-bottom:1px solid var(--line)}
+.cat-node:last-child{border-bottom:0}
+.cat-row{display:flex;align-items:center;gap:var(--s2);padding:9px 0;padding-left:calc(var(--depth,0) * 20px)}
+.cat-twist{width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.cat-twist:disabled{cursor:default;opacity:.4}
+.cat-name{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-actions{display:flex;gap:4px;opacity:0;transition:opacity .12s}
+.cat-row:hover .cat-actions,.cat-row:focus-within .cat-actions{opacity:1}
+.cat-actions .icon-button{width:30px;height:30px}
+.cat-archived{opacity:.6}
+/* Transactions list markers + clickable rows (§9.1) */
+.tx-row{cursor:pointer}
+.tx-row:hover{background:var(--surface-2)}
+.tx-ignored{opacity:.6}
+.tx-marker{display:inline-block;font-size:12px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
+.tx-marker.pending{background:var(--surface-2);color:var(--text)}
+/* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
+.tx-detail{width:min(500px,94vw)}
+.tx-detail .tx-amount{font-size:21px;font-weight:600;margin:2px 0 6px}
+.tx-detail .tx-note{margin-top:var(--s2)}
+dialog.drawer{margin:0 0 0 auto;height:100%;max-height:100vh;border-radius:0;align-self:stretch}
+@media(max-width:767px){dialog.drawer{margin:0;width:100vw;max-width:100vw}.tx-detail{width:100%}}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s4)}
+.settings-link{text-decoration:none;color:inherit}
+/* A settings row rendered as a <button> (opens a dialog) must look like the <a> rows. */
+button.settings-link{width:100%;border:0;background:transparent;font:inherit;text-align:left;cursor:pointer}
+.toggle-row input{width:auto}
+/* Inactivity lock screen: opaque cover + a single floating card (§ security). */
+.lock-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:grid;place-items:center;padding:var(--s4)}
+.lock-card{width:min(360px,92vw);border:1px solid var(--line);border-radius:var(--radius-card);box-shadow:var(--shadow-menu);background:var(--surface);padding:var(--s6);text-align:center;display:flex;flex-direction:column;gap:var(--s3)}
+.lock-mark{justify-self:center;align-self:center;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-weight:600;font-size:17px}
+.lock-card h2{margin:0}
+.lock-sub{margin:0;color:var(--muted);font-size:14px}
+.lock-actions{display:flex;flex-direction:column;gap:var(--s2)}
+.lock-pin{display:flex;gap:var(--s2)}
+.lock-pin input{flex:1;min-width:0}
+.lock-error{margin:0;color:var(--negative);font-size:13px;min-height:1em}
+body.locked{overflow:hidden}
+.notif-intro{margin:0 0 var(--s2)}.notif-foot{margin-top:var(--s3)}
+
+/* Purchases */
+.purchase-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;width:100%;padding:12px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;text-align:left;background:transparent}
+.purchase-row:last-child{border-bottom:0}.purchase-row:hover{background:var(--surface-2)}
+.purchase-detail{width:min(760px,94vw)}
+.purchase-items{display:grid;gap:var(--s2)}
+.purchase-item{display:grid;grid-template-columns:minmax(0,2fr) 90px 110px minmax(140px,1fr);gap:var(--s2);align-items:center}
+.purchase-item input,.purchase-item select{min-width:0}
+
+/* Dialog helpers reused by add flows */
+.choice-grid{display:grid;gap:10px;margin-top:var(--s3)}
+.choice-grid button{display:grid;gap:4px;text-align:left;padding:14px;border-radius:12px}
+.choice-grid strong{font-size:15px}.choice-grid span{color:var(--muted);font-size:13px}
+.bank-options{display:grid;gap:2px;max-height:50vh;overflow:auto;margin-top:var(--s2)}
+.bank-options button{text-align:left;border:0;background:transparent;padding:10px;border-radius:8px}
+.bank-options button:hover{background:var(--surface-2)}
+
+/* More sheet + search */
+.more-sheet .more-list{display:grid;gap:2px;margin-top:var(--s2)}
+.more-sheet .more-list button{display:flex;align-items:center;gap:var(--s3);border:0;background:transparent;padding:13px 10px;border-radius:9px;text-align:left;font-size:15px}
+.more-sheet .more-list button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
+.more-sheet .more-list button.active{background:var(--surface-2);color:var(--text)}
+.more-sheet .more-list button.active svg{color:var(--text)}
+.search-dialog{width:min(560px,94vw)}
+.search-dialog input[type=search]{width:100%;margin-bottom:var(--s2)}
+.search-group{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:var(--s2)}
+.search-hit{width:100%;border:0;background:transparent;text-align:left;cursor:pointer}
+.search-hit:hover{background:var(--surface-2)}
+
+/* Loading / empty states (§24) */
+.state-empty{border-bottom:0}
+.skel{border-bottom:1px solid var(--line)}
+.skel-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:skel 1.2s ease-in-out infinite;margin:6px 0}
+.skel-bar.short{width:45%}
+@keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* Toast */
+#toast{position:fixed;right:20px;bottom:20px;background:var(--text);color:var(--surface);padding:10px 14px;border-radius:9px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s;max-width:min(420px,calc(100vw - 40px));z-index:90}
+#toast.show{opacity:1;transform:none}
+
+/* Mobile bottom nav (§3.2) — hidden on desktop */
+#bottom-nav{display:none}
+
+/* Tablet + mobile < 1024px: desktop sidebar gives way to the fixed bottom nav (§3.3/§3.2) */
+@media(max-width:1023px){
+  .shell{display:block}
+  .sidebar{display:none}
+  main{padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom));max-width:none}
+  #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+  #bottom-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
+  #bottom-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  #bottom-nav button span{font-size:10px;line-height:1}
+  #bottom-nav button.active{color:var(--text);background:var(--surface-2);border-radius:10px}
+  .metric-grid{grid-template-columns:repeat(2,1fr)}
+  #toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
+}
+@media(max-width:767px){
+  .topbar{padding-top:var(--s4)}
+  .topbar-title h1{font-size:24px}
+  .content-grid{grid-template-columns:1fr}
+  .dashboard-grid{grid-template-columns:1fr}
+  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
+  .span-2{grid-column:auto}
+  .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
+  .metric strong{font-size:20px}
+  select,input,textarea{min-height:40px}
+  button:not(#bottom-nav button){min-height:44px;font-size:16px}
+  label.check input{min-height:0}
+  .toolbar input[type=search]{min-width:100%}
+  .purchase-item{grid-template-columns:1fr 72px 92px}
+  .purchase-item .item-category{grid-column:1/-1}
+}
+/* Rules (§11) */
+.ghost{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:var(--radius-pill);font-weight:600}
+.rule-actions{display:flex;align-items:center;gap:var(--s2)}
+.rule-prio{color:var(--muted);font-size:12px;white-space:nowrap}
+.rule-off{opacity:.6}
+.rule-dialog .rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.rule-preview{margin-top:var(--s2);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2,var(--surface))}
+.rule-preview.is-loading{opacity:.6}
+.rule-preview .preview-head{font-weight:600;margin-bottom:var(--s2)}
+.preview-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:4px 0;font-size:13px}
+.preview-row .preview-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.preview-row .preview-amt{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* Contracts (§13) */
+/* Destructive actions are text-only, never a filled surface or even an outline (Design System §06). */
+button.danger{border:0;color:var(--negative);background:transparent}
+.contract-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
+.contract-archived{opacity:.6}
+.row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}
+.detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2,var(--surface))}
+.detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.detected-row:last-child{border-bottom:0}
+/* Removable pill list (merchant aliases) — a generic component for short tag chips with a remove ×. */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1;padding:4px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;font-size:14px;line-height:1}
+.chip button:hover{color:var(--negative)}
+.chip.add{background:transparent;border:1px dashed var(--line);color:var(--text);cursor:pointer}
+.chip.add:hover{background:var(--surface-2)}
+/* Muted intro line under a panel head (merchants, audit). */
+.panel-intro{margin:0 0 var(--s3)}
+/* Audit log: keep the timestamp on one line, aligned to the row's end column. */
+.audit-time{white-space:nowrap;text-align:right}
+/* Account groups (§8.1): a group header row with a collapse toggle + group total. */
+.group-head{border-bottom:1px solid var(--line)}
+.group-toggle{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;font:inherit;font-weight:600;font-size:14px;color:var(--text);cursor:pointer;padding:0}
+.contract-detail .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3);margin:var(--s3) 0}
+.detail-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.detail-item .detail-k{color:var(--muted);font-size:12px}
+.detail-item .detail-v{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.detail-section{margin-top:var(--s3)}
+.detail-section h3{font-size:14px;margin:0 0 var(--s2)}
+.contract-trend{margin:var(--s2) 0}
+.contract-trend svg{width:100%;height:90px;color:var(--accent,currentColor)}
+.contract-trend.private{color:var(--muted)}
+@media (max-width:768px){.contract-detail .detail-grid{grid-template-columns:1fr}}
+/* Net worth (§14) */
+.row-group{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:10px 0 4px}
+.nw-item.nw-excluded{opacity:.6}
+#nw-change.positive{color:var(--positive)}
+#nw-change.negative{color:var(--negative)}
+/* Notifications (§20) */
+.notif-push{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s3)}
+.notif-h{font-size:14px;margin:var(--s3) 0 var(--s2)}
+/* Analytics (§15) */
+.field{display:flex;align-items:center;gap:8px}
+.an-toolbar{margin-bottom:var(--s3)}
+.an-legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:6px}
+.an-legend .lg{display:flex;align-items:center;gap:6px}
+.an-legend .lg::before{content:"";width:10px;height:10px;border-radius:2px;display:inline-block}
+.an-legend .lg-income::before{background:var(--positive)}
+.an-legend .lg-expense::before{background:var(--negative)}
+.bar-income{fill:var(--positive)}
+.bar-expense{fill:var(--negative)}
+.an-axis{fill:var(--muted);font-size:12px}
+.an-zero{stroke:currentColor;opacity:.25}
+/* Category identity: a category's bar/dot carries its super-category colour (assigned by index). */
+.cat-dot{display:inline-block;width:9px;height:9px;border-radius:3px;flex:0 0 auto;background:var(--k4);margin-right:7px;vertical-align:middle}
+.bar-fill[data-cat="1"],.cat-dot[data-cat="1"]{background:var(--cat-1)}
+.bar-fill[data-cat="2"],.cat-dot[data-cat="2"]{background:var(--cat-2)}
+.bar-fill[data-cat="3"],.cat-dot[data-cat="3"]{background:var(--cat-3)}
+.bar-fill[data-cat="4"],.cat-dot[data-cat="4"]{background:var(--cat-4)}
+.bar-fill[data-cat="5"],.cat-dot[data-cat="5"]{background:var(--cat-5)}
+.bar-fill[data-cat="6"],.cat-dot[data-cat="6"]{background:var(--cat-6)}
+.bar-fill[data-cat="7"],.cat-dot[data-cat="7"]{background:var(--cat-7)}
+.bar-fill[data-cat="8"],.cat-dot[data-cat="8"]{background:var(--cat-8)}
+/* Chart-builder donut: per-slice stroke colour + legend layout. */
+.donut-seg[data-cat="1"]{stroke:var(--cat-1)}.donut-seg[data-cat="2"]{stroke:var(--cat-2)}.donut-seg[data-cat="3"]{stroke:var(--cat-3)}.donut-seg[data-cat="4"]{stroke:var(--cat-4)}
+.donut-seg[data-cat="5"]{stroke:var(--cat-5)}.donut-seg[data-cat="6"]{stroke:var(--cat-6)}.donut-seg[data-cat="7"]{stroke:var(--cat-7)}.donut-seg[data-cat="8"]{stroke:var(--cat-8)}
+.donut-wrap{display:flex;gap:var(--s4);align-items:center;flex-wrap:wrap}
+.donut-wrap svg{width:180px;height:180px;flex:0 0 auto}
+.donut-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.an-cat{padding:8px 0;border-bottom:1px solid var(--line)}
+.an-cat:last-child{border-bottom:0}
+.an-cat-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3)}
+.an-estimate{margin-bottom:var(--s2)}
+/* Purchases reconcile (§16) */
+.reconcile{margin:var(--s3) 0;padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2,var(--surface))}
+.reconcile-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3)}
+.reconcile-link{margin-top:var(--s3)}
+.purchase-merchants{margin-top:var(--s3)}
+@media (max-width:768px){.reconcile-grid{grid-template-columns:1fr}}
+/* Transaction splits (§9.5) */
+.split-lines{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s2) 0}
+.split-line{display:grid;grid-template-columns:96px 1fr 1fr auto;gap:var(--s2);align-items:center}
+.split-remaining{margin-top:var(--s2);font-weight:600}
+.split-remaining.ok{color:var(--positive)}
+.split-remaining.warn{color:var(--negative)}
+@media (max-width:768px){.split-line{grid-template-columns:1fr 1fr;gap:6px}.split-line .split-note{grid-column:1/-1}}
+.tx-refund{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2);margin-top:var(--s2)}
+.refund-candidates{display:flex;flex-direction:column;max-height:50vh;overflow:auto}
+.candidate-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
+/* Loans / amortization (§13/§14.4) */
+.loan-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
+.loan-detail .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3);margin:var(--s3) 0}
+.loan-split{margin:var(--s3) 0}
+.loan-split-head{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px}
+.loan-split-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--surface-2)}
+.loan-split-principal{background:var(--cta)}
+.loan-split-interest{background:var(--k4)}
+.loan-chart svg{width:100%;height:120px;color:var(--k2)}
+@media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

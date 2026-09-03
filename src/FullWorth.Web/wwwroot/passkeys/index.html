@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Passkeys · FullWorth</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/passkeys/passkeys.css">
+</head>
+<body class="passkey-body">
+  <main class="passkey-shell" data-passkey-management>
+    <header class="passkey-header">
+      <div>
+        <a class="passkey-brand" href="/">FullWorth</a>
+        <h1 data-i18n="passkeys.title"></h1>
+        <p data-i18n="passkeys.subtitle"></p>
+      </div>
+      <a class="passkey-back" href="/" data-i18n="passkeys.backToApp"></a>
+    </header>
+
+    <section class="passkey-panel" aria-labelledby="add-passkey-title">
+      <h2 id="add-passkey-title" data-i18n="passkeys.add"></h2>
+      <p data-i18n="passkeys.explanation"></p>
+      <label for="passkey-name">
+        <span data-i18n="passkeys.name"></span>
+        <input id="passkey-name" type="text" maxlength="80" autocomplete="off" data-i18n-placeholder="passkeys.namePlaceholder">
+      </label>
+      <button type="button" class="passkey-primary" data-passkey-action="add" data-i18n="passkeys.add"></button>
+    </section>
+
+    <div id="passkey-management-status" class="passkey-status" role="status" aria-live="polite" hidden></div>
+
+    <section class="passkey-panel" aria-labelledby="registered-passkeys-title">
+      <h2 id="registered-passkeys-title" data-i18n="passkeys.yourPasskeys"></h2>
+      <div id="passkey-list" class="passkey-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/passkeys/management.js"></script>
+</body>
+</html>

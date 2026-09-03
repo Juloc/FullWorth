@@ -1,0 +1,72 @@
+name: Release
+
+# Build the service images and publish them to GHCR (this repo's Container Registry).
+# Cost policy: normal CI stays manual-only. Version tags are the intentional exception:
+# pushing a v* tag automatically publishes the release images.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            dockerfile: src/FullWorth.Backend/Dockerfile
+          - service: banking
+            dockerfile: src/FullWorth.Banking/Dockerfile
+          - service: web
+            dockerfile: src/FullWorth.Web/Dockerfile
+          - service: codex
+            dockerfile: src/FullWorth.CodexBridge/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # metadata-action lowercases the image name automatically (repository_owner may be mixed case).
+      # For a pre-release tag (contains a hyphen, e.g. -rc.1) we publish ONLY the exact version + sha:
+      # no moving `latest` / `X.Y` alias points at an unvalidated build.
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fullworth-${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=sha,format=short
+          flavor: |
+            latest=auto
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=fullworth-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}

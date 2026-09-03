@@ -1,0 +1,143 @@
+.property-operation-metrics {
+  margin-bottom: 14px;
+}
+
+.property-operation-note {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, #f7f7f7);
+  color: var(--muted);
+  font-size: .92rem;
+  line-height: 1.35;
+  margin: 10px 0 14px;
+}
+
+.property-operation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-operation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.property-operation-row,
+.property-operation-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, #f7f7f7);
+}
+
+.property-operation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+}
+
+.property-operation-card {
+  padding: 12px;
+}
+
+.property-operation-card > .property-operation-row {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.property-operation-actions,
+.property-operation-inline,
+.property-operation-facts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.property-operation-actions {
+  justify-content: flex-end;
+}
+
+.property-operation-facts {
+  margin: 9px 0 6px;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.property-operation-facts strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.property-operation-inline {
+  margin-top: 10px;
+}
+
+.property-operation-inline select {
+  min-width: min(420px, 100%);
+  flex: 1 1 240px;
+}
+
+.property-operation-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.property-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.property-form-grid label {
+  min-width: 0;
+}
+
+.property-form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.property-form-grid textarea {
+  resize: vertical;
+}
+
+.property-operation-row button,
+.property-operation-card button {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .property-form-grid,
+  .property-form-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .property-form-grid .wide {
+    grid-column: auto;
+  }
+
+  .property-operation-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .property-operation-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .property-operation-inline {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

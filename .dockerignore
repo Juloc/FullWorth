@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+secrets/
+**/*.pem
+**/*.key
+**/*.crt
+**/bin/
+**/obj/
+README.md
+backups/
+tests/
+docs/
+docker-compose*.yml

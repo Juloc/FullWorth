@@ -1,0 +1,341 @@
+const $ = selector => document.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const lang = () => (localStorage.getItem('finance.language') || (navigator.language || 'de')).startsWith('de') ? 'de' : 'en';
+const spaceId = () => localStorage.getItem('finance.space');
+const isCoachPath = () => location.pathname.replace(/\/+$/, '') === '/coach';
+let active = false;
+let currentConversationId = null;
+let reviews = new Map();
+let loading = false;
+
+const reasonLabels = {
+  necessary: ['Notwendig', 'Necessary'], good_value: ['Gutes Preis-Leistungs-Verhältnis', 'Good value'], quality_of_life: ['Lebensqualität', 'Quality of life'],
+  experience: ['Erlebnis', 'Experience'], health_or_wellbeing: ['Gesundheit / Wohlbefinden', 'Health / wellbeing'], gift_or_relationship: ['Geschenk / Beziehung', 'Gift / relationship'],
+  long_term_value: ['Langfristiger Wert', 'Long-term value'], routine: ['Routine', 'Routine'], expected: ['Erwartet', 'Expected'], mixed: ['Gemischt', 'Mixed'], unsure: ['Unsicher', 'Unsure'],
+  impulse: ['Impulskauf', 'Impulse'], too_expensive: ['Zu teuer', 'Too expensive'], unused: ['Nicht genutzt', 'Unused'], duplicate: ['Doppelt / unnötig', 'Duplicate'],
+  subscription_regret: ['Abo bereut', 'Subscription regret'], convenience_cost: ['Bequemlichkeitskosten', 'Convenience cost'], avoidable_fee: ['Vermeidbare Gebühr', 'Avoidable fee'], poor_value: ['Schlechter Gegenwert', 'Poor value']
+};
+const reasonsBySentiment = {
+  Positive: ['necessary', 'good_value', 'quality_of_life', 'experience', 'health_or_wellbeing', 'gift_or_relationship', 'long_term_value'],
+  Neutral: ['routine', 'expected', 'mixed', 'unsure'],
+  Negative: ['impulse', 'too_expensive', 'unused', 'duplicate', 'subscription_regret', 'convenience_cost', 'avoidable_fee', 'poor_value']
+};
+
+function tr(de, en) { return lang() === 'de' ? de : en; }
+function formatMoney(value, currency = 'EUR') { return new Intl.NumberFormat(lang() === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency }).format(Number(value || 0)); }
+function formatPercent(value) { return new Intl.NumberFormat(lang() === 'de' ? 'de-DE' : 'en-US', { style: 'percent', maximumFractionDigits: 0 }).format(Number(value || 0)); }
+
+async function ensureSpace() {
+  if (spaceId()) return spaceId();
+  const response = await fetch('/bff/backend/api/fullworth-spaces');
+  if (!response.ok) throw new Error(String(response.status));
+  const spaces = await response.json();
+  if (!spaces?.length) throw new Error(tr('Kein FullWorth Space vorhanden.', 'No FullWorth Space exists.'));
+  localStorage.setItem('finance.space', spaces[0].id);
+  return spaces[0].id;
+}
+
+async function api(path, options = {}) {
+  await ensureSpace();
+  const clean = path.replace(/^\//, '');
+  const [base, query = ''] = clean.split('?');
+  const params = new URLSearchParams(query);
+  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
+  const response = await fetch(`/bff/backend/${base}?${params}`, options);
+  if (!response.ok) {
+    let message = String(response.status);
+    try { const body = await response.json(); message = body.error || body.message || body.title || message; } catch { }
+    throw new Error(message);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function installShell() {
+  if ($('#coach-nav')) return;
+  const nav = $('#nav');
+  const separator = nav?.querySelector('.nav-sep');
+  const button = document.createElement('button');
+  button.id = 'coach-nav';
+  button.type = 'button';
+  button.dataset.coachView = '1';
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg><span>Coach</span>';
+  button.addEventListener('click', () => activate(true));
+  if (separator) nav.insertBefore(button, separator); else nav?.appendChild(button);
+
+  const section = document.createElement('section');
+  section.id = 'view-coach';
+  section.className = 'view coach-view';
+  section.innerHTML = `
+    <div class="coach-layout">
+      <div class="coach-main">
+        <article class="panel coach-hero">
+          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true">FW</div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
+          <span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span>
+        </article>
+        <article class="panel coach-chat-panel">
+          <div id="coach-starters" class="coach-starters"></div>
+          <div id="coach-messages" class="coach-messages" aria-live="polite"></div>
+          <form id="coach-form" class="coach-composer">
+            <label class="sr-only" for="coach-input">${esc(tr('Frage an FullWorth', 'Question for FullWorth'))}</label>
+            <textarea id="coach-input" rows="2" maxlength="2000" placeholder="${esc(tr('Wo ist mein Geld diesen Monat hin?', 'Where did my money go this month?'))}"></textarea>
+            <button id="coach-send" type="submit" class="primary-action">${esc(tr('Fragen', 'Ask'))}</button>
+          </form>
+        </article>
+      </div>
+      <aside class="coach-side">
+        <article class="panel"><div class="panel-head"><h2>${esc(tr('Ausgaben-Review', 'Spending review'))}</h2><button id="coach-review-refresh" type="button" class="ghost">↻</button></div><div id="coach-summary"></div></article>
+        <article class="panel"><div class="panel-head"><h2>${esc(tr('Letzte Ausgaben bewerten', 'Review recent spending'))}</h2></div><div id="coach-review-list" class="coach-review-list"></div></article>
+      </aside>
+    </div>`;
+  $('#main')?.appendChild(section);
+
+  $('#coach-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-input').value); });
+  $('#coach-review-refresh')?.addEventListener('click', () => loadReviews());
+  $('#refresh')?.addEventListener('click', event => {
+    if (!active) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    loadAll();
+  }, true);
+
+  document.querySelectorAll('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(existing => {
+    existing.addEventListener('click', () => { if (active) deactivate(); }, true);
+  });
+  $('#bottom-more')?.addEventListener('click', () => queueMicrotask(injectMobileMore));
+  window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
+  window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
+  if (document.readyState === 'complete' && isCoachPath()) activate(false);
+}
+
+function injectMobileMore() {
+  const list = [...document.querySelectorAll('dialog .more-list')].at(-1);
+  if (!list || list.querySelector('[data-coach-mobile]')) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.coachMobile = '1';
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg><span>Coach</span>';
+  button.addEventListener('click', () => { button.closest('dialog')?.close(); activate(true); });
+  list.appendChild(button);
+}
+
+function activate(push) {
+  active = true;
+  document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+  $('#view-coach')?.classList.add('active');
+  document.querySelectorAll('.sidebar button').forEach(button => button.classList.remove('active'));
+  $('#coach-nav')?.classList.add('active');
+  $('#coach-nav')?.setAttribute('aria-current', 'page');
+  $('#bottom-more')?.classList.add('active');
+  $('#page-title').textContent = 'Coach';
+  $('#page-subtitle').textContent = tr('Deine Daten erklären, Ausgaben bewerten und Ziele berechnen.', 'Explain your data, review spending and calculate goals.');
+  const primary = $('#primary-action'); if (primary) primary.hidden = true;
+  if (push && !isCoachPath()) history.pushState({ view: 'coach' }, '', '/coach');
+  loadAll();
+}
+
+function deactivate() {
+  active = false;
+  $('#view-coach')?.classList.remove('active');
+  $('#coach-nav')?.classList.remove('active');
+  $('#coach-nav')?.setAttribute('aria-current', 'false');
+}
+
+async function loadAll() {
+  if (loading) return;
+  loading = true;
+  setMascotLabel();
+  renderStarters();
+  try { await Promise.all([loadConversation(), loadReviews()]); }
+  catch (error) { renderError(error); }
+  finally { loading = false; }
+}
+
+function setMascotLabel() {
+  const mascot = localStorage.getItem('finance.mascot');
+  $('#coach-mascot-label').textContent = mascot ? `${tr('Maskottchen', 'Mascot')}: ${mascot}` : tr('Finanzanalyse ohne KI-Zwang', 'Financial analysis without mandatory AI');
+}
+
+function renderStarters() {
+  const starters = lang() === 'de'
+    ? ['Wo ist mein Geld hin?', 'Was habe ich bereut?', 'Was war es wert?', 'Was könnte ich reduzieren?', 'Wann erreiche ich 100.000 €?']
+    : ['Where did my money go?', 'What did I regret?', 'What was worth it?', 'What could I reduce?', 'When could I reach €100,000?'];
+  const root = $('#coach-starters');
+  root.innerHTML = '';
+  starters.forEach(text => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'coach-chip'; button.textContent = text;
+    button.addEventListener('click', () => ask(text)); root.appendChild(button);
+  });
+}
+
+async function loadConversation() {
+  const conversations = await api('api/coach/conversations?limit=10');
+  if (!currentConversationId) currentConversationId = conversations?.[0]?.id || null;
+  if (!currentConversationId) { $('#coach-messages').innerHTML = `<div class="coach-empty">${esc(tr('Stelle eine Frage. Ein Chat wird beim ersten Senden angelegt.', 'Ask a question. A chat is created when you first send one.'))}</div>`; return; }
+  const detail = await api(`api/coach/conversations/${currentConversationId}`);
+  renderMessages(detail.messages || []);
+}
+
+async function ensureConversation() {
+  if (currentConversationId) return currentConversationId;
+  const created = await api('api/coach/conversations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: null, mascotId: localStorage.getItem('finance.mascot') || null })
+  });
+  currentConversationId = created.id;
+  return currentConversationId;
+}
+
+async function ask(text) {
+  const question = String(text || '').trim();
+  if (!question) return;
+  const input = $('#coach-input'); const send = $('#coach-send');
+  input.value = ''; send.disabled = true;
+  appendMessage({ role: 'User', text: question, facts: [] });
+  try {
+    const id = await ensureConversation();
+    const response = await api(`api/coach/conversations/${id}/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question })
+    });
+    appendMessage(response.message);
+    $('#coach-mode').textContent = response.message.mode === 'Ai' ? tr('KI + geprüfte Fakten', 'AI + verified facts') : tr('Deterministisch', 'Deterministic');
+    renderFollowUps(response.followUps || []);
+    await loadReviews(false);
+  } catch (error) { appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] }); }
+  finally { send.disabled = false; input.focus(); }
+}
+
+function renderMessages(messages) {
+  const root = $('#coach-messages'); root.innerHTML = '';
+  if (!messages.length) root.innerHTML = `<div class="coach-empty">${esc(tr('Noch keine Nachrichten.', 'No messages yet.'))}</div>`;
+  messages.forEach(appendMessage);
+}
+
+function appendMessage(message) {
+  const root = $('#coach-messages'); root.querySelector('.coach-empty')?.remove();
+  const article = document.createElement('article');
+  article.className = `coach-message ${String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant'}`;
+  const text = document.createElement('div'); text.className = 'coach-message-text'; text.textContent = message.text || '';
+  article.appendChild(text);
+  if (message.facts?.length) {
+    const details = document.createElement('details'); details.className = 'coach-evidence';
+    const summary = document.createElement('summary'); summary.textContent = tr('Verwendete Fakten', 'Evidence'); details.appendChild(summary);
+    const facts = document.createElement('div'); facts.className = 'coach-facts';
+    message.facts.forEach(fact => { const chip = document.createElement('span'); chip.className = 'coach-fact'; chip.textContent = `${fact.label}: ${fact.value}`; facts.appendChild(chip); });
+    details.appendChild(facts); article.appendChild(details);
+  }
+  root.appendChild(article); root.scrollTop = root.scrollHeight;
+}
+
+function renderFollowUps(items) {
+  const root = $('#coach-starters'); root.innerHTML = '';
+  items.slice(0, 3).forEach(text => { const b = document.createElement('button'); b.type = 'button'; b.className = 'coach-chip'; b.textContent = text; b.addEventListener('click', () => ask(text)); root.appendChild(b); });
+}
+
+async function loadReviews(renderCandidates = true) {
+  const [summary, recent, transactions] = await Promise.all([
+    api('api/spending-reviews/summary'),
+    api('api/spending-reviews/recent?limit=100'),
+    renderCandidates ? api('api/transactions?direction=expense&limit=20') : Promise.resolve(null)
+  ]);
+  reviews = new Map((recent || []).map(review => [review.transactionId, review]));
+  renderSummary(summary);
+  if (transactions) renderReviewCandidates((transactions.items || []).filter(tx => !tx.isTransfer && !tx.isIgnored).slice(0, 12));
+}
+
+function renderSummary(summary) {
+  const root = $('#coach-summary');
+  const score = summary.worthItScore == null ? '—' : Number(summary.worthItScore).toFixed(2);
+  root.innerHTML = `<div class="coach-summary-grid">
+    <div><span>${esc(tr('Abdeckung', 'Coverage'))}</span><strong>${esc(formatPercent(summary.reviewCoverage))}</strong></div>
+    <div><span>${esc(tr('Worth-it', 'Worth it'))}</span><strong>${esc(score)}</strong></div>
+    <div><span>${esc(tr('Gut', 'Good'))}</span><strong>${esc(formatMoney(summary.positiveAmount, summary.currency))}</strong></div>
+    <div><span>${esc(tr('Schlecht', 'Bad'))}</span><strong>${esc(formatMoney(summary.negativeAmount, summary.currency))}</strong></div>
+  </div>${renderInsightGroups(summary)}`;
+}
+
+function renderInsightGroups(summary) {
+  const positive = (summary.highSpendPositive || []).slice(0, 2);
+  const negative = (summary.negativeOpportunities || []).slice(0, 2);
+  if (!positive.length && !negative.length) return `<p class="coach-muted">${esc(tr('Mehr Ausgaben bewerten, damit die Auswertung persönlicher wird.', 'Review more spending to make the analysis personal.'))}</p>`;
+  const rows = [
+    ...positive.map(x => `<li><strong>${esc(x.label)}</strong> · ${esc(tr('überwiegend gut bewertet', 'mostly rated good'))}</li>`),
+    ...negative.map(x => `<li><strong>${esc(x.label)}</strong> · ${esc(tr('negatives Signal', 'negative signal'))}</li>`)
+  ];
+  return `<ul class="coach-insights">${rows.join('')}</ul>`;
+}
+
+function renderReviewCandidates(items) {
+  const root = $('#coach-review-list'); root.innerHTML = '';
+  if (!items.length) { root.innerHTML = `<div class="coach-empty">${esc(tr('Keine Ausgaben gefunden.', 'No spending found.'))}</div>`; return; }
+  items.forEach(tx => {
+    const review = reviews.get(tx.id);
+    const row = document.createElement('div'); row.className = 'coach-review-row'; row.dataset.transactionId = tx.id;
+    row.innerHTML = `<div class="coach-review-head"><div><strong>${esc(tx.counterparty || tx.description || tr('Ausgabe', 'Expense'))}</strong><span>${esc(tx.bookingDate || '')}</span></div><strong>${esc(formatMoney(Math.abs(tx.amount), tx.currency || 'EUR'))}</strong></div>
+      <div class="coach-sentiments" role="group" aria-label="${esc(tr('Ausgabe bewerten', 'Review spending'))}">
+        ${sentimentButton('Positive', tr('Gut', 'Good'), review)}${sentimentButton('Neutral', tr('Neutral', 'Neutral'), review)}${sentimentButton('Negative', tr('Schlecht', 'Bad'), review)}
+        <button type="button" class="coach-details" ${review ? '' : 'disabled'}>${esc(tr('Details', 'Details'))}</button>
+      </div><div class="coach-review-details" hidden></div>`;
+    row.querySelectorAll('[data-sentiment]').forEach(button => button.addEventListener('click', () => quickReview(tx, button.dataset.sentiment, row)));
+    row.querySelector('.coach-details').addEventListener('click', () => toggleReviewDetails(tx, row));
+    root.appendChild(row);
+  });
+}
+
+function sentimentButton(sentiment, label, review) {
+  const activeClass = review?.sentiment === sentiment ? ' active' : '';
+  return `<button type="button" class="coach-sentiment ${sentiment.toLowerCase()}${activeClass}" data-sentiment="${sentiment}" aria-pressed="${review?.sentiment === sentiment}">${esc(label)}</button>`;
+}
+
+async function quickReview(tx, sentiment, row) {
+  try {
+    const saved = await api(`api/spending-reviews/transactions/${tx.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sentiment, reasons: [], note: null })
+    });
+    reviews.set(tx.id, saved); updateReviewRow(row, saved); await refreshSummaryOnly();
+  } catch (error) { showInlineError(row, error.message); }
+}
+
+function updateReviewRow(row, review) {
+  row.querySelectorAll('[data-sentiment]').forEach(button => { const on = button.dataset.sentiment === review.sentiment; button.classList.toggle('active', on); button.setAttribute('aria-pressed', String(on)); });
+  row.querySelector('.coach-details').disabled = false;
+}
+
+function toggleReviewDetails(tx, row) {
+  const panel = row.querySelector('.coach-review-details');
+  if (!panel.hidden) { panel.hidden = true; return; }
+  const review = reviews.get(tx.id); if (!review) return;
+  const allowed = reasonsBySentiment[review.sentiment] || [];
+  panel.innerHTML = `<div class="coach-reasons">${allowed.map(reason => `<button type="button" data-reason="${reason}" class="${review.reasons?.includes(reason) ? 'active' : ''}">${esc(reasonLabels[reason]?.[lang() === 'de' ? 0 : 1] || reason)}</button>`).join('')}</div>
+    <textarea maxlength="500" rows="2" placeholder="${esc(tr('Optionale Notiz', 'Optional note'))}">${esc(review.note || '')}</textarea>
+    <div class="coach-detail-actions"><button type="button" data-clear class="ghost">${esc(tr('Bewertung löschen', 'Clear review'))}</button><button type="button" data-save>${esc(tr('Speichern', 'Save'))}</button></div>`;
+  panel.querySelectorAll('[data-reason]').forEach(button => button.addEventListener('click', () => button.classList.toggle('active')));
+  panel.querySelector('[data-save]').addEventListener('click', () => saveReviewDetails(tx, row, panel));
+  panel.querySelector('[data-clear]').addEventListener('click', () => clearReview(tx, row));
+  panel.hidden = false;
+}
+
+async function saveReviewDetails(tx, row, panel) {
+  const current = reviews.get(tx.id); if (!current) return;
+  const reasons = [...panel.querySelectorAll('[data-reason].active')].map(button => button.dataset.reason);
+  const note = panel.querySelector('textarea').value.trim() || null;
+  try {
+    const saved = await api(`api/spending-reviews/transactions/${tx.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sentiment: current.sentiment, reasons, note })
+    });
+    reviews.set(tx.id, saved); panel.hidden = true; await refreshSummaryOnly();
+  } catch (error) { showInlineError(row, error.message); }
+}
+
+async function clearReview(tx, row) {
+  try {
+    await api(`api/spending-reviews/transactions/${tx.id}`, { method: 'DELETE' });
+    reviews.delete(tx.id); row.querySelectorAll('[data-sentiment]').forEach(button => { button.classList.remove('active'); button.setAttribute('aria-pressed', 'false'); });
+    row.querySelector('.coach-details').disabled = true; row.querySelector('.coach-review-details').hidden = true; await refreshSummaryOnly();
+  } catch (error) { showInlineError(row, error.message); }
+}
+
+async function refreshSummaryOnly() { renderSummary(await api('api/spending-reviews/summary')); }
+function showInlineError(row, message) { let error = row.querySelector('.coach-inline-error'); if (!error) { error = document.createElement('div'); error.className = 'coach-inline-error'; row.appendChild(error); } error.textContent = message; }
+function renderError(error) { const root = $('#coach-messages'); if (root) root.innerHTML = `<div class="coach-empty">${esc(tr('Coach konnte nicht geladen werden: ', 'Coach could not be loaded: ') + error.message)}</div>`; }
+
+installShell();

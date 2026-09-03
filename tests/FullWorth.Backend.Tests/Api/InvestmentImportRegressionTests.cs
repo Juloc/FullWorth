@@ -1,0 +1,222 @@
+using System.Data;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.Users;
+using FullWorth.Backend.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+
+namespace FullWorth.Backend.Tests.Api;
+
+public sealed class InvestmentImportRegressionTests
+{
+    private const string Isin = "DE000A1EWWW0";
+
+    [Fact]
+    public async Task GermanCsvAutoMatchesIsinAndReimportIsIdempotent()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var portfolio = Guid.NewGuid();
+        var security = Guid.NewGuid();
+        await SeedOwnerPortfolioSecurity(factory, owner, portfolio, security);
+
+        const string csv = "Datum;Typ;ISIN;Stück;Kurs;Betrag;Währung;Gebühren;ID\r\n" +
+                           "30.08.2026;Kauf;DE000A1EWWW0;2;100,00;200,00;EUR;1,00;broker-1\r\n";
+        var firstJob = await Upload(client, owner, csv);
+
+        using (var summaryRequest = UserRequest(HttpMethod.Get,
+                   $"/api/investment-import/jobs/{firstJob:D}/summary?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner))
+        using (var summaryResponse = await client.SendAsync(summaryRequest))
+        {
+            Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
+            using var summary = JsonDocument.Parse(await summaryResponse.Content.ReadAsStringAsync());
+            var mapping = Assert.Single(summary.RootElement.GetProperty("securities").EnumerateArray());
+            Assert.Equal(security, mapping.GetProperty("autoMatchId").GetGuid());
+        }
+
+        var first = await Commit(client, owner, firstJob, portfolio);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        using (var body = JsonDocument.Parse(await first.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(1, body.RootElement.GetProperty("imported").GetInt32());
+            Assert.Equal(0, body.RootElement.GetProperty("duplicates").GetInt32());
+        }
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+SELECT "SecurityId","TradeType","Quantity","Price","Amount","Fees","Source","ExternalKey"
+FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
+""";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@portfolio";
+            parameter.Value = portfolio;
+            command.Parameters.Add(parameter);
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(security, reader.GetGuid(0));
+            Assert.Equal("buy", reader.GetString(1));
+            Assert.Equal(2m, reader.GetDecimal(2));
+            Assert.Equal(100m, reader.GetDecimal(3));
+            Assert.Equal(200m, reader.GetDecimal(4));
+            Assert.Equal(1m, reader.GetDecimal(5));
+            Assert.Equal("import", reader.GetString(6));
+            Assert.StartsWith("investment-import:external:", reader.GetString(7));
+            Assert.False(await reader.ReadAsync());
+        });
+
+        var secondJob = await Upload(client, owner, csv);
+        using var second = await Commit(client, owner, secondJob, portfolio);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        using var secondBody = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        Assert.Equal(0, secondBody.RootElement.GetProperty("imported").GetInt32());
+        Assert.Equal(1, secondBody.RootElement.GetProperty("duplicates").GetInt32());
+    }
+
+    [Fact]
+    public async Task OversellFailureRollsBackTradeCandidateAndJobMutations()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var portfolio = Guid.NewGuid();
+        var security = Guid.NewGuid();
+        await SeedOwnerPortfolioSecurity(factory, owner, portfolio, security);
+
+        const string csv = "Datum;Typ;ISIN;Stück;Kurs;Betrag;Währung;ID\r\n" +
+                           "30.08.2026;Verkauf;DE000A1EWWW0;1;100,00;100,00;EUR;sell-without-stock\r\n";
+        var job = await Upload(client, owner, csv);
+        using var commit = await Commit(client, owner, job, portfolio);
+        Assert.Equal(HttpStatusCode.Conflict, commit.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+
+            await using (var trades = connection.CreateCommand())
+            {
+                trades.CommandText = "SELECT count(*) FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio";
+                var parameter = trades.CreateParameter(); parameter.ParameterName = "@portfolio"; parameter.Value = portfolio; trades.Parameters.Add(parameter);
+                Assert.Equal(0L, Convert.ToInt64(await trades.ExecuteScalarAsync()));
+            }
+            await using (var jobCommand = connection.CreateCommand())
+            {
+                jobCommand.CommandText = "SELECT \"Status\",\"ImportedCount\",\"DuplicateCount\",\"CompletedAt\" FROM \"InvestmentImportJobs\" WHERE \"Id\"=@job";
+                var parameter = jobCommand.CreateParameter(); parameter.ParameterName = "@job"; parameter.Value = job; jobCommand.Parameters.Add(parameter);
+                await using var reader = await jobCommand.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal("review", reader.GetString(0));
+                Assert.Equal(0, reader.GetInt32(1));
+                Assert.Equal(0, reader.GetInt32(2));
+                Assert.True(reader.IsDBNull(3));
+            }
+            await using (var candidate = connection.CreateCommand())
+            {
+                candidate.CommandText = "SELECT \"DuplicateStatus\" FROM \"InvestmentImportCandidates\" WHERE \"ImportJobId\"=@job";
+                var parameter = candidate.CreateParameter(); parameter.ParameterName = "@job"; parameter.Value = job; candidate.Parameters.Add(parameter);
+                Assert.Equal("new", Convert.ToString(await candidate.ExecuteScalarAsync()));
+            }
+        });
+    }
+
+    private static async Task<Guid> Upload(HttpClient client, Guid userId, string csv)
+    {
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/upload?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", userId);
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+        file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        form.Add(file, "file", "broker.csv");
+        form.Add(new StringContent(JsonSerializer.Serialize(new
+        {
+            tradeDate = "Datum",
+            tradeType = "Typ",
+            settlementDate = (string?)null,
+            securityName = (string?)null,
+            isin = "ISIN",
+            wkn = (string?)null,
+            ticker = (string?)null,
+            quantity = "Stück",
+            price = "Kurs",
+            grossAmount = (string?)null,
+            amount = "Betrag",
+            currency = "Währung",
+            fees = csv.Contains("Gebühren", StringComparison.Ordinal) ? "Gebühren" : null,
+            taxes = (string?)null,
+            withholdingTax = (string?)null,
+            externalKey = "ID"
+        }), Encoding.UTF8, "application/json"), "mapping");
+        request.Content = form;
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("jobId").GetGuid();
+    }
+
+    private static async Task<HttpResponseMessage> Commit(HttpClient client, Guid userId, Guid jobId, Guid portfolioId)
+    {
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", userId);
+        request.Content = JsonContent.Create(new
+        {
+            portfolioId,
+            securityMappings = new Dictionary<string, Guid?>(),
+            createMissingSecurities = false,
+            candidateIds = (Guid[]?)null
+        });
+        return await client.SendAsync(request);
+    }
+
+    private static async Task SeedOwnerPortfolioSecurity(
+        BackendWebApplicationFactory factory,
+        Guid owner,
+        Guid portfolio,
+        Guid security)
+    {
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = owner,
+                EmailNormalized = $"{owner:N}@EXAMPLE.COM",
+                DisplayName = "Investment import owner",
+                IsActive = true
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                UserId = owner,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            await db.SaveChangesAsync();
+            var now = DateTimeOffset.UtcNow;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+INSERT INTO "Securities"
+("Id","FullWorthSpaceId","Name","Isin","AssetType","Currency","IsActive","CreatedAt","UpdatedAt")
+VALUES ({security},{FullWorthSpaceDefaults.LegacyId},{"Import ETF"},{Isin},{"etf"},{"EUR"},{true},{now},{now})
+""");
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+INSERT INTO "InvestmentPortfolios"
+("Id","FullWorthSpaceId","Name","Currency","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
+VALUES ({portfolio},{FullWorthSpaceDefaults.LegacyId},{"Import Depot"},{"EUR"},{true},{true},{false},{now},{now})
+""");
+        });
+    }
+
+    private static HttpRequestMessage UserRequest(HttpMethod method, string path, Guid userId)
+    {
+        var request = new HttpRequestMessage(method, path);
+        request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
+        request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
+        return request;
+    }
+}

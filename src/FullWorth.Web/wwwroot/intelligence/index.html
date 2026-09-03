@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>AI & Intelligence · FullWorth</title>
+  <script src="/theme-init.js"></script>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/design-depth.css">
+  <link rel="stylesheet" href="/intelligence/intelligence.css">
+  <link rel="stylesheet" href="/intelligence/cloud.css">
+</head>
+<body>
+  <main class="intel-shell">
+    <header class="intel-header">
+      <div>
+        <a class="intel-back" href="/?view=settings">← Einstellungen</a>
+        <h1>AI & Intelligence</h1>
+        <p>Lokale AI-Konfiguration. Banking und deterministische Funktionen bleiben unabhängig davon aktiv.</p>
+      </div>
+      <span id="intel-status" class="status-pill">Lädt…</span>
+    </header>
+
+    <div id="intel-denied" class="panel intel-message" hidden>
+      <h2>Nicht verfügbar</h2>
+      <p>Diese Seite ist nur für Instanz-Administratoren verfügbar.</p>
+    </div>
+
+    <div id="intel-content" hidden>
+      <section id="cloud-setup-panel" class="panel cloud-setup" aria-labelledby="cloud-title">
+        <div class="panel-head cloud-head">
+          <div>
+            <div class="cloud-title-line">
+              <h2 id="cloud-title">FullWorth Cloud Intelligence</h2>
+              <span id="cloud-mode" class="status-pill">Nicht entschieden</span>
+            </div>
+            <p class="row-sub">Entscheide, ob diese Instanz die offizielle FullWorth Platform Cloud nutzt oder vollständig lokal bleibt.</p>
+          </div>
+        </div>
+
+        <div id="cloud-required" class="cloud-required" hidden>
+          Diese Entscheidung gehört zum Intelligence-Setup und muss einmal bewusst getroffen werden.
+        </div>
+
+        <fieldset class="cloud-choices">
+          <legend class="sr-only">Cloud-Intelligence-Modus</legend>
+          <label class="cloud-choice">
+            <input id="cloud-choice-enabled" type="radio" name="cloud-choice" value="enabled">
+            <span>
+              <strong>FullWorth Cloud Intelligence verwenden <em>Empfohlen</em></strong>
+              <small>Bessere Händler-, Kategorie-, Vertrags-, Produkt-, Preis- und Brand-Intelligence aus der FullWorth Platform Cloud.</small>
+            </span>
+          </label>
+          <label class="cloud-choice">
+            <input id="cloud-choice-local" type="radio" name="cloud-choice" value="disabled">
+            <span>
+              <strong>Intelligence nur lokal halten</strong>
+              <small>Keine Cloud-Beiträge und keine erweiterten FullWorth-Cloud-Mappings. Lokale Regeln, Algorithmen und optional lokale/eigene AI funktionieren weiter.</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <details class="cloud-details">
+          <summary>Was wird geteilt?</summary>
+          <div class="cloud-detail-grid">
+            <div>
+              <strong>Nur geeignete abgeleitete Daten</strong>
+              <p>Zum Beispiel bestätigte, kanonische Produkt-/Mapping-Informationen, aggregierte Beobachtungen und Qualitäts-/Confidence-Metadaten. Beiträge werden vor dem Outbox-Eintrag minimiert und nach einer festen Whitelist projiziert.</p>
+            </div>
+            <div>
+              <strong>Nicht Teil der Cloud-Beiträge</strong>
+              <p>Keine IBANs, Kontonummern, Salden, Benutzernamen, Kartenendungen, API-Keys, Belegbilder oder rohen freien Verwendungszwecke. Einzelne Käufe anderer Nutzer werden nicht sichtbar gemacht.</p>
+            </div>
+          </div>
+          <p class="row-sub">Empfang und Beitrag gehören zusammen: FullWorth unterstützt keinen produktiven „nur herunterladen“-Modus.</p>
+        </details>
+
+        <label id="cloud-consent-wrap" class="cloud-consent" hidden>
+          <input id="cloud-consent" type="checkbox">
+          <span>Ich verstehe, dass Cloud Intelligence den Empfang verbesserter FullWorth-Daten und die Übermittlung geeigneter minimierter Beiträge gemeinsam aktiviert.</span>
+        </label>
+
+        <div class="cloud-actions">
+          <button id="cloud-save" class="primary-action" type="button">Entscheidung speichern</button>
+        </div>
+        <p id="cloud-result" class="intel-result" aria-live="polite"></p>
+        <div id="cloud-ops" class="cloud-ops" hidden>
+          <span>Policy <strong id="cloud-policy">—</strong></span>
+          <span>Entitlement <strong id="cloud-entitlement">—</strong></span>
+          <span>Letzte Registrierung <strong id="cloud-registration">—</strong></span>
+          <span>Letzter Upload <strong id="cloud-submission">—</strong></span>
+        </div>
+      </section>
+
+      <section class="intel-metrics">
+        <article class="metric"><span>Provider</span><strong id="metric-provider">—</strong></article>
+        <article class="metric"><span>Offene Vorschläge</span><strong id="metric-suggestions">—</strong></article>
+        <article class="metric"><span>Fehlgeschlagene Jobs</span><strong id="metric-failed">—</strong></article>
+        <article class="metric"><span>Kosten Monat</span><strong id="metric-cost">—</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Provider & Modelle</h2><button id="save-settings" class="primary-action" type="button">Speichern</button></div>
+        <div class="intel-form-grid">
+          <label class="check"><input id="ai-enabled" type="checkbox"><span>AI aktivieren</span></label>
+          <label><span>Provider</span><select id="ai-provider"></select></label>
+          <label><span>Credential</span><select id="ai-credential"><option value="">Keins</option></select></label>
+          <label><span>Textmodell</span><input id="ai-text-model" autocomplete="off"></label>
+          <label><span>Vision-Modell</span><input id="ai-vision-model" autocomplete="off"></label>
+          <label><span>Tagesbudget €</span><input id="ai-daily-budget" type="number" min="0" step="0.01"></label>
+          <label><span>Monatsbudget €</span><input id="ai-monthly-budget" type="number" min="0" step="0.01"></label>
+          <label class="check"><input id="ai-allow-user-credentials" type="checkbox"><span>Eigene User-Credentials erlauben</span></label>
+        </div>
+        <div class="intel-feature-grid">
+          <label class="check"><input id="ai-receipt" type="checkbox"><span>Belege</span></label>
+          <label class="check"><input id="ai-merchant" type="checkbox"><span>Händler</span></label>
+          <label class="check"><input id="ai-category" type="checkbox"><span>Kategorien</span></label>
+          <label class="check"><input id="ai-contract" type="checkbox"><span>Verträge</span></label>
+          <label class="check"><input id="ai-product" type="checkbox"><span>Produkte</span></label>
+          <label class="check"><input id="ai-logo" type="checkbox"><span>Logo-Recherche</span></label>
+          <label class="check"><input id="ai-internet" type="checkbox"><span>Internet-Recherche</span></label>
+          <label class="check"><input id="ai-daily" type="checkbox"><span>Daily Scan</span></label>
+          <label class="check"><input id="ai-weekly" type="checkbox"><span>Weekly Deep Scan</span></label>
+          <label class="check"><input id="ai-monthly" type="checkbox"><span>Monthly Review</span></label>
+        </div>
+        <p class="row-sub">Wenn ein Budget gesetzt ist, muss für das gewählte Modell eine konservative Kostenschätzung konfiguriert sein. Sonst werden Provider-Aufrufe sicher zurückgestellt.</p>
+        <p id="settings-result" class="intel-result" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><h2>Offene Vorschläge</h2><p class="row-sub">AI-Vorschläge ändern nichts automatisch. Erst deine Bestätigung erzeugt ein lokales Mapping.</p></div><button id="refresh-suggestions" type="button">Aktualisieren</button></div>
+        <div id="suggestion-list" class="rows"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><h2>Scheduled Jobs</h2><p class="row-sub">Zeigt auch bewusst zurückgestellte Jobs, z. B. wegen Budget oder fehlendem Credential.</p></div><button id="refresh-jobs" type="button">Aktualisieren</button></div>
+        <div id="job-list" class="rows"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Credentials</h2></div>
+        <form id="credential-form" class="intel-inline-form">
+          <select id="credential-provider" aria-label="Provider"></select>
+          <input id="credential-name" maxlength="120" placeholder="Name" required>
+          <input id="credential-secret" type="password" autocomplete="new-password" placeholder="API Key" required>
+          <button type="submit">Hinzufügen</button>
+        </form>
+        <p class="row-sub">Der vollständige Key wird nach dem Speichern nicht mehr an den Browser zurückgegeben.</p>
+        <div id="credential-list" class="rows"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Provider Smoke Test</h2><button id="run-smoke" type="button">Test ausführen</button></div>
+        <p class="row-sub">Sendet ausschließlich feste synthetische Testdaten. Keine Konten, Transaktionen oder Belege.</p>
+        <pre id="smoke-result" class="intel-code">Noch nicht ausgeführt.</pre>
+      </section>
+
+      <div class="intel-two-col">
+        <section class="panel"><div class="panel-head"><h2>Letzte AI-Runs</h2></div><div id="run-list" class="rows"></div></section>
+        <section class="panel"><div class="panel-head"><h2>Intelligence Audit</h2></div><div id="audit-list" class="rows"></div></section>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="/security/browser-fetch.js"></script>
+  <script type="module" src="/intelligence/cloud.js"></script>
+  <script type="module" src="/intelligence/intelligence.js"></script>
+  <script type="module" src="/intelligence/jobs.js"></script>
+</body>
+</html>

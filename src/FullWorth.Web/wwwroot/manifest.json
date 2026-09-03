@@ -1,0 +1,47 @@
+{
+  "name": "FullWorth",
+  "short_name": "FullWorth",
+  "description": "Self-hosted personal finance: accounts, transactions, budgets, purchases and net worth.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f6f7",
+  "theme_color": "#f5f6f7",
+  "share_target": {
+    "action": "/share/receipt",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "receipt",
+          "accept": [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/heic",
+            "application/pdf",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".heic",
+            ".pdf"
+          ]
+        }
+      ]
+    }
+  },
+  "icons": [
+    {
+      "src": "/pwa/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

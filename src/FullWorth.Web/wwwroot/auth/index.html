@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FullWorth</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/auth/auth.css">
+</head>
+<body class="auth-body">
+  <div class="auth-shell">
+    <header class="auth-topbar">
+      <a class="auth-brand" href="/auth/index.html?view=login" aria-label="FullWorth">
+        <span class="brand-mark" aria-hidden="true">FW</span>
+        <span>FullWorth</span>
+      </a>
+      <div class="auth-preferences">
+        <label class="auth-preference">
+          <span data-i18n="auth.language"></span>
+          <select id="auth-language" data-i18n-aria-label="auth.language">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label class="auth-preference">
+          <span data-i18n="auth.theme"></span>
+          <select id="auth-theme" data-i18n-aria-label="auth.theme">
+            <option value="system" data-i18n="theme.system"></option>
+            <option value="light" data-i18n="theme.light"></option>
+            <option value="dark" data-i18n="theme.dark"></option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <main class="auth-main">
+      <article class="auth-card" aria-live="polite">
+        <div class="auth-card-brand">
+          <span class="brand-mark" aria-hidden="true">FW</span>
+          <div>
+            <strong>FullWorth</strong>
+            <span data-i18n="auth.appDescription"></span>
+          </div>
+        </div>
+
+        <div id="auth-session-status" class="auth-message auth-message-status" role="status" hidden></div>
+
+        <section data-auth-view="login">
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.login.title"></h1>
+            <p data-i18n="auth.pages.login.subtitle"></p>
+          </div>
+
+          <form id="login-form" class="auth-form" method="post" action="/auth/login" novalidate>
+            <label for="login-email">
+              <span data-i18n="auth.email"></span>
+              <input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required data-i18n-placeholder="auth.emailPlaceholder">
+            </label>
+
+            <label for="login-password">
+              <span data-i18n="auth.password"></span>
+              <span class="password-control">
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                <button type="button" class="password-toggle" data-auth-action="toggle-password" data-target="login-password" aria-controls="login-password" aria-pressed="false" data-i18n-aria-label="auth.showPassword" data-i18n-title="auth.showPassword">
+                  <span aria-hidden="true">Aa</span>
+                </button>
+              </span>
+            </label>
+
+            <div id="login-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.invalidCredentials"></div>
+            <div id="login-unavailable" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.signInUnavailable"></div>
+
+            <button class="auth-primary" type="submit" data-i18n="auth.signIn" data-loading-i18n="auth.signingIn"></button>
+          </form>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=forgot-password" data-i18n="auth.forgotPassword"></a>
+          </div>
+
+          <div class="auth-divider" aria-hidden="true"><span></span></div>
+
+          <button class="auth-secondary" type="button" data-auth-action="passkey-login" data-i18n="auth.passkey"></button>
+          <div id="passkey-status" class="auth-message auth-message-status" role="status" hidden data-i18n="auth.passkeyUnavailable"></div>
+        </section>
+
+        <section data-auth-view="forgot-password" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.forgot-password.title"></h1>
+            <p data-i18n="auth.pages.forgot-password.subtitle"></p>
+          </div>
+
+          <form id="forgot-form" class="auth-form" method="post" action="/auth/password-reset/request" novalidate>
+            <label for="forgot-email">
+              <span data-i18n="auth.email"></span>
+              <input id="forgot-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required data-i18n-placeholder="auth.emailPlaceholder">
+            </label>
+            <button class="auth-primary" type="submit" data-i18n="auth.continue" data-loading-i18n="auth.sending"></button>
+          </form>
+
+          <div id="forgot-confirmation" class="auth-message auth-message-success" role="status" hidden data-i18n="auth.forgotConfirmation"></div>
+          <div id="forgot-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+          </div>
+        </section>
+
+        <section data-auth-view="reset-password" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.reset-password.title"></h1>
+            <p data-i18n="auth.pages.reset-password.subtitle"></p>
+          </div>
+
+          <form id="reset-form" class="auth-form" method="post" action="/auth/password-reset/complete" novalidate>
+            <label for="new-password">
+              <span data-i18n="auth.newPassword"></span>
+              <input id="new-password" name="newPassword" type="password" autocomplete="new-password" required aria-describedby="password-help">
+            </label>
+            <p id="password-help" class="auth-help" data-i18n="auth.passwordHelp"></p>
+
+            <label for="confirm-password">
+              <span data-i18n="auth.confirmPassword"></span>
+              <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required aria-describedby="password-mismatch">
+            </label>
+            <div id="password-mismatch" class="auth-field-error" role="alert" hidden data-i18n="auth.passwordMismatch"></div>
+
+            <button class="auth-primary" type="submit" data-i18n="auth.resetPassword" data-loading-i18n="auth.resetting"></button>
+          </form>
+
+          <div id="reset-invalid" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.invalidResetLink"></div>
+          <div id="reset-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
+          <div id="reset-success" class="auth-message auth-message-success auth-final-state" role="status" hidden>
+            <strong data-i18n="auth.passwordChanged"></strong>
+            <a class="auth-primary auth-link-button" href="/auth/index.html?view=login" data-i18n="auth.signInAgain"></a>
+          </div>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+          </div>
+        </section>
+
+        <section data-auth-view="claim" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.claim.title"></h1>
+            <p data-i18n="auth.pages.claim.subtitle"></p>
+          </div>
+
+          <form id="claim-form" class="auth-form" method="post" action="/auth/claim" novalidate>
+            <label for="claim-new-password">
+              <span data-i18n="auth.newPassword"></span>
+              <input id="claim-new-password" name="newPassword" type="password" autocomplete="new-password" required aria-describedby="claim-password-help">
+            </label>
+            <p id="claim-password-help" class="auth-help" data-i18n="auth.passwordHelp"></p>
+
+            <label for="claim-confirm-password">
+              <span data-i18n="auth.confirmPassword"></span>
+              <input id="claim-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required aria-describedby="claim-password-mismatch">
+            </label>
+            <div id="claim-password-mismatch" class="auth-field-error" role="alert" hidden data-i18n="auth.passwordMismatch"></div>
+
+            <button class="auth-primary" type="submit" data-i18n="auth.claimSubmit" data-loading-i18n="auth.claimSubmitting"></button>
+          </form>
+
+          <div id="claim-invalid" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.claimInvalid"></div>
+          <div id="claim-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
+          <div id="claim-existing" class="auth-message auth-message-success auth-final-state" role="status" hidden>
+            <strong data-i18n="auth.claimExisting"></strong>
+            <a class="auth-primary auth-link-button" href="/auth/index.html?view=login" data-i18n="auth.signInAgain"></a>
+          </div>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+          </div>
+        </section>
+
+        <section data-auth-view="recovery-code" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.recovery-code.title"></h1>
+            <p data-i18n="auth.pages.recovery-code.subtitle"></p>
+          </div>
+
+          <form id="recovery-code-form" class="auth-form" method="post" action="/auth/recovery-code/redeem" novalidate>
+            <label for="recovery-email">
+              <span data-i18n="auth.email"></span>
+              <input id="recovery-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required data-i18n-placeholder="auth.emailPlaceholder">
+            </label>
+            <label for="recovery-code">
+              <span data-i18n="auth.recoveryCode"></span>
+              <input id="recovery-code" name="recoveryCode" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required aria-describedby="recovery-code-help">
+            </label>
+            <p id="recovery-code-help" class="auth-help" data-i18n="auth.recoveryCodeHelp"></p>
+            <button class="auth-primary" type="submit" data-auth-action="recovery-code-submit" data-i18n="auth.useRecoveryCode"></button>
+          </form>
+
+          <div id="recovery-code-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.recoveryError"></div>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+          </div>
+        </section>
+
+        <section data-auth-view="recovery-codes" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.recovery-codes.title"></h1>
+            <p data-i18n="auth.pages.recovery-codes.subtitle"></p>
+          </div>
+
+          <div class="auth-message auth-message-warning" role="status">
+            <strong data-i18n="auth.recoveryCodesShownOnce"></strong>
+            <span data-i18n="auth.recoveryCodesStoreSecurely"></span>
+          </div>
+
+          <ol id="recovery-codes-list" class="recovery-codes" aria-live="polite"></ol>
+          <p id="recovery-codes-remaining" class="auth-help" hidden></p>
+
+          <button id="copy-recovery-codes" class="auth-secondary" type="button" data-auth-action="copy-recovery-codes" data-i18n="auth.copyAll" disabled></button>
+          <div id="copy-recovery-status" class="auth-message auth-message-status" role="status" hidden data-i18n="auth.copied"></div>
+
+          <div class="auth-links">
+            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+          </div>
+        </section>
+      </article>
+    </main>
+
+    <footer class="auth-footer">FullWorth</footer>
+  </div>
+
+  <script type="module" src="/auth/auth.js"></script>
+</body>
+</html>

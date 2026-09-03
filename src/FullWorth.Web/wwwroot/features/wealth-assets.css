@@ -1,0 +1,136 @@
+.wealth-composition {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.wealth-composition-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.wealth-composition-item span,
+.wealth-composition-item strong {
+  display: block;
+}
+
+.wealth-composition-item span {
+  color: var(--muted);
+  font-size: .86rem;
+}
+
+.wealth-composition-item strong {
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wealth-chart svg {
+  width: 100%;
+  min-height: 180px;
+  max-height: 230px;
+  color: var(--text);
+}
+
+.wealth-group-title {
+  margin-top: 7px;
+}
+
+.wealth-group-title:first-child {
+  margin-top: 0;
+}
+
+.wealth-investment-total {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  border-radius: 10px;
+}
+
+.wealth-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.wealth-type {
+  min-height: 72px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.wealth-type:hover,
+.wealth-type:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--muted);
+  box-shadow: 0 5px 16px rgb(0 0 0 / 7%);
+}
+
+.wealth-type strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.wealth-investment-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  font-size: .9rem;
+}
+
+.wealth-valuations {
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.wealth-valuation.is-current {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.wealth-value-form {
+  margin-top: 14px;
+}
+
+.wealth-value-form h3 {
+  margin: 0 0 10px;
+}
+
+.fx-incomplete {
+  margin-top: 5px;
+  color: var(--warning, #f9891f);
+  font-size: .8rem;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .wealth-composition {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wealth-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wealth-type {
+    min-height: 58px;
+  }
+
+  .nw-item .row-side {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
