@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -14,11 +15,27 @@ public sealed record FullWorthCloudRegistrationResult(
     DateTimeOffset? CredentialExpiresAt,
     string EntitlementStatus);
 
+public sealed record FullWorthCloudBatchEventResult(string IdempotencyKey, string Status, string? ErrorCode);
+
+public sealed record FullWorthCloudBatchResult(
+    string BatchId,
+    int Accepted,
+    int Duplicate,
+    int Rejected,
+    IReadOnlyList<FullWorthCloudBatchEventResult> Events);
+
+public sealed record FullWorthCloudSubmissionEvent(
+    string IdempotencyKey,
+    string SchemaVersion,
+    string EventType,
+    JsonElement Payload);
+
 public interface IFullWorthCloudClient
 {
     Uri BaseUri { get; }
     Task<FullWorthCloudRegistrationResult> RegisterAsync(Guid instanceId, string policyVersion, string clientVersion, CancellationToken ct);
     Task<FullWorthCloudRegistrationResult> RotateCredentialAsync(Guid instanceId, string currentCredential, CancellationToken ct);
+    Task<FullWorthCloudBatchResult> SubmitBatchAsync(Guid instanceId, string instanceCredential, IReadOnlyList<FullWorthCloudSubmissionEvent> events, CancellationToken ct);
 }
 
 public sealed class FullWorthCloudException(
@@ -43,6 +60,8 @@ public sealed class FullWorthCloudException(
 public sealed class FullWorthCloudClient : IFullWorthCloudClient
 {
     public const string OfficialBaseUrl = "https://cloud.fullworth.de/";
+    public const int MaximumBatchEvents = 500;
+    public const int MaximumCompressedBatchBytes = 2 * 1024 * 1024;
 
     private readonly HttpClient http;
     private readonly IConfiguration configuration;
@@ -99,6 +118,46 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
             throw new FullWorthCloudException("cloud_rotation_invalid_response", response.StatusCode);
         return new(instanceId, result.Credential.Trim(), result.CredentialExpiresAt,
             NormalizeEntitlement(result.EntitlementStatus));
+    }
+
+    public async Task<FullWorthCloudBatchResult> SubmitBatchAsync(
+        Guid instanceId,
+        string instanceCredential,
+        IReadOnlyList<FullWorthCloudSubmissionEvent> events,
+        CancellationToken ct)
+    {
+        if (events.Count is < 1 or > MaximumBatchEvents)
+            throw new ArgumentOutOfRangeException(nameof(events), $"Cloud batch must contain 1-{MaximumBatchEvents} events.");
+
+        var batchId = Guid.NewGuid().ToString("N");
+        var json = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            batchId,
+            instanceId,
+            schemaVersion = CloudIntelligencePolicy.SubmissionSchemaVersion,
+            events
+        });
+        var compressed = Compress(json);
+        if (compressed.Length > MaximumCompressedBatchBytes)
+            throw new FullWorthCloudException("cloud_batch_too_large");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "v1/submissions/batch");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        request.Headers.TryAddWithoutValidation("Idempotency-Key", $"batch:{instanceId:N}:{batchId}");
+        var content = new ByteArrayContent(compressed);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        content.Headers.ContentEncoding.Add("gzip");
+        request.Content = content;
+
+        using var response = await SendAsync(request, ct);
+        var result = await DeserializeAsync<BatchResponse>(response, ct);
+        var perEvent = result.Events?.Select(x => new FullWorthCloudBatchEventResult(
+                x.IdempotencyKey ?? string.Empty,
+                x.Status ?? string.Empty,
+                x.ErrorCode))
+            .Where(x => x.IdempotencyKey.Length > 0)
+            .ToList() ?? [];
+        return new(result.BatchId ?? batchId, result.Accepted, result.Duplicate, result.Rejected, perEvent);
     }
 
     internal static Uri ResolveBaseUri(IConfiguration configuration, IHostEnvironment environment)
@@ -169,6 +228,14 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         return content;
     }
 
+    private static byte[] Compress(byte[] input)
+    {
+        using var output = new MemoryStream();
+        using (var gzip = new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true))
+            gzip.Write(input, 0, input.Length);
+        return output.ToArray();
+    }
+
     private static TimeSpan? ParseRetryAfter(RetryConditionHeaderValue? retryAfter)
     {
         if (retryAfter?.Delta is { } delta) return delta;
@@ -191,6 +258,15 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         string Credential,
         DateTimeOffset? CredentialExpiresAt,
         string? EntitlementStatus);
+
+    private sealed record BatchResponse(
+        string? BatchId,
+        int Accepted,
+        int Duplicate,
+        int Rejected,
+        List<BatchEventResponse>? Events);
+
+    private sealed record BatchEventResponse(string? IdempotencyKey, string? Status, string? ErrorCode);
 }
 
 public sealed class CloudInstanceCredentialStore(

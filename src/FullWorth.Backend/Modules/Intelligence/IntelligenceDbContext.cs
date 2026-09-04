@@ -30,7 +30,11 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<CloudConnectionState> CloudConnectionStates => Set<CloudConnectionState>();
     public DbSet<CloudIntelligenceConsent> CloudIntelligenceConsents => Set<CloudIntelligenceConsent>();
     public DbSet<CloudInstanceCredential> CloudInstanceCredentials => Set<CloudInstanceCredential>();
+    public DbSet<CloudSubmissionOutbox> CloudSubmissionOutbox => Set<CloudSubmissionOutbox>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
+    public DbSet<KnowledgePackInstallation> KnowledgePackInstallations => Set<KnowledgePackInstallation>();
+    public DbSet<KnowledgePackArchive> KnowledgePackArchives => Set<KnowledgePackArchive>();
+    public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +46,20 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
         LearnedMerchantMappingModelConfiguration.Configure(modelBuilder);
         CloudIntelligenceModelConfiguration.Configure(modelBuilder);
         IntelligenceDigestModelConfiguration.Configure(modelBuilder);
+        KnowledgePackModelConfiguration.Configure(modelBuilder);
+
+        // Downloaded FullWorth Cloud knowledge is reciprocal. Keeping the rows locally is not enough
+        // to make them usable: every normal query must also see a currently accepted policy version.
+        // Administrative purge/replacement paths that intentionally operate on stored rows use
+        // IgnoreQueryFilters() explicitly.
+        modelBuilder.Entity<OfficialMerchantMapping>().HasQueryFilter(_ =>
+            CloudConnectionStates.Any(state =>
+                state.ScopeKey == CloudConnectionState.InstanceScopeKey &&
+                state.Mode == CloudIntelligenceModes.Enabled &&
+                CloudIntelligenceConsents.Any(consent =>
+                    consent.InstanceId == state.InstanceId &&
+                    consent.PolicyVersion == CloudIntelligencePolicy.CurrentVersion &&
+                    consent.RevokedAt == null)));
 
         // The fast unit-style Intelligence tests run this model on in-memory SQLite, which cannot
         // order or compare DateTimeOffset columns (many queries filter/order by StartedAt/CreatedAt).

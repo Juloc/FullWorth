@@ -7,7 +7,7 @@ namespace FullWorth.Backend.Tests.Intelligence;
 public sealed class CloudOptOutPurgeTests
 {
     [Fact]
-    public async Task Disable_revokes_consent_and_drops_instance_credential()
+    public async Task Disable_removes_active_and_archived_cloud_knowledge()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -15,25 +15,48 @@ public sealed class CloudOptOutPurgeTests
         await using var db = new IntelligenceDbContext(options);
         await db.Database.EnsureCreatedAsync();
 
-        var service = new CloudIntelligenceStateService(db);
-        var enabled = await service.EnableAsync(
-            Guid.NewGuid(),
-            new EnableCloudIntelligenceRequest(CloudIntelligencePolicy.CurrentVersion, "de-DE", "test"),
-            CancellationToken.None);
-
-        db.CloudInstanceCredentials.Add(new CloudInstanceCredential
+        db.KnowledgePackInstallations.Add(new KnowledgePackInstallation
         {
-            InstanceId = enabled.InstanceId,
-            ProtectedSecret = "protected",
-            SecretFingerprint = "sha256:deadbeefdeadbeef"
+            PackId = "merchant-de",
+            Version = "1.0.0",
+            SchemaVersion = "1",
+            Region = "DE",
+            ContentSha256 = new string('a', 64),
+            SignatureAlgorithm = KnowledgePackVerifier.SupportedSignatureAlgorithm,
+            MerchantMappingCount = 1
+        });
+        db.KnowledgePackArchives.Add(new KnowledgePackArchive
+        {
+            PackId = "merchant-de",
+            Version = "1.0.0",
+            SchemaVersion = "1",
+            Region = "DE",
+            ContentSha256 = new string('a', 64),
+            SignatureAlgorithm = KnowledgePackVerifier.SupportedSignatureAlgorithm,
+            SignatureBase64 = "AA==",
+            PayloadBase64 = "e30="
+        });
+        db.OfficialMerchantMappings.Add(new OfficialMerchantMapping
+        {
+            PackId = "merchant-de",
+            PackVersion = "1.0.0",
+            AliasKey = "AMAZON",
+            Direction = "expense",
+            CanonicalMerchantKey = "AMAZON",
+            CanonicalName = "Amazon",
+            CategoryKey = "shopping.online",
+            Country = "DE",
+            Confidence = 0.95m
         });
         await db.SaveChangesAsync();
 
+        Assert.Single(await db.OfficialMerchantMappings.IgnoreQueryFilters().ToListAsync());
+
+        var service = new CloudIntelligenceStateService(db);
         await service.DisableAsync(Guid.NewGuid(), CancellationToken.None);
 
-        Assert.Empty(await db.CloudInstanceCredentials.ToListAsync());
-        Assert.False(await service.HasCurrentActiveConsentAsync(CancellationToken.None));
-        var consent = await db.CloudIntelligenceConsents.SingleAsync();
-        Assert.NotNull(consent.RevokedAt);
+        Assert.Empty(await db.KnowledgePackInstallations.ToListAsync());
+        Assert.Empty(await db.KnowledgePackArchives.ToListAsync());
+        Assert.Empty(await db.OfficialMerchantMappings.IgnoreQueryFilters().ToListAsync());
     }
 }

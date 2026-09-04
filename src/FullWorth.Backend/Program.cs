@@ -69,6 +69,8 @@ builder.Services.AddHttpClient<OpenAiIntelligenceProvider>(client =>
 });
 builder.Services.AddHttpClient<FullWorthCloudClient>();
 builder.Services.AddScoped<IFullWorthCloudClient>(services => services.GetRequiredService<FullWorthCloudClient>());
+builder.Services.AddHttpClient<FullWorthKnowledgePackClient>();
+builder.Services.AddScoped<IFullWorthKnowledgePackClient>(services => services.GetRequiredService<FullWorthKnowledgePackClient>());
 builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
 builder.Services.AddScoped<IntelligenceProviderRegistry>();
 builder.Services.AddScoped<IntelligenceStore>();
@@ -78,6 +80,10 @@ builder.Services.AddScoped<IntelligenceManualJobService>();
 builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
 builder.Services.AddScoped<CloudIntelligenceStateService>();
 builder.Services.AddScoped<CloudInstanceCredentialStore>();
+builder.Services.AddScoped<CloudOutboxUploader>();
+builder.Services.AddScoped<KnowledgePackVerifier>();
+builder.Services.AddScoped<KnowledgePackService>();
+builder.Services.AddScoped<KnowledgePackSyncService>();
 builder.Services.AddScoped<AiBudgetGuard>();
 builder.Services.AddScoped<AiCostEstimator>();
 builder.Services.AddScoped<IntelligenceJobLeaseService>();
@@ -88,6 +94,8 @@ builder.Services.AddScoped<ScheduledIntelligenceJobProcessor>();
 builder.Services.AddScoped<IntelligenceSuggestionReviewService>();
 builder.Services.AddHostedService<IntelligenceSchedulePlannerService>();
 builder.Services.AddHostedService<IntelligenceScheduledJobWorker>();
+builder.Services.AddHostedService<CloudOutboxUploaderWorker>();
+builder.Services.AddHostedService<KnowledgePackSyncWorker>();
 
 builder.Services.AddSingleton(services => InternalUserContextOptions.Load(
     services.GetRequiredService<IConfiguration>(),
@@ -330,6 +338,8 @@ app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
 app.MapIntelligenceSuggestionEndpoints();
+app.MapCloudSyncAdminEndpoints();
+app.MapKnowledgePackAdminEndpoints();
 
 // Main feature-parity surfaces remain available. Product/review endpoints are compatibility facades
 // over the canonical purchase stack rather than parallel storage models.

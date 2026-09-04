@@ -186,8 +186,6 @@ public sealed class IngestionService(
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();
-        // Sourced merchant knowledge distribution now lives outside this instance; the rule engine
-        // tolerates an empty cloud-mapping set and falls back to rules/learning/catalog.
         IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings = Array.Empty<OfficialMerchantCategoryMapping>();
         if (intelligenceDb is not null && activeCategoryIds.Length > 0)
         {
@@ -195,6 +193,17 @@ public sealed class IngestionService(
                 .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.IsActive && activeCategoryIds.Contains(x.CategoryId))
                 .OrderBy(x => x.NormalizedCounterparty).ThenBy(x => x.Direction)
                 .Select(x => new LearnedMerchantCategoryMapping(x.NormalizedCounterparty, x.Direction, x.CategoryId))
+                .ToListAsync(ct);
+
+            var installation = await intelligenceDb.KnowledgePackInstallations.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.ScopeKey == KnowledgePackPolicy.InstallationScopeKey, ct);
+            var region = installation?.Region?.Trim().ToUpperInvariant();
+            cloudMappings = await intelligenceDb.OfficialMerchantMappings.AsNoTracking()
+                .Where(x => x.CategoryKey != null && x.Confidence >= TransactionRuleEngine.MinimumCloudMappingConfidence)
+                .Where(x => x.Country == null || region == null || x.Country == region)
+                .OrderByDescending(x => x.Confidence)
+                .ThenBy(x => x.AliasKey)
+                .Select(x => new OfficialMerchantCategoryMapping(x.AliasKey, x.Direction, x.CategoryKey!, x.Confidence))
                 .ToListAsync(ct);
         }
 

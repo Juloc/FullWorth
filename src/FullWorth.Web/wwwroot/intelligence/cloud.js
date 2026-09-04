@@ -50,6 +50,28 @@ function setResult(message, kind = '') {
   node.className = `intel-result ${kind}`.trim();
 }
 
+function renderOutbox(payload) {
+  const node = $('cloud-outbox');
+  if (!node) return;
+  const counts = new Map((payload?.counts || []).map(item => [item.status, item.count]));
+  const pending = (counts.get('queued') || 0) + (counts.get('failed') || 0) + (counts.get('sending') || 0);
+  const dead = counts.get('dead_letter') || 0;
+  node.textContent = dead > 0 ? `${pending} offen · ${dead} Dead-Letter` : `${pending} offen`;
+}
+
+async function refreshOutbox() {
+  if (!cloudState || cloudState.mode !== 'enabled' || cloudState.requiresSetupDecision) {
+    $('cloud-outbox').textContent = '—';
+    return;
+  }
+
+  try {
+    renderOutbox(await api('/cloud/outbox'));
+  } catch {
+    $('cloud-outbox').textContent = 'nicht verfügbar';
+  }
+}
+
 function renderCloudState(state) {
   cloudState = state;
   const enabled = state.mode === 'enabled';
@@ -84,6 +106,7 @@ function renderCloudState(state) {
   $('cloud-registration').textContent = formatDate(state.lastRegistrationAt);
   $('cloud-submission').textContent = formatDate(state.lastSubmissionAt);
   $('cloud-ops').hidden = !state.setupDecisionAt;
+  $('cloud-sync').disabled = saving || !enabled || state.requiresSetupDecision;
 
   if (state.lastErrorCode && enabled) setResult(`Cloud-Status: ${state.lastErrorCode}`, 'bad');
   refreshSaveState();
@@ -106,6 +129,7 @@ async function loadCloud() {
   try {
     const state = await api('/cloud');
     renderCloudState(state);
+    await refreshOutbox();
   } catch (error) {
     if (error.status === 403) return;
     setResult(error.message || 'Cloud-Status konnte nicht geladen werden.', 'bad');
@@ -125,6 +149,7 @@ async function saveDecision() {
 
   saving = true;
   refreshSaveState();
+  $('cloud-sync').disabled = true;
   setResult('Speichert…');
 
   try {
@@ -137,12 +162,13 @@ async function saveDecision() {
             clientVersion: 'fullworth-web'
           })
         })
-      : await api('/cloud/disable', { method: 'POST', body: '{}' });
+      : await api('/cloud/local-only', { method: 'POST', body: '{}' });
 
     renderCloudState(state);
     setResult(choice === 'enabled'
       ? 'FullWorth Cloud Intelligence ist aktiviert. Empfang und geeignete minimierte Beiträge sind gemeinsam aktiv.'
       : 'Diese Instanz bleibt lokal. Es werden keine FullWorth-Cloud-Beiträge gesendet und keine erweiterten Cloud-Mappings bezogen.', 'ok');
+    await refreshOutbox();
   } catch (error) {
     if (error.status === 409 && error.detail?.error === 'cloud_policy_stale') {
       setResult('Die Cloud-Richtlinie hat sich geändert. Der aktuelle Stand wird neu geladen; bitte bestätige erneut.', 'bad');
@@ -153,6 +179,26 @@ async function saveDecision() {
   } finally {
     saving = false;
     refreshSaveState();
+    $('cloud-sync').disabled = !cloudState || cloudState.mode !== 'enabled' || cloudState.requiresSetupDecision;
+  }
+}
+
+async function syncNow() {
+  if (!cloudState || cloudState.mode !== 'enabled' || cloudState.requiresSetupDecision) return;
+  const button = $('cloud-sync');
+  button.disabled = true;
+  setResult('Synchronisiert…');
+  try {
+    const result = await api('/cloud/sync', { method: 'POST', body: '{}' });
+    setResult(result.errorCode
+      ? `Synchronisierung beendet: ${result.errorCode}`
+      : `Synchronisiert: ${result.sent || 0} gesendet, ${result.retried || 0} erneut geplant, ${result.deadLettered || 0} Dead-Letter.`,
+      result.errorCode ? 'bad' : 'ok');
+    await loadCloud();
+  } catch (error) {
+    setResult(error.message || 'Cloud-Synchronisierung fehlgeschlagen.', 'bad');
+  } finally {
+    button.disabled = !cloudState || cloudState.mode !== 'enabled' || cloudState.requiresSetupDecision;
   }
 }
 
@@ -161,5 +207,6 @@ for (const id of ['cloud-choice-enabled', 'cloud-choice-local']) {
 }
 $('cloud-consent')?.addEventListener('change', refreshSaveState);
 $('cloud-save')?.addEventListener('click', saveDecision);
+$('cloud-sync')?.addEventListener('click', syncNow);
 
 loadCloud();

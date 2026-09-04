@@ -26,8 +26,10 @@ public sealed class IntelligenceFeedbackRecorder(
         string? publicProductKey = null,
         string? semanticCategoryKey = null)
     {
-        _ = publicProductKey;
-        _ = semanticCategoryKey;
+        var projection = string.IsNullOrWhiteSpace(publicProductKey) || string.IsNullOrWhiteSpace(semanticCategoryKey)
+            ? null
+            : new CloudFeedbackProjection("product", publicProductKey, semanticCategoryKey);
+        var cloudEligible = CloudSubmissionProjector.IsSafe(projection);
         return TryRecordAsync(new IntelligenceFeedbackEvent
         {
             FullWorthSpaceId = fullWorthSpaceId,
@@ -39,9 +41,9 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = JsonSerializer.Serialize(new { categoryId = oldCategoryId }),
             NewValueJson = JsonSerializer.Serialize(new { categoryId = newCategoryId, productId }),
             Source = "user",
-            CloudEligible = false,
+            CloudEligible = cloudEligible,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        }, projection, ct);
     }
 
     public Task<bool> RecordContractDecisionAsync(
@@ -75,7 +77,7 @@ public sealed class IntelligenceFeedbackRecorder(
             // cloud identifier. This becomes cloud-eligible only after a canonical provider key exists.
             CloudEligible = false,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        }, projection: null, ct: ct);
 
     /// <summary>
     /// Records a manual category correction only. It intentionally does not create future merchant
@@ -111,18 +113,22 @@ public sealed class IntelligenceFeedbackRecorder(
             // supply a stable public FullWorth merchant/provider key.
             CloudEligible = false,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        }, projection: null, ct: ct);
     }
 
     private async Task<bool> TryRecordAsync(
         IntelligenceFeedbackEvent feedback,
+        CloudFeedbackProjection? projection,
         CancellationToken ct)
     {
+        CloudSubmissionOutbox? outbox = null;
         try
         {
             db.IntelligenceFeedbackEvents.Add(feedback);
-            // Feedback capture is best-effort. The primary FinanceDb mutation that triggered this
-            // recorder remains intentionally independent and is never rolled back by it.
+            outbox = await CloudSubmissionProjector.TryCreateOutboxAsync(db, feedback, projection, ct);
+            if (outbox is not null) db.CloudSubmissionOutbox.Add(outbox);
+            // Feedback and its optional network outbox record commit together. The primary FinanceDb
+            // mutation that triggered this recorder remains intentionally independent/best-effort.
             await db.SaveChangesAsync(ct);
             return true;
         }
@@ -134,6 +140,8 @@ public sealed class IntelligenceFeedbackRecorder(
         {
             if (db.Entry(feedback).State != EntityState.Detached)
                 db.Entry(feedback).State = EntityState.Detached;
+            if (outbox is not null && db.Entry(outbox).State != EntityState.Detached)
+                db.Entry(outbox).State = EntityState.Detached;
             logger.LogWarning(exception,
                 "Intelligence feedback capture failed for {EventType}/{SubjectType}; primary finance mutation remains successful.",
                 feedback.EventType, feedback.SubjectType);

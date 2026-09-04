@@ -106,7 +106,9 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
                  descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Purchases.ReceiptScanQueueWorker) ||
                  descriptor.ImplementationType == typeof(FullWorth.Backend.Modules.Tax.TaxAutomaticAnalysisWorker) ||
                  descriptor.ImplementationType == typeof(IntelligenceSchedulePlannerService) ||
-                 descriptor.ImplementationType == typeof(IntelligenceScheduledJobWorker))).ToList())
+                 descriptor.ImplementationType == typeof(IntelligenceScheduledJobWorker) ||
+                 descriptor.ImplementationType == typeof(CloudOutboxUploaderWorker) ||
+                 descriptor.ImplementationType == typeof(KnowledgePackSyncWorker))).ToList())
                 services.Remove(worker);
 
             serviceOverrides?.Invoke(services);

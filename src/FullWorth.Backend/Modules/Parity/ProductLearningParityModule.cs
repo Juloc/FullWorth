@@ -166,7 +166,7 @@ public static class ProductLearningParityEndpoints
                 .ToListAsync(ct);
             foreach (var barcode in barcodes)
             {
-                if (!GtinKey.TryCreateGtinSubjectKey(barcode, out var key)) continue;
+                if (!CloudSubmissionProjector.TryCreateGtinSubjectKey(barcode, out var key)) continue;
                 publicProductKey = key;
                 break;
             }

@@ -36,10 +36,11 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.DoesNotContain(rawAlias, feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(newCategoryId.ToString(), feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.False(feedback.CloudEligible);
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]
-    public async Task Product_feedback_with_public_identifier_is_still_recorded_locally()
+    public async Task Safe_product_feedback_is_queued_only_with_active_current_consent()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -47,28 +48,65 @@ public sealed class IntelligenceFeedbackRecorderTests
         await using var db = new IntelligenceDbContext(options);
         await db.Database.EnsureCreatedAsync();
 
+        var state = new CloudIntelligenceStateService(db);
+        await state.EnableAsync(
+            Guid.NewGuid(),
+            new EnableCloudIntelligenceRequest(CloudIntelligencePolicy.CurrentVersion, "de-DE", "test"),
+            CancellationToken.None);
+
         var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
         var spaceId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var productId = Guid.NewGuid();
+        var oldCategoryId = Guid.NewGuid();
         var newCategoryId = Guid.NewGuid();
         const string rawAlias = "PRIVATE RECEIPT NAME";
+        const string publicProductKey = "gtin:4006381333931";
+        const string semanticCategoryKey = "food.groceries";
 
         var recorded = await recorder.RecordProductCategoryAsync(
             spaceId,
             userId,
             productId,
             rawAlias,
-            null,
+            oldCategoryId,
             newCategoryId,
             CancellationToken.None,
-            "gtin:4006381333931",
-            "food.groceries");
+            publicProductKey,
+            semanticCategoryKey);
 
         Assert.True(recorded);
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
-        Assert.Equal("product_category_corrected", feedback.EventType);
-        Assert.DoesNotContain(rawAlias, feedback.SubjectFingerprint, StringComparison.OrdinalIgnoreCase);
+        Assert.True(feedback.CloudEligible);
+        var outbox = await db.CloudSubmissionOutbox.SingleAsync();
+        Assert.Equal(feedback.Id, outbox.FeedbackEventId);
+        Assert.Equal("product_category_corrected", outbox.EventType);
+        Assert.Contains(publicProductKey, outbox.PayloadJson, StringComparison.Ordinal);
+        Assert.Contains(semanticCategoryKey, outbox.PayloadJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(rawAlias, outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(spaceId.ToString("D"), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(userId.ToString("D"), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(productId.ToString("D"), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(oldCategoryId.ToString("D"), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(newCategoryId.ToString("D"), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Safe_product_feedback_does_not_queue_when_cloud_is_disabled()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
+        await using var db = new IntelligenceDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
+
+        Assert.True(await recorder.RecordProductCategoryAsync(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "private", null, Guid.NewGuid(), CancellationToken.None,
+            "gtin:4006381333931", "food.groceries"));
+
+        Assert.True((await db.IntelligenceFeedbackEvents.SingleAsync()).CloudEligible);
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Theory]
@@ -77,7 +115,7 @@ public sealed class IntelligenceFeedbackRecorderTests
     [InlineData("REWE", null)]
     public void Public_product_key_requires_valid_gtin_check_digit(string barcode, string? expected)
     {
-        var valid = GtinKey.TryCreateGtinSubjectKey(barcode, out var actual);
+        var valid = CloudSubmissionProjector.TryCreateGtinSubjectKey(barcode, out var actual);
         Assert.Equal(expected is not null, valid);
         Assert.Equal(expected, actual);
     }
@@ -107,6 +145,7 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.DoesNotContain(rawCounterparty, feedback.NewValueJson, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("EUR", feedback.NewValueJson, StringComparison.Ordinal);
         Assert.False(feedback.CloudEligible);
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 
     [Fact]
@@ -128,5 +167,6 @@ public sealed class IntelligenceFeedbackRecorderTests
         Assert.Empty(await db.AiInstanceSettings.ToListAsync());
         var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
         Assert.False(feedback.CloudEligible);
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
     }
 }

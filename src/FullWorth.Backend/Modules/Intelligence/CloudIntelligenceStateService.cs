@@ -94,10 +94,17 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
         state.LastErrorCode = null;
         state.UpdatedAt = now;
 
-        // Cloud Intelligence is reciprocal. Opt-out revokes consent and drops the rotatable instance
-        // credential so nothing can be transmitted after a later re-enable without fresh enrollment.
+        // Cloud Intelligence is reciprocal. Opt-out makes downloaded cloud knowledge unavailable and
+        // guarantees that unsent contributions cannot be transmitted after a later re-enable.
+        // IgnoreQueryFilters is required here so stale-policy mappings are physically purged too.
+        db.OfficialMerchantMappings.RemoveRange(await db.OfficialMerchantMappings.IgnoreQueryFilters().ToListAsync(ct));
+        db.KnowledgePackInstallations.RemoveRange(await db.KnowledgePackInstallations.ToListAsync(ct));
+        db.KnowledgePackArchives.RemoveRange(await db.KnowledgePackArchives.ToListAsync(ct));
         db.CloudInstanceCredentials.RemoveRange(await db.CloudInstanceCredentials
             .Where(x => x.InstanceId == state.InstanceId)
+            .ToListAsync(ct));
+        db.CloudSubmissionOutbox.RemoveRange(await db.CloudSubmissionOutbox
+            .Where(x => x.InstanceId == state.InstanceId && x.Status != CloudSubmissionStatuses.Sent)
             .ToListAsync(ct));
 
         await db.SaveChangesAsync(ct);

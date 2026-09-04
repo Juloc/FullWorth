@@ -8,11 +8,21 @@ public static class CloudIntelligenceModes
     public const string Enabled = "enabled";
 }
 
+public static class CloudSubmissionStatuses
+{
+    public const string Queued = "queued";
+    public const string Sending = "sending";
+    public const string Sent = "sent";
+    public const string Failed = "failed";
+    public const string DeadLetter = "dead_letter";
+}
+
 public static class CloudIntelligencePolicy
 {
     // Bump when materially changing what may be contributed. Existing consent must not silently cover
     // new data categories after a material policy change.
     public const string CurrentVersion = "2026-09-01.1";
+    public const string SubmissionSchemaVersion = "1";
 }
 
 public sealed class CloudConnectionState
@@ -68,6 +78,31 @@ public sealed class CloudInstanceCredential
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Network-independent upload queue. PayloadJson may contain only an already-sanitized derived cloud
+/// contribution envelope; raw transactions, free-text descriptions, receipt images, account/user ids,
+/// credentials and unrelated application payloads are forbidden by the projector that creates rows.
+/// </summary>
+public sealed class CloudSubmissionOutbox
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid InstanceId { get; set; }
+    public Guid? FeedbackEventId { get; set; }
+    public string IdempotencyKey { get; set; } = string.Empty;
+    public string SchemaVersion { get; set; } = CloudIntelligencePolicy.SubmissionSchemaVersion;
+    public string EventType { get; set; } = string.Empty;
+    public string PayloadJson { get; set; } = "{}";
+    public string Status { get; set; } = CloudSubmissionStatuses.Queued;
+    public int AttemptCount { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? SentAt { get; set; }
+    public string? ErrorCode { get; set; }
+    public string? LeaseOwner { get; set; }
+    public DateTimeOffset? LeaseExpiresAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public static class CloudIntelligenceModelConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)
@@ -96,6 +131,25 @@ public static class CloudIntelligenceModelConfiguration
             entity.HasIndex(x => x.InstanceId).IsUnique();
             entity.Property(x => x.ProtectedSecret).HasColumnType("text");
             entity.Property(x => x.SecretFingerprint).HasMaxLength(80);
+        });
+
+        modelBuilder.Entity<CloudSubmissionOutbox>(entity =>
+        {
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => new { x.Status, x.NextAttemptAt, x.CreatedAt });
+            entity.HasIndex(x => new { x.LeaseOwner, x.LeaseExpiresAt });
+            entity.HasIndex(x => x.FeedbackEventId).IsUnique();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(240);
+            entity.Property(x => x.SchemaVersion).HasMaxLength(40);
+            entity.Property(x => x.EventType).HasMaxLength(80);
+            entity.Property(x => x.Status).HasMaxLength(32);
+            entity.Property(x => x.ErrorCode).HasMaxLength(120);
+            entity.Property(x => x.LeaseOwner).HasMaxLength(160);
+            entity.Property(x => x.PayloadJson).HasColumnType("jsonb");
+            entity.HasOne<IntelligenceFeedbackEvent>()
+                .WithMany()
+                .HasForeignKey(x => x.FeedbackEventId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
