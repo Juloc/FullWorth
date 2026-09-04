@@ -169,7 +169,7 @@ public sealed class KnowledgePackVerifier(IConfiguration configuration)
     }
 
     private static string NormalizeRegion(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "GLOBAL" : value.Trim().ToUpperInvariant();
+        string.IsNullOrWhiteSpace(value) ? KnowledgePackPolicy.DefaultRegion : value.Trim().ToUpperInvariant();
 
     private static string? NormalizeCountry(string? value)
     {

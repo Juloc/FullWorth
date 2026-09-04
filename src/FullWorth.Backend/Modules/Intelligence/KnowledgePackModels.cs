@@ -6,6 +6,14 @@ public static class KnowledgePackPolicy
 {
     public const string CurrentSchemaVersion = "1";
     public const string InstallationScopeKey = "official";
+
+    /// <summary>
+    /// Region requested when neither an installed pack nor operator config specifies one. "GLOBAL"
+    /// means region-agnostic packs and is the shared default across the client sync, the signature
+    /// verifier and the cloud's pack builder/query — an unconfigured instance must request the same
+    /// region the cloud publishes by default, or it would receive 204 forever and never install a pack.
+    /// </summary>
+    public const string DefaultRegion = "GLOBAL";
     public const int MaximumPackBytes = 5 * 1024 * 1024;
     public const int MaximumMerchantMappings = 50_000;
     public const int ArchiveRetentionCount = 3;

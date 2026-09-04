@@ -39,7 +39,7 @@ public sealed class KnowledgePackSyncService(
             registered = credential.Registered;
             var current = await db.KnowledgePackInstallations.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.ScopeKey == KnowledgePackPolicy.InstallationScopeKey, ct);
-            var region = NormalizeRegion(current?.Region ?? configuration["FullWorthCloud:KnowledgePackRegion"] ?? "DE");
+            var region = NormalizeRegion(current?.Region ?? configuration["FullWorthCloud:KnowledgePackRegion"] ?? KnowledgePackPolicy.DefaultRegion);
 
             var manifestResult = await GetManifestWithAuthRecoveryAsync(state, credential.Secret, current?.Version, region, ct);
             if (manifestResult.Rotated) credential = (manifestResult.Secret, registered);
@@ -177,7 +177,7 @@ public sealed class KnowledgePackSyncService(
     private static string NormalizeRegion(string region)
     {
         var value = region.Trim().ToUpperInvariant();
-        return value.Length is > 0 and <= 32 ? value : "DE";
+        return value.Length is > 0 and <= 32 ? value : KnowledgePackPolicy.DefaultRegion;
     }
 
     internal static void EnsureClientCompatible(string? clientVersion, string? minimumClientVersion)

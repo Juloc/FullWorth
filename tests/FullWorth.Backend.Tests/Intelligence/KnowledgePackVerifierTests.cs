@@ -57,6 +57,15 @@ public sealed class KnowledgePackVerifierTests
         Assert.Equal("knowledge_pack_signature_invalid", ex.ErrorCode);
     }
 
+    [Fact]
+    public void Default_region_is_the_cross_repo_global_scope()
+    {
+        // The sync service, the signature verifier and the cloud's pack builder/query must share one
+        // default region. Drift here (the client defaulting to "DE" while the cloud publishes "GLOBAL")
+        // makes an unconfigured instance receive 204 forever and silently never install a pack.
+        Assert.Equal("GLOBAL", KnowledgePackPolicy.DefaultRegion);
+    }
+
     private static KnowledgePackPayload Payload(string version) => new(
         "merchant-de",
         version,
