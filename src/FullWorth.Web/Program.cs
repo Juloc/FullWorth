@@ -4,6 +4,7 @@ using System.Security.Claims;
 using FullWorth.Web.Data;
 using FullWorth.Web.Modules.Auth;
 using FullWorth.Web.Modules.Bootstrap;
+using FullWorth.Web.Modules.Landing;
 using FullWorth.Web.Modules.Passkeys;
 using FullWorth.Web.Modules.Pin;
 using FullWorth.Web.Modules.Recovery;
@@ -102,6 +103,9 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthSessionCoordinator>();
 builder.Services.AddScoped<InviteClaimService>();
+builder.Services.Configure<InstallationOptions>(builder.Configuration.GetSection(InstallationOptions.SectionName));
+builder.Services.AddScoped<InstallationStateService>();
+builder.Services.AddSingleton<ILandingPageProvider, DefaultLandingPageProvider>();
 builder.Services.AddScoped<ISessionPersistence, AuthSessionPersistence>();
 builder.Services.AddScoped<SessionStore>();
 builder.Services.AddScoped<SessionService>();
@@ -253,6 +257,7 @@ app.MapGet("/settings/security/passkeys", async (HttpContext context, Cancellati
     await context.Response.SendFileAsync(passkeyShellPath, ct);
 }).RequireAuthorization();
 
+app.MapLandingEndpoints();
 app.MapAuthEndpoints();
 app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
