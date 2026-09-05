@@ -117,7 +117,6 @@ services:
       Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-365}
       Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-365}
       Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-365}
-      Sync__InitialHistoryDays: ${SYNC_INITIAL_HISTORY_DAYS:-180}
       Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
       Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
     secrets:
