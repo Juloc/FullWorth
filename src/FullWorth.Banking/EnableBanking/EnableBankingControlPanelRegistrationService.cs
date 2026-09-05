@@ -33,9 +33,10 @@ public sealed record EnableBankingAutoRegistrationCallbackResult(
 /// <summary>
 /// One-time Enable Banking Control Panel sign-in + application registration flow.
 /// The flow mirrors Enable Banking's official CLI: request an email-link sign-in, exchange the
-/// oobCode for a short-lived Control Panel token, POST /api/applications, then immediately discard
-/// the Control Panel tokens. Generated RSA private keys remain server-side and are persisted only
-/// after the newly registered application has been verified through GET /application.
+/// oobCode for Control Panel tokens and POST /api/applications. The short-lived ID token is never
+/// persisted; the refresh token is stored encrypted with the user's banking profile so FullWorth can
+/// read Enable Banking's official ASPSP health status later. Generated RSA private keys remain
+/// server-side and are persisted only after the application has been verified through GET /application.
 /// </summary>
 public sealed class EnableBankingControlPanelRegistrationService
 {
@@ -164,6 +165,7 @@ public sealed class EnableBankingControlPanelRegistrationService
 
             removed.PrivateKeyPem = string.Empty;
             removed.PublicKeyPem = string.Empty;
+            removed.ControlPanelRefreshToken = string.Empty;
             removed.Email = string.Empty;
             removed.Status = "cancelled";
             return true;
@@ -211,6 +213,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             pending.Status = "completed";
             pending.PrivateKeyPem = string.Empty;
             pending.PublicKeyPem = string.Empty;
+            pending.ControlPanelRefreshToken = string.Empty;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -270,6 +273,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             using var signInJson = JsonDocument.Parse(signIn.Body);
             var idToken = GetString(signInJson.RootElement, "idToken");
             var refreshToken = GetString(signInJson.RootElement, "refreshToken");
+            pending.ControlPanelRefreshToken = refreshToken ?? string.Empty;
             if (string.IsNullOrWhiteSpace(idToken))
                 throw new EnableBankingControlPanelException("control_panel_token_missing", signIn.StatusCode);
 
@@ -277,8 +281,11 @@ public sealed class EnableBankingControlPanelRegistrationService
             if (registration.StatusCode == HttpStatusCode.Unauthorized && !string.IsNullOrWhiteSpace(refreshToken))
             {
                 var refreshed = await RefreshControlPanelTokenAsync(refreshToken, ct);
-                if (!string.IsNullOrWhiteSpace(refreshed))
-                    registration = await RegisterApplicationAsync(pending, refreshed, ct);
+                if (refreshed is not null)
+                {
+                    pending.ControlPanelRefreshToken = refreshed.RefreshToken;
+                    registration = await RegisterApplicationAsync(pending, refreshed.IdToken, ct);
+                }
             }
 
             if (!IsSuccess(registration.StatusCode))
@@ -302,6 +309,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             pending.ErrorCode = null;
             pending.PrivateKeyPem = string.Empty;
             pending.PublicKeyPem = string.Empty;
+            pending.ControlPanelRefreshToken = string.Empty;
             pending.Email = string.Empty;
 
             return new(true, pending.Status, null);
@@ -314,6 +322,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             {
                 pending.PrivateKeyPem = string.Empty;
                 pending.PublicKeyPem = string.Empty;
+                pending.ControlPanelRefreshToken = string.Empty;
                 pending.Email = string.Empty;
             }
             _logger.LogWarning(
@@ -332,6 +341,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             {
                 pending.PrivateKeyPem = string.Empty;
                 pending.PublicKeyPem = string.Empty;
+                pending.ControlPanelRefreshToken = string.Empty;
                 pending.Email = string.Empty;
             }
             _logger.LogWarning(ex, "Enable Banking automatic application setup failed.");
@@ -352,7 +362,10 @@ public sealed class EnableBankingControlPanelRegistrationService
             new EnableBankingProfileVerifyRequest(
                 pending.ApplicationId!,
                 pending.PrivateKeyPem),
-            ct);
+            ct,
+            string.IsNullOrWhiteSpace(pending.ControlPanelRefreshToken)
+                ? null
+                : pending.ControlPanelRefreshToken);
     }
 
     private async Task<ControlPanelResponse> RegisterApplicationAsync(
@@ -385,7 +398,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             ct);
     }
 
-    private async Task<string?> RefreshControlPanelTokenAsync(
+    private async Task<ControlPanelTokenRefresh?> RefreshControlPanelTokenAsync(
         string refreshToken,
         CancellationToken ct)
     {
@@ -406,7 +419,12 @@ public sealed class EnableBankingControlPanelRegistrationService
             return null;
 
         using var json = JsonDocument.Parse(response.Body);
-        return GetString(json.RootElement, "id_token");
+        var idToken = GetString(json.RootElement, "id_token");
+        if (string.IsNullOrWhiteSpace(idToken))
+            return null;
+        return new(
+            idToken,
+            GetString(json.RootElement, "refresh_token") ?? refreshToken);
     }
 
     private async Task<ControlPanelResponse> SendControlPanelAsync(
@@ -478,6 +496,7 @@ public sealed class EnableBankingControlPanelRegistrationService
             .Replace('/', '_');
 
     private sealed record ControlPanelResponse(HttpStatusCode StatusCode, string Body);
+    private sealed record ControlPanelTokenRefresh(string IdToken, string RefreshToken);
 
     private sealed class PendingRegistration
     {
@@ -487,6 +506,7 @@ public sealed class EnableBankingControlPanelRegistrationService
         public string Environment { get; init; } = "PRODUCTION";
         public string PrivateKeyPem { get; set; } = string.Empty;
         public string PublicKeyPem { get; set; } = string.Empty;
+        public string ControlPanelRefreshToken { get; set; } = string.Empty;
         public string SetupCallbackUrl { get; init; } = string.Empty;
         public string? ApplicationId { get; set; }
         public DateTimeOffset CreatedAt { get; init; }
