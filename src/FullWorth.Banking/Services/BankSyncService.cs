@@ -396,7 +396,12 @@ public sealed class BankSyncService(
             var afterFailure = await FindConnectionAsync(connectionId, ct);
             if (RequiresReauthorization(afterFailure))
                 return new(ManualSyncStatus.ReauthorizationRequired);
-            return new(ManualSyncStatus.Cooldown, afterFailure?.NextSyncAllowedAt);
+            if (string.Equals(
+                    afterFailure?.LastError,
+                    "ASPSP_RATE_LIMIT_EXCEEDED",
+                    StringComparison.OrdinalIgnoreCase))
+                return new(ManualSyncStatus.Cooldown, afterFailure?.NextSyncAllowedAt);
+            return new(ManualSyncStatus.Error, afterFailure?.NextSyncAllowedAt);
         }
         catch
         {
