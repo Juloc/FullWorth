@@ -86,6 +86,31 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
             return new(AuthorizeResponse);
         }
 
+        if (request.Method == HttpMethod.Post &&
+            path.StartsWith("/internal/banking/connections/", StringComparison.Ordinal) &&
+            path.EndsWith("/close-retain", StringComparison.Ordinal))
+        {
+            var body = await request.Content!.ReadFromJsonAsync<CloseConnectionBody>(_json, cancellationToken)
+                ?? throw new InvalidOperationException("Missing close-retain payload.");
+            var segment = path["/internal/banking/connections/".Length..^"/close-retain".Length].Trim('/');
+            if (!Guid.TryParse(segment, out var id)) return new(HttpStatusCode.BadRequest);
+
+            var index = Connections.FindIndex(x => x.Id == id);
+            if (index < 0) return new(HttpStatusCode.NotFound);
+            var current = Connections[index];
+            Connections[index] = current with
+            {
+                AuthorizationState = null,
+                AuthorizationId = null,
+                ProviderSessionId = null,
+                Status = "CLOSED",
+                NextSyncAllowedAt = null,
+                ConsecutiveFailures = 0,
+                LastError = null
+            };
+            return new(HttpStatusCode.NoContent);
+        }
+
         if (request.Method == HttpMethod.Post && path == "/internal/banking/connections/")
         {
             var write = await request.Content!.ReadFromJsonAsync<BankConnectionWrite>(_json, cancellationToken)
