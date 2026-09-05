@@ -17,7 +17,14 @@ public static class BankConnectionConsentHealthCalculator
             ? (int?)(int)(expiry.Date - now.Date).TotalDays
             : null;
 
-        if (!string.Equals(status, "AUTHORIZED", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(providerSessionId))
+        var normalizedStatus = (status ?? string.Empty).ToUpperInvariant();
+        if (normalizedStatus == "EXPIRED")
+            return new("expired", daysUntilExpiry);
+        if (normalizedStatus == "REVOKED")
+            return new("revoked", daysUntilExpiry);
+        if (normalizedStatus == "CLOSED")
+            return new("closed", daysUntilExpiry);
+        if (!string.Equals(normalizedStatus, "AUTHORIZED", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(providerSessionId))
             return new("reauthorization_required", daysUntilExpiry);
         if (validUntil is { } expiredAt && expiredAt < now)
             return new("expired", daysUntilExpiry);
