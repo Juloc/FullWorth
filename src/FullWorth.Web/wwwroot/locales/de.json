@@ -600,6 +600,7 @@
     "connected": "Bank „{name}“ verbunden. Die Konten werden beim nächsten Abgleich importiert.",
     "connectCancelled": "Die Bankverbindung wurde abgebrochen. Du kannst es jederzeit erneut versuchen.",
     "connectExpired": "Die Anmeldung bei der Bank ist abgelaufen oder ungültig. Bitte starte die Verbindung erneut.",
+    "connectReauth": "Die Bankfreigabe ist nicht mehr gültig. Bitte das Konto erneut verbinden.",
     "connectFailed": "Die Bankverbindung ist fehlgeschlagen",
     "health_authorized": "Aktiv",
     "health_expiring": "Läuft bald ab",
