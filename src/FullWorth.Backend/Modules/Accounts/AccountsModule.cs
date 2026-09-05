@@ -21,6 +21,10 @@ public sealed class FinanceAccount
     public string DisplayName { get; set; } = string.Empty;
     public string? Product { get; set; }
     public string? AccountType { get; set; }
+    public string? Usage { get; set; }
+    public string? PsuStatus { get; set; }
+    public decimal? CreditLimitAmount { get; set; }
+    public string? CreditLimitCurrency { get; set; }
     public string Currency { get; set; } = "EUR";
     public string? IbanLast4 { get; set; }
     public bool IsActive { get; set; } = true;
