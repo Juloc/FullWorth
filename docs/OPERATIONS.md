@@ -12,7 +12,7 @@ Required secrets include the database password, the three service credentials an
 application ID + RSA private key through the authenticated setup wizard. The RSA key is encrypted at
 rest with `Security:DataEncryptionKey` and is never returned to the browser after setup.
 
-A global Enable Banking key is legacy-only and is resolved only for already-existing bank connections with no profile id. It cannot be used to create a new user bank connection. For old deployments either set
+A global Enable Banking key is legacy-only and is resolved only for already-existing bank connections with no profile id. It cannot be used to create a new user bank connection. To migrate a legacy application, the legitimate application owner explicitly enters the same Application ID and matching PEM in their own Enable Banking settings wizard. FullWorth verifies it through /application and stores the new user-scoped copy encrypted; it never auto-assigns a global key to another user. For old deployments either set
 `ENABLE_BANKING_APPLICATION_ID` plus `ENABLE_BANKING_PRIVATE_KEY_BASE64`, or keep the previous PEM
 mount by starting Compose with `docker-compose.enable-banking-legacy.yml`.
 
