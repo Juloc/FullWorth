@@ -20,7 +20,7 @@ instance. Run the banks **in this order** (each builds confidence for the next):
 
 - [ ] Deployed instance reachable over HTTPS at your `FULLWORTH_PASSKEY_ORIGIN`.
 - [ ] `ENABLE_BANKING_REDIRECT_URL` points to the deployed `…/connect/enable-banking/callback`.
-- [ ] The FullWorth user completed the Enable Banking setup wizard, preferably the automatic API-registration path; the manual Application ID + PEM path remains the fallback.
+- [ ] The FullWorth user completed the Enable Banking setup wizard, using either the automatic beta registration path or the manual Application ID + PEM path.
 - [ ] Automatic-path check: the Enable Banking email link returns to `/connect/enable-banking/setup-callback`, the application is created with the configured FullWorth callback plus privacy/terms URLs, and the wizard reaches the verified profile screen.
 - [ ] For restricted Production, that application is active and its Linked Accounts belong to that Control Panel user.
 - [ ] You are signed in as an owner of the FullWorth Space under test.
