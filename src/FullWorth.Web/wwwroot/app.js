@@ -532,7 +532,7 @@ async function reconnectConnection(connection,button){
     const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}&psuType=${encodeURIComponent(connection.psuType||'personal')}`);
     const bank=(data.aspsps||[]).find(x=>(x.name||'').toLowerCase()===(connection.institutionName||'').toLowerCase());
     if(button)button.disabled=false;
-    if(bank)return openBankConnectionOptions(bank,connection.id,status.profile?.id||null);
+    if(bank)return openBankConnectionOptions(bank,connection.id,status.profile?.id||null,connection.psuType||'personal');
     // ASPSP names can change. Fall back to the fresh provider list and let the user select the
     // renamed successor while keeping the existing FullWorth connection id.
     toast(get('bankingSetup.bankRenamedHint'));
@@ -1070,17 +1070,21 @@ function openIngTanDialog(initial){
   render();dlg.showModal();
 }
 
-function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
-  const psuTypes=Array.isArray(bank.psu_types)&&bank.psu_types.filter(Boolean).length
-    ? bank.psu_types.filter(Boolean)
-    : ['personal','business'];
+function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null,preferredPsuType=null){
+  const rawPsuTypes=Array.isArray(bank.psu_types)?bank.psu_types.filter(Boolean):[];
+  const psuTypes=[...new Set((rawPsuTypes.length?rawPsuTypes:['personal','business']).map(x=>String(x).toLowerCase()))]
+    .sort((a,b)=>(a==='personal'?0:a==='business'?1:2)-(b==='personal'?0:b==='business'?1:2));
+  const requestedDefault=String(preferredPsuType||'personal').toLowerCase();
+  const defaultPsuType=psuTypes.includes(requestedDefault)
+    ? requestedDefault
+    : (psuTypes.includes('personal')?'personal':psuTypes[0]||'personal');
   const health=bank.providerStatusSeverity;
   const healthWarning=health&&health!=='ok'
     ? `<div class="bank-status-warning ${esc(health)}"><strong>${esc(providerStatusLabel(health))}</strong><span>${esc(get('bankingSetup.statusWarning'))}</span><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a></div>`
     : '';
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
     ${healthWarning}
-    ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
+    ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}"${x===defaultPsuType?' selected':''}>${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(defaultPsuType)}">`}
     <p class="row-sub" data-business-notice hidden>${esc(get('bankingSetup.businessNotice'))}</p>
     <label class="check"><input type="checkbox" data-limit-accounts> <span>${esc(get('bankingSetup.limitAccounts'))}</span></label>
     <label data-account-access hidden>${esc(get('bankingSetup.accountIdentifiers'))}<textarea name="accountAccess" rows="3" autocomplete="off" placeholder="DE89370400440532013000&#10;BBAN|123456|Optional issuer"></textarea><span class="row-sub">${esc(get('bankingSetup.accountIdentifiersHint'))}</span></label>
@@ -1113,7 +1117,7 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
   };
 
   const drawMethods=()=>{
-    const psuType=form.elements.psuType?.value||psuTypes[0]||'personal';
+    const psuType=form.elements.psuType?.value||defaultPsuType;
     if(businessNotice)businessNotice.hidden=String(psuType).toLowerCase()!=='business';
     methods=authMethodsFor(bank,psuType);
     methodRoot.innerHTML='';
