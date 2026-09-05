@@ -79,8 +79,10 @@ public sealed class EnableBankingClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
+        // Anonymous DTO properties (validUntil, etc.) follow Enable Banking's snake_case JSON,
+        // while dictionary keys are provider-defined (e.g. credential "userId") and MUST stay exact.
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower
+        DictionaryKeyPolicy = null
     };
 
     private readonly HttpClient _http;
