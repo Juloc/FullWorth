@@ -132,6 +132,20 @@ public sealed class BankConnectionAuthorizationIntegrationTests
     }
 
     [Fact]
+    public async Task PublicBankConnectionItemHasNoDeleteEndpoint()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(
+            HttpMethod.Delete,
+            $"/api/bank-connections/{scenario.ConnectionA}?fullWorthSpaceId={scenario.SpaceA}",
+            scenario.Owner));
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PublicBankConnectionCollectionHasNoMutationEndpoint()
     {
         using var factory = new BackendWebApplicationFactory();
