@@ -36,7 +36,7 @@ public sealed class EnableBankingProfileService(
     {
         var profile = await resolver.GetProfileForUserAsync(userId, ct);
         return new(
-            profile is not null || resolver.LegacyConfigured,
+            profile is not null,
             resolver.LegacyConfigured,
             _options.RedirectUrl,
             profile is null ? null : View(profile));
