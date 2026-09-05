@@ -15,6 +15,7 @@ public sealed class EnableBankingProfile
     public Guid UserId { get; set; }
     public string ApplicationId { get; set; } = string.Empty;
     public string PrivateKeyPem { get; set; } = string.Empty;
+    public string? ControlPanelRefreshToken { get; set; }
     public string KeyFingerprint { get; set; } = string.Empty;
     public string Environment { get; set; } = "SANDBOX";
     public string ApplicationName { get; set; } = string.Empty;
@@ -31,6 +32,7 @@ public sealed record EnableBankingProfileInternalDto(
     Guid UserId,
     string ApplicationId,
     string PrivateKeyPem,
+    string? ControlPanelRefreshToken,
     string KeyFingerprint,
     string Environment,
     string ApplicationName,
@@ -50,7 +52,8 @@ public sealed record EnableBankingProfileWrite(
     bool Active,
     IReadOnlyList<string> Services,
     IReadOnlyList<string> RedirectUrls,
-    DateTimeOffset VerifiedAt);
+    DateTimeOffset VerifiedAt,
+    string? ControlPanelRefreshToken = null);
 
 public enum EnableBankingProfileDeleteResult { Deleted, NotFound, InUse }
 
@@ -89,6 +92,8 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
 
         entity.ApplicationId = request.ApplicationId.Trim();
         entity.PrivateKeyPem = cipher.Protect(request.PrivateKeyPem) ?? throw new InvalidOperationException("Failed to protect Enable Banking private key.");
+        if (request.ControlPanelRefreshToken is not null)
+            entity.ControlPanelRefreshToken = cipher.Protect(request.ControlPanelRefreshToken);
         entity.KeyFingerprint = request.KeyFingerprint;
         entity.Environment = request.Environment.ToUpperInvariant();
         entity.ApplicationName = request.ApplicationName;
@@ -132,6 +137,7 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
         entity.UserId,
         entity.ApplicationId,
         cipher.Unprotect(entity.PrivateKeyPem) ?? string.Empty,
+        cipher.Unprotect(entity.ControlPanelRefreshToken),
         entity.KeyFingerprint,
         entity.Environment,
         entity.ApplicationName,
