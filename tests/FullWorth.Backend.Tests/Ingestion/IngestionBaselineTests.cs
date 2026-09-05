@@ -145,6 +145,46 @@ public sealed class IngestionBaselineTests
     }
 
     [Fact]
+    public async Task SharedFuzzyIdentificationAliasDoesNotMergeDistinctAccounts()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(new FinanceIngestBatch(
+            new BankConnectionBatch(null, "enable-banking", "DKB", "DE", "session-dkb", "AUTHORIZED", null, DateTimeOffset.UtcNow, null, FullWorthSpaceDefaults.LegacyId),
+            [new AccountBatchItem(
+                "savings-primary", "savings-uid", "DKB", "Tagesgeld", "Savings", "SVGS", "EUR", "1111", true,
+                IdentificationHashes: ["savings-primary", "shared-fuzzy"])],
+            [],
+            []), CancellationToken.None);
+
+        await service.IngestAsync(new FinanceIngestBatch(
+            new BankConnectionBatch(null, "enable-banking", "DKB", "DE", "session-dkb", "AUTHORIZED", null, DateTimeOffset.UtcNow, null, FullWorthSpaceDefaults.LegacyId),
+            [new AccountBatchItem(
+                "checking-primary", "checking-uid", "DKB", "Girokonto", "Current", "CACC", "EUR", "2222", true,
+                IdentificationHashes: ["checking-primary", "shared-fuzzy"])],
+            [],
+            [new TransactionBatchItem(
+                "checking-primary", "er:giro-tx", "giro-provider-tx", "BOOK",
+                new DateOnly(2026, 9, 5), new DateOnly(2026, 9, 5), -42m, "EUR",
+                "Merchant", "Card payment", null, "giro-tx", "{}")]), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var accounts = await db.Accounts.AsNoTracking().OrderBy(x => x.DisplayName).ToListAsync();
+        Assert.Equal(2, accounts.Count);
+
+        var giro = Assert.Single(accounts.Where(x => x.IdentificationHash == "checking-primary"));
+        var savings = Assert.Single(accounts.Where(x => x.IdentificationHash == "savings-primary"));
+        Assert.Equal("Girokonto", giro.DisplayName);
+        Assert.Equal("Tagesgeld", savings.DisplayName);
+
+        var transaction = await db.Transactions.AsNoTracking().SingleAsync();
+        Assert.Equal(giro.Id, transaction.AccountId);
+        Assert.NotEqual(savings.Id, transaction.AccountId);
+    }
+
+    [Fact]
     public async Task TransactionRuleMatchingAssignsCategoryDeterministically()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
