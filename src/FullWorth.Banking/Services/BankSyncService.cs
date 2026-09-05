@@ -389,6 +389,8 @@ public sealed class BankSyncService(
         catch (EnableBankingApiException)
         {
             var afterFailure = await FindConnectionAsync(connectionId, ct);
+            if (RequiresReauthorization(afterFailure))
+                return new(ManualSyncStatus.ReauthorizationRequired);
             return new(ManualSyncStatus.Cooldown, afterFailure?.NextSyncAllowedAt);
         }
         catch
@@ -554,7 +556,8 @@ public sealed class BankSyncService(
                 return await backend.UpsertConnectionAsync(ToWrite(
                     connection,
                     status: status,
-                    nextSyncAllowedAt: nextAllowed,
+                    nextSyncAllowedAt: IsTerminalSessionStatus(status) ? null : nextAllowed,
+                    clearNextSyncAllowedAt: IsTerminalSessionStatus(status),
                     lastError: SessionError(status),
                     consecutiveFailures: 0), ct);
             }
@@ -600,6 +603,32 @@ public sealed class BankSyncService(
     {
         var now = DateTimeOffset.UtcNow;
         var classification = EnableBankingErrorClassifier.Classify(ex);
+
+        var terminalStatus = classification.Category switch
+        {
+            BankErrorCategory.ConsentExpired when string.Equals(classification.Code, "SESSION_REVOKED", StringComparison.OrdinalIgnoreCase)
+                => "REVOKED",
+            BankErrorCategory.ConsentExpired => "EXPIRED",
+            BankErrorCategory.AuthRequired => "INVALID",
+            _ => null
+        };
+
+        if (terminalStatus is not null)
+        {
+            logger.LogWarning(
+                "Bank sync for {Institution} requires reauthorization ({Category}).",
+                connection.InstitutionName,
+                classification.Code);
+
+            await backend.UpsertConnectionAsync(ToWrite(
+                connection,
+                status: terminalStatus,
+                clearNextSyncAllowedAt: true,
+                consecutiveFailures: connection.ConsecutiveFailures + 1,
+                lastError: classification.Code), ct);
+            return;
+        }
+
         var minimumCooldown = now.AddMinutes(
             string.Equals(classification.Code, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
                 ? Math.Max(360, _sync.RateLimitCooldownMinutes)
@@ -794,6 +823,7 @@ public sealed class BankSyncService(
         DateTimeOffset? lastAttemptAt = null,
         DateTimeOffset? lastSyncedAt = null,
         DateTimeOffset? nextSyncAllowedAt = null,
+        bool clearNextSyncAllowedAt = false,
         int? consecutiveFailures = null,
         string? lastError = null)
         => new(
@@ -808,7 +838,7 @@ public sealed class BankSyncService(
             validUntil ?? connection.ValidUntil,
             lastAttemptAt ?? connection.LastAttemptAt,
             lastSyncedAt ?? connection.LastSyncedAt,
-            nextSyncAllowedAt ?? connection.NextSyncAllowedAt,
+            clearNextSyncAllowedAt ? null : nextSyncAllowedAt ?? connection.NextSyncAllowedAt,
             consecutiveFailures ?? connection.ConsecutiveFailures,
             lastError,
             EnableBankingProfileId: connection.EnableBankingProfileId,
@@ -1256,6 +1286,14 @@ public sealed class BankSyncService(
         var language = value?.Trim().ToLowerInvariant();
         return language is { Length: 2 } && language.All(char.IsAsciiLetter) ? language : null;
     }
+
+    private static bool IsTerminalSessionStatus(string? status) =>
+        status is not null && status.ToUpperInvariant() is "EXPIRED" or "REVOKED" or "CLOSED" or "CANCELLED" or "INVALID";
+
+    private static bool RequiresReauthorization(BankConnectionDto? connection) =>
+        connection is not null &&
+        (IsTerminalSessionStatus(connection.Status) ||
+         connection.LastError is "SESSION_EXPIRED" or "SESSION_REVOKED" or "SESSION_CLOSED" or "AUTHORIZATION_FAILED");
 
     private static string? SessionError(string status) => status switch
     {
