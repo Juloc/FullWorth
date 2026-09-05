@@ -384,7 +384,11 @@ public sealed class BankSyncService(
             var client = await ResolveProviderForConnectionAsync(connection, ct);
             try
             {
-                await client.DeleteSessionAsync(connection.ProviderSessionId, psuContext, ct);
+                await client.DeleteSessionAsync(
+                    connection.ProviderSessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
             }
             catch (EnableBankingApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
             {
