@@ -39,6 +39,24 @@ public sealed record ManualSyncResult(ManualSyncStatus Status, DateTimeOffset? N
 
 public enum DisconnectStatus { Deleted, NotFound, ProviderFailed }
 
+public sealed record ProviderTransactionDetailsView(
+    string? TransactionId,
+    string? EntryReference,
+    string? Status,
+    DateOnly? BookingDate,
+    DateOnly? ValueDate,
+    decimal? Amount,
+    string? Currency,
+    string? CreditDebitIndicator,
+    string? Creditor,
+    string? Debtor,
+    string? CreditorAccountLast4,
+    string? DebtorAccountLast4,
+    IReadOnlyList<string> RemittanceInformation,
+    string? MerchantCategoryCode,
+    string? BankTransactionCode,
+    string? BankTransactionDescription);
+
 /// <summary>Trusted caller identity for banking write operations, set by FullWorth.Web from the session.</summary>
 public sealed record BankingCaller(Guid UserId, Guid FullWorthSpaceId);
 
@@ -382,7 +400,7 @@ public sealed class BankSyncService(
             : DisconnectStatus.NotFound;
     }
 
-    public async Task<JsonElement> GetTransactionDetailsAsync(
+    public async Task<ProviderTransactionDetailsView> GetTransactionDetailsAsync(
         Guid transactionId,
         BankingCaller caller,
         PsuContext? psuContext,
@@ -401,12 +419,34 @@ public sealed class BankSyncService(
             ?? throw new BankAccessException(false);
         var client = await ResolveProviderForConnectionAsync(connection, ct);
 
-        return await client.GetTransactionDetailsAsync(
+        var json = await client.GetTransactionDetailsAsync(
             pointer.ProviderAccountId,
             pointer.ProviderTransactionId,
             psuContext,
             RequiredPsuHeaders(connection),
             ct);
+
+        JsonElement amount = default;
+        var hasAmount = json.ValueKind == JsonValueKind.Object &&
+                        json.TryGetProperty("transaction_amount", out amount) &&
+                        amount.ValueKind == JsonValueKind.Object;
+        return new(
+            GetString(json, "transaction_id"),
+            GetString(json, "entry_reference"),
+            GetString(json, "status"),
+            ParseDate(json, "booking_date"),
+            ParseDate(json, "value_date"),
+            hasAmount ? GetDecimal(amount, "amount") : null,
+            hasAmount ? GetString(amount, "currency") : null,
+            GetString(json, "credit_debit_indicator"),
+            GetNestedString(json, "creditor", "name"),
+            GetNestedString(json, "debtor", "name"),
+            GetPartyAccountLast4(json, "creditor_account"),
+            GetPartyAccountLast4(json, "debtor_account"),
+            GetRemittanceInformation(json),
+            GetString(json, "merchant_category_code"),
+            GetNestedString(json, "bank_transaction_code", "code"),
+            GetNestedString(json, "bank_transaction_code", "description"));
     }
 
     private async Task<EnableBankingClient> ResolveProviderForConnectionAsync(BankConnectionDto connection, CancellationToken ct) =>
@@ -873,6 +913,33 @@ public sealed class BankSyncService(
             if (!string.IsNullOrWhiteSpace(text)) return text;
         }
         return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
+    }
+
+    private static IReadOnlyList<string> GetRemittanceInformation(JsonElement json)
+    {
+        if (json.ValueKind != JsonValueKind.Object ||
+            !json.TryGetProperty("remittance_information", out var lines) ||
+            lines.ValueKind != JsonValueKind.Array)
+            return [];
+        return lines.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .ToArray();
+    }
+
+    private static string? GetPartyAccountLast4(JsonElement json, string child)
+    {
+        if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty(child, out var account))
+            return null;
+        var value = GetString(account, "iban")
+                    ?? GetString(account, "bban")
+                    ?? GetString(account, "masked_pan")
+                    ?? GetString(account, "pan");
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = new string(value.Where(char.IsLetterOrDigit).ToArray());
+        return normalized.Length >= 4 ? normalized[^4..] : normalized;
     }
 
     private static string? GetIbanLast4(JsonElement json)
