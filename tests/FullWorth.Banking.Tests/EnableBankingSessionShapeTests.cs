@@ -26,7 +26,7 @@ public sealed class EnableBankingSessionShapeTests
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
             if (path == "/accounts/account-1/details")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Girokonto\",\"currency\":\"EUR\"}"));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Max Mustermann\",\"details\":\"Girokonto\",\"currency\":\"EUR\"}"));
             if (path == "/accounts/account-1/balances")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
             if (path == "/accounts/account-1/transactions")
@@ -64,8 +64,7 @@ public sealed class EnableBankingSessionShapeTests
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
             if (path == "/accounts/account-1/details")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse(
-                    "{\"name\":\"Girokonto\",\"currency\":\"CHF\",\"account_id\":{\"iban\":\"CH00 1234 5678 9012 3456 7\"}}"));
+                throw new Xunit.Sdk.XunitException("Ongoing sync must not refetch account details.");
             if (path == "/accounts/account-1/balances")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
             if (path == "/accounts/account-1/transactions")
@@ -78,9 +77,43 @@ public sealed class EnableBankingSessionShapeTests
 
         Assert.Equal(1, result.Synced);
         var account = Assert.Single(backend.Ingests.SelectMany(batch => batch.Accounts).DistinctBy(x => x.IdentificationHash));
-        Assert.Equal("Girokonto", account.DisplayName);
-        Assert.Equal("CHF", account.Currency);
-        Assert.Equal("4567", account.IbanLast4);
+        Assert.Equal("Test Bank", account.DisplayName);
+        Assert.Equal("EUR", account.Currency);
+        Assert.Null(account.IbanLast4);
+        Assert.False(account.HasDetails);
+        Assert.DoesNotContain(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1/details");
+    }
+
+    [Fact]
+    public async Task AccountHolderNameIsNotPersistedAsAccountDisplayName()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/sessions/session-1")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"status\":\"AUTHORIZED\",\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
+            if (path == "/accounts/account-1/details")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"identification_hash\":\"hash-1\",\"name\":\"Max Mustermann\",\"product\":\"Privatkonto\",\"currency\":\"EUR\"}"));
+            if (path == "/accounts/account-1/balances")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
+            if (path == "/accounts/account-1/transactions")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"transactions\":[]}"));
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.SyncAllAsync(CancellationToken.None);
+
+        var account = Assert.Single(
+            backend.Ingests.SelectMany(batch => batch.Accounts).DistinctBy(x => x.IdentificationHash));
+        Assert.Equal("Privatkonto", account.DisplayName);
+        Assert.DoesNotContain("Max Mustermann", account.DisplayName, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -98,7 +131,7 @@ public sealed class EnableBankingSessionShapeTests
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"]}"));
             if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
-                    "{\"identification_hash\":\"hash-real\",\"name\":\"Tagesgeld\",\"currency\":\"EUR\",\"product\":\"Sparen\"}"));
+                    "{\"identification_hash\":\"hash-real\",\"name\":\"Max Mustermann\",\"details\":\"Tagesgeld\",\"currency\":\"EUR\",\"product\":\"Sparen\"}"));
             if (path == "/accounts/account-1/balances")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
             if (path == "/accounts/account-1/transactions")
@@ -156,9 +189,9 @@ public sealed class EnableBankingSessionShapeTests
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\",\"account-2\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"},{\"uid\":\"account-2\"}]}"));
             if (path == "/accounts/account-1/details")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Giro\",\"currency\":\"EUR\"}"));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"details\":\"Giro\",\"currency\":\"EUR\"}"));
             if (path == "/accounts/account-2/details")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"identification_hash\":\"hash-2\",\"name\":\"Depot\",\"currency\":\"EUR\"}"));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"identification_hash\":\"hash-2\",\"details\":\"Depot\",\"currency\":\"EUR\"}"));
             if (path.StartsWith("/accounts/") && path.EndsWith("/balances"))
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
             if (path.StartsWith("/accounts/") && path.EndsWith("/transactions"))
