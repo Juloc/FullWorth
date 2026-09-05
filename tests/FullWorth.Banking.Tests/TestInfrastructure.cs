@@ -12,7 +12,11 @@ using Microsoft.Extensions.Options;
 
 namespace FullWorth.Banking.Tests;
 
-internal sealed record RecordedRequest(HttpMethod Method, Uri Uri, string? Body);
+internal sealed record RecordedRequest(
+    HttpMethod Method,
+    Uri Uri,
+    string? Body,
+    IReadOnlyDictionary<string, string>? Headers = null);
 
 internal sealed class RecordingHttpMessageHandler(
     Func<HttpRequestMessage, int, CancellationToken, Task<HttpResponseMessage>> responder)
@@ -24,7 +28,13 @@ internal sealed class RecordingHttpMessageHandler(
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Enqueue(new(request.Method, request.RequestUri!, body));
+        var headers = request.Headers
+            .Concat(request.Content?.Headers ?? [])
+            .ToDictionary(
+                header => header.Key,
+                header => string.Join(",", header.Value),
+                StringComparer.OrdinalIgnoreCase);
+        Requests.Enqueue(new(request.Method, request.RequestUri!, body, headers));
         var requestNumber = Interlocked.Increment(ref _requestNumber);
         return await responder(request, requestNumber, cancellationToken);
     }
