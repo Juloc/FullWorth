@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Coach;
+using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.Users;
@@ -103,6 +104,24 @@ public sealed class CoachHardeningIntegrationTests
     }
 
     [Fact]
+    public async Task RequestedModelIsPassedToCoachProviderAndReturned()
+    {
+        var provider = new CapturingProvider();
+        using var factory = FactoryWithProvider(provider);
+        var seed = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var ask = Request(HttpMethod.Post, $"/api/coach/ask?fullWorthSpaceId={seed.SpaceId}", seed.UserId,
+            JsonContent.Create(new { text = "Analysiere meine Ausgaben.", model = "gpt-coach-test" }));
+        using var response = await client.SendAsync(ask);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal("gpt-coach-test", provider.LastRequest?.Model);
+        Assert.Equal("gpt-coach-test", json.RootElement.GetProperty("model").GetString());
+    }
+
+    [Fact]
     public async Task ProviderPayloadExcludesReviewNotesAndOtherFullWorthSpaces()
     {
         var provider = new CapturingProvider();
@@ -127,6 +146,8 @@ public sealed class CoachHardeningIntegrationTests
         Assert.DoesNotContain(privateNote, serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("Other Space Only", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("9876", serialized, StringComparison.Ordinal);
+        Assert.Contains("Shared Wallet", serialized, StringComparison.Ordinal);
+        Assert.Contains("Coach Internet", serialized, StringComparison.Ordinal);
         Assert.Equal(100m, provider.LastRequest!.Context.Outgoing);
     }
 
@@ -172,6 +193,19 @@ public sealed class CoachHardeningIntegrationTests
             db.AccountOwners.Add(new AccountOwner { AccountId = accountId, UserId = userId, OwnershipType = AccountOwnershipTypes.Owner });
             if (secondUserId.HasValue)
                 db.AccountOwners.Add(new AccountOwner { AccountId = accountId, UserId = secondUserId.Value, OwnershipType = AccountOwnershipTypes.Owner });
+            db.Contracts.Add(new RecurringContract
+            {
+                FullWorthSpaceId = spaceId,
+                Name = "Coach Internet",
+                ProviderName = "ISP",
+                Kind = "internet",
+                AccountId = accountId,
+                Amount = 49.99m,
+                Currency = "EUR",
+                BillingCycle = "monthly",
+                Interval = 1,
+                IsActive = true
+            });
             db.Transactions.AddRange(
                 new FinanceTransaction
                 {
@@ -283,7 +317,7 @@ public sealed class CoachHardeningIntegrationTests
         {
             LastRequest = request;
             if (Throw) throw new InvalidOperationException("provider unavailable");
-            return Task.FromResult(new CoachProviderResult("Provider answer based only on supplied facts.", [], []));
+            return Task.FromResult(new CoachProviderResult("Provider answer based only on supplied facts.", [], [], request.Model));
         }
     }
 }

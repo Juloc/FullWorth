@@ -80,7 +80,7 @@ public sealed class CoachService(
 
         var context = await contextBuilder.BuildAsync(userId, fullWorthSpaceId, request.From, request.To, ct);
         var fallback = deterministic.Answer(text, context);
-        var answer = await TryAiAsync(userId, fullWorthSpaceId, conversation, text, context, fallback, ct);
+        var answer = await TryAiAsync(userId, fullWorthSpaceId, conversation, text, context, request.Model, fallback, ct);
         var assistant = new CoachMessage
         {
             ConversationId = conversationId,
@@ -105,26 +105,26 @@ public sealed class CoachService(
         var context = await contextBuilder.BuildAsync(userId, fullWorthSpaceId, request.From, request.To, ct);
         var fallback = deterministic.Answer(text, context);
         var provider = await providerResolver.ResolveAsync(userId, fullWorthSpaceId, ct);
-        return provider is null ? fallback : await CompleteWithProviderAsync(provider, text, context, [], null, fallback, ct);
+        return provider is null ? fallback : await CompleteWithProviderAsync(provider, text, context, [], null, request.Model, fallback, ct);
     }
 
-    private async Task<CoachAnswer> TryAiAsync(Guid userId, Guid fullWorthSpaceId, CoachConversation conversation, string text, CoachContext context, CoachAnswer fallback, CancellationToken ct)
+    private async Task<CoachAnswer> TryAiAsync(Guid userId, Guid fullWorthSpaceId, CoachConversation conversation, string text, CoachContext context, string? requestedModel, CoachAnswer fallback, CancellationToken ct)
     {
         var provider = await providerResolver.ResolveAsync(userId, fullWorthSpaceId, ct);
         if (provider is null) return fallback;
         var tailRows = await Messages.AsNoTracking().Where(x => x.ConversationId == conversation.Id)
             .OrderByDescending(x => x.CreatedAt).Take(8).ToListAsync(ct);
         var tail = tailRows.OrderBy(x => x.CreatedAt).Select(ToDto).ToList();
-        return await CompleteWithProviderAsync(provider, text, context, tail, conversation.MascotId, fallback, ct);
+        return await CompleteWithProviderAsync(provider, text, context, tail, conversation.MascotId, requestedModel, fallback, ct);
     }
 
     private async Task<CoachAnswer> CompleteWithProviderAsync(ICoachTextProvider provider, string text, CoachContext context,
-        IReadOnlyList<CoachMessageDto> tail, string? mascotId, CoachAnswer fallback, CancellationToken ct)
+        IReadOnlyList<CoachMessageDto> tail, string? mascotId, string? requestedModel, CoachAnswer fallback, CancellationToken ct)
     {
         try
         {
             // Review notes are deliberately absent from CoachContext, so they cannot leak to external providers.
-            var result = await provider.CompleteAsync(new(text, context, tail, mascotId), ct);
+            var result = await provider.CompleteAsync(new(text, context, tail, mascotId, requestedModel), ct);
             if (string.IsNullOrWhiteSpace(result.Text) || result.Text.Length > 6000) return fallback;
             var allowed = context.Facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
             var facts = result.FactIds.Where(allowed.ContainsKey).Distinct(StringComparer.Ordinal).Take(12).Select(id => allowed[id]).ToList();
