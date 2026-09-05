@@ -174,6 +174,8 @@ public sealed class IngestionService(
             {
                 if (mayRefreshDisplayName) entity.DisplayName = item.DisplayName;
                 entity.Product = item.Product; entity.AccountType = item.AccountType; entity.Currency = item.Currency;
+                entity.Usage = item.Usage; entity.PsuStatus = item.PsuStatus;
+                entity.CreditLimitAmount = item.CreditLimitAmount; entity.CreditLimitCurrency = item.CreditLimitCurrency;
                 entity.IbanLast4 = item.IbanLast4;
             }
             entity.IsActive = item.IsActive; entity.UpdatedAt = DateTimeOffset.UtcNow;
