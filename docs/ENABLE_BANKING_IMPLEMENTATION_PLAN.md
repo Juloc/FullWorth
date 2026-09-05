@@ -45,7 +45,9 @@ AIS is considered complete only when FullWorth correctly supports:
 17. reauthorization without account duplication,
 18. per-user Enable Banking credentials,
 19. an in-app BYO Enable Banking setup wizard,
-20. automated regression coverage for all above behavior.
+20. optional account-scoped consent requests through access.accounts using IBAN or GenericIdentification,
+21. all documented transaction_status filters (BOOK, CNCL, HOLD, OTHR, PDNG, RJCT, SCHD),
+22. automated regression coverage for all above behavior.
 
 PIS endpoints are not implemented.
 
@@ -54,7 +56,8 @@ PIS endpoints are not implemented.
 The repository implementation now covers the AIS definition of done above, including per-user BYO profiles,
 provider/session lifecycle, account hash aliases, stable transaction reconciliation, initial/full-history
 retrieval, incremental sync, PSU online context, consent close, retained-data disconnect, transaction
-details, error/health handling and legacy-connection compatibility.
+details, optional account-scoped consent requests, every documented transaction-status filter,
+error/health handling and legacy-connection compatibility.
 
 Static verification completed on 2026-09-05:
 
@@ -148,6 +151,11 @@ Rules:
 - psu_id is a stable anonymous FullWorth-generated identifier, never email, name, national ID or other direct identifier.
 - credentials are transient request data and are never stored or logged.
 - valid_until is capped to maximum_consent_validity.
+- access.accounts is optional; when supplied FullWorth supports both documented AccountIdentification forms:
+  - iban
+  - other { identification, scheme_name, issuer? }
+- the default UX leaves access.accounts unset so the ASPSP consent UI can choose accounts; an advanced
+  connect option lets the user explicitly restrict the requested accounts when they already know the identifiers.
 
 ## 1.4 ASPSP metadata
 
@@ -402,6 +410,7 @@ For each account:
 - details
 - balances
 - GET transactions with strategy=longest
+- transaction_status is supported as an optional provider query filter for all documented status values
 - omit date_from
 - omit date_to
 - continue until continuation_key is absent
@@ -560,6 +569,8 @@ Provider contract tests:
 - credentials require auth_method
 - psu_type and language
 - maximum consent validity cap
+- access.accounts serializes IBAN and GenericIdentification exactly as documented
+- transaction_status accepts every documented status and rejects unknown values before provider access
 
 History tests:
 
