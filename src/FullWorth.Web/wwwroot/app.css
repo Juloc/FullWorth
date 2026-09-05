@@ -99,7 +99,7 @@ body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:n
 main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max)}
 main:focus{outline:none}
 .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
-.topbar-title h1{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.topbar-title h1{font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.08}
 .topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
 .topbar-actions{display:flex;align-items:center;gap:var(--s2)}
 .icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
@@ -245,8 +245,14 @@ label.check.inline{font-size:12px;color:var(--muted)}
    stay plain text so colour is reserved for the money statement that matters. */
 .tx-row td.amount .tx-amt{font-variant-numeric:tabular-nums}
 .tx-row td.amount.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft);color:var(--positive);font-weight:600}
+/* A transfer moves money between your own accounts — neither income nor expense — so keep both legs
+   neutral (no green income pill, no red) and let the ⟳ badge tell the story. */
+.tx-row.tx-is-transfer td.amount .tx-amt{background:transparent;color:var(--muted);padding:0;font-weight:600}
 .tx-marker{display:inline-block;font-size:12px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
 .tx-marker.pending{background:var(--surface-2);color:var(--text)}
+/* Transfer badge: a compact circular-arrow chip (Finanzguru-style), not a wordy text chip. */
+.tx-marker.tx-marker-icon{padding:0;width:18px;height:18px;display:inline-grid;place-items:center;font-size:12px;line-height:1;background:var(--surface-3);color:var(--text)}
+.tx-marker.tx-marker-icon.transfer{color:var(--k1)}
 /* Merchant/category identity + booking-date grouping (UX rework §4) */
 .tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
 .tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0}
@@ -363,6 +369,10 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
 .an-catrow{padding:8px 0;border-bottom:1px solid var(--line)}
 .an-catrow:last-child{border-bottom:0}
+/* Finanzguru-style colour accent: the category marker reads as a tall left bar, not a small dot,
+   reusing the existing per-category palette (data-cat). Scoped to the category list rows so donut
+   legends and other dots keep their compact form. */
+.an-catrow .cat-dot,.an-cat-head .cat-dot{width:4px;height:22px;border-radius:999px;margin-right:11px}
 .an-catrow-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:6px}
 .an-catrow-head .row-title{flex:1 1 auto;min-width:0}
 .an-catrow-head .amount{margin-left:auto}

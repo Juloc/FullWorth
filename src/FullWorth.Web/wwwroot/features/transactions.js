@@ -189,7 +189,7 @@ export async function renderTransactions(context) {
     const name = x.merchantDisplayName || x.counterparty || '—';
     const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
     const tr = document.createElement('tr');
-    tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '');
+    tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '') + (x.isTransfer ? ' tx-is-transfer' : '');
     tr.tabIndex = 0;
     tr.dataset.txId = x.id;
     tr.innerHTML =
@@ -238,13 +238,16 @@ async function renderScope(scope) {
 
 // Markers are grey word-label pills hanging on the name (Design System §10): monochrome, never a
 // colour emoji or bare symbol, and never more than two per row (the rest live in the detail view).
-function marker(cls, label) {
-  return `<span class="tx-marker ${cls}" title="${ctx.esc(label)}">${ctx.esc(label)}</span>`;
+function marker(cls, label, glyph) {
+  return glyph
+    ? `<span class="tx-marker tx-marker-icon ${cls}" title="${ctx.esc(label)}" aria-label="${ctx.esc(label)}">${glyph}</span>`
+    : `<span class="tx-marker ${cls}" title="${ctx.esc(label)}">${ctx.esc(label)}</span>`;
 }
 function markers(x) {
   const m = [];
   if (x.status === 'PDNG') m.push(marker('pending', ctx.get('transactions.pending')));
-  if (x.isTransfer) m.push(marker('transfer', ctx.get('transactions.transfer')));
+  // Transfers get a compact circular-arrow badge (Finanzguru-style) rather than a text chip.
+  if (x.isTransfer) m.push(marker('transfer', ctx.get('transactions.transfer'), '⟳'));
   if (x.isIgnored) m.push(marker('ignored', ctx.get('transactions.excluded')));
   if (x.purchaseCount > 0) m.push(marker('receipt', ctx.get('transactions.receiptLinked')));
   return m.length ? ` ${m.slice(0, 2).join('')}` : '';
