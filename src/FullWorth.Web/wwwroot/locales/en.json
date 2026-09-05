@@ -832,6 +832,10 @@
     "connect": "Continue to bank",
     "beta": "Beta",
     "bankNotFound": "The bank was not found in the current Enable Banking institution list.",
-    "bankRenamedHint": "The bank name may have changed. Please select the current bank."
+    "bankRenamedHint": "The bank name may have changed. Please select the current bank.",
+    "limitAccounts": "Limit access to specific accounts",
+    "accountIdentifiers": "Account identifiers",
+    "accountIdentifiersHint": "Optional: one IBAN per line. Other identifiers use SCHEME|IDENTIFICATION|ISSUER, e.g. BBAN|123456. Without a restriction, the bank flow handles account selection.",
+    "accountIdentifiersMissing": "Enter at least one valid IBAN or SCHEME|IDENTIFICATION."
   }
 }
