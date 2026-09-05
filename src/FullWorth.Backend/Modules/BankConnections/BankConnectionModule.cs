@@ -156,6 +156,35 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
         return true;
     }
 
+    public async Task<bool> CloseRetainingDataForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid id,
+        CancellationToken ct)
+    {
+        var authorization = await AuthorizeAsync(userId, fullWorthSpaceId, id, null, ct);
+        if (authorization != BankConnectionAuthorizeResult.Authorized) return false;
+
+        var entity = await db.BankConnections
+            .SingleOrDefaultAsync(x => x.Id == id && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+        if (entity is null) return false;
+
+        entity.AuthorizationState = null;
+        entity.AuthorizationStateExpiresAt = null;
+        entity.AuthorizationId = null;
+        entity.ProviderSessionId = null;
+        entity.ProviderSessionIdLookup = null;
+        entity.Status = "CLOSED";
+        entity.NextSyncAllowedAt = null;
+        entity.ConsecutiveFailures = 0;
+        entity.LastError = null;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        audit.Record(fullWorthSpaceId, userId, "bank_connection.disconnected_data_retained", "BankConnection", id);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<BankConnection> UpsertAsync(BankConnectionWrite request, CancellationToken ct)
     {
         var entity = request.Id.HasValue ? await db.BankConnections.SingleOrDefaultAsync(x => x.Id == request.Id.Value, ct) : null;
@@ -425,6 +454,7 @@ public enum BankConnectionAuthorizeResult { Authorized, Forbidden, NotFound }
 
 public sealed record ConsumeStateRequest(string State);
 public sealed record DeleteBankConnectionInternalRequest(Guid FullWorthSpaceId);
+public sealed record CloseBankConnectionInternalRequest(Guid FullWorthSpaceId);
 
 public static class BankConnectionEndpoints
 {
@@ -472,6 +502,22 @@ public static class BankConnectionEndpoints
                 _ => Results.NotFound()
             };
         });
+        // Banking closes the remote Enable Banking session first. This path deliberately does NOT
+        // use UpsertAsync so an intentional user disconnect cannot emit a bank_reauth transition push.
+        internalGroup.MapPost("/{id:guid}/close-retain", async (
+            HttpContext http,
+            Guid id,
+            CloseBankConnectionInternalRequest request,
+            BankConnectionStore store,
+            CancellationToken ct) =>
+        {
+            if (!Guid.TryParse(http.Request.Headers["X-FullWorth-User-Id"], out var userId))
+                return Results.BadRequest();
+            return await store.CloseRetainingDataForUserAsync(userId, request.FullWorthSpaceId, id, ct)
+                ? Results.NoContent()
+                : Results.NotFound();
+        });
+
         // Banking closes the remote Enable Banking session first, then calls this local destructive delete.
         internalGroup.MapPost("/{id:guid}/delete", async (
             HttpContext http,
