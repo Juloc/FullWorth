@@ -603,6 +603,8 @@
     "health_authorized": "Aktiv",
     "health_expiring": "Läuft bald ab",
     "health_expired": "Abgelaufen",
+    "health_revoked": "Widerrufen",
+    "health_closed": "Getrennt",
     "health_error": "Fehler beim Abgleich",
     "health_partial_history": "Historie unvollständig",
     "health_cooldown": "Wartet",
