@@ -719,7 +719,7 @@ public sealed class BankSyncService(
 
         // If the primary hash changed, /details may reveal the previous hash in identification_hashes.
         // Resolve that alias before deciding this is a brand-new account and doing another longest import.
-        if (!detailsFetched && (syncState is null || !account.HasDetails))
+        if (!detailsFetched && syncState is null)
         {
             var details = await TryGetAccountDetailsAsync(
                 client, connection, account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
@@ -905,17 +905,18 @@ public sealed class BankSyncService(
         var uid = GetString(json, "uid");
         var hash = GetString(json, "identification_hash");
         if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(hash)) return null;
-        var name = GetString(json, "details") ?? GetString(json, "name");
+        var product = GetString(json, "product");
+        var display = GetString(json, "details") ?? product;
         return new(
             hash,
             uid,
-            name ?? connection.InstitutionName,
-            GetString(json, "product"),
+            display ?? connection.InstitutionName,
+            product,
             GetString(json, "cash_account_type"),
             GetString(json, "currency") ?? "EUR",
             GetIbanLast4(json),
             IdentificationHashes: GetIdentificationHashes(json, hash),
-            HasDetails: name is not null,
+            HasDetails: display is not null,
             Usage: GetString(json, "usage"),
             PsuStatus: GetString(json, "psu_status"),
             CreditLimitAmount: GetNestedDecimal(json, "credit_limit", "amount"),
@@ -960,7 +961,7 @@ public sealed class BankSyncService(
             IdentificationHashes = MergeIdentificationHashes(
                 AccountIdentificationHashes(account),
                 GetIdentificationHashes(details, primary)),
-            DisplayName = GetString(details, "details") ?? GetString(details, "name") ?? account.DisplayName,
+            DisplayName = GetString(details, "details") ?? GetString(details, "product") ?? account.DisplayName,
             Product = GetString(details, "product") ?? account.Product,
             AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
             Usage = GetString(details, "usage") ?? account.Usage,
