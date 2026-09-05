@@ -65,6 +65,48 @@ public sealed class BootstrapEndpointsTests
             Assert.Equal(1, await db.Set<FullWorthUser>().CountAsync()));
     }
 
+
+    [Fact]
+    public async Task HostedRegistrationCreatesAdditionalUserWithOwnSpace()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        using (var first = await client.SendAsync(BootstrapRequest(new { email = "owner@example.com", displayName = "Owner" })))
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        using var registration = await client.SendAsync(RegistrationRequest(new
+        {
+            email = "member@example.com",
+            displayName = "Member",
+            spaceName = "Member Household",
+            baseCurrency = "EUR"
+        }));
+
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+        var body = await registration.Content.ReadFromJsonAsync<BootstrapResult>();
+        Assert.NotNull(body);
+
+        await factory.SeedAsync(async db =>
+        {
+            Assert.Equal(2, await db.Set<FullWorthUser>().CountAsync());
+            var space = await db.Set<FullWorthSpace>().AsNoTracking()
+                .SingleAsync(x => x.Id == body!.FullWorthSpaceId);
+            Assert.Equal("Member Household", space.Name);
+
+            var owner = await db.Set<FullWorthSpaceMember>().AsNoTracking()
+                .SingleAsync(x => x.FullWorthSpaceId == body.FullWorthSpaceId && x.UserId == body.FinanceUserId);
+            Assert.Equal(FullWorthSpaceRoles.Owner, owner.Role);
+        });
+
+        using var duplicate = await client.SendAsync(RegistrationRequest(new
+        {
+            email = "member@example.com",
+            displayName = "Other"
+        }));
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
     [Fact]
     public async Task BootstrapWithoutInternalKeyIsUnauthorized()
     {
@@ -83,9 +125,15 @@ public sealed class BootstrapEndpointsTests
             Assert.False(await db.Set<FullWorthUser>().AnyAsync()));
     }
 
-    private static HttpRequestMessage BootstrapRequest(object body)
+    private static HttpRequestMessage BootstrapRequest(object body) =>
+        InternalRequest("/api/bootstrap/first-admin", body);
+
+    private static HttpRequestMessage RegistrationRequest(object body) =>
+        InternalRequest("/api/bootstrap/register", body);
+
+    private static HttpRequestMessage InternalRequest(string path, object body)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/bootstrap/first-admin");
+        var request = new HttpRequestMessage(HttpMethod.Post, path);
         request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
         request.Content = JsonContent.Create(body);
         return request;
