@@ -530,7 +530,7 @@ Migration rules:
 - global ApplicationId/private-key config forms a legacy provider context for these rows
 - new user-created connections require an EnableBankingProfile
 - no plaintext key migration into the database is automatic
-- administrators can explicitly migrate a global profile through settings later
+- legacy administrators migrate explicitly by re-entering the legacy Application ID + matching PEM in their own BYO settings wizard; FullWorth never copies a global secret into an arbitrary user's profile automatically
 
 No destructive migration of existing transactions.
 
