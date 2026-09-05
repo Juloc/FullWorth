@@ -32,6 +32,10 @@ public sealed class RegistrationService(
         if (await userManager.FindByEmailAsync(email) is not null)
             return RegisterResultDto.Unavailable();
 
+        var userErrors = await ValidateUserAsync(email);
+        if (userErrors.Count > 0)
+            return new RegisterResultDto(false, "invalid_registration", null, userErrors);
+
         var passwordErrors = await ValidatePasswordAsync(email, request.Password);
         if (passwordErrors.Count > 0)
             return new RegisterResultDto(false, "invalid_password", null, passwordErrors);
@@ -68,6 +72,20 @@ public sealed class RegistrationService(
         return login.Succeeded && login.User is not null
             ? RegisterResultDto.Success(login.User)
             : RegisterResultDto.Failed();
+    }
+
+    private async Task<IReadOnlyList<string>> ValidateUserAsync(string email)
+    {
+        var probe = new AuthUser { Id = Guid.NewGuid(), Email = email, UserName = email };
+        var errors = new List<string>();
+        foreach (var validator in userManager.UserValidators)
+        {
+            var result = await validator.ValidateAsync(userManager, probe);
+            if (!result.Succeeded)
+                errors.AddRange(result.Errors.Select(error => error.Description));
+        }
+
+        return errors;
     }
 
     private async Task<IReadOnlyList<string>> ValidatePasswordAsync(string email, string? password)
