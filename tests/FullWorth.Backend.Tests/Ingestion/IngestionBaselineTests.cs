@@ -111,6 +111,40 @@ public sealed class IngestionBaselineTests
     }
 
     [Fact]
+    public async Task ChangedPrimaryIdentificationHashReusesAccountThroughAlias()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(new FinanceIngestBatch(
+            new BankConnectionBatch(null, "enable-banking", "Test Bank", "DE", "session-a", "AUTHORIZED", null, DateTimeOffset.UtcNow, null, FullWorthSpaceDefaults.LegacyId),
+            [new AccountBatchItem(
+                "old-hash", "provider-1", "Test Bank", "Girokonto", "Current", "checking", "EUR", "1234", true,
+                IdentificationHashes: ["old-hash"])],
+            [],
+            []), CancellationToken.None);
+
+        var originalId = await db.Accounts.AsNoTracking().Select(x => x.Id).SingleAsync();
+
+        await service.IngestAsync(new FinanceIngestBatch(
+            new BankConnectionBatch(null, "enable-banking", "Test Bank", "DE", "session-a", "AUTHORIZED", null, DateTimeOffset.UtcNow, null, FullWorthSpaceDefaults.LegacyId),
+            [new AccountBatchItem(
+                "new-hash", "provider-2", "Test Bank", "Girokonto", "Current", "checking", "EUR", "1234", true,
+                IdentificationHashes: ["new-hash", "old-hash"])],
+            [],
+            []), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var account = Assert.Single(await db.Accounts.AsNoTracking().ToListAsync());
+        Assert.Equal(originalId, account.Id);
+        Assert.Equal("new-hash", account.IdentificationHash);
+        Assert.Equal("provider-2", account.ProviderAccountId);
+        Assert.Contains("old-hash", account.IdentificationHashesJson);
+        Assert.Contains("new-hash", account.IdentificationHashesJson);
+    }
+
+    [Fact]
     public async Task TransactionRuleMatchingAssignsCategoryDeterministically()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
