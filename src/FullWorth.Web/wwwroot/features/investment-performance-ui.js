@@ -1,5 +1,6 @@
 import { money, percent, setMoneyLocale } from '../ui/money.js';
 import { onPrivacyChange } from '../ui/privacy.js';
+import { bindChartScrubber } from '../ui/chart-scrubber.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -165,7 +166,8 @@ async function renderPerformance(state,container){
   </div>
   ${perf.incomplete?`<div class="ip-warning"><strong>${esc(text('Unvollständige Bewertungsdaten','Incomplete valuation data'))}</strong><div>${esc((perf.reasons||[]).join(', '))}</div></div>`:''}
   <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Performance-Verlauf','Performance history'))}</h3><span>${esc(dateText(perf.effectiveFrom))} – ${esc(dateText(perf.to))}</span></div>${performanceChart(perf.points||[])}</section>`;
-  $$('[data-ip-period]',container).forEach(button=>button.onclick=()=>{state.period=button.dataset.ipPeriod;renderPerformance(state,container)});
+  bindPerformanceScrubber(container,perf.points||[]);
+  $('[data-ip-period]',container).forEach(button=>button.onclick=()=>{state.period=button.dataset.ipPeriod;renderPerformance(state,container)});
 }
 function performanceChart(points){
   const valid=points.filter(p=>p.portfolioReturn!=null);
@@ -177,7 +179,41 @@ function performanceChart(points){
   const portfolio=valid.map((p,i)=>xy(Number(p.portfolioReturn)*100,i)).join(' ');
   const benchmark=valid.every(p=>p.benchmarkReturn!=null)?valid.map((p,i)=>xy(Number(p.benchmarkReturn)*100,i)).join(' '):'';
   const zeroY=height-pad-((0-min)/(max-min))*(height-pad*2);
-  return `<div class="ip-chart-wrap"><svg class="ip-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(text('Performance und Benchmark','Performance and benchmark'))}"><line x1="${pad}" y1="${zeroY}" x2="${width-pad}" y2="${zeroY}" class="ip-zero"/><polyline points="${portfolio}" class="ip-line ip-line-main"/>${benchmark?`<polyline points="${benchmark}" class="ip-line ip-line-benchmark"/>`:''}</svg><div class="ip-chart-legend"><span><i class="main"></i>FullWorth</span>${benchmark?`<span><i class="benchmark"></i>${esc(text('Benchmark','Benchmark'))}</span>`:''}</div></div>`;
+  const last=valid[valid.length-1];
+  const latestBenchmark=last.benchmarkReturn==null?'':` · ${esc(text('Benchmark','Benchmark'))} ${pct(last.benchmarkReturn)}`;
+  return `<div class="ip-chart-wrap"><div class="ip-chart-readout">${esc(dateText(last.date))} · FullWorth ${pct(last.portfolioReturn)}${latestBenchmark}</div><svg class="ip-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(text('Performance und Benchmark','Performance and benchmark'))}"><line x1="${pad}" y1="${zeroY}" x2="${width-pad}" y2="${zeroY}" class="ip-zero"/><polyline points="${portfolio}" class="ip-line ip-line-main"/>${benchmark?`<polyline points="${benchmark}" class="ip-line ip-line-benchmark"/>`:''}</svg><div class="ip-chart-legend"><span><i class="main"></i>FullWorth</span>${benchmark?`<span><i class="benchmark"></i>${esc(text('Benchmark','Benchmark'))}</span>`:''}</div></div>`;
+}
+
+function bindPerformanceScrubber(container,points){
+  const valid=points.filter(point=>point.portfolioReturn!=null);
+  const svg=$('.ip-chart',container),readout=$('.ip-chart-readout',container);
+  if(!svg||!readout||valid.length<2)return;
+  const values=valid.flatMap(point=>[Number(point.portfolioReturn)*100,point.benchmarkReturn==null?null:Number(point.benchmarkReturn)*100]).filter(Number.isFinite);
+  let min=Math.min(...values,0),max=Math.max(...values,0);if(max-min<1){max+=.5;min-=.5}
+  const width=720,height=240,pad=24;
+  const pointsForScrub=valid.map((point,index)=>{
+    const x=pad+(index/(valid.length-1))*(width-pad*2);
+    const main=Number(point.portfolioReturn)*100;
+    const markers=[{y:height-pad-((main-min)/(max-min))*(height-pad*2)}];
+    if(point.benchmarkReturn!=null){
+      const benchmark=Number(point.benchmarkReturn)*100;
+      markers.push({y:height-pad-((benchmark-min)/(max-min))*(height-pad*2),className:'benchmark'});
+    }
+    return {x,label:dateText(point.date),markers,data:point};
+  });
+  const original=readout.innerHTML;
+  bindChartScrubber(svg,pointsForScrub,{
+    initialIndex:pointsForScrub.length-1,
+    onChange:point=>{
+      const benchmark=point.data.benchmarkReturn==null?'':` · ${text('Benchmark','Benchmark')} ${pct(point.data.benchmarkReturn)}`;
+      readout.textContent=`${point.label} · FullWorth ${pct(point.data.portfolioReturn)}${benchmark}`;
+    },
+    onReset:()=>{readout.innerHTML=original},
+    formatAria:point=>{
+      const benchmark=point.data.benchmarkReturn==null?'':`, ${text('Benchmark','Benchmark')} ${pct(point.data.benchmarkReturn)}`;
+      return `${point.label}: FullWorth ${pct(point.data.portfolioReturn)}${benchmark}`;
+    }
+  });
 }
 
 async function renderIncome(state,container){
