@@ -5,6 +5,8 @@ namespace FullWorth.Backend.Modules.Intelligence;
 public static class IntelligenceProviders
 {
     public const string OpenAi = "openai";
+    public const string OpenAiCompatible = "openai-compatible";
+    public const string Codex = "codex";
 }
 
 public static class IntelligenceSuggestionStatuses
