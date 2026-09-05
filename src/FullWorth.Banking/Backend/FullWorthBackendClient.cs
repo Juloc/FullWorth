@@ -74,6 +74,7 @@ public sealed record EnableBankingProfileDto(
     Guid UserId,
     string ApplicationId,
     string PrivateKeyPem,
+    string? ControlPanelRefreshToken,
     string KeyFingerprint,
     string Environment,
     string ApplicationName,
@@ -93,7 +94,8 @@ public sealed record EnableBankingProfileWrite(
     bool Active,
     IReadOnlyList<string> Services,
     IReadOnlyList<string> RedirectUrls,
-    DateTimeOffset VerifiedAt);
+    DateTimeOffset VerifiedAt,
+    string? ControlPanelRefreshToken = null);
 
 public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOptions> options)
 {
