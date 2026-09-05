@@ -48,7 +48,8 @@ AIS is considered complete only when FullWorth correctly supports:
 19. an in-app BYO Enable Banking setup wizard with automatic API registration and manual fallback,
 20. optional account-scoped consent requests through access.accounts using IBAN or GenericIdentification,
 21. all documented transaction_status filters (BOOK, CNCL, HOLD, OTHR, PDNG, RJCT, SCHD),
-22. automated regression coverage for all above behavior.
+22. automated regression coverage for all above behavior,
+23. de-duplicated ASPSP selection plus optional Enable Banking Control Panel health warnings for known bank disruptions.
 
 PIS endpoints are not implemented.
 
@@ -72,6 +73,8 @@ Static verification completed on 2026-09-05:
 - POST /sessions handling now requires the documented access.valid_until, closes malformed newly-created sessions best-effort, and never logs provider session IDs.
 - transaction identity was rechecked end-to-end: entry_reference is account-scoped through the database unique key (AccountId, ExternalKey).
 - the BYO wizard can now generate the RSA key server-side and register the user's Enable Banking application through the official Control Panel API flow; manual application import remains available as fallback.
+- FullWorth can read the ASPSP health feed used by the official Enable Banking CLI (`GET /api/get_today_stats`) and surface warnings in the bank picker. Automatic setup stores the Control Panel refresh token encrypted; existing/manual profiles can opt in with a one-time email-link sign-in. Short-lived ID tokens stay in memory only.
+- The bank picker de-duplicates same-name ASPSP variants and merges their PSU types/auth methods, preventing duplicate bank rows/icons.
 
 This document does **not** mark the integration production-ready yet. Remaining external verification:
 
@@ -80,7 +83,7 @@ This document does **not** mark the integration production-ready yet. Remaining 
 2. complete the Enable Banking sandbox checklist;
 3. complete at least one restricted Production test using the tester's own linked personal account and review the real-ASPSP behavior/logs.
 
-No further static implementation work is currently known to be required before those checks.
+The 2026-09-06 bank-status and picker changes add targeted regression tests, but the repository-wide build/test run is still required before treating the current main revision as verified.
 
 ---
 
