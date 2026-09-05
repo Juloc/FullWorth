@@ -157,7 +157,7 @@ public sealed class EnableBankingSessionShapeTests
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\",\"account-2\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"},{\"uid\":\"account-2\"}]}"));
             if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Giro\",\"currency\":\"EUR\"}"));
-            if (path == "/accounts/account-2")
+            if (path == "/accounts/account-2/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"identification_hash\":\"hash-2\",\"name\":\"Depot\",\"currency\":\"EUR\"}"));
             if (path.StartsWith("/accounts/") && path.EndsWith("/balances"))
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
