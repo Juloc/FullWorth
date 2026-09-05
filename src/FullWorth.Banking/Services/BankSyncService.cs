@@ -522,7 +522,9 @@ public sealed class BankSyncService(
             return await backend.UpsertConnectionAsync(ToWrite(
                 connection,
                 status: status,
-                lastSyncedAt: DateTimeOffset.UtcNow,
+                // A partial account/history result must not advance the user-visible successful-sync
+                // timestamp. Preserve the previous completed sync until every account finishes.
+                lastSyncedAt: error is null ? DateTimeOffset.UtcNow : connection.LastSyncedAt,
                 nextSyncAllowedAt: nextAllowed,
                 consecutiveFailures: error is null ? 0 : connection.ConsecutiveFailures + 1,
                 lastError: error), ct);
