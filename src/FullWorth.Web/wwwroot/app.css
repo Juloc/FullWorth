@@ -620,7 +620,8 @@ body.locked{overflow:hidden}
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}
   select,input,textarea{min-height:44px;font-size:16px}
-  .icon-button,.primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button{min-height:44px}
+  .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
+  .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button{min-height:44px}
   label.check input{min-height:0}
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}
