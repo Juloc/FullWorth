@@ -13,6 +13,9 @@ public sealed class FinanceAccount
     public Guid? BankConnectionId { get; set; }
     public string Provider { get; set; } = "enable-banking";
     public string IdentificationHash { get; set; } = string.Empty;
+    // Enable Banking may expose several equivalent hashes (e.g. IBAN/BBAN and legacy hash versions).
+    // Keep the aliases so a later session can resolve the same account even when the primary hash changes.
+    public string IdentificationHashesJson { get; set; } = "[]";
     public string ProviderAccountId { get; set; } = string.Empty;
     public string InstitutionName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
