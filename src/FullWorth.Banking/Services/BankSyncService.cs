@@ -161,16 +161,16 @@ public sealed class BankSyncService(
         if (request.Credentials is { Count: > 0 } && string.IsNullOrWhiteSpace(request.AuthMethod))
             throw new InvalidOperationException("Credentials require an explicit Enable Banking auth method.");
 
+        var maximumSupportedSeconds = (long)TimeSpan.FromDays(365).TotalSeconds;
         var maxSeconds = institution.TryGetProperty("maximum_consent_validity", out var max) &&
                          max.ValueKind == JsonValueKind.Number &&
                          max.TryGetInt64(out var seconds) &&
                          seconds > 0
-            ? seconds
+            ? Math.Min(seconds, maximumSupportedSeconds)
             : (long)TimeSpan.FromDays(90).TotalSeconds;
         var requested = TimeSpan.FromDays(Math.Clamp(request.ValidDays ?? 365, 1, 365));
-        var validity = requested < TimeSpan.FromSeconds(maxSeconds)
-            ? requested
-            : TimeSpan.FromSeconds(maxSeconds);
+        var providerMaximum = TimeSpan.FromSeconds(maxSeconds);
+        var validity = requested < providerMaximum ? requested : providerMaximum;
         var validUntil = DateTimeOffset.UtcNow.Add(validity);
 
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
