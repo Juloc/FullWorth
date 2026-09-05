@@ -197,7 +197,7 @@ export async function renderTransactions(context) {
       `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       `<td class="tx-cat">${ctx.esc(cat)}</td>` +
       `<td class="tx-acct">${ctx.esc(x.account || '')}</td>` +
-      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;
+      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>`;
     tr.addEventListener('click', () => openDetail(x));
     tr.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(x); });
     body.appendChild(tr);
