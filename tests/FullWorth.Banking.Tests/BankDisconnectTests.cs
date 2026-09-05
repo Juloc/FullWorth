@@ -26,8 +26,8 @@ public sealed class BankDisconnectTests
         var result = await service.DisconnectAsync(
             connection.Id,
             new BankingCaller(Guid.NewGuid(), Guid.NewGuid()),
-            psuContext: null,
-            deleteLocalData: false,
+            null,
+            false,
             CancellationToken.None);
 
         Assert.Equal(DisconnectStatus.ClosedDataRetained, result);
@@ -70,14 +70,14 @@ public sealed class BankDisconnectTests
         var result = await service.CompleteConnectionAsync(
             "state-1",
             "authorization-code",
-            psuContext: null,
+            null,
             CancellationToken.None);
 
         Assert.Equal("AUTHORIZED", result.Status);
         Assert.Equal("session-new", result.ProviderSessionId);
         var requests = provider.Requests.ToArray();
         Assert.Equal(
-            ["/sessions", "/sessions/session-old", "/sessions/session-new"],
+            new[] { "/sessions", "/sessions/session-old", "/sessions/session-new" },
             requests.Select(x => x.Uri.AbsolutePath).ToArray());
         Assert.Equal("session-new", backend.Connections.Single().ProviderSessionId);
     }
