@@ -30,11 +30,17 @@ public sealed record InvestmentImportColumnMapping(
     string? WithholdingTax,
     string? ExternalKey);
 
+public sealed record InvestmentImportPortfolioCreate(
+    string Name,
+    string Currency = "EUR",
+    string? ProviderName = null);
+
 public sealed record InvestmentImportCommitWrite(
-    Guid PortfolioId,
+    Guid? PortfolioId,
     IReadOnlyDictionary<string, Guid?>? SecurityMappings,
     bool CreateMissingSecurities = false,
-    IReadOnlyList<Guid>? CandidateIds = null);
+    IReadOnlyList<Guid>? CandidateIds = null,
+    InvestmentImportPortfolioCreate? CreatePortfolio = null);
 
 public static class InvestmentImportParityEndpoints
 {
@@ -325,8 +331,28 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
         if (!await OwnJobAsync(db, jobId, fullWorthSpaceId, userId, includeCompleted: false, ct)) return Results.NotFound();
         if (!await CanManageInvestments(db, userId, fullWorthSpaceId, ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await CanWritePortfolioAsync(db, userId, fullWorthSpaceId, request.PortfolioId, ct))
-            return Results.BadRequest(new { error = "Target portfolio is inaccessible or not writable." });
+
+        if (request.PortfolioId.HasValue && request.CreatePortfolio is not null)
+            return Results.BadRequest(new { error = "Choose either an existing portfolio or create a new one, not both." });
+        if (!request.PortfolioId.HasValue && request.CreatePortfolio is null)
+            return Results.BadRequest(new { error = "Choose an existing portfolio or provide a new portfolio." });
+
+        var targetPortfolioId = request.PortfolioId;
+        var portfolioName = request.CreatePortfolio?.Name?.Trim();
+        var portfolioCurrency = request.CreatePortfolio?.Currency?.Trim().ToUpperInvariant();
+        var portfolioProvider = request.CreatePortfolio?.ProviderName?.Trim();
+        if (targetPortfolioId.HasValue)
+        {
+            if (!await CanWritePortfolioAsync(db, userId, fullWorthSpaceId, targetPortfolioId.Value, ct))
+                return Results.BadRequest(new { error = "Target portfolio is inaccessible or not writable." });
+        }
+        else if (string.IsNullOrWhiteSpace(portfolioName) ||
+                 string.IsNullOrWhiteSpace(portfolioCurrency) ||
+                 portfolioCurrency.Length != 3 ||
+                 !portfolioCurrency.All(char.IsLetter))
+        {
+            return Results.BadRequest(new { error = "New portfolio requires a name and a three-letter currency." });
+        }
 
         var allCandidates = await ReadCandidatesAsync(db, jobId, ct);
         var selectedIds = request.CandidateIds?.ToHashSet();
@@ -385,6 +411,23 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
         try
         {
             var connection = await ParitySql.OpenAsync(db, ct);
+            var portfolioCreated = false;
+            if (!targetPortfolioId.HasValue)
+            {
+                targetPortfolioId = Guid.NewGuid();
+                await using var createPortfolio = ParitySql.Command(connection, """
+INSERT INTO "InvestmentPortfolios"
+("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
+VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,true,true,false,@now,@now)
+""", ("@id", targetPortfolioId.Value), ("@space", fullWorthSpaceId), ("@name", portfolioName!),
+                    ("@currency", portfolioCurrency!), ("@provider", string.IsNullOrWhiteSpace(portfolioProvider) ? null : portfolioProvider),
+                    ("@now", DateTimeOffset.UtcNow));
+                await createPortfolio.ExecuteNonQueryAsync(ct);
+                portfolioCreated = true;
+                audit.Record(fullWorthSpaceId, userId, "investment.portfolio.created", "InvestmentPortfolio", targetPortfolioId.Value);
+            }
+            var portfolioId = targetPortfolioId.Value;
+
             if (request.CreateMissingSecurities)
             {
                 foreach (var group in candidates.Where(HasSecurityIdentity).GroupBy(SecurityKey))
@@ -416,7 +459,7 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,'other',@currency,'investment-import
             foreach (var candidate in candidates)
             {
                 var stableKey = StableExternalKey(candidate);
-                if (!seenStableKeys.Add(stableKey) || await InvestmentTradeExistsAsync(db, request.PortfolioId, stableKey, ct))
+                if (!seenStableKeys.Add(stableKey) || await InvestmentTradeExistsAsync(db, portfolioId, stableKey, ct))
                 {
                     duplicates++;
                     await MarkCandidateAsync(db, candidate.Id, "duplicate", ct);
@@ -434,7 +477,7 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,'other',@currency,'investment-import
 INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,'import',@external,@notes,@now,@now)
-""", ("@id", Guid.NewGuid()), ("@space", fullWorthSpaceId), ("@portfolio", request.PortfolioId),
+""", ("@id", Guid.NewGuid()), ("@space", fullWorthSpaceId), ("@portfolio", portfolioId),
                     ("@security", securityId), ("@type", candidate.TradeType), ("@tradeDate", candidate.TradeDate),
                     ("@settlement", candidate.SettlementDate), ("@quantity", candidate.Quantity),
                     ("@price", candidate.Price), ("@gross", candidate.GrossAmount), ("@amount", candidate.Amount),
@@ -456,7 +499,7 @@ WHERE "Id"=@id
             audit.Record(fullWorthSpaceId, userId, "investment.import.completed", "InvestmentImportJob", jobId);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return Results.Ok(new { imported, duplicates, total = candidates.Count });
+            return Results.Ok(new { imported, duplicates, total = candidates.Count, portfolioId, portfolioCreated });
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -708,15 +751,16 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
             "buy" or "kauf" or "kaufen" => "buy",
             "sell" or "verkauf" or "verkaufen" => "sell",
             "dividend" or "dividende" or "ausschuettung" or "ausschüttung" => "dividend",
-            "interest" or "zins" or "zinsen" => "interest",
+            "interest" or "zins" or "zinsen" or "interestpayment" => "interest",
             "fee" or "fees" or "gebuehr" or "gebühr" or "gebuehren" or "gebühren" => "fee",
-            "tax" or "taxes" or "steuer" or "steuern" => "tax",
-            "deposit" or "einzahlung" => "deposit",
-            "withdrawal" or "auszahlung" => "withdrawal",
+            "tax" or "taxes" or "steuer" or "steuern" or "taxoptimization" or "secaccount" => "tax",
+            "deposit" or "einzahlung" or "customerinbound" or "customerinpayment" or "transferinbound" or "transferinstantinbound" => "deposit",
+            "withdrawal" or "auszahlung" or "customeroutboundrequest" or "transferoutbound" or "transferinstantoutbound" or "cardtransaction" => "withdrawal",
             "securitytransferin" or "transferin" or "eingang" => "security_transfer_in",
             "securitytransferout" or "transferout" or "ausgang" => "security_transfer_out",
+            "redemption" => "sell",
             "split" or "aktiensplit" => "split",
-            "other" or "sonstiges" => "other",
+            "other" or "sonstiges" or "compensation" or "buycancelled" => "other",
             _ => value?.Trim().ToLowerInvariant() ?? ""
         };
     }
