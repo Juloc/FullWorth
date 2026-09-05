@@ -250,6 +250,10 @@ app.MapGet("/api/banking/transactions/{id:guid}/details", async (
     {
         return Results.NotFound();
     }
+    catch (BankReauthorizationRequiredException)
+    {
+        return Results.Conflict(new { error = "reauthorization_required" });
+    }
     catch (InvalidOperationException ex)
     {
         return Results.Conflict(new { error = "transaction_details_unavailable", message = ex.Message });
