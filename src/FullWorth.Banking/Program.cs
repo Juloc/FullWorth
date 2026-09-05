@@ -163,6 +163,10 @@ app.MapGet("/api/banking/institutions", async (
     {
         return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
     }
+    catch (EnableBankingApiException ex)
+    {
+        return ProviderApiError(ex, consentAware: false);
+    }
 });
 
 app.MapPost("/api/banking/connect", async (
@@ -183,6 +187,10 @@ app.MapPost("/api/banking/connect", async (
     catch (EnableBankingProfileNotConfiguredException ex)
     {
         return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
+    }
+    catch (EnableBankingApiException ex)
+    {
+        return ProviderApiError(ex, consentAware: false);
     }
 });
 
@@ -258,6 +266,10 @@ app.MapGet("/api/banking/transactions/{id:guid}/details", async (
     {
         return Results.Conflict(new { error = "transaction_details_unavailable", message = ex.Message });
     }
+    catch (EnableBankingApiException ex)
+    {
+        return ProviderApiError(ex, consentAware: true);
+    }
 });
 
 app.MapGet("/connect/enable-banking/callback", async (
@@ -331,6 +343,40 @@ static bool ValidKey(string supplied, string? configured)
 {
     if (string.IsNullOrWhiteSpace(configured) || supplied.Length != configured.Length) return false;
     return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(configured));
+}
+
+static IResult ProviderApiError(EnableBankingApiException exception, bool consentAware)
+{
+    var classification = EnableBankingErrorClassifier.Classify(exception);
+
+    if (classification.Category == BankErrorCategory.RateLimit)
+        return Results.Json(
+            new { error = classification.Code, message = classification.SafeMessage, retryAt = classification.RetryAt },
+            statusCode: StatusCodes.Status429TooManyRequests);
+
+    if (consentAware &&
+        classification.Category is BankErrorCategory.AuthRequired or BankErrorCategory.ConsentExpired)
+        return Results.Conflict(new { error = "reauthorization_required" });
+
+    if (!consentAware &&
+        classification.Category is BankErrorCategory.AuthRequired or BankErrorCategory.ConsentExpired)
+        return Results.Conflict(new
+        {
+            error = "enable_banking_auth_failed",
+            message = "Enable Banking application authentication failed. Recheck the configured application."
+        });
+
+    if (classification.Category == BankErrorCategory.PsuContext)
+        return Results.Conflict(new { error = classification.Code, message = classification.SafeMessage });
+
+    if (classification.Category == BankErrorCategory.TransientProvider)
+        return Results.Json(
+            new { error = classification.Code, message = classification.SafeMessage },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    return Results.Json(
+        new { error = classification.Code, message = classification.SafeMessage },
+        statusCode: StatusCodes.Status502BadGateway);
 }
 
 static IResult CallbackErrorRedirect(string errorCode, string? description)
