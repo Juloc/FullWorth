@@ -815,6 +815,7 @@
     "removeConfirm": "Enable-Banking-Zugang aus FullWorth entfernen? Bestehende Bankverbindungen müssen vorher getrennt werden.",
     "recheck": "Erneut prüfen",
     "accountType": "Kontotyp",
+    "country": "Land (2-stelliger Code)",
     "psu_personal": "Privat",
     "psu_business": "Geschäftlich",
     "authMethod": "Anmeldeverfahren",
