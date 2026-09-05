@@ -14,7 +14,7 @@ public sealed class EnableBankingErrorClassifierTests
             new EnableBankingApiException(HttpStatusCode.TooManyRequests, "SOMETHING", "{}", retryAt));
 
         Assert.Equal(BankErrorCategory.RateLimit, result.Category);
-        Assert.Equal("rate_limit", result.Code);
+        Assert.Equal("ASPSP_RATE_LIMIT_EXCEEDED", result.Code);
         Assert.Equal(retryAt, result.RetryAt);
     }
 
@@ -35,7 +35,7 @@ public sealed class EnableBankingErrorClassifierTests
         var result = EnableBankingErrorClassifier.Classify(
             new EnableBankingApiException(HttpStatusCode.Unauthorized, errorCode, "{}"));
         Assert.Equal(BankErrorCategory.ConsentExpired, result.Category);
-        Assert.Equal("consent_expired", result.Code);
+        Assert.Equal("SESSION_EXPIRED", result.Code);
     }
 
     [Theory]
