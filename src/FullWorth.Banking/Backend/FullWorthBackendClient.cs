@@ -24,7 +24,11 @@ public sealed record BankConnectionDto(
     DateTimeOffset? LastSyncedAt,
     DateTimeOffset? NextSyncAllowedAt,
     int ConsecutiveFailures,
-    string? LastError);
+    string? LastError,
+    Guid? EnableBankingProfileId = null,
+    string PsuType = "personal",
+    string? AuthMethod = null,
+    string RequiredPsuHeadersJson = "[]");
 
 public sealed record BankConnectionWrite(
     Guid? Id,
@@ -43,7 +47,11 @@ public sealed record BankConnectionWrite(
     string? LastError,
     Guid? FullWorthSpaceId = null,
     Guid? AuthorizationUserId = null,
-    DateTimeOffset? AuthorizationStateExpiresAt = null);
+    DateTimeOffset? AuthorizationStateExpiresAt = null,
+    Guid? EnableBankingProfileId = null,
+    string PsuType = "personal",
+    string? AuthMethod = null,
+    string RequiredPsuHeadersJson = "[]");
 
 public enum BankAuthorizeResult { Authorized, Forbidden, NotFound }
 
@@ -54,7 +62,33 @@ public sealed record TransactionBatchItem(string IdentificationHash, string Exte
 public sealed record FinanceIngestBatch(IngestConnectionDto Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions);
 public sealed record AccountSyncState(DateOnly? LatestBookingDate);
 public sealed record ConsumeStateBody(string State);
-public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId);
+public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
+
+public sealed record EnableBankingProfileDto(
+    Guid Id,
+    Guid UserId,
+    string ApplicationId,
+    string PrivateKeyPem,
+    string KeyFingerprint,
+    string Environment,
+    string ApplicationName,
+    bool Active,
+    IReadOnlyList<string> Services,
+    IReadOnlyList<string> RedirectUrls,
+    DateTimeOffset? VerifiedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record EnableBankingProfileWrite(
+    Guid UserId,
+    string ApplicationId,
+    string PrivateKeyPem,
+    string KeyFingerprint,
+    string Environment,
+    string ApplicationName,
+    bool Active,
+    IReadOnlyList<string> Services,
+    IReadOnlyList<string> RedirectUrls,
+    DateTimeOffset VerifiedAt);
 
 public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOptions> options)
 {
@@ -84,9 +118,9 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
     /// connection in <paramref name="fullWorthSpaceId"/> (owner) and, if given, that the connection
     /// belongs to that space. The user id travels in X-FullWorth-User-Id.
     /// </summary>
-    public async Task<BankAuthorizeResult> AuthorizeAsync(Guid userId, Guid fullWorthSpaceId, Guid? connectionId, CancellationToken ct)
+    public async Task<BankAuthorizeResult> AuthorizeAsync(Guid userId, Guid fullWorthSpaceId, Guid? connectionId, Guid? enableBankingProfileId, CancellationToken ct)
     {
-        using var request = Create(HttpMethod.Post, "/internal/banking/connections/authorize", new AuthorizeBody(fullWorthSpaceId, connectionId));
+        using var request = Create(HttpMethod.Post, "/internal/banking/connections/authorize", new AuthorizeBody(fullWorthSpaceId, connectionId, enableBankingProfileId));
         request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
         using var response = await http.SendAsync(request, ct);
         return response.StatusCode switch
@@ -95,6 +129,39 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
             System.Net.HttpStatusCode.Forbidden => BankAuthorizeResult.Forbidden,
             _ => BankAuthorizeResult.NotFound
         };
+    }
+
+    public async Task<EnableBankingProfileDto?> GetEnableBankingProfileForUserAsync(Guid userId, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, $"/internal/banking/profiles/users/{userId:D}");
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<EnableBankingProfileDto>(cancellationToken: ct);
+    }
+
+    public async Task<EnableBankingProfileDto?> GetEnableBankingProfileAsync(Guid profileId, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, $"/internal/banking/profiles/{profileId:D}");
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<EnableBankingProfileDto>(cancellationToken: ct);
+    }
+
+    public async Task<EnableBankingProfileDto> UpsertEnableBankingProfileAsync(EnableBankingProfileWrite body, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, "/internal/banking/profiles/", body);
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<EnableBankingProfileDto>(cancellationToken: ct))!;
+    }
+
+    public async Task<System.Net.HttpStatusCode> DeleteEnableBankingProfileForUserAsync(Guid userId, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Delete, $"/internal/banking/profiles/users/{userId:D}");
+        using var response = await http.SendAsync(request, ct);
+        return response.StatusCode;
     }
 
     public async Task<BankConnectionDto> UpsertConnectionAsync(BankConnectionWrite body, CancellationToken ct)
