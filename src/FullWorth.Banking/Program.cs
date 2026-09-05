@@ -370,6 +370,13 @@ static IResult ProviderApiError(EnableBankingApiException exception, bool consen
         classification.Category is BankErrorCategory.AuthRequired or BankErrorCategory.ConsentExpired)
         return Results.Conflict(new { error = "reauthorization_required" });
 
+    if (classification.Category == BankErrorCategory.ApplicationAuth)
+        return Results.Conflict(new
+        {
+            error = classification.Code,
+            message = classification.SafeMessage
+        });
+
     if (!consentAware &&
         classification.Category is BankErrorCategory.AuthRequired or BankErrorCategory.ConsentExpired)
         return Results.Conflict(new
