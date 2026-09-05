@@ -64,6 +64,7 @@ public sealed record AccountSyncState(DateOnly? LatestBookingDate);
 public sealed record ConsumeStateBody(string State);
 public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
 public sealed record DeleteConnectionBody(Guid FullWorthSpaceId);
+public sealed record CloseConnectionBody(Guid FullWorthSpaceId);
 public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
 
 public sealed record EnableBankingProfileDto(
@@ -182,6 +183,23 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AccountSyncState>(cancellationToken: ct);
+    }
+
+    public async Task<bool> CloseConnectionRetainingDataAsync(
+        Guid connectionId,
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct)
+    {
+        using var request = Create(
+            HttpMethod.Post,
+            $"/internal/banking/connections/{connectionId}/close-retain",
+            new CloseConnectionBody(fullWorthSpaceId));
+        request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+        response.EnsureSuccessStatusCode();
+        return true;
     }
 
     public async Task<bool> DeleteConnectionDataAsync(Guid connectionId, Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
