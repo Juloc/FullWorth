@@ -230,7 +230,7 @@ async function runSearch(query,results,dlg){
 
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
-const ctx={$,$$,api,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`};
+const ctx={$,$,api,bankApi,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`};
 async function loadDashboard(){await renderDashboard(ctx)}
 
 async function loadBudgets(){
@@ -444,7 +444,7 @@ function openMoveToGroupDialog(account,groups){
 async function disconnectConnection(connection,button){
   if(!await ctx.confirm(get('accounts.disconnectConfirm').replace('{name}',()=>connection.institutionName),{destructive:true,confirmLabel:get('accounts.disconnect')}))return;
   if(button)button.disabled=true;
-  try{await api(`api/bank-connections/${connection.id}`,{method:'DELETE'});toast(get('accounts.disconnected'));await loadAccountsView()}
+  try{await bankApi(`api/banking/connections/${connection.id}`,{method:'DELETE'});toast(get('accounts.disconnected'));await loadAccountsView()}
   catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
 }
 // §17: re-authorizes an expired/errored connection IN PLACE (reconnectConnectionId) instead of
@@ -452,8 +452,13 @@ async function disconnectConnection(connection,button){
 async function reconnectConnection(connection,button){
   if(button)button.disabled=true;
   try{
-    const result=await bankApi('api/banking/connect',jsonBody({institutionName:connection.institutionName,country:connection.country||'DE',validDays:180,authMethod:null,psuId:null,credentials:null,reconnectConnectionId:connection.id}));
-    location.href=result.authorizationUrl;
+    const status=await bankApi('api/banking/status');
+    if(!bankingReady(status)){if(button)button.disabled=false;return openEnableBankingWizard(status)}
+    const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(connection.country||'DE')}&psuType=${encodeURIComponent(connection.psuType||'personal')}`);
+    const bank=(data.aspsps||[]).find(x=>(x.name||'').toLowerCase()===(connection.institutionName||'').toLowerCase());
+    if(!bank)throw new Error(get('bankingSetup.bankNotFound'));
+    if(button)button.disabled=false;
+    return openBankConnectionOptions(bank,connection.id,status.profile?.id||null);
   }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
 }
 function openAddAccountDialog(){
@@ -524,7 +529,7 @@ async function openCategoryDialog(){
 }
 
 
-async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await renderSharing(ctx)}
+async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings()])}
 // Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
 // fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
 // which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
@@ -541,16 +546,172 @@ async function downloadExport(){
   finally{if(btn)btn.disabled=false}
 }
 
-async function openBankDialog(){
+const ENABLE_BANKING_SIGN_IN='https://enablebanking.com/sign-in/';
+const ENABLE_BANKING_APPS='https://enablebanking.com/cp/applications';
+const ENABLE_BANKING_LINKED='https://enablebanking.com/docs/api/linked-accounts';
+
+function bankingReady(status){
+  if(status?.profile)return status.profile.environment==='SANDBOX'||status.profile.active===true;
+  return status?.legacyConfigured===true;
+}
+
+async function renderEnableBankingSettings(){
+  const row=$('#enable-banking-settings'),sub=$('#enable-banking-status');
+  if(!row||!sub)return;
+  sub.textContent=get('bankingSetup.loading');
   try{
     const status=await bankApi('api/banking/status');
-    if(!status?.configured){toast(get('accounts.notConfigured'));return}
-  }catch(err){toast(err.message||get('common.error'));return}
+    if(status.profile){
+      sub.textContent=status.profile.active||status.profile.environment==='SANDBOX'
+        ?get('bankingSetup.ready').replace('{name}',status.profile.applicationName||status.profile.applicationId)
+        :get('bankingSetup.activationRequired');
+    }else if(status.legacyConfigured)sub.textContent=get('bankingSetup.legacy');
+    else sub.textContent=get('bankingSetup.notConfigured');
+    row.onclick=()=>openEnableBankingWizard(status);
+  }catch(err){
+    sub.textContent=err.message||get('common.error');
+    row.onclick=()=>openEnableBankingWizard(null);
+  }
+}
+
+function openEnableBankingWizard(initialStatus){
+  let status=initialStatus;
+  const dlg=dialog('<div class="dialog-card banking-setup"><div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div><div data-step></div></div>');
+  const step=dlg.querySelector('[data-step]');
+  dlg.querySelector('h2').textContent=get('bankingSetup.title');
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+
+  const showIntro=()=>{
+    step.innerHTML=`<p>${esc(get('bankingSetup.privateIntro'))}</p>
+      <p class="row-sub">${esc(get('bankingSetup.privateBoundary'))}</p>
+      <p><a href="${ENABLE_BANKING_SIGN_IN}" target="_blank" rel="noopener">${esc(get('bankingSetup.openControlPanel'))} ↗</a></p>
+      <label class="check"><input type="checkbox" data-ack> ${esc(get('bankingSetup.ack'))}</label>
+      <div class="dialog-actions"><button type="button" data-next disabled>${esc(get('auth.continue'))}</button></div>`;
+    const ack=step.querySelector('[data-ack]'),next=step.querySelector('[data-next]');
+    ack.onchange=()=>next.disabled=!ack.checked;
+    next.onclick=showCredentials;
+  };
+
+  const showCredentials=()=>{
+    const callback=status?.callbackUrl||'';
+    step.innerHTML=`<p class="row-sub">${esc(get('bankingSetup.createApp'))}</p>
+      <p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.apiApplications'))} ↗</a></p>
+      <label>${esc(get('bankingSetup.callback'))}<input data-callback readonly value="${esc(callback)}"></label>
+      <label>${esc(get('bankingSetup.applicationId'))}<input data-app-id required autocomplete="off"></label>
+      <label>${esc(get('bankingSetup.privateKey'))}<input data-key type="file" accept=".pem,text/plain" required></label>
+      <p class="row-sub">${esc(get('bankingSetup.keyHint'))}</p>
+      <div class="dialog-actions"><button type="button" data-back>${esc(get('common.cancel'))}</button><button type="button" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
+    step.querySelector('[data-back]').onclick=showIntro;
+    step.querySelector('[data-verify]').onclick=async e=>{
+      const button=e.currentTarget,appId=step.querySelector('[data-app-id]').value.trim(),file=step.querySelector('[data-key]').files?.[0];
+      if(!appId||!file){toast(get('bankingSetup.missingCredentials'));return}
+      button.disabled=true;
+      try{
+        const privateKeyPem=await file.text();
+        await bankApi('api/banking/profile/verify',jsonBody({applicationId:appId,privateKeyPem}));
+        status=await bankApi('api/banking/status');
+        showProfile();
+        await renderEnableBankingSettings();
+      }catch(err){toast(err.message||get('common.error'));button.disabled=false}
+    };
+  };
+
+  const showProfile=()=>{
+    const p=status?.profile;
+    if(!p){showIntro();return}
+    const ready=p.environment==='SANDBOX'||p.active;
+    step.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(p.applicationName||p.applicationId)}</div>
+      <div class="row-sub">${esc(p.environment)} · ${ready?esc(get('bankingSetup.active')):esc(get('bankingSetup.inactive'))}</div></div></div>
+      <p class="row-sub">${esc(ready?get('bankingSetup.complete'):get('bankingSetup.activateRestricted'))}</p>
+      ${!ready&&p.environment==='PRODUCTION'?`<p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.activateAccounts'))} ↗</a> · <a href="${ENABLE_BANKING_LINKED}" target="_blank" rel="noopener">${esc(get('bankingSetup.instructions'))} ↗</a></p>`:''}
+      <div class="dialog-actions"><button type="button" class="ghost danger" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" data-done>${esc(get('common.close'))}</button></div>`;
+    step.querySelector('[data-done]').onclick=()=>dlg.close();
+    step.querySelector('[data-recheck]').onclick=async e=>{
+      e.currentTarget.disabled=true;
+      try{await bankApi('api/banking/profile/recheck',jsonBody({}));status=await bankApi('api/banking/status');showProfile();await renderEnableBankingSettings()}
+      catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
+    };
+    step.querySelector('[data-remove]').onclick=async e=>{
+      if(!await confirmDialog(ctx,get('bankingSetup.removeConfirm'),{destructive:true,confirmLabel:get('bankingSetup.remove')}))return;
+      e.currentTarget.disabled=true;
+      try{await bankApi('api/banking/profile',{method:'DELETE'});status=await bankApi('api/banking/status');showIntro();await renderEnableBankingSettings()}
+      catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
+    };
+  };
+
+  if(status?.profile)showProfile();else showIntro();
+  dlg.showModal();
+}
+
+function authMethodsFor(bank){
+  return (bank.auth_methods||[]).filter(m=>!(m&&typeof m==='object'&&m.hidden_method)).map(m=>{
+    if(typeof m==='string')return{name:m,label:m,credentials:[]};
+    return{name:m.name||m.id||'',label:m.display_name||m.name||m.id||'',credentials:Array.isArray(m.credentials)?m.credentials:[]};
+  }).filter(m=>m.name);
+}
+
+function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
+  const psuTypes=(bank.psu_types||['personal']).filter(Boolean);
+  const methods=authMethodsFor(bank);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
+    ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
+    ${methods.length?`<label>${esc(get('bankingSetup.authMethod'))}<select name="authMethod"><option value="">${esc(get('bankingSetup.bankDefault'))}</option>${methods.map(m=>`<option value="${esc(m.name)}">${esc(m.label)}</option>`).join('')}</select></label><div data-credentials></div>`:''}
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
+  const form=dlg.querySelector('form'),credentialRoot=dlg.querySelector('[data-credentials]'),methodSelect=form.elements.authMethod;
+  const drawCredentials=()=>{
+    if(!credentialRoot)return;
+    const method=methods.find(m=>m.name===methodSelect?.value);credentialRoot.innerHTML='';
+    for(const field of method?.credentials||[]){
+      const name=field.name||field.id;if(!name)continue;
+      const label=document.createElement('label');label.textContent=field.label||field.display_name||name;
+      const input=document.createElement('input');input.name='credential:'+name;input.autocomplete='off';
+      input.type=(field.type||'').toLowerCase().includes('password')?'password':'text';
+      if(field.pattern)try{input.pattern=field.pattern}catch{}
+      if(field.optional!==true&&field.required!==false)input.required=true;
+      label.append(input);credentialRoot.append(label);
+    }
+  };
+  if(methodSelect){methodSelect.onchange=drawCredentials;drawCredentials()}
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const fd=new FormData(form),authMethod=fd.get('authMethod')||null,credentials={};
+    for(const[k,v]of fd.entries())if(k.startsWith('credential:')&&String(v).length)credentials[k.slice(11)]=String(v);
+    const body={
+      institutionName:bank.name,country:bank.country||'DE',validDays:365,
+      authMethod,psuId:null,credentials:Object.keys(credentials).length?credentials:null,
+      reconnectConnectionId,enableBankingProfileId:profileId,
+      psuType:fd.get('psuType')||'personal',language:state.lang,
+      credentialsAutosubmit:Object.keys(credentials).length?true:null
+    };
+    const submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    try{const result=await bankApi('api/banking/connect',jsonBody(body));location.href=result.authorizationUrl}
+    catch(err){toast(err.message||get('common.error'));submit.disabled=false}
+  };
+  dlg.showModal();
+}
+
+async function openBankDialog(){
+  let status;
+  try{status=await bankApi('api/banking/status')}catch(err){toast(err.message||get('common.error'));return}
+  if(!bankingReady(status)){openEnableBankingWizard(status);return}
+
   let data;
-  try{data=await bankApi('api/banking/institutions?country=DE')}catch(err){toast(err.message||get('common.error'));return}
-  const banks=(data.aspsps||[]).sort((a,b)=>a.name.localeCompare(b.name));
+  try{data=await bankApi('api/banking/institutions?country=DE&psuType=personal')}catch(err){toast(err.message||get('common.error'));return}
+  const banks=(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.addBank'))}</h2><button value="cancel">×</button></div><input id="bank-search" type="search" placeholder="Bank"><div id="bank-options" class="bank-options"></div></form>`);
-  const box=dlg.querySelector('#bank-options');const draw=filter=>{box.innerHTML='';for(const bank of banks.filter(x=>!filter||x.name.toLowerCase().includes(filter.toLowerCase())).slice(0,80)){const b=document.createElement('button');b.type='button';b.textContent=bank.name;b.onclick=async()=>{try{const result=await bankApi('api/banking/connect',jsonBody({institutionName:bank.name,country:'DE',validDays:180,authMethod:null,psuId:null,credentials:null}));location.href=result.authorizationUrl}catch(err){toast(err.message||get('common.error'))}};box.appendChild(b)}};draw('');dlg.querySelector('#bank-search').oninput=e=>draw(e.target.value);dlg.showModal();
+  const box=dlg.querySelector('#bank-options');
+  const draw=filter=>{
+    box.innerHTML='';
+    for(const bank of banks.filter(x=>!filter||(x.name||'').toLowerCase().includes(filter.toLowerCase())).slice(0,100)){
+      const b=document.createElement('button');b.type='button';
+      const beta=bank.beta?` · ${get('bankingSetup.beta')}`:'';
+      b.innerHTML=`<strong>${esc(bank.name)}</strong><span class="row-sub">${esc((bank.country||'DE')+beta)}</span>`;
+      b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,null,status.profile?.id||null)};
+      box.appendChild(b);
+    }
+  };
+  draw('');dlg.querySelector('#bank-search').oninput=e=>draw(e.target.value);dlg.showModal();
 }
 
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
