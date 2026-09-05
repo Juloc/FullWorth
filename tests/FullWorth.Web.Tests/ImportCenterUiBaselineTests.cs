@@ -30,6 +30,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("Finanzfluss Copilot", html);
         Assert.Contains("Outbank", html);
         Assert.Contains("Parqet", html);
+        Assert.Contains("value=\"traderepublic\"", html);
+        Assert.Contains("id=\"inv-new-portfolio-fields\"", html);
         Assert.Contains("Broker-PDF", html);
         Assert.DoesNotContain("disabled-provider", html);
     }
@@ -98,6 +100,10 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("preset==='outbank'", centerJs);
         Assert.Contains("preset==='finanzfluss'", centerJs);
         Assert.Contains("preset==='parqet'", centerJs);
+        Assert.Contains("preset==='traderepublic'", centerJs);
+        Assert.Contains("isTradeRepublicExport", centerJs);
+        Assert.Contains("createPortfolio", centerJs);
+        Assert.Contains("transaction_id", centerJs);
         Assert.Contains("identifier", centerJs);
         Assert.Contains("shares", centerJs);
         Assert.Contains("Auftraggeber/Empfänger", centerJs);
@@ -128,6 +134,12 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
             response.EnsureSuccessStatusCode();
             var js = await response.Content.ReadAsStringAsync();
             Assert.Contains("financeFileUpload?.snapshot", js);
+            if (path.EndsWith("investment-import-ui.js", StringComparison.Ordinal))
+            {
+                Assert.Contains("Trade Republic", js);
+                Assert.Contains("createPortfolio", js);
+                Assert.Contains("__new__", js);
+            }
         }
     }
 
