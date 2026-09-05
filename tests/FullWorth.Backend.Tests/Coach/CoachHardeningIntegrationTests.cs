@@ -103,6 +103,24 @@ public sealed class CoachHardeningIntegrationTests
     }
 
     [Fact]
+    public async Task RequestedModelIsPassedToCoachProviderAndReturned()
+    {
+        var provider = new CapturingProvider();
+        using var factory = FactoryWithProvider(provider);
+        var seed = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var ask = Request(HttpMethod.Post, $"/api/coach/ask?fullWorthSpaceId={seed.SpaceId}", seed.UserId,
+            JsonContent.Create(new { text = "Analysiere meine Ausgaben.", model = "gpt-coach-test" }));
+        using var response = await client.SendAsync(ask);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal("gpt-coach-test", provider.LastRequest?.Model);
+        Assert.Equal("gpt-coach-test", json.RootElement.GetProperty("model").GetString());
+    }
+
+    [Fact]
     public async Task ProviderPayloadExcludesReviewNotesAndOtherFullWorthSpaces()
     {
         var provider = new CapturingProvider();
@@ -283,7 +301,7 @@ public sealed class CoachHardeningIntegrationTests
         {
             LastRequest = request;
             if (Throw) throw new InvalidOperationException("provider unavailable");
-            return Task.FromResult(new CoachProviderResult("Provider answer based only on supplied facts.", [], []));
+            return Task.FromResult(new CoachProviderResult("Provider answer based only on supplied facts.", [], [], request.Model));
         }
     }
 }
