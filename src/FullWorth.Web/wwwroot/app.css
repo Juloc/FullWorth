@@ -260,6 +260,16 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .tx-scope-back{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer;font-size:17px;line-height:1;padding:0}
 .tx-scope-back:hover{background:var(--surface-2)}
 .tx-scope-label{font-weight:600;font-size:15px}
+/* Transaction filter sheet (UX rework §5): a Filter button with active-count badge + a drawer of the
+   advanced filters (direction/date/category/flags). The old inline direction/flags selects move into it. */
+.tx-filter-btn{position:relative;display:inline-flex;align-items:center;gap:6px}
+.tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.tx-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:700;line-height:1}
+#view-transactions .toolbar #tx-direction,#view-transactions .toolbar #tx-flags{display:none}
+.tx-filter-sheet{width:min(440px,94vw);display:flex;flex-direction:column;gap:var(--s3)}
+.tx-filter-range{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.tx-filter-sheet label{text-transform:none;letter-spacing:normal;font-size:13px;color:var(--text)}
+.tx-filter-sheet label.check{flex-direction:row;align-items:center;color:var(--muted)}
 /* Account/group drill-down affordance (UX rework §3) */
 .row.is-drillable{cursor:pointer}
 .row.is-drillable:hover{background:var(--surface-2)}

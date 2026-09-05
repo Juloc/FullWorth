@@ -11,6 +11,7 @@ export function bindTransactions(context) {
   ctx = context;
   ctx.$('#tx-apply').addEventListener('click', applySearch);
   ctx.$('#tx-query').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applySearch(); } });
+  ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
   ctx.$('#tx-detect').addEventListener('click', detectTransfers);
   ctx.$('#tx-add').addEventListener('click', openBookingDialog);
 }
@@ -26,6 +27,62 @@ function applySearch() {
   const qs = params.toString();
   history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
   renderTransactions(ctx);
+}
+
+function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
+function txReplaceUrl(params) {
+  const qs = params.toString();
+  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
+}
+
+// Active-filter count badge on the Filter button (§5): direction, flags, date range and category.
+function updateFilterBadge(f) {
+  const btn = ctx.$('#tx-filter'); if (!btn) return;
+  const n = (f.direction ? 1 : 0) + (f.flags ? 1 : 0) + (f.from || f.to ? 1 : 0) + (f.categoryId ? 1 : 0);
+  let badge = btn.querySelector('.tx-filter-count');
+  if (n) { if (!badge) { badge = document.createElement('span'); badge.className = 'tx-filter-count'; btn.appendChild(badge); } badge.textContent = String(n); }
+  else badge?.remove();
+}
+
+// Filter sheet (§5): a compact drawer (bottom sheet on mobile via .drawer CSS) for the advanced filters
+// that don't fit the toolbar — direction, date range, category and the transfer/excluded flags. Applied
+// through the URL (single source of truth) so filters are restorable and agree with the scope banner.
+async function openFilterSheet() {
+  const params = new URLSearchParams(location.search);
+  let catOptions = '';
+  try { catOptions = await ctx.categoryOptions(params.get('categoryId') || undefined); } catch { /* category filter optional */ }
+  const dir = ctx.$('#tx-direction').value, flags = ctx.$('#tx-flags').value;
+  const dlg = ctx.dialog(`<form class="dialog-card drawer tx-filter-sheet" method="dialog">
+    <div class="panel-head"><h2>${ctx.esc(deLabel('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <label>${ctx.esc(ctx.get('transactions.type'))}<select name="direction"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="income"${dir === 'income' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.income'))}</option><option value="expense"${dir === 'expense' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.expenses'))}</option></select></label>
+    <div class="tx-filter-range"><label>${ctx.esc(deLabel('Von', 'From'))}<input type="date" name="from" value="${ctx.esc(params.get('from') || '')}"></label><label>${ctx.esc(deLabel('Bis', 'To'))}<input type="date" name="to" value="${ctx.esc(params.get('to') || '')}"></label></div>
+    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${catOptions}</select></label>
+    <label class="check"><input type="checkbox" name="fpending"${flags === 'pending' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</label>
+    <label class="check"><input type="checkbox" name="ftransfers"${flags === 'transfers' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
+    <label class="check"><input type="checkbox" name="fignored"${flags === 'ignored' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
+    <div class="dialog-actions"><button type="button" data-reset class="ghost">${ctx.esc(deLabel('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.classList.add('drawer');
+  const cat = () => dlg.querySelector('[name="category"]');
+  if (cat() && params.get('categoryId')) cat().value = params.get('categoryId');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-reset]').onclick = () => {
+    ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
+    const p = new URLSearchParams(location.search); ['from', 'to', 'categoryId', 'includeDescendants'].forEach(k => p.delete(k));
+    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+  };
+  dlg.querySelector('[data-apply]').onclick = () => {
+    const fd = new FormData(dlg.querySelector('form'));
+    ctx.$('#tx-direction').value = fd.get('direction') || '';
+    ctx.$('#tx-flags').value = fd.get('ftransfers') ? 'transfers' : fd.get('fignored') ? 'ignored' : fd.get('fpending') ? 'pending' : '';
+    const p = new URLSearchParams(location.search);
+    const setOrDel = (k, v) => { if (v) p.set(k, v); else p.delete(k); };
+    setOrDel('from', fd.get('from')); setOrDel('to', fd.get('to'));
+    const c = fd.get('category');
+    if (c) { p.set('categoryId', c); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
+    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+  };
+  dlg.showModal();
 }
 
 // Manual booking (UI_UX_SPEC §9.4): hand-enter an income/expense on a MANUAL account. Only manual
@@ -89,6 +146,8 @@ export async function renderTransactions(context) {
   const groupId = params.get('groupId') || '';
   const categoryId = params.get('categoryId') || '';
   const includeDescendants = params.get('includeDescendants') === 'true';
+  const fromDate = params.get('from') || '';
+  const toDate = params.get('to') || '';
   // The search term lives in the URL (?query=), set by a merchant drill or by applySearch(); reflect it
   // into the box and use it for the request so the box, the scope banner and the list always agree.
   const urlQuery = params.get('query') || '';
@@ -104,6 +163,9 @@ export async function renderTransactions(context) {
   if (accountId) q.set('accountId', accountId);
   if (groupId) q.set('accountGroupId', groupId);
   if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
+  if (fromDate) q.set('from', fromDate);
+  if (toDate) q.set('to', toDate);
+  updateFilterBadge({ direction: dir, flags, from: fromDate, to: toDate, categoryId });
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
   const data = await ctx.api(`api/transactions?${q}`);
   let items = data.items || [];
