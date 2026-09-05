@@ -19,7 +19,8 @@ dialog.fw-dialog{overscroll-behavior:contain}
 dialog.fw-dialog .fw-dialog-card{min-width:0}
 dialog.fw-dialog .fw-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 dialog.fw-dialog .fw-dialog-head>h2,
-dialog.fw-dialog .fw-dialog-head>div{min-width:0}
+dialog.fw-dialog .fw-dialog-head>h3,
+dialog.fw-dialog .fw-dialog-head>div{min-width:0;overflow-wrap:anywhere}
 dialog.fw-dialog .fw-dialog-head-minimal{justify-content:flex-end}
 dialog.fw-dialog .fw-dialog-close{
   display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;padding:0;
