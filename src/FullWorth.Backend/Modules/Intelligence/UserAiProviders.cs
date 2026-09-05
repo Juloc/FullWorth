@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -38,8 +39,16 @@ public static class OpenAiCompatibleCredentialCodec
         if (credential.BaseUrl.Length is < 8 or > 2048 ||
             !Uri.TryCreate(credential.BaseUrl.Trim(), UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https") ||
-            !string.IsNullOrEmpty(uri.UserInfo))
-            throw new ArgumentException("Custom AI endpoint must be an absolute http(s) URL without embedded credentials.");
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+            throw new ArgumentException("Custom AI endpoint must be an absolute http(s) base URL without embedded credentials, query or fragment.");
+
+        var host = uri.DnsSafeHost.TrimEnd('.').ToLowerInvariant();
+        if (host is "metadata.google.internal" or "metadata" or "instance-data.ec2.internal")
+            throw new ArgumentException("Cloud metadata endpoints are not allowed as custom AI endpoints.");
+        if (IPAddress.TryParse(host, out var address) && IsBlockedAddress(address))
+            throw new ArgumentException("Link-local, multicast and cloud metadata addresses are not allowed as custom AI endpoints.");
 
         var authType = credential.AuthType.Trim().ToLowerInvariant();
         if (authType is not ("bearer" or "basic" or "none"))
@@ -52,6 +61,22 @@ public static class OpenAiCompatibleCredentialCodec
             throw new ArgumentException("Basic authentication requires username and password.");
         if ((credential.Username?.Length ?? 0) > 256 || (credential.Secret?.Length ?? 0) > 8192)
             throw new ArgumentException("Custom AI credentials exceed safe limits.");
+    }
+
+    private static bool IsBlockedAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address)) return false;
+        if (address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) ||
+            address.Equals(IPAddress.Broadcast))
+            return true;
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var bytes = address.GetAddressBytes();
+            if (bytes[0] == 169 && bytes[1] == 254) return true;
+            if (bytes[0] == 100 && bytes[1] == 100 && bytes[2] == 100 && bytes[3] == 200) return true;
+            return false;
+        }
+        return address.IsIPv6LinkLocal || address.IsIPv6Multicast;
     }
 }
 
