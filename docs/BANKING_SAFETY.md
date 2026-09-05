@@ -45,7 +45,7 @@ It may **not** bypass a persisted provider rate-limit window.
 - simultaneous manual/scheduled sync requests are not queued into repeated provider runs
 - Enable Banking HTTP calls are serialized
 - default spacing between Enable Banking requests is 1000 ms
-- account details are fetched on initial import or when session metadata is insufficient
+- account details are fetched on initial import and when a session UID must be resolved to a stable hash; normal ongoing sync does not refetch /details
 - ongoing transaction sync uses the latest successfully stored booked date minus the overlap window
 - continuation pages are followed sequentially with the same retrieval mode
 
