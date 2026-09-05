@@ -42,7 +42,7 @@ public sealed class FullWorthCloudException(
 /// </summary>
 public sealed class FullWorthCloudClient : IFullWorthCloudClient
 {
-    public const string OfficialBaseUrl = "https://cloud.fullworth.de/";
+    public const string OfficialBaseUrl = "https://api.fullworth.de/";
 
     private readonly HttpClient http;
     private readonly IConfiguration configuration;
