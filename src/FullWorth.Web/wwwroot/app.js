@@ -64,7 +64,8 @@ function renderPageHeader(){
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
   if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
-function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual}
+function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;updateThemeToggle()}
+function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
 async function loadSpaces(){
   const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
   const saved=localStorage.getItem('finance.space');
@@ -83,8 +84,8 @@ function renderUserBlock(){
 function bind(){
   $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
   $('#theme').addEventListener('change',e=>{state.theme=e.target.value;localStorage.setItem('finance.theme',state.theme);applyTheme()});
-  // Sidebar light/dark toggle: flips the effective theme and keeps the Settings select in sync.
-  $('#theme-toggle')?.addEventListener('click',()=>{const effective=state.theme==='system'?(media.matches?'dark':'light'):state.theme;state.theme=effective==='dark'?'light':'dark';localStorage.setItem('finance.theme',state.theme);applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
+  // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
+  $('#theme-toggle')?.addEventListener('click',()=>{const order=['system','light','dark'];state.theme=order[(order.indexOf(state.theme)+1)%order.length]||'system';localStorage.setItem('finance.theme',state.theme);applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
   // `.sidebar button[data-view]` covers both #nav and the sidebar-foot (Settings) entry, so Settings
   // is reachable on desktop; #bottom-nav is the mobile bar.

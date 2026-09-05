@@ -69,7 +69,7 @@ function installShell() {
     <div class="coach-layout">
       <div class="coach-main">
         <article class="panel coach-hero">
-          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true">FW</div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
+          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
           <span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span>
         </article>
         <article class="panel coach-chat-panel">

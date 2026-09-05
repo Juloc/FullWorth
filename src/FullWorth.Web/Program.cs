@@ -223,15 +223,30 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseStaticFiles();
+// Serve static assets with revalidation ("no-cache" = cache, but always check the ETag first). The
+// auth/app shells are dynamic and always fresh, so without this a browser could keep an old cached
+// CSS/JS after an update; ETag revalidation returns 304 when unchanged and fresh bytes after a deploy.
+app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
+{
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+});
 app.UseAuthorization();
 app.UseFullWorthAntiforgery();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "fullworth-web" })).AllowAnonymous();
+app.MapGet("/api/app-version", (IConfiguration cfg) =>
+    Results.Ok(new { version = string.IsNullOrWhiteSpace(cfg["AppVersion"]) ? "dev" : cfg["AppVersion"]!.Trim() }))
+    .AllowAnonymous();
 app.MapGet("/appsettings.json", () => Results.NotFound()).AllowAnonymous();
 app.MapFullWorthAntiforgeryTokenEndpoint();
 
 var authShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "auth", "index.html");
+// Asset cache-busting version. Production: the stable build version (cache-friendly, busts per release).
+// Development: a fresh GUID per process start so every restart guarantees fresh assets — never a stale
+// cached CSS/JS, never a manual hard-reload while iterating.
+var assetVersion = string.IsNullOrWhiteSpace(app.Configuration["AppVersion"]) ? "dev" : app.Configuration["AppVersion"]!.Trim();
+if (app.Environment.IsDevelopment())
+    assetVersion = $"{assetVersion}-{Guid.NewGuid():N}";
 foreach (var route in new[]
 {
     "/auth",
@@ -245,8 +260,13 @@ foreach (var route in new[]
 {
     app.MapGet(route, async (HttpContext context, CancellationToken ct) =>
     {
+        // Version the linked CSS/JS so a browser always fetches the assets matching this build
+        // instead of a heuristically-cached older copy (the shell HTML itself is always served fresh).
+        var html = (await File.ReadAllTextAsync(authShellPath, ct))
+            .Replace("/auth/auth.css", $"/auth/auth.css?v={assetVersion}")
+            .Replace("/auth/auth.js", $"/auth/auth.js?v={assetVersion}");
         context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.SendFileAsync(authShellPath, ct);
+        await context.Response.WriteAsync(html, ct);
     }).AllowAnonymous();
 }
 

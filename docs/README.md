@@ -5,6 +5,7 @@
 - [Roadmap](../ROADMAP.md) — scope and release priorities
 - [Product decisions](PRODUCT_DECISIONS.md) — product rules and trade-offs
 - [UI/UX specification](UI_UX_SPEC.md) — application behaviour and interface
+- [Simple finance-app UX rework plan](SIMPLE_FINANCE_APP_UX_REWORK_PLAN.md) — account/group booking drill-down, merchant/category identity, W/M/Q/Y analyses, contract filters and simplified mobile information architecture
 - [Feature parity implementation plan](FEATURE_PARITY_IMPLEMENTATION_PLAN.md) — junior-executable plan for remaining Finanzguru/Finanzfluss parity, backend/UI consequences and delivery gates
 - [Wealth & asset management implementation plan](WEALTH_ASSET_MANAGEMENT_IMPLEMENTATION_PLAN.md) — junior-executable plan for unified net worth, real estate, asset valuation, rentals, debt links, specialized assets and investment integration
 - [Category Intelligence plan](CATEGORY_INTELLIGENCE_PLAN.md) — categorization catalog, review, learning, bulk actions, tags and visual category metadata

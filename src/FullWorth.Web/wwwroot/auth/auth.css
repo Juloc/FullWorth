@@ -1,22 +1,24 @@
 /* Auth shell — FullWorth light-first design. Consumes the same app.css tokens as the main app.
    Depth is restrained and structural: one elevated auth card, quiet controls, semantic colour only. */
 .auth-body{min-height:100dvh;overflow-x:hidden;background:radial-gradient(760px 420px at 70% 5%,rgba(255,255,255,.95),transparent 72%),radial-gradient(540px 320px at 18% 30%,rgba(91,71,224,.04),transparent 72%),var(--bg)}
-.auth-shell{min-height:100dvh;display:grid;grid-template-rows:auto 1fr auto;padding:var(--s4) clamp(14px,3vw,32px);gap:var(--s4)}
-.auth-topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0}
+.auth-shell{min-height:100dvh;display:grid;grid-template-rows:1fr auto;padding:var(--s4) clamp(14px,3vw,32px);gap:var(--s4)}
+.auth-topbar{display:flex;align-items:center;justify-content:flex-end;gap:var(--s4);min-width:0}
 .auth-brand{display:inline-flex;align-items:center;gap:var(--s3);color:var(--text);font-weight:600;text-decoration:none}
 .auth-brand .brand-mark,.auth-card-brand .brand-mark{background:linear-gradient(145deg,#111318,#343a44);box-shadow:0 4px 11px rgba(17,19,24,.16),inset 0 1px 0 rgba(255,255,255,.12)}
 .auth-preferences{display:flex;align-items:flex-end;gap:var(--s2)}
 .auth-preference{gap:var(--s1)}
 .auth-preference>span{font-size:11px}
 .auth-preference select{min-height:40px}
-.auth-main{display:grid;place-items:center;min-height:0;padding:var(--s4) 0}
+.auth-main{display:grid;justify-items:center;align-content:center;gap:var(--s5);min-height:0;padding:var(--s4) 0}
+.auth-hero{display:grid;justify-items:center;text-align:center;gap:var(--s2)}
+.auth-hero-logo{height:clamp(40px,7vw,52px);width:auto;display:block}
+html[data-theme="light"] .auth-hero-logo{content:url("/branding/fullworth-logo-light.svg")}
+html[data-theme="dark"] .auth-hero-logo{content:url("/branding/fullworth-logo-dark.svg")}
+.auth-hero-name{margin:0;font-size:clamp(28px,5vw,34px);font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.auth-hero-tagline{margin:0;color:var(--muted);font-size:14px}
 .auth-card{width:min(100%,440px);background:linear-gradient(180deg,rgba(255,255,255,.985),rgba(255,255,255,.96));border:1px solid rgba(216,220,226,.95);border-radius:var(--radius-card);box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 22px rgba(16,24,40,.055),0 28px 70px rgba(16,24,40,.07);padding:clamp(20px,4vw,30px);animation:auth-enter .45s cubic-bezier(.2,.7,.2,1) both}
 html[data-theme="dark"] .auth-body{background:var(--bg)}
 html[data-theme="dark"] .auth-card{background:var(--surface);border-color:var(--line);box-shadow:var(--shadow-menu)}
-.auth-card-brand{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s6)}
-.auth-card-brand>div{display:grid;gap:2px}
-.auth-card-brand strong{font-size:15px;font-weight:600}
-.auth-card-brand span:last-child{font-size:12px;color:var(--muted)}
 .auth-heading{margin-bottom:var(--s6)}
 .auth-heading h1{font-size:24px;font-weight:600;line-height:1.2;margin:0 0 var(--s2);letter-spacing:-.02em}
 .auth-heading p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
@@ -26,9 +28,13 @@ html[data-theme="dark"] .auth-card{background:var(--surface);border-color:var(--
 html[data-theme="dark"] .auth-form input{background:var(--surface)}
 .auth-form input:hover{border-color:color-mix(in srgb,var(--line) 68%,var(--text))}
 .auth-form input:focus-visible,.auth-form button:focus-visible,.auth-links a:focus-visible,.auth-secondary:focus-visible,.auth-preference select:focus-visible,.auth-link-button:focus-visible{outline:2px solid var(--cta);outline-offset:2px;border-color:var(--cta)}
-.password-control{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:var(--s2)}
-.password-toggle{min-width:40px;min-height:40px;padding:0;display:grid;place-items:center;border-radius:50%;transition:transform .18s cubic-bezier(.2,.7,.2,1),box-shadow .18s ease,border-color .18s ease}
-.password-toggle:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(16,24,40,.06)}
+.password-control{position:relative;display:grid}
+.password-control input{width:100%;padding-right:42px}
+.password-toggle{position:absolute;top:0;bottom:0;right:6px;margin-block:auto;width:32px;height:32px;padding:0;display:grid;place-items:center;border:0;background:transparent;color:var(--muted);border-radius:var(--radius-input);cursor:pointer;transition:color .18s ease,background-color .18s ease}
+.password-toggle:hover{color:var(--text);background:var(--surface-2)}
+.password-toggle .pw-eye-off{display:none}
+.password-toggle[aria-pressed="true"] .pw-eye-open{display:none}
+.password-toggle[aria-pressed="true"] .pw-eye-off{display:block}
 .auth-primary,.auth-secondary{width:100%;min-height:40px;font-weight:600;border-radius:var(--radius-pill);transition:transform .18s cubic-bezier(.2,.7,.2,1),box-shadow .18s ease,filter .18s ease}
 .auth-primary{background:linear-gradient(180deg,#2d3036,#1e2024);border-color:transparent;color:#fff;box-shadow:0 2px 5px rgba(16,24,40,.12),0 8px 18px rgba(16,24,40,.09),inset 0 1px 0 rgba(255,255,255,.13)}
 html[data-theme="dark"] .auth-primary{background:var(--cta);color:var(--cta-text);box-shadow:none}
@@ -62,6 +68,17 @@ button.is-loading::before{content:"";width:14px;height:14px;border:2px solid cur
    must be unambiguous to read/transcribe, so they use a monospace family (0/O, 1/l disambiguation). */
 .recovery-codes code{font:600 14px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
 .auth-footer{text-align:center;color:var(--muted);font-size:12px;padding-bottom:max(0px,env(safe-area-inset-bottom))}
+.auth-version::before{content:"·";margin:0 var(--s1)}
+.auth-utility{position:fixed;left:clamp(12px,3vw,24px);bottom:max(clamp(12px,3vw,24px),env(safe-area-inset-bottom));display:flex;gap:var(--s2);z-index:2}
+.auth-util-btn{display:inline-flex;align-items:center;gap:var(--s1);min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:color .18s ease,border-color .18s ease,background-color .18s ease}
+.auth-util-btn:hover{color:var(--text);border-color:color-mix(in srgb,var(--line) 60%,var(--text))}
+.auth-util-btn svg{flex:0 0 auto}
+.auth-util-label{line-height:1}
+/* Show only the icon for the active theme preference; robust even before JS runs (default: system). */
+#auth-theme [data-theme-icon]{display:none}
+#auth-theme[data-theme-pref="system"] [data-theme-icon="system"],
+#auth-theme[data-theme-pref="light"] [data-theme-icon="light"],
+#auth-theme[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 [hidden]{display:none!important}
 @media(max-width:600px){
   .auth-shell{padding:var(--s3) var(--s3) max(var(--s3),env(safe-area-inset-bottom));gap:var(--s3)}
@@ -72,7 +89,7 @@ button.is-loading::before{content:"";width:14px;height:14px;border:2px solid cur
   .auth-preference select{max-width:112px;min-height:44px}
   .auth-main{place-items:start center;padding:var(--s2) 0}
   .auth-card{padding:var(--s4)}
-  .auth-form input,.auth-primary,.auth-secondary,.password-toggle{min-height:44px}
+  .auth-form input,.auth-primary,.auth-secondary{min-height:44px}
   .recovery-codes{grid-template-columns:1fr}
 }
 @media(max-height:620px){

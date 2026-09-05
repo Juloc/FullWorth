@@ -36,8 +36,8 @@ function resolveView() {
 }
 
 async function boot() {
-  $('#auth-language').value = preferences.language;
-  $('#auth-theme').value = preferences.theme;
+  updateLanguageButton();
+  updateThemeButton();
   applyTheme();
   await loadMessages();
   bind();
@@ -87,17 +87,31 @@ function applyTheme() {
   document.documentElement.dataset.theme = actual;
 }
 
+function updateLanguageButton() {
+  const label = document.getElementById('auth-language-label');
+  if (label) label.textContent = preferences.language.toUpperCase();
+}
+
+function updateThemeButton() {
+  const button = document.getElementById('auth-theme');
+  if (button) button.dataset.themePref = preferences.theme;
+}
+
 function bind() {
-  $('#auth-language').addEventListener('change', async event => {
-    preferences.language = event.target.value;
+  $('#auth-language').addEventListener('click', async () => {
+    const order = ['de', 'en'];
+    preferences.language = order[(order.indexOf(preferences.language) + 1) % order.length] ?? 'de';
     localStorage.setItem('finance.language', preferences.language);
+    updateLanguageButton();
     await loadMessages();
   });
 
-  $('#auth-theme').addEventListener('change', event => {
-    preferences.theme = event.target.value;
+  $('#auth-theme').addEventListener('click', () => {
+    const order = ['system', 'light', 'dark'];
+    preferences.theme = order[(order.indexOf(preferences.theme) + 1) % order.length] ?? 'system';
     localStorage.setItem('finance.theme', preferences.theme);
     applyTheme();
+    updateThemeButton();
   });
 
   media.addEventListener('change', () => {
@@ -111,6 +125,8 @@ function bind() {
   $$('[data-auth-action="toggle-password"]').forEach(button => {
     button.addEventListener('click', togglePassword);
   });
+
+  loadAppVersion();
 
   initializePasskeyLogin({
     button: $('[data-auth-action="passkey-login"]'),
@@ -370,6 +386,22 @@ function prepareResetView() {
 function showInvalidReset() {
   $('#reset-form').hidden = true;
   showMessage($('#reset-invalid'));
+}
+
+async function loadAppVersion() {
+  const el = document.getElementById('app-version');
+  if (!el) return;
+  try {
+    const response = await fetch('/api/app-version', { headers: { Accept: 'application/json' } });
+    if (!response.ok) return;
+    const data = await response.json();
+    const version = (data && data.version ? String(data.version) : '').trim();
+    if (!version) return;
+    el.textContent = version.startsWith('v') ? version : `v${version}`;
+    el.hidden = false;
+  } catch {
+    /* Version is decorative; on failure the footer simply shows the product name. */
+  }
 }
 
 function togglePassword(event) {

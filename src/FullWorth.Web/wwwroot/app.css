@@ -53,6 +53,14 @@ body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
 .sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
+.brand-logo{height:24px;width:auto;flex:0 0 auto;display:block}
+html[data-theme="light"] .brand-logo{content:url("/branding/fullworth-logo-light.svg")}
+html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.svg")}
+/* Sidebar theme toggle: show only the icon for the active preference (System/Hell/Dunkel), like login. */
+#theme-toggle [data-theme-icon]{display:none}
+#theme-toggle[data-theme-pref="system"] [data-theme-icon="system"],
+#theme-toggle[data-theme-pref="light"] [data-theme-icon="light"],
+#theme-toggle[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 .brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
 /* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
    stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
