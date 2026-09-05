@@ -11,6 +11,7 @@ Implementation must be checked against these official Enable Banking resources:
 - FAQ: https://enablebanking.com/docs/faq/
 - Quick Start: https://enablebanking.com/docs/api/quick-start/
 - Control Panel: https://enablebanking.com/docs/api/control-panel/
+- Official CLI / Control Panel API flow: https://github.com/enablebanking/enablebanking-cli
 - Linked Accounts / restricted production: https://enablebanking.com/docs/api/linked-accounts/
 - Terms of Service: https://enablebanking.com/terms/
 
@@ -44,7 +45,7 @@ AIS is considered complete only when FullWorth correctly supports:
 16. session delete/remote consent close,
 17. reauthorization without account duplication,
 18. per-user Enable Banking credentials,
-19. an in-app BYO Enable Banking setup wizard,
+19. an in-app BYO Enable Banking setup wizard with automatic API registration and manual fallback,
 20. optional account-scoped consent requests through access.accounts using IBAN or GenericIdentification,
 21. all documented transaction_status filters (BOOK, CNCL, HOLD, OTHR, PDNG, RJCT, SCHD),
 22. automated regression coverage for all above behavior.
@@ -70,6 +71,7 @@ Static verification completed on 2026-09-05:
 - final lifecycle pass preserves AuthorizationStateExpiresAt across concurrent sync, keeps the old consent/status/validity intact while reauthorization is pending, consumes cancelled callback state, and marks unreachable new authorization attempts terminal instead of leaving stale PENDING rows.
 - POST /sessions handling now requires the documented access.valid_until, closes malformed newly-created sessions best-effort, and never logs provider session IDs.
 - transaction identity was rechecked end-to-end: entry_reference is account-scoped through the database unique key (AccountId, ExternalKey).
+- the BYO wizard can now generate the RSA key server-side and register the user's Enable Banking application through the official Control Panel API flow; manual application import remains available as fallback.
 
 This document does **not** mark the integration production-ready yet. Remaining external verification:
 
@@ -228,21 +230,39 @@ Require acknowledgement before credentials can be saved.
 
 ## Step 2 - create Enable Banking account/application
 
-Provide a link to the official Control Panel and show the exact FullWorth callback URL:
+Show the exact FullWorth callback URL:
 
 https://<current-fullworth-host>/connect/enable-banking/callback
 
-Instructions:
+The wizard offers two paths.
 
-- create Production application for private real-bank testing
-- include AIS service
-- add the shown redirect URL
-- generate/upload the certificate according to Enable Banking instructions
-- keep the matching private key
+### Automatic registration (preferred)
 
-Sandbox remains supported for development.
+FullWorth follows the Control Panel flow used by Enable Banking's official CLI:
 
-## Step 3 - import credentials
+1. user enters their Enable Banking email and chooses SANDBOX or PRODUCTION;
+2. FullWorth generates a 4096-bit RSA key pair inside the Banking service;
+3. FullWorth requests the Enable Banking passwordless email sign-in link;
+4. the email link returns to a short-lived FullWorth setup callback;
+5. FullWorth exchanges the one-time code and registers the application with POST /api/applications;
+6. the public key, normal FullWorth banking callback and application metadata are registered;
+7. PRODUCTION registration also supplies description, GDPR email, https://fullworth.de/privacy/ and https://fullworth.de/terms/;
+8. Control Panel authentication tokens are used only for this flow and are never persisted;
+9. the generated private key is verified with GET /application and then stored encrypted in the user's EnableBankingProfile.
+
+Pending automatic registrations are user-bound, single-use and short-lived. They are kept only in Banking-service memory; a service restart during the email-login window requires restarting the setup flow.
+
+### Manual fallback
+
+The user can instead open the official Control Panel and:
+
+- create a Production application for private real-bank testing (or Sandbox for development);
+- include AIS service;
+- add the shown redirect URL;
+- generate/upload a certificate or public key;
+- keep the matching private key.
+
+## Step 3 - import credentials (manual path)
 
 Inputs:
 
@@ -612,6 +632,11 @@ Profile/tenancy tests:
 
 Wizard verification tests:
 
+- automatic registration requests passwordless Control Panel login without persisting tokens
+- automatic registration sends the generated public key, configured callback and required Production legal/contact fields
+- automatic callback state is random, user-bound, single-use and expires
+- automatic registration verifies the returned app before persisting the generated private key
+- automatic failure leaves the manual setup path available
 - valid app succeeds
 - kid mismatch rejected
 - missing AIS rejected
