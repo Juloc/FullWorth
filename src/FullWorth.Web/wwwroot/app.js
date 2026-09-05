@@ -49,7 +49,7 @@ function handleConnectRedirect(){
   if(!connected&&!error)return null;
   history.replaceState(null,'',location.pathname);
   if(connected){toast(get('accounts.connected').replace('{name}',()=>connected),6000);return'accounts'}
-  const known={access_denied:'accounts.connectCancelled',app_invalid_callback:'accounts.connectExpired',app_not_configured:'accounts.notConfigured',app_missing_parameters:'accounts.connectFailed'};
+  const known={access_denied:'accounts.connectCancelled',app_invalid_callback:'accounts.connectExpired',app_not_configured:'accounts.notConfigured',app_missing_parameters:'accounts.connectFailed',reauthorization_required:'accounts.connectReauth'};
   toast(get(known[error]||'accounts.connectFailed'),8000);
   return'accounts';
 }
