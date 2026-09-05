@@ -101,6 +101,31 @@ public sealed class BankSyncFlowTests
     }
 
     [Fact]
+    public async Task BackgroundSyncSendsNoPsuHeaders()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.DoesNotContain(
+                request.Headers,
+                header => header.Key.StartsWith("Psu-", StringComparison.OrdinalIgnoreCase));
+            if (request.RequestUri!.AbsolutePath == "/sessions/session-1")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"status\":\"AUTHORIZED\",\"accounts\":[]}"));
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Synced);
+        Assert.Single(provider.Requests);
+    }
+
+    [Fact]
     public async Task Continuation_pages_keep_date_range_and_continue_after_an_empty_intermediate_page()
     {
         using var environment = new TestBankingEnvironment();
