@@ -822,6 +822,7 @@
     "bankDefault": "Bank auswählen lassen",
     "connect": "Zur Bank weiter",
     "beta": "Beta",
-    "bankNotFound": "Die Bank wurde in der aktuellen Enable-Banking-Liste nicht gefunden."
+    "bankNotFound": "Die Bank wurde in der aktuellen Enable-Banking-Liste nicht gefunden.",
+    "bankRenamedHint": "Bankname hat sich möglicherweise geändert. Bitte wähle die aktuelle Bank aus."
   }
 }
