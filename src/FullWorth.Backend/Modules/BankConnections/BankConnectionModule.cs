@@ -422,6 +422,7 @@ public sealed record BankConnectionAuthorizeRequest(Guid FullWorthSpaceId, Guid?
 public enum BankConnectionAuthorizeResult { Authorized, Forbidden, NotFound }
 
 public sealed record ConsumeStateRequest(string State);
+public sealed record DeleteBankConnectionInternalRequest(Guid FullWorthSpaceId);
 
 public static class BankConnectionEndpoints
 {
@@ -471,6 +472,20 @@ public static class BankConnectionEndpoints
                 BankConnectionAuthorizeResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
                 _ => Results.NotFound()
             };
+        });
+        // Banking closes the remote Enable Banking session first, then calls this local destructive delete.
+        internalGroup.MapPost("/{id:guid}/delete", async (
+            HttpContext http,
+            Guid id,
+            DeleteBankConnectionInternalRequest request,
+            BankConnectionStore store,
+            CancellationToken ct) =>
+        {
+            if (!Guid.TryParse(http.Request.Headers["X-FullWorth-User-Id"], out var userId))
+                return Results.BadRequest();
+            return await store.DeleteForUserAsync(userId, request.FullWorthSpaceId, id, ct)
+                ? Results.NoContent()
+                : Results.NotFound();
         });
         return app;
     }
