@@ -295,7 +295,29 @@ app.MapGet("/connect/enable-banking/callback", async (
     CancellationToken ct) =>
 {
     if (!string.IsNullOrWhiteSpace(error))
+    {
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            try
+            {
+                await service.HandleAuthorizationErrorAsync(state, error, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // The browser must still get a safe callback result; never reflect provider/state
+                // details. A failed cleanup is logged and the expiring state remains server-side.
+                logger.LogWarning(
+                    exception,
+                    "Enable Banking authorization-error callback cleanup failed for state {State}.",
+                    SanitizeCallbackValue(state, 64));
+            }
+        }
         return CallbackErrorRedirect(error, error_description);
+    }
     if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
         return CallbackErrorRedirect("app_missing_parameters", null);
 
