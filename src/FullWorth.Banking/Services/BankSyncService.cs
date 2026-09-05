@@ -93,17 +93,22 @@ public sealed class BankSyncService(
         BankingCaller caller,
         CancellationToken ct)
     {
+        var normalizedCountry = NormalizeCountry(country ?? _providerOptions.DefaultCountry);
+        var normalizedPsuType = NormalizeOptionalPsuType(psuType);
         var (client, _) = providerResolver is null
             ? (provider, (EnableBankingProfileDto?)null)
             : await providerResolver.ResolveForUserAsync(caller.UserId, null, requireActive: true, ct);
-        return await client.GetInstitutionsAsync(
-            NormalizeCountry(country ?? _providerOptions.DefaultCountry),
-            string.IsNullOrWhiteSpace(psuType) ? null : psuType,
-            ct);
+        return await client.GetInstitutionsAsync(normalizedCountry, normalizedPsuType, ct);
     }
 
     public async Task<string> StartConnectionAsync(ConnectBankRequest request, BankingCaller caller, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.InstitutionName) || request.InstitutionName.Trim().Length > 200)
+            throw new ArgumentException("InstitutionName is required and must not exceed 200 characters.");
+
+        var country = NormalizeCountry(request.Country ?? _providerOptions.DefaultCountry);
+        var desiredPsuType = NormalizePsuType(request.PsuType ?? _providerOptions.DefaultPsuType);
+
         var requestedProfileId = request.EnableBankingProfileId;
         var authorized = await backend.AuthorizeAsync(
             caller.UserId,
@@ -141,11 +146,6 @@ public sealed class BankSyncService(
         var redirectUrl = _providerOptions.RedirectUrl;
         if (string.IsNullOrWhiteSpace(redirectUrl))
             throw new InvalidOperationException("EnableBanking:RedirectUrl is not configured.");
-
-        var country = NormalizeCountry(request.Country ?? _providerOptions.DefaultCountry);
-        var desiredPsuType = string.IsNullOrWhiteSpace(request.PsuType)
-            ? _providerOptions.DefaultPsuType
-            : request.PsuType.Trim().ToLowerInvariant();
 
         var list = await client.GetInstitutionsAsync(country, desiredPsuType, ct);
         var institution = FindInstitution(list, request.InstitutionName);
@@ -1295,6 +1295,20 @@ public sealed class BankSyncService(
         var source = $"{applicationId}|{profileId?.ToString("D") ?? "legacy"}|{userId:D}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
     }
+
+    private static string NormalizePsuType(string? value)
+    {
+        var psuType = (value ?? string.Empty).Trim().ToLowerInvariant();
+        return psuType switch
+        {
+            "personal" => "personal",
+            "business" => "business",
+            _ => throw new ArgumentException("PSU type must be either 'personal' or 'business'.")
+        };
+    }
+
+    private static string? NormalizeOptionalPsuType(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : NormalizePsuType(value);
 
     private static string NormalizeCountry(string? value)
     {
