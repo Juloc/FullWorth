@@ -207,6 +207,60 @@ public sealed class BankSyncFlowTests
     }
 
     [Fact]
+    public async Task WrongTransactionsPeriodNarrowsOnceAndDoesNotRepeatRejectedRange()
+    {
+        using var environment = new TestBankingEnvironment();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var backend = new FakeBackendHandler
+        {
+            SyncState = new AccountSyncState(today.AddDays(-180))
+        };
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+
+        var transactionCalls = 0;
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/sessions/session-1")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"status\":\"AUTHORIZED\",\"accounts\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"name\":\"Konto\",\"currency\":\"EUR\"}]}"));
+            if (path == "/accounts/account-1/balances")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
+            if (path == "/accounts/account-1/transactions")
+            {
+                transactionCalls++;
+                if (transactionCalls == 1)
+                    return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                        "{\"error_code\":\"WRONG_TRANSACTIONS_PERIOD\"}",
+                        HttpStatusCode.BadRequest));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"transactions\":[]}"));
+            }
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
+        {
+            OverlapDays = 7
+        });
+
+        var result = await service.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Synced);
+        var requests = provider.Requests
+            .Where(x => x.Uri.AbsolutePath == "/accounts/account-1/transactions")
+            .ToArray();
+        Assert.Equal(2, requests.Length);
+
+        var rejected = TestBankingEnvironment.Query(requests[0].Uri);
+        var fallback = TestBankingEnvironment.Query(requests[1].Uri);
+        Assert.Equal(today.AddDays(-187).ToString("yyyy-MM-dd"), rejected["date_from"]);
+        Assert.Equal(today.AddDays(-90).ToString("yyyy-MM-dd"), fallback["date_from"]);
+        Assert.Equal(today.ToString("yyyy-MM-dd"), fallback["date_to"]);
+        Assert.Equal("default", fallback["strategy"]);
+        Assert.False(fallback.ContainsKey("continuation_key"));
+    }
+
+    [Fact]
     public async Task First_import_uses_longest_strategy_without_date_bounds()
     {
         using var environment = new TestBankingEnvironment();
