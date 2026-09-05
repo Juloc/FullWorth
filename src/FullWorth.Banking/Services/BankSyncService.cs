@@ -14,7 +14,6 @@ public sealed class BankingSyncOptions
     public int IntervalMinutes { get; set; } = 360;
     public int MinimumBackgroundSyncIntervalMinutes { get; set; } = 360;
     public int RateLimitCooldownMinutes { get; set; } = 360;
-    public int InitialHistoryDays { get; set; } = 180;
     public int OverlapDays { get; set; } = 7;
     public int PersistBatchSize { get; set; } = 250;
     public int MaxPagesPerAccount { get; set; } = 250;
@@ -394,11 +393,12 @@ public sealed class BankSyncService(
         var balancesJson = await provider.GetBalancesAsync(account.ProviderAccountId, ct);
         var balances = ParseBalances(account, balancesJson);
         var now = DateOnly.FromDateTime(DateTime.UtcNow);
-        var from = syncState?.LatestBookingDate is { } latest
+        DateOnly? from = syncState?.LatestBookingDate is { } latest
             ? latest.AddDays(-Math.Max(0, _sync.OverlapDays))
-            : now.AddDays(-Math.Max(1, _sync.InitialHistoryDays));
-        if (from > now) from = now.AddDays(-Math.Max(0, _sync.OverlapDays));
-        var to = now;
+            : null;
+        if (from.HasValue && from.Value > now)
+            from = now.AddDays(-Math.Max(0, _sync.OverlapDays));
+        DateOnly? to = initialSync ? null : now;
         string? continuation = null;
         var firstPersist = true;
 
