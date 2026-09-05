@@ -797,7 +797,7 @@
     "loading": "Status wird geprüft …",
     "ready": "Bereit · {name}",
     "activationRequired": "Production-App muss noch aktiviert werden",
-    "legacy": "Globaler Server-Zugang aktiv",
+    "legacy": "Globaler Legacy-Zugang aktiv · nur bestehende Verbindungen",
     "notConfigured": "Noch nicht eingerichtet",
     "privateIntro": "FullWorth verwendet deinen eigenen Enable-Banking-Zugang für deine eigenen Bankkonten.",
     "privateBoundary": "Für private Tests mit Familie oder Freunden richtet jede Person einen eigenen Enable-Banking-Account, eine eigene Application und ihre eigenen verknüpften Konten ein. Eine öffentliche oder gemeinsame Banking-Anwendung benötigt einen Vertrag mit Enable Banking.",
