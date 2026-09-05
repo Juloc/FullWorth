@@ -440,6 +440,13 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @media(max-width:1023px){
+  html[data-theme="light"] .topbar{
+    margin-left:calc(var(--s4) * -1);
+    margin-right:calc(var(--s4) * -1);
+    padding-left:var(--s4);
+    padding-right:var(--s4);
+  }
+
   html[data-theme="light"] #bottom-nav{
     background:rgba(255,255,255,.93);
     backdrop-filter:saturate(145%) blur(18px);
