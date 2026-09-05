@@ -32,7 +32,6 @@ public sealed record EnableBankingProfileInternalDto(
     Guid UserId,
     string ApplicationId,
     string PrivateKeyPem,
-    string? ControlPanelRefreshToken,
     string KeyFingerprint,
     string Environment,
     string ApplicationName,
@@ -40,7 +39,8 @@ public sealed record EnableBankingProfileInternalDto(
     IReadOnlyList<string> Services,
     IReadOnlyList<string> RedirectUrls,
     DateTimeOffset? VerifiedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? ControlPanelRefreshToken = null);
 
 public sealed record EnableBankingProfileWrite(
     Guid UserId,
@@ -137,7 +137,6 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
         entity.UserId,
         entity.ApplicationId,
         cipher.Unprotect(entity.PrivateKeyPem) ?? string.Empty,
-        cipher.Unprotect(entity.ControlPanelRefreshToken),
         entity.KeyFingerprint,
         entity.Environment,
         entity.ApplicationName,
@@ -145,7 +144,8 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
         Deserialize(entity.ServicesJson),
         Deserialize(entity.RedirectUrlsJson),
         entity.VerifiedAt,
-        entity.UpdatedAt);
+        entity.UpdatedAt,
+        cipher.Unprotect(entity.ControlPanelRefreshToken));
 
     private static IReadOnlyList<string> Deserialize(string json)
     {
