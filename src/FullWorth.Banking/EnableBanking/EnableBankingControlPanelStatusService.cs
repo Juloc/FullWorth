@@ -262,9 +262,10 @@ public sealed class EnableBankingControlPanelStatusService(
         if (refreshed is null)
             return null;
 
+        var cacheSeconds = Math.Max(30, Math.Min(refreshed.ExpiresInSeconds - 90, 3300));
         var cachedToken = new CachedToken(
             refreshed.IdToken,
-            DateTimeOffset.UtcNow.AddSeconds(Math.Clamp(refreshed.ExpiresInSeconds - 90, 300, 3300)));
+            DateTimeOffset.UtcNow.AddSeconds(cacheSeconds));
         _tokenCache[userId] = cachedToken;
 
         if (!string.Equals(
