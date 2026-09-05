@@ -538,8 +538,21 @@
       "recovery-codes": {
         "title": "Save recovery codes",
         "subtitle": "Keep newly generated codes in a secure place."
+      },
+      "register": {
+        "title": "Create account",
+        "subtitle": "Create your FullWorth account. The setup wizard will guide you through the first steps."
       }
-    }
+    },
+    "createAccount": "Create account",
+    "displayName": "Name",
+    "register": "Create account",
+    "registering": "Creating account…",
+    "acceptTerms": "I accept the privacy policy and terms of use.",
+    "registrationUnavailable": "Registration could not be completed. If an account already exists, sign in instead.",
+    "registrationDisabled": "Public registration is disabled on this FullWorth instance.",
+    "privacy": "Privacy",
+    "terms": "Terms of use"
   },
   "passkeys": {
     "title": "Passkeys",
