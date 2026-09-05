@@ -259,7 +259,8 @@ public sealed class BankConnectTenancyTests
         var provider = new RecordingHttpMessageHandler((request, _, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;
-            if (path == "/sessions") return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"session_id\":\"s-1\"}"));
+            if (path == "/sessions") return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"session_id\":\"s-1\",\"access\":{\"valid_until\":\"2026-12-01T12:00:00Z\"}}"));
             if (path == "/sessions/s-1") return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"status\":\"AUTHORIZED\",\"accounts\":[]}"));
             throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
         });
