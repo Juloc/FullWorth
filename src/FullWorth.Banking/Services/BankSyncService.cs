@@ -31,7 +31,8 @@ public sealed record ConnectBankRequest(
     Guid? EnableBankingProfileId = null,
     string? PsuType = null,
     string? Language = null,
-    bool? CredentialsAutosubmit = null);
+    bool? CredentialsAutosubmit = null,
+    IReadOnlyList<EnableBankingAccountIdentification>? Accounts = null);
 
 public sealed record BankSyncResult(int Synced, int Skipped, int Failed, bool AlreadyRunning);
 
@@ -191,7 +192,8 @@ public sealed class BankSyncService(
             ct,
             desiredPsuType,
             language,
-            request.CredentialsAutosubmit);
+            request.CredentialsAutosubmit,
+            request.Accounts);
 
         var requiredPsuHeaders = GetStringArray(institution, "required_psu_headers");
         await backend.UpsertConnectionAsync(new(
