@@ -615,6 +615,7 @@
     "disconnectConfirm": "Verbindung zu „{name}“ trennen? Alle synchronisierten Konten und Umsätze dieser Bank werden endgültig gelöscht.",
     "disconnected": "Bankverbindung getrennt",
     "syncStarted": "Synchronisierung läuft – aktuelle Daten werden geladen.",
+    "syncCompleted": "Synchronisierung abgeschlossen",
     "syncRunning": "Eine Synchronisierung läuft bereits.",
     "syncCooldown": "Die Bank hat das Limit erreicht. Bitte später erneut versuchen.",
     "syncReauth": "Die Freigabe ist abgelaufen. Bitte verbinde die Bank neu.",
