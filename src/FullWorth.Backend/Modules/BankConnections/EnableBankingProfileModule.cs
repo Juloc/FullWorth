@@ -6,8 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.BankConnections;
 
 /// <summary>
-/// One Bring-Your-Own Enable Banking application per FullWorth user. The RSA private key is encrypted
-/// with FieldCipher and is only returned through the ingest-key-protected internal banking API.
+/// One Bring-Your-Own Enable Banking application per FullWorth user. The RSA private key and optional
+/// Control Panel refresh token are encrypted with FieldCipher and are only returned through the
+/// ingest-key-protected internal banking API.
 /// </summary>
 public sealed class EnableBankingProfile
 {
