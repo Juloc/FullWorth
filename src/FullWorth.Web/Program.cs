@@ -88,6 +88,7 @@ builder.Services.AddIdentityCore<AuthUser>(configuredAuth.Apply)
     .AddDefaultTokenProviders();
 
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
+builder.Services.Configure<RegistrationOptions>(builder.Configuration.GetSection(RegistrationOptions.SectionName));
 builder.Services.Configure<FinanceSessionOptions>(builder.Configuration.GetSection("Sessions"));
 builder.Services.Configure<RecoveryOptions>(builder.Configuration.GetSection("Recovery"));
 builder.Services.AddSingleton(services => BackendContextOptions.Load(
@@ -101,6 +102,7 @@ builder.Services.AddTransient<BankingUserContextHandler>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthSessionCoordinator>();
+builder.Services.AddScoped<RegistrationService>();
 builder.Services.AddScoped<InviteClaimService>();
 builder.Services.AddScoped<ISessionPersistence, AuthSessionPersistence>();
 builder.Services.AddScoped<SessionStore>();
@@ -232,6 +234,7 @@ foreach (var route in new[]
 {
     "/auth",
     "/auth/login",
+    "/auth/register",
     "/auth/forgot-password",
     "/auth/reset-password",
     "/auth/recovery-code",
