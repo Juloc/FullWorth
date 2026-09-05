@@ -832,6 +832,10 @@
     "connect": "Zur Bank weiter",
     "beta": "Beta",
     "bankNotFound": "Die Bank wurde in der aktuellen Enable-Banking-Liste nicht gefunden.",
-    "bankRenamedHint": "Bankname hat sich möglicherweise geändert. Bitte wähle die aktuelle Bank aus."
+    "bankRenamedHint": "Bankname hat sich möglicherweise geändert. Bitte wähle die aktuelle Bank aus.",
+    "limitAccounts": "Zugriff auf bestimmte Konten begrenzen",
+    "accountIdentifiers": "Konto-Kennungen",
+    "accountIdentifiersHint": "Optional: eine IBAN pro Zeile. Andere Kennungen als SCHEMA|IDENTIFIKATION|ISSUER, z. B. BBAN|123456. Ohne Einschränkung übernimmt der Bank-Dialog die Kontenauswahl.",
+    "accountIdentifiersMissing": "Gib mindestens eine gültige IBAN oder SCHEMA|IDENTIFIKATION an."
   }
 }
