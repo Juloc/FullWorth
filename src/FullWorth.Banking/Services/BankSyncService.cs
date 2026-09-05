@@ -35,7 +35,7 @@ public sealed record ConnectBankRequest(
 
 public sealed record BankSyncResult(int Synced, int Skipped, int Failed, bool AlreadyRunning);
 
-public enum ManualSyncStatus { Started, Cooldown, AlreadyRunning, ReauthorizationRequired, NotFound }
+public enum ManualSyncStatus { Started, PartialHistory, Error, Cooldown, AlreadyRunning, ReauthorizationRequired, NotFound }
 public sealed record ManualSyncResult(ManualSyncStatus Status, DateTimeOffset? NextSyncAllowedAt = null);
 
 public enum DisconnectStatus { Deleted, NotFound, ProviderFailed }
@@ -291,8 +291,9 @@ public sealed class BankSyncService(
             try
             {
                 // Scheduled retrieval is deliberately PSU-header free.
-                await SyncConnectionCoreAsync(connection, bypassCadence: false, null, ct);
-                synced++;
+                var completed = await SyncConnectionCoreAsync(connection, bypassCadence: false, null, ct);
+                if (string.IsNullOrWhiteSpace(completed.LastError)) synced++;
+                else failed++;
             }
             catch (EnableBankingApiException)
             {
@@ -362,8 +363,17 @@ public sealed class BankSyncService(
             var afterFailure = await FindConnectionAsync(connectionId, ct);
             return new(ManualSyncStatus.Cooldown, afterFailure?.NextSyncAllowedAt);
         }
+        catch
+        {
+            var afterFailure = await FindConnectionAsync(connectionId, ct);
+            return new(ManualSyncStatus.Error, afterFailure?.NextSyncAllowedAt);
+        }
 
         var afterSync = await FindConnectionAsync(connectionId, ct);
+        if (string.Equals(afterSync?.LastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
+            return new(ManualSyncStatus.PartialHistory, afterSync?.NextSyncAllowedAt);
+        if (!string.IsNullOrWhiteSpace(afterSync?.LastError))
+            return new(ManualSyncStatus.Error, afterSync?.NextSyncAllowedAt);
         return new(ManualSyncStatus.Started, afterSync?.NextSyncAllowedAt);
     }
 
