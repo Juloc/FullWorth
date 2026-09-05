@@ -45,10 +45,19 @@ public sealed class EnableBankingClient(
     public Task<JsonElement> GetBalancesAsync(string accountId, CancellationToken ct) => SendJsonAsync(HttpMethod.Get, $"/accounts/{Uri.EscapeDataString(accountId)}/balances", null, ct);
     public Task<JsonElement> AuthorizeSessionAsync(string code, CancellationToken ct) => SendJsonAsync(HttpMethod.Post, "/sessions", new { code }, ct);
 
-    public Task<JsonElement> GetTransactionsAsync(string accountId, DateOnly from, DateOnly to, bool initialSync, string? continuationKey, CancellationToken ct)
+    public Task<JsonElement> GetTransactionsAsync(string accountId, DateOnly? from, DateOnly? to, bool initialSync, string? continuationKey, CancellationToken ct)
     {
         var strategy = initialSync ? "longest" : "default";
-        var path = $"/accounts/{Uri.EscapeDataString(accountId)}/transactions?date_from={from:yyyy-MM-dd}&date_to={to:yyyy-MM-dd}&strategy={strategy}";
+        var path = $"/accounts/{Uri.EscapeDataString(accountId)}/transactions?strategy={strategy}";
+
+        // For the first import Enable Banking's "longest" strategy is intentionally called without
+        // date_from/date_to so the provider can discover the earliest history the ASPSP exposes.
+        if (!initialSync)
+        {
+            if (from.HasValue) path += $"&date_from={from.Value:yyyy-MM-dd}";
+            if (to.HasValue) path += $"&date_to={to.Value:yyyy-MM-dd}";
+        }
+
         if (!string.IsNullOrWhiteSpace(continuationKey))
             path += $"&continuation_key={Uri.EscapeDataString(continuationKey)}";
         return SendJsonAsync(HttpMethod.Get, path, null, ct);
