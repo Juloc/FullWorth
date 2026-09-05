@@ -71,7 +71,15 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PublicRegistrationUi_IsAbsent()
     {
-        var content = await GetAuthPublicContentAsync();
+        // Scope to the login surface + the auth locale subtree. The full locale files legitimately
+        // describe the Enable Banking "application registration" feature ("register the application"),
+        // which is unrelated to public user sign-up and must not trip this check.
+        var content = string.Join("\n",
+            await GetAsync("/auth/index.html"),
+            await GetAsync("/auth/auth.css"),
+            await GetAsync("/auth/auth.js"),
+            await GetAuthLocaleSectionAsync("de"),
+            await GetAuthLocaleSectionAsync("en"));
 
         foreach (var forbidden in new[]
                  {
@@ -271,6 +279,12 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
             await GetAsync("/auth/auth.js"),
             await GetAsync("/locales/de.json"),
             await GetAsync("/locales/en.json"));
+    }
+
+    private async Task<string> GetAuthLocaleSectionAsync(string locale)
+    {
+        using var json = await GetLocaleAsync(locale);
+        return json.RootElement.TryGetProperty("auth", out var auth) ? auth.GetRawText() : string.Empty;
     }
 
     private async Task<string> GetAsync(string path)
