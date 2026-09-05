@@ -15,6 +15,7 @@ import { renderPurchases, bindPurchases } from './features/purchases.js';
 import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
+import { createAccessSetup } from './features/access-setup.js';
 
 const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null};
 // Mobile bottom nav shows exactly these four + "More" (UI_UX_SPEC §3.2); everything else lives in More.
@@ -42,7 +43,7 @@ async function boot(){
   await showView(startView,{replace:true});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
   initLock(ctx,{onUnlock:loadCurrent});
-  await maybeOpenRegistrationOnboarding();
+  await accessSetup.maybeOpenRegistrationOnboarding();
 }
 function handleConnectRedirect(){
   const params=new URLSearchParams(location.search);
@@ -232,6 +233,7 @@ async function runSearch(query,results,dlg){
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
 const ctx={$,$,api,bankApi,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`};
+const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
 async function loadDashboard(){await renderDashboard(ctx)}
 
 async function loadBudgets(){
@@ -548,7 +550,7 @@ async function openCategoryDialog(){
 }
 
 
-async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),renderAiAccessSettings()])}
+async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings()])}
 // Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
 // fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
 // which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
