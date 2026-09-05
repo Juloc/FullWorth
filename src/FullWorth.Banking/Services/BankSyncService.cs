@@ -177,7 +177,7 @@ public sealed class BankSyncService(
         var stateExpiresAt = DateTimeOffset.UtcNow.AddMinutes(
             Math.Clamp(_providerOptions.AuthorizationStateTtlMinutes, 1, 60));
         var language = NormalizeLanguage(request.Language);
-        var psuId = BuildPseudonymousPsuId(caller.UserId, profileId, client.ApplicationId);
+        var psuId = BuildPseudonymousPsuId(caller.UserId, client.ApplicationId);
 
         var result = await client.StartAuthorizationAsync(
             GetString(institution, "name") ?? request.InstitutionName,
@@ -1290,9 +1290,11 @@ public sealed class BankSyncService(
         }
     }
 
-    private static string BuildPseudonymousPsuId(Guid userId, Guid? profileId, string applicationId)
+    private static string BuildPseudonymousPsuId(Guid userId, string applicationId)
     {
-        var source = $"{applicationId}|{profileId?.ToString("D") ?? "legacy"}|{userId:D}";
+        // Stable for the same FullWorth user + Enable Banking application even if the local
+        // EnableBankingProfile row is deleted/re-created. Contains no email/name/direct identifier.
+        var source = $"{applicationId.Trim()}|{userId:D}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
     }
 
