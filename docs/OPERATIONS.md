@@ -7,8 +7,14 @@ Copy `.env.example` to `.env`, replace every placeholder with a unique value and
 hostname in `FULLWORTH_ALLOWED_HOSTS`, `FULLWORTH_PASSKEY_RP_ID` and `FULLWORTH_PASSKEY_ORIGIN`.
 
 Required secrets include the database password, the three service credentials and the base64-encoded
-32-byte data-encryption key. Create `secrets/enable-banking-private-key.pem`; replace the empty file
-with the provider RSA key before enabling banking.
+32-byte data-encryption key. Enable Banking itself is BYO by default: set the instance-wide
+`ENABLE_BANKING_REDIRECT_URL`, then let each FullWorth user verify and store their own Enable Banking
+application ID + RSA private key through the authenticated setup wizard. The RSA key is encrypted at
+rest with `Security:DataEncryptionKey` and is never returned to the browser after setup.
+
+A global Enable Banking key is legacy-only. For old deployments either set
+`ENABLE_BANKING_APPLICATION_ID` plus `ENABLE_BANKING_PRIVATE_KEY_BASE64`, or keep the previous PEM
+mount by starting Compose with `docker-compose.enable-banking-legacy.yml`.
 
 ```bash
 docker compose config
@@ -42,3 +48,20 @@ Do not replace `Security:DataEncryptionKey` in place when encrypted data exists.
 be decrypted with the old key and re-encrypted with the new one. Keep an old backup passphrase until
 all backups encrypted with it have expired or been re-encrypted.
 
+
+
+## Enable Banking private/restricted production
+
+For personal testing, each FullWorth user should create their own Enable Banking Production application,
+activate it by linking only their own accounts in the Enable Banking Control Panel, and then add that
+application to FullWorth. Do not share one restricted application between unrelated FullWorth users.
+Restricted production remains subject to Enable Banking's current Terms and linked-account rules.
+
+The normal deployment does not require any Enable Banking PEM file. Legacy PEM compatibility:
+
+```bash
+mkdir -p secrets
+# put the existing legacy RSA key here:
+# secrets/enable-banking-private-key.pem
+docker compose -f docker-compose.yml -f docker-compose.enable-banking-legacy.yml up -d
+```
