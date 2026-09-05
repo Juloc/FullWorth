@@ -218,7 +218,7 @@ public sealed class IngestionService(
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
             var entryReferenceCandidates = entryReferences.Length == 0
-                ? []
+                ? new List<FinanceTransaction>()
                 : await db.Transactions
                     .Where(x => x.AccountId == account.Id && x.EntryReference != null && entryReferences.Contains(x.EntryReference))
                     .ToListAsync(ct);
