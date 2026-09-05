@@ -134,6 +134,49 @@ public sealed class BankConnectTenancyTests
         Assert.Equal("https://finance.test/connect/enable-banking/callback", sentRedirect);
     }
 
+    [Fact]
+    public async Task PseudonymousPsuIdIsStableAcrossLocalProfileIdsForSameUserAndApplication()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var psuIds = new List<string>();
+        var provider = new RecordingHttpMessageHandler(async (request, _, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/aspsps")
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"aspsps\":[{\"name\":\"Test Bank\",\"country\":\"DE\",\"psu_types\":[\"personal\"]}]}");
+            if (request.RequestUri.AbsolutePath == "/auth")
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(
+                    await request.Content!.ReadAsStringAsync(ct));
+                psuIds.Add(json.RootElement.GetProperty("psu_id").GetString()!);
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"url\":\"https://bank.example/a\",\"authorization_id\":\"auth-1\"}");
+            }
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.StartConnectionAsync(
+            new ConnectBankRequest(
+                "Test Bank", "DE", 90, null, null, null,
+                EnableBankingProfileId: Guid.NewGuid(),
+                PsuType: "personal"),
+            Owner,
+            CancellationToken.None);
+        await service.StartConnectionAsync(
+            new ConnectBankRequest(
+                "Test Bank", "DE", 90, null, null, null,
+                EnableBankingProfileId: Guid.NewGuid(),
+                PsuType: "personal"),
+            Owner,
+            CancellationToken.None);
+
+        Assert.Equal(2, psuIds.Count);
+        Assert.Equal(psuIds[0], psuIds[1]);
+        Assert.Equal(64, psuIds[0].Length);
+    }
+
     [Theory]
     [InlineData("consumer")]
     [InlineData("company")]
