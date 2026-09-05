@@ -218,6 +218,15 @@ app.MapPost("/api/banking/profile/register/{id}/retry", async (
     }
 });
 
+app.MapDelete("/api/banking/profile/register/{id}", (
+    HttpContext http,
+    string id,
+    EnableBankingControlPanelRegistrationService registration) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    return registration.Cancel(userId, id) ? Results.NoContent() : Results.NotFound();
+});
+
 app.MapGet("/api/banking/institutions", async (
     HttpContext http,
     string? country,
