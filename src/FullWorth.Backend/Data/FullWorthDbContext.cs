@@ -30,6 +30,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<FullWorthSpaceInvite> FullWorthSpaceInvites => Set<FullWorthSpaceInvite>();
     public DbSet<AccountOwner> AccountOwners => Set<AccountOwner>();
     public DbSet<BankConnection> BankConnections => Set<BankConnection>();
+    public DbSet<EnableBankingProfile> EnableBankingProfiles => Set<EnableBankingProfile>();
     public DbSet<FinanceAccount> Accounts => Set<FinanceAccount>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<BalanceSnapshot> BalanceSnapshots => Set<BalanceSnapshot>();
@@ -97,16 +98,34 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         b.ApplyConfiguration(new MerchantConfiguration());
         b.ApplyConfiguration(new MerchantAliasConfiguration());
 
+        b.Entity<EnableBankingProfile>(e =>
+        {
+            e.HasIndex(x => x.UserId).IsUnique();
+            e.HasIndex(x => x.ApplicationId);
+            e.Property(x => x.ApplicationId).HasMaxLength(128);
+            e.Property(x => x.KeyFingerprint).HasMaxLength(128);
+            e.Property(x => x.Environment).HasMaxLength(24);
+            e.Property(x => x.ApplicationName).HasMaxLength(200);
+            e.Property(x => x.ServicesJson).HasColumnType("jsonb");
+            e.Property(x => x.RedirectUrlsJson).HasColumnType("jsonb");
+            e.HasOne<FullWorthUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         b.Entity<BankConnection>(e =>
         {
             e.HasIndex(x => new { x.Provider, x.ProviderSessionIdLookup }).IsUnique();
             e.HasIndex(x => x.AuthorizationState).IsUnique();
             e.HasIndex(x => x.FullWorthSpaceId);
+            e.HasIndex(x => x.EnableBankingProfileId);
             e.Property(x => x.Provider).HasMaxLength(64);
             e.Property(x => x.Country).HasMaxLength(2);
+            e.Property(x => x.PsuType).HasMaxLength(16);
+            e.Property(x => x.AuthMethod).HasMaxLength(120);
+            e.Property(x => x.RequiredPsuHeadersJson).HasColumnType("jsonb");
             e.Property(x => x.AuthorizationState).HasMaxLength(100);
             e.Property(x => x.LastError).HasMaxLength(2000);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<EnableBankingProfile>().WithMany().HasForeignKey(x => x.EnableBankingProfileId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<FinanceAccount>(e =>
