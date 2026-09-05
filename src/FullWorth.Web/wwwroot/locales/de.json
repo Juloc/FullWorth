@@ -178,7 +178,17 @@
     "purpose_savings": "Sparen",
     "purpose_vacation": "Urlaubsziel",
     "purpose_reserve": "Rücklage",
-    "purpose_other": "Sonstiges"
+    "purpose_other": "Sonstiges",
+    "bankDetails": "Bankdetails laden",
+    "bankDetailsUnavailable": "Für diese Buchung sind keine zusätzlichen Bankdetails verfügbar.",
+    "bankStatus": "Bankstatus",
+    "bankEntryReference": "Entry Reference",
+    "bankTransactionId": "Provider-Transaktions-ID",
+    "bankCreditor": "Empfänger",
+    "bankDebtor": "Zahlender",
+    "bankAccount": "Gegenkonto",
+    "bankCode": "Bank-Buchungscode",
+    "bankRemittance": "Verwendungszweck"
   },
   "purchases": {
     "title": "Käufe",
