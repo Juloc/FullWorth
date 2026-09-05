@@ -36,7 +36,7 @@ html[data-theme="dark"]{
   --shadow:none;
 }
 *{box-sizing:border-box}
-html,body{margin:0}
+html,body{margin:0;max-width:100%;overflow-x:clip}
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 h1,h2{margin:0}
@@ -46,7 +46,7 @@ a:hover{color:var(--muted)}
 .skip-link{position:fixed;top:-60px;left:8px;z-index:100;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-input);padding:10px 14px;transition:top .15s}
 .skip-link:focus{top:8px}
 
-.shell{min-height:100vh;display:grid;grid-template-columns:var(--sidebar-w) 1fr}
+.shell{min-height:100vh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
 body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
 
 /* Sidebar (§3.1) */
@@ -101,10 +101,11 @@ body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:n
 /* Main + top header (§3.1) */
 main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max)}
 main:focus{outline:none}
-.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
+.topbar-title{min-width:0;flex:1 1 auto}
 .topbar-title h1{font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.08}
 .topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
-.topbar-actions{display:flex;align-items:center;gap:var(--s2)}
+.topbar-actions{display:flex;align-items:center;gap:var(--s2);min-width:0;flex:0 1 auto}
 .icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
 .icon-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button:hover{border-color:var(--cta)}
@@ -575,9 +576,9 @@ body.locked{overflow:hidden}
 
 /* Tablet + mobile < 1024px: desktop sidebar gives way to the fixed bottom nav (§3.3/§3.2) */
 @media(max-width:1023px){
-  .shell{display:block}
+  .shell{display:block;width:100%;min-width:0}
   .sidebar{display:none}
-  main{padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom));max-width:none}
+  main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom));max-width:none}
   #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
   #bottom-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
   #bottom-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
