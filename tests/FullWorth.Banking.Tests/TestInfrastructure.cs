@@ -49,6 +49,7 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
 
     public List<BankConnectionDto> Connections { get; } = [];
     public AccountSyncState? SyncState { get; set; }
+    public TransactionProviderPointer? ProviderPointer { get; set; }
     public List<BankConnectionWrite> Upserts { get; } = [];
     public List<FinanceIngestBatch> Ingests { get; } = [];
     public int ListConnectionCalls { get; private set; }
@@ -150,6 +151,11 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
             path.Contains("/accounts/", StringComparison.Ordinal) &&
             path.EndsWith("/sync-state", StringComparison.Ordinal))
             return SyncState is null ? new(HttpStatusCode.NotFound) : Json(SyncState);
+
+        if (request.Method == HttpMethod.Get &&
+            path.StartsWith("/internal/banking/transactions/", StringComparison.Ordinal) &&
+            path.EndsWith("/provider-pointer", StringComparison.Ordinal))
+            return ProviderPointer is null ? new(HttpStatusCode.NotFound) : Json(ProviderPointer);
 
         if (request.Method == HttpMethod.Post && path == "/internal/banking/ingest")
         {
