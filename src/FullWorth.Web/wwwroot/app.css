@@ -1166,3 +1166,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
   .ic-polish .import-provider{transition:none}
   .ic-polish .import-status.is-busy::before{animation-duration:1.6s}
 }
+
+/* A non-interactive dashboard widget row (e.g. upcoming contracts) keeps the default cursor. */
+.fw-row-plain{cursor:default}
