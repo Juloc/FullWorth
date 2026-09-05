@@ -684,10 +684,14 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
     ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
     <p class="row-sub" data-business-notice hidden>${esc(get('bankingSetup.businessNotice'))}</p>
+    <label class="check"><input type="checkbox" data-limit-accounts> <span>${esc(get('bankingSetup.limitAccounts'))}</span></label>
+    <label data-account-access hidden>${esc(get('bankingSetup.accountIdentifiers'))}<textarea name="accountAccess" rows="3" autocomplete="off" placeholder="DE89370400440532013000&#10;BBAN|123456|Optional issuer"></textarea><span class="row-sub">${esc(get('bankingSetup.accountIdentifiersHint'))}</span></label>
     <div data-auth-method></div>
     <div data-credentials></div>
     <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
   const form=dlg.querySelector('form'),methodRoot=dlg.querySelector('[data-auth-method]'),credentialRoot=dlg.querySelector('[data-credentials]'),businessNotice=dlg.querySelector('[data-business-notice]');
+  const limitAccounts=dlg.querySelector('[data-limit-accounts]'),accountAccess=dlg.querySelector('[data-account-access]');
+  limitAccounts.onchange=()=>{accountAccess.hidden=!limitAccounts.checked;if(limitAccounts.checked)form.elements.accountAccess.focus()};
   let methods=[];
 
   const drawCredentials=()=>{
@@ -737,12 +741,29 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
     const selectedMethod=authMethod?authMethodsFor(bank,selectedPsuType).find(m=>m.name===authMethod):null;
     if(authMethod&&!selectedMethod){toast(get('common.error'));return}
     for(const[k,v]of fd.entries())if(k.startsWith('credential:')&&String(v).length)credentials[k.slice(11)]=String(v);
+    let accounts=null;
+    if(limitAccounts.checked){
+      const lines=String(fd.get('accountAccess')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      if(!lines.length){toast(get('bankingSetup.accountIdentifiersMissing'));return}
+      accounts=[];
+      for(const line of lines){
+        if(!line.includes('|')){
+          const iban=line.replace(/\s+/g,'').toUpperCase();
+          if(!/^[A-Z]{2}[A-Z0-9]{13,32}$/.test(iban)){toast(get('bankingSetup.accountIdentifiersMissing'));return}
+          accounts.push({iban});continue;
+        }
+        const parts=line.split('|').map(x=>x.trim()),schemeName=(parts[0]||'').toUpperCase(),identification=parts[1]||'',issuer=parts.slice(2).join('|').trim();
+        if(!schemeName||!identification){toast(get('bankingSetup.accountIdentifiersMissing'));return}
+        accounts.push({other:{identification,schemeName,issuer:issuer||null}});
+      }
+    }
     const body={
       institutionName:bank.name,country:bank.country||'DE',validDays:365,
       authMethod,credentials:Object.keys(credentials).length?credentials:null,
       reconnectConnectionId,enableBankingProfileId:profileId,
       psuType:selectedPsuType,language:state.lang,
-      credentialsAutosubmit:Object.keys(credentials).length?true:null
+      credentialsAutosubmit:Object.keys(credentials).length?true:null,
+      accounts
     };
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;
     try{const result=await bankApi('api/banking/connect',jsonBody(body));location.href=result.authorizationUrl}
