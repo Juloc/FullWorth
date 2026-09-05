@@ -30,7 +30,7 @@ public sealed class BankSyncFlowTests
         Assert.Equal(1, result.Failed);
         Assert.Single(provider.Requests);
         var failure = backend.Upserts.Last();
-        Assert.Equal("rate_limit", failure.LastError);
+        Assert.Equal("ASPSP_RATE_LIMIT_EXCEEDED", failure.LastError);
         Assert.NotNull(failure.NextSyncAllowedAt);
         Assert.True(failure.NextSyncAllowedAt >= started.AddMinutes(359));
     }
@@ -173,7 +173,7 @@ public sealed class BankSyncFlowTests
         var result = await service.SyncAllAsync(CancellationToken.None);
 
         Assert.Equal(1, result.Synced);
-        Assert.DoesNotContain(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1");
+        Assert.DoesNotContain(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1/details");
         var transactionRequest = provider.Requests.Single(x => x.Uri.AbsolutePath == "/accounts/account-1/transactions");
         var query = TestBankingEnvironment.Query(transactionRequest.Uri);
         Assert.Equal(latest.AddDays(-7).ToString("yyyy-MM-dd"), query["date_from"]);
@@ -198,7 +198,7 @@ public sealed class BankSyncFlowTests
         var result = await service.SyncAllAsync(CancellationToken.None);
 
         Assert.Equal(1, result.Synced);
-        Assert.Contains(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1");
+        Assert.Contains(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1/details");
         var transactionRequest = provider.Requests.Single(x => x.Uri.AbsolutePath == "/accounts/account-1/transactions");
         var query = TestBankingEnvironment.Query(transactionRequest.Uri);
         Assert.False(query.ContainsKey("date_from"));
@@ -212,7 +212,7 @@ public sealed class BankSyncFlowTests
         if (path == "/sessions/session-1")
             return Task.FromResult(TestBankingEnvironment.JsonResponse(
                 "{\"status\":\"AUTHORIZED\",\"accounts\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"name\":\"Konto 1\",\"currency\":\"EUR\"}]}"));
-        if (path == "/accounts/account-1" && includeAccountDetails)
+        if (path == "/accounts/account-1/details" && includeAccountDetails)
             return Task.FromResult(TestBankingEnvironment.JsonResponse(
                 "{\"details\":\"Checking\",\"currency\":\"EUR\"}"));
         if (path == "/accounts/account-1/balances")
