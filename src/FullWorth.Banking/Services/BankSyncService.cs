@@ -66,6 +66,11 @@ public sealed class BankAccessException(bool forbidden) : Exception
     public bool Forbidden { get; } = forbidden;
 }
 
+public sealed class BankReauthorizationRequiredException : InvalidOperationException
+{
+    public BankReauthorizationRequiredException() : base("Bank connection requires reauthorization.") { }
+}
+
 public sealed class BankSyncService(
     EnableBankingClient provider,
     FullWorthBackendClient backend,
@@ -480,14 +485,30 @@ public sealed class BankSyncService(
 
         var connection = await FindConnectionAsync(pointer.ConnectionId, ct)
             ?? throw new BankAccessException(false);
-        var client = await ResolveProviderForConnectionAsync(connection, ct);
+        if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
+            (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= DateTimeOffset.UtcNow))
+            throw new BankReauthorizationRequiredException();
 
-        var json = await client.GetTransactionDetailsAsync(
-            pointer.ProviderAccountId,
-            pointer.ProviderTransactionId,
-            psuContext,
-            RequiredPsuHeaders(connection),
-            ct);
+        var client = await ResolveProviderForConnectionAsync(connection, ct);
+        JsonElement json;
+        try
+        {
+            json = await client.GetTransactionDetailsAsync(
+                pointer.ProviderAccountId,
+                pointer.ProviderTransactionId,
+                psuContext,
+                RequiredPsuHeaders(connection),
+                ct);
+        }
+        catch (EnableBankingApiException ex)
+        {
+            await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
+            var afterFailure = await FindConnectionAsync(pointer.ConnectionId, ct);
+            if (RequiresReauthorization(afterFailure))
+                throw new BankReauthorizationRequiredException();
+            throw;
+        }
 
         JsonElement amount = default;
         var hasAmount = json.ValueKind == JsonValueKind.Object &&
