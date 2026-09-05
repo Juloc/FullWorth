@@ -7,6 +7,7 @@ const preferences = {
 
 const endpoints = Object.freeze({
   login: '/auth/login',
+  register: '/auth/register',
   passwordResetRequest: '/auth/password-reset/request',
   passwordResetComplete: '/auth/password-reset/complete',
   recoveryCodeRedeem: '/auth/recovery-code/redeem',
@@ -14,7 +15,7 @@ const endpoints = Object.freeze({
 });
 
 const media = matchMedia('(prefers-color-scheme: dark)');
-const supportedViews = new Set(['login', 'forgot-password', 'reset-password', 'recovery-code', 'recovery-codes', 'claim']);
+const supportedViews = new Set(['login', 'register', 'forgot-password', 'reset-password', 'recovery-code', 'recovery-codes', 'claim']);
 const state = {
   messages: {},
   view: resolveView(),
@@ -118,7 +119,7 @@ function bind() {
     if (preferences.theme === 'system') applyTheme();
   });
 
-  $$('#login-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
+  $('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
     form.addEventListener('submit', handleSubmit);
   });
 
@@ -152,6 +153,9 @@ async function handleSubmit(event) {
   switch (event.currentTarget.id) {
     case 'login-form':
       await submitLogin(event.currentTarget);
+      break;
+    case 'register-form':
+      await submitRegister(event.currentTarget);
       break;
     case 'forgot-form':
       await submitForgotPassword(event.currentTarget);
@@ -262,6 +266,55 @@ async function submitLogin(form) {
     }
   } catch {
     showMessage($('#login-unavailable'));
+  } finally {
+    setSubmitting(button, false);
+  }
+}
+
+async function submitRegister(form) {
+  hideMessage($('#register-error'));
+  hideMessage($('#register-disabled'));
+  hideMessage($('#register-password-mismatch'));
+
+  if (!form.reportValidity()) return;
+
+  const password = $('#register-password').value;
+  const confirmPassword = $('#register-confirm-password').value;
+  if (password !== confirmPassword) {
+    $('#register-confirm-password').setAttribute('aria-invalid', 'true');
+    showMessage($('#register-password-mismatch'));
+    $('#register-confirm-password').focus();
+    return;
+  }
+
+  $('#register-confirm-password').removeAttribute('aria-invalid');
+  const button = form.querySelector('button[type="submit"]');
+  setSubmitting(button, true);
+
+  try {
+    const body = new FormData(form);
+    const response = await fetch(endpoints.register, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        displayName: String(body.get('displayName') || ''),
+        email: String(body.get('email') || ''),
+        password,
+        acceptTerms: body.get('acceptTerms') === 'on'
+      })
+    });
+
+    if (response.ok) {
+      const payload = await readJson(response);
+      location.assign(resolveSafeReturnPath(payload?.returnUrl));
+      return;
+    }
+
+    if (response.status === 403) showMessage($('#register-disabled'));
+    else showMessage($('#register-error'));
+  } catch {
+    showMessage($('#register-error'));
   } finally {
     setSubmitting(button, false);
   }
