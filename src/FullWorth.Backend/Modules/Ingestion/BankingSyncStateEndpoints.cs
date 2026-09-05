@@ -19,7 +19,10 @@ public static class BankingSyncStateEndpoints
                 {
                     x.Id,
                     x.IdentificationHash,
-                    LatestBookingDate = db.Transactions.Where(t => t.AccountId == x.Id && t.BookingDate != null)
+                    LatestBookingDate = db.Transactions.Where(t =>
+                            t.AccountId == x.Id &&
+                            t.BookingDate != null &&
+                            t.Status == "BOOK")
                         .Max(t => (DateOnly?)t.BookingDate),
                     LatestTransactionUpdatedAt = db.Transactions.Where(t => t.AccountId == x.Id)
                         .Max(t => (DateTimeOffset?)t.UpdatedAt)
