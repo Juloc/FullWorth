@@ -142,6 +142,9 @@ public sealed class EnableBankingProfileService(
         {
             using var rsa = RSA.Create();
             rsa.ImportFromPem(privateKeyPem);
+            // ImportFromPem also accepts PUBLIC KEY material. Require private parameters here so an
+            // invalid upload becomes a deterministic 400 before any JWT signing/provider request.
+            _ = rsa.ExportParameters(includePrivateParameters: true);
             var publicKey = rsa.ExportSubjectPublicKeyInfo();
             return Convert.ToHexString(SHA256.HashData(publicKey)).ToLowerInvariant();
         }
