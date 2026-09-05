@@ -170,8 +170,9 @@ public sealed class EnableBankingSessionShapeTests
 
         var result = await service.SyncAllAsync(CancellationToken.None);
 
-        Assert.Equal(1, result.Synced);
-        Assert.Equal(0, result.Failed);
+        Assert.Equal(0, result.Synced);
+        Assert.Equal(1, result.Failed);
+        Assert.Equal("ACCOUNT_RESOLUTION_FAILED", backend.Connections.Single().LastError);
         Assert.Empty(backend.Ingests.SelectMany(batch => batch.Accounts));
     }
 
@@ -291,7 +292,8 @@ public sealed class EnableBankingSessionShapeTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Post && path == "/sessions")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"session_id\":\"session-9\"}"));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"session_id\":\"session-9\",\"access\":{\"valid_until\":\"2026-12-01T12:00:00Z\"}}"));
             if (path == "/sessions/session-9")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
