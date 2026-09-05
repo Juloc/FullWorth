@@ -236,9 +236,9 @@ https://<current-fullworth-host>/connect/enable-banking/callback
 
 The wizard offers two paths.
 
-### Automatic registration (preferred)
+### Automatic registration (beta)
 
-FullWorth follows the Control Panel flow used by Enable Banking's official CLI:
+FullWorth combines the documented application-registration API with the passwordless Control Panel sign-in flow implemented by Enable Banking's official CLI. The application-registration endpoint is documented; the Control Panel sign-in endpoints are not part of the public API reference and therefore remain a beta integration:
 
 1. user enters their Enable Banking email and chooses SANDBOX or PRODUCTION;
 2. FullWorth generates a 4096-bit RSA key pair inside the Banking service;
