@@ -4,6 +4,7 @@
 .auth-shell{min-height:100dvh;display:grid;grid-template-rows:auto 1fr auto;padding:var(--s4) clamp(14px,3vw,32px);gap:var(--s4)}
 .auth-topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0}
 .auth-brand{display:inline-flex;align-items:center;gap:var(--s3);color:var(--text);font-weight:600;text-decoration:none}
+.auth-brand-copy{display:grid;gap:0;line-height:1}.auth-brand-copy .beta-label{margin-bottom:3px}
 .auth-brand .brand-mark,.auth-card-brand .brand-mark{background:linear-gradient(145deg,#111318,#343a44);box-shadow:0 4px 11px rgba(17,19,24,.16),inset 0 1px 0 rgba(255,255,255,.12)}
 .auth-preferences{display:flex;align-items:flex-end;gap:var(--s2)}
 .auth-preference{gap:var(--s1)}
@@ -16,6 +17,7 @@ html[data-theme="dark"] .auth-card{background:var(--surface);border-color:var(--
 .auth-card-brand{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s6)}
 .auth-card-brand>div{display:grid;gap:2px}
 .auth-card-brand strong{font-size:15px;font-weight:600}
+.auth-card-brand .beta-label{margin-bottom:1px}
 .auth-card-brand span:last-child{font-size:12px;color:var(--muted)}
 .auth-heading{margin-bottom:var(--s6)}
 .auth-heading h1{font-size:24px;font-weight:600;line-height:1.2;margin:0 0 var(--s2);letter-spacing:-.02em}

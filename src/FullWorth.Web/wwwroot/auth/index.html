@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <link rel="icon" type="image/svg+xml" href="/pwa/icon-light.svg" media="(prefers-color-scheme: light)">
   <link rel="icon" type="image/svg+xml" href="/pwa/icon-dark.svg" media="(prefers-color-scheme: dark)">
-  <title>FullWorth</title>
+  <title>FullWorth Beta</title>
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/auth/auth.css">
 </head>
@@ -15,7 +15,7 @@
     <header class="auth-topbar">
       <a class="auth-brand" href="/auth/index.html?view=login" aria-label="FullWorth">
         <span class="brand-mark" aria-hidden="true">FW</span>
-        <span>FullWorth</span>
+        <span class="auth-brand-copy"><small class="beta-label">BETA</small><span>FullWorth</span></span>
       </a>
       <div class="auth-preferences">
         <label class="auth-preference">
@@ -41,6 +41,7 @@
         <div class="auth-card-brand">
           <span class="brand-mark" aria-hidden="true">FW</span>
           <div>
+            <small class="beta-label">BETA</small>
             <strong>FullWorth</strong>
             <span data-i18n="auth.appDescription"></span>
           </div>
@@ -226,7 +227,7 @@
       </article>
     </main>
 
-    <footer class="auth-footer">FullWorth</footer>
+    <footer class="auth-footer">FullWorth · Beta</footer>
   </div>
 
   <script type="module" src="/auth/auth.js"></script>

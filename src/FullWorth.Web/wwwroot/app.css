@@ -54,11 +54,14 @@ body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
 .brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand-name{display:grid;gap:0;line-height:1}
+.beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 /* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
    stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
 #nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
 #nav-collapse:hover{border-color:var(--cta)}
 body.nav-collapsed .brand strong{display:none}
+body.nav-collapsed .brand-name{display:none}
 /* Collapsed rail (72px): stack the logo above the toggle, both centred, so the toggle stays a real,
    clickable button that can re-open the sidebar (it used to be hidden, trapping the collapsed state). */
 body.nav-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
