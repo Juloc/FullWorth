@@ -21,6 +21,13 @@ services:
         limits:
           memory: 512M
 
+  fullworth-codex-volume-init:
+    image: alpine:3.22
+    restart: "no"
+    command: ["/bin/sh", "-ec", "mkdir -p /data/codex && chown -R 1000:1000 /data/codex"]
+    volumes:
+      - fullworth-codex-data:/data/codex
+
   fullworth-codex:
     # Experimental, internal-only bridge used by Purchases -> "GPT Scan · Test".
     # ChatGPT/Codex credentials are persisted only in this dedicated volume. It deliberately does
@@ -30,6 +37,9 @@ services:
       context: .
       dockerfile: src/FullWorth.CodexBridge/Dockerfile
     restart: unless-stopped
+    depends_on:
+      fullworth-codex-volume-init:
+        condition: service_completed_successfully
     environment:
       BRIDGE_KEY: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
       CODEX_HOME: /data/codex
