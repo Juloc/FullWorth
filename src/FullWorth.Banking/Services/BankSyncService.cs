@@ -410,6 +410,8 @@ public sealed class BankSyncService(
         }
 
         var afterSync = await FindConnectionAsync(connectionId, ct);
+        if (RequiresReauthorization(afterSync))
+            return new(ManualSyncStatus.ReauthorizationRequired);
         if (string.Equals(afterSync?.LastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
             return new(ManualSyncStatus.PartialHistory, afterSync?.NextSyncAllowedAt);
         if (!string.IsNullOrWhiteSpace(afterSync?.LastError))
