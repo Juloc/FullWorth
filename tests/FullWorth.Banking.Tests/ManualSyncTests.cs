@@ -113,6 +113,34 @@ public sealed class ManualSyncTests
     }
 
     [Fact]
+    public async Task TerminalSessionStatusFromSuccessfulSessionResponseRequiresReauthorization()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var connection = TestBankingEnvironment.AuthorizedConnection();
+        backend.Connections.Add(connection);
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.Equal("/sessions/session-1", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"status\":\"EXPIRED\",\"accounts\":[]}"));
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.RequestManualSyncAsync(
+            connection.Id,
+            Caller,
+            force: true,
+            CancellationToken.None);
+
+        Assert.Equal(ManualSyncStatus.ReauthorizationRequired, result.Status);
+        var final = backend.Connections.Single();
+        Assert.Equal("EXPIRED", final.Status);
+        Assert.Equal("SESSION_EXPIRED", final.LastError);
+        Assert.Null(final.NextSyncAllowedAt);
+    }
+
+    [Fact]
     public async Task GenericUnauthorizedProviderResponseIsErrorNotReauthorizationOrRateLimit()
     {
         using var environment = new TestBankingEnvironment();
