@@ -14,6 +14,7 @@ public static class AuthEndpoints
         var group = endpoints.MapGroup("/auth");
 
         group.MapPost("/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
+        group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapPost("/change-password", ChangePasswordAsync).RequireAuthorization();
         group.MapPost("/password-reset/request", RequestPasswordResetAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.PasswordReset);
@@ -41,6 +42,25 @@ public static class AuthEndpoints
             result.User,
             ReturnUrl = returnUrl
         });
+    }
+
+    private static async Task<IResult> RegisterAsync(
+        HttpContext context,
+        RegisterRequest request,
+        RegistrationService registration,
+        CancellationToken ct)
+    {
+        var result = await registration.RegisterAsync(request, context, ct);
+        if (result.Succeeded)
+            return Results.Ok(new { result.Succeeded, result.User, ReturnUrl = "/" });
+
+        var status = result.Error switch
+        {
+            "registration_disabled" => StatusCodes.Status403Forbidden,
+            "registration_unavailable" => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest
+        };
+        return Results.Json(result, statusCode: status);
     }
 
     private static async Task<IResult> LogoutAsync(
