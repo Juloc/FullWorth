@@ -366,7 +366,7 @@ async function loadAccountsView(){
   for(const x of connections||[]){
     const health=x.healthStatus||'authorized';
     const label=get(`accounts.health_${health}`);
-    const warn=['reauthorization_required','expired','error'].includes(health);
+    const warn=['reauthorization_required','expired','error','partial_history'].includes(health);
     const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
     const row=document.createElement('div');row.className='row';
     row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${date(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${date(x.lastSyncedAt)}${esc(expiry)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
