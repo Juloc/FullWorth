@@ -737,7 +737,7 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
     for(const[k,v]of fd.entries())if(k.startsWith('credential:')&&String(v).length)credentials[k.slice(11)]=String(v);
     const body={
       institutionName:bank.name,country:bank.country||'DE',validDays:365,
-      authMethod,psuId:null,credentials:Object.keys(credentials).length?credentials:null,
+      authMethod,credentials:Object.keys(credentials).length?credentials:null,
       reconnectConnectionId,enableBankingProfileId:profileId,
       psuType:selectedPsuType,language:state.lang,
       credentialsAutosubmit:Object.keys(credentials).length?true:null
