@@ -16,6 +16,7 @@ export async function renderLoans(context) {
   ctx = context;
   const el = ctx.$('#nw-loans');
   if (!el) return;
+  el.innerHTML = loadingRows();
   let loans;
   try { loans = await ctx.api('api/loans'); } catch { el.innerHTML = errorRow(); return; }
   loans = (loans || []).filter(l => l.isActive);
@@ -25,12 +26,31 @@ export async function renderLoans(context) {
   for (const l of loans) {
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'row loan-row';
-    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(l.name)}</div><div class="row-sub">${ctx.esc(ctx.get('loans.rate'))} ${Number(l.nominalInterestRate)}% · ${ctx.esc(ctx.get('loans.payment'))} ${ctx.money(l.paymentAmount, l.currency)}</div></div><div class="amount">${ctx.money(l.currentBalance, l.currency)}</div>`;
+    row.className = 'row loan-row loan-rowcard';
+    row.innerHTML =
+      `<span class="fw-ident loan-ident" aria-hidden="true">${loanIcon()}</span>`
+      + `<div class="row-main loan-rowcard-main"><div class="row-title">${ctx.esc(l.name)}</div>`
+      + `<div class="row-sub loan-rowcard-sub">${loanRowMeta(l)}</div></div>`
+      + `<div class="loan-rowcard-end"><span class="amount">${ctx.money(l.currentBalance, l.currency)}</span>`
+      + `<span class="loan-rowcard-cap">${ctx.esc(ctx.get('loans.balance'))}</span></div>`;
     row.addEventListener('click', () => openAmortization(l));
     frag.appendChild(row);
   }
   el.appendChild(frag);
+}
+
+// Sub-line for a loan row: nominal rate, recurring payment and its cadence (all from existing i18n keys).
+function loanRowMeta(l) {
+  const rate = `${ctx.esc(ctx.get('loans.rate'))} ${Number(l.nominalInterestRate)}%`;
+  const pay = `${ctx.esc(ctx.get('loans.payment'))} ${ctx.money(l.paymentAmount, l.currency)}`;
+  const freq = ctx.esc(ctx.get('contracts.cycle_' + (l.paymentFrequency || 'monthly')));
+  const sep = '<span class="loan-meta-sep" aria-hidden="true">·</span>';
+  return `${rate}${sep}${pay}${sep}${freq}`;
+}
+
+// Monochrome "stacked balance" glyph for the row identity chip (stroke = currentColor via .fw-ident).
+function loanIcon() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6"/><path d="M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg>`;
 }
 
 async function openAmortization(loan) {
@@ -74,13 +94,39 @@ function amortizationBody(loan, data) {
   return `<div class="detail-grid">${meta}</div>${splitBar}<div class="loan-chart">${balanceChart(periods)}</div>`;
 }
 
-// Remaining-balance decline over the schedule as an SVG polyline.
+// Remaining-balance decline over the schedule as a softened SVG area+line: a smooth curve with rounded
+// joins over a faint token area-gradient (currentColor → transparent), staying monochrome per brand.
 function balanceChart(periods) {
   if (periods.length < 2) return '';
-  const vals = periods.map(p => Number(p.remainingBalance));
-  const max = Math.max(...vals, 1), w = 600, h = 120;
-  const pts = periods.map((p, i) => `${(i / (periods.length - 1)) * w},${h - (Number(p.remainingBalance) / max) * (h - 12) - 6}`).join(' ');
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('loans.balanceCurve'))}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  const w = 600, h = 120, pad = 6;
+  const max = Math.max(...periods.map(p => Number(p.remainingBalance)), 1);
+  const pts = periods.map((p, i) => [
+    (i / (periods.length - 1)) * w,
+    h - (Number(p.remainingBalance) / max) * (h - pad * 2) - pad
+  ]);
+  const line = smoothPath(pts);
+  const area = `${line} L ${w.toFixed(2)},${h} L 0,${h} Z`;
+  return `<svg class="loan-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('loans.balanceCurve'))}">`
+    + `<defs><linearGradient id="loan-area-grad" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0%" stop-color="currentColor" stop-opacity="0.16"/>`
+    + `<stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>`
+    + `<path d="${area}" fill="url(#loan-area-grad)" stroke="none"/>`
+    + `<path d="${line}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`
+    + `</svg>`;
+}
+
+// Catmull-Rom → cubic-bezier smoothing so the balance curve reads as a soft line rather than kinked segments.
+function smoothPath(pts) {
+  if (pts.length < 2) return '';
+  if (pts.length === 2) return `M ${pts[0][0].toFixed(2)},${pts[0][1].toFixed(2)} L ${pts[1][0].toFixed(2)},${pts[1][1].toFixed(2)}`;
+  const t = 0.2, d = [`M ${pts[0][0].toFixed(2)},${pts[0][1].toFixed(2)}`];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) * t, c1y = p1[1] + (p2[1] - p0[1]) * t;
+    const c2x = p2[0] - (p3[0] - p1[0]) * t, c2y = p2[1] - (p3[1] - p1[1]) * t;
+    d.push(`C ${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2[0].toFixed(2)},${p2[1].toFixed(2)}`);
+  }
+  return d.join(' ');
 }
 
 async function openLoanDialog(existing) {
@@ -141,5 +187,14 @@ async function openLoanDialog(existing) {
   dlg.showModal();
 }
 
-function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; }
-function errorRow() { return `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`; }
+function stateRow(kind, msg) {
+  return `<div class="row state-empty loan-state loan-state-${kind}"><span class="loan-state-ico" aria-hidden="true">${loanIcon()}</span><div class="row-sub">${ctx.esc(msg)}</div></div>`;
+}
+function emptyRow() { return stateRow('empty', ctx.get('common.empty')); }
+function errorRow() { return stateRow('error', ctx.get('common.error')); }
+
+// Calm skeleton shown while the loan list loads (rows shaped like the real ones so layout does not jump).
+function loadingRows() {
+  const row = `<div class="row loan-row loan-rowcard loan-skel" aria-hidden="true"><span class="fw-ident loan-ident loan-skel-box"></span><div class="row-main loan-rowcard-main"><span class="loan-skel-box loan-skel-title"></span><span class="loan-skel-box loan-skel-sub"></span></div><span class="loan-skel-box loan-skel-amt"></span></div>`;
+  return `<div class="loan-loading" role="status" aria-label="${ctx.esc(ctx.get('common.loading'))}">${row}${row}${row}</div>`;
+}

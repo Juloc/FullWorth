@@ -4,10 +4,29 @@
 // (GET list with aliases, POST create, PUT rename, DELETE, POST /{id}/merge), plus per-merchant alias
 // add/remove. All writes require the space Owner role.
 
+import { identityIcon } from '../ui/ux-kit.js';
+
 let ctx = null;
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
 const editIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
 const mergeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v6a4 4 0 0 0 4 4h6"/><path d="M7 20V10"/><path d="m14 11 3 3-3 3"/></svg>';
+// Line-art storefront for the friendly empty state (monochrome, matches the icon set).
+const storefrontIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16M5 9 6 4h12l1 5M6 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M4 9a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0"/></svg>';
+
+// Placeholder skeleton rows shown while the merchant list loads, so navigation lands on a calm layout
+// instead of an empty flash. Purely decorative (aria-hidden); replaced once the data resolves.
+function skeletonRows(n = 4) {
+  let out = '';
+  for (let i = 0; i < n; i++) out += '<div class="row merchant-row merchant-skeleton" aria-hidden="true"><span class="fw-ident"></span><div class="row-main"><span class="merchants-sk-line"></span><span class="merchants-sk-line short"></span></div></div>';
+  return out;
+}
+
+function emptyState() {
+  return `<div class="state-empty merchants-empty">
+    <div class="merchants-empty-icon" aria-hidden="true">${storefrontIcon}</div>
+    <div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>
+  </div>`;
+}
 
 export function bindMerchants(context) {
   ctx = context;
@@ -21,12 +40,15 @@ export async function renderMerchants(context) {
   ctx = context;
   const list = ctx.$('#merchants-list');
   if (!list) return;
+  list.setAttribute('aria-busy', 'true');
+  list.innerHTML = skeletonRows();
   let merchants;
   try { merchants = (await ctx.api('api/merchants')) || []; }
-  catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  catch (err) { list.innerHTML = ''; list.removeAttribute('aria-busy'); ctx.toast(err.message || ctx.get('common.error')); return; }
+  list.removeAttribute('aria-busy');
   list.innerHTML = '';
   if (!merchants.length) {
-    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`;
+    list.innerHTML = emptyState();
     return;
   }
   const frag = document.createDocumentFragment();
@@ -41,6 +63,7 @@ function rowFor(m, all) {
     `<span class="chip">${ctx.esc(a.normalizedAlias)}<button type="button" data-remove-alias="${a.id}" aria-label="${ctx.esc(ctx.get('merchants.removeAlias'))}" title="${ctx.esc(ctx.get('merchants.removeAlias'))}">×</button></span>`).join('');
   const canMerge = (all || []).length > 1;
   row.innerHTML = `
+    ${identityIcon(m.name, { logoAssetPath: m.logoAssetPath })}
     <div class="row-main">
       <div class="row-title">${ctx.esc(m.name)}</div>
       <div class="chips">${chips}<button type="button" class="chip add" data-add-alias>+ ${ctx.esc(ctx.get('merchants.addAlias'))}</button></div>

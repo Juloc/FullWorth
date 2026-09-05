@@ -159,23 +159,35 @@ function readBenefits(){
 
 function renderResult(result){
   $('#result-net-month').textContent=money2.format(result.estimatedCashNetMonthly);
-  $('#result-net-year').textContent=`${money.format(result.estimatedCashNetAnnual)} netto pro Jahr · ${pct(result.estimatedNetRatioPercent)} vom Cash-Brutto`;
+  $('#result-net-year').innerHTML=`<span class="comp-hero-sub">${esc(money.format(result.estimatedCashNetAnnual))} netto pro Jahr</span><span class="fw-trend positive comp-hero-badge">${esc(pct(result.estimatedNetRatioPercent))} vom Cash-Brutto</span>`;
   $('#result-employer').textContent=money.format(result.employerTotalCostAnnual);
   $('#result-fullworth').textContent=money.format(result.fullWorthCompensationValueAnnual);
   $('#result-marginal').textContent=money2.format(result.marginalNetFromNext100Gross);
   $('#result-hourly').textContent=money2.format(result.effectiveNetValuePerWorkingHour);
   const social=result.socialInsurance;
   const tax=result.taxes;
-  $('#deduction-rows').innerHTML=[
-    ['Einkommensteuer',tax.estimatedIncomeTaxAnnual],['Solidaritätszuschlag',tax.estimatedSolidaritySurchargeAnnual],['Kirchensteuer',tax.estimatedChurchTaxAnnual],['Rentenversicherung',social.pensionAnnual],['Arbeitslosenversicherung',social.unemploymentAnnual],['Krankenversicherung',social.healthAnnual],['Pflegeversicherung',social.careAnnual]
-  ].map(([label,amount])=>row(label,money.format(amount))).join('');
+  const deductions=[
+    ['Einkommensteuer',tax.estimatedIncomeTaxAnnual,'tax'],['Solidaritätszuschlag',tax.estimatedSolidaritySurchargeAnnual,'tax'],['Kirchensteuer',tax.estimatedChurchTaxAnnual,'tax'],
+    ['Rentenversicherung',social.pensionAnnual,'social'],['Arbeitslosenversicherung',social.unemploymentAnnual,'social'],['Krankenversicherung',social.healthAnnual,'social'],['Pflegeversicherung',social.careAnnual,'social']
+  ];
+  const net=Number(result.estimatedCashNetAnnual)||0;
+  const taxTotal=deductions.filter(d=>d[2]==='tax').reduce((s,d)=>s+(Number(d[1])||0),0);
+  const socialTotal=deductions.filter(d=>d[2]==='social').reduce((s,d)=>s+(Number(d[1])||0),0);
+  const totalDeductions=taxTotal+socialTotal;
+  const cashGross=net+totalDeductions;
+  const frac=v=>cashGross>0?(v/cashGross)*100:0;
+  const dedRows=deductions.map(([label,amount,cls])=>compLine(label,money.format(amount),cls,cashGross>0?`${pct(frac(amount))} vom Cash-Brutto`:null)).join('');
+  $('#deduction-rows').innerHTML=
+    `<div class="comp-dedu-head">${donut(frac(net),frac(taxTotal),frac(socialTotal),pct(result.estimatedNetRatioPercent))}`+
+    `<div class="comp-donut-legend">${legendItem('net','Netto',money.format(net))}${legendItem('tax','Steuern',money.format(taxTotal))}${legendItem('social','Sozialabgaben',money.format(socialTotal))}</div></div>`+
+    `<div class="comp-dedu-rows">${dedRows}${compLine('Summe Abzüge',money.format(totalDeductions),'total',null)}</div>`;
   const car=result.companyCar,pension=result.occupationalPension;
   const summary=[];
-  if(car.taxableBenefitAnnual>0||car.estimatedEffectivePersonalValueAnnual>0){summary.push(['Firmenwagen: geldwerter Vorteil',money.format(car.taxableBenefitAnnual)]);summary.push(['Firmenwagen: geschätzter persönlicher Wert',money.format(car.estimatedEffectivePersonalValueAnnual)])}
-  if(pension.totalInvestedAnnual>0){summary.push(['bAV: investiert / Jahr',money.format(pension.totalInvestedAnnual)]);summary.push(['bAV: heutiger Nettoverzicht',money.format(pension.estimatedCurrentNetSacrificeAnnual)]);summary.push([`bAV: Projektion ${readProfile().occupationalPension.projectionYears} Jahre`,money.format(pension.projectedValue)])}
-  result.benefits.forEach(b=>summary.push([b.name,money.format(b.personalValueAnnual)]));
-  if(!summary.length)summary.push(['Weitere Benefits','Keine erfasst']);
-  $('#benefit-summary').innerHTML=summary.map(([label,val])=>row(label,val)).join('');
+  if(car.taxableBenefitAnnual>0||car.estimatedEffectivePersonalValueAnnual>0){summary.push(['Firmenwagen: geldwerter Vorteil',money.format(car.taxableBenefitAnnual),'']);summary.push(['Firmenwagen: geschätzter persönlicher Wert',money.format(car.estimatedEffectivePersonalValueAnnual),'pos'])}
+  if(pension.totalInvestedAnnual>0){summary.push(['bAV: investiert / Jahr',money.format(pension.totalInvestedAnnual),'']);summary.push(['bAV: heutiger Nettoverzicht',money.format(pension.estimatedCurrentNetSacrificeAnnual),'']);summary.push([`bAV: Projektion ${readProfile().occupationalPension.projectionYears} Jahre`,money.format(pension.projectedValue),'pos'])}
+  result.benefits.forEach((b,i)=>summary.push([b.name,money.format(b.personalValueAnnual),`cat${(i%8)+1}`]));
+  if(!summary.length)summary.push(['Weitere Benefits','Keine erfasst','muted']);
+  $('#benefit-summary').innerHTML=summary.map(([label,val,tone])=>benefitLine(label,val,tone)).join('');
   const a=result.assumptions;
   $('#assumptions').textContent=`${a.calculationKind}. ${a.taxSource}. ${a.socialInsuranceSource}. Stand ${a.dataAsOf}. ${a.disclaimer}`;
 }
@@ -283,6 +295,28 @@ function comparisonCell(label,value){const positive=!String(value).startsWith('�
 function signedMoney(v){const n=Number(v||0);return `${n>=0?'+':'−'}${money2.format(Math.abs(n))}`}
 function signedPct(v){const n=Number(v||0);return `${n>=0?'+':'−'}${pct(Math.abs(n))}`}
 function row(label,value){return `<div class="result-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`}
+function compLine(label,value,cls,sub){
+  const dot=cls&&cls!=='total'?`<i class="comp-dot comp-dot-${esc(cls)}"></i>`:'';
+  const subHtml=sub?`<span class="comp-line-sub">${esc(sub)}</span>`:'';
+  return `<div class="comp-line${cls==='total'?' comp-line-total':''}"><span class="comp-line-key">${dot}<span class="comp-line-label">${esc(label)}</span>${subHtml}</span><span class="amount">${esc(value)}</span></div>`;
+}
+function benefitLine(label,value,tone){
+  const isCat=typeof tone==='string'&&tone.startsWith('cat');
+  const dot=isCat?`<i class="comp-dot comp-dot-${esc(tone)}"></i>`:'';
+  const amtCls=tone==='pos'?'amount positive':(tone==='muted'?'amount comp-amount-muted':'amount');
+  return `<div class="comp-line"><span class="comp-line-key">${dot}<span class="comp-line-label">${esc(label)}</span></span><span class="${amtCls}">${esc(value)}</span></div>`;
+}
+function legendItem(cls,label,value){
+  return `<div class="comp-leg"><span class="comp-sw comp-sw-${esc(cls)}"></span><span class="comp-leg-label">${esc(label)}</span><span class="amount comp-leg-amt">${esc(value)}</span></div>`;
+}
+function donut(netF,taxF,socialF,centerPct){
+  const seg=(fr,start,cls)=>{const len=Math.max(0,(Number(fr)||0)-2);if(len<=0)return'';return `<circle class="comp-arc comp-arc-${cls}" cx="60" cy="60" r="48" pathLength="100" stroke-dasharray="${len.toFixed(2)} ${(100-len).toFixed(2)}" stroke-dashoffset="${(-(Number(start)||0)).toFixed(2)}"/>`};
+  const arcs=seg(netF,0,'net')+seg(taxF,netF,'tax')+seg(socialF,(Number(netF)||0)+(Number(taxF)||0),'social');
+  return `<svg class="comp-donut" viewBox="0 0 120 120" role="img" aria-label="Aufteilung des Cash-Bruttos in Netto, Steuern und Sozialabgaben">`+
+    `<defs><linearGradient id="comp-net-grad" x1="0" y1="0" x2="1" y2="1"><stop class="comp-grad-a" offset="0"/><stop class="comp-grad-b" offset="1"/></linearGradient></defs>`+
+    `<circle class="comp-arc-track" cx="60" cy="60" r="48"/><g transform="rotate(-90 60 60)">${arcs}</g>`+
+    `<text class="comp-donut-pct" x="60" y="57">${esc(centerPct)}</text><text class="comp-donut-cap" x="60" y="71">Netto-Anteil</text></svg>`;
+}
 function value(id){return $(`#${id}`).value}
 function number(id){return Number(value(id))||0}
 function set(id,v){const el=$(`#${id}`);if(el)el.value=v??''}

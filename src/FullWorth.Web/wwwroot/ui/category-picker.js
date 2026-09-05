@@ -11,7 +11,10 @@ export function attachCategoryPicker(ctx, selectEl) {
   btn.setAttribute('aria-label', ctx.get('categories.pick'));
   btn.textContent = '⌕';
   selectEl.insertAdjacentElement('afterend', btn);
-  btn.addEventListener('click', () => openPicker(ctx, selectEl));
+  btn.addEventListener('click', () => openCategoryPicker(ctx, id => {
+    selectEl.value = id;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }, selectEl));
 }
 
 function pathOf(category, byId) {
@@ -28,7 +31,10 @@ function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
 }
 
-async function openPicker(ctx, selectEl) {
+// Opens the picker and calls onSelect(categoryId) with the chosen (or freshly created) id. `selectEl`
+// is optional and only used to append a newly-created <option> when the picker layers over a <select>;
+// callers without a select (e.g. the transactions list category chip) just pass a callback.
+export async function openCategoryPicker(ctx, onSelect, selectEl = null) {
   let categories;
   try { categories = await ctx.api('api/categories'); }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
@@ -43,7 +49,7 @@ async function openPicker(ctx, selectEl) {
     <button type="button" class="ghost" data-toggle-new>${ctx.esc(ctx.get('categories.new'))}</button>
   </div>`);
 
-  const select = id => { selectEl.value = id; selectEl.dispatchEvent(new Event('change', { bubbles: true })); dlg.close(); };
+  const select = id => { onSelect(id); dlg.close(); };
   const list = dlg.querySelector('[data-list]');
   const render = filter => {
     const q = filter.trim().toLowerCase();
@@ -68,10 +74,12 @@ async function openPicker(ctx, selectEl) {
     if (!name) return;
     try {
       const created = await ctx.api('api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: slugify(name), name, parentId: null, icon: null, sortOrder: null }) });
-      const option = document.createElement('option');
-      option.value = created.id;
-      option.textContent = name;
-      selectEl.appendChild(option);
+      if (selectEl) {
+        const option = document.createElement('option');
+        option.value = created.id;
+        option.textContent = name;
+        selectEl.appendChild(option);
+      }
       select(created.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });

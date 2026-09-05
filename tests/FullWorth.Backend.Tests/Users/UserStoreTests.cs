@@ -132,7 +132,7 @@ public sealed class UserStoreTests
             .ToArray();
 
         Assert.Equal(
-            new[] { "CreatedAt", "DisplayName", "Email", "EmailNormalized", "Id", "IsActive", "UpdatedAt" },
+            new[] { "CreatedAt", "DisplayName", "Email", "EmailNormalized", "Id", "IsActive", "OnboardingCompletedAt", "OnboardingVersion", "UpdatedAt" },
             propertyNames);
     }
 }

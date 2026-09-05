@@ -408,12 +408,12 @@ public static class AiUserAccessEndpoints
                        "http://fullworth-codex:8080").TrimEnd('/');
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != Uri.UriSchemeHttp)
-            return (StatusCodes.Status503ServiceUnavailable, "{"error":"codex_bridge_invalid"}");
+            return (StatusCodes.Status503ServiceUnavailable, "{\"error\":\"codex_bridge_invalid\"}");
 
         var key = configuration["AiAccess:CodexBridgeKey"] ??
                   configuration["CodexTest:BridgeKey"];
         if (string.IsNullOrWhiteSpace(key))
-            return (StatusCodes.Status503ServiceUnavailable, "{"error":"codex_bridge_unavailable"}");
+            return (StatusCodes.Status503ServiceUnavailable, "{\"error\":\"codex_bridge_unavailable\"}");
 
         using var message = new HttpRequestMessage(method, new Uri(baseUri, path));
         message.Headers.Add("X-FullWorth-Internal-Key", key);
@@ -432,11 +432,11 @@ public static class AiUserAccessEndpoints
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return (StatusCodes.Status504GatewayTimeout, "{"error":"codex_bridge_timeout"}");
+            return (StatusCodes.Status504GatewayTimeout, "{\"error\":\"codex_bridge_timeout\"}");
         }
         catch (HttpRequestException)
         {
-            return (StatusCodes.Status503ServiceUnavailable, "{"error":"codex_bridge_unavailable"}");
+            return (StatusCodes.Status503ServiceUnavailable, "{\"error\":\"codex_bridge_unavailable\"}");
         }
     }
 }

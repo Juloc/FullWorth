@@ -8,6 +8,9 @@
 let ctx = null;
 // Cursor of the last-loaded (oldest shown) row for the keyset "load older" fetch; null when at the end.
 let cursor = null;
+// Day-key of the last rendered row, so we emit one date header per calendar day across appended pages
+// (reset on a fresh, non-append render).
+let lastDay = null;
 
 // Known audit action ids and entity types (a stable, curated set — the audit columns are free-form
 // strings, so this drives the filter dropdowns; a new action added in code just won't be filterable
@@ -70,12 +73,22 @@ async function fetchPage(append) {
 
   if (!append) {
     list.innerHTML = '';
+    lastDay = null;
     if (!events.length) {
-      list.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`;
+      list.innerHTML = `<div class="audit-empty state-empty">`
+        + `<svg class="audit-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h6l4 4v12H6V6"/><path d="M14 4v4h4"/><path d="M9.5 13h5M9.5 16.5h3"/></svg>`
+        + `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`
+        + `</div>`;
     }
   }
   const frag = document.createDocumentFragment();
-  for (const e of events) frag.appendChild(rowFor(e));
+  for (const e of events) {
+    // Group consecutive rows under a per-day header for a scannable timeline; the cursor/paging logic
+    // still works off the raw events array, so grouping is purely presentational.
+    const key = dayKey(e.occurredAt);
+    if (key !== lastDay) { lastDay = key; frag.appendChild(dayHeader(dayLabel(e.occurredAt))); }
+    frag.appendChild(rowFor(e));
+  }
   list.appendChild(frag);
 
   // A full page means more may exist → keep a cursor on the oldest row and show "load older".
@@ -107,15 +120,50 @@ function when(value) {
   try { return new Date(value).toLocaleString(); } catch { return String(value); }
 }
 
+// Time-of-day for a row (the calendar date lives in the day header); falls back to the full stamp.
+function clock(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d)) return String(value);
+  try { return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); }
+  catch { return when(value); }
+}
+
+// Stable per-calendar-day key used to decide when to emit a new day header.
+function dayKey(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  return isNaN(d) ? String(value) : d.toDateString();
+}
+
+// Localized, human date shown in a day header (e.g. "Fr., 5. Sept. 2026").
+function dayLabel(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d)) return String(value);
+  try { return d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return d.toDateString(); }
+}
+
+// A date divider separating the timeline into calendar days.
+function dayHeader(label) {
+  const el = document.createElement('div');
+  el.className = 'audit-day';
+  el.innerHTML = `<span class="audit-day-label">${ctx.esc(label)}</span><span class="audit-day-line" aria-hidden="true"></span>`;
+  return el;
+}
+
 function rowFor(e) {
   const row = document.createElement('div');
   row.className = 'row audit-row';
   const entity = e.entityId ? `${ctx.esc(e.entityType)} · ${ctx.esc(String(e.entityId).slice(0, 8))}` : ctx.esc(e.entityType || '');
+  const meta = entity ? `${ctx.esc(actor(e))} · ${entity}` : ctx.esc(actor(e));
   row.innerHTML = `
+    <div class="audit-mark" aria-hidden="true"></div>
     <div class="row-main">
       <div class="row-title">${ctx.esc(humanize(e.action))}</div>
-      <div class="row-sub">${entity} · ${ctx.esc(actor(e))}</div>
+      <div class="row-sub audit-meta">${meta}</div>
     </div>
-    <div class="row-sub audit-time">${ctx.esc(when(e.occurredAt))}</div>`;
+    <div class="row-sub audit-time" title="${ctx.esc(when(e.occurredAt))}">${ctx.esc(clock(e.occurredAt))}</div>`;
   return row;
 }

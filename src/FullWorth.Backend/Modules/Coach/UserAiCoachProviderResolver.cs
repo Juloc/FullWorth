@@ -69,7 +69,7 @@ Keep the answer concise, concrete and neutral. Return only JSON matching the sup
 }
 """;
 
-        public string ProviderId => provider.Descriptor.Id;
+        public string ProviderId => provider.Descriptor.Provider;
 
         public async Task<CoachProviderResult> CompleteAsync(
             CoachProviderRequest request,

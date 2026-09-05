@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Banking.EnableBanking;
@@ -98,6 +99,10 @@ public sealed class EnableBankingClient
     private readonly EnableBankingCredentials? _credentials;
 
     // Legacy/global DI constructor.
+    // The typed-HttpClient DI activator must use this constructor (global credentials); the per-user
+    // BYO constructor below is only invoked explicitly. Without this, the two HttpClient-first
+    // constructors are ambiguous and the typed client fails to activate.
+    [ActivatorUtilitiesConstructor]
     public EnableBankingClient(
         HttpClient http,
         IOptions<EnableBankingOptions> options,

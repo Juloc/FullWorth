@@ -3,15 +3,86 @@
 // category, exclude-from-statistics and transfer status through the existing classification PATCH,
 // and links to a receipt when a purchase is attached.
 
-import { attachCategoryPicker } from '../ui/category-picker.js';
+import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
+import { identityIcon, categoryIconInner, monogramHue } from '../ui/ux-kit.js';
 
 let ctx = null;
-
 export function bindTransactions(context) {
   ctx = context;
-  ctx.$('#tx-apply').addEventListener('click', () => renderTransactions(ctx));
+  ctx.$('#tx-apply').addEventListener('click', applySearch);
+  ctx.$('#tx-query').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applySearch(); } });
+  ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
   ctx.$('#tx-detect').addEventListener('click', detectTransfers);
   ctx.$('#tx-add').addEventListener('click', openBookingDialog);
+}
+
+// The URL is the SINGLE source of truth for the free-text search term, so the search box, the scope
+// banner and the actual list filter can never diverge — a merchant drill (?query=…) and a manual search
+// both flow through it. Applying a search writes the term into the URL (preserving the account/group/
+// category scope) and re-renders.
+function applySearch() {
+  const params = new URLSearchParams(location.search);
+  const v = ctx.$('#tx-query').value.trim();
+  if (v) params.set('query', v); else params.delete('query');
+  const qs = params.toString();
+  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
+  renderTransactions(ctx);
+}
+
+function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
+function txReplaceUrl(params) {
+  const qs = params.toString();
+  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
+}
+
+// Active-filter count badge on the Filter button (§5): direction, flags, date range and category.
+function updateFilterBadge(f) {
+  const btn = ctx.$('#tx-filter'); if (!btn) return;
+  const n = (f.direction ? 1 : 0) + (f.flags ? 1 : 0) + (f.from || f.to ? 1 : 0) + (f.categoryId ? 1 : 0);
+  let badge = btn.querySelector('.tx-filter-count');
+  if (n) { if (!badge) { badge = document.createElement('span'); badge.className = 'tx-filter-count'; btn.appendChild(badge); } badge.textContent = String(n); }
+  else badge?.remove();
+}
+
+// Filter sheet (§5): a compact drawer (bottom sheet on mobile via .drawer CSS) for the advanced filters
+// that don't fit the toolbar — direction, date range, category and the transfer/excluded flags. Applied
+// through the URL (single source of truth) so filters are restorable and agree with the scope banner.
+async function openFilterSheet() {
+  const params = new URLSearchParams(location.search);
+  let catOptions = '';
+  try { catOptions = await ctx.categoryOptions(params.get('categoryId') || undefined); } catch { /* category filter optional */ }
+  const dir = ctx.$('#tx-direction').value, flags = ctx.$('#tx-flags').value;
+  const dlg = ctx.dialog(`<form class="dialog-card drawer tx-filter-sheet" method="dialog">
+    <div class="panel-head"><h2>${ctx.esc(deLabel('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <label>${ctx.esc(ctx.get('transactions.type'))}<select name="direction"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="income"${dir === 'income' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.income'))}</option><option value="expense"${dir === 'expense' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.expenses'))}</option></select></label>
+    <div class="tx-filter-range"><label>${ctx.esc(deLabel('Von', 'From'))}<input type="date" name="from" value="${ctx.esc(params.get('from') || '')}"></label><label>${ctx.esc(deLabel('Bis', 'To'))}<input type="date" name="to" value="${ctx.esc(params.get('to') || '')}"></label></div>
+    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${catOptions}</select></label>
+    <label class="check"><input type="checkbox" name="fpending"${flags === 'pending' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</label>
+    <label class="check"><input type="checkbox" name="ftransfers"${flags === 'transfers' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
+    <label class="check"><input type="checkbox" name="fignored"${flags === 'ignored' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
+    <div class="dialog-actions"><button type="button" data-reset class="ghost">${ctx.esc(deLabel('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.classList.add('drawer');
+  const cat = () => dlg.querySelector('[name="category"]');
+  if (cat() && params.get('categoryId')) cat().value = params.get('categoryId');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-reset]').onclick = () => {
+    ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
+    const p = new URLSearchParams(location.search); ['from', 'to', 'categoryId', 'includeDescendants'].forEach(k => p.delete(k));
+    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+  };
+  dlg.querySelector('[data-apply]').onclick = () => {
+    const fd = new FormData(dlg.querySelector('form'));
+    ctx.$('#tx-direction').value = fd.get('direction') || '';
+    ctx.$('#tx-flags').value = fd.get('ftransfers') ? 'transfers' : fd.get('fignored') ? 'ignored' : fd.get('fpending') ? 'pending' : '';
+    const p = new URLSearchParams(location.search);
+    const setOrDel = (k, v) => { if (v) p.set(k, v); else p.delete(k); };
+    setOrDel('from', fd.get('from')); setOrDel('to', fd.get('to'));
+    const c = fd.get('category');
+    if (c) { p.set('categoryId', c); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
+    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+  };
+  dlg.showModal();
 }
 
 // Manual booking (UI_UX_SPEC §9.4): hand-enter an income/expense on a MANUAL account. Only manual
@@ -67,42 +138,212 @@ async function openBookingDialog() {
 export async function renderTransactions(context) {
   ctx = context;
   const body = ctx.$('#transactions-body');
+  // URL scope (UX rework §3): ?accountId= one account, ?groupId= every account in that group. The
+  // group is resolved to accessible accounts server-side (backend param accountGroupId) — the browser
+  // never sends a raw account-id list, so the scope stays authorization-safe.
+  const params = new URLSearchParams(location.search);
+  const accountId = params.get('accountId') || '';
+  const groupId = params.get('groupId') || '';
+  const categoryId = params.get('categoryId') || '';
+  const includeDescendants = params.get('includeDescendants') === 'true';
+  const fromDate = params.get('from') || '';
+  const toDate = params.get('to') || '';
+  // The search term lives in the URL (?query=), set by a merchant drill or by applySearch(); reflect it
+  // into the box and use it for the request so the box, the scope banner and the list always agree.
+  const urlQuery = params.get('query') || '';
+  ctx.$('#tx-query').value = urlQuery;
   const q = new URLSearchParams({ limit: '500' });
-  const text = ctx.$('#tx-query').value.trim();
+  const text = urlQuery;
   const dir = ctx.$('#tx-direction').value;
   const flags = ctx.$('#tx-flags').value;
   if (text) q.set('query', text);
   if (dir) q.set('direction', dir);
   if (flags === 'transfers') q.set('transfersOnly', 'true');
   if (flags === 'ignored') q.set('includeIgnored', 'true');
+  if (accountId) q.set('accountId', accountId);
+  if (groupId) q.set('accountGroupId', groupId);
+  if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
+  if (fromDate) q.set('from', fromDate);
+  if (toDate) q.set('to', toDate);
+  updateFilterBadge({ direction: dir, flags, from: fromDate, to: toDate, categoryId });
+  // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
+  body.innerHTML = txSkeletonRows();
+  await renderScope({ accountId, groupId, categoryId, query: urlQuery });
   const data = await ctx.api(`api/transactions?${q}`);
   let items = data.items || [];
   // 'pending'/'ignored' refine client-side over the fetched page (list endpoint has no pending filter).
   if (flags === 'pending') items = items.filter(x => x.status === 'PDNG');
   if (flags === 'ignored') items = items.filter(x => x.isIgnored);
 
+  renderSummary(items);
   body.innerHTML = '';
+  let lastDate = null;
   for (const x of items) {
+    // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
+    // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
+    const day = String(x.bookingDate || '').slice(0, 10);
+    if (day !== lastDate) {
+      lastDate = day;
+      const head = document.createElement('tr');
+      head.className = 'tx-date-head';
+      head.innerHTML = `<td colspan="6"><span>${ctx.esc(dateHeading(day))}</span></td>`;
+      body.appendChild(head);
+    }
+    const name = x.merchantDisplayName || x.counterparty || '—';
+    const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
     const tr = document.createElement('tr');
-    tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '');
+    tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '') + (x.isTransfer ? ' tx-is-transfer' : '');
     tr.tabIndex = 0;
-    tr.innerHTML = `<td>${ctx.date(x.bookingDate)}</td><td><strong>${ctx.esc(x.counterparty || '—')}</strong>${markers(x)}<div class="row-sub">${ctx.esc(x.description || '')}</div></td><td>${ctx.esc(x.category || ctx.get('common.uncategorized'))}</td><td>${ctx.esc(x.account || '')}</td><td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;
-    tr.addEventListener('click', () => openDetail(x));
-    tr.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(x); });
+    tr.dataset.txId = x.id;
+    tr.innerHTML =
+      `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
+      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      categoryCell(x, cat) +
+      accountCell(x) +
+      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
+      `<td class="tx-go"><span class="tx-go-caret" aria-hidden="true">›</span></td>`;
+    // The category chip is an inline control: clicking it edits the category in place, without also
+    // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
+    tr.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
+    tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit]')) openDetail(x); });
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit]')) openDetail(x); });
     body.appendChild(tr);
   }
-  if (!items.length) body.innerHTML = `<tr><td colspan="5">${ctx.esc(ctx.get('common.empty'))}</td></tr>`;
+  if (!items.length) {
+    const filtered = !!(text || dir || flags || fromDate || toDate || categoryId || accountId || groupId);
+    body.innerHTML = txEmptyState(filtered);
+  }
+}
+
+// Period summary strip (Finanzguru-style): income vs expense for the shown range. Transfers are neutral
+// and excluded-from-statistics rows don't count, so the two figures agree with what analytics reports.
+function renderSummary(items) {
+  const view = ctx.$('#view-transactions');
+  const panel = view.querySelector('.table-panel');
+  let bar = view.querySelector('#tx-summary');
+  if (!items.length || !panel) { bar?.remove(); return; }
+  let income = 0, expense = 0;
+  const cur = items[0]?.currency;
+  for (const x of items) {
+    if (x.isTransfer || x.isIgnored) continue;
+    const amt = Number(x.amount) || 0;
+    if (amt >= 0) income += amt; else expense += amt;
+  }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-summary'; bar.className = 'tx-summary'; panel.parentNode.insertBefore(bar, panel); }
+  const count = deLabel(`${items.length} Buchungen`, `${items.length} transactions`);
+  bar.innerHTML =
+    `<div class="fw-summary tx-summary-figs">` +
+    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.income'))}</span><span class="fw-summary-value tx-summary-income">${ctx.money(income, cur)}</span></div>` +
+    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.expenses'))}</span><span class="fw-summary-value tx-summary-expense">${ctx.money(expense, cur)}</span></div>` +
+    `</div><div class="tx-summary-meta">${ctx.esc(count)}</div>`;
+}
+
+// Loading skeleton rows: monochrome shimmer placeholders matching the row layout while the list loads.
+function txSkeletonRows(n = 7) {
+  const row =
+    `<tr class="tx-skeleton" aria-hidden="true">` +
+    `<td class="tx-date-cell"><span class="tx-sk-line tx-sk-sm"></span></td>` +
+    `<td class="tx-cp"><span class="tx-sk-avatar"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg"></span><span class="tx-sk-line tx-sk-md"></span></span></td>` +
+    `<td class="tx-cat"><span class="tx-sk-line tx-sk-md"></span></td>` +
+    `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm"></span></td>` +
+    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt"></span></td>` +
+    `<td class="tx-go"></td></tr>`;
+  return row.repeat(n);
+}
+
+// Empty state: a monochrome glyph plus a context-aware hint (filters active vs. genuinely no bookings yet).
+function txEmptyState(filtered) {
+  const title = ctx.get('common.empty');
+  const hint = filtered
+    ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
+    : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
+  return `<tr><td colspan="6" class="tx-empty"><div class="tx-empty-box">` +
+    `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>` +
+    `<span class="tx-empty-title">${ctx.esc(title)}</span>` +
+    `<span class="tx-empty-hint">${ctx.esc(hint)}</span>` +
+    `</div></td></tr>`;
+}
+
+// Desktop table: category shown as an editable chip (tinted icon + name + caret). The icon reuses the
+// shared category-icon set; its tint is a stable per-category colour index. Clicking edits inline.
+function categoryCell(x, cat) {
+  const idx = (monogramHue(cat) % 8) + 1;
+  const inner = categoryIconInner(x.categoryIconKey)
+    || `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01"/></svg>`;
+  return `<td class="tx-cat"><button type="button" class="tx-cat-chip" data-cat-edit aria-label="${ctx.esc(deLabel('Kategorie ändern', 'Change category'))}"><span class="tx-cat-ic" data-cat="${idx}">${inner}</span><span class="tx-cat-name">${ctx.esc(cat)}</span><span class="tx-cat-caret" aria-hidden="true">▾</span></button></td>`;
+}
+
+// Desktop table: account cell with a small type icon (card for credit/cards, a bank mark otherwise).
+function accountCell(x) {
+  const name = x.account || '';
+  if (!name) return `<td class="tx-acct"></td>`;
+  const card = /kredit|card|karte|visa|master|amex/i.test(name);
+  const icon = card
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 12 4l8 6M5 10v8m4-8v8m6-8v8m4-8v8M3.5 19h17"/></svg>`;
+  return `<td class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></td>`;
+}
+
+// Inline category edit from the list chip. The classification PATCH is a full replace, so we read the
+// transaction's current flags first (cheap — GETs are coalesced) and only swap the category.
+function quickEditCategory(x) {
+  openCategoryPicker(ctx, async id => {
+    try {
+      const detail = await ctx.api(`api/transactions/${x.id}`);
+      const t = detail.transaction || x;
+      await ctx.api(`api/transactions/${x.id}/classification`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryId: id || null, isIgnored: !!t.isIgnored, isTransfer: !!t.isTransfer, transferPurpose: t.transferPurpose || null, userNote: t.userNote || null }),
+      });
+      ctx.toast(ctx.get('common.saved'));
+      await renderTransactions(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  });
+}
+
+// Booking-date header: Heute / Gestern / localized date (UX rework §4).
+function dateHeading(day) {
+  if (!day) return '—';
+  const iso = d => { const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() + d); return t.toISOString().slice(0, 10); };
+  const today = ctx.get('common.today'), yesterday = ctx.get('common.yesterday');
+  if (day === iso(0) && today !== 'common.today') return today;
+  if (day === iso(-1) && yesterday !== 'common.yesterday') return yesterday;
+  return ctx.date(day);
+}
+
+// Scope banner (UX rework §3/§6): shows the active account / group / category / merchant-search scope
+// with its name and a clear back path (accounts for an account/group drill, all-bookings otherwise).
+async function renderScope(scope) {
+  const { accountId, groupId, categoryId, query } = scope;
+  const view = ctx.$('#view-transactions');
+  let bar = view.querySelector('#tx-scopebar');
+  if (!accountId && !groupId && !categoryId && !query) { bar?.remove(); return; }
+  let label = '';
+  try {
+    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = a?.displayName || a?.institutionName || ''; }
+    else if (groupId) { const g = (await ctx.api('api/account-groups').catch(() => [])).find(g => String(g.id) === String(groupId)); label = g?.name || ''; }
+    else if (categoryId) { const c = (await ctx.api('api/categories').catch(() => [])).find(c => String(c.id) === String(categoryId)); label = c?.name || ''; }
+    else if (query) { label = query; }
+  } catch { /* label is best-effort; the list itself is already scoped server-side */ }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
+  const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
+  bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
+  bar.querySelector('[data-back]').onclick = () => { if (window.fwNavScope) window.fwNavScope(backTo, ''); };
+  const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 
 // Markers are grey word-label pills hanging on the name (Design System §10): monochrome, never a
 // colour emoji or bare symbol, and never more than two per row (the rest live in the detail view).
-function marker(cls, label) {
-  return `<span class="tx-marker ${cls}" title="${ctx.esc(label)}">${ctx.esc(label)}</span>`;
+function marker(cls, label, glyph) {
+  return glyph
+    ? `<span class="tx-marker tx-marker-icon ${cls}" title="${ctx.esc(label)}" aria-label="${ctx.esc(label)}">${glyph}</span>`
+    : `<span class="tx-marker ${cls}" title="${ctx.esc(label)}">${ctx.esc(label)}</span>`;
 }
 function markers(x) {
   const m = [];
   if (x.status === 'PDNG') m.push(marker('pending', ctx.get('transactions.pending')));
-  if (x.isTransfer) m.push(marker('transfer', ctx.get('transactions.transfer')));
+  // Transfers get a compact circular-arrow badge (Finanzguru-style) rather than a text chip.
+  if (x.isTransfer) m.push(marker('transfer', ctx.get('transactions.transfer'), '⟳'));
   if (x.isIgnored) m.push(marker('ignored', ctx.get('transactions.excluded')));
   if (x.purchaseCount > 0) m.push(marker('receipt', ctx.get('transactions.receiptLinked')));
   return m.length ? ` ${m.slice(0, 2).join('')}` : '';
@@ -182,16 +423,27 @@ async function openDetail(listItem) {
   const purchases = detail.purchases || [];
   const receiptPurchase = purchases.find(p => p.receiptImagePath || p.hasReceipt);
 
+  // Identity header (Finanzguru-style): brand logo / category icon / monogram + merchant name.
+  const name = listItem.merchantDisplayName || listItem.counterparty || t.counterparty || ctx.get('transactions.title');
+  const identity = identityIcon(name, { logoAssetPath: listItem.logoAssetPath, categoryIconKey: listItem.categoryIconKey, isTransfer: t.isTransfer });
+  // Transfer direction: money leaving THIS account → Von = this account, An = counterpart; else reversed.
+  const outgoing = Number(t.amount) < 0;
+  const vonAcct = outgoing ? (t.account || '') : (counterpart?.account || '');
+  const anAcct = outgoing ? (counterpart?.account || '') : (t.account || '');
+  const purposeOpts = ['', 'savings', 'vacation', 'reserve', 'other'].map(p => `<option value="${p}"${(t.transferPurpose || '') === p ? ' selected' : ''}>${p === '' ? ctx.esc(ctx.get('transactions.purposeNone')) : ctx.esc(ctx.get('transactions.purpose_' + p))}</option>`).join('');
+  // Inside the transfer block: a tappable Von→An counter-booking when linked, else a "choose" button.
+  const transferInner = counterpart
+    ? `${counterpart.id ? `<button type="button" class="tx-vonan" data-open-counterpart><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('Von', 'From'))}</span><span class="tx-vonan-acct">${ctx.esc(vonAcct)}</span></span><span class="tx-vonan-arrow" aria-hidden="true">→</span><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('An', 'To'))}</span><span class="tx-vonan-acct">${ctx.esc(anAcct)}</span></span><span class="tx-vonan-go" aria-hidden="true">›</span></button>` : ''}<button type="button" class="ghost danger tx-transfer-unpair" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>`
+    : `<button type="button" class="tx-choose-counter" data-transfer-link>${ctx.esc(deLabel('Gegenbuchung wählen', 'Choose counter-booking'))}</button>`;
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
-    <div class="panel-head"><h2>${ctx.esc(t.counterparty || ctx.get('transactions.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.cancel'))}">×</button></div>
+    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="tx-amount amount ${t.amount < 0 ? 'negative' : 'positive'}">${ctx.money(t.amount, t.currency)}</div>
-    <div class="row-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}${t.description ? ' · ' + ctx.esc(t.description) : ''}</div>
+    ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${!t.isManual ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
-    <label class="check"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</label>
-    <label class="check"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.markTransfer'))}</label>
-    <label class="tx-purpose"${t.isTransfer ? '' : ' hidden'}>${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${['', 'savings', 'vacation', 'reserve', 'other'].map(p => `<option value="${p}"${(t.transferPurpose || '') === p ? ' selected' : ''}>${p === '' ? ctx.esc(ctx.get('transactions.purposeNone')) : ctx.esc(ctx.get('transactions.purpose_' + p))}</option>`).join('')}</select></label>
-    <div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.transferLink'))}</div><div class="row-sub">${counterpart ? ctx.esc(ctx.get('transactions.transferLinked').replace('{account}', counterpart.account)) : ctx.esc(ctx.get('transactions.transferHint'))}</div></div><div class="row-side">${counterpart ? `<button type="button" class="ghost danger" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>` : `<button type="button" class="ghost" data-transfer-link>${ctx.esc(ctx.get('transactions.transferLink'))}</button>`}</div></div>
+    <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
+    <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
+    <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
     ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
     ${receiptPurchase ? `<a class="row settings-link" href="/bff/backend/api/purchases/${receiptPurchase.id}/receipt?fullWorthSpaceId=${encodeURIComponent(spaceId())}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
@@ -251,9 +503,12 @@ async function openDetail(listItem) {
   if (t.categoryId) sel.value = t.categoryId;
   attachCategoryPicker(ctx, sel);
   const transferBox = dlg.querySelector('[name="transfer"]');
-  const purposeLabel = dlg.querySelector('.tx-purpose');
-  // The purpose select is only relevant while the transfer flag is on (§9.7).
-  transferBox.addEventListener('change', () => { purposeLabel.hidden = !transferBox.checked; });
+  const transferSection = dlg.querySelector('.tx-transfer');
+  // The transfer options (purpose select + "Gegenbuchung wählen" / the Von→An counter-booking) appear
+  // only while "Als Umbuchung markieren" is on (§9.7).
+  transferBox.addEventListener('change', () => { transferSection.hidden = !transferBox.checked; });
+  // Tapping the Von→An block opens the linked counter-booking's own detail.
+  dlg.querySelector('[data-open-counterpart]')?.addEventListener('click', () => { dlg.close(); openDetail(counterpart); });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('[data-save]').onclick = async () => {

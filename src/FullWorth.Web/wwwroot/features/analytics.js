@@ -1,20 +1,355 @@
-// Analytics home (UI_UX_SPEC §15.1). A period selector (§7.2 presets) drives the reports the backend
-// can serve today: income vs expenses (header + monthly grouped bars), expenses by category
-// (horizontal bars), net-worth history (trend) and the forecast (clearly labeled as an estimate,
-// §7.4). The guided chart builder (§15.2) needs a generic measure/scope query engine and arrives
-// separately. All money is privacy-masked via money(); bar widths are set from JS (no source inline
-// style) to keep the CSP audit at one.
+// Analytics home (UX rework §6 / Phase C). A card-based analysis home driven by ONE global cycle
+// selector (Woche / Monat / Quartal / Jahr) with prev/next window navigation. Every card obeys the
+// selected window — the old behaviour where category & merchant panels always meant the current
+// calendar month is gone. The custom chart builder + saved analyses are demoted below the cards under
+// a collapsed "Erweitert / Eigene Analyse" section. All money is privacy-masked via ctx.money(); SVG
+// bar widths are set from JS (no source inline style) to keep the CSP audit at one.
+
+import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, esc } from '../ui/ux-kit.js';
 
 let ctx = null;
+// Kept for backwards compatibility with the builder period presets (and the required export).
 const PERIODS = ['7d', 'month', 'quarter', 'year', '1y', '5y', 'all'];
 
+// Global cycle state (UX rework §6): the chosen cycle + how many whole windows we've paged back.
+let cycle = 'month';
+let offset = 0;
+
+const CYCLE_LABELS = { week: ['Woche', 'Week'], month: ['Monat', 'Month'], quarter: ['Quartal', 'Quarter'], year: ['Jahr', 'Year'] };
+
+function isDe() { return !document.documentElement.lang?.startsWith('en'); }
+function t(d, e) { return isDe() ? d : e; }
+
 export function bindAnalytics(context) {
+  // The whole view is (re)built by renderAnalytics each time it is shown, so there are no stable static
+  // controls to wire here — just remember the context. Real wiring happens on the freshly-built DOM.
   ctx = context;
-  ctx.$('#an-period')?.addEventListener('change', () => renderAnalytics(ctx));
-  // Chart builder (§15.2): explicit Run (no auto-refetch while configuring); Save stores a named config.
-  ctx.$('#an-run')?.addEventListener('click', () => runBuilder(ctx));
-  ctx.$('#an-save')?.addEventListener('click', () => saveAnalysis(ctx));
 }
+
+export async function renderAnalytics(context) {
+  ctx = context;
+  injectCss();
+  const view = ctx.$('#view-analytics');
+  if (!view) return;
+
+  const lang = isDe() ? 'de' : 'en';
+  const win = cycleWindow(cycle, offset, lang);
+
+  view.innerHTML = shellHtml(win);
+  wireControls(view);
+
+  const from = win.from, to = win.to, gran = win.granularity;
+  const prev = cycleWindow(cycle, offset - 1, lang);
+  const cmp = '&comparison=previous-period';
+
+  // All card queries share the selected window. overviewPrev backs the income/spending trend badges.
+  const [overview, overviewPrev, history, categories, merchants, forecast] = await Promise.all([
+    ctx.api(`api/analytics/overview?from=${from}&to=${to}`).catch(() => null),
+    ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}`).catch(() => null),
+    ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
+    ctx.api(`api/analytics/categories?from=${from}&to=${to}&granularity=${gran}${cmp}`).catch(() => null),
+    ctx.api(`api/analytics/merchants?from=${from}&to=${to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
+    ctx.api('api/analytics/forecast?months=12').catch(() => null),
+  ]);
+
+  const cur = overview?.currency || history?.[0]?.currency || 'EUR';
+  fillSpending(ctx.$('#an-spending'), overview, overviewPrev);
+  fillInout(ctx.$('#an-inout'), overview, overviewPrev);
+  fillCategory(ctx.$('#an-category'), categories);
+  fillMerchant(ctx.$('#an-merchant'), merchants);
+  fillNetWorth(ctx.$('#an-networth'), history, cur);
+  fillForecast(ctx.$('#an-forecast'), forecast);
+}
+
+// ---- View shell -----------------------------------------------------------------------------------
+
+function shellHtml(win) {
+  const cycleBtns = CYCLES.map(c => {
+    const [de, en] = CYCLE_LABELS[c];
+    return `<button type="button" role="tab" data-cycle="${c}" aria-selected="${c === cycle}" class="${c === cycle ? 'active' : ''}">${esc(t(de, en))}</button>`;
+  }).join('');
+  const nextDisabled = offset >= 0 ? ' disabled' : '';
+  const cyclebar = `<div class="fw-cyclebar">
+    <div class="fw-cycle" role="tablist" aria-label="${esc(t('Zeitraum', 'Cycle'))}">${cycleBtns}</div>
+    <div class="fw-window">
+      <button type="button" data-nav="prev" aria-label="${esc(t('Vorheriger Zeitraum', 'Previous window'))}">‹</button>
+      <span class="fw-window-label" aria-live="polite">${esc(win.label)}</span>
+      <button type="button" data-nav="next"${nextDisabled} aria-label="${esc(t('Nächster Zeitraum', 'Next window'))}">›</button>
+    </div>
+  </div>`;
+
+  const loading = `<div class="row-sub">${esc(ctx.get('common.loading'))}</div>`;
+  const card = (id, title, sub) => sectionCard(title, `<div id="${id}" class="an-card-body">${loading}</div>`, { sub });
+
+  const cards = `<div class="fw-analysis-grid">
+    ${card('an-spending', t('Ausgabenentwicklung', 'Spending development'), t('Ausgaben je Periode', 'Spending per period'))}
+    ${card('an-inout', ctx.get('analytics.incomeExpense'), t('Einnahmen und Ausgaben', 'Income and expenses'))}
+    ${card('an-category', ctx.get('analytics.categories'), t('Größte Kategorien', 'Top categories'))}
+    ${card('an-merchant', ctx.get('analytics.merchants'), t('Größte Händler', 'Top merchants'))}
+    ${card('an-networth', ctx.get('analytics.trend'), t('Vermögen über die Zeit', 'Net worth over time'))}
+    ${card('an-forecast', ctx.get('analytics.forecast'), t('Geschätzte Entwicklung', 'Estimated trajectory'))}
+  </div>`;
+
+  return cyclebar + cards + advancedHtml();
+}
+
+// Advanced / custom builder (UX rework §6): demoted into a collapsed <details> so it is neither the
+// first nor the largest element. Reuses the original builder ids so readBuilderConfig et al. still work.
+function advancedHtml() {
+  const opt = (v, key, sel) => `<option value="${v}"${v === sel ? ' selected' : ''}>${esc(ctx.get(key))}</option>`;
+  const controls = `<div class="an-builder-controls">
+    <label class="field"><span>${esc(ctx.get('analytics.builder.measure'))}</span><select id="an-measure">${opt('spend', 'analytics.builder.measure_spend')}${opt('income', 'analytics.builder.measure_income')}${opt('net', 'analytics.builder.measure_net')}${opt('count', 'analytics.builder.measure_count')}</select></label>
+    <label class="field"><span>${esc(ctx.get('analytics.builder.dimension'))}</span><select id="an-dimension">${opt('month', 'analytics.builder.dimension_month')}${opt('category', 'analytics.builder.dimension_category')}${opt('merchant', 'analytics.builder.dimension_merchant')}${opt('none', 'analytics.builder.dimension_none')}</select></label>
+    <label class="field"><span>${esc(ctx.get('analytics.period'))}</span><select id="an-cperiod">${PERIODS.map(p => opt(p, 'analytics.period_' + p, '1y')).join('')}</select></label>
+    <label class="field"><span>${esc(ctx.get('analytics.builder.type'))}</span><select id="an-ctype">${opt('bar', 'analytics.builder.type_bar')}${opt('line', 'analytics.builder.type_line')}${opt('hbar', 'analytics.builder.type_hbar')}${opt('donut', 'analytics.builder.type_donut')}</select></label>
+  </div>`;
+  return `<details class="fw-card an-advanced">
+    <summary>${esc(t('Erweitert / Eigene Analyse', 'Advanced / Custom analysis'))}</summary>
+    <p class="fw-card-sub">${esc(ctx.get('analytics.builder.title'))}</p>
+    ${controls}
+    <div class="an-builder-actions"><button type="button" id="an-save" class="ghost">${esc(ctx.get('analytics.builder.save'))}</button><button type="button" id="an-run">${esc(ctx.get('analytics.builder.run'))}</button></div>
+    <div id="an-builder-chart" class="chart-empty"></div>
+    <div id="an-saved" class="rows"></div>
+  </details>`;
+}
+
+function wireControls(view) {
+  view.querySelectorAll('.fw-cycle [data-cycle]').forEach(b => b.addEventListener('click', () => {
+    cycle = b.dataset.cycle; offset = 0; renderAnalytics(ctx);
+  }));
+  const prev = view.querySelector('[data-nav="prev"]');
+  const next = view.querySelector('[data-nav="next"]');
+  prev?.addEventListener('click', () => { offset -= 1; renderAnalytics(ctx); });
+  next?.addEventListener('click', () => { if (offset < 0) { offset += 1; renderAnalytics(ctx); } });
+
+  view.querySelector('#an-run')?.addEventListener('click', () => runBuilder(ctx));
+  view.querySelector('#an-save')?.addEventListener('click', () => saveAnalysis(ctx));
+  // Lazily populate the advanced builder the first time it is expanded (avoids extra calls per render).
+  const adv = view.querySelector('.an-advanced');
+  adv?.addEventListener('toggle', () => {
+    if (adv.open && !adv.dataset.loaded) { adv.dataset.loaded = '1'; loadSavedAnalyses(ctx); runBuilder(ctx); }
+  });
+}
+
+// ---- Card renderers -------------------------------------------------------------------------------
+
+function pct(cur, prev) { cur = Number(cur) || 0; prev = Number(prev) || 0; if (!prev) return 0; return ((cur - prev) / Math.abs(prev)) * 100; }
+
+function kpi(valueHtml, label) { return `<div class="an-kpi"><span class="k">${valueHtml}</span><span class="l">${label}</span></div>`; }
+
+// 1) Spending development — expenses over the window as a line, with total + trend vs previous window.
+function fillSpending(el, o, oPrev) {
+  if (!el) return;
+  const cur = o?.currency || 'EUR';
+  const rows = o?.byMonth || [];
+  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
+  const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
+  el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
+    `<div class="an-card-foot">${kpi(ctx.money(o?.expenses || 0, cur), esc(t('Ausgaben gesamt', 'Total spending')))}${trendBadge(trend, false)}</div>`;
+}
+
+function spendingLine(rows) {
+  const vals = rows.map(r => Math.abs(Number(r.expenses) || 0));
+  const max = Math.max(1, ...vals), w = 900, h = 200, baseY = h - 20;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - (v / max) * (h - 30)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
+  const base = `<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line>`;
+  const labels = rows.map((r, i) => `<text x="${((i / (rows.length - 1 || 1)) * w).toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${areaGradient('an-grad-neg', 'an-g-neg')}${base}<path d="${area}" class="an-area" fill="url(#an-grad-neg)"></path><path d="${line}" class="an-line-expense"></path>${labels}</svg>`;
+}
+
+// 2) Income vs expenses — grouped bars per period, with income/expense/net numbers and both trends.
+function fillInout(el, o, oPrev) {
+  if (!el) return;
+  const cur = o?.currency || 'EUR';
+  const rows = o?.byMonth || [];
+  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
+  const incTrend = pct(o?.income || 0, oPrev?.income || 0);
+  const expTrend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
+  const net = o?.net ?? ((o?.income || 0) - (o?.expenses || 0));
+  const netCls = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
+  el.innerHTML = fxMarker(o?.incomplete) + chart(() => inoutBars(rows)) +
+    `<div class="an-card-foot"><div class="an-kpi-group">` +
+    kpi(ctx.money(o?.income || 0, cur), `${esc(ctx.get('transactions.income'))} ${trendBadge(incTrend, true)}`) +
+    kpi(ctx.money(o?.expenses || 0, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
+    `</div>` + kpi(`<span class="${netCls}">${ctx.money(net, cur)}</span>`, esc(ctx.get('analytics.net'))) + `</div>`;
+}
+
+function inoutBars(rows) {
+  const max = Math.max(1, ...rows.map(r => Math.max(Number(r.income) || 0, Number(r.expenses) || 0)));
+  const w = 900, h = 200, pad = 24, n = rows.length, slot = (w - pad * 2) / n;
+  const bw = Math.max(4, Math.min(18, slot / 3));
+  let bars = '';
+  rows.forEach((r, i) => {
+    const cx = pad + slot * i + slot / 2;
+    const ih = ((Number(r.income) || 0) / max) * (h - 30);
+    const eh = ((Number(r.expenses) || 0) / max) * (h - 30);
+    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="6"></rect>`;
+    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="6"></rect>`;
+    bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`;
+  });
+  const baseline = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
+  return `<div class="an-legend"><span class="lg lg-income">${esc(ctx.get('transactions.income'))}</span><span class="lg lg-expense">${esc(ctx.get('transactions.expenses'))}</span></div>
+    <svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.incomeExpense'))}">${baseline}${bars}</svg>`;
+}
+
+// 3) Spend by category — top categories as share-of-largest bars with a per-row trend badge + total.
+function fillCategory(el, result) {
+  if (!el) return;
+  const cats = result?.categories || [];
+  const rows = cats.slice(0, 6);
+  const cur = result?.currency || 'EUR';
+  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
+  const max = Math.max(1, ...rows.map(r => Math.abs(Number(r.current) || 0)));
+  // True window spend = sum of ROOT categories only (each root's `current` already rolls up its whole
+  // subtree and roots are disjoint) + the Uncategorized row — NOT the sum of the top-N rows, which would
+  // double-count a parent together with its children (the backend emits both parent and child rows).
+  const total = cats.filter(c => !c.parentId).reduce((s, r) => s + Math.abs(Number(r.current) || 0), 0);
+  // Drill-down (UX rework §6): tapping a category opens its bookings, scoped to the category subtree so
+  // the list matches the card's rolled-up figure. Uncategorized (no id) is not navigable.
+  const list = rows.map(r => {
+    const pctW = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
+    const cat = categoryColorIndex(r.categoryId || r.name);
+    const drill = r.categoryId ? ` data-cat-id="${esc(r.categoryId)}" role="button" tabindex="0"` : '';
+    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
+      <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
+  }).join('');
+  // Screenshot parity: a soft category donut sits above the list, sharing its per-category palette; the
+  // list below doubles as the legend. Wrapped in chart() so privacy mode swaps its (leaking) geometry.
+  const donutHtml = categoryDonut(cats, total, cur);
+  const donut = donutHtml ? chart(() => donutHtml) : '';
+  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
+  el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
+  el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', `categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+}
+
+// Soft category donut (screenshot parity): shares of the window's spend across ROOT categories only
+// (roots are disjoint and each rolls up its subtree, matching `total`), coloured from the same per-
+// category palette as the list. Rounded caps + a small inter-segment gap keep it in the soft FullWorth
+// style; the center carries the total, the list underneath serves as the legend. Returns '' when a donut
+// wouldn't say anything (fewer than two slices).
+function categoryDonut(cats, total, cur) {
+  const roots = cats.filter(c => !c.parentId)
+    .map(c => ({ val: Math.abs(Number(c.current) || 0), cat: categoryColorIndex(c.categoryId || c.name) }))
+    .filter(s => s.val > 0).sort((a, b) => b.val - a.val);
+  if (roots.length < 2 || total <= 0) return '';
+  const r = 64, cx = 80, cy = 80, circ = 2 * Math.PI * r, gap = 8;
+  let offset = 0, arcs = '';
+  for (const s of roots) {
+    const len = (s.val / total) * circ;
+    const dash = Math.max(0.75, len - gap);
+    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="16" stroke-linecap="round" class="donut-seg" data-cat="${s.cat}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    offset += len;
+  }
+  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(total, cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))}</span></div></div>`;
+}
+
+// 4) Spend by merchant — top merchants with brand identity, count/average, spend + per-row trend.
+function fillMerchant(el, result) {
+  if (!el) return;
+  const rows = (result?.merchants || []).slice(0, 6);
+  const cur = result?.currency || 'EUR';
+  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
+  const total = rows.reduce((s, r) => s + Math.abs(Number(r.currentSpend) || 0), 0);
+  // Drill-down (UX rework §6): a merchant has no stored FK on transactions, so scope by the merchant name
+  // as a counterparty search (the tx list ILIKEs the counterparty) — the pragmatic equivalent of a
+  // merchant filter without a backend change.
+  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
+  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Top-Ausgaben', 'Top spending')))}</div>`;
+  el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
+    const q = row.dataset.merchant;
+    if (!q) return;
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', `query=${encodeURIComponent(q)}`);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+}
+
+// 5) Net-worth development — history as a trend line with the latest value + change over the window.
+function fillNetWorth(el, history, currency) {
+  if (!el) return;
+  if (!history || !history.length) { el.innerHTML = emptyRow(); return; }
+  const vals = history.map(x => Number(x.netWorth) || 0);
+  const last = vals[vals.length - 1], first = vals[0];
+  el.innerHTML = chart(() => nwLine(vals)) + `<div class="an-card-foot">${kpi(ctx.money(last, currency), esc(t('Aktuelles Vermögen', 'Current net worth')))}${trendBadge(pct(last, first), true)}</div>`;
+}
+
+function nwLine(vals) {
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  const w = 900, h = 200, baseY = h - 10;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - ((v - min) / span) * (h - 20)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.trend'))}">${areaGradient('an-grad-nw', 'an-g-nw')}<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line><path d="${area}" class="an-area" fill="url(#an-grad-nw)"></path><path d="${line}" class="an-line-networth"></path></svg>`;
+}
+
+// 6) Forecast (optional) — kept as an explicitly-labelled estimate (§7.4). Independent of the cycle.
+function fillForecast(el, forecast) {
+  if (!el) return;
+  const points = (forecast?.points || []).slice(0, 6);
+  const cur = forecast?.currency || 'EUR';
+  if (!points.length) { el.innerHTML = fxMarker(forecast?.incomplete) + emptyRow(); return; }
+  el.innerHTML = fxMarker(forecast?.incomplete) + `<div class="row-sub an-estimate">${esc(ctx.get('analytics.estimateHint'))}</div>` +
+    points.map(p => `<div class="row"><div class="row-main"><div class="row-title">${esc(ctx.date(p.date))}</div><div class="row-sub">${esc(ctx.get('analytics.estimate'))}</div></div><div class="amount">${ctx.money(p.estimatedNetWorth, cur)}</div></div>`).join('');
+}
+
+// ---- Shared small helpers -------------------------------------------------------------------------
+
+// Stable 1-8 palette index for a category (§13 category colours), from its id/name so the same
+// category always keeps the same tone across renders without needing a server-side colour.
+function categoryColorIndex(key) {
+  const s = String(key || '');
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return (hash % 8) + 1;
+}
+
+function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${esc(ctx.get('common.empty'))}</div></div>`; }
+
+// Catmull-Rom → cubic-bézier smoothing: turns [[x,y],…] into a soft SVG path `d` so the line/area charts
+// read as gentle curves instead of hard polylines (paired with stroke-linecap/-linejoin:round in CSS).
+function smoothPath(pts) {
+  if (!pts.length) return '';
+  if (pts.length < 3) return 'M' + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L');
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+// A soft vertical fade for area fills — a token colour up top, transparent at the bottom — referenced by
+// the returned <path fill="url(#id)">. Defining the gradient inside the SVG markup is allowed (it is not
+// an injected <style>); the stop colours/opacities live in the .an-g-* classes in app.css.
+function areaGradient(id, cls) {
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="${cls}-0"></stop><stop offset="1" class="${cls}-1"></stop></linearGradient></defs>`;
+}
+
+// §18: an amber note when foreign amounts couldn't be converted (a missing FX rate) so the figures are
+// understood as partial rather than silently dropping money.
+function fxMarker(incomplete) { return incomplete ? `<div class="fx-incomplete">${esc(ctx.get('common.fxIncomplete'))}</div>` : ''; }
+
+// Privacy mode (§5): a chart's geometry is derived from the real amounts, so it would visually leak the
+// masked figures. When privacy is on, swap the chart body for a neutral placeholder (as the contracts
+// sparkline does). KPI numbers are already masked through ctx.money().
+function chart(build) { return ctx.isPrivate() ? `<div class="an-chart an-chart-private" aria-hidden="true">•••</div>` : build(); }
+
+// One-time CSS for the analytics-only layout primitives (card feet, KPI, merchant/category rows,
+// coloured trend lines, advanced disclosure). Everything else comes from app.css .fw-*/token classes.
+// No-op: the analytics layout CSS lives in app.css (the app CSP blocks injected inline <style>, so this
+// used to be dead). Kept as a stub so the renderAnalytics call site needs no change.
+function injectCss() { }
+
+// ---- Chart builder (§15.2): a bounded measure×dimension query rendered with the existing chart
+// techniques, plus saved analyses persisted in a preference. Demoted below the cards (advancedHtml). ----
 
 function range(period) {
   const end = new Date();
@@ -33,137 +368,10 @@ function range(period) {
 }
 
 // Serialize a Date by its LOCAL calendar day. Using toISOString() would convert to UTC and, in
-// positive-offset timezones during the early-morning window, shift both bounds a day earlier —
-// dropping the current day (or, for the month preset, the whole current month).
+// positive-offset timezones during the early-morning window, shift both bounds a day earlier.
 function isoLocal(z) {
   return `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`;
 }
-
-export async function renderAnalytics(context) {
-  ctx = context;
-  const period = ctx.$('#an-period')?.value || 'month';
-  const { from, to } = range(period);
-  const qs = from ? `?from=${from}&to=${to}` : '';
-
-  // Category trend and Merchant spending are inherently single-calendar-month reports (they carry
-  // their own trailing 3/6/12-month averages) — they always show the CURRENT month regardless of the
-  // page's date-range selector above, which drives the other panels.
-  const [overview, forecast, history, categories, merchants] = await Promise.all([
-    ctx.api(`api/analytics/overview${qs}`).catch(() => null),
-    ctx.api('api/analytics/forecast?months=12').catch(() => null),
-    ctx.api(`api/net-worth/history${qs}`).catch(() => []),
-    ctx.api('api/analytics/categories').catch(() => null),
-    ctx.api('api/analytics/merchants?top=10').catch(() => null),
-  ]);
-
-  renderHeader(overview);
-  renderMonthly(overview);
-  renderCategories(categories);
-  renderTrend(history, overview?.currency || 'EUR');
-  renderForecast(forecast);
-  renderMerchants(merchants);
-  loadSavedAnalyses(ctx);
-}
-
-function renderHeader(o) {
-  const cur = o?.currency || 'EUR';
-  ctx.$('#an-income').textContent = ctx.money(o?.income ?? 0, cur);
-  ctx.$('#an-expenses').textContent = ctx.money(o?.expenses ?? 0, cur);
-  const net = ctx.$('#an-net');
-  net.textContent = ctx.money(o?.net ?? 0, cur);
-  net.className = (o?.net ?? 0) > 0 ? 'positive' : (o?.net ?? 0) < 0 ? 'negative' : '';
-}
-
-// Monthly income vs expenses as a grouped bar chart. Two bars per month; heights scale to the max.
-function renderMonthly(o) {
-  const el = ctx.$('#an-monthly');
-  const rows = (o?.byMonth || []);
-  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
-  const max = Math.max(1, ...rows.map(r => Math.max(Number(r.income) || 0, Number(r.expenses) || 0)));
-  const w = 900, h = 200, pad = 24, n = rows.length;
-  const slot = (w - pad * 2) / n;
-  const bw = Math.max(4, Math.min(18, slot / 3));
-  let bars = '';
-  rows.forEach((r, i) => {
-    const cx = pad + slot * i + slot / 2;
-    const ih = ((Number(r.income) || 0) / max) * (h - 30);
-    const eh = ((Number(r.expenses) || 0) / max) * (h - 30);
-    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="2"></rect>`;
-    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="2"></rect>`;
-    bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`;
-  });
-  const baseline = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
-  el.innerHTML = fxMarker(o?.incomplete) + `<div class="an-legend"><span class="lg lg-income">${ctx.esc(ctx.get('transactions.income'))}</span><span class="lg lg-expense">${ctx.esc(ctx.get('transactions.expenses'))}</span></div>
-    <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.incomeExpense'))}">${baseline}${bars}</svg>`;
-}
-
-// Stable 1-8 palette index for a category (§13 category colours), from its id/name so the same
-// category always keeps the same tone across renders without needing a server-side colour.
-function categoryColorIndex(key) {
-  const s = String(key || '');
-  let hash = 0;
-  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  return (hash % 8) + 1;
-}
-
-// Category trend (§15.1): current month's spend per category with a share-of-largest bar, trend vs
-// last month, and the trailing 3-month average — a subtree roll-up, so a parent's figure already
-// includes its children. Amounts are privacy-masked.
-function renderCategories(result) {
-  const el = ctx.$('#category-analysis');
-  const rows = (result?.categories || []).slice(0, 10);
-  const cur = result?.currency || 'EUR';
-  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
-  const max = Math.max(1, ...rows.map(r => Math.abs(Number(r.current) || 0)));
-  el.innerHTML = fxMarker(result?.incomplete) + rows.map(r => {
-    const pct = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
-    const cat = categoryColorIndex(r.categoryId || r.name);
-    const trendClass = r.trendPercent > 0 ? 'negative' : r.trendPercent < 0 ? 'positive' : '';
-    const arrow = r.trendPercent > 0 ? '▲' : r.trendPercent < 0 ? '▼' : '';
-    return `<div class="an-cat"><div class="an-cat-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${ctx.esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span></div>
-      <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pct}"></span></div>
-      <div class="row-sub"><span class="amount ${trendClass}">${arrow} ${Math.abs(Math.round(r.trendPercent))}%</span> · Ø3 ${ctx.money(r.average3, cur)}${r.hasItemBreakdown ? ' · ' + ctx.esc(ctx.get('analytics.itemLevel')) : ''}</div></div>`;
-  }).join('');
-  el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
-}
-
-// Merchant spending (§15.1): top merchants this month by total spend, with visit count and average.
-function renderMerchants(result) {
-  const el = ctx.$('#merchant-analysis');
-  if (!el) return;
-  const rows = result?.merchants || [];
-  const cur = result?.currency || 'EUR';
-  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
-  el.innerHTML = fxMarker(result?.incomplete) + rows.map(r => `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(r.merchant)}</div><div class="row-sub">${r.currentCount} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="amount">${ctx.money(r.currentSpend, cur)}</div></div>`).join('');
-}
-
-function renderTrend(history, currency) {
-  const el = ctx.$('#trend-chart');
-  if (!history || !history.length) { el.innerHTML = emptyRow(); return; }
-  const vals = history.map(x => Number(x.netWorth));
-  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const w = 900, h = 200;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1 || 1)) * w},${h - ((v - min) / span) * (h - 20) - 10}`).join(' ');
-  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><line x1="0" y1="${h - 10}" x2="${w}" y2="${h - 10}" class="an-zero"></line><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(vals[vals.length - 1], currency)}</div>`;
-}
-
-function renderForecast(forecast) {
-  const el = ctx.$('#forecast-list');
-  const points = forecast?.points || [];
-  const cur = forecast?.currency || 'EUR';
-  if (!points.length) { el.innerHTML = fxMarker(forecast?.incomplete) + emptyRow(); return; }
-  el.innerHTML = fxMarker(forecast?.incomplete) + `<div class="row-sub an-estimate">${ctx.esc(ctx.get('analytics.estimateHint'))}</div>` +
-    points.map(p => `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(ctx.date(p.date))}</div><div class="row-sub">${ctx.esc(ctx.get('analytics.estimate'))}</div></div><div class="amount">${ctx.money(p.estimatedNetWorth, cur)}</div></div>`).join('');
-}
-
-function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; }
-
-// §18: an amber note when foreign amounts couldn't be converted (a missing FX rate) so the figures are
-// understood as partial rather than silently dropping money.
-function fxMarker(incomplete) { return incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''; }
-
-// ---- Chart builder (§15.2): a bounded measure×dimension query rendered with the existing chart
-// techniques, plus saved analyses persisted in a preference. ----
 
 function readBuilderConfig() {
   return {
@@ -182,7 +390,8 @@ async function runBuilder(context) {
   if (context) ctx = context;
   const cfg = readBuilderConfig();
   const el = ctx.$('#an-builder-chart');
-  el.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('common.loading'))}</div>`;
+  if (!el) return;
+  el.innerHTML = `<div class="row-sub">${esc(ctx.get('common.loading'))}</div>`;
   // "all" in the builder means the widest the bounded engine allows (~5 years), not unbounded — send an
   // explicit 5-year range so it doesn't fall through to the endpoint's 12-month default.
   let win;
@@ -192,7 +401,7 @@ async function runBuilder(context) {
   const qs = `?measure=${cfg.measure}&dimension=${cfg.dimension}${from ? `&from=${from}&to=${to}` : ''}`;
   let r;
   try { r = await ctx.api('api/analytics/chart' + qs); }
-  catch (err) { el.innerHTML = `<div class="row-sub">${ctx.esc(err.message || ctx.get('common.error'))}</div>`; return; }
+  catch (err) { el.innerHTML = `<div class="row-sub">${esc(err.message || ctx.get('common.error'))}</div>`; return; }
   renderSeries(el, r, cfg);
 }
 
@@ -226,10 +435,10 @@ function barChart(series, fmt, measure) {
     const cx = pad + slot * i + slot / 2;
     const bh = (Math.abs(Number(p.value) || 0) / max) * (h - 30);
     const cls = barClass(p.value);
-    out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(h - 20 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}" rx="2"></rect>`;
-    out += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${ctx.esc(shortLabel(p.label))}</text>`;
+    out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(h - 20 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}" rx="6"></rect>`;
+    out += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(shortLabel(p.label))}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.builder.title'))}">${out}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${out}</svg>`;
 }
 
 // Horizontal bars (share of the largest), reusing the category-bar technique.
@@ -238,17 +447,19 @@ function hbarChart(series, fmt) {
   return series.map(p => {
     const pct = Math.round((Math.abs(Number(p.value) || 0) / max) * 100);
     const cat = categoryColorIndex(p.key || p.label);
-    return `<div class="an-cat"><div class="an-cat-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${ctx.esc(p.label)}</span><span class="amount">${fmt(p.value)}</span></div><div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pct}"></span></div></div>`;
+    return `<div class="an-cat"><div class="an-cat-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(p.label)}</span><span class="amount">${fmt(p.value)}</span></div><div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pct}"></span></div></div>`;
   }).join('');
 }
 
 function lineChart(series, fmt) {
   const vals = series.map(p => Number(p.value) || 0);
   const min = Math.min(0, ...vals), max = Math.max(1, ...vals), span = (max - min) || 1;
-  const w = 900, h = 200;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1 || 1)) * w},${(h - ((v - min) / span) * (h - 20) - 10).toFixed(1)}`).join(' ');
+  const w = 900, h = 200, baseY = h - 10;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - ((v - min) / span) * (h - 20)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
   const last = series[series.length - 1];
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.builder.title'))}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.esc(last.label)}: ${fmt(last.value)}</div>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${areaGradient('an-grad-line', 'an-g-line')}<path d="${area}" class="an-area" fill="url(#an-grad-line)"></path><path d="${line}" class="an-line-builder"></path></svg><div class="row-sub">${esc(last.label)}: ${fmt(last.value)}</div>`;
 }
 
 // Donut of the positive-valued slices (a donut of mixed signs is meaningless). Arc lengths via
@@ -257,15 +468,17 @@ function donutChart(series, fmt) {
   const positives = series.filter(p => Number(p.value) > 0);
   const total = positives.reduce((s, p) => s + Number(p.value), 0);
   if (!total) return emptyRow();
-  const r = 60, cx = 90, cy = 90, circ = 2 * Math.PI * r;
+  const r = 60, cx = 90, cy = 90, circ = 2 * Math.PI * r, gap = 8;
   let offset = 0, arcs = '';
   for (const p of positives) {
     const len = (Number(p.value) / total) * circ;
-    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="22" class="donut-seg" data-cat="${categoryColorIndex(p.key || p.label)}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    // Soft rounded arcs: round caps + shrink each dash by a few px so a small gap opens between segments.
+    const dash = Math.max(0.75, len - gap);
+    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="18" stroke-linecap="round" class="donut-seg" data-cat="${categoryColorIndex(p.key || p.label)}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
     offset += len;
   }
-  const legend = positives.map(p => `<div class="row-sub"><span class="cat-dot" data-cat="${categoryColorIndex(p.key || p.label)}"></span>${ctx.esc(p.label)} · ${fmt(p.value)}</div>`).join('');
-  return `<div class="donut-wrap"><svg viewBox="0 0 180 180" role="img" aria-label="${ctx.esc(ctx.get('analytics.builder.title'))}">${arcs}</svg><div class="donut-legend">${legend}</div></div>`;
+  const legend = positives.map(p => `<div class="row-sub"><span class="cat-dot" data-cat="${categoryColorIndex(p.key || p.label)}"></span>${esc(p.label)} · ${fmt(p.value)}</div>`).join('');
+  return `<div class="donut-wrap"><svg viewBox="0 0 180 180" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${arcs}</svg><div class="donut-legend">${legend}</div></div>`;
 }
 
 async function loadSavedAnalyses(context) {
@@ -275,12 +488,12 @@ async function loadSavedAnalyses(context) {
   let items;
   try { const pref = await ctx.api('api/preferences/analytics.savedAnalyses'); items = pref?.value?.items || []; }
   catch { items = []; }
-  if (!items.length) { el.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('analytics.builder.empty'))}</div>`; return; }
-  el.innerHTML = `<div class="row-group">${ctx.esc(ctx.get('analytics.builder.saved'))}</div>`;
+  if (!items.length) { el.innerHTML = `<div class="row-sub">${esc(ctx.get('analytics.builder.empty'))}</div>`; return; }
+  el.innerHTML = `<div class="row-group">${esc(ctx.get('analytics.builder.saved'))}</div>`;
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = `<button type="button" class="ghost saved-open" data-id="${ctx.esc(it.id)}">${ctx.esc(it.name)}</button><div class="row-side"><button type="button" class="ghost danger" data-del="${ctx.esc(it.id)}">${ctx.esc(ctx.get('common.delete'))}</button></div>`;
+    row.innerHTML = `<button type="button" class="ghost saved-open" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="ghost danger" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
     row.querySelector('.saved-open').addEventListener('click', () => { applyBuilderConfig(it.config || {}); runBuilder(ctx); });
     row.querySelector('[data-del]').addEventListener('click', () => deleteSaved(it.id));
     el.appendChild(row);
@@ -301,9 +514,9 @@ async function deleteSaved(id) {
 
 function saveAnalysis(context) {
   if (context) ctx = context;
-  const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get('analytics.builder.save'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('analytics.builder.saveName'))}<input name="name" required maxlength="80" autocomplete="off"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.save'))}</button></div></form>`);
+  const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(ctx.get('analytics.builder.save'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <label>${esc(ctx.get('analytics.builder.saveName'))}<input name="name" required maxlength="80" autocomplete="off"></label>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit">${esc(ctx.get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

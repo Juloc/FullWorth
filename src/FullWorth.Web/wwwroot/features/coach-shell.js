@@ -69,7 +69,7 @@ function installShell() {
     <div class="coach-layout">
       <div class="coach-main">
         <article class="panel coach-hero">
-          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true">FW</div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
+          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
           <span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span>
         </article>
         <article class="panel coach-chat-panel">
@@ -246,10 +246,10 @@ function renderSummary(summary) {
   const root = $('#coach-summary');
   const score = summary.worthItScore == null ? '—' : Number(summary.worthItScore).toFixed(2);
   root.innerHTML = `<div class="coach-summary-grid">
-    <div><span>${esc(tr('Abdeckung', 'Coverage'))}</span><strong>${esc(formatPercent(summary.reviewCoverage))}</strong></div>
-    <div><span>${esc(tr('Worth-it', 'Worth it'))}</span><strong>${esc(score)}</strong></div>
-    <div><span>${esc(tr('Gut', 'Good'))}</span><strong>${esc(formatMoney(summary.positiveAmount, summary.currency))}</strong></div>
-    <div><span>${esc(tr('Schlecht', 'Bad'))}</span><strong>${esc(formatMoney(summary.negativeAmount, summary.currency))}</strong></div>
+    <div class="coach-metric"><span>${esc(tr('Abdeckung', 'Coverage'))}</span><strong>${esc(formatPercent(summary.reviewCoverage))}</strong></div>
+    <div class="coach-metric"><span>${esc(tr('Worth-it', 'Worth it'))}</span><strong>${esc(score)}</strong></div>
+    <div class="coach-metric coach-metric--good"><span>${esc(tr('Gut', 'Good'))}</span><strong>${esc(formatMoney(summary.positiveAmount, summary.currency))}</strong></div>
+    <div class="coach-metric coach-metric--bad"><span>${esc(tr('Schlecht', 'Bad'))}</span><strong>${esc(formatMoney(summary.negativeAmount, summary.currency))}</strong></div>
   </div>${renderInsightGroups(summary)}`;
 }
 
@@ -257,11 +257,12 @@ function renderInsightGroups(summary) {
   const positive = (summary.highSpendPositive || []).slice(0, 2);
   const negative = (summary.negativeOpportunities || []).slice(0, 2);
   if (!positive.length && !negative.length) return `<p class="coach-muted">${esc(tr('Mehr Ausgaben bewerten, damit die Auswertung persönlicher wird.', 'Review more spending to make the analysis personal.'))}</p>`;
-  const rows = [
-    ...positive.map(x => `<li><strong>${esc(x.label)}</strong> · ${esc(tr('überwiegend gut bewertet', 'mostly rated good'))}</li>`),
-    ...negative.map(x => `<li><strong>${esc(x.label)}</strong> · ${esc(tr('negatives Signal', 'negative signal'))}</li>`)
+  const insightCard = (label, tone, line) => `<div class="coach-insight coach-insight--${tone}"><span class="coach-insight-dot" aria-hidden="true"></span><div class="coach-insight-body"><strong>${esc(label)}</strong><span>${esc(line)}</span></div></div>`;
+  const cards = [
+    ...positive.map(x => insightCard(x.label, 'good', tr('überwiegend gut bewertet', 'mostly rated good'))),
+    ...negative.map(x => insightCard(x.label, 'warn', tr('negatives Signal', 'negative signal')))
   ];
-  return `<ul class="coach-insights">${rows.join('')}</ul>`;
+  return `<div class="coach-insight-label">${esc(tr('Signale', 'Signals'))}</div><div class="coach-insight-list">${cards.join('')}</div>`;
 }
 
 function renderReviewCandidates(items) {

@@ -5,43 +5,254 @@
 // subscriptions" section surfaces recurring-payment candidates with one-click accept. All money and
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
+import { identityIcon, sectionCard, esc } from '../ui/ux-kit.js';
+
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
 const KINDS = ['subscription', 'contract', 'insurance', 'loan', 'other'];
 // Populated on every render so the price-change panel can show a contract's name/currency from its id.
 let contractsById = new Map();
+// The full contract set plus best-effort id→name maps, kept at module scope so the filter/sort chips
+// can re-render the list without refetching (UX rework §7: small datasets filter/sort client-side).
+let allContracts = [];
+let categoryNames = new Map();
+let accountNames = new Map();
+// Filter/sort state persisted across renders so it survives an edit / cancel / detect round-trip.
+const view = { kind: '', status: 'active', sort: 'due', order: 'asc' };
 
-export function bindContracts(context) {
-  ctx = context;
-  ctx.$('[data-action="new-contract"]').addEventListener('click', () => openContractDialog());
-  // One "Detect" action scans for both new subscriptions and price changes on existing contracts.
-  ctx.$('#contracts-detect')?.addEventListener('click', () => { loadDetected(true); loadPriceChanges(true); });
-  ctx.$('#contracts-archived')?.addEventListener('change', () => renderContracts(ctx));
+// A few labels the rework introduces have no existing i18n key, so fall back to inline DE/EN.
+function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
+function t(de, en) { return lang() ? de : en; }
+
+// Monochrome line glyph for the sort bottom-sheet (matches the shared `.more-sheet` icon language).
+function sortIcon(paths) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 }
+// The sort dimensions offered in the bottom-sheet — same keys the list `sortContracts()` understands and
+// the same i18n labels the old <select> used, so behaviour is unchanged; only the presentation is new.
+function sortOptions() {
+  return [
+    { key: 'due', label: ctx.get('contracts.nextDue'), icon: sortIcon('<path d="M4 5h16v15H4z"/><path d="M4 9h16"/><path d="M8 3v4M16 3v4"/>') },
+    { key: 'monthly', label: t('Monatlich', 'Monthly'), icon: sortIcon('<path d="M20 8a8 8 0 0 0-14-4L3 7"/><path d="M3 3.5V7h3.5"/><path d="M4 16a8 8 0 0 0 14 4l3-3"/><path d="M21 20.5V17h-3.5"/>') },
+    { key: 'annual', label: ctx.get('contracts.annualized'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
+    { key: 'account', label: ctx.get('contracts.account'), icon: sortIcon('<path d="M3 10 12 4l9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9"/><path d="M3 20h18"/>') },
+    { key: 'category', label: t('Kategorie', 'Category'), icon: sortIcon('<path d="M4 4h7l9 9-7 7-9-9V4Z"/><path d="M8.5 8.5h.01"/>') },
+    { key: 'name', label: ctx.get('common.name'), icon: sortIcon('<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M13 6h7M13 11h5M13 16h3"/>') },
+  ];
+}
+function sortLabel() { const o = sortOptions().find(x => x.key === view.sort); return o ? o.label : ''; }
+
+// Sort bottom-sheet (mirrors the Finanzguru "Sortierung" sheet): one tap per dimension + a direction
+// segment. Selecting a dimension applies it and closes; the ascending/descending toggle applies live.
+function openSortSheet(host) {
+  const rows = sortOptions().map(o => `
+    <button type="button" class="contracts-sortopt${view.sort === o.key ? ' active' : ''}" data-sort-opt="${o.key}" aria-pressed="${view.sort === o.key}">
+      <span class="contracts-sortopt-ic">${o.icon}</span>
+      <span class="contracts-sortopt-label">${esc(o.label)}</span>
+      <span class="contracts-sortopt-radio" aria-hidden="true"></span>
+    </button>`).join('');
+  const dir = `<div class="contracts-sortdir" data-order-seg role="group" aria-label="${esc(t('Reihenfolge', 'Order'))}">
+      <button type="button" class="${view.order === 'asc' ? 'active' : ''}" data-order-val="asc" aria-pressed="${view.order === 'asc'}">${esc(t('Aufsteigend', 'Ascending'))}</button>
+      <button type="button" class="${view.order === 'desc' ? 'active' : ''}" data-order-val="desc" aria-pressed="${view.order === 'desc'}">${esc(t('Absteigend', 'Descending'))}</button>
+    </div>`;
+  const dlg = ctx.dialog(`<div class="dialog-card contracts-sortsheet">
+    <div class="panel-head"><h2>${esc(t('Sortierung', 'Sort by'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <div class="contracts-sortlist">${rows}</div>
+    ${dir}
+  </div>`);
+  dlg.classList.add('contracts-sortsheet-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-sort-opt]').forEach(b => b.addEventListener('click', () => {
+    view.sort = b.dataset.sortOpt;
+    const cur = host.querySelector('[data-sort-current]'); if (cur) cur.textContent = sortLabel();
+    renderList(host);
+    dlg.close();
+  }));
+  dlg.querySelector('[data-order-seg]')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-order-val]'); if (!b) return;
+    view.order = b.dataset.orderVal;
+    dlg.querySelectorAll('[data-order-val]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on); });
+    renderList(host);
+  });
+  dlg.showModal();
+}
+
+// Grouping (matches the reference's per-account sections): only the account/category dimensions group —
+// the others stay a flat, globally-sorted list. Returns the key/label bucket for one contract.
+function groupKeyFor() { return (view.sort === 'account' || view.sort === 'category') ? view.sort : null; }
+function groupBucket(c) {
+  return view.sort === 'account'
+    ? { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account') }
+    : { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category') };
+}
+function groupMonthly(items) { return items.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0); }
+function groupHead(label, items, cur) {
+  const el = document.createElement('div');
+  el.className = 'contracts-group-head';
+  el.innerHTML = `<div class="contracts-group-id"><span class="contracts-group-name">${esc(label)}</span><span class="contracts-group-count">(${items.length})</span></div>
+    <div class="contracts-group-sum">${ctx.money(groupMonthly(items), cur)}<small>${esc(ctx.get('contracts.cycle_monthly'))}</small></div>`;
+  return el;
+}
+
+// bindContracts only stashes ctx now — the view (and every control) is rebuilt by renderContracts, and
+// the page-header primary action button (app.js #primary-action) is what invokes newContract.
+export function bindContracts(context) { ctx = context; }
 
 // Used by the page-header primary action.
 export function newContract(context) { if (context) ctx = context; return openContractDialog(); }
 
 export async function renderContracts(context) {
   ctx = context;
-  const showArchived = !!ctx.$('#contracts-archived')?.checked;
-  const rows = (await ctx.api('api/contracts')) || [];
+  injectCss();
+  const host = ctx.$('#view-contracts');
+  let rows = [];
+  try { rows = (await ctx.api('api/contracts')) || []; }
+  catch (err) { ctx.toast(err.message || ctx.get('common.error')); rows = []; }
   contractsById = new Map(rows.map(c => [c.id, c]));
-  const shown = showArchived ? rows : rows.filter(r => r.isActive);
+  allContracts = rows;
+  // The list DTO only carries category/account ids; resolve their names best-effort for the row context
+  // line and for account/category sorting. A failed lookup just omits that label — never blocks render.
+  [categoryNames, accountNames] = await Promise.all([
+    ctx.api('api/categories').then(cs => new Map((cs || []).map(c => [c.id, c.name]))).catch(() => new Map()),
+    ctx.api('api/accounts').then(as => new Map((as || []).map(a => [a.id, a.displayName || a.institutionName]))).catch(() => new Map()),
+  ]);
 
-  const list = ctx.$('#contracts-list');
-  list.innerHTML = '';
-  if (!shown.length) {
-    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`;
-  } else {
-    const frag = document.createDocumentFragment();
-    for (const c of shown) frag.appendChild(rowFor(c));
-    list.appendChild(frag);
-  }
-  // Refresh detected candidates + price-change suggestions quietly (no error toast on the passive load).
+  host.innerHTML = viewHtml();
+  wireControls(host);
+  renderList(host);
+  // Contextual alerts: detected subscriptions + price-change suggestions load quietly and surface only
+  // when the backend actually has candidates, so they never dominate the header (UX rework §7).
   loadDetected(false);
   loadPriceChanges(false);
 }
+
+// Whole-view markup: top summary card (sum of monthlyEquivalent / annualizedAmount over active
+// contracts, computed server-side), the detected/price-change alert slots, then the filter + list card.
+function viewHtml() {
+  const active = allContracts.filter(c => c.isActive);
+  const sumMonthly = active.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0);
+  const sumAnnual = active.reduce((s, c) => s + (Number(c.annualizedAmount) || 0), 0);
+  const cur = (active.find(c => c.currency) || {}).currency || 'EUR';
+  // Hero summary (matches the reference's "Ausgaben für Verträge · Ø … / Monat"): the monthly total is the
+  // focal figure, with the annualized cost and active count as a supporting meta line.
+  const summaryBody = `<div class="contracts-hero">
+    <div class="contracts-hero-fig">
+      <span class="contracts-hero-value">${ctx.money(sumMonthly, cur)}</span>
+      <span class="contracts-hero-unit">/ ${esc(t('Monat', 'month'))}</span>
+    </div>
+    <div class="contracts-hero-meta">
+      <span class="contracts-hero-annual">${ctx.money(sumAnnual, cur)} ${esc(t('pro Jahr', 'per year'))}</span>
+      <span class="contracts-hero-dot" aria-hidden="true">·</span>
+      <span>${esc(t(`${active.length} aktive Verträge`, `${active.length} active contracts`))}</span>
+    </div>
+  </div>`;
+  const summary = sectionCard(t('Ausgaben für Verträge', 'Contract spending'), summaryBody, {
+    className: 'contracts-summary',
+  });
+
+  const kindChip = (val, label) => `<button type="button" class="fw-chip${view.kind === val ? ' active' : ''}" data-kind="${val}">${esc(label)}</button>`;
+  const typeChips = `<div class="fw-chips" data-type-chips>${kindChip('', ctx.get('common.all'))}${KINDS.map(k => kindChip(k, ctx.get('contracts.kind_' + k))).join('')}</div>`;
+  const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
+  // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
+  const controls = `<div class="contracts-controls">
+    <div class="fw-chips" data-status-chips>${statusChip('active', t('Aktiv', 'Active'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
+    <button type="button" class="fw-chip contracts-detect" data-detect>${esc(ctx.get('contracts.detect'))}</button>
+  </div>
+  <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
+    <span class="contracts-sortbar-label">${esc(t('Sortieren nach', 'Sort by'))} <strong data-sort-current>${esc(sortLabel())}</strong></span>
+    <span class="contracts-sortbar-caret" aria-hidden="true">⇅</span>
+  </button>`;
+
+  const listCard = sectionCard('', `${typeChips}${controls}<div class="contracts-list" data-list></div>`, { className: 'contracts-listcard' });
+
+  return `<div class="contracts-ux">
+    ${summary}
+    <div id="contracts-price-changes" class="detected-panel" hidden></div>
+    <div id="contracts-detected" class="detected-panel" hidden></div>
+    ${listCard}
+  </div>`;
+}
+
+function wireControls(host) {
+  host.querySelector('[data-type-chips]')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-kind]'); if (!btn) return;
+    view.kind = btn.dataset.kind; setActive(host, '[data-type-chips] .fw-chip', btn); renderList(host);
+  });
+  host.querySelector('[data-status-chips]')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-status]'); if (!btn) return;
+    view.status = btn.dataset.status; setActive(host, '[data-status-chips] .fw-chip', btn); renderList(host);
+  });
+  host.querySelector('[data-sort-open]')?.addEventListener('click', () => openSortSheet(host));
+  // The detect action stays, but as a subtle contextual control rather than the header's focal point.
+  host.querySelector('[data-detect]')?.addEventListener('click', () => { loadDetected(true); loadPriceChanges(true); });
+}
+
+function setActive(host, selector, activeEl) {
+  host.querySelectorAll(selector).forEach(el => el.classList.toggle('active', el === activeEl));
+}
+
+function renderList(host) {
+  const box = host.querySelector('[data-list]');
+  if (!box) return;
+  const shown = sortContracts(filterContracts(allContracts));
+  if (!shown.length) {
+    box.innerHTML = `<div class="contracts-empty">${esc(ctx.get('common.empty'))}</div>`;
+    return;
+  }
+  box.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  if (!groupKeyFor()) {
+    for (const c of shown) frag.appendChild(rowFor(c));
+    box.appendChild(frag);
+    return;
+  }
+  // Cluster the already-sorted rows into account/category sections, each with its own header + monthly sum
+  // (like the reference's "DKB Girokonto (9) · Ø … mtl"). Groups order by total monthly spend, biggest first.
+  const groups = new Map();
+  for (const c of shown) {
+    const b = groupBucket(c);
+    if (!groups.has(b.key)) groups.set(b.key, { label: b.label, items: [] });
+    groups.get(b.key).items.push(c);
+  }
+  const cur = (allContracts.find(c => c.currency) || {}).currency || 'EUR';
+  const ordered = [...groups.values()].sort((a, b) => groupMonthly(b.items) - groupMonthly(a.items));
+  for (const g of ordered) {
+    frag.appendChild(groupHead(g.label, g.items, cur));
+    for (const c of g.items) frag.appendChild(rowFor(c));
+  }
+  box.appendChild(frag);
+}
+
+function accountLabel(c) { return c.accountId ? (accountNames.get(c.accountId) || '') : ''; }
+function categoryLabel(c) { return c.categoryId ? (categoryNames.get(c.categoryId) || '') : ''; }
+
+function filterContracts(list) {
+  return list.filter(c => {
+    if (view.kind && (c.kind || '') !== view.kind) return false;
+    if (view.status === 'active' && !c.isActive) return false;
+    if (view.status === 'archived' && c.isActive) return false;
+    return true;
+  });
+}
+
+function sortContracts(list) {
+  const dir = view.order === 'desc' ? -1 : 1;
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+  const dueKey = c => (c.nextDueDate ? String(c.nextDueDate) : '9999-12-31'); // nulls sort last
+  const cmp = {
+    due: (a, b) => dueKey(a).localeCompare(dueKey(b)),
+    monthly: (a, b) => (Number(a.monthlyEquivalent) || 0) - (Number(b.monthlyEquivalent) || 0),
+    annual: (a, b) => (Number(a.annualizedAmount) || 0) - (Number(b.annualizedAmount) || 0),
+    account: (a, b) => accountLabel(a).localeCompare(accountLabel(b)),
+    category: (a, b) => categoryLabel(a).localeCompare(categoryLabel(b)),
+    name: byName,
+  }[view.sort] || (() => 0);
+  return list.slice().sort((a, b) => dir * cmp(a, b) || byName(a, b));
+}
+
+// Injected once (no app.css edits). Everything else reuses the shared `.fw-*` and app.css classes.
+// No-op: the contracts layout CSS lives in app.css (the app CSP blocks injected inline <style>).
+function injectCss() { }
 
 // Price-change suggestions (UI_UX_SPEC §13): detected jumps in a subscription's recurring amount, shown
 // for the owner to accept (apply the new price to the contract) or dismiss. `detect` runs a fresh scan
@@ -89,19 +300,32 @@ async function resolvePriceChange(id, action) {
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }
 
+// Compact identity row (UX rework §7): brand/monogram icon, provider/contract name, type + category as
+// secondary context, amount with its recurrence, and the next due date when it is still meaningful.
 function rowFor(c) {
-  const row = document.createElement('button');
-  row.type = 'button';
-  row.className = 'row contract-row' + (c.isActive ? '' : ' contract-archived');
-  const cycle = ctx.get('contracts.cycle_' + (c.billingCycle || 'monthly'));
-  const due = c.nextDueDate ? ctx.date(c.nextDueDate) : '—';
-  row.innerHTML = `
-    <div class="row-main">
-      <div class="row-title">${ctx.esc(c.name)}${c.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`}</div>
-      <div class="row-sub">${ctx.esc(cycle)} · ${ctx.esc(ctx.get('contracts.nextDue'))}: ${ctx.esc(due)}</div>
+  const row = document.createElement('div');
+  row.className = 'fw-row contract-row' + (c.isActive ? '' : ' contract-archived');
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  const cycleKey = c.billingCycle || 'monthly';
+  const cycle = ctx.get('contracts.cycle_' + cycleKey);
+  const kind = ctx.get('contracts.kind_' + (c.kind || 'contract'));
+  const cat = categoryLabel(c);
+  const due = (c.isActive && c.nextDueDate) ? `${ctx.get('contracts.nextDue')}: ${ctx.date(c.nextDueDate)}` : '';
+  // For non-monthly cadences show the normalized monthly figure so rows stay comparable at a glance.
+  const permo = (cycleKey !== 'monthly' && Number(c.monthlyEquivalent) > 0)
+    ? `≈ ${ctx.money(c.monthlyEquivalent, c.currency)} / ${t('Mon.', 'mo.')}` : '';
+  const marker = c.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`;
+  const sub = [(cat || kind), due, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
+  row.innerHTML = `${identityIcon(c.name, { logoAssetPath: c.logoAssetPath })}
+    <div class="fw-row-main">
+      <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
+      <div class="fw-row-sub">${sub}</div>
     </div>
-    <div class="amount">${ctx.money(c.amount, c.currency)}</div>`;
-  row.addEventListener('click', () => openDetail(c.id));
+    <div class="fw-row-amt">${ctx.money(c.amount, c.currency)}<small>${ctx.esc(cycle)}</small></div>`;
+  const open = () => openDetail(c.id);
+  row.addEventListener('click', open);
+  row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   return row;
 }
 

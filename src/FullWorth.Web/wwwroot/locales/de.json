@@ -437,6 +437,9 @@
   },
   "common": {
     "all": "Alle",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "back": "Zurück",
     "apply": "Anwenden",
     "add": "Hinzufügen",
     "loading": "Lade Daten…",

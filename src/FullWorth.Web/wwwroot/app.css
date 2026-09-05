@@ -53,6 +53,14 @@ body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
 .sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
+.brand-logo{height:24px;width:auto;flex:0 0 auto;display:block}
+html[data-theme="light"] .brand-logo{content:url("/branding/fullworth-logo-light.svg")}
+html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.svg")}
+/* Sidebar theme toggle: show only the icon for the active preference (System/Hell/Dunkel), like login. */
+#theme-toggle [data-theme-icon]{display:none}
+#theme-toggle[data-theme-pref="system"] [data-theme-icon="system"],
+#theme-toggle[data-theme-pref="light"] [data-theme-icon="light"],
+#theme-toggle[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 .brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand-name{display:grid;gap:0;line-height:1}
 .beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
@@ -94,7 +102,7 @@ body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:n
 main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max)}
 main:focus{outline:none}
 .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
-.topbar-title h1{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.topbar-title h1{font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.08}
 .topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
 .topbar-actions{display:flex;align-items:center;gap:var(--s2)}
 .icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
@@ -236,14 +244,267 @@ label.check.inline{font-size:12px;color:var(--muted)}
 .tx-row{cursor:pointer}
 .tx-row:hover{background:var(--surface-2)}
 .tx-ignored{opacity:.6}
+/* Income stands out as a soft-green pill (Finanzguru-style; green = income, on-brand §4.3). Expenses
+   stay plain text so colour is reserved for the money statement that matters. */
+.tx-row td.amount .tx-amt{font-variant-numeric:tabular-nums;font-weight:600}
+/* Desktop table: income is clean green text; the soft-green pill is a mobile-card touch (added below). */
+.tx-row td.amount.positive .tx-amt{color:var(--positive)}
+/* A transfer moves money between your own accounts — neither income nor expense — so keep both legs
+   neutral (no green income pill, no red) and let the ⟳ badge tell the story. */
+.tx-row.tx-is-transfer td.amount .tx-amt{background:transparent;color:var(--muted);padding:0;font-weight:600}
 .tx-marker{display:inline-block;font-size:12px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
 .tx-marker.pending{background:var(--surface-2);color:var(--text)}
+/* Transfer badge: a compact circular-arrow chip (Finanzguru-style), not a wordy text chip. */
+.tx-marker.tx-marker-icon{padding:0;width:18px;height:18px;display:inline-grid;place-items:center;font-size:12px;line-height:1;background:var(--surface-3);color:var(--text)}
+.tx-marker.tx-marker-icon.transfer{color:var(--k1)}
+/* Merchant/category identity + booking-date grouping (UX rework §4) */
+.tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
+.tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0}
+.tx-cp-main strong{font-weight:600}
+.tx-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.tx-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
+html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
+.tx-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
+.tx-logo{width:100%;height:100%;object-fit:cover}
+.tx-ident.tx-logo-failed{background:var(--surface-2)}
+.tx-date-head td{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+.tx-date-head td>span{opacity:.85}
+/* Scope banner: account/group name + back path (UX rework §3) */
+.tx-scopebar{display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)}
+.tx-scope-back{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer;font-size:17px;line-height:1;padding:0}
+.tx-scope-back:hover{background:var(--surface-2)}
+.tx-scope-label{font-weight:600;font-size:15px}
+/* Transaction filter sheet (UX rework §5): a Filter button with active-count badge + a drawer of the
+   advanced filters (direction/date/category/flags). The old inline direction/flags selects move into it. */
+.tx-filter-btn{position:relative;display:inline-flex;align-items:center;gap:6px}
+.tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.tx-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:700;line-height:1}
+#view-transactions .toolbar #tx-direction,#view-transactions .toolbar #tx-flags{display:none}
+.tx-filter-sheet{width:min(440px,94vw);display:flex;flex-direction:column;gap:var(--s3)}
+.tx-filter-range{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.tx-filter-sheet label{text-transform:none;letter-spacing:normal;font-size:13px;color:var(--text)}
+.tx-filter-sheet label.check{flex-direction:row;align-items:center;color:var(--muted)}
+/* Account/group drill-down affordance (UX rework §3) */
+.row.is-drillable{cursor:pointer}
+.row.is-drillable:hover{background:var(--surface-2)}
+.group-head .row-main{display:flex;align-items:center;gap:6px;min-width:0}
+.group-chevron{width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;flex:0 0 auto;border-radius:6px}
+.group-chevron:hover{background:var(--surface-2)}
+.group-toggle{border:0;background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:default;padding:4px 2px;display:inline-flex;align-items:center;gap:8px;min-width:0}
+.group-toggle.is-drillable{cursor:pointer}
+.group-toggle.is-drillable:hover{text-decoration:underline}
+/* Mobile: the desktop transaction table becomes identity cards, never a compressed table (UX rework §4) */
+@media(max-width:767px){
+  #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
+  #view-transactions table{min-width:0;width:100%}
+  #view-transactions thead{display:none}
+  #view-transactions .tx-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  #view-transactions .tx-row>td{display:none;border:0;padding:0}
+  #view-transactions .tx-row>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
+  #view-transactions .tx-row>td.amount{display:block;flex:0 0 auto;font-size:15px}
+  #view-transactions .tx-cp-main{display:flex;min-width:0}
+  #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px}
+}
+/* ---- Shared UX-rework kit (ui/ux-kit.js): identity, cards, trend, period cycle, summary ---- */
+.fw-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.fw-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
+html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
+.fw-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
+.fw-ident-logo{width:100%;height:100%;object-fit:cover}
+.fw-ident.fw-ident-failed{background:var(--surface-2)}
+.fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:18px}
+.fw-ident-cat svg{width:20px;height:20px}
+/* SectionCard */
+.fw-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s4);box-shadow:var(--shadow)}
+.fw-card+.fw-card{margin-top:var(--s4)}
+.fw-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.fw-card-title{font-size:15px;font-weight:600}
+.fw-card-sub{margin:2px 0 0;color:var(--muted);font-size:12px}
+.fw-card-action{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:var(--radius-pill);padding:4px 12px;font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap}
+.fw-card-action:hover{background:var(--surface-2)}
+/* TrendValue */
+.fw-trend{display:inline-flex;align-items:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
+.fw-trend-good{background:var(--positive-soft);color:var(--positive)}
+.fw-trend-bad{background:var(--negative-soft);color:var(--negative)}
+/* PeriodCycleSelector: segmented control + window navigation */
+.fw-cyclebar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
+.fw-cycle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px;gap:2px}
+.fw-cycle button{border:0;background:transparent;color:var(--muted);border-radius:var(--radius-pill);padding:6px 14px;font-weight:600;font-size:13px;cursor:pointer}
+.fw-cycle button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-menu)}
+.fw-window{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:13px}
+.fw-window button{width:30px;height:30px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer}
+.fw-window button:disabled{opacity:.4;cursor:not-allowed}
+.fw-window-label{min-width:9ch;text-align:center;font-weight:600;color:var(--text)}
+/* SummaryMetric (card top line) */
+.fw-summary{display:flex;flex-wrap:wrap;gap:var(--s6);align-items:baseline}
+.fw-summary-value{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.fw-summary-label{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+/* AnalysisCard grid */
+.fw-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start}
+@media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
+/* Identity list row (contracts, merchant lists, upcoming widgets) */
+.fw-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.fw-row:last-child{border-bottom:0}
+.fw-row:hover{background:var(--surface-2)}
+.fw-row-main{flex:1;min-width:0}
+.fw-row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fw-row-sub{color:var(--muted);font-size:12px;margin-top:2px}
+.fw-row-amt{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
+.fw-row-amt small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+/* Segmented filter chips (type/sort) */
+.fw-chips{display:flex;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s3)}
+.fw-chip{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:var(--radius-pill);padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.fw-chip.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+/* Allocation / composition bar */
+.fw-alloc{display:flex;height:12px;border-radius:var(--radius-pill);overflow:hidden;background:var(--surface-2);margin:var(--s2) 0}
+.fw-alloc>span{display:block;height:100%}
+/* ---- Per-feature UX-rework styles (moved out of runtime <style> blocks: the app CSP blocks injected
+   inline stylesheets, so these must live in a linked file). Analyses (an-*), contracts, net worth. ---- */
+.an-card-body{min-height:60px}
+.an-chart{display:block;width:100%;height:auto}
+.an-line-expense{stroke:var(--negative);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
+.an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
+.an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-kpi .k{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.an-kpi .k .positive{color:var(--positive)}
+.an-kpi .k .negative{color:var(--negative)}
+.an-kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
+.an-catrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.an-catrow:last-child{border-bottom:0}
+/* Finanzguru-style colour accent: the category marker reads as a tall left bar, not a small dot,
+   reusing the existing per-category palette (data-cat). Scoped to the category list rows so donut
+   legends and other dots keep their compact form. */
+.an-catrow .cat-dot,.an-cat-head .cat-dot{width:4px;height:22px;border-radius:999px;margin-right:11px}
+.an-catrow-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:6px}
+.an-catrow-head .row-title{flex:1 1 auto;min-width:0}
+.an-catrow-head .amount{margin-left:auto}
+.an-mrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.an-mrow:last-child{border-bottom:0}
+.an-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+.an-mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+/* Analytics category/merchant rows drill into scoped bookings (UX rework §6) */
+.an-catrow.is-drillable,.an-mrow.is-drillable{cursor:pointer;border-radius:8px;margin:0 -6px;padding-left:6px;padding-right:6px}
+.an-catrow.is-drillable:hover,.an-mrow.is-drillable:hover{background:var(--surface-2)}
+.an-catrow.is-drillable:focus-visible,.an-mrow.is-drillable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* Privacy mode: charts must not reveal figures through their geometry */
+.an-chart-private{height:80px;display:grid;place-items:center;color:var(--muted);letter-spacing:.35em;font-weight:600}
+/* Overview grouped account cards (UX rework §3) */
+.dash-group-head .fw-row-title{font-weight:700}
+.dash-group-head+.fw-row:not(.dash-group-head){padding-left:12px}
+.dash-group-icon{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
+.dash-group-icon svg{width:20px;height:20px}
+.an-advanced{margin-top:var(--s5)}
+.an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
+.an-advanced>summary::-webkit-details-marker{display:none}
+.an-advanced>summary::before{content:"▸";color:var(--muted);margin-right:8px}
+.an-advanced[open]>summary::before{content:"▾"}
+.an-builder-controls{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0}
+.an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}
+.contracts-ux .detected-panel:not([hidden]){margin-bottom:var(--s4)}
+.contracts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);margin:var(--s3) 0}
+.contracts-sort{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:12px;margin-left:auto}
+.contracts-sort select{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font-size:12px;font-weight:600}
+.contracts-order{min-width:32px;text-align:center;line-height:1}
+.contracts-detect{border-style:dashed}
+.contract-row.contract-archived{opacity:.6}
+.contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
+.nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
+.nw-hero .fw-summary-value{font-size:34px}
+.nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.nw-trend-desc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px}
+.nw-delta.positive{color:var(--positive)}
+.nw-delta.negative{color:var(--negative)}
+.nw-window-label{color:var(--muted);font-size:11px}
+.nw-windows{margin:var(--s3) 0}
+.nw-chart{margin:var(--s2) 0}
+.nw-chart svg{display:block;width:100%;height:140px}
+.nw-chart-line{stroke:var(--cta);fill:none}
+.nw-chart-fill{fill:var(--cta);opacity:.10}
+.nw-chart-empty{padding:var(--s5) 0;text-align:center}
+.nw-hero-metrics{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s3)}
+.nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
+.nw-hero-metrics strong.negative{color:var(--negative)}
+.nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
+.nw-alloc-block{margin:var(--s2) 0 var(--s3)}
+.nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
+.nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
+.nw-alloc-debt{background:var(--negative-soft)}
+.nw-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px var(--s5);margin-top:var(--s3)}
+.nw-legend-item{display:flex;align-items:center;gap:8px;font-size:13px}
+.nw-dot{width:10px;height:10px;border-radius:3px;flex:none}
+.nw-legend-label{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nw-legend-amt{font-variant-numeric:tabular-nums;font-weight:600}
+.nw-legend-amt.negative{color:var(--negative)}
+.nw-manage{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);overflow:hidden}
+.nw-manage>summary{position:relative;cursor:pointer;padding:var(--s4) calc(var(--s4) + 20px) var(--s4) var(--s4);display:flex;flex-direction:column;gap:2px;list-style:none;font-weight:600}
+.nw-manage>summary::-webkit-details-marker{display:none}
+.nw-manage>summary::after{content:'▾';position:absolute;right:var(--s4);top:var(--s4);color:var(--muted)}
+.nw-manage[open]>summary::after{content:'▴'}
+.nw-manage-hint{font-weight:400;color:var(--muted);font-size:12px}
+.nw-manage-body{padding:0 var(--s4) var(--s4)}
+.nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
+.nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
+#nw-investments .panel-head{margin-bottom:var(--s3)}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
-.tx-detail{width:min(500px,94vw)}
-.tx-detail .tx-amount{font-size:21px;font-weight:600;margin:2px 0 6px}
-.tx-detail .tx-note{margin-top:var(--s2)}
-dialog.drawer{margin:0 0 0 auto;height:100%;max-height:100vh;border-radius:0;align-self:stretch}
-@media(max-width:767px){dialog.drawer{margin:0;width:100vw;max-width:100vw}.tx-detail{width:100%}}
+/* The global `label{display:grid}` (and other display rules) otherwise beat the UA [hidden] rule, so a
+   `<label hidden>` (e.g. the transfer-purpose select on a non-transfer) leaked into view. Enforce it. */
+[hidden]{display:none!important}
+/* Close buttons. Generic text-× dialogs get a bigger/bolder borderless ×; the detail drawer uses a real
+   icon button (36px bordered circle, like the top-bar icons) with a bold ✕ glyph. */
+.dialog-card [data-close]:not(.icon-button){width:36px;height:36px;padding:0;display:grid;place-items:center;border:0;background:transparent;border-radius:50%;color:var(--text);font-size:26px;font-weight:600;line-height:1;cursor:pointer;flex:0 0 auto}
+.dialog-card [data-close]:not(.icon-button):hover{background:var(--surface-2)}
+.tx-close{flex:0 0 auto}
+.tx-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.tx-detail{width:min(500px,94vw);gap:var(--s4)}
+/* Transaction detail drawer — Finanzguru-style identity header + card sections that read top-to-bottom. */
+.tx-detail-head{align-items:center;gap:var(--s3)}
+.tx-detail-id{display:flex;align-items:center;gap:var(--s3);min-width:0}
+.tx-detail-id .fw-ident{width:44px;height:44px;font-size:17px}
+.tx-detail-idmain{min-width:0;display:flex;flex-direction:column}
+.tx-detail-idmain h2{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-detail-sub{color:var(--muted);font-size:12px;margin-top:2px}
+.tx-detail .tx-amount{font-size:28px;font-weight:600;margin:0}
+.tx-detail .tx-detail-desc{margin-top:calc(-1 * var(--s3))}
+.tx-detail .tx-refund,.tx-detail .tx-transfer{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
+.tx-detail .tx-note{margin-top:0}
+/* Transfer block (revealed by the Umbuchung toggle): purpose + choose/Von→An counter-booking. */
+.tx-transfer{display:grid;gap:var(--s3)}
+.tx-transfer .tx-purpose{text-transform:none;letter-spacing:normal;color:var(--muted);font-size:12px;gap:5px;margin:0}
+.tx-choose-counter{width:100%;border:1px solid var(--cta);background:var(--cta);color:var(--cta-text);border-radius:var(--radius-pill);padding:10px 14px;font-weight:600;cursor:pointer}
+.tx-choose-counter:hover{opacity:.92}
+.tx-vonan{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:10px 12px;cursor:pointer}
+.tx-vonan:hover{background:var(--surface-2)}
+.tx-vonan-leg{display:flex;flex-direction:column;min-width:0;flex:1}
+.tx-vonan-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.tx-vonan-acct{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-vonan-arrow{color:var(--muted);flex:0 0 auto}
+.tx-vonan-go{color:var(--muted);flex:0 0 auto;font-size:18px;line-height:1}
+.tx-transfer-unpair{justify-self:start}
+/* Injected advanced sections (category-review/tags, coach worth-rating) share the calm grey-card look. */
+.tx-detail .coach-inline-review,.tx-detail .ci-detail-panel{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
+.tx-detail .coach-inline-review>*:first-child,.tx-detail .ci-detail-panel>*:first-child{margin-top:0}
+dialog.drawer{margin:0 0 0 auto;width:min(460px,100vw);max-width:100vw;height:100%;max-height:100vh;border-radius:0;align-self:stretch}
+/* Inside a drawer the card IS the panel: fill it and drop the floating rounded-box radius/shadow so it
+   reads as one clean right-hand sheet — not a shadowed card sitting on a blurred backdrop (§9.3). */
+dialog.drawer .dialog-card{width:100%;height:100%;max-height:100vh;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:none;overflow:auto;align-content:start}
+/* The detail close control is a real 36px icon button; reset the inherited button padding and make the
+   SVG block-level so the ✕ sits dead-centre. */
+.tx-close{padding:0}
+.tx-close svg{display:block}
+@media(max-width:767px){dialog.drawer{margin:0;width:100vw;max-width:100vw}dialog.drawer .dialog-card{border-left:0}.tx-detail{width:100%}}
+/* Toggle switch (Umbuchung / exclude-from-stats): calm pill; on-state is the dark CTA (per user pref). */
+.fw-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);cursor:pointer;color:var(--text);font-size:14px;font-weight:400;text-transform:none;letter-spacing:normal}
+.fw-toggle{position:relative;flex:0 0 auto;width:44px;height:26px}
+.fw-toggle input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;cursor:pointer;z-index:1}
+.fw-toggle-track{position:absolute;inset:0;background:var(--surface-3);border-radius:999px;transition:background .16s ease;pointer-events:none}
+.fw-toggle-track::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .16s ease}
+.fw-toggle input:checked+.fw-toggle-track{background:var(--cta)}
+.fw-toggle input:checked+.fw-toggle-track::after{transform:translateX(18px)}
+.fw-toggle input:focus-visible+.fw-toggle-track{outline:2px solid var(--accent);outline-offset:2px}
 .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s4)}
 .settings-link{text-decoration:none;color:inherit}
 /* A settings row rendered as a <button> (opens a dialog) must look like the <a> rows. */
@@ -448,3 +709,469 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .loan-chart svg{width:100%;height:120px;color:var(--k2)}
 @media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ============================================================================
+   Round 4 — Finanzguru-style page polish (per-page workflow). Each block is
+   namespaced under its page prefix (dash-/contracts-/an-/nw-/purchase-/tx-) so
+   the rules cannot collide. FullWorth stays monochrome + --cat accents only.
+   ============================================================================ */
+
+/* --- Übersicht (Overview): calmer summary tiles + grouped account cards --- */
+.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1)}
+.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em}
+.widget-split.dash-metric-split{margin-top:var(--s2)}
+.dash-accounts{display:grid;gap:var(--s5)}
+.dash-group{display:grid}
+.dash-group-rows{display:grid}
+.dash-group-head{padding-top:2px;padding-bottom:var(--s3)}
+.dash-group-head .fw-row-title{font-size:15px}
+.dash-group-head .fw-row-sub{font-size:11px}
+.dash-group-head .fw-row-amt{font-size:15px}
+.dash-drill-chevron{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
+.dash-drill-chevron svg{width:16px;height:16px;display:block}
+.dash-group-head:hover .dash-drill-chevron,.dash-group-head:focus-visible .dash-drill-chevron{color:var(--text)}
+.dash-group .fw-row.is-drillable:focus-visible{outline:2px solid var(--text);outline-offset:-2px;border-radius:var(--radius-input)}
+
+/* --- Verträge (contracts): hero summary + grouped sections + sort sheet --- */
+.contracts-summary .fw-card-head{margin-bottom:var(--s2)}
+.contracts-hero{display:flex;flex-direction:column;gap:6px}
+.contracts-hero-fig{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.contracts-hero-value{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05;letter-spacing:-.01em}
+.contracts-hero-unit{color:var(--muted);font-size:15px;font-weight:600}
+.contracts-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:12px}
+.contracts-hero-annual{font-weight:600;color:var(--text)}
+.contracts-hero-dot{color:var(--line)}
+.contracts-sortbar{display:flex;align-items:center;justify-content:center;gap:var(--s2);width:100%;margin:var(--s2) 0 var(--s3);padding:11px 16px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);border-radius:var(--radius-pill);font-size:13px;font-weight:600;cursor:pointer}
+.contracts-sortbar:hover{background:var(--surface-3)}
+.contracts-sortbar-label{color:var(--muted)}
+.contracts-sortbar-label strong{color:var(--text);font-weight:700}
+.contracts-sortbar-caret{color:var(--muted);font-size:14px;line-height:1}
+.contracts-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding:var(--s4) 4px var(--s2)}
+.contracts-group-head:first-child{padding-top:var(--s2)}
+.contracts-group-id{display:flex;align-items:baseline;gap:6px;min-width:0}
+.contracts-group-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contracts-group-count{color:var(--muted);font-size:12px;font-weight:600;flex:0 0 auto}
+.contracts-group-sum{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;white-space:nowrap;flex:0 0 auto}
+.contracts-group-sum small{color:var(--muted);font-weight:600;font-size:11px;margin-left:4px}
+dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(560px,100vw)}
+.contracts-sortsheet{border-radius:16px 16px 0 0;padding:var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom,0px));max-height:86vh;overflow:auto;gap:var(--s2)}
+.contracts-sortsheet .panel-head h2{font-size:18px}
+.contracts-sortsheet.dialog-card [data-close]:not(.icon-button){background:var(--surface-3);color:var(--muted)}
+.contracts-sortsheet.dialog-card [data-close]:not(.icon-button):hover{background:var(--surface-3);color:var(--text)}
+.contracts-sortlist{display:flex;flex-direction:column}
+.contracts-sortopt{display:flex;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;padding:14px 6px;text-align:left;font-size:15px;color:var(--text);cursor:pointer}
+.contracts-sortopt+.contracts-sortopt{border-top:1px solid var(--line)}
+.contracts-sortopt:hover{background:var(--surface-2)}
+.contracts-sortopt-ic{width:24px;height:24px;flex:0 0 auto;color:var(--muted);display:grid;place-items:center}
+.contracts-sortopt-ic svg{width:22px;height:22px}
+.contracts-sortopt.active .contracts-sortopt-ic{color:var(--text)}
+.contracts-sortopt-label{flex:1;min-width:0}
+.contracts-sortopt.active .contracts-sortopt-label{font-weight:600}
+.contracts-sortopt-radio{position:relative;width:20px;height:20px;flex:0 0 auto;border:2px solid var(--line);border-radius:50%}
+.contracts-sortopt.active .contracts-sortopt-radio{border-color:var(--cta);background:var(--cta)}
+.contracts-sortopt.active .contracts-sortopt-radio::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid var(--cta-text);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.contracts-sortdir{display:flex;gap:var(--s2);margin-top:var(--s3)}
+.contracts-sortdir button{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:var(--radius-pill);padding:9px 12px;font-weight:600;font-size:13px;cursor:pointer}
+.contracts-sortdir button.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+
+/* --- Analyse (an-*): softened charts + category donut --- */
+.an-area{stroke:none}
+.an-chart .an-line-expense{stroke-linecap:round;stroke-linejoin:round}
+.an-chart .an-line-networth{stroke:var(--k2);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.an-chart .an-line-builder{stroke:var(--cta);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.an-g-neg-0{stop-color:var(--negative);stop-opacity:.18}
+.an-g-neg-1{stop-color:var(--negative);stop-opacity:0}
+.an-g-nw-0{stop-color:var(--k2);stop-opacity:.16}
+.an-g-nw-1{stop-color:var(--k2);stop-opacity:0}
+.an-g-line-0{stop-color:var(--cta);stop-opacity:.12}
+.an-g-line-1{stop-color:var(--cta);stop-opacity:0}
+.an-chart rect,.chart-empty svg rect{rx:6px}
+.an-donut{position:relative;width:180px;max-width:60vw;margin:0 auto var(--s5);aspect-ratio:1/1}
+.an-donut-svg{display:block;width:100%;height:100%;overflow:visible}
+.an-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;pointer-events:none}
+.an-donut-center .k{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1.1}
+.an-donut-center .l{font-size:11px;color:var(--muted)}
+
+/* --- Vermögen (nw-*): softened trend area + allocation donut --- */
+.nw-chart-area{fill:url(#nw-trend-grad)}
+.nw-trend-grad-top{stop-color:var(--cta);stop-opacity:.16}
+.nw-trend-grad-bottom{stop-color:var(--cta);stop-opacity:0}
+.nw-chart-line{stroke-linecap:round;stroke-linejoin:round}
+.nw-chart-grid{stroke:var(--line);stroke-width:1;opacity:.55}
+.nw-allocation .nw-alloc-chart{position:relative;width:min(260px,72%);margin:var(--s4) auto var(--s3);aspect-ratio:1/1}
+.nw-allocation .nw-donut{display:block;width:100%;height:auto;overflow:visible}
+.nw-allocation .nw-donut-track{fill:none;stroke:var(--surface-2);stroke-width:20}
+.nw-allocation .nw-donut-seg{fill:none;stroke-width:20;stroke-linecap:round}
+.nw-allocation .nw-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;pointer-events:none}
+.nw-allocation .nw-donut-value{font-size:22px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.15}
+.nw-allocation .nw-donut-label{font-size:12px;color:var(--muted)}
+.nw-allocation .nw-legend-pct{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;min-width:34px;text-align:right}
+
+/* --- Käufe (purchase-*): summary strip + identity rows + share bars --- */
+.purchase-summary{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);margin:0 0 var(--s4);padding:var(--s4);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+.purchase-stat{display:flex;flex-direction:column;gap:6px;min-width:0}
+.purchase-stat-k{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.purchase-stat-v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.purchase-stat--review .purchase-stat-v{color:var(--warning)}
+@media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
+.purchase-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--s3)}
+.purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
+.purchase-title{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.purchase-name{font-size:15px;font-weight:500;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.purchase-row .amount{align-self:center;text-align:right}
+.purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:11px;font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
+.purchase-tag--unlinked{background:var(--surface-3);color:var(--text)}
+.purchase-mrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.purchase-mrow:last-child{border-bottom:0}
+.purchase-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+.purchase-mrow-main{min-width:0;display:flex;flex-direction:column;gap:6px}
+.purchase-mrow-top{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+.purchase-mrow-top .purchase-name{font-weight:500}
+.purchase-mrow-top .amount{flex:0 0 auto}
+.purchase-bar{display:block;height:4px;border-radius:var(--radius-pill);background:var(--surface-3);overflow:hidden}
+.purchase-bar>span{display:block;height:100%;border-radius:inherit;background:var(--k4)}
+
+/* --- Buchungen (tx-*): period summary strip + skeleton + empty state --- */
+#view-transactions .tx-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s4);padding:var(--s3) var(--s4);margin-bottom:var(--s3);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+.tx-summary .tx-summary-figs{gap:var(--s6)}
+.tx-summary .tx-summary-fig{display:flex;flex-direction:column}
+.tx-summary .fw-summary-value{font-size:20px}
+.tx-summary .tx-summary-income{color:var(--positive)}
+.tx-summary .tx-summary-expense{color:var(--text)}
+.tx-summary .tx-summary-meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#view-transactions .tx-cp-main strong{font-size:14px;line-height:1.25}
+#view-transactions .tx-cp-main .row-sub{font-size:12px;margin-top:1px}
+.tx-skeleton td{vertical-align:middle}
+.tx-sk-avatar{display:inline-block;vertical-align:middle;width:38px;height:38px;border-radius:50%;margin-right:11px}
+.tx-skeleton .tx-cp-main{gap:6px}
+.tx-sk-line{display:block;height:10px;border-radius:var(--radius-pill)}
+.tx-sk-sm{width:52px}
+.tx-sk-md{width:96px}
+.tx-sk-lg{width:150px;height:12px}
+.tx-sk-amt{display:inline-block}
+.tx-sk-avatar,.tx-sk-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:tx-sk-shimmer 1.4s ease infinite}
+@keyframes tx-sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+@media(prefers-reduced-motion:reduce){.tx-sk-avatar,.tx-sk-line{animation:none}}
+.tx-empty{text-align:center}
+.tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s7,32px) var(--s4);color:var(--muted)}
+.tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
+.tx-empty-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tx-empty-title{color:var(--text);font-weight:600;font-size:14px}
+.tx-empty-hint{font-size:12px;max-width:34ch;line-height:1.4}
+@media(max-width:767px){
+  #view-transactions .tx-summary{padding:var(--s3)}
+  #view-transactions .tx-skeleton{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  #view-transactions .tx-skeleton>td{display:none;border:0;padding:0}
+  #view-transactions .tx-skeleton>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
+  #view-transactions .tx-skeleton>td.amount{display:block;flex:0 0 auto}
+  #view-transactions .tx-skeleton .tx-sk-avatar{margin-right:0}
+}
+
+/* ---- Buchungen DESKTOP table (per reference): category chip, account icon, row chevron, airier rows.
+   The mobile card view (≤767px) hides these cells and keeps the compact identity+amount layout. ---- */
+#view-transactions tbody td{padding-top:13px;padding-bottom:13px;vertical-align:middle}
+/* Category shown as an editable chip: tinted icon + name + caret. Clicking edits the category inline. */
+#view-transactions td.tx-cat{padding-top:6px;padding-bottom:6px}
+.tx-cat-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-width:0;border:0;background:transparent;padding:4px 9px 4px 4px;border-radius:var(--radius-pill);cursor:pointer;font:inherit;color:var(--text)}
+.tx-cat-chip:hover{background:var(--surface-2)}
+.tx-cat-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tx-cat-ic{display:inline-grid;place-items:center;width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--surface-2);color:var(--muted)}
+.tx-cat-ic svg{width:16px;height:16px;fill:none;stroke:currentColor}
+.tx-cat-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tx-cat-caret{color:var(--muted);font-size:11px;line-height:1;flex:0 0 auto}
+.tx-cat-ic[data-cat="1"]{color:var(--cat-1);background:color-mix(in srgb,var(--cat-1) 14%,var(--surface))}
+.tx-cat-ic[data-cat="2"]{color:var(--cat-2);background:color-mix(in srgb,var(--cat-2) 14%,var(--surface))}
+.tx-cat-ic[data-cat="3"]{color:var(--cat-3);background:color-mix(in srgb,var(--cat-3) 14%,var(--surface))}
+.tx-cat-ic[data-cat="4"]{color:var(--cat-4);background:color-mix(in srgb,var(--cat-4) 14%,var(--surface))}
+.tx-cat-ic[data-cat="5"]{color:var(--cat-5);background:color-mix(in srgb,var(--cat-5) 14%,var(--surface))}
+.tx-cat-ic[data-cat="6"]{color:var(--cat-6);background:color-mix(in srgb,var(--cat-6) 16%,var(--surface))}
+.tx-cat-ic[data-cat="7"]{color:var(--cat-7);background:color-mix(in srgb,var(--cat-7) 14%,var(--surface))}
+.tx-cat-ic[data-cat="8"]{color:var(--cat-8);background:color-mix(in srgb,var(--cat-8) 16%,var(--surface))}
+/* Account cell: small type icon (card / bank) + name */
+#view-transactions td.tx-acct{color:var(--muted)}
+.tx-acct-ic{display:inline-grid;place-items:center;width:22px;height:22px;flex:0 0 auto;vertical-align:middle;margin-right:8px;color:var(--muted)}
+.tx-acct-ic svg{width:18px;height:18px}
+.tx-acct-name{vertical-align:middle}
+/* Row chevron: signals the row opens the detail drawer */
+#view-transactions th.tx-go-col{width:34px;padding-left:0;padding-right:8px}
+#view-transactions td.tx-go{width:34px;text-align:center;padding-left:0;padding-right:8px}
+.tx-go-caret{color:var(--muted);font-size:18px;line-height:1;opacity:.5}
+.tx-row:hover .tx-go-caret{opacity:1;color:var(--text)}
+/* Mobile card view: the soft-green income pill (desktop uses plain green text). */
+@media(max-width:767px){
+  #view-transactions .tx-row>td.tx-cat,#view-transactions .tx-row>td.tx-acct,#view-transactions .tx-row>td.tx-go{display:none}
+  #view-transactions .tx-row:not(.tx-is-transfer) td.amount.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
+}
+
+/* ============================================================================
+   Round 4b — remaining pages (tax / compensation / coach / categories / rules /
+   notifications). Namespaced per page; monochrome shell, colour only where it
+   carries meaning (green income/confirmed, red/amber status, --cat identity).
+   ============================================================================ */
+
+/* --- Steuern (tax.js): hero + softened category breakdown --- */
+.tax-hero{padding:var(--s5) var(--s6)}
+.tax-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s6);flex-wrap:wrap}
+.tax-hero-lead{min-width:0}
+.tax-hero .fw-summary-value{font-size:34px}
+.tax-hero-side{display:flex;gap:var(--s6);margin:0;flex-wrap:wrap}
+.tax-hero-side>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tax-hero-side dt{color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.tax-hero-side dd{margin:0;font-size:18px}
+.tax-hero .tax-pos{color:var(--positive)}
+.tax-hero .tax-warn{color:var(--warning)}
+.tax-alloc{display:flex;gap:3px;height:10px;margin-top:var(--s5)}
+.tax-alloc .tax-seg{height:100%;min-width:8px;border-radius:var(--radius-pill)}
+.tax-alloc .tax-seg[data-cat="1"]{background:var(--cat-1)}
+.tax-alloc .tax-seg[data-cat="2"]{background:var(--cat-2)}
+.tax-alloc .tax-seg[data-cat="3"]{background:var(--cat-3)}
+.tax-alloc .tax-seg[data-cat="4"]{background:var(--cat-4)}
+.tax-alloc .tax-seg[data-cat="5"]{background:var(--cat-5)}
+.tax-alloc .tax-seg[data-cat="6"]{background:var(--cat-6)}
+.tax-alloc .tax-seg[data-cat="7"]{background:var(--cat-7)}
+.tax-alloc .tax-seg[data-cat="8"]{background:var(--cat-8)}
+.tax-breakdown-list .tax-brow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);padding:10px 4px;border-bottom:1px solid var(--line)}
+.tax-breakdown-list .tax-brow:last-child{border-bottom:0}
+.tax-brow .cat-dot{width:4px;height:20px;border-radius:var(--radius-pill);margin-right:0}
+.tax-brow-main{min-width:0}
+.tax-brow-main .row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tax-brow .amount{white-space:nowrap;text-align:right}
+.tax-view .tax-cases{margin-top:var(--s4)}
+@media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
+
+/* --- Gehalt & Benefits (compensation.js): hero + Cash-Brutto donut + rows --- */
+.comp-result-primary .comp-hero-sub{display:block}
+.comp-result-primary .comp-hero-badge{margin-top:var(--s1)}
+.comp-dedu-head{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;padding:2px 0 var(--s4);border-bottom:1px solid var(--line);margin-bottom:var(--s3)}
+.comp-donut{width:116px;height:116px;flex:0 0 auto}
+.comp-donut-legend{display:grid;gap:var(--s2);flex:1 1 168px;min-width:160px}
+.comp-leg{display:flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted)}
+.comp-leg-label{flex:1 1 auto}
+.comp-leg-amt{color:var(--text)}
+.comp-sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.comp-sw-net{background:var(--positive)}
+.comp-sw-tax{background:var(--k2)}
+.comp-sw-social{background:var(--k4)}
+.comp-arc-track{fill:none;stroke:var(--surface-3);stroke-width:12}
+.comp-arc{fill:none;stroke-width:12;stroke-linecap:round}
+.comp-arc-net{stroke:url(#comp-net-grad)}
+.comp-arc-tax{stroke:var(--k2)}
+.comp-arc-social{stroke:var(--k4)}
+.comp-grad-a{stop-color:var(--positive)}
+.comp-grad-b{stop-color:var(--positive-soft)}
+.comp-donut-pct{font-size:17px;font-weight:600;fill:var(--text);text-anchor:middle;dominant-baseline:middle;font-variant-numeric:tabular-nums}
+.comp-donut-cap{font-size:7.5px;fill:var(--muted);text-anchor:middle;dominant-baseline:middle;text-transform:uppercase;letter-spacing:.12em}
+.comp-dedu-rows{display:grid}
+.comp-line{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.comp-line:last-child{border-bottom:0}
+.comp-line-key{display:flex;align-items:center;gap:var(--s2);min-width:0;color:var(--muted)}
+.comp-line-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.comp-line .amount{white-space:nowrap;text-align:right;flex:0 0 auto}
+.comp-line-sub{color:var(--muted);font-size:11px;margin-left:6px;opacity:.85;white-space:nowrap}
+.comp-line-total{margin-top:2px;padding-top:11px;border-top:1px solid var(--line);border-bottom:0}
+.comp-line-total .comp-line-key{color:var(--text);font-weight:600}
+.comp-amount-muted{color:var(--muted);font-weight:500}
+.comp-dot{width:8px;height:8px;border-radius:var(--radius-pill);flex:0 0 auto;background:var(--k3)}
+.comp-dot-tax{background:var(--k2)}
+.comp-dot-social{background:var(--k4)}
+.comp-dot-cat1{background:var(--cat-1)}
+.comp-dot-cat2{background:var(--cat-2)}
+.comp-dot-cat3{background:var(--cat-3)}
+.comp-dot-cat4{background:var(--cat-4)}
+.comp-dot-cat5{background:var(--cat-5)}
+.comp-dot-cat6{background:var(--cat-6)}
+.comp-dot-cat7{background:var(--cat-7)}
+.comp-dot-cat8{background:var(--cat-8)}
+@media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}
+
+/* --- Coach (coach-shell.js): status-tinted metrics + calm insight/review cards --- */
+#coach-summary .coach-metric strong{letter-spacing:-.01em}
+#coach-summary .coach-metric--good strong{color:var(--positive)}
+#coach-summary .coach-metric--bad strong{color:var(--negative)}
+.coach-insight-label{margin:var(--s4) 0 var(--s2);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.coach-insight-list{display:grid;gap:var(--s2)}
+.coach-insight{display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.coach-insight-dot{flex:0 0 auto;width:8px;height:8px;margin-top:6px;border-radius:var(--radius-pill);background:var(--k3)}
+.coach-insight-body{display:grid;gap:2px;min-width:0}
+.coach-insight-body strong{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+.coach-insight-body span{font-size:12px;color:var(--muted)}
+.coach-insight--good .coach-insight-dot{background:var(--positive)}
+.coach-insight--good .coach-insight-body span{color:var(--positive)}
+.coach-insight--warn .coach-insight-dot{background:var(--warning)}
+.coach-insight--warn .coach-insight-body span{color:var(--warning)}
+#coach-review-list{gap:var(--s3)}
+#coach-review-list .coach-review-row{padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+#coach-review-list .coach-review-row:last-child{border-bottom:1px solid var(--line)}
+
+/* --- Kategorien (categories.js): summary strip + per-category accent + calm rows --- */
+.cat-summary{display:flex;flex-wrap:wrap;gap:var(--s6);padding-bottom:var(--s4);margin-bottom:var(--s2);border-bottom:1px solid var(--line)}
+.cat-sum-item{display:flex;flex-direction:column;gap:3px}
+.cat-sum-item strong{font-size:19px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.cat-sum-item span{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+.cat-tree .cat-row .cat-dot{width:3px;height:17px;margin:0;border-radius:var(--radius-pill);flex:0 0 auto}
+.cat-tree .cat-row{transition:background .12s}
+.cat-tree .cat-row:hover,.cat-tree .cat-row:focus-within{background:var(--surface-2)}
+.cat-tree .cat-twist{border-radius:var(--radius-pill)}
+
+/* --- Regeln (rules.js): "when → do" summary, priority badge, empty state --- */
+#rules-list .rule-row{padding-top:13px;padding-bottom:13px}
+#rules-list .rule-row .row-title{font-weight:600}
+#rules-list .rule-summary{margin-top:5px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+#rules-list .rule-summary .rule-when{color:var(--muted)}
+#rules-list .rule-summary .rule-term{color:var(--text);font-weight:500}
+#rules-list .rule-summary .rule-sep{margin:0 6px;color:var(--muted)}
+#rules-list .rule-summary .rule-arrow{margin:0 7px;color:var(--muted);font-weight:600}
+#rules-list .rule-summary .rule-then-tag{display:inline-block;margin:1px 0;padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);font-size:11.5px;font-weight:500;line-height:1.6;vertical-align:baseline}
+#rules-list .rule-summary .rule-then-tag + .rule-then-tag{margin-left:4px}
+#rules-list .rule-row .rule-prio{padding:2px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:500;line-height:1.6}
+#rules-list .rules-empty{display:block;padding:var(--s6) var(--s4);text-align:center}
+#rules-list .rules-empty .rules-empty-inner{display:flex;flex-direction:column;align-items:center;gap:var(--s2)}
+#rules-list .rules-empty .rules-empty-icon{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+#rules-list .rules-empty .row-sub{margin-top:0}
+
+/* --- Benachrichtigungen (notifications.js): master card + status dot + switch rows --- */
+.notif-intro{margin-bottom:var(--s4)}
+.notif-push{padding:var(--s4) var(--s5);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);margin-bottom:var(--s4)}
+.notif-push .row-title{margin-bottom:2px}
+.notif-push-status{display:flex;align-items:center;gap:var(--s2)}
+.notif-dot{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-pill);background:var(--k4)}
+.notif-push[data-push-state="on"] .notif-dot{background:var(--positive)}
+.notif-push[data-push-state="blocked"] .notif-dot{background:var(--warning)}
+.notif-types{margin-top:var(--s1)}
+.notif-type-row{cursor:pointer;gap:var(--s4)}
+.notif-type-title{white-space:normal;overflow:visible;font-weight:400;line-height:1.35}
+.notif-foot{border-top:1px solid var(--line);margin-top:var(--s4);padding-top:var(--s3)}
+
+/* --- Einstellungen: privacy setting as a full-width toggle row under the selects --- */
+.settings-grid .settings-toggle{grid-column:1/-1;margin-top:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line);text-transform:none;letter-spacing:normal;font-size:14px;color:var(--text)}
+
+/* ============================================================================
+   Round 4c — last utility pages (Händler / Prüfprotokoll / Kredite / Import).
+   Namespaced per page; monochrome shell, colour only where meaning-bearing.
+   ============================================================================ */
+
+/* --- Händler (merchants.js): identity rows + empty/loading states --- */
+#merchants-list .merchant-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--s4);align-items:center;padding:var(--s3) 0}
+#merchants-list .merchant-row .fw-ident{align-self:center}
+#merchants-list .merchant-row .row-title{font-weight:600}
+#merchants-list .merchant-row .chips{margin-top:var(--s2)}
+#merchants-list .merchant-row .row-side{align-self:center}
+.merchants-empty{display:flex;flex-direction:column;align-items:center;gap:var(--s3);text-align:center;padding:var(--s6) var(--s4)}
+.merchants-empty .merchants-empty-icon{display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
+.merchants-empty .merchants-empty-icon svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.merchants-empty .row-sub{margin-top:0}
+.merchant-skeleton{pointer-events:none}
+.merchant-skeleton .fw-ident{background:var(--surface-2)}
+.merchants-sk-line{display:block;height:11px;border-radius:var(--radius-pill);background:var(--surface-2);max-width:min(100%,220px)}
+.merchants-sk-line.short{width:120px;margin-top:var(--s2)}
+.merchant-skeleton .fw-ident,.merchants-sk-line{animation:merchants-sk-pulse 1.2s ease-in-out infinite}
+@keyframes merchants-sk-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){.merchant-skeleton .fw-ident,.merchants-sk-line{animation:none}}
+
+/* --- Prüfprotokoll (audit.js): monochrome timeline --- */
+#audit-list .audit-row{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;column-gap:var(--s3);padding:var(--s3) 0;border-bottom:0}
+#audit-list .audit-row .row-title{font-weight:500}
+#audit-list .audit-row .audit-meta{margin-top:2px}
+#audit-list .audit-time{align-self:start;padding-top:1px;font-variant-numeric:tabular-nums;color:var(--muted)}
+#audit-list .audit-mark{position:relative;width:10px;align-self:stretch}
+#audit-list .audit-mark::before{content:"";position:absolute;left:4px;top:0;bottom:0;width:1px;background:var(--line)}
+#audit-list .audit-mark::after{content:"";position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:var(--radius-pill);background:var(--surface);border:1.5px solid var(--k4)}
+#audit-list .audit-row:last-child .audit-mark::before{bottom:auto;height:9px}
+#audit-list .audit-day{display:flex;align-items:center;gap:var(--s3);padding:var(--s5) 0 var(--s2)}
+#audit-list .audit-day:first-child{padding-top:var(--s1)}
+#audit-list .audit-day-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+#audit-list .audit-day-line{flex:1 1 auto;height:1px;background:var(--line)}
+#audit-list .audit-empty{display:flex;flex-direction:column;align-items:center;gap:var(--s2);text-align:center;padding:var(--s8) var(--s4)}
+#audit-list .audit-empty-icon{width:32px;height:32px;color:var(--k4)}
+#audit-list .audit-empty .row-sub{margin-top:0}
+
+/* --- Kredite (loans.js): identity rows + softened amortization + states --- */
+#nw-loans .loan-rowcard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);border-radius:var(--radius-input);transition:background .14s ease}
+#nw-loans .loan-rowcard:hover{background:var(--surface-2)}
+#nw-loans .loan-rowcard:focus-visible{outline:2px solid var(--cta);outline-offset:-2px;background:var(--surface-2)}
+.loan-ident{width:34px;height:34px}
+.loan-ident svg{width:19px;height:19px;display:block}
+.loan-rowcard-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.loan-rowcard-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px;white-space:normal}
+.loan-meta-sep{color:var(--k5)}
+.loan-rowcard-end{display:flex;flex-direction:column;align-items:flex-end;gap:1px;text-align:right}
+.loan-rowcard-cap{color:var(--muted);font-size:11px;white-space:nowrap}
+.loan-detail .loan-split-bar{border-radius:var(--radius-pill)}
+.loan-chart{margin-top:var(--s3)}
+.loan-chart .loan-chart-svg{display:block}
+#nw-loans .loan-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s2);text-align:center;padding:var(--s6) var(--s4)}
+#nw-loans .loan-state-ico{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--surface-2);color:var(--k4)}
+#nw-loans .loan-state-ico svg{width:19px;height:19px;display:block}
+#nw-loans .loan-state-error .loan-state-ico{color:var(--negative);background:var(--negative-soft)}
+#nw-loans .loan-skel{pointer-events:none}
+#nw-loans .loan-skel-box{display:block;border-radius:var(--radius-input);background:linear-gradient(90deg,var(--surface-2) 0%,var(--surface-3) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:loan-shimmer 1.2s ease-in-out infinite}
+#nw-loans .loan-skel .loan-ident.loan-skel-box{border-radius:50%}
+#nw-loans .loan-skel-title{width:44%;height:13px}
+#nw-loans .loan-skel-sub{width:66%;height:10px;margin-top:6px}
+#nw-loans .loan-skel-amt{width:72px;height:14px;justify-self:end}
+@keyframes loan-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* --- Import-Center (import-center-page.js, scope .ic-polish on <main>) --- */
+.ic-polish .import-center-view{gap:var(--s5)}
+.ic-polish #page-subtitle{color:var(--muted);font-size:13px;margin-top:2px}
+.ic-polish .import-context{padding:var(--s4) var(--s5)}
+.ic-polish .import-context .row{border-bottom:0;padding:0}
+.ic-polish .import-context .row-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.ic-polish .import-context .row-sub{font-size:15px;color:var(--text);margin-top:2px}
+.ic-polish .import-provider-grid{gap:var(--s3)}
+.ic-polish .import-provider{position:relative;gap:var(--s3);padding:var(--s5);min-height:auto;border-color:var(--line);background:var(--surface);transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.ic-polish .import-provider::after{content:"\2192";position:absolute;top:var(--s5);right:var(--s5);color:var(--k4);font-size:15px;line-height:1;opacity:0;transform:translateX(-2px);transition:opacity .15s ease,transform .15s ease}
+.ic-polish .import-provider:hover:not(:disabled){border-color:var(--k3);box-shadow:var(--shadow-menu);transform:translateY(-1px)}
+.ic-polish .import-provider:hover::after,.ic-polish .import-provider:focus-visible::after,.ic-polish .import-provider.active::after{opacity:1;transform:none}
+.ic-polish .import-provider.active{border-color:var(--cta);box-shadow:inset 0 0 0 1px var(--cta);transform:none}
+.ic-polish .import-provider:focus-visible{outline:2px solid var(--cta);outline-offset:2px}
+.ic-polish .import-provider strong{font-size:15px;font-weight:600;color:var(--text);padding-right:var(--s5)}
+.ic-polish .import-provider span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
+.ic-polish .provider-icon{min-width:40px;height:40px;border-radius:var(--radius-input);background:var(--surface-2);color:var(--k1);font-weight:700;font-size:14px}
+.ic-polish .import-workflow{padding:var(--s6)}
+.ic-polish .import-workflow>.panel-head{margin-bottom:var(--s2)}
+.ic-polish .import-workflow .panel-head h2{font-size:17px;font-weight:600}
+.ic-polish .import-workflow h3{margin:var(--s6) 0 var(--s3);padding-top:var(--s5);border-top:1px solid var(--line);font-size:14px;font-weight:600;color:var(--text)}
+.ic-polish .import-form-grid{gap:var(--s4);margin-top:var(--s4)}
+.ic-polish .mapping-grid{gap:var(--s3)}
+.ic-polish .import-form-grid .field,.ic-polish .mapping-grid .field{flex-direction:column;align-items:stretch;gap:var(--s1)}
+.ic-polish .import-form-grid .field>span,.ic-polish .mapping-grid .field>span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ic-polish .import-form-grid .field select,.ic-polish .import-form-grid .field input,.ic-polish .mapping-grid .field select{width:100%}
+.ic-polish .import-options,.ic-polish .import-option{margin-top:var(--s4);padding:var(--s4);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+.ic-polish .import-options{display:grid;gap:var(--s2)}
+.ic-polish .preview-wrap{margin-top:var(--s4);border-color:var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.ic-polish .preview-wrap table{width:100%}
+.ic-polish .preview-wrap th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:var(--s2) var(--s3);border-bottom:1px solid var(--line);white-space:nowrap}
+.ic-polish .preview-wrap td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--line);font-size:13px;color:var(--text)}
+.ic-polish .preview-wrap tbody tr:last-child td{border-bottom:0}
+.ic-polish .preview-wrap tbody tr:hover td{background:var(--surface-2)}
+.ic-polish .ic-empty{padding:var(--s5) 0;text-align:center;color:var(--muted)}
+.ic-polish .import-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3);margin-top:var(--s5);margin-bottom:0}
+.ic-polish .import-metrics .metric{padding:var(--s4)}
+.ic-polish .import-metrics .metric span{margin-bottom:var(--s1)}
+.ic-polish .metric.ic-metric-pos strong{color:var(--positive)}
+.ic-polish .metric.ic-metric-neg strong{color:var(--negative)}
+.ic-polish #tx-result,.ic-polish #inv-result{margin-top:var(--s5);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2);padding:0 var(--s4)}
+.ic-polish .ic-result-row{grid-template-columns:minmax(0,1fr) auto}
+.ic-polish .ic-result-row:last-child{border-bottom:0}
+.ic-polish .amount.ic-amt-warn{color:var(--warning)}
+.ic-polish .import-status{display:flex;align-items:center;gap:var(--s2)}
+.ic-polish .import-status.is-busy{color:var(--muted)}
+.ic-polish .import-status.is-busy::before{content:"";width:13px;height:13px;flex:0 0 auto;border-radius:50%;border:2px solid var(--k5);border-top-color:var(--k2);animation:ic-spin .7s linear infinite}
+.ic-polish .import-status.is-done{color:var(--positive)}
+.ic-polish .import-status.is-done::before{content:"\2713";font-weight:700}
+.ic-polish .import-status.is-error{color:var(--negative)}
+@keyframes ic-spin{to{transform:rotate(360deg)}}
+@media(max-width:620px){
+  .ic-polish .import-metrics{grid-template-columns:1fr}
+  .ic-polish .ic-map-row{grid-template-columns:1fr}
+  .ic-polish .ic-map-row .account-map-select{min-width:0;width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  .ic-polish .import-provider{transition:none}
+  .ic-polish .import-status.is-busy::before{animation-duration:1.6s}
+}
+
+/* A non-interactive dashboard widget row (e.g. upcoming contracts) keeps the default cursor. */
+.fw-row-plain{cursor:default}
