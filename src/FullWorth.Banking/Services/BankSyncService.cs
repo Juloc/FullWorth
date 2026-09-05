@@ -696,7 +696,8 @@ public sealed class BankSyncService(
                         connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
-                        true, account.HasDetails, AccountIdentificationHashes(account))],
+                        true, account.HasDetails, AccountIdentificationHashes(account),
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency)],
                     firstPersist ? balances : [],
                     chunk), ct);
                 firstPersist = false;
@@ -709,7 +710,8 @@ public sealed class BankSyncService(
                         connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
-                        true, account.HasDetails, AccountIdentificationHashes(account))],
+                        true, account.HasDetails, AccountIdentificationHashes(account),
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency)],
                     balances,
                     []), ct);
                 firstPersist = false;
@@ -803,7 +805,11 @@ public sealed class BankSyncService(
             GetString(json, "currency") ?? "EUR",
             GetIbanLast4(json),
             IdentificationHashes: GetIdentificationHashes(json, hash),
-            HasDetails: name is not null);
+            HasDetails: name is not null,
+            Usage: GetString(json, "usage"),
+            PsuStatus: GetString(json, "psu_status"),
+            CreditLimitAmount: GetNestedDecimal(json, "credit_limit", "amount"),
+            CreditLimitCurrency: GetNestedString(json, "credit_limit", "currency"));
     }
 
     private static AccountState? ParseAccountFromUid(BankConnectionDto connection, string? uid)
@@ -847,6 +853,10 @@ public sealed class BankSyncService(
             DisplayName = GetString(details, "details") ?? GetString(details, "name") ?? account.DisplayName,
             Product = GetString(details, "product") ?? account.Product,
             AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
+            Usage = GetString(details, "usage") ?? account.Usage,
+            PsuStatus = GetString(details, "psu_status") ?? account.PsuStatus,
+            CreditLimitAmount = GetNestedDecimal(details, "credit_limit", "amount") ?? account.CreditLimitAmount,
+            CreditLimitCurrency = GetNestedString(details, "credit_limit", "currency") ?? account.CreditLimitCurrency,
             Currency = GetString(details, "currency") ?? account.Currency,
             IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4
         };
@@ -1204,6 +1214,20 @@ public sealed class BankSyncService(
             ? GetString(c, name)
             : null;
 
+    private static decimal? GetNestedDecimal(JsonElement e, string child, string name)
+    {
+        if (e.ValueKind != JsonValueKind.Object ||
+            !e.TryGetProperty(child, out var nested) ||
+            nested.ValueKind != JsonValueKind.Object ||
+            !nested.TryGetProperty(name, out var value))
+            return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String &&
+               decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
     private static DateOnly? ParseDate(JsonElement e, string name) =>
         e.ValueKind == JsonValueKind.Object &&
         e.TryGetProperty(name, out var v) &&
@@ -1239,5 +1263,9 @@ public sealed class BankSyncService(
         string? IbanLast4,
         IReadOnlyList<string>? IdentificationHashes = null,
         bool HasDetails = true,
-        bool NeedsHashResolution = false);
+        bool NeedsHashResolution = false,
+        string? Usage = null,
+        string? PsuStatus = null,
+        decimal? CreditLimitAmount = null,
+        string? CreditLimitCurrency = null);
 }
