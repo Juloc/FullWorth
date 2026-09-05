@@ -149,6 +149,31 @@ public sealed class EnableBankingControlPanelRegistrationService
             _options.TermsUrl);
     }
 
+    public bool Cancel(Guid userId, string id)
+    {
+        if (!_pending.TryGetValue(id, out var pending) || pending.UserId != userId)
+            return false;
+
+        if (Interlocked.CompareExchange(ref pending.Claimed, 1, 0) != 0)
+            return false;
+
+        try
+        {
+            if (!_pending.TryRemove(id, out var removed))
+                return false;
+
+            removed.PrivateKeyPem = string.Empty;
+            removed.PublicKeyPem = string.Empty;
+            removed.Email = string.Empty;
+            removed.Status = "cancelled";
+            return true;
+        }
+        finally
+        {
+            Volatile.Write(ref pending.Claimed, 0);
+        }
+    }
+
     public EnableBankingAutoRegistrationView GetStatus(Guid userId, string id)
     {
         PruneExpired();
@@ -285,6 +310,12 @@ public sealed class EnableBankingControlPanelRegistrationService
         {
             pending.Status = "failed";
             pending.ErrorCode = ex.SafeCode;
+            if (string.IsNullOrWhiteSpace(pending.ApplicationId))
+            {
+                pending.PrivateKeyPem = string.Empty;
+                pending.PublicKeyPem = string.Empty;
+                pending.Email = string.Empty;
+            }
             _logger.LogWarning(
                 "Enable Banking Control Panel registration failed with {StatusCode} ({SafeCode}).",
                 (int)ex.StatusCode,
@@ -297,6 +328,12 @@ public sealed class EnableBankingControlPanelRegistrationService
             pending.ErrorCode = string.IsNullOrWhiteSpace(pending.ApplicationId)
                 ? "application_registration_failed"
                 : "application_verification_failed";
+            if (string.IsNullOrWhiteSpace(pending.ApplicationId))
+            {
+                pending.PrivateKeyPem = string.Empty;
+                pending.PublicKeyPem = string.Empty;
+                pending.Email = string.Empty;
+            }
             _logger.LogWarning(ex, "Enable Banking automatic application setup failed.");
             return new(false, pending.Status, pending.ErrorCode);
         }
