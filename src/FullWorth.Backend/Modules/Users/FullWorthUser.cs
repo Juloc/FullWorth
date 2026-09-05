@@ -12,6 +12,8 @@ public sealed class FullWorthUser
     public string Email => EmailNormalized;
     public string DisplayName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public int OnboardingVersion { get; set; }
+    public DateTimeOffset? OnboardingCompletedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
