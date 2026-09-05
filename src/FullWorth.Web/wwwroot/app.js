@@ -698,7 +698,7 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
       label.append(document.createTextNode(field.title||name));
       const input=document.createElement('input');input.name='credential:'+name;input.autocomplete='off';
       input.type=/password|pin|secret/i.test(name+' '+(field.title||''))?'password':'text';
-      if(field.template)try{input.pattern=field.template}catch{}
+      if(field.template)try{new RegExp(field.template);input.pattern=field.template}catch{}
       input.required=field.required===true;
       label.append(input);
       if(field.description){
