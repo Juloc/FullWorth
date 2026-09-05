@@ -538,8 +538,21 @@
       "recovery-codes": {
         "title": "Wiederherstellungscodes sichern",
         "subtitle": "Speichere die neu erzeugten Codes an einem sicheren Ort."
+      },
+      "register": {
+        "title": "Registrieren",
+        "subtitle": "Erstelle deinen FullWorth-Zugang. Danach führt dich der Einrichtungsassistent durch die ersten Schritte."
       }
-    }
+    },
+    "createAccount": "Registrieren",
+    "displayName": "Name",
+    "register": "Konto erstellen",
+    "registering": "Konto wird erstellt…",
+    "acceptTerms": "Ich akzeptiere die Datenschutzbestimmungen und Nutzungsbedingungen.",
+    "registrationUnavailable": "Die Registrierung konnte nicht abgeschlossen werden. Falls bereits ein Konto existiert, melde dich an.",
+    "registrationDisabled": "Die öffentliche Registrierung ist auf dieser FullWorth-Instanz deaktiviert.",
+    "privacy": "Datenschutz",
+    "terms": "Nutzungsbedingungen"
   },
   "passkeys": {
     "title": "Passkeys",
