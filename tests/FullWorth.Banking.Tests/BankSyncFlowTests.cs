@@ -101,6 +101,36 @@ public sealed class BankSyncFlowTests
     }
 
     [Fact]
+    public async Task BackgroundSyncPreservesPendingReauthorizationStateExpiry()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(12);
+        var connection = TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)) with
+        {
+            AuthorizationState = "pending-reauth-state",
+            AuthorizationStateExpiresAt = expiresAt
+        };
+        backend.Connections.Add(connection);
+
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.Equal("/sessions/session-1", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"status\":\"AUTHORIZED\",\"accounts\":[]}"));
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, result.Synced);
+        var final = backend.Connections.Single();
+        Assert.Equal("pending-reauth-state", final.AuthorizationState);
+        Assert.Equal(expiresAt, final.AuthorizationStateExpiresAt);
+    }
+
+    [Fact]
     public async Task BackgroundSyncSendsNoPsuHeaders()
     {
         using var environment = new TestBankingEnvironment();
