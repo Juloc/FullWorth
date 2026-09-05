@@ -6,6 +6,7 @@ public enum BankErrorCategory
 {
     RateLimit,
     AuthRequired,
+    ApplicationAuth,
     ConsentExpired,
     PsuContext,
     TransactionsPeriod,
@@ -63,12 +64,22 @@ public static class EnableBankingErrorClassifier
                 null);
         }
 
-        if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ||
-            ContainsAny(providerCode, "UNAUTHORIZED", "FORBIDDEN"))
+        if (ContainsAny(providerCode, "AUTHORIZATION_FAILED", "AUTHORIZATION_REQUIRED", "REAUTHORIZE"))
             return new(
                 BankErrorCategory.AuthRequired,
                 "AUTHORIZATION_FAILED",
                 "The bank connection needs to be re-authorized.",
+                null);
+
+        // Enable Banking explicitly warns that HTTP 401 can represent errors other than an expired
+        // session. Session/consent codes were handled above; a remaining 401/403 is application/API
+        // authentication until the provider gives a more specific error code.
+        if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ||
+            ContainsAny(providerCode, "UNAUTHORIZED", "FORBIDDEN"))
+            return new(
+                BankErrorCategory.ApplicationAuth,
+                "ENABLE_BANKING_AUTH_FAILED",
+                "Enable Banking application authentication failed; recheck the application/key.",
                 null);
 
         if (IsTransient(status))
@@ -96,6 +107,7 @@ public static class EnableBankingErrorClassifier
     {
         BankErrorCategory.RateLimit => "ASPSP_RATE_LIMIT_EXCEEDED",
         BankErrorCategory.AuthRequired => "AUTHORIZATION_FAILED",
+        BankErrorCategory.ApplicationAuth => "ENABLE_BANKING_AUTH_FAILED",
         BankErrorCategory.ConsentExpired => "SESSION_EXPIRED",
         BankErrorCategory.PsuContext => "PSU_HEADER_NOT_PROVIDED",
         BankErrorCategory.TransactionsPeriod => "WRONG_TRANSACTIONS_PERIOD",
