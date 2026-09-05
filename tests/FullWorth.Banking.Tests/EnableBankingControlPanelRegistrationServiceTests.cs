@@ -111,6 +111,7 @@ public sealed class EnableBankingControlPanelRegistrationServiceTests
         Assert.Contains("BEGIN PRIVATE KEY", backendHandler.LastWrite.PrivateKeyPem, StringComparison.Ordinal);
         Assert.Equal("PRODUCTION", backendHandler.LastWrite.Environment);
         Assert.False(backendHandler.LastWrite.Active);
+        Assert.Equal("one-time-refresh-token", backendHandler.LastWrite.ControlPanelRefreshToken);
 
         var requests = controlPanel.Requests.ToArray();
         Assert.Equal(3, requests.Length);
