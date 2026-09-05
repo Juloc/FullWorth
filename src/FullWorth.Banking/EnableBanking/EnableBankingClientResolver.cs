@@ -60,6 +60,11 @@ public sealed class EnableBankingClientResolver(
         {
             var profile = await backend.GetEnableBankingProfileAsync(profileId, ct)
                 ?? throw new EnableBankingProfileNotConfiguredException("Enable Banking profile for this connection no longer exists.");
+            if (connection.AuthorizationUserId is not { } authorizationUserId ||
+                authorizationUserId == Guid.Empty ||
+                profile.UserId != authorizationUserId)
+                throw new EnableBankingProfileNotConfiguredException(
+                    "Enable Banking profile ownership does not match the connection authorization owner.");
             return Create(profile.ApplicationId, profile.PrivateKeyPem);
         }
 
