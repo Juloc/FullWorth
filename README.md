@@ -14,7 +14,7 @@ docker compose up -d --build
 
 Set strong, unique values for the database password, service keys, and data-encryption key. Configure `FULLWORTH_ALLOWED_HOSTS`, `FULLWORTH_PASSKEY_RP_ID`, `FULLWORTH_PASSKEY_ORIGIN`, and `ENABLE_BANKING_REDIRECT_URL` for the public HTTPS hostname before exposing the application.
 
-Enable Banking is BYO by default: each FullWorth user configures their own Enable Banking application and RSA key from the FullWorth settings wizard. A global PEM file is no longer required to boot the stack. Existing deployments that still use one global Enable Banking application can use `docker-compose.enable-banking-legacy.yml` during migration.
+Enable Banking is BYO by default: each FullWorth user configures their own Enable Banking application and RSA key from the FullWorth settings wizard. A global PEM file is no longer required to boot the stack. Existing deployments that still use one global Enable Banking application can use `docker-compose.enable-banking-legacy.yml` during migration. That legacy credential is used only for already-existing profile-less bank connections; every newly created connection requires the current FullWorth user to configure their own BYO Enable Banking profile.
 
 ## Documentation
 
