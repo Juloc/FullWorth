@@ -274,23 +274,18 @@ button:hover,
   width: min(560px, calc(100vw - 32px));
   max-width: 560px;
   max-height: min(760px, calc(100dvh - 32px));
-  border: 1px solid var(--border, rgba(127, 127, 127, .22));
-  border-radius: 18px;
-  padding: 0;
-  background: var(--surface, #fff);
-  color: var(--text, #172033);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .22);
-}
-
-.account-ux-dialog::backdrop {
-  background: rgba(9, 14, 25, .42);
-  backdrop-filter: blur(3px);
 }
 
 .account-ux-form {
   display: flex;
   flex-direction: column;
   max-height: inherit;
+}
+
+.account-ux-form.dialog-card {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
 .account-ux-dialog-head {
@@ -575,11 +570,13 @@ button:hover,
 
   .account-ux-dialog-body {
     flex: 1 1 auto;
+    padding: var(--s4) 0;
   }
 
   .account-ux-dialog .dialog-actions {
     position: sticky;
     bottom: 0;
+    padding: var(--s3) 0;
     background: var(--surface, #fff);
     border-top: 1px solid var(--border, rgba(127, 127, 127, .18));
   }
