@@ -50,12 +50,61 @@
 
           <div class="auth-links">
             <a href="/auth/index.html?view=forgot-password" data-i18n="auth.forgotPassword"></a>
+            <a href="/auth/register" data-i18n="auth.createAccount"></a>
           </div>
 
           <div class="auth-divider" aria-hidden="true"><span></span></div>
 
           <button class="auth-secondary" type="button" data-auth-action="passkey-login" data-i18n="auth.passkey"></button>
           <div id="passkey-status" class="auth-message auth-message-status" role="status" hidden data-i18n="auth.passkeyUnavailable"></div>
+        </section>
+
+
+        <section data-auth-view="register" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.register.title"></h1>
+            <p data-i18n="auth.pages.register.subtitle"></p>
+          </div>
+
+          <form id="register-form" class="auth-form" method="post" action="/auth/register" novalidate>
+            <label for="register-name">
+              <span data-i18n="auth.displayName"></span>
+              <input id="register-name" name="displayName" type="text" autocomplete="name" maxlength="200" required>
+            </label>
+
+            <label for="register-email">
+              <span data-i18n="auth.email"></span>
+              <input id="register-email" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" required>
+            </label>
+
+            <label for="register-password">
+              <span data-i18n="auth.password"></span>
+              <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="register-password-help">
+            </label>
+            <p id="register-password-help" class="auth-help" data-i18n="auth.passwordHelp"></p>
+
+            <label for="register-confirm-password">
+              <span data-i18n="auth.confirmPassword"></span>
+              <input id="register-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required aria-describedby="register-password-mismatch">
+            </label>
+            <div id="register-password-mismatch" class="auth-field-error" role="alert" hidden data-i18n="auth.passwordMismatch"></div>
+
+            <label class="check">
+              <input id="register-terms" name="acceptTerms" type="checkbox" required>
+              <span data-i18n="auth.acceptTerms"></span>
+            </label>
+
+            <div id="register-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.registrationUnavailable"></div>
+            <div id="register-disabled" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.registrationDisabled"></div>
+
+            <button class="auth-primary" type="submit" data-i18n="auth.register" data-loading-i18n="auth.registering"></button>
+          </form>
+
+          <div class="auth-links">
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
+            <a href="https://fullworth.de/privacy/" data-i18n="auth.privacy" target="_blank" rel="noopener"></a>
+            <a href="https://fullworth.de/terms/" data-i18n="auth.terms" target="_blank" rel="noopener"></a>
+          </div>
         </section>
 
         <section data-auth-view="forgot-password" hidden>
