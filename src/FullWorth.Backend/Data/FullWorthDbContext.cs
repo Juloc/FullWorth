@@ -135,6 +135,10 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => x.BankConnectionId);
             e.HasIndex(x => x.FullWorthSpaceId);
             e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.Usage).HasMaxLength(16);
+            e.Property(x => x.PsuStatus).HasMaxLength(120);
+            e.Property(x => x.CreditLimitAmount).HasPrecision(20, 8);
+            e.Property(x => x.CreditLimitCurrency).HasMaxLength(3);
             e.Property(x => x.IdentificationHashesJson).HasColumnType("jsonb");
             e.Property(x => x.IbanLast4).HasMaxLength(4);
             e.HasIndex(x => x.GroupId);
