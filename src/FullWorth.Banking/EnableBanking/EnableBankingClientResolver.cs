@@ -21,7 +21,8 @@ public sealed class EnableBankingClientResolver(
     public bool LegacyConfigured =>
         !string.IsNullOrWhiteSpace(_options.ApplicationId) &&
         !string.IsNullOrWhiteSpace(_options.RedirectUrl) &&
-        File.Exists(_options.PrivateKeyPath);
+        (!string.IsNullOrWhiteSpace(_options.PrivateKeyBase64) ||
+         (!string.IsNullOrWhiteSpace(_options.PrivateKeyPath) && File.Exists(_options.PrivateKeyPath)));
 
     public Task<EnableBankingProfileDto?> GetProfileForUserAsync(Guid userId, CancellationToken ct) =>
         backend.GetEnableBankingProfileForUserAsync(userId, ct);
