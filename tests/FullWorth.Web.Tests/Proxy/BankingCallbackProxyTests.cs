@@ -36,6 +36,20 @@ public sealed class BankingCallbackProxyTests : IClassFixture<FullWorthWebFactor
     }
 
     [Fact]
+    public async Task StatusCallbackHtmlFromBankingServicePassesThroughToTheBrowser()
+    {
+        var responding = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddHttpClient("banking").ConfigurePrimaryHttpMessageHandler(() => new StatusCallbackStub())));
+
+        using var client = responding.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var response = await client.GetAsync("/connect/enable-banking/status-callback?state=x&oobCode=y");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("Enable Banking bank status connected", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CallbackRedirectFromBankingServicePassesThroughToTheBrowser()
     {
         var redirecting = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -57,6 +71,19 @@ public sealed class BankingCallbackProxyTests : IClassFixture<FullWorthWebFactor
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("<h1>Enable Banking setup completed</h1>", System.Text.Encoding.UTF8, "text/html")
+            });
+        }
+    }
+
+    private sealed class StatusCallbackStub : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("/connect/enable-banking/status-callback", request.RequestUri!.AbsolutePath);
+            Assert.Equal("?state=x&oobCode=y", request.RequestUri.Query);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<h1>Enable Banking bank status connected</h1>", System.Text.Encoding.UTF8, "text/html")
             });
         }
     }
