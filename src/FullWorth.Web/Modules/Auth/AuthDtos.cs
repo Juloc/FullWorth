@@ -2,6 +2,21 @@ namespace FullWorth.Web.Modules.Auth;
 
 public sealed record LoginRequest(string Email, string Password);
 
+public sealed record RegisterRequest(string Email, string Password, string DisplayName, bool AcceptTerms);
+
+public sealed record RegisterResultDto(
+    bool Succeeded,
+    string? Error,
+    AuthUserDto? User,
+    IReadOnlyList<string> Errors)
+{
+    public static RegisterResultDto Success(AuthUserDto user) => new(true, null, user, Array.Empty<string>());
+    public static RegisterResultDto Disabled() => new(false, "registration_disabled", null, Array.Empty<string>());
+    public static RegisterResultDto Invalid() => new(false, "invalid_registration", null, Array.Empty<string>());
+    public static RegisterResultDto Unavailable() => new(false, "registration_unavailable", null, Array.Empty<string>());
+    public static RegisterResultDto Failed() => new(false, "registration_failed", null, Array.Empty<string>());
+}
+
 public sealed record LoginResultDto(bool Succeeded, string? Error, AuthUserDto? User)
 {
     public static LoginResultDto Success(AuthUserDto user) => new(true, null, user);
