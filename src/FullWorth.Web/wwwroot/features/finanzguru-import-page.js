@@ -37,7 +37,8 @@ form.addEventListener('submit',async event=>{
   if(!window.confirm(text.confirm))return;
   submit.disabled=true;fileInput.disabled=true;status.textContent=text.working;result.hidden=true;result.innerHTML='';
   try{
-    const body=new FormData();body.append('file',file,file.name);
+    const uploadFile=window.financeFileUpload?.snapshot?await window.financeFileUpload.snapshot(file):file;
+    const body=new FormData();body.append('file',uploadFile,uploadFile.name);
     const response=await fetch(`/bff/backend/api/import/finanzguru?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
     if(!response.ok){let message=`${response.status}`;try{const data=await response.json();message=data.error||data.title||message}catch{}throw new Error(message)}
     const data=await response.json();

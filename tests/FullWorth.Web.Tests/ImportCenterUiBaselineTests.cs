@@ -112,6 +112,25 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("t.ocr", pdfJs);
     }
 
+    [Fact]
+    public async Task CloudProviderImports_SnapshotFilesBeforeMultipartUpload()
+    {
+        using var security = await client.GetAsync("/security/browser-fetch.js");
+        security.EnsureSuccessStatusCode();
+        var securityJs = await security.Content.ReadAsStringAsync();
+        Assert.Contains("snapshotUploadFile", securityJs);
+        Assert.Contains("file.arrayBuffer()", securityJs);
+        Assert.Contains("new File([bytes]", securityJs);
+
+        foreach (var path in new[] { "/features/finanzguru-import-page.js", "/features/investment-import-ui.js" })
+        {
+            using var response = await client.GetAsync(path);
+            response.EnsureSuccessStatusCode();
+            var js = await response.Content.ReadAsStringAsync();
+            Assert.Contains("financeFileUpload?.snapshot", js);
+        }
+    }
+
     private static string EmbeddedHtml(Type pageType)
     {
         var field = pageType.GetField("Html", BindingFlags.NonPublic | BindingFlags.Static);

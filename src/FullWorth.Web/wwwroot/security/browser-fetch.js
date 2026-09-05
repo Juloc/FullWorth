@@ -29,6 +29,18 @@
       && (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/bff/'));
   }
 
+  // Chrome on Android can lose the backing handle for files selected from cloud document providers
+  // (notably Google Drive) while a multipart request is being prepared. Copy the bytes into a new
+  // browser-owned File before upload so fetch no longer depends on the transient provider handle.
+  async function snapshotUploadFile(file) {
+    if (!(file instanceof File)) throw new TypeError('Expected a File.');
+    const bytes = await file.arrayBuffer();
+    return new File([bytes], file.name, {
+      type: file.type,
+      lastModified: file.lastModified
+    });
+  }
+
   window.fetch = async function financeFetch(input, init = {}) {
     const sourceRequest = input instanceof Request ? input : null;
     const method = String(init.method || sourceRequest?.method || 'GET').toUpperCase();
@@ -63,5 +75,9 @@
       token = null;
       return getToken();
     }
+  };
+
+  window.financeFileUpload = {
+    snapshot: snapshotUploadFile
   };
 })();
