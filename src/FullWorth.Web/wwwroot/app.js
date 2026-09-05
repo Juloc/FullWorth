@@ -626,6 +626,7 @@ async function downloadExport(){
 const ENABLE_BANKING_SIGN_IN='https://enablebanking.com/sign-in/';
 const ENABLE_BANKING_APPS='https://enablebanking.com/cp/applications';
 const ENABLE_BANKING_LINKED='https://enablebanking.com/docs/api/linked-accounts';
+const ENABLE_BANKING_STATUS='https://enablebanking.com/cp/aspsps';
 
 function bankingReady(status){
   if(status?.profile)return status.profile.environment==='SANDBOX'||status.profile.active===true;
@@ -865,11 +866,79 @@ function authMethodsFor(bank,psuType){
     .filter(m=>m.name&&(!m.psuType||!psuType||String(m.psuType).toLowerCase()===String(psuType).toLowerCase()));
 }
 
+function bankNameKey(value){
+  return String(value||'').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function mergeBankOptions(rows){
+  const merged=new Map();
+  for(const row of Array.isArray(rows)?rows:[]){
+    const name=bankNameKey(row?.name),country=String(row?.country||'').toUpperCase();
+    const logo=String(row?.logo||'');
+    const key=`${country}|${name}|${logo}`;
+    if(!name||!country)continue;
+    const existing=merged.get(key);
+    if(!existing){
+      merged.set(key,{...row,psu_types:[...(row.psu_types||[])],auth_methods:[...(row.auth_methods||[])]});
+      continue;
+    }
+    existing.psu_types=[...new Set([...(existing.psu_types||[]),...(row.psu_types||[])])];
+    const seen=new Set((existing.auth_methods||[]).map(x=>JSON.stringify(x)));
+    for(const method of row.auth_methods||[]){
+      const signature=JSON.stringify(method);
+      if(!seen.has(signature)){existing.auth_methods.push(method);seen.add(signature)}
+    }
+    existing.beta=Boolean(existing.beta||row.beta);
+    if(!existing.group&&row.group)existing.group=row.group;
+  }
+  return [...merged.values()];
+}
+
+function providerStatusSeverity(value){
+  const status=String(value||'').toLowerCase();
+  if(!status)return null;
+  if(status.includes('major')||status.includes('disruption')||status.includes('critical')||status==='down')return'major';
+  if(status.includes('possible')||status.includes('problem')||status.includes('warning')||status.includes('degraded'))return'possible';
+  if(status.includes('no problems')||status.includes('healthy')||status==='ok'||status.includes('available'))return'ok';
+  return'unknown';
+}
+
+function providerStatusLabel(severity){
+  if(severity==='major')return get('bankingSetup.statusMajor');
+  if(severity==='possible')return get('bankingSetup.statusPossible');
+  if(severity==='ok')return get('bankingSetup.statusOk');
+  return get('bankingSetup.statusUnknown');
+}
+
+function applyProviderStatuses(banks,statusView){
+  if(!statusView?.available||!Array.isArray(statusView.statuses))return banks;
+  const rank={major:3,possible:2,unknown:1,ok:0};
+  for(const bank of banks){
+    const names=new Set([bankNameKey(bank.name)]);
+    const groupName=typeof bank.group==='string'?bank.group:(bank.group?.name||bank.group?.title||'');
+    if(groupName)names.add(bankNameKey(groupName));
+    const matches=statusView.statuses.filter(s=>
+      String(s.country||'').toUpperCase()===String(bank.country||'').toUpperCase()&&
+      names.has(bankNameKey(s.brand)));
+    if(!matches.length)continue;
+    const best=matches.map(s=>({raw:s.status,severity:providerStatusSeverity(s.status)}))
+      .sort((a,b)=>(rank[b.severity]??-1)-(rank[a.severity]??-1))[0];
+    bank.providerStatus=best.raw;
+    bank.providerStatusSeverity=best.severity;
+  }
+  return banks;
+}
+
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
   const psuTypes=Array.isArray(bank.psu_types)&&bank.psu_types.filter(Boolean).length
     ? bank.psu_types.filter(Boolean)
     : ['personal','business'];
+  const health=bank.providerStatusSeverity;
+  const healthWarning=health&&health!=='ok'
+    ? `<div class="bank-status-warning ${esc(health)}"><strong>${esc(providerStatusLabel(health))}</strong><span>${esc(get('bankingSetup.statusWarning'))}</span><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a></div>`
+    : '';
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
+    ${healthWarning}
     ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
     <p class="row-sub" data-business-notice hidden>${esc(get('bankingSetup.businessNotice'))}</p>
     <label class="check"><input type="checkbox" data-limit-accounts> <span>${esc(get('bankingSetup.limitAccounts'))}</span></label>
@@ -968,6 +1037,7 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(reconnectConnection?get('accounts.reconnect'):get('accounts.addBank'))}</h2><button value="cancel">×</button></div>
     <label>${esc(get('bankingSetup.country'))}<input id="bank-country" value="${esc(String(initialCountry||'DE').toUpperCase())}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" autocapitalize="characters"></label>
     <input id="bank-search" type="search" placeholder="Bank">
+    <p class="row-sub bank-status-link"><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a></p>
     <div id="bank-options" class="bank-options"></div></form>`);
   const box=dlg.querySelector('#bank-options'),search=dlg.querySelector('#bank-search'),countryInput=dlg.querySelector('#bank-country');
   let banks=[];
@@ -984,8 +1054,11 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       const title=document.createElement('strong');title.textContent=bank.name||'';text.appendChild(title);
       const groupName=typeof bank.group==='string'?bank.group:(bank.group?.name||bank.group?.title||'');
       const types=(bank.psu_types||[]).map(type=>get('bankingSetup.psu_'+type)||type).join(' / ');
-      const meta=[bank.country||countryInput.value.toUpperCase(),groupName,types,bank.beta?get('bankingSetup.beta'):null].filter(Boolean);
+      const health=bank.providerStatusSeverity;
+      const issue=health&&health!=='ok'?providerStatusLabel(health):null;
+      const meta=[bank.country||countryInput.value.toUpperCase(),groupName,types,bank.beta?get('bankingSetup.beta'):null,issue].filter(Boolean);
       const sub=document.createElement('span');sub.className='row-sub';sub.textContent=meta.join(' · ');text.appendChild(sub);
+      if(health&&health!=='ok')b.classList.add('bank-option-status-'+health);
       b.appendChild(text);
       b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,reconnectConnection?.id||null,status.profile?.id||null)};
       box.appendChild(b);
@@ -998,8 +1071,13 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
     if(!/^[A-Z]{2}$/.test(country))return;
     countryInput.value=country;box.innerHTML=`<div class="row-sub">${esc(get('bankingSetup.loading'))}</div>`;
     try{
-      const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`);
-      banks=(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      const [data,providerStatus]=await Promise.all([
+        bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`),
+        bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`).catch(()=>null)
+      ]);
+      banks=applyProviderStatuses(
+        mergeBankOptions(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||'')),
+        providerStatus);
       draw(search.value);
     }catch(err){banks=[];box.innerHTML=`<div class="row-sub">${esc(err.message||get('common.error'))}</div>`}
   };
