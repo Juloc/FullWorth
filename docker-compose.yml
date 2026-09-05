@@ -75,6 +75,10 @@ services:
       CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
       CodexTest__BaseUrl: http://fullworth-codex:8080
       CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
+      # General per-user AI access uses the same isolated Codex sidecar, independently of the
+      # experimental receipt-test flag.
+      AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
+      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
     volumes:
       - fullworth-purchases-data:/data/purchases
     healthcheck:
