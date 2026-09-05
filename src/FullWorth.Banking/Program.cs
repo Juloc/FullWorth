@@ -159,6 +159,10 @@ app.MapGet("/api/banking/institutions", async (
     {
         return Results.Json(await service.GetInstitutionsAsync(country, psuType, caller, ct));
     }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_institution_query", message = ex.Message });
+    }
     catch (EnableBankingProfileNotConfiguredException ex)
     {
         return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
@@ -187,6 +191,14 @@ app.MapPost("/api/banking/connect", async (
     catch (EnableBankingProfileNotConfiguredException ex)
     {
         return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_connect_request", message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_connect_request", message = ex.Message });
     }
     catch (EnableBankingApiException ex)
     {
