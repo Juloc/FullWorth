@@ -22,9 +22,9 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
         var js = await GetAsync("/app.js");
         var css = await GetAsync("/app.css");
 
-        Assert.Contains("value=\"system\"", html);
-        Assert.Contains("value=\"light\"", html);
-        Assert.Contains("value=\"dark\"", html);
+        Assert.Contains("data-theme-icon=\"system\"", html);
+        Assert.Contains("data-theme-icon=\"light\"", html);
+        Assert.Contains("data-theme-icon=\"dark\"", html);
         Assert.Contains("state.theme==='system'", js);
         Assert.Contains("prefers-color-scheme: dark", js);
         Assert.Contains("html[data-theme=\"dark\"]", css);
