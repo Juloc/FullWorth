@@ -62,6 +62,8 @@ public sealed record AccountBatchItem(string IdentificationHash, string Provider
 public sealed record BalanceBatchItem(string IdentificationHash, decimal Amount, string Currency, string BalanceType, DateOnly? ReferenceDate, DateTimeOffset CapturedAt);
 public sealed record TransactionBatchItem(string IdentificationHash, string ExternalKey, string? ProviderTransactionId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? EntryReference, string RawJson);
 public sealed record FinanceIngestBatch(IngestConnectionDto Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions);
+public sealed record FinTsHoldingSnapshotDto(string ProviderKey, string Name, string? Isin, string? Wkn, string Currency, decimal Quantity, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, string? Exchange);
+public sealed record FinTsInvestmentSnapshotDto(Guid ConnectionId, string DepotKey, string Name, string Currency, DateOnly AsOf, IReadOnlyList<FinTsHoldingSnapshotDto> Holdings);
 public sealed record AccountSyncState(DateOnly? LatestBookingDate);
 public sealed record ConsumeStateBody(string State);
 public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
@@ -230,6 +232,12 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<TransactionProviderPointer>(cancellationToken: ct);
+    }
+
+    public async Task IngestFinTsInvestmentSnapshotAsync(FinTsInvestmentSnapshotDto body, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, "/internal/banking/fints/investment-snapshot", body);
+        using var response = await http.SendAsync(request, ct); response.EnsureSuccessStatusCode();
     }
 
     public async Task IngestAsync(FinanceIngestBatch body, CancellationToken ct)
