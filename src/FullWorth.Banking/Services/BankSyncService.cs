@@ -449,8 +449,22 @@ public sealed class BankSyncService(
             }
             catch (EnableBankingApiException ex)
             {
-                logger.LogWarning("Remote consent close failed for {Institution}: {Code}", connection.InstitutionName, ex.ErrorCode);
-                return DisconnectStatus.ProviderFailed;
+                var classification = EnableBankingErrorClassifier.Classify(ex);
+                if (IsTerminalSessionStatus(connection.Status) ||
+                    classification.Category == BankErrorCategory.ConsentExpired)
+                {
+                    // The consent is already known to be unusable/closed. A provider refusing DELETE
+                    // for that stale session must not prevent the user's local disconnect/data policy.
+                    logger.LogInformation(
+                        "Remote session for {Institution} is already terminal ({Code}); continuing local disconnect.",
+                        connection.InstitutionName,
+                        classification.Code);
+                }
+                else
+                {
+                    logger.LogWarning("Remote consent close failed for {Institution}: {Code}", connection.InstitutionName, ex.ErrorCode);
+                    return DisconnectStatus.ProviderFailed;
+                }
             }
         }
 
