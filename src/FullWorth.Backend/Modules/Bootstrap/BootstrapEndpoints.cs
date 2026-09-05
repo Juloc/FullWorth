@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FullWorth.Backend.Modules.Bootstrap;
 
 public sealed record BootstrapAdminRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
+public sealed record BootstrapRegistrationRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
 public sealed record BootstrapAdminResponse(Guid FinanceUserId, Guid FullWorthSpaceId);
 
 public static class BootstrapEndpoints
@@ -49,6 +50,35 @@ public static class BootstrapEndpoints
             await intelligenceAdminBootstrapper.EnsureBootstrapAdminAsync(ct);
 
             return Results.Ok(new BootstrapAdminResponse(user.Id, space.Id));
+        }).WithTags("Bootstrap");
+
+        app.MapPost($"{BasePath}/register", async (
+            BootstrapRegistrationRequest request,
+            FullWorthDbContext db,
+            UserStore users,
+            FullWorthSpaceService spaces,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.DisplayName))
+                return Results.BadRequest(new { error = "email and displayName are required." });
+
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var user = await users.CreateAsync(new CreateUserRequest(request.Email, request.DisplayName), ct);
+                var spaceName = string.IsNullOrWhiteSpace(request.SpaceName) ? "Household" : request.SpaceName.Trim();
+                var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct);
+                await transaction.CommitAsync(ct);
+                return Results.Ok(new BootstrapAdminResponse(user.Id, space.Id));
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.Conflict(new { error = "registration_unavailable" });
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         }).WithTags("Bootstrap");
 
         // Claim an owner-issued invite (multi-user sharing). Lives under /api/bootstrap so it runs on the
