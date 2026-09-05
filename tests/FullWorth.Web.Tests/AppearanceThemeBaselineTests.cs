@@ -18,7 +18,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("dataset.visualTheme", init);
         Assert.Contains("/appearance.css", init);
         Assert.Contains("/ui/appearance.js", init);
-        Assert.DoesNotContain("mascot", init, StringComparison.OrdinalIgnoreCase);
+        Assert.False(init.Contains("mascot", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("--surface", css);
         Assert.Contains("--shadow", css);
         Assert.Contains("prefers-reduced-motion: reduce", css);
-        Assert.DoesNotContain("mascot", css, StringComparison.OrdinalIgnoreCase);
+        Assert.False(css.Contains("mascot", StringComparison.OrdinalIgnoreCase));
         Assert.False(css.Contains("CuteCard", StringComparison.OrdinalIgnoreCase));
         Assert.False(css.Contains("CleanCard", StringComparison.OrdinalIgnoreCase));
     }
@@ -46,7 +46,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("finance.visualTheme", appearance);
         Assert.Contains("visualTheme", appearance);
         Assert.DoesNotContain("finance.visualTheme", app);
-        Assert.DoesNotContain("mascot", appearance, StringComparison.OrdinalIgnoreCase);
+        Assert.False(appearance.Contains("mascot", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -60,8 +60,8 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("const VERSION = 'v56'", sw);
         Assert.Contains("'/features/wealth-real-estate.js'", sw);
         Assert.Contains("'/features/wealth-real-estate.css'", sw);
-        Assert.DoesNotContain("/mascots/", sw, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("mascot-scenes", sw, StringComparison.OrdinalIgnoreCase);
+        Assert.False(sw.Contains("/mascots/", StringComparison.OrdinalIgnoreCase));
+        Assert.False(sw.Contains("mascot-scenes", StringComparison.OrdinalIgnoreCase));
 
         var appShellStart = sw.IndexOf("const APP_SHELL", StringComparison.Ordinal);
         var appShellEnd = sw.IndexOf("];", appShellStart, StringComparison.Ordinal);
