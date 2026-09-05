@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FullWorth.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,22 +14,36 @@ public static class BankingSyncStateEndpoints
             FullWorthDbContext db,
             CancellationToken ct) =>
         {
-            var account = await db.Accounts.AsNoTracking()
-                .Where(x => x.BankConnectionId == connectionId && x.IdentificationHash == identificationHash)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.IdentificationHash,
-                    LatestBookingDate = db.Transactions.Where(t =>
-                            t.AccountId == x.Id &&
-                            t.BookingDate != null &&
-                            t.Status == "BOOK")
-                        .Max(t => (DateOnly?)t.BookingDate),
-                    LatestTransactionUpdatedAt = db.Transactions.Where(t => t.AccountId == x.Id)
-                        .Max(t => (DateTimeOffset?)t.UpdatedAt)
-                })
-                .SingleOrDefaultAsync(ct);
-            return account is null ? Results.NotFound() : Results.Ok(account);
+            var candidates = await db.Accounts.AsNoTracking()
+                .Where(x => x.BankConnectionId == connectionId)
+                .Select(x => new { x.Id, x.IdentificationHash, x.IdentificationHashesJson })
+                .ToListAsync(ct);
+
+            var matchingIds = candidates
+                .Where(x => string.Equals(x.IdentificationHash, identificationHash, StringComparison.Ordinal) ||
+                            ContainsIdentificationHash(x.IdentificationHashesJson, identificationHash))
+                .Select(x => x.Id)
+                .Distinct()
+                .ToArray();
+
+            if (matchingIds.Length == 0) return Results.NotFound();
+            if (matchingIds.Length > 1)
+                return Results.Conflict(new { error = "ambiguous_account_identification_hash" });
+
+            var accountId = matchingIds[0];
+            var primaryHash = candidates.Single(x => x.Id == accountId).IdentificationHash;
+            var account = new
+            {
+                Id = accountId,
+                IdentificationHash = primaryHash,
+                LatestBookingDate = await db.Transactions.AsNoTracking()
+                    .Where(t => t.AccountId == accountId && t.BookingDate != null && t.Status == "BOOK")
+                    .MaxAsync(t => (DateOnly?)t.BookingDate, ct),
+                LatestTransactionUpdatedAt = await db.Transactions.AsNoTracking()
+                    .Where(t => t.AccountId == accountId)
+                    .MaxAsync(t => (DateTimeOffset?)t.UpdatedAt, ct)
+            };
+            return Results.Ok(account);
         }).WithTags("Internal banking");
 
         app.MapGet("/internal/banking/transactions/{transactionId:guid}/provider-pointer", async (
@@ -67,5 +82,19 @@ public static class BankingSyncStateEndpoints
         }).WithTags("Internal banking");
 
         return app;
+    }
+
+    private static bool ContainsIdentificationHash(string? json, string identificationHash)
+    {
+        if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(identificationHash)) return false;
+        try
+        {
+            return (JsonSerializer.Deserialize<string[]>(json) ?? [])
+                .Any(hash => string.Equals(hash, identificationHash, StringComparison.Ordinal));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
