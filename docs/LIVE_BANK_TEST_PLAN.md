@@ -31,6 +31,12 @@ instance. Run the banks **in this order** (each builds confidence for the next):
 
 Repeat the whole block for each bank, in the order above. Record PASS/FAIL + notes per line.
 
+### Status pre-check
+- [ ] Open the bank picker and confirm duplicate institution variants are collapsed to one bank row.
+- [ ] If FullWorth has Control Panel status access, verify the Enable Banking bank status is shown before connecting.
+- [ ] When Enable Banking reports `possible problems` or `major disruption`, confirm FullWorth warns before starting the bank authorization. Compare with `https://enablebanking.com/cp/aspsps`.
+- [ ] For an older/manual FullWorth profile, use **Bankstatus verbinden** once and confirm the email-link callback enables automatic status checks without recreating the Enable Banking application.
+
 ### A. Connect / consent
 - [ ] Start a connection for the institution; complete the bank's consent/redirect flow.
 - [ ] Land back on FullWorth via the callback with the connection shown as **AUTHORIZED**.
