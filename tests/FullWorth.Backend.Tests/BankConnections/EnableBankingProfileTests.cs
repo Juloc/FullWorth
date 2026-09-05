@@ -155,6 +155,56 @@ public sealed class EnableBankingProfileTests
         Assert.Equal(1, await db.EnableBankingProfiles.CountAsync());
     }
 
+    [Fact]
+    public async Task ClosedConnectionsAreDetachedWhenProfileIsDeleted()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+
+        var user = new FullWorthUser { EmailNormalized = "CLOSED@EXAMPLE.TEST", DisplayName = "Closed" };
+        var space = new FullWorthSpace { Name = "Space", BaseCurrency = "EUR" };
+        db.Users.Add(user);
+        db.FullWorthSpaces.Add(space);
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+        {
+            FullWorthSpaceId = space.Id,
+            UserId = user.Id,
+            Role = FullWorthSpaceRoles.Owner
+        });
+        var profile = new EnableBankingProfile
+        {
+            UserId = user.Id,
+            ApplicationId = "closed-app",
+            PrivateKeyPem = "protected",
+            KeyFingerprint = "fp",
+            Environment = "PRODUCTION",
+            ApplicationName = "Closed",
+            Active = true
+        };
+        db.EnableBankingProfiles.Add(profile);
+        var connection = new BankConnection
+        {
+            FullWorthSpaceId = space.Id,
+            EnableBankingProfileId = profile.Id,
+            AuthorizationUserId = user.Id,
+            InstitutionName = "Bank",
+            Country = "DE",
+            Status = "CLOSED"
+        };
+        db.BankConnections.Add(connection);
+        await db.SaveChangesAsync();
+
+        var store = new EnableBankingProfileStore(db, FieldCipher.Null);
+        var result = await store.DeleteForUserAsync(user.Id, CancellationToken.None);
+
+        Assert.Equal(EnableBankingProfileDeleteResult.Deleted, result);
+        Assert.Empty(await db.EnableBankingProfiles.ToListAsync());
+        db.ChangeTracker.Clear();
+        var retainedConnection = await db.BankConnections.AsNoTracking().SingleAsync();
+        Assert.Null(retainedConnection.EnableBankingProfileId);
+        Assert.Equal("CLOSED", retainedConnection.Status);
+    }
+
     private static FieldCipher Cipher()
     {
         var key = Convert.ToBase64String(Enumerable.Range(1, 32).Select(i => (byte)i).ToArray());
