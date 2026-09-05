@@ -36,7 +36,11 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var shell = await GetAsync("/features/coach-shell.js");
         Assert.Contains("Deterministisch", shell);
         Assert.Contains("Verwendete Fakten", shell);
-        Assert.Contains("Finanzanalyse ohne KI-Zwang", shell);
+        Assert.Contains("FullWorth-Daten im sicheren Kontext", shell);
+        Assert.Contains("id=\"coach-model\"", shell);
+        Assert.Contains("finance.coach.model", shell);
+        Assert.Contains("api/coach/models", shell);
+        Assert.Contains("model: selectedModel || null", shell);
         Assert.Contains("Wo ist mein Geld hin?", shell);
         Assert.Contains("Was habe ich bereut?", shell);
         Assert.Contains("Was war es wert?", shell);
