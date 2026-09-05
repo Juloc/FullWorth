@@ -85,12 +85,12 @@ async function openAccessEditor(){let members;try{members=await api('api/access/
 function editMemberAccess(member,parent){const caps=member.capabilities||{};const d=dlg(member.displayName||member.email,`<label>${esc(tx('Rolle','Role'))}<select name="template"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="owner">Owner</option></select></label><details open><summary>${esc(tx('Erweiterte Rechte','Advanced permissions'))}</summary><div class="fp-stack">${Object.entries(caps).map(([k,v])=>`<label class="fp-check"><input type="checkbox" name="cap" value="${esc(k)}" ${v?'checked':''}> ${esc(k)}</label>`).join('')}</div></details><div class="dialog-actions"><button type="submit" class="primary-action">${esc(tx('Speichern','Save'))}</button></div>`);d.querySelector('[name=template]').value=member.template;d.querySelector('form').onsubmit=async e=>{e.preventDefault();const template=e.currentTarget.template.value;const checked=new Set([...e.currentTarget.querySelectorAll('[name=cap]:checked')].map(x=>x.value));const overrides={};Object.keys(caps).forEach(cap=>{const defaultAllowed=template==='owner'||(template==='editor'&&['transactions.read','transactions.categorize','transactions.write','budgets.manage','contracts.manage','purchases.manage','investments.manage','export.read'].includes(cap))||(template==='viewer'&&cap==='transactions.read');if(checked.has(cap)!==defaultAllowed)overrides[cap]=checked.has(cap)});try{await api(`api/access/members/${member.userId}`,json('PUT',{template,overrides}));toast(tx('Berechtigungen gespeichert','Permissions saved'));d.close();parent.close();openAccessEditor()}catch(err){toast(err.message)}}}
 
 export function initParityCompletionUi(){
-  // De-duplicated (UX rework §2): the bank-connections page + nav, the group manager, category
-  // merge/reorder and the "edit all matches" bulk editor are provided canonically by accounts-ux.js,
-  // category-merge-ui.js / category-order-ui.js and advanced-transaction-bulk-ui.js. This module used to
-  // inject a second copy of each (incl. the duplicate "Bankverbindungen" sidebar entry). Only the unique
-  // household-permissions editor remains.
-  setupAccessEditor();
+  // Fully de-duplicated (UX rework §2). This module used to inject second copies of the bank-connections
+  // page + nav, the group manager, category merge/reorder, the "edit all matches" bulk editor AND a
+  // household-permissions editor. All are provided canonically elsewhere (accounts-ux.js,
+  // category-merge-ui.js / category-order-ui.js, advanced-transaction-bulk-ui.js, and parity-final-ui.js's
+  // openAccess role/capability editor); the permissions clone here rendered raw untranslated capability
+  // keys and was already force-removed every frame by capability-ui-guard.js. Nothing is injected now.
 }
 
 window.addEventListener('DOMContentLoaded',()=>setTimeout(initParityCompletionUi,150));
