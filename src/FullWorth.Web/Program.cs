@@ -349,7 +349,19 @@ app.MapGet("/connect/enable-banking/callback", async (HttpContext context, IHttp
 })
     .AllowAnonymous();
 
-app.MapFallbackToFile("index.html").RequireAuthorization();
+// Serve the SPA shell with versioned asset links so a browser always fetches the CSS/JS matching this
+// build (never a stale heuristically-cached copy). Dynamically-imported feature modules are kept fresh
+// by the Cache-Control: no-cache on static files (revalidation).
+var appShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
+app.MapFallback(async (HttpContext context, CancellationToken ct) =>
+{
+    var shell = System.Text.RegularExpressions.Regex.Replace(
+        await File.ReadAllTextAsync(appShellPath, ct),
+        "(src|href)=\"(/[^\"?]+\\.(?:js|css))\"",
+        m => $"{m.Groups[1].Value}=\"{m.Groups[2].Value}?v={assetVersion}\"");
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.WriteAsync(shell, ct);
+}).RequireAuthorization();
 app.Run();
 
 static async Task ValidateFinancePrincipalAsync(CookieValidatePrincipalContext context)
