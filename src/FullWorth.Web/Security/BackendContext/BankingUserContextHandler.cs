@@ -61,12 +61,12 @@ public sealed class BankingUserContextHandler(IHttpContextAccessor httpContextAc
     private static void AddPsuContext(HttpRequestMessage outbound, HttpContext inbound)
     {
         Add(outbound, "Psu-Ip-Address", inbound.Connection.RemoteIpAddress?.ToString(), 64);
-        Add(outbound, "Psu-User-Agent", inbound.Request.Headers.UserAgent.ToString(), 1024);
-        Add(outbound, "Psu-Referer", inbound.Request.Headers.Referer.ToString(), 2048);
-        Add(outbound, "Psu-Accept", inbound.Request.Headers.Accept.ToString(), 1024);
-        Add(outbound, "Psu-Accept-Charset", inbound.Request.Headers.AcceptCharset.ToString(), 512);
-        Add(outbound, "Psu-Accept-Encoding", inbound.Request.Headers.AcceptEncoding.ToString(), 512);
-        Add(outbound, "Psu-Accept-language", inbound.Request.Headers.AcceptLanguage.ToString(), 512);
+        Add(outbound, "Psu-User-Agent", inbound.Request.Headers["User-Agent"].ToString(), 1024);
+        Add(outbound, "Psu-Referer", inbound.Request.Headers["Referer"].ToString(), 2048);
+        Add(outbound, "Psu-Accept", inbound.Request.Headers["Accept"].ToString(), 1024);
+        Add(outbound, "Psu-Accept-Charset", inbound.Request.Headers["Accept-Charset"].ToString(), 512);
+        Add(outbound, "Psu-Accept-Encoding", inbound.Request.Headers["Accept-Encoding"].ToString(), 512);
+        Add(outbound, "Psu-Accept-language", inbound.Request.Headers["Accept-Language"].ToString(), 512);
 
         // Psu-Geo-Location is intentionally absent. It may only be added by a future explicit
         // geolocation-consent feature; merely visiting FullWorth is not permission to expose location.
