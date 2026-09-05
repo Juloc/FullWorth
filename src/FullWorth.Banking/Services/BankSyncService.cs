@@ -92,7 +92,7 @@ public sealed class BankSyncService(
             ? (provider, (EnableBankingProfileDto?)null)
             : await providerResolver.ResolveForUserAsync(caller.UserId, null, requireActive: true, ct);
         return await client.GetInstitutionsAsync(
-            (country ?? _providerOptions.DefaultCountry).ToUpperInvariant(),
+            NormalizeCountry(country ?? _providerOptions.DefaultCountry),
             string.IsNullOrWhiteSpace(psuType) ? null : psuType,
             ct);
     }
@@ -137,7 +137,7 @@ public sealed class BankSyncService(
         if (string.IsNullOrWhiteSpace(redirectUrl))
             throw new InvalidOperationException("EnableBanking:RedirectUrl is not configured.");
 
-        var country = (request.Country ?? _providerOptions.DefaultCountry).ToUpperInvariant();
+        var country = NormalizeCountry(request.Country ?? _providerOptions.DefaultCountry);
         var desiredPsuType = string.IsNullOrWhiteSpace(request.PsuType)
             ? _providerOptions.DefaultPsuType
             : request.PsuType.Trim().ToLowerInvariant();
@@ -1196,6 +1196,14 @@ public sealed class BankSyncService(
     {
         var source = $"{applicationId}|{profileId?.ToString("D") ?? "legacy"}|{userId:D}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+    }
+
+    private static string NormalizeCountry(string? value)
+    {
+        var country = (value ?? string.Empty).Trim().ToUpperInvariant();
+        if (country.Length != 2 || country.Any(character => character is < 'A' or > 'Z'))
+            throw new ArgumentException("Country must be a two-letter ISO 3166-1 alpha-2 code.");
+        return country;
     }
 
     private static string? NormalizeLanguage(string? value)
