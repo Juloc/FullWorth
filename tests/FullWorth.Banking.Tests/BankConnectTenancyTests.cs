@@ -69,6 +69,45 @@ public sealed class BankConnectTenancyTests
     }
 
     [Fact]
+    public async Task ConsentValidityIsCappedToAspspMaximum()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        DateTimeOffset? sentValidUntil = null;
+        var provider = new RecordingHttpMessageHandler(async (request, _, ct) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/aspsps")
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"aspsps\":[{\"name\":\"Test Bank\",\"country\":\"DE\",\"maximum_consent_validity\":7776000}]}");
+            if (path == "/auth")
+            {
+                var body = await request.Content!.ReadAsStringAsync(ct);
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                sentValidUntil = doc.RootElement.GetProperty("access").GetProperty("valid_until").GetDateTimeOffset();
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"url\":\"https://bank.example/a\",\"authorization_id\":\"auth-1\"}");
+            }
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+        var started = DateTimeOffset.UtcNow;
+
+        await service.StartConnectionAsync(
+            new ConnectBankRequest("Test Bank", "DE", 180, null, null, null),
+            Owner,
+            CancellationToken.None);
+
+        Assert.NotNull(sentValidUntil);
+        Assert.InRange(
+            sentValidUntil!.Value,
+            started.AddDays(89).AddHours(23),
+            started.AddDays(90).AddMinutes(1));
+        var write = Assert.Single(backend.Upserts);
+        Assert.Equal(sentValidUntil.Value, write.ValidUntil!.Value, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
     public async Task Connect_uses_the_server_redirect_url_not_any_browser_value()
     {
         using var environment = new TestBankingEnvironment();
