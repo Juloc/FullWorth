@@ -206,7 +206,7 @@ public sealed class BankSyncService(
             // keeps its real status until the new callback succeeds; abandoning the bank flow must
             // not silently turn an existing connection into PENDING forever.
             Status: existing?.Status ?? "PENDING_AUTHORIZATION",
-            ValidUntil: validUntil,
+            ValidUntil: existing?.ValidUntil ?? validUntil,
             LastAttemptAt: existing?.LastAttemptAt,
             LastSyncedAt: existing?.LastSyncedAt,
             NextSyncAllowedAt: existing?.NextSyncAllowedAt,
@@ -260,17 +260,53 @@ public sealed class BankSyncService(
         var connection = await backend.ConsumeStateAsync(state, ct)
             ?? throw new InvalidOperationException("Unknown or expired authorization state.");
 
-        var client = await ResolveProviderForConnectionAsync(connection, ct);
+        EnableBankingClient client;
         var previousSessionId = connection.ProviderSessionId;
-        var session = await client.AuthorizeSessionAsync(code, ct);
+        JsonElement session;
+        try
+        {
+            client = await ResolveProviderForConnectionAsync(connection, ct);
+            session = await client.AuthorizeSessionAsync(code, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            await MarkAuthorizationCompletionFailureAsync(connection, ct);
+            throw;
+        }
+
         var sessionId = GetString(session, "session_id")
             ?? throw new InvalidOperationException("Enable Banking did not return session_id.");
-        var validUntil = connection.ValidUntil;
-        if (session.ValueKind == JsonValueKind.Object &&
-            session.TryGetProperty("access", out var access) && access.ValueKind == JsonValueKind.Object &&
-            access.TryGetProperty("valid_until", out var valid) && valid.ValueKind == JsonValueKind.String &&
-            DateTimeOffset.TryParse(valid.GetString(), out var parsed))
-            validUntil = parsed;
+
+        if (session.ValueKind != JsonValueKind.Object ||
+            !session.TryGetProperty("access", out var access) ||
+            access.ValueKind != JsonValueKind.Object ||
+            !access.TryGetProperty("valid_until", out var valid) ||
+            valid.ValueKind != JsonValueKind.String ||
+            !DateTimeOffset.TryParse(valid.GetString(), out var validUntil))
+        {
+            try
+            {
+                await client.DeleteSessionAsync(
+                    sessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Malformed Enable Banking session {SessionId} could not be closed.",
+                    sessionId);
+            }
+
+            await MarkAuthorizationCompletionFailureAsync(connection, ct);
+            throw new InvalidOperationException("Enable Banking did not return a valid access.valid_until.");
+        }
 
         connection = await backend.UpsertConnectionAsync(ToWrite(
             connection,
@@ -589,6 +625,24 @@ public sealed class BankSyncService(
             GetString(json, "merchant_category_code"),
             GetNestedString(json, "bank_transaction_code", "code"),
             GetNestedString(json, "bank_transaction_code", "description"));
+    }
+
+    private async Task MarkAuthorizationCompletionFailureAsync(
+        BankConnectionDto connection,
+        CancellationToken ct)
+    {
+        // Reauthorization failure leaves the existing session/status untouched. A brand-new
+        // connection has no usable session after its one-time state was consumed, so make that
+        // terminal instead of leaving an unreachable PENDING_AUTHORIZATION row behind.
+        if (!string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return;
+
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            status: "INVALID",
+            clearNextSyncAllowedAt: true,
+            consecutiveFailures: 0,
+            lastError: "AUTHORIZATION_FAILED"), ct);
     }
 
     private async Task<EnableBankingClient> ResolveProviderForConnectionAsync(BankConnectionDto connection, CancellationToken ct) =>
