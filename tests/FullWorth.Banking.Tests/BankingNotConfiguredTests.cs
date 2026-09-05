@@ -114,7 +114,7 @@ public sealed class BankingNotConfiguredTests
             {
                 var status = await (await client.SendAsync(Request(HttpMethod.Get, "/api/banking/status")))
                     .Content.ReadFromJsonAsync<StatusResponse>();
-                Assert.True(status!.Configured);
+                Assert.False(status!.Configured);
                 Assert.True(status.LegacyConfigured);
             }
         }
