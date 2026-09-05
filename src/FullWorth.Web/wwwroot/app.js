@@ -16,6 +16,7 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
+import { createDialog } from './ui/dialog.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -216,7 +217,7 @@ function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div cla
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function acctId(last4){return last4?` · ${maskIdentifier(last4)}`:''}
 function toast(text,duration){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),duration||3200)}
-function dialog(html){const dlg=document.createElement('dialog');dlg.innerHTML=html;document.body.appendChild(dlg);dlg.addEventListener('close',()=>dlg.remove());return dlg}
+function dialog(html,options={}){return createDialog(html,{closeLabel:get('common.close'),...options})}
 // §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
 // category under multiple parents with the same name is still distinguishable at a glance.
 async function categoryOptions(selected){const categories=await api('api/categories');const byId=new Map(categories.map(c=>[c.id,c]));const path=c=>{const chain=[];let cur=c;while(cur){chain.unshift(cur.name);cur=cur.parentId?byId.get(cur.parentId):null}return chain.join(' › ')};return categories.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${esc(path(c))}</option>`).join('')}
@@ -231,7 +232,7 @@ function openMoreSheet(){
     const label=nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav;
     return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
   }).join('');
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`);
+  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
   dlg.classList.add('more-sheet-dialog');
   dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
   dlg.showModal();
