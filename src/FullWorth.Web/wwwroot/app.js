@@ -570,7 +570,7 @@ const ENABLE_BANKING_LINKED='https://enablebanking.com/docs/api/linked-accounts'
 
 function bankingReady(status){
   if(status?.profile)return status.profile.environment==='SANDBOX'||status.profile.active===true;
-  return status?.legacyConfigured===true;
+  return false;
 }
 
 async function renderEnableBankingSettings(){
