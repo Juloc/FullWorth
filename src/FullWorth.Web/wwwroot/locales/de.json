@@ -181,6 +181,7 @@
     "purpose_other": "Sonstiges",
     "bankDetails": "Bankdetails laden",
     "bankDetailsUnavailable": "Für diese Buchung sind keine zusätzlichen Bankdetails verfügbar.",
+    "bankReauthRequired": "Bankzugang abgelaufen oder widerrufen. Bitte das Konto neu verbinden.",
     "bankStatus": "Bankstatus",
     "bankEntryReference": "Entry Reference",
     "bankTransactionId": "Provider-Transaktions-ID",
