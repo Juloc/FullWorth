@@ -271,6 +271,27 @@ app.MapGet("/api/banking/provider-status", async (
     }
 });
 
+app.MapPost("/api/banking/provider-status/connect/start", async (
+    HttpContext http,
+    EnableBankingProviderStatusConnectRequest request,
+    EnableBankingControlPanelStatusService statusService,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await statusService.StartConnectionAsync(userId, request, ct));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_status_connection", message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "status_connection_unavailable", message = ex.Message });
+    }
+});
+
 app.MapPost("/api/banking/connect", async (
     HttpContext http,
     ConnectBankRequest request,
@@ -380,6 +401,25 @@ app.MapGet("/api/banking/transactions/{id:guid}/details", async (
     {
         return ProviderApiError(ex, consentAware: true);
     }
+});
+
+app.MapGet("/connect/enable-banking/status-callback", async (
+    string? state,
+    string? oobCode,
+    EnableBankingControlPanelStatusService statusService,
+    CancellationToken ct) =>
+{
+    var result = await statusService.CompleteConnectionAsync(state, oobCode, ct);
+    var title = result.Success ? "Enable Banking bank status connected" : "Enable Banking bank status connection failed";
+    var message = result.Success
+        ? "FullWorth can now read the Enable Banking bank-status feed. Return to FullWorth."
+        : "The bank-status sign-in could not be completed. Return to FullWorth and try again.";
+    var html = $"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{title}</title></head><body style=\"font-family:system-ui,sans-serif;max-width:640px;margin:64px auto;padding:0 24px\"><h1>{title}</h1><p>{message}</p></body></html>";
+    return Results.Content(
+        html,
+        "text/html; charset=utf-8",
+        Encoding.UTF8,
+        result.Success ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest);
 });
 
 app.MapGet("/connect/enable-banking/setup-callback", async (
