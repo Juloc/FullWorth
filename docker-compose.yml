@@ -195,7 +195,7 @@ services:
       Bootstrap__SpaceName: ${FULLWORTH_BOOTSTRAP_SPACE_NAME:-Household}
       Bootstrap__BaseCurrency: ${FULLWORTH_BOOTSTRAP_BASE_CURRENCY:-EUR}
     ports:
-      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080"
+      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8101}:8080"
     volumes:
       - fullworth-web-dataprotection:/data/dataprotection
     stop_grace_period: 30s
