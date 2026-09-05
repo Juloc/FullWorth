@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using FullWorth.Banking.Backend;
@@ -7,7 +8,6 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// P0.3: Docker secret files (build-time, before any config read).
 FullWorth.Shared.SecretBootstrap.AddSecretFiles(builder.Configuration);
 
 builder.Services.AddOpenApi();
@@ -16,6 +16,14 @@ builder.Services.Configure<BackendOptions>(builder.Configuration.GetSection(Back
 builder.Services.Configure<BankingSyncOptions>(builder.Configuration.GetSection(BankingSyncOptions.SectionName));
 builder.Services.AddSingleton<EnableBankingRequestPolicy>();
 builder.Services.AddSingleton<BankSyncConcurrencyGate>();
+
+builder.Services.AddHttpClient("enable-banking", (sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(90);
+});
+// Legacy/global provider remains injectable for old connections and tests. New connections use resolver.
 builder.Services.AddHttpClient<EnableBankingClient>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
@@ -28,16 +36,16 @@ builder.Services.AddHttpClient<FullWorthBackendClient>((sp, client) =>
     client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromMinutes(5);
 });
+builder.Services.AddScoped<EnableBankingClientResolver>();
+builder.Services.AddScoped<EnableBankingProfileService>();
 builder.Services.AddScoped<BankSyncService>();
 builder.Services.AddHostedService<BankSyncWorker>();
 
 var app = builder.Build();
 
-// P0.3 fail-closed against the fully-merged configuration (Production only; no-op in dev/test).
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "Security:ApiKey");
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "Backend:IngestKey");
 
-// P1.2c: OpenAPI document is Development-only, never exposed in Production.
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "fullworth-banking" }));
 
@@ -47,51 +55,152 @@ app.Use(async (context, next) =>
     {
         var configured = builder.Configuration["Security:ApiKey"];
         var supplied = context.Request.Headers["X-FullWorth-Banking-Key"].ToString();
-        if (!ValidKey(supplied, configured)) { context.Response.StatusCode = StatusCodes.Status401Unauthorized; return; }
-
-        // Without Enable Banking credentials every provider call would die in an unhandled
-        // InvalidOperationException (500). Answer with an explicit, machine-readable 503 instead so
-        // the UI can tell the operator what is missing. /api/banking/status stays reachable.
-        if (!context.Request.Path.StartsWithSegments("/api/banking/status"))
+        if (!ValidKey(supplied, configured))
         {
-            var options = context.RequestServices.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
-            if (!ProviderConfigured(options))
-            {
-                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = "banking_not_configured",
-                    message = "Enable Banking is not configured. Set EnableBanking:ApplicationId, EnableBanking:RedirectUrl and provide the private key."
-                });
-                return;
-            }
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
         }
     }
     await next();
 });
 
-app.MapGet("/api/banking/status", (IOptions<EnableBankingOptions> options) =>
-    Results.Ok(new { configured = ProviderConfigured(options.Value) }));
-
-app.MapGet("/api/banking/institutions", async (string? country, BankSyncService service, CancellationToken ct) => Results.Json(await service.GetInstitutionsAsync(country, ct)));
-app.MapPost("/api/banking/connect", async (HttpContext http, ConnectBankRequest request, BankSyncService service, CancellationToken ct) =>
+// Per-user BYO Enable Banking setup. The private key enters only this internal service path and is
+// persisted encrypted by FullWorth.Backend; every read response below is a safe view without key data.
+app.MapGet("/api/banking/status", async (
+    HttpContext http,
+    EnableBankingProfileService profiles,
+    CancellationToken ct) =>
 {
-    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
-    try { return Results.Ok(new { authorizationUrl = await service.StartConnectionAsync(request, caller, ct) }); }
-    catch (BankAccessException exception) { return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound(); }
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    return Results.Ok(await profiles.GetStatusAsync(userId, ct));
 });
-app.MapPost("/api/banking/sync", async (BankSyncService service, CancellationToken ct) => Results.Ok(await service.SyncAllAsync(ct)));
-app.MapPost("/api/banking/connections/{id:guid}/sync", async (HttpContext http, Guid id, bool? force, BankSyncService service, CancellationToken ct) =>
+
+app.MapGet("/api/banking/profile", async (
+    HttpContext http,
+    EnableBankingProfileService profiles,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    return Results.Ok(await profiles.GetStatusAsync(userId, ct));
+});
+
+app.MapPost("/api/banking/profile/verify", async (
+    HttpContext http,
+    EnableBankingProfileVerifyRequest request,
+    EnableBankingProfileService profiles,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await profiles.VerifyAndSaveAsync(userId, request, ct));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_profile", message = ex.Message });
+    }
+    catch (EnableBankingApiException)
+    {
+        return Results.BadRequest(new { error = "enable_banking_verification_failed", message = "Enable Banking rejected the application ID/private key." });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = "enable_banking_verification_failed", message = ex.Message });
+    }
+});
+
+app.MapPost("/api/banking/profile/recheck", async (
+    HttpContext http,
+    EnableBankingProfileService profiles,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await profiles.RecheckAsync(userId, ct));
+    }
+    catch (EnableBankingProfileNotConfiguredException)
+    {
+        return Results.NotFound();
+    }
+    catch (EnableBankingApiException)
+    {
+        return Results.BadRequest(new { error = "enable_banking_verification_failed" });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = "enable_banking_verification_failed", message = ex.Message });
+    }
+});
+
+app.MapDelete("/api/banking/profile", async (
+    HttpContext http,
+    EnableBankingProfileService profiles,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    return await profiles.DeleteAsync(userId, ct) switch
+    {
+        HttpStatusCode.NoContent => Results.NoContent(),
+        HttpStatusCode.Conflict => Results.Conflict(new { error = "profile_in_use" }),
+        _ => Results.NotFound()
+    };
+});
+
+app.MapGet("/api/banking/institutions", async (
+    HttpContext http,
+    string? country,
+    string? psuType,
+    BankSyncService service,
+    CancellationToken ct) =>
 {
     if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
-    // The "sync now" button is a deliberate user action for current data, so this endpoint forces by
-    // default; pass ?force=false to honour the background cadence cooldown instead.
-    var result = await service.RequestManualSyncAsync(id, caller, force ?? true, ct);
+    try
+    {
+        return Results.Json(await service.GetInstitutionsAsync(country, psuType, caller, ct));
+    }
+    catch (EnableBankingProfileNotConfiguredException ex)
+    {
+        return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
+    }
+});
+
+app.MapPost("/api/banking/connect", async (
+    HttpContext http,
+    ConnectBankRequest request,
+    BankSyncService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(new { authorizationUrl = await service.StartConnectionAsync(request, caller, ct) });
+    }
+    catch (BankAccessException exception)
+    {
+        return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+    }
+    catch (EnableBankingProfileNotConfiguredException ex)
+    {
+        return Results.Conflict(new { error = "banking_profile_not_ready", message = ex.Message });
+    }
+});
+
+// No browser-facing global "sync all" endpoint. Only the background worker may drive all tenants.
+app.MapPost("/api/banking/connections/{id:guid}/sync", async (
+    HttpContext http,
+    Guid id,
+    bool? force,
+    BankSyncService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+
+    var result = await service.RequestManualSyncAsync(id, caller, force ?? true, BuildPsuContext(http), ct);
     if (result.Status == ManualSyncStatus.NotFound) return Results.NotFound();
+
     var status = result.Status switch
     {
-        // RequestManualSyncAsync waits for SyncConnectionCoreAsync to finish before returning. Calling
-        // this "started" made a completed ingest look like it was still running in the Web UI.
         ManualSyncStatus.Started => "completed",
         ManualSyncStatus.Cooldown => "cooldown",
         ManualSyncStatus.AlreadyRunning => "already_running",
@@ -100,29 +209,66 @@ app.MapPost("/api/banking/connections/{id:guid}/sync", async (HttpContext http, 
     };
     return Results.Ok(new { status, nextSyncAllowedAt = result.NextSyncAllowedAt });
 });
-app.MapGet("/connect/enable-banking/callback", async (string? code, string? state, string? error, string? error_description, BankSyncService service, IOptions<EnableBankingOptions> options, ILogger<Program> logger, CancellationToken ct) =>
+
+app.MapDelete("/api/banking/connections/{id:guid}", async (
+    HttpContext http,
+    Guid id,
+    BankSyncService service,
+    CancellationToken ct) =>
 {
-    // A PERSON lands here (the bank redirects the browser back). Every outcome — success, the user
-    // cancelling at the bank, an expired state, a provider outage, missing configuration — must
-    // redirect into the app UI where it is rendered as a localized message. Raw JSON or a 500 is
-    // never an acceptable answer on this route.
-    // Server-synthesized codes carry an app_ prefix so a crafted ?error=... from outside can never
-    // impersonate an internal state (e.g. fake "not configured") in the UI.
-    if (!ProviderConfigured(options.Value))
-        return CallbackErrorRedirect("app_not_configured", null);
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+
+    return await service.DisconnectAsync(id, caller, BuildPsuContext(http), ct) switch
+    {
+        DisconnectStatus.Deleted => Results.NoContent(),
+        DisconnectStatus.ProviderFailed => Results.StatusCode(StatusCodes.Status502BadGateway),
+        _ => Results.NotFound()
+    };
+});
+
+app.MapGet("/api/banking/transactions/{id:guid}/details", async (
+    HttpContext http,
+    Guid id,
+    BankSyncService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Json(await service.GetTransactionDetailsAsync(id, caller, BuildPsuContext(http), ct));
+    }
+    catch (BankAccessException)
+    {
+        return Results.NotFound();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "transaction_details_unavailable", message = ex.Message });
+    }
+});
+
+app.MapGet("/connect/enable-banking/callback", async (
+    HttpContext http,
+    string? code,
+    string? state,
+    string? error,
+    string? error_description,
+    BankSyncService service,
+    ILogger<Program> logger,
+    CancellationToken ct) =>
+{
     if (!string.IsNullOrWhiteSpace(error))
         return CallbackErrorRedirect(error, error_description);
     if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
         return CallbackErrorRedirect("app_missing_parameters", null);
+
     try
     {
-        var connection = await service.CompleteConnectionAsync(state, code, ct);
+        var connection = await service.CompleteConnectionAsync(state, code, BuildPsuContext(http), ct);
         return Results.Redirect($"/?bankConnected={Uri.EscapeDataString(connection.InstitutionName)}");
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
-        // Genuine cancellation (client gone / shutdown). Provider/backend TIMEOUTS also surface as
-        // OperationCanceledException but with an uncancelled ct — those fall through to the redirect.
         throw;
     }
     catch (Exception exception)
@@ -134,15 +280,38 @@ app.MapGet("/connect/enable-banking/callback", async (string? code, string? stat
 
 app.Run();
 
-// The trusted user + space identity is set by FullWorth.Web from the authenticated session; the
-// backend re-verifies ownership, so these headers alone grant nothing.
+static bool TryGetUser(HttpContext http, out Guid userId) =>
+    Guid.TryParse(http.Request.Headers["X-FullWorth-User-Id"], out userId) && userId != Guid.Empty;
+
 static bool TryGetCaller(HttpContext http, out BankingCaller caller)
 {
     caller = new BankingCaller(Guid.Empty, Guid.Empty);
-    if (!Guid.TryParse(http.Request.Headers["X-FullWorth-User-Id"], out var userId) || userId == Guid.Empty) return false;
+    if (!TryGetUser(http, out var userId)) return false;
     if (!Guid.TryParse(http.Request.Headers["X-FullWorth-Space-Id"], out var spaceId) || spaceId == Guid.Empty) return false;
     caller = new BankingCaller(userId, spaceId);
     return true;
+}
+
+static PsuContext? BuildPsuContext(HttpContext http)
+{
+    var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var name in new[]
+    {
+        "Psu-Ip-Address",
+        "Psu-User-Agent",
+        "Psu-Referer",
+        "Psu-Accept",
+        "Psu-Accept-Charset",
+        "Psu-Accept-Encoding",
+        "Psu-Accept-language",
+        "Psu-Geo-Location"
+    })
+    {
+        var value = http.Request.Headers[name].ToString();
+        if (!string.IsNullOrWhiteSpace(value)) headers[name] = value;
+    }
+
+    return headers.Count == 0 ? null : new PsuContext(headers);
 }
 
 static bool ValidKey(string supplied, string? configured)
@@ -151,14 +320,6 @@ static bool ValidKey(string supplied, string? configured)
     return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(configured));
 }
 
-static bool ProviderConfigured(EnableBankingOptions options) =>
-    !string.IsNullOrWhiteSpace(options.ApplicationId)
-    && !string.IsNullOrWhiteSpace(options.RedirectUrl)   // required: the connect flow derives the OAuth redirect from it
-    && File.Exists(options.PrivateKeyPath);
-
-// Redirect a failed bank-authorization callback into the app UI. Codes and descriptions come from an
-// external redirect, so they are length-capped and control-character-stripped before being reflected
-// as query parameters (the SPA renders them via textContent, never as markup).
 static IResult CallbackErrorRedirect(string errorCode, string? description)
 {
     var url = $"/?bankError={Uri.EscapeDataString(SanitizeCallbackValue(errorCode, 64) ?? "unknown")}";
@@ -174,3 +335,5 @@ static string? SanitizeCallbackValue(string? value, int maxLength)
     if (cleaned.Length == 0) return null;
     return cleaned.Length <= maxLength ? cleaned : cleaned[..maxLength];
 }
+
+public partial class Program { }
