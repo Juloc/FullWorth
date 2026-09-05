@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FullWorth.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,9 +18,10 @@ public static class BankingSyncStateEndpoints
                 .Select(x => new { x.Id, x.IdentificationHash, x.IdentificationHashesJson })
                 .ToListAsync(ct);
 
+            // Only the provider's primary identification_hash is a stable account identity.
+            // Fuzzy aliases from identification_hashes are explicitly not guaranteed to be unique.
             var matchingIds = candidates
-                .Where(x => string.Equals(x.IdentificationHash, identificationHash, StringComparison.Ordinal) ||
-                            ContainsIdentificationHash(x.IdentificationHashesJson, identificationHash))
+                .Where(x => string.Equals(x.IdentificationHash, identificationHash, StringComparison.Ordinal))
                 .Select(x => x.Id)
                 .Distinct()
                 .ToArray();
@@ -84,17 +84,4 @@ public static class BankingSyncStateEndpoints
         return app;
     }
 
-    private static bool ContainsIdentificationHash(string? json, string identificationHash)
-    {
-        if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(identificationHash)) return false;
-        try
-        {
-            return (JsonSerializer.Deserialize<string[]>(json) ?? [])
-                .Any(hash => string.Equals(hash, identificationHash, StringComparison.Ordinal));
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
 }
