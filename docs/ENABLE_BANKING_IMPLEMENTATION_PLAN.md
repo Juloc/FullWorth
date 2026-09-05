@@ -499,12 +499,13 @@ Persist safe error categories, including:
 - SESSION_REVOKED
 - SESSION_CLOSED
 - AUTHORIZATION_FAILED
+- ENABLE_BANKING_AUTH_FAILED
 - ACCOUNT_RESOLUTION_FAILED
 - HISTORY_PAGE_LIMIT_REACHED
 - PROVIDER_UNAVAILABLE
 - SYNC_FAILED
 
-Never store raw provider error bodies as user-visible error messages.
+Never store raw provider error bodies as user-visible error messages. HTTP 401/403 alone is not treated as an expired session: only explicit session/consent error codes trigger reauthorization; otherwise FullWorth records ENABLE_BANKING_AUTH_FAILED so the user's application/key can be rechecked.
 
 Health UI:
 
