@@ -599,16 +599,25 @@ public sealed class BankSyncService(
             detailsFetched = true;
         }
 
-        var syncState = await backend.GetAccountSyncStateAsync(connection.Id, account.IdentificationHash, ct);
-        var initialSync = syncState?.LatestBookingDate is null;
+        var syncState = await FindAccountSyncStateAsync(connection.Id, AccountIdentificationHashes(account), ct);
 
-        if (!detailsFetched && (initialSync || !account.HasDetails))
+        // If the primary hash changed, /details may reveal the previous hash in identification_hashes.
+        // Resolve that alias before deciding this is a brand-new account and doing another longest import.
+        if (!detailsFetched && (syncState is null || !account.HasDetails))
         {
             var details = await TryGetAccountDetailsAsync(
                 client, connection, account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
             if (details is { } json)
+            {
                 account = ApplyDetails(account, json) with { HasDetails = true };
+                detailsFetched = true;
+                if (syncState is null)
+                    syncState = await FindAccountSyncStateAsync(
+                        connection.Id, AccountIdentificationHashes(account), ct);
+            }
         }
+
+        var initialSync = syncState?.LatestBookingDate is null;
 
         var balancesJson = await client.GetBalancesAsync(
             account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
@@ -680,7 +689,7 @@ public sealed class BankSyncService(
                         connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
-                        true, account.HasDetails)],
+                        true, account.HasDetails, AccountIdentificationHashes(account))],
                     firstPersist ? balances : [],
                     chunk), ct);
                 firstPersist = false;
@@ -693,7 +702,7 @@ public sealed class BankSyncService(
                         connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
-                        true, account.HasDetails)],
+                        true, account.HasDetails, AccountIdentificationHashes(account))],
                     balances,
                     []), ct);
                 firstPersist = false;
@@ -786,6 +795,7 @@ public sealed class BankSyncService(
             GetString(json, "cash_account_type"),
             GetString(json, "currency") ?? "EUR",
             GetIbanLast4(json),
+            IdentificationHashes: GetIdentificationHashes(json, hash),
             HasDetails: name is not null);
     }
 
@@ -793,7 +803,7 @@ public sealed class BankSyncService(
     {
         if (string.IsNullOrWhiteSpace(uid)) return null;
         return new($"uid:{uid}", uid, connection.InstitutionName, null, null, "EUR", null,
-            HasDetails: false, NeedsHashResolution: true);
+            IdentificationHashes: [], HasDetails: false, NeedsHashResolution: true);
     }
 
     private async Task<JsonElement?> TryGetAccountDetailsAsync(
@@ -818,14 +828,64 @@ public sealed class BankSyncService(
         }
     }
 
-    private static AccountState ApplyDetails(AccountState account, JsonElement details) => account with
+    private static AccountState ApplyDetails(AccountState account, JsonElement details)
     {
-        DisplayName = GetString(details, "details") ?? GetString(details, "name") ?? account.DisplayName,
-        Product = GetString(details, "product") ?? account.Product,
-        AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
-        Currency = GetString(details, "currency") ?? account.Currency,
-        IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4
-    };
+        var primary = GetString(details, "identification_hash") ?? account.IdentificationHash;
+        return account with
+        {
+            IdentificationHash = primary,
+            IdentificationHashes = MergeIdentificationHashes(
+                AccountIdentificationHashes(account),
+                GetIdentificationHashes(details, primary)),
+            DisplayName = GetString(details, "details") ?? GetString(details, "name") ?? account.DisplayName,
+            Product = GetString(details, "product") ?? account.Product,
+            AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
+            Currency = GetString(details, "currency") ?? account.Currency,
+            IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4
+        };
+    }
+
+    private async Task<AccountSyncState?> FindAccountSyncStateAsync(
+        Guid connectionId,
+        IReadOnlyList<string> identificationHashes,
+        CancellationToken ct)
+    {
+        foreach (var hash in identificationHashes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        {
+            var state = await backend.GetAccountSyncStateAsync(connectionId, hash, ct);
+            if (state is not null) return state;
+        }
+        return null;
+    }
+
+    private static IReadOnlyList<string> GetIdentificationHashes(JsonElement json, string primary)
+    {
+        var hashes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primary)) hashes.Add(primary);
+        if (json.ValueKind == JsonValueKind.Object &&
+            json.TryGetProperty("identification_hashes", out var aliases) &&
+            aliases.ValueKind == JsonValueKind.Array)
+            hashes.AddRange(aliases.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>());
+        return hashes.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<string> AccountIdentificationHashes(AccountState account) =>
+        MergeIdentificationHashes(
+            [account.IdentificationHash],
+            account.IdentificationHashes ?? []);
+
+    private static IReadOnlyList<string> MergeIdentificationHashes(
+        IEnumerable<string> first,
+        IEnumerable<string> second) =>
+        first.Concat(second)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     private static List<BalanceBatchItem> ParseBalances(AccountState account, JsonElement json)
     {
@@ -1097,6 +1157,7 @@ public sealed class BankSyncService(
         string? AccountType,
         string Currency,
         string? IbanLast4,
+        IReadOnlyList<string>? IdentificationHashes = null,
         bool HasDetails = true,
         bool NeedsHashResolution = false);
 }
