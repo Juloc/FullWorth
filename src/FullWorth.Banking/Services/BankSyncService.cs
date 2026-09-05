@@ -150,7 +150,7 @@ public sealed class BankSyncService(
         if (supportedPsuTypes.Count > 0 && !supportedPsuTypes.Contains(desiredPsuType, StringComparer.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Institution '{request.InstitutionName}' does not support PSU type '{desiredPsuType}'.");
 
-        ValidateAuthMethod(institution, request.AuthMethod);
+        ValidateAuthMethod(institution, request.AuthMethod, desiredPsuType);
         if (request.Credentials is { Count: > 0 } && string.IsNullOrWhiteSpace(request.AuthMethod))
             throw new InvalidOperationException("Credentials require an explicit Enable Banking auth method.");
 
@@ -975,24 +975,31 @@ public sealed class BankSyncService(
             string.Equals(GetString(x, "name"), institutionName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void ValidateAuthMethod(JsonElement institution, string? requestedMethod)
+    private static void ValidateAuthMethod(JsonElement institution, string? requestedMethod, string desiredPsuType)
     {
-        if (string.IsNullOrWhiteSpace(requestedMethod) ||
-            !institution.TryGetProperty("auth_methods", out var methods) ||
-            methods.ValueKind != JsonValueKind.Array)
-            return;
+        if (string.IsNullOrWhiteSpace(requestedMethod)) return;
+        if (!institution.TryGetProperty("auth_methods", out var methods) || methods.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException($"Enable Banking auth method '{requestedMethod}' is not supported by this institution.");
 
         var found = methods.EnumerateArray().Any(method =>
-            method.ValueKind == JsonValueKind.String
-                ? string.Equals(method.GetString(), requestedMethod, StringComparison.OrdinalIgnoreCase)
-                : method.ValueKind == JsonValueKind.Object &&
-                  string.Equals(
-                      GetString(method, "name") ?? GetString(method, "id"),
-                      requestedMethod,
-                      StringComparison.OrdinalIgnoreCase));
+        {
+            if (method.ValueKind == JsonValueKind.String)
+                return string.Equals(method.GetString(), requestedMethod, StringComparison.OrdinalIgnoreCase);
+            if (method.ValueKind != JsonValueKind.Object) return false;
+
+            var name = GetString(method, "name") ?? GetString(method, "id");
+            if (!string.Equals(name, requestedMethod, StringComparison.OrdinalIgnoreCase)) return false;
+            if (method.TryGetProperty("hidden_method", out var hidden) && hidden.ValueKind == JsonValueKind.True)
+                return false;
+
+            var methodPsuType = GetString(method, "psu_type");
+            return string.IsNullOrWhiteSpace(methodPsuType) ||
+                   string.Equals(methodPsuType, desiredPsuType, StringComparison.OrdinalIgnoreCase);
+        });
 
         if (!found)
-            throw new InvalidOperationException($"Enable Banking auth method '{requestedMethod}' is not supported by this institution.");
+            throw new InvalidOperationException(
+                $"Enable Banking auth method '{requestedMethod}' is not available for PSU type '{desiredPsuType}'.");
     }
 
     private static IReadOnlyList<string> GetStringArray(JsonElement root, string name) =>
