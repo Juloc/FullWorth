@@ -21,6 +21,7 @@ public sealed record UpdateCustomAiAccessRequest(
 
 public static class AiUserAccessEndpoints
 {
+    private const string DefaultOpenAiModel = "gpt-5.6-terra";
     private const string BridgeScopeHeader = "X-FullWorth-Codex-Scope";
 
     public static IEndpointRouteBuilder MapAiUserAccessEndpoints(this IEndpointRouteBuilder app)
@@ -120,8 +121,8 @@ public static class AiUserAccessEndpoints
             await store.SelectUserCredentialAsync(
                 userId,
                 credential.Id,
-                request.TextModel,
-                request.VisionModel,
+                string.IsNullOrWhiteSpace(request.TextModel) ? DefaultOpenAiModel : request.TextModel,
+                string.IsNullOrWhiteSpace(request.VisionModel) ? DefaultOpenAiModel : request.VisionModel,
                 ct);
             await store.DeleteOtherUserCredentialsAsync(userId, credential.Id, ct);
             return Results.Ok(new { configured = true, mode = "api-key", credential });
@@ -148,6 +149,9 @@ public static class AiUserAccessEndpoints
             {
                 return Results.BadRequest(new { error = "invalid_custom_endpoint", message = ex.Message });
             }
+
+            if (string.IsNullOrWhiteSpace(request.TextModel))
+                return Results.BadRequest(new { error = "custom_model_required", message = "A text model is required for a custom AI endpoint." });
 
             var test = await providers.GetRequired(IntelligenceProviders.OpenAiCompatible)
                 .TestCredentialAsync(encoded, ct);
