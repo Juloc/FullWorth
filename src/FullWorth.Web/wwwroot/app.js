@@ -742,9 +742,18 @@ async function openBankDialog(){
   const draw=filter=>{
     box.innerHTML='';
     for(const bank of banks.filter(x=>!filter||(x.name||'').toLowerCase().includes(filter.toLowerCase())).slice(0,100)){
-      const b=document.createElement('button');b.type='button';
-      const beta=bank.beta?` · ${get('bankingSetup.beta')}`:'';
-      b.innerHTML=`<strong>${esc(bank.name)}</strong><span class="row-sub">${esc((bank.country||'DE')+beta)}</span>`;
+      const b=document.createElement('button');b.type='button';b.className='bank-option';
+      if(bank.logo){
+        const logo=document.createElement('img');logo.className='bank-option-logo';logo.src=bank.logo;logo.alt='';
+        logo.loading='lazy';logo.referrerPolicy='no-referrer';logo.onerror=()=>logo.remove();b.appendChild(logo);
+      }
+      const text=document.createElement('span');text.className='bank-option-text';
+      const title=document.createElement('strong');title.textContent=bank.name||'';text.appendChild(title);
+      const groupName=typeof bank.group==='string'?bank.group:(bank.group?.name||bank.group?.title||'');
+      const types=(bank.psu_types||[]).map(type=>get('bankingSetup.psu_'+type)||type).join(' / ');
+      const meta=[bank.country||'DE',groupName,types,bank.beta?get('bankingSetup.beta'):null].filter(Boolean);
+      const sub=document.createElement('span');sub.className='row-sub';sub.textContent=meta.join(' · ');text.appendChild(sub);
+      b.appendChild(text);
       b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,null,status.profile?.id||null)};
       box.appendChild(b);
     }
