@@ -38,7 +38,7 @@ public sealed record BankSyncResult(int Synced, int Skipped, int Failed, bool Al
 public enum ManualSyncStatus { Started, PartialHistory, Error, Cooldown, AlreadyRunning, ReauthorizationRequired, NotFound }
 public sealed record ManualSyncResult(ManualSyncStatus Status, DateTimeOffset? NextSyncAllowedAt = null);
 
-public enum DisconnectStatus { Deleted, NotFound, ProviderFailed }
+public enum DisconnectStatus { Deleted, ClosedDataRetained, NotFound, ProviderFailed }
 
 public sealed record ProviderTransactionDetailsView(
     string? TransactionId,
@@ -377,10 +377,18 @@ public sealed class BankSyncService(
         return new(ManualSyncStatus.Started, afterSync?.NextSyncAllowedAt);
     }
 
+    public Task<DisconnectStatus> DisconnectAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        PsuContext? psuContext,
+        CancellationToken ct) =>
+        DisconnectAsync(connectionId, caller, psuContext, deleteLocalData: true, ct);
+
     public async Task<DisconnectStatus> DisconnectAsync(
         Guid connectionId,
         BankingCaller caller,
         PsuContext? psuContext,
+        bool deleteLocalData,
         CancellationToken ct)
     {
         var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, connectionId, null, ct);
@@ -411,9 +419,31 @@ public sealed class BankSyncService(
             }
         }
 
-        return await backend.DeleteConnectionDataAsync(connectionId, caller.UserId, caller.FullWorthSpaceId, ct)
-            ? DisconnectStatus.Deleted
-            : DisconnectStatus.NotFound;
+        if (deleteLocalData)
+            return await backend.DeleteConnectionDataAsync(connectionId, caller.UserId, caller.FullWorthSpaceId, ct)
+                ? DisconnectStatus.Deleted
+                : DisconnectStatus.NotFound;
+
+        await backend.UpsertConnectionAsync(new BankConnectionWrite(
+            Id: connection.Id,
+            Provider: connection.Provider,
+            InstitutionName: connection.InstitutionName,
+            Country: connection.Country,
+            AuthorizationState: null,
+            AuthorizationId: null,
+            ProviderSessionId: null,
+            Status: "CLOSED",
+            ValidUntil: connection.ValidUntil,
+            LastAttemptAt: connection.LastAttemptAt,
+            LastSyncedAt: connection.LastSyncedAt,
+            NextSyncAllowedAt: null,
+            ConsecutiveFailures: 0,
+            LastError: null,
+            EnableBankingProfileId: connection.EnableBankingProfileId,
+            PsuType: connection.PsuType,
+            AuthMethod: connection.AuthMethod,
+            RequiredPsuHeadersJson: connection.RequiredPsuHeadersJson), ct);
+        return DisconnectStatus.ClosedDataRetained;
     }
 
     public async Task<ProviderTransactionDetailsView> GetTransactionDetailsAsync(
