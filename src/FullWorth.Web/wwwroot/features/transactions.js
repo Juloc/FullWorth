@@ -3,8 +3,8 @@
 // category, exclude-from-statistics and transfer status through the existing classification PATCH,
 // and links to a receipt when a purchase is attached.
 
-import { attachCategoryPicker } from '../ui/category-picker.js';
-import { identityIcon } from '../ui/ux-kit.js';
+import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
+import { identityIcon, categoryIconInner, monogramHue } from '../ui/ux-kit.js';
 
 let ctx = null;
 export function bindTransactions(context) {
@@ -186,7 +186,7 @@ export async function renderTransactions(context) {
       lastDate = day;
       const head = document.createElement('tr');
       head.className = 'tx-date-head';
-      head.innerHTML = `<td colspan="5"><span>${ctx.esc(dateHeading(day))}</span></td>`;
+      head.innerHTML = `<td colspan="6"><span>${ctx.esc(dateHeading(day))}</span></td>`;
       body.appendChild(head);
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
@@ -198,11 +198,15 @@ export async function renderTransactions(context) {
     tr.innerHTML =
       `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
       `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
-      `<td class="tx-cat">${ctx.esc(cat)}</td>` +
-      `<td class="tx-acct">${ctx.esc(x.account || '')}</td>` +
-      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>`;
-    tr.addEventListener('click', () => openDetail(x));
-    tr.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(x); });
+      categoryCell(x, cat) +
+      accountCell(x) +
+      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
+      `<td class="tx-go"><span class="tx-go-caret" aria-hidden="true">›</span></td>`;
+    // The category chip is an inline control: clicking it edits the category in place, without also
+    // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
+    tr.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
+    tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit]')) openDetail(x); });
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit]')) openDetail(x); });
     body.appendChild(tr);
   }
   if (!items.length) {
@@ -242,7 +246,8 @@ function txSkeletonRows(n = 7) {
     `<td class="tx-cp"><span class="tx-sk-avatar"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg"></span><span class="tx-sk-line tx-sk-md"></span></span></td>` +
     `<td class="tx-cat"><span class="tx-sk-line tx-sk-md"></span></td>` +
     `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm"></span></td>` +
-    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt"></span></td></tr>`;
+    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt"></span></td>` +
+    `<td class="tx-go"></td></tr>`;
   return row.repeat(n);
 }
 
@@ -252,11 +257,48 @@ function txEmptyState(filtered) {
   const hint = filtered
     ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
     : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
-  return `<tr><td colspan="5" class="tx-empty"><div class="tx-empty-box">` +
+  return `<tr><td colspan="6" class="tx-empty"><div class="tx-empty-box">` +
     `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>` +
     `<span class="tx-empty-title">${ctx.esc(title)}</span>` +
     `<span class="tx-empty-hint">${ctx.esc(hint)}</span>` +
     `</div></td></tr>`;
+}
+
+// Desktop table: category shown as an editable chip (tinted icon + name + caret). The icon reuses the
+// shared category-icon set; its tint is a stable per-category colour index. Clicking edits inline.
+function categoryCell(x, cat) {
+  const idx = (monogramHue(cat) % 8) + 1;
+  const inner = categoryIconInner(x.categoryIconKey)
+    || `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01"/></svg>`;
+  return `<td class="tx-cat"><button type="button" class="tx-cat-chip" data-cat-edit aria-label="${ctx.esc(deLabel('Kategorie ändern', 'Change category'))}"><span class="tx-cat-ic" data-cat="${idx}">${inner}</span><span class="tx-cat-name">${ctx.esc(cat)}</span><span class="tx-cat-caret" aria-hidden="true">▾</span></button></td>`;
+}
+
+// Desktop table: account cell with a small type icon (card for credit/cards, a bank mark otherwise).
+function accountCell(x) {
+  const name = x.account || '';
+  if (!name) return `<td class="tx-acct"></td>`;
+  const card = /kredit|card|karte|visa|master|amex/i.test(name);
+  const icon = card
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 12 4l8 6M5 10v8m4-8v8m6-8v8m4-8v8M3.5 19h17"/></svg>`;
+  return `<td class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></td>`;
+}
+
+// Inline category edit from the list chip. The classification PATCH is a full replace, so we read the
+// transaction's current flags first (cheap — GETs are coalesced) and only swap the category.
+function quickEditCategory(x) {
+  openCategoryPicker(ctx, async id => {
+    try {
+      const detail = await ctx.api(`api/transactions/${x.id}`);
+      const t = detail.transaction || x;
+      await ctx.api(`api/transactions/${x.id}/classification`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryId: id || null, isIgnored: !!t.isIgnored, isTransfer: !!t.isTransfer, transferPurpose: t.transferPurpose || null, userNote: t.userNote || null }),
+      });
+      ctx.toast(ctx.get('common.saved'));
+      await renderTransactions(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  });
 }
 
 // Booking-date header: Heute / Gestern / localized date (UX rework §4).

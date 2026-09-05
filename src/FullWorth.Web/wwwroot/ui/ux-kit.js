@@ -46,6 +46,14 @@ export function identityIcon(name, opts = {}) {
   return `<span class="fw-ident fw-monogram" style="--ident-h:${monogramHue(name)}" aria-hidden="true">${esc(initial)}</span>`;
 }
 
+// Inner markup for a category icon (used by the transactions list category chip): a literal emoji, a
+// known category glyph SVG, or null. Reuses the same CATEGORY_ICONS map + emoji detection as
+// identityIcon so a category renders the same icon wherever it appears.
+export function categoryIconInner(iconKey) {
+  if (iconKey && isEmoji(iconKey)) return esc(iconKey);
+  return categoryGlyph(iconKey);
+}
+
 // A titled elevated card (UX rework §9/§10 SectionCard). `opts`: {sub, action:{label,attr}, className}.
 // Returns an <article> string; caller fills `body` and wires any [data-action] via the returned markup.
 export function sectionCard(title, body, opts = {}) {
