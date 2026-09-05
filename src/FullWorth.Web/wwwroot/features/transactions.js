@@ -186,6 +186,7 @@ async function openDetail(listItem) {
     <div class="panel-head"><h2>${ctx.esc(t.counterparty || ctx.get('transactions.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.cancel'))}">×</button></div>
     <div class="tx-amount amount ${t.amount < 0 ? 'negative' : 'positive'}">${ctx.money(t.amount, t.currency)}</div>
     <div class="row-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}${t.description ? ' · ' + ctx.esc(t.description) : ''}</div>
+    ${!t.isManual ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label class="check"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</label>
     <label class="check"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.markTransfer'))}</label>
@@ -198,6 +199,32 @@ async function openDetail(listItem) {
   </form>`);
   dlg.classList.add('drawer');
   dlg.querySelector('[data-split]').addEventListener('click', () => openSplitDialog(t));
+  dlg.querySelector('[data-bank-details]')?.addEventListener('click', async e => {
+    const button = e.currentTarget;
+    const target = dlg.querySelector('[data-bank-details-body]');
+    button.disabled = true;
+    try {
+      const d = await ctx.bankApi('api/banking/transactions/' + t.id + '/details');
+      const values = [
+        [ctx.get('transactions.bankStatus'), d.status],
+        [ctx.get('transactions.bankEntryReference'), d.entryReference],
+        [ctx.get('transactions.bankTransactionId'), d.transactionId],
+        [ctx.get('transactions.bankCreditor'), d.creditor],
+        [ctx.get('transactions.bankDebtor'), d.debtor],
+        [ctx.get('transactions.bankAccount'), d.creditorAccountLast4 || d.debtorAccountLast4 ? '•••• ' + (d.creditorAccountLast4 || d.debtorAccountLast4) : null],
+        [ctx.get('transactions.bankCode'), d.bankTransactionDescription || d.bankTransactionCode],
+        [ctx.get('transactions.bankRemittance'), (d.remittanceInformation || []).join(' · ')]
+      ].filter(([, value]) => value);
+      target.innerHTML = values.length
+        ? values.map(([label, value]) => '<div><strong>' + ctx.esc(label) + ':</strong> ' + ctx.esc(value) + '</div>').join('')
+        : ctx.esc(ctx.get('transactions.bankDetailsUnavailable'));
+      target.hidden = false;
+      button.hidden = true;
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('transactions.bankDetailsUnavailable'));
+      button.disabled = false;
+    }
+  });
   dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
     if (!await ctx.confirm(ctx.get('transactions.deleteConfirm'), { destructive: true, confirmLabel: ctx.get('transactions.delete') })) return;
     try {
