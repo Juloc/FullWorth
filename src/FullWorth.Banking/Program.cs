@@ -23,6 +23,12 @@ builder.Services.AddHttpClient("enable-banking", (sp, client) =>
     client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(90);
 });
+builder.Services.AddHttpClient("enable-banking-control-panel", (sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
+    client.BaseAddress = new Uri(options.ControlPanelBaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(90);
+});
 // Legacy/global provider remains injectable for old connections and tests. New connections use resolver.
 builder.Services.AddHttpClient<EnableBankingClient>((sp, client) =>
 {
@@ -38,6 +44,7 @@ builder.Services.AddHttpClient<FullWorthBackendClient>((sp, client) =>
 });
 builder.Services.AddScoped<EnableBankingClientResolver>();
 builder.Services.AddScoped<EnableBankingProfileService>();
+builder.Services.AddSingleton<EnableBankingControlPanelRegistrationService>();
 builder.Services.AddScoped<BankSyncService>();
 builder.Services.AddHostedService<BankSyncWorker>();
 
@@ -145,6 +152,70 @@ app.MapDelete("/api/banking/profile", async (
         HttpStatusCode.Conflict => Results.Conflict(new { error = "profile_in_use" }),
         _ => Results.NotFound()
     };
+});
+
+app.MapPost("/api/banking/profile/register/start", async (
+    HttpContext http,
+    EnableBankingAutoRegistrationRequest request,
+    EnableBankingControlPanelRegistrationService registration,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await registration.StartAsync(userId, request, ct));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_registration_request", message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "registration_unavailable", message = ex.Message });
+    }
+    catch (EnableBankingControlPanelException ex)
+    {
+        return Results.Json(
+            new { error = ex.SafeCode },
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+});
+
+app.MapGet("/api/banking/profile/register/{id}", (
+    HttpContext http,
+    string id,
+    EnableBankingControlPanelRegistrationService registration) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(registration.GetStatus(userId, id));
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapPost("/api/banking/profile/register/{id}/retry", async (
+    HttpContext http,
+    string id,
+    EnableBankingControlPanelRegistrationService registration,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await registration.RetryVerificationAsync(userId, id, ct));
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "verification_retry_unavailable", message = ex.Message });
+    }
 });
 
 app.MapGet("/api/banking/institutions", async (
@@ -282,6 +353,25 @@ app.MapGet("/api/banking/transactions/{id:guid}/details", async (
     {
         return ProviderApiError(ex, consentAware: true);
     }
+});
+
+app.MapGet("/connect/enable-banking/setup-callback", async (
+    string? state,
+    string? oobCode,
+    EnableBankingControlPanelRegistrationService registration,
+    CancellationToken ct) =>
+{
+    var result = await registration.CompleteAsync(state, oobCode, ct);
+    var title = result.Success ? "Enable Banking setup completed" : "Enable Banking setup failed";
+    var message = result.Success
+        ? "The application was registered. Return to FullWorth; the setup dialog will update automatically."
+        : "The automatic setup could not be completed. Return to FullWorth and try again or use the manual setup.";
+    var html = $"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{title}</title></head><body style=\"font-family:system-ui,sans-serif;max-width:640px;margin:64px auto;padding:0 24px\"><h1>{title}</h1><p>{message}</p></body></html>";
+    return Results.Content(
+        html,
+        "text/html; charset=utf-8",
+        Encoding.UTF8,
+        result.Success ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest);
 });
 
 app.MapGet("/connect/enable-banking/callback", async (
