@@ -4,6 +4,7 @@
 // and links to a receipt when a purchase is attached.
 
 import { attachCategoryPicker } from '../ui/category-picker.js';
+import { identityIcon } from '../ui/ux-kit.js';
 
 let ctx = null;
 
@@ -111,7 +112,7 @@ export async function renderTransactions(context) {
     tr.dataset.txId = x.id;
     tr.innerHTML =
       `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
-      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(x, name)}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       `<td class="tx-cat">${ctx.esc(cat)}</td>` +
       `<td class="tx-acct">${ctx.esc(x.account || '')}</td>` +
       `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;
@@ -130,16 +131,6 @@ function dateHeading(day) {
   if (day === iso(0) && today !== 'common.today') return today;
   if (day === iso(-1) && yesterday !== 'common.yesterday') return yesterday;
   return ctx.date(day);
-}
-
-// Left identity (UX rework §4): brand logo when a curated local asset exists, else a stable monogram
-// tinted deterministically from the merchant name. Transfers get their own glyph. No external lookups.
-function identityIcon(x, name) {
-  if (x.isTransfer) return `<span class="tx-ident tx-ident-transfer" aria-hidden="true">⇄</span>`;
-  if (x.logoAssetPath) return `<span class="tx-ident"><img class="tx-logo" src="${ctx.esc(x.logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.tx-ident').classList.add('tx-logo-failed');this.remove()"></span>`;
-  const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
-  let h = 0; const s = String(name || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return `<span class="tx-ident tx-monogram" style="--ident-h:${h % 360}" aria-hidden="true">${ctx.esc(initial)}</span>`;
 }
 
 // Scope banner (UX rework §3): shows the active account/group name and a clear back path to Konten.

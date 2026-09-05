@@ -282,6 +282,57 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
   #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px}
 }
+/* ---- Shared UX-rework kit (ui/ux-kit.js): identity, cards, trend, period cycle, summary ---- */
+.fw-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.fw-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
+html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
+.fw-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
+.fw-ident-logo{width:100%;height:100%;object-fit:cover}
+.fw-ident.fw-ident-failed{background:var(--surface-2)}
+/* SectionCard */
+.fw-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s4);box-shadow:var(--shadow)}
+.fw-card+.fw-card{margin-top:var(--s4)}
+.fw-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.fw-card-title{font-size:15px;font-weight:600}
+.fw-card-sub{margin:2px 0 0;color:var(--muted);font-size:12px}
+.fw-card-action{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:var(--radius-pill);padding:4px 12px;font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap}
+.fw-card-action:hover{background:var(--surface-2)}
+/* TrendValue */
+.fw-trend{display:inline-flex;align-items:center;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
+.fw-trend-good{background:var(--positive-soft);color:var(--positive)}
+.fw-trend-bad{background:var(--negative-soft);color:var(--negative)}
+/* PeriodCycleSelector: segmented control + window navigation */
+.fw-cyclebar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
+.fw-cycle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px;gap:2px}
+.fw-cycle button{border:0;background:transparent;color:var(--muted);border-radius:var(--radius-pill);padding:6px 14px;font-weight:600;font-size:13px;cursor:pointer}
+.fw-cycle button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-menu)}
+.fw-window{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:13px}
+.fw-window button{width:30px;height:30px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer}
+.fw-window button:disabled{opacity:.4;cursor:not-allowed}
+.fw-window-label{min-width:9ch;text-align:center;font-weight:600;color:var(--text)}
+/* SummaryMetric (card top line) */
+.fw-summary{display:flex;flex-wrap:wrap;gap:var(--s6);align-items:baseline}
+.fw-summary-value{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.fw-summary-label{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+/* AnalysisCard grid */
+.fw-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start}
+@media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
+/* Identity list row (contracts, merchant lists, upcoming widgets) */
+.fw-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.fw-row:last-child{border-bottom:0}
+.fw-row:hover{background:var(--surface-2)}
+.fw-row-main{flex:1;min-width:0}
+.fw-row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fw-row-sub{color:var(--muted);font-size:12px;margin-top:2px}
+.fw-row-amt{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
+.fw-row-amt small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+/* Segmented filter chips (type/sort) */
+.fw-chips{display:flex;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s3)}
+.fw-chip{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:var(--radius-pill);padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.fw-chip.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+/* Allocation / composition bar */
+.fw-alloc{display:flex;height:12px;border-radius:var(--radius-pill);overflow:hidden;background:var(--surface-2);margin:var(--s2) 0}
+.fw-alloc>span{display:block;height:100%}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
 .tx-detail{width:min(500px,94vw)}
 .tx-detail .tx-amount{font-size:21px;font-weight:600;margin:2px 0 6px}
