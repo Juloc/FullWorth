@@ -12,6 +12,11 @@ public sealed class EnableBankingOptions
 {
     public const string SectionName = "EnableBanking";
     public string BaseUrl { get; set; } = "https://api.enablebanking.com";
+    public string ControlPanelBaseUrl { get; set; } = "https://enablebanking.com";
+    public string PrivacyUrl { get; set; } = "https://fullworth.de/privacy/";
+    public string TermsUrl { get; set; } = "https://fullworth.de/terms/";
+    public string ApplicationName { get; set; } = "FullWorth";
+    public string ApplicationDescription { get; set; } = "Private finance web app";
     public string ApplicationId { get; set; } = string.Empty;
     public string PrivateKeyPath { get; set; } = "/run/secrets/enable-banking-private-key.pem";
     // Optional legacy/global key for container deployments that do not mount a PEM file.
