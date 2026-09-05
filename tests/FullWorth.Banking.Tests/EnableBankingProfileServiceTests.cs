@@ -39,6 +39,23 @@ public sealed class EnableBankingProfileServiceTests
     }
 
     [Fact]
+    public async Task PublicKeyOnlyPemIsRejectedBeforeProviderCall()
+    {
+        using var rsa = RSA.Create(2048);
+        var publicOnlyPem = rsa.ExportSubjectPublicKeyInfoPem();
+        using var fixture = new Fixture("{}");
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            fixture.Service.VerifyAndSaveAsync(
+                Guid.NewGuid(),
+                new EnableBankingProfileVerifyRequest(ApplicationId, publicOnlyPem),
+                CancellationToken.None));
+
+        Assert.Equal(0, fixture.BackendProfileWrites);
+        Assert.Equal(0, fixture.ProviderRequests);
+    }
+
+    [Fact]
     public async Task KidMismatchIsRejected()
     {
         using var fixture = new Fixture($$"""
@@ -136,6 +153,7 @@ public sealed class EnableBankingProfileServiceTests
         private readonly HttpClient _providerHttp;
         private readonly HttpClient _backendHttp;
         private int _backendProfileWrites;
+        private RecordingHttpMessageHandler? _providerHandler;
 
         public Fixture(string applicationJson)
         {
@@ -148,6 +166,7 @@ public sealed class EnableBankingProfileServiceTests
                 Assert.Equal("/application", request.RequestUri!.AbsolutePath);
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(applicationJson));
             });
+            _providerHandler = providerHandler;
             _providerHttp = new HttpClient(providerHandler) { BaseAddress = new Uri("https://provider.test/") };
 
             var backendHandler = new ProfileBackendHandler(() => Interlocked.Increment(ref _backendProfileWrites));
@@ -178,6 +197,7 @@ public sealed class EnableBankingProfileServiceTests
         public string PrivateKeyPem { get; }
         public EnableBankingProfileService Service { get; }
         public int BackendProfileWrites => _backendProfileWrites;
+        public int ProviderRequests => _providerHandler?.Requests.Count ?? 0;
 
         public void Dispose()
         {
