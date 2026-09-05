@@ -6,6 +6,7 @@
 // bar widths are set from JS (no source inline style) to keep the CSP audit at one.
 
 import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, esc } from '../ui/ux-kit.js';
+import { bindChartScrubber } from '../ui/chart-scrubber.js';
 
 let ctx = null;
 // Kept for backwards compatibility with the builder period presets (and the required export).
@@ -137,6 +138,133 @@ function pct(cur, prev) { cur = Number(cur) || 0; prev = Number(prev) || 0; if (
 
 function kpi(valueHtml, label) { return `<div class="an-kpi"><span class="k">${valueHtml}</span><span class="l">${label}</span></div>`; }
 
+function monthLabel(row) {
+  const year = Number(row?.year), month = Number(row?.month);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return String(row?.label || row?.month || '');
+  return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1));
+}
+
+function bindSpendingScrubber(el, rows, currency) {
+  const svg = el.querySelector('svg.an-chart');
+  const valueEl = el.querySelector('.an-card-foot .an-kpi .k');
+  const labelEl = el.querySelector('.an-card-foot .an-kpi .l');
+  if (!svg || !valueEl || !rows.length) return;
+  const originalValue = valueEl.innerHTML;
+  const originalLabel = labelEl?.innerHTML || '';
+  const vals = rows.map(row => Math.abs(Number(row.expenses) || 0));
+  const max = Math.max(1, ...vals), w = 900, h = 200, baseY = h - 20;
+  const points = rows.map((row, index) => {
+    const value = vals[index];
+    return {
+      x: (index / (rows.length - 1 || 1)) * w,
+      label: monthLabel(row),
+      markers: [{ y: baseY - (value / max) * (h - 30), className: 'expense' }],
+      data: { row, value }
+    };
+  });
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => {
+      valueEl.innerHTML = ctx.money(point.data.value, currency);
+      if (labelEl) labelEl.textContent = point.label;
+    },
+    onReset: () => {
+      valueEl.innerHTML = originalValue;
+      if (labelEl) labelEl.innerHTML = originalLabel;
+    },
+    formatAria: point => `${point.label}: ${ctx.money(point.data.value, currency)}`
+  });
+}
+
+function bindInoutScrubber(el, rows, currency) {
+  const svg = el.querySelector('svg.an-chart');
+  const valueEls = [...el.querySelectorAll('.an-card-foot .an-kpi .k')];
+  if (!svg || valueEls.length < 3 || !rows.length) return;
+  const originals = valueEls.map(node => node.innerHTML);
+  const max = Math.max(1, ...rows.map(row => Math.max(Number(row.income) || 0, Number(row.expenses) || 0)));
+  const w = 900, h = 200, pad = 24, slot = (w - pad * 2) / rows.length;
+  const points = rows.map((row, index) => {
+    const income = Number(row.income) || 0, expenses = Number(row.expenses) || 0, net = income - expenses;
+    const x = pad + slot * index + slot / 2;
+    return {
+      x,
+      label: monthLabel(row),
+      markers: [
+        { y: h - 20 - (income / max) * (h - 30), className: 'income' },
+        { y: h - 20 - (expenses / max) * (h - 30), className: 'expense' }
+      ],
+      data: { income, expenses, net }
+    };
+  });
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => {
+      valueEls[0].innerHTML = ctx.money(point.data.income, currency);
+      valueEls[1].innerHTML = ctx.money(point.data.expenses, currency);
+      const cls = point.data.net > 0 ? 'positive' : point.data.net < 0 ? 'negative' : '';
+      valueEls[2].innerHTML = `<span class="${cls}">${ctx.money(point.data.net, currency)}</span>`;
+    },
+    onReset: () => valueEls.forEach((node, index) => { node.innerHTML = originals[index]; }),
+    formatAria: point => `${point.label}: ${ctx.get('transactions.income')} ${ctx.money(point.data.income, currency)}, ${ctx.get('transactions.expenses')} ${ctx.money(point.data.expenses, currency)}`
+  });
+}
+
+function bindNetWorthHistoryScrubber(el, history, currency) {
+  const svg = el.querySelector('svg.an-chart');
+  const valueEl = el.querySelector('.an-card-foot .an-kpi .k');
+  const labelEl = el.querySelector('.an-card-foot .an-kpi .l');
+  if (!svg || !valueEl || !history.length) return;
+  const originalValue = valueEl.innerHTML;
+  const originalLabel = labelEl?.innerHTML || '';
+  const vals = history.map(point => Number(point.netWorth) || 0);
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  const w = 900, h = 200, baseY = h - 10;
+  const points = history.map((point, index) => ({
+    x: (index / (history.length - 1 || 1)) * w,
+    label: ctx.date(point.date),
+    markers: [{ y: baseY - ((vals[index] - min) / span) * (h - 20) }],
+    data: { value: vals[index] }
+  }));
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => {
+      valueEl.innerHTML = ctx.money(point.data.value, currency);
+      if (labelEl) labelEl.textContent = point.label;
+    },
+    onReset: () => {
+      valueEl.innerHTML = originalValue;
+      if (labelEl) labelEl.innerHTML = originalLabel;
+    },
+    formatAria: point => `${point.label}: ${ctx.money(point.data.value, currency)}`
+  });
+}
+
+function bindBuilderScrubber(el, series, fmt, chartType) {
+  const svg = el.querySelector('svg.an-chart');
+  const readout = el.querySelector('.an-chart-current');
+  if (!svg || !readout || !series.length) return;
+  const vals = series.map(point => Number(point.value) || 0);
+  const w = 900, h = 200;
+  let points;
+  if (chartType === 'bar') {
+    const max = Math.max(1, ...vals.map(Math.abs)), pad = 24, slot = (w - pad * 2) / series.length;
+    points = series.map((point, index) => {
+      const value = vals[index], x = pad + slot * index + slot / 2;
+      return { x, label: String(point.label || ''), markers: [{ y: h - 20 - (Math.abs(value) / max) * (h - 30), className: value < 0 ? 'expense' : 'income' }], data: point };
+    });
+  } else {
+    const min = Math.min(0, ...vals), max = Math.max(1, ...vals), span = (max - min) || 1, baseY = h - 10;
+    points = series.map((point, index) => ({ x: (index / (series.length - 1 || 1)) * w, label: String(point.label || ''), markers: [{ y: baseY - ((vals[index] - min) / span) * (h - 20) }], data: point }));
+  }
+  const original = readout.innerHTML;
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => { readout.textContent = `${point.label}: ${fmt(point.data.value)}`; },
+    onReset: () => { readout.innerHTML = original; },
+    formatAria: point => `${point.label}: ${fmt(point.data.value)}`
+  });
+}
+
 // 1) Spending development — expenses over the window as a line, with total + trend vs previous window.
 function fillSpending(el, o, oPrev) {
   if (!el) return;
@@ -146,6 +274,7 @@ function fillSpending(el, o, oPrev) {
   const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
     `<div class="an-card-foot">${kpi(ctx.money(o?.expenses || 0, cur), esc(t('Ausgaben gesamt', 'Total spending')))}${trendBadge(trend, false)}</div>`;
+  bindSpendingScrubber(el, rows, cur);
 }
 
 function spendingLine(rows) {
@@ -174,6 +303,7 @@ function fillInout(el, o, oPrev) {
     kpi(ctx.money(o?.income || 0, cur), `${esc(ctx.get('transactions.income'))} ${trendBadge(incTrend, true)}`) +
     kpi(ctx.money(o?.expenses || 0, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
     `</div>` + kpi(`<span class="${netCls}">${ctx.money(net, cur)}</span>`, esc(ctx.get('analytics.net'))) + `</div>`;
+  bindInoutScrubber(el, rows, cur);
 }
 
 function inoutBars(rows) {
@@ -277,6 +407,7 @@ function fillNetWorth(el, history, currency) {
   const vals = history.map(x => Number(x.netWorth) || 0);
   const last = vals[vals.length - 1], first = vals[0];
   el.innerHTML = chart(() => nwLine(vals)) + `<div class="an-card-foot">${kpi(ctx.money(last, currency), esc(t('Aktuelles Vermögen', 'Current net worth')))}${trendBadge(pct(last, first), true)}</div>`;
+  bindNetWorthHistoryScrubber(el, history, currency);
 }
 
 function nwLine(vals) {
@@ -416,9 +547,10 @@ function renderSeries(el, r, cfg) {
     el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
     return;
   }
-  if (cfg.chartType === 'line') { el.innerHTML = marker + lineChart(series, fmt); return; }
+  if (cfg.chartType === 'line') { el.innerHTML = marker + lineChart(series, fmt); bindBuilderScrubber(el, series, fmt, 'line'); return; }
   if (cfg.chartType === 'donut') { el.innerHTML = marker + donutChart(series, fmt); return; }
   el.innerHTML = marker + barChart(series, fmt, cfg.measure);
+  bindBuilderScrubber(el, series, fmt, 'bar');
 }
 
 function shortLabel(s) { const t = String(s || ''); return t.length > 10 ? t.slice(0, 9) + '…' : t; }
@@ -438,7 +570,8 @@ function barChart(series, fmt, measure) {
     out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(h - 20 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}" rx="6"></rect>`;
     out += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(shortLabel(p.label))}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${out}</svg>`;
+  const last = series[series.length - 1];
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${out}</svg><div class="row-sub an-chart-current">${esc(last.label)}: ${fmt(last.value)}</div>`;
 }
 
 // Horizontal bars (share of the largest), reusing the category-bar technique.
@@ -459,7 +592,7 @@ function lineChart(series, fmt) {
   const line = smoothPath(pts);
   const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
   const last = series[series.length - 1];
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${areaGradient('an-grad-line', 'an-g-line')}<path d="${area}" class="an-area" fill="url(#an-grad-line)"></path><path d="${line}" class="an-line-builder"></path></svg><div class="row-sub">${esc(last.label)}: ${fmt(last.value)}</div>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${areaGradient('an-grad-line', 'an-g-line')}<path d="${area}" class="an-area" fill="url(#an-grad-line)"></path><path d="${line}" class="an-line-builder"></path></svg><div class="row-sub an-chart-current">${esc(last.label)}: ${fmt(last.value)}</div>`;
 }
 
 // Donut of the positive-valued slices (a donut of mixed signs is meaningless). Arc lengths via
