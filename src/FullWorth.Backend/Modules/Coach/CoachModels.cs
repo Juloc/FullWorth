@@ -164,6 +164,34 @@ public sealed record CoachReviewExample(
     decimal Amount,
     IReadOnlyList<string> Reasons);
 
+public sealed record CoachAccountFact(
+    Guid AccountId,
+    string InstitutionName,
+    string DisplayName,
+    string Currency,
+    decimal? Balance,
+    bool IncludeInNetWorth);
+
+public sealed record CoachContractFact(
+    Guid ContractId,
+    string Name,
+    string? ProviderName,
+    string Kind,
+    decimal Amount,
+    string Currency,
+    string BillingCycle,
+    int Interval,
+    DateOnly? NextDueDate,
+    bool IsActive);
+
+public sealed record CoachTransactionFact(
+    Guid TransactionId,
+    DateOnly Date,
+    string Merchant,
+    string Category,
+    decimal Amount,
+    string Currency);
+
 public sealed record CoachTargetScenario(
     decimal Target,
     DateOnly? EstimatedDate,
@@ -197,10 +225,13 @@ public sealed record CoachContext(
     public IReadOnlyList<CoachBudgetFact> Budgets { get; init; } = [];
     public IReadOnlyList<CoachReviewExample> PositiveExamples { get; init; } = [];
     public IReadOnlyList<CoachReviewExample> NegativeExamples { get; init; } = [];
+    public IReadOnlyList<CoachAccountFact> Accounts { get; init; } = [];
+    public IReadOnlyList<CoachContractFact> Contracts { get; init; } = [];
+    public IReadOnlyList<CoachTransactionFact> RecentTransactions { get; init; } = [];
 }
 
 public sealed record CreateCoachConversationRequest(string? Title, string? MascotId);
-public sealed record AskCoachRequest(string Text, DateOnly? From = null, DateOnly? To = null);
+public sealed record AskCoachRequest(string Text, DateOnly? From = null, DateOnly? To = null, string? Model = null);
 
 public sealed record CoachConversationDto(
     Guid Id,
@@ -235,7 +266,8 @@ public sealed record CoachProviderRequest(
     string Question,
     CoachContext Context,
     IReadOnlyList<CoachMessageDto> ConversationTail,
-    string? MascotId);
+    string? MascotId,
+    string? Model = null);
 
 public sealed record CoachProviderResult(
     string Text,
