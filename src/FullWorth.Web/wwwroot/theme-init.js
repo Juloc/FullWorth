@@ -1,20 +1,11 @@
-let bankConnectedAtBoot = false;
-
 try {
-  bankConnectedAtBoot = new URLSearchParams(location.search).has('bankConnected');
-
   const theme = localStorage.getItem('finance.theme') || 'system';
   document.documentElement.dataset.theme = theme === 'system'
     ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
 
   const visualTheme = localStorage.getItem('finance.visualTheme') || 'clean';
-  const mascot = localStorage.getItem('finance.mascot') || 'none';
-  const mascotActivity = localStorage.getItem('finance.mascotActivity') || 'normal';
   document.documentElement.dataset.visualTheme = ['clean', 'cute'].includes(visualTheme) ? visualTheme : 'clean';
-  document.documentElement.dataset.mascot = ['none', 'lion', 'duck', 'elephant', 'penguin', 'raccoon', 'tree', 'ghost', 'vault'].includes(mascot) ? mascot : 'none';
-  document.documentElement.dataset.mascotActivity = ['subtle', 'normal', 'high'].includes(mascotActivity) ? mascotActivity : 'normal';
-
 } catch {
 }
 
@@ -34,23 +25,11 @@ try {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  // Appearance is initialized before feature enhancers. Normal features do not need to know whether
-  // Clean/Cute or a mascot is active; optional scene slots are resolved centrally by this module.
   try {
     const appearance = await import('/ui/appearance.js');
     appearance.initAppearance?.();
   } catch (error) {
     console.error('Appearance initialization failed.', error);
-  }
-
-  // Semantic mascot scenes compose optional props over the safe base-state artwork. This is also the
-  // single place for transient mascot moments, so feature code never branches on Clean/Cute or mascot id.
-  try {
-    const scenes = await import('/ui/mascot-scenes.js');
-    scenes.initMascotScenes?.();
-    if (bankConnectedAtBoot) scenes.showMascotMoment?.('first-bank-connected', { duration: 3000 });
-  } catch (error) {
-    console.error('Mascot scene initialization failed.', error);
   }
 
   const modules = [
