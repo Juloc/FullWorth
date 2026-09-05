@@ -206,6 +206,44 @@ public sealed class BankSyncFlowTests
         Assert.Equal("longest", query["strategy"]);
     }
 
+    [Fact]
+    public async Task Page_limit_marks_history_partial_and_does_not_advance_success_timestamp()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler { SyncState = null };
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/sessions/session-1")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{"status":"AUTHORIZED","accounts":[{"uid":"account-1","identification_hash":"hash-1","name":"Konto","currency":"EUR"}]}"));
+            if (path == "/accounts/account-1/details")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{"identification_hash":"hash-1","details":"Konto","currency":"EUR"}"));
+            if (path == "/accounts/account-1/balances")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{"balances":[]}"));
+            if (path == "/accounts/account-1/transactions")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{"transactions":[],"continuation_key":"more"}"));
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
+        {
+            MaxPagesPerAccount = 1
+        });
+
+        var result = await service.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(0, result.Synced);
+        Assert.Equal(1, result.Failed);
+        var final = backend.Connections.Single();
+        Assert.Equal("HISTORY_PAGE_LIMIT_REACHED", final.LastError);
+        Assert.Null(final.LastSyncedAt);
+        Assert.Equal(1, final.ConsecutiveFailures);
+    }
+
     private static RecordingHttpMessageHandler StandardAccountProvider(bool includeAccountDetails) => new((request, _, _) =>
     {
         var path = request.RequestUri!.AbsolutePath;
