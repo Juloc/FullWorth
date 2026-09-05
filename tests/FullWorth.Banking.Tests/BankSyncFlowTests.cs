@@ -218,15 +218,15 @@ public sealed class BankSyncFlowTests
             var path = request.RequestUri!.AbsolutePath;
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
-                    "{"status":"AUTHORIZED","accounts":[{"uid":"account-1","identification_hash":"hash-1","name":"Konto","currency":"EUR"}]}"));
+                    "{\"status\":\"AUTHORIZED\",\"accounts\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"name\":\"Konto\",\"currency\":\"EUR\"}]}"));
             if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
-                    "{"identification_hash":"hash-1","details":"Konto","currency":"EUR"}"));
+                    "{\"identification_hash\":\"hash-1\",\"details\":\"Konto\",\"currency\":\"EUR\"}"));
             if (path == "/accounts/account-1/balances")
-                return Task.FromResult(TestBankingEnvironment.JsonResponse("{"balances":[]}"));
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
             if (path == "/accounts/account-1/transactions")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
-                    "{"transactions":[],"continuation_key":"more"}"));
+                    "{\"transactions\":[],\"continuation_key\":\"more\"}"));
             throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
         });
         var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
