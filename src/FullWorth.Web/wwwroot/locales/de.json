@@ -889,7 +889,20 @@
     "retryVerification": "Prüfung erneut versuchen",
     "tryAgain": "Neu starten",
     "useManual": "Manuell einrichten",
-    "automaticSecurity": "Der private RSA-Schlüssel und das Control-Panel-Refresh-Token werden verschlüsselt gespeichert. Kurzlebige Control-Panel-Zugriffstokens bleiben nur im Arbeitsspeicher."
+    "automaticSecurity": "Der private RSA-Schlüssel und das Control-Panel-Refresh-Token werden verschlüsselt gespeichert. Kurzlebige Control-Panel-Zugriffstokens bleiben nur im Arbeitsspeicher.",
+    "ingFinTsTitle": "ING verbinden",
+    "ingFinTsMode": "Verbindungsart",
+    "ingFinTsFull": "FinTS – Giro + Extra-Konten + Depot",
+    "ingFinTsFullHint": "Standard. Liest ING Girokonten, Extra-Konten und Direkt-Depot.",
+    "ingEnableBankingOnly": "Enable Banking – nur Giro über PSD2",
+    "ingEnableBankingHint": "Benötigt eine eingerichtete Enable-Banking-Anwendung.",
+    "ingUserId": "Zugangsnummer / Benutzername",
+    "ingPin": "Internetbanking-PIN / Passwort",
+    "ingTan": "TAN",
+    "ingTanHint": "Bestätige die Anmeldung mit dem von ING verlangten Verfahren.",
+    "ingDecoupledHint": "Freigabe in der ING-App bestätigen und anschließend prüfen.",
+    "ingPoll": "Freigabe prüfen",
+    "ingConnected": "ING verbunden"
   },
   "aiAccess": {
     "title": "KI-Zugang",
