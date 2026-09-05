@@ -202,6 +202,8 @@ app.MapPost("/api/banking/connections/{id:guid}/sync", async (
     var status = result.Status switch
     {
         ManualSyncStatus.Started => "completed",
+        ManualSyncStatus.PartialHistory => "partial_history",
+        ManualSyncStatus.Error => "error",
         ManualSyncStatus.Cooldown => "cooldown",
         ManualSyncStatus.AlreadyRunning => "already_running",
         ManualSyncStatus.ReauthorizationRequired => "reauthorization_required",
