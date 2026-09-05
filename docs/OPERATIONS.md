@@ -12,7 +12,7 @@ Required secrets include the database password, the three service credentials an
 application ID + RSA private key through the authenticated setup wizard. The RSA key is encrypted at
 rest with `Security:DataEncryptionKey` and is never returned to the browser after setup.
 
-A global Enable Banking key is legacy-only. For old deployments either set
+A global Enable Banking key is legacy-only and is resolved only for already-existing bank connections with no profile id. It cannot be used to create a new user bank connection. For old deployments either set
 `ENABLE_BANKING_APPLICATION_ID` plus `ENABLE_BANKING_PRIVATE_KEY_BASE64`, or keep the previous PEM
 mount by starting Compose with `docker-compose.enable-banking-legacy.yml`.
 
