@@ -615,6 +615,7 @@
     "disconnectConfirm": "Disconnect “{name}”? All accounts and transactions synced from this bank will be permanently deleted.",
     "disconnected": "Bank disconnected",
     "syncStarted": "Sync running – fetching the latest data.",
+    "syncCompleted": "Synchronization completed",
     "syncRunning": "A sync is already running.",
     "syncCooldown": "The bank hit its rate limit. Please try again later.",
     "syncReauth": "The consent has expired. Please reconnect the bank.",
