@@ -74,7 +74,7 @@ public sealed class EnableBankingAisContractTests
             DateTimeOffset.UtcNow.AddDays(90),
             "password",
             "anonymous-psu-id",
-            new Dictionary<string, string> { ["username"] = "user" },
+            new Dictionary<string, string> { ["userId"] = "user" },
             CancellationToken.None,
             psuType: "personal",
             language: "de",
@@ -87,7 +87,8 @@ public sealed class EnableBankingAisContractTests
         Assert.Equal("de", root.GetProperty("language").GetString());
         Assert.Equal("anonymous-psu-id", root.GetProperty("psu_id").GetString());
         Assert.True(root.GetProperty("credentials_autosubmit").GetBoolean());
-        Assert.Equal("user", root.GetProperty("credentials").GetProperty("username").GetString());
+        Assert.Equal("user", root.GetProperty("credentials").GetProperty("userId").GetString());
+        Assert.False(root.GetProperty("credentials").TryGetProperty("user_id", out _));
         Assert.True(root.GetProperty("access").GetProperty("balances").GetBoolean());
         Assert.True(root.GetProperty("access").GetProperty("transactions").GetBoolean());
     }
