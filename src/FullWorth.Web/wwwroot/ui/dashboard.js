@@ -204,12 +204,21 @@ async function saveLayout(ctx, layout) {
 export function invalidateLayout() { cachedLayout = null; }
 
 async function gatherData(ctx) {
-  const [dashboard, accounts, budgets] = await Promise.all([
+  const [dashboard, accounts, budgets, groups] = await Promise.all([
     ctx.api('api/analytics/dashboard').catch(() => null),
     ctx.api('api/accounts').catch(() => []),
     ctx.api('api/analytics/budget-status').catch(() => ({ items: [] })),
+    ctx.api('api/account-groups').catch(() => []),
   ]);
-  return { dashboard, accounts, budgets };
+  return { dashboard, accounts, budgets, groups };
+}
+
+// Scoped-navigation helper for drillable widget rows (Overview → scoped bookings, UX rework §3).
+const DASH_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg>';
+function bindDrill(el, queryFn) {
+  const go = () => window.fwNavScope && window.fwNavScope('transactions', queryFn());
+  el.addEventListener('click', go);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
 }
 
 function errorState(ctx) { return `<div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`; }
@@ -229,8 +238,26 @@ function renderWidget(type, ctx, body, data, cfg) {
     return;
   }
   if (type === 'accounts') {
-    const a = data.accounts || [];
-    body.innerHTML = a.length ? a.map(x => `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="row-sub">${ctx.esc(x.institutionName)}${x.ibanLast4 ? ' · ' + (isPrivate() ? '••••' : '•••• ' + ctx.esc(x.ibanLast4)) : ''}</div></div><div class="amount-stack"><div class="amount">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div>${x.baseValue != null ? `<div class="amount-converted">${converted(x.baseValue, x.baseCurrency)}</div>` : ''}</div></div>`).join('') : emptyState(ctx);
+    // Grouped account cards (UX rework §3): each group header opens all its bookings (?groupId=), each
+    // account row opens that account (?accountId=) — so group AND account drill-down work from Overview.
+    const a = (data.accounts || []).filter(x => x.isActive !== false);
+    if (!a.length) { body.innerHTML = emptyState(ctx); return; }
+    const groups = (data.groups || []).slice().sort((g1, g2) => (g1.sortOrder - g2.sortOrder) || (g1.name || '').localeCompare(g2.name || ''));
+    const byGroup = new Map();
+    for (const x of a) { const k = x.groupId || ''; if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(x); }
+    const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === cur ? s + Number(x.latestBalance.amount) : s), 0);
+    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${ctx.esc(x.institutionName || '')}${x.ibanLast4 ? ' · ' + (isPrivate() ? '••••' : '•••• ' + ctx.esc(x.ibanLast4)) : ''}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
+    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), cur)}</div></div>`;
+    let html = '';
+    if (groups.length) {
+      for (const g of groups) { const accts = byGroup.get(g.id) || []; if (accts.length) html += groupHead(g, accts) + accts.map(acctRow).join(''); }
+      const ung = byGroup.get('') || []; if (ung.length) html += ung.map(acctRow).join('');
+    } else {
+      html = a.map(acctRow).join('');
+    }
+    body.innerHTML = html;
+    body.querySelectorAll('[data-acct]').forEach(r => bindDrill(r, () => 'accountId=' + encodeURIComponent(r.dataset.acct)));
+    body.querySelectorAll('[data-group]').forEach(r => bindDrill(r, () => 'groupId=' + encodeURIComponent(r.dataset.group)));
     return;
   }
   if (type === 'income-expense') {
@@ -268,9 +295,9 @@ function renderWidget(type, ctx, body, data, cfg) {
       body.innerHTML = items.length ? items.map(x => {
         const name = x.merchantDisplayName || x.counterparty || '—';
         const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
-        return `<div class="fw-row" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
+        return `<div class="fw-row is-drillable" role="button" tabindex="0" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
       }).join('') : emptyState(ctx);
-      body.querySelectorAll('[data-recent-tx]').forEach(r => r.addEventListener('click', () => window.fwNavScope && window.fwNavScope('transactions', '')));
+      body.querySelectorAll('[data-recent-tx]').forEach(r => bindDrill(r, () => ''));
     }).catch(() => { body.innerHTML = errorState(ctx); });
     return;
   }
@@ -285,7 +312,8 @@ function renderIncomeExpensePeriod(ctx, body, cfg) {
   ctx.api(`api/analytics/overview${qs}`).then(o => {
     const cur = o?.currency || 'EUR';
     const marker = o?.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : '';
-    if (cfg.chart === 'bars') { body.innerHTML = monthlyBars(ctx, o?.byMonth || [], cur) + marker; return; }
+    // Privacy: a bar chart's geometry would leak the masked figures, so hide the chart body in privacy mode.
+    if (cfg.chart === 'bars') { body.innerHTML = (isPrivate() ? `<div class="widget-chart an-chart-private" aria-hidden="true">•••</div>` : monthlyBars(ctx, o?.byMonth || [], cur)) + marker; return; }
     body.innerHTML = `<div class="widget-split big"><div><div class="row-sub">${ctx.esc(ctx.get('transactions.income'))}</div><strong class="amount positive">${money(o?.income ?? 0, cur)}</strong></div><div><div class="row-sub">${ctx.esc(ctx.get('transactions.expenses'))}</div><strong class="amount negative">${money(o?.expenses ?? 0, cur)}</strong></div></div>${marker}`;
   }).catch(() => { body.innerHTML = errorState(ctx); });
 }

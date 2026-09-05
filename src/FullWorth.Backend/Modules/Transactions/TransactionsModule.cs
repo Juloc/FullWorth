@@ -76,14 +76,34 @@ public sealed class TransactionStore(FullWorthDbContext db)
         }
         if (request.CategoryId.HasValue)
         {
-            var categoryId = request.CategoryId.Value;
+            // Match the exact category, or — when includeDescendants is set — the category plus every
+            // descendant, so a parent-category drill-down from Analytics returns the same subtree the
+            // category report rolls up. Scoped to the active space; the walk is cycle-safe via the HashSet.
+            var scopeCategoryIds = new HashSet<Guid> { request.CategoryId.Value };
+            if (request.IncludeDescendants == true && fullWorthSpaceId.HasValue)
+            {
+                var edges = await db.Categories.AsNoTracking()
+                    .Where(c => c.FullWorthSpaceId == fullWorthSpaceId.Value && c.ParentId != null)
+                    .Select(c => new { c.Id, ParentId = c.ParentId!.Value })
+                    .ToListAsync(ct);
+                var childrenByParent = edges.GroupBy(e => e.ParentId).ToDictionary(g => g.Key, g => g.Select(e => e.Id).ToList());
+                var stack = new Stack<Guid>();
+                stack.Push(request.CategoryId.Value);
+                while (stack.Count > 0)
+                {
+                    var current = stack.Pop();
+                    if (childrenByParent.TryGetValue(current, out var kids))
+                        foreach (var kid in kids)
+                            if (scopeCategoryIds.Add(kid)) stack.Push(kid);
+                }
+            }
             q = q.Where(x =>
-                x.CategoryId == categoryId ||
-                db.TransactionAllocations.Any(a => a.TransactionId == x.Id && a.CategoryId == categoryId) ||
+                (x.CategoryId != null && scopeCategoryIds.Contains(x.CategoryId.Value)) ||
+                db.TransactionAllocations.Any(a => a.TransactionId == x.Id && a.CategoryId != null && scopeCategoryIds.Contains(a.CategoryId.Value)) ||
                 db.Purchases.Any(p =>
                     (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
                     (p.Visibility != "private" || p.CreatedByUserId == userId) &&
-                    p.Items.Any(i => i.CategoryId == categoryId)));
+                    p.Items.Any(i => i.CategoryId != null && scopeCategoryIds.Contains(i.CategoryId.Value))));
         }
         if (request.From.HasValue) q = q.Where(x => x.BookingDate >= request.From.Value);
         if (request.To.HasValue) q = q.Where(x => x.BookingDate <= request.To.Value);
@@ -578,7 +598,7 @@ public sealed class TransactionStore(FullWorthDbContext db)
     }
 }
 
-public sealed record TransactionQuery(Guid? AccountId, Guid? AccountGroupId, Guid? CategoryId, DateOnly? From, DateOnly? To, string? Direction, string? Query, bool? IncludeIgnored, bool? TransfersOnly, string? Sort, string? Order, int? Offset, int? Limit);
+public sealed record TransactionQuery(Guid? AccountId, Guid? AccountGroupId, Guid? CategoryId, bool? IncludeDescendants, DateOnly? From, DateOnly? To, string? Direction, string? Query, bool? IncludeIgnored, bool? TransfersOnly, string? Sort, string? Order, int? Offset, int? Limit);
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 public sealed record AllocationLine(Guid? CategoryId, decimal Amount, string? Note, Guid? PurchaseItemId = null);
 public sealed record RefundLink(Guid? OriginalTransactionId, Guid? RefundCategoryId = null);
@@ -591,9 +611,9 @@ public static class TransactionEndpoints
     {
         var group = app.MapGroup("/api/transactions").WithTags("Transactions");
 
-        group.MapGet("/", async (Guid? fullWorthSpaceId, Guid? accountId, Guid? accountGroupId, Guid? categoryId, DateOnly? from, DateOnly? to, string? direction, string? query, bool? includeIgnored, bool? transfersOnly, string? sort, string? order, int? offset, int? limit, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
+        group.MapGet("/", async (Guid? fullWorthSpaceId, Guid? accountId, Guid? accountGroupId, Guid? categoryId, bool? includeDescendants, DateOnly? from, DateOnly? to, string? direction, string? query, bool? includeIgnored, bool? transfersOnly, string? sort, string? order, int? offset, int? limit, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
             Results.Ok(await store.SearchForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId,
-                new(accountId, accountGroupId, categoryId, from, to, direction, query, includeIgnored, transfersOnly, sort, order, offset, limit), ct)));
+                new(accountId, accountGroupId, categoryId, includeDescendants, from, to, direction, query, includeIgnored, transfersOnly, sort, order, offset, limit), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {

@@ -97,7 +97,7 @@ public sealed class TransactionAccountGroupScopeTests
     }
 
     private static TransactionQuery Query(Guid? groupId = null, Guid? accountId = null) =>
-        new(accountId, groupId, null, null, null, null, null, null, null, null, null, null, null);
+        new(accountId, groupId, null, null, null, null, null, null, null, null, null, null, null, null);
 
     private static JsonDocument Parse(object result) => JsonDocument.Parse(JsonSerializer.Serialize(result, Camel));
 

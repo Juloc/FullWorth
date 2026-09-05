@@ -7,6 +7,9 @@ import { attachCategoryPicker } from '../ui/category-picker.js';
 import { identityIcon } from '../ui/ux-kit.js';
 
 let ctx = null;
+// The URL ?query= merchant-drill term we last seeded into the search box (so a manual re-apply keeps the
+// user's edited term instead of re-seeding from the stale URL).
+let appliedUrlQuery = '';
 
 export function bindTransactions(context) {
   ctx = context;
@@ -74,6 +77,15 @@ export async function renderTransactions(context) {
   const params = new URLSearchParams(location.search);
   const accountId = params.get('accountId') || '';
   const groupId = params.get('groupId') || '';
+  const categoryId = params.get('categoryId') || '';
+  const includeDescendants = params.get('includeDescendants') === 'true';
+  // A category/merchant drill-down from Analytics arrives as ?categoryId= (subtree-scoped) or ?query=
+  // (merchant name → counterparty search). Seed the toolbar search from the URL ONCE per drill so a
+  // drilled search is visible and editable — but never re-seed on a manual re-apply (that would clobber
+  // an edited term), tracked via appliedUrlQuery.
+  const urlQuery = params.get('query') || '';
+  if (!urlQuery) appliedUrlQuery = '';
+  else if (urlQuery !== appliedUrlQuery) { ctx.$('#tx-query').value = urlQuery; appliedUrlQuery = urlQuery; }
   const q = new URLSearchParams({ limit: '500' });
   const text = ctx.$('#tx-query').value.trim();
   const dir = ctx.$('#tx-direction').value;
@@ -84,7 +96,8 @@ export async function renderTransactions(context) {
   if (flags === 'ignored') q.set('includeIgnored', 'true');
   if (accountId) q.set('accountId', accountId);
   if (groupId) q.set('accountGroupId', groupId);
-  await renderScope(accountId, groupId);
+  if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
+  await renderScope({ accountId, groupId, categoryId, query: urlQuery });
   const data = await ctx.api(`api/transactions?${q}`);
   let items = data.items || [];
   // 'pending'/'ignored' refine client-side over the fetched page (list endpoint has no pending filter).
@@ -133,19 +146,27 @@ function dateHeading(day) {
   return ctx.date(day);
 }
 
-// Scope banner (UX rework §3): shows the active account/group name and a clear back path to Konten.
-async function renderScope(accountId, groupId) {
+// Scope banner (UX rework §3/§6): shows the active account / group / category / merchant-search scope
+// with its name and a clear back path (accounts for an account/group drill, all-bookings otherwise).
+async function renderScope(scope) {
+  const { accountId, groupId, categoryId, query } = scope;
   const view = ctx.$('#view-transactions');
   let bar = view.querySelector('#tx-scopebar');
-  if (!accountId && !groupId) { bar?.remove(); return; }
+  if (!accountId && !groupId && !categoryId && !query) { bar?.remove(); return; }
   let label = '';
   try {
     if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = a?.displayName || a?.institutionName || ''; }
     else if (groupId) { const g = (await ctx.api('api/account-groups').catch(() => [])).find(g => String(g.id) === String(groupId)); label = g?.name || ''; }
+    else if (categoryId) { const c = (await ctx.api('api/categories').catch(() => [])).find(c => String(c.id) === String(categoryId)); label = c?.name || ''; }
+    else if (query) { label = query; }
   } catch { /* label is best-effort; the list itself is already scoped server-side */ }
   if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
-  bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back') === 'common.back' ? 'Konten' : ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
-  bar.querySelector('[data-back]').onclick = () => { if (window.fwNavScope) window.fwNavScope('accounts', ''); };
+  const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
+  bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
+  bar.querySelector('[data-back]').onclick = () => {
+    const qi = ctx.$('#tx-query'); if (qi && query) qi.value = ''; // clear a merchant-search drill
+    if (window.fwNavScope) window.fwNavScope(backTo, '');
+  };
   const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 

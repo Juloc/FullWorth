@@ -354,6 +354,17 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .an-mrow:last-child{border-bottom:0}
 .an-mrow .fw-ident{width:32px;height:32px;font-size:13px}
 .an-mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+/* Analytics category/merchant rows drill into scoped bookings (UX rework §6) */
+.an-catrow.is-drillable,.an-mrow.is-drillable{cursor:pointer;border-radius:8px;margin:0 -6px;padding-left:6px;padding-right:6px}
+.an-catrow.is-drillable:hover,.an-mrow.is-drillable:hover{background:var(--surface-2)}
+.an-catrow.is-drillable:focus-visible,.an-mrow.is-drillable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* Privacy mode: charts must not reveal figures through their geometry */
+.an-chart-private{height:80px;display:grid;place-items:center;color:var(--muted);letter-spacing:.35em;font-weight:600}
+/* Overview grouped account cards (UX rework §3) */
+.dash-group-head .fw-row-title{font-weight:700}
+.dash-group-head+.fw-row:not(.dash-group-head){padding-left:12px}
+.dash-group-icon{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
+.dash-group-icon svg{width:20px;height:20px}
 .an-advanced{margin-top:var(--s5)}
 .an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
 .an-advanced>summary::-webkit-details-marker{display:none}

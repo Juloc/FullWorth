@@ -144,7 +144,7 @@ function fillSpending(el, o, oPrev) {
   const rows = o?.byMonth || [];
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
   const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
-  el.innerHTML = fxMarker(o?.incomplete) + spendingLine(rows) +
+  el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
     `<div class="an-card-foot">${kpi(ctx.money(o?.expenses || 0, cur), esc(t('Ausgaben gesamt', 'Total spending')))}${trendBadge(trend, false)}</div>`;
 }
 
@@ -167,7 +167,7 @@ function fillInout(el, o, oPrev) {
   const expTrend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
   const net = o?.net ?? ((o?.income || 0) - (o?.expenses || 0));
   const netCls = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
-  el.innerHTML = fxMarker(o?.incomplete) + inoutBars(rows) +
+  el.innerHTML = fxMarker(o?.incomplete) + chart(() => inoutBars(rows)) +
     `<div class="an-card-foot"><div class="an-kpi-group">` +
     kpi(ctx.money(o?.income || 0, cur), `${esc(ctx.get('transactions.income'))} ${trendBadge(incTrend, true)}`) +
     kpi(ctx.money(o?.expenses || 0, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
@@ -195,21 +195,31 @@ function inoutBars(rows) {
 // 3) Spend by category — top categories as share-of-largest bars with a per-row trend badge + total.
 function fillCategory(el, result) {
   if (!el) return;
-  const rows = (result?.categories || []).slice(0, 6);
+  const cats = result?.categories || [];
+  const rows = cats.slice(0, 6);
   const cur = result?.currency || 'EUR';
   if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
   const max = Math.max(1, ...rows.map(r => Math.abs(Number(r.current) || 0)));
-  const total = rows.reduce((s, r) => s + Math.abs(Number(r.current) || 0), 0);
-  // TODO(drill-down): rows are intentionally non-navigating — the transaction list has no categoryId
-  // scope param yet, so tapping a category cannot open its bookings. Wire this up once it lands.
+  // True window spend = sum of ROOT categories only (each root's `current` already rolls up its whole
+  // subtree and roots are disjoint) + the Uncategorized row — NOT the sum of the top-N rows, which would
+  // double-count a parent together with its children (the backend emits both parent and child rows).
+  const total = cats.filter(c => !c.parentId).reduce((s, r) => s + Math.abs(Number(r.current) || 0), 0);
+  // Drill-down (UX rework §6): tapping a category opens its bookings, scoped to the category subtree so
+  // the list matches the card's rolled-up figure. Uncategorized (no id) is not navigable.
   const list = rows.map(r => {
     const pctW = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
     const cat = categoryColorIndex(r.categoryId || r.name);
-    return `<div class="an-catrow"><div class="an-catrow-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
+    const drill = r.categoryId ? ` data-cat-id="${esc(r.categoryId)}" role="button" tabindex="0"` : '';
+    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
       <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
   }).join('');
   el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
+  el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', `categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
 }
 
 // 4) Spend by merchant — top merchants with brand identity, count/average, spend + per-row trend.
@@ -219,10 +229,18 @@ function fillMerchant(el, result) {
   const cur = result?.currency || 'EUR';
   if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
   const total = rows.reduce((s, r) => s + Math.abs(Number(r.currentSpend) || 0), 0);
-  // TODO(drill-down): rows are intentionally non-navigating — the transaction list has no merchantId
-  // scope param yet, so tapping a merchant cannot open its bookings. Wire this up once it lands.
-  const list = rows.map(r => `<div class="an-mrow">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
+  // Drill-down (UX rework §6): a merchant has no stored FK on transactions, so scope by the merchant name
+  // as a counterparty search (the tx list ILIKEs the counterparty) — the pragmatic equivalent of a
+  // merchant filter without a backend change.
+  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
   el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Top-Ausgaben', 'Top spending')))}</div>`;
+  el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
+    const q = row.dataset.merchant;
+    if (!q) return;
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', `query=${encodeURIComponent(q)}`);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
 }
 
 // 5) Net-worth development — history as a trend line with the latest value + change over the window.
@@ -231,7 +249,7 @@ function fillNetWorth(el, history, currency) {
   if (!history || !history.length) { el.innerHTML = emptyRow(); return; }
   const vals = history.map(x => Number(x.netWorth) || 0);
   const last = vals[vals.length - 1], first = vals[0];
-  el.innerHTML = nwLine(vals) + `<div class="an-card-foot">${kpi(ctx.money(last, currency), esc(t('Aktuelles Vermögen', 'Current net worth')))}${trendBadge(pct(last, first), true)}</div>`;
+  el.innerHTML = chart(() => nwLine(vals)) + `<div class="an-card-foot">${kpi(ctx.money(last, currency), esc(t('Aktuelles Vermögen', 'Current net worth')))}${trendBadge(pct(last, first), true)}</div>`;
 }
 
 function nwLine(vals) {
@@ -267,6 +285,11 @@ function emptyRow() { return `<div class="row state-empty"><div class="row-sub">
 // §18: an amber note when foreign amounts couldn't be converted (a missing FX rate) so the figures are
 // understood as partial rather than silently dropping money.
 function fxMarker(incomplete) { return incomplete ? `<div class="fx-incomplete">${esc(ctx.get('common.fxIncomplete'))}</div>` : ''; }
+
+// Privacy mode (§5): a chart's geometry is derived from the real amounts, so it would visually leak the
+// masked figures. When privacy is on, swap the chart body for a neutral placeholder (as the contracts
+// sparkline does). KPI numbers are already masked through ctx.money().
+function chart(build) { return ctx.isPrivate() ? `<div class="an-chart an-chart-private" aria-hidden="true">•••</div>` : build(); }
 
 // One-time CSS for the analytics-only layout primitives (card feet, KPI, merchant/category rows,
 // coloured trend lines, advanced disclosure). Everything else comes from app.css .fw-*/token classes.
