@@ -280,6 +280,7 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 app.MapBootstrapEndpoints();
+app.MapUserOnboardingEndpoints();
 app.MapFullWorthSpaceEndpoints();
 app.MapBankConnectionEndpoints();
 app.MapEnableBankingProfileEndpoints();
