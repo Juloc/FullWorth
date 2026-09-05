@@ -79,6 +79,9 @@ services:
       # experimental receipt-test flag.
       AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
       AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
+      # Shared bootstrap token used only to enroll this instance with the official FullWorth Cloud.
+      # The cloud issues a separate rotatable instance credential after registration.
+      FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
     volumes:
       - fullworth-purchases-data:/data/purchases
     healthcheck:
