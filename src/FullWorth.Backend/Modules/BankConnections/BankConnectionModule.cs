@@ -442,11 +442,8 @@ public static class BankConnectionEndpoints
             return item is null ? Results.NotFound() : Results.Ok(item);
         });
 
-        // Disconnect a bank: permanently deletes the connection and all of its synced accounts + data.
-        group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, BankConnectionStore store, CancellationToken ct) =>
-            await store.DeleteForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)
-                ? Results.NoContent()
-                : Results.NotFound());
+        // No public mutation endpoint here. Disconnect must pass through FullWorth.Banking so the
+        // provider session/consent is closed before local data is destroyed.
 
         // Internal machine-to-machine Banking ingest path. Authentication is enforced separately for /internal/**.
         var internalGroup = app.MapGroup("/internal/banking/connections").WithTags("Internal banking");
