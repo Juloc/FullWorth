@@ -82,6 +82,73 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
     }
 
     [Fact]
+    public async Task TradeRepublicImportCanCreatePortfolioWhenNoneExists()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+
+        const string csv = "date,type,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
+                           "2026-08-01,BUY,Core MSCI World,IE00B4L5Y983,1.5,100,-150,1,0,EUR,tr-buy-1\r\n" +
+                           "2026-08-02,INTEREST_PAYMENT,,,,,2.5,0,0.5,EUR,tr-interest-1\r\n";
+        var job = await UploadTradeRepublic(client, owner, csv);
+
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        request.Content = JsonContent.Create(new
+        {
+            portfolioId = (Guid?)null,
+            createPortfolio = new { name = "Trade Republic", currency = "EUR", providerName = "Trade Republic" },
+            securityMappings = new Dictionary<string, Guid?>(),
+            createMissingSecurities = true,
+            candidateIds = (Guid[]?)null
+        });
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.GetProperty("portfolioCreated").GetBoolean());
+        Assert.Equal(2, body.RootElement.GetProperty("imported").GetInt32());
+        var portfolioId = body.RootElement.GetProperty("portfolioId").GetGuid();
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+
+            await using (var portfolio = connection.CreateCommand())
+            {
+                portfolio.CommandText = """
+SELECT "Name","Currency","ProviderName" FROM "InvestmentPortfolios"
+WHERE "Id"=@portfolio AND "FullWorthSpaceId"=@space
+""";
+                var id = portfolio.CreateParameter(); id.ParameterName = "@portfolio"; id.Value = portfolioId; portfolio.Parameters.Add(id);
+                var space = portfolio.CreateParameter(); space.ParameterName = "@space"; space.Value = FullWorthSpaceDefaults.LegacyId; portfolio.Parameters.Add(space);
+                await using var reader = await portfolio.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal("Trade Republic", reader.GetString(0));
+                Assert.Equal("EUR", reader.GetString(1));
+                Assert.Equal("Trade Republic", reader.GetString(2));
+            }
+
+            await using var trades = connection.CreateCommand();
+            trades.CommandText = """
+SELECT "TradeType","SecurityId" FROM "InvestmentTrades"
+WHERE "PortfolioId"=@portfolio ORDER BY "TradeDate"
+""";
+            var p = trades.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolioId; trades.Parameters.Add(p);
+            await using var tradeReader = await trades.ExecuteReaderAsync();
+            Assert.True(await tradeReader.ReadAsync());
+            Assert.Equal("buy", tradeReader.GetString(0));
+            Assert.False(tradeReader.IsDBNull(1));
+            Assert.True(await tradeReader.ReadAsync());
+            Assert.Equal("interest", tradeReader.GetString(0));
+            Assert.True(tradeReader.IsDBNull(1));
+            Assert.False(await tradeReader.ReadAsync());
+        });
+    }
+
+    [Fact]
     public async Task OversellFailureRollsBackTradeCandidateAndJobMutations()
     {
         using var factory = new BackendWebApplicationFactory();
@@ -126,6 +193,41 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
                 Assert.Equal("new", Convert.ToString(await candidate.ExecuteScalarAsync()));
             }
         });
+    }
+
+    private static async Task<Guid> UploadTradeRepublic(HttpClient client, Guid userId, string csv)
+    {
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/upload?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", userId);
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+        file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        form.Add(file, "file", "trade-republic.csv");
+        form.Add(new StringContent(JsonSerializer.Serialize(new
+        {
+            tradeDate = "date",
+            tradeType = "type",
+            settlementDate = (string?)null,
+            securityName = "name",
+            isin = "symbol",
+            wkn = (string?)null,
+            ticker = (string?)null,
+            quantity = "shares",
+            price = "price",
+            grossAmount = (string?)null,
+            amount = "amount",
+            currency = "currency",
+            fees = "fee",
+            taxes = "tax",
+            withholdingTax = (string?)null,
+            externalKey = "transaction_id"
+        }), Encoding.UTF8, "application/json"), "mapping");
+        request.Content = form;
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, document.RootElement.GetProperty("errors").GetInt32());
+        return document.RootElement.GetProperty("jobId").GetGuid();
     }
 
     private static async Task<Guid> Upload(HttpClient client, Guid userId, string csv)
@@ -174,6 +276,27 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
             candidateIds = (Guid[]?)null
         });
         return await client.SendAsync(request);
+    }
+
+    private static async Task SeedOwner(BackendWebApplicationFactory factory, Guid owner)
+    {
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = owner,
+                EmailNormalized = $"{owner:N}@EXAMPLE.COM",
+                DisplayName = "Investment import owner",
+                IsActive = true
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                UserId = owner,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            await db.SaveChangesAsync();
+        });
     }
 
     private static async Task SeedOwnerPortfolioSecurity(
