@@ -207,7 +207,9 @@ public sealed class BankSyncFlowTests
         Assert.Equal("default", secondQuery["strategy"]);
         Assert.False(firstQuery.ContainsKey("continuation_key"));
         Assert.Equal("next-page", secondQuery["continuation_key"]);
-        Assert.Contains(backend.Ingests, batch => batch.Transactions.Any(x => x.ExternalKey == "tx-1"));
+        // The transaction is keyed by its stable entry_reference / fingerprint (see ParseTransaction),
+        // never by the volatile transaction_id — identify the ingested row by its provider id instead.
+        Assert.Contains(backend.Ingests, batch => batch.Transactions.Any(x => x.ProviderTransactionId == "tx-1"));
     }
 
     [Fact]
