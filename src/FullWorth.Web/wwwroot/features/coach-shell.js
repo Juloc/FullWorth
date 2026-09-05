@@ -7,6 +7,8 @@ let active = false;
 let currentConversationId = null;
 let reviews = new Map();
 let loading = false;
+let modelCatalog = null;
+let selectedModel = '';
 
 const reasonLabels = {
   necessary: ['Notwendig', 'Necessary'], good_value: ['Gutes Preis-Leistungs-Verhältnis', 'Good value'], quality_of_life: ['Lebensqualität', 'Quality of life'],
@@ -78,7 +80,16 @@ function installShell() {
           <form id="coach-form" class="coach-composer">
             <label class="sr-only" for="coach-input">${esc(tr('Frage an FullWorth', 'Question for FullWorth'))}</label>
             <textarea id="coach-input" rows="2" maxlength="2000" placeholder="${esc(tr('Wo ist mein Geld diesen Monat hin?', 'Where did my money go this month?'))}"></textarea>
-            <button id="coach-send" type="submit" class="primary-action">${esc(tr('Fragen', 'Ask'))}</button>
+            <div class="coach-composer-footer">
+              <label class="coach-model-picker" for="coach-model">
+                <span class="sr-only">${esc(tr('KI-Modell', 'AI model'))}</span>
+                <select id="coach-model" aria-label="${esc(tr('KI-Modell', 'AI model'))}"><option value="">${esc(tr('Automatisch', 'Automatic'))}</option></select>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
+              </label>
+              <button id="coach-send" type="submit" class="primary-action coach-send" aria-label="${esc(tr('Senden', 'Send'))}" title="${esc(tr('Senden', 'Send'))}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
+              </button>
+            </div>
           </form>
         </article>
       </div>
@@ -90,6 +101,11 @@ function installShell() {
   $('#main')?.appendChild(section);
 
   $('#coach-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-input').value); });
+  $('#coach-model')?.addEventListener('change', event => {
+    selectedModel = event.target.value || '';
+    if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
+    else localStorage.removeItem('finance.coach.model');
+  });
   $('#coach-review-refresh')?.addEventListener('click', () => loadReviews());
   $('#refresh')?.addEventListener('click', event => {
     if (!active) return;
@@ -145,14 +161,54 @@ async function loadAll() {
   loading = true;
   setMascotLabel();
   renderStarters();
-  try { await Promise.all([loadConversation(), loadReviews()]); }
+  try { await Promise.all([loadConversation(), loadReviews(), loadModels()]); }
   catch (error) { renderError(error); }
   finally { loading = false; }
 }
 
 function setMascotLabel() {
   const mascot = localStorage.getItem('finance.mascot');
-  $('#coach-mascot-label').textContent = mascot ? `${tr('Maskottchen', 'Mascot')}: ${mascot}` : tr('Finanzanalyse ohne KI-Zwang', 'Financial analysis without mandatory AI');
+  $('#coach-mascot-label').textContent = mascot ? `${tr('Maskottchen', 'Mascot')}: ${mascot}` : tr('FullWorth-Daten im sicheren Kontext', 'FullWorth data in secure context');
+}
+
+async function loadModels() {
+  const select = $('#coach-model');
+  if (!select) return;
+  try {
+    modelCatalog = await api('api/coach/models');
+  } catch {
+    modelCatalog = { configured: false, models: [] };
+  }
+
+  const models = Array.isArray(modelCatalog?.models) ? modelCatalog.models : [];
+  const stored = localStorage.getItem('finance.coach.model') || '';
+  selectedModel = models.some(model => model.id === stored) ? stored : '';
+  if (!selectedModel && stored) localStorage.removeItem('finance.coach.model');
+
+  select.innerHTML = '';
+  const auto = document.createElement('option');
+  auto.value = '';
+  const defaultLabel = modelCatalog?.defaultModel ? ` · ${modelCatalog.defaultModel}` : '';
+  auto.textContent = modelCatalog?.configured
+    ? `${tr('Automatisch', 'Automatic')}${defaultLabel}`
+    : tr('Deterministisch', 'Deterministic');
+  select.appendChild(auto);
+
+  models.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.id;
+    option.textContent = model.label || model.id;
+    select.appendChild(option);
+  });
+  select.value = selectedModel;
+  select.disabled = !modelCatalog?.configured;
+
+  const mode = $('#coach-mode');
+  if (mode) {
+    mode.textContent = modelCatalog?.configured
+      ? `${tr('KI', 'AI')} · ${modelCatalog.provider || tr('konfiguriert', 'configured')}`
+      : tr('Deterministisch', 'Deterministic');
+  }
 }
 
 function renderStarters() {
@@ -194,10 +250,12 @@ async function ask(text) {
   try {
     const id = await ensureConversation();
     const response = await api(`api/coach/conversations/${id}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null })
     });
     appendMessage(response.message);
-    $('#coach-mode').textContent = response.message.mode === 'Ai' ? tr('KI + geprüfte Fakten', 'AI + verified facts') : tr('Deterministisch', 'Deterministic');
+    $('#coach-mode').textContent = response.message.mode === 'Ai'
+      ? `${tr('KI', 'AI')}${response.message.model ? ` · ${response.message.model}` : ''}`
+      : tr('Deterministisch', 'Deterministic');
     renderFollowUps(response.followUps || []);
     await loadReviews(false);
   } catch (error) { appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] }); }
@@ -216,6 +274,12 @@ function appendMessage(message) {
   article.className = `coach-message ${String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant'}`;
   const text = document.createElement('div'); text.className = 'coach-message-text'; text.textContent = message.text || '';
   article.appendChild(text);
+  if (String(message.role).toLowerCase() !== 'user' && (message.model || message.provider)) {
+    const meta = document.createElement('div');
+    meta.className = 'coach-message-meta';
+    meta.textContent = [message.provider, message.model].filter(Boolean).join(' · ');
+    article.appendChild(meta);
+  }
   if (message.facts?.length) {
     const details = document.createElement('details'); details.className = 'coach-evidence';
     const summary = document.createElement('summary'); summary.textContent = tr('Verwendete Fakten', 'Evidence'); details.appendChild(summary);
