@@ -116,7 +116,8 @@ public sealed class CodexReceiptBridgeClient(
 
     private static string BridgeScope(Guid userId, Guid fullWorthSpaceId)
     {
-        var input = Encoding.UTF8.GetBytes($"{userId:N}:{fullWorthSpaceId:N}");
+        _ = fullWorthSpaceId; // authorization stays space-scoped; AI login itself is user-scoped.
+        var input = Encoding.UTF8.GetBytes($"fullworth-ai:{userId:N}");
         return Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
     }
 }
