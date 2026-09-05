@@ -89,41 +89,38 @@ public sealed class IngestionService(
 
     private async Task<Dictionary<string, FinanceAccount>> UpsertAccountsAsync(BankConnection connection, string provider, IReadOnlyList<AccountBatchItem> items, CancellationToken ct)
     {
-        // Enable Banking can change the primary identification_hash while retaining the old hash in
-        // identification_hashes. Load the small account set for this provider/space and reconcile by
-        // ANY known hash before deciding that a new FinanceAccount is needed.
+        // Enable Banking documents identification_hash as the cross-session account identifier.
+        // identification_hashes is only for fuzzy matching and may contain values shared by different
+        // accounts, so stored fuzzy aliases must never be treated as unique account keys.
         var storedAccounts = await db.Accounts
             .Where(x => x.FullWorthSpaceId == connection.FullWorthSpaceId && x.Provider == provider)
             .ToListAsync(ct);
 
-        var byHash = new Dictionary<string, List<FinanceAccount>>(StringComparer.Ordinal);
-        foreach (var stored in storedAccounts)
-            foreach (var hash in AccountHashes(stored))
-            {
-                if (!byHash.TryGetValue(hash, out var bucket)) byHash[hash] = bucket = [];
-                if (!bucket.Contains(stored)) bucket.Add(stored);
-            }
+        var byPrimaryHash = storedAccounts
+            .Where(x => !string.IsNullOrWhiteSpace(x.IdentificationHash))
+            .ToDictionary(x => x.IdentificationHash, x => x, StringComparer.Ordinal);
 
         var result = new Dictionary<string, FinanceAccount>(StringComparer.Ordinal);
         foreach (var item in items)
         {
             var incomingHashes = NormalizeHashes(item.IdentificationHash, item.IdentificationHashes);
-            FinanceAccount? entity = storedAccounts.FirstOrDefault(x =>
-                string.Equals(x.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal));
+            byPrimaryHash.TryGetValue(item.IdentificationHash, out var entity);
             var isNew = entity is null;
 
             if (entity is null)
             {
-                var aliasMatches = incomingHashes
-                    .Where(byHash.ContainsKey)
-                    .SelectMany(hash => byHash[hash])
+                // A changed primary hash is safe to reconcile when one of the incoming hashes equals
+                // a STORED PRIMARY hash. Do not match against stored fuzzy aliases.
+                var primaryMatches = incomingHashes
+                    .Where(byPrimaryHash.ContainsKey)
+                    .Select(hash => byPrimaryHash[hash])
                     .DistinctBy(x => x.Id)
                     .ToList();
 
-                if (aliasMatches.Count > 1)
+                if (primaryMatches.Count > 1)
                     throw new InvalidOperationException(
-                        "Enable Banking account identification hashes ambiguously match multiple stored accounts.");
-                entity = aliasMatches.SingleOrDefault();
+                        "Enable Banking account identification hashes ambiguously match multiple stored primary accounts.");
+                entity = primaryMatches.SingleOrDefault();
                 isNew = entity is null;
             }
 
@@ -137,16 +134,21 @@ public sealed class IngestionService(
                 };
                 db.Accounts.Add(entity);
                 storedAccounts.Add(entity);
+                byPrimaryHash[entity.IdentificationHash] = entity;
             }
             else if (!string.Equals(entity!.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal))
             {
                 // Promote the provider's current primary hash while preserving the previous primary as
                 // an alias. Refuse to steal a primary hash already owned by a different account.
-                if (storedAccounts.Any(x => x.Id != entity.Id &&
-                    string.Equals(x.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal)))
+                if (byPrimaryHash.TryGetValue(item.IdentificationHash, out var other) && other.Id != entity.Id)
                     throw new InvalidOperationException(
                         "Enable Banking primary identification hash is already assigned to another account.");
+
+                var previousPrimary = entity.IdentificationHash;
                 entity.IdentificationHash = item.IdentificationHash;
+                if (byPrimaryHash.TryGetValue(previousPrimary, out var previous) && previous.Id == entity.Id)
+                    byPrimaryHash.Remove(previousPrimary);
+                byPrimaryHash[entity.IdentificationHash] = entity;
             }
 
             if (entity!.FullWorthSpaceId != connection.FullWorthSpaceId)
@@ -156,14 +158,6 @@ public sealed class IngestionService(
                 entity.IdentificationHash,
                 AccountHashes(entity).Concat(incomingHashes));
             entity.IdentificationHashesJson = JsonSerializer.Serialize(mergedHashes);
-
-            // Refresh the local lookup immediately so a second account in the same ingest batch cannot
-            // accidentally be created from an alias we just learned.
-            foreach (var hash in mergedHashes)
-            {
-                if (!byHash.TryGetValue(hash, out var bucket)) byHash[hash] = bucket = [];
-                if (!bucket.Any(x => x.Id == entity.Id)) bucket.Add(entity);
-            }
 
             var mayRefreshDisplayName = isNew ||
                 string.IsNullOrWhiteSpace(entity.DisplayName) ||
