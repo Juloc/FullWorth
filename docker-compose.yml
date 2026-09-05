@@ -107,11 +107,12 @@ services:
       Backend__BaseUrl: http://fullworth-backend:8080
       Backend__IngestKey: ${FULLWORTH_INGEST_KEY}
       Security__ApiKey: ${FULLWORTH_BANKING_API_KEY}
-      EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID}
+      # Redirect URL is required for all BYO profiles. ApplicationId/private-key are legacy-only:
+      # normal installations configure each user's Enable Banking application in the FullWorth UI.
+      EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
       EnableBanking__RedirectUrl: ${ENABLE_BANKING_REDIRECT_URL}
-      # Docker mounts the secret at /run/secrets/<name> (no extension). The entrypoint stages an
-      # app-readable copy and overrides this at runtime; this value is the fallback mount path.
-      EnableBanking__PrivateKeyPath: /run/secrets/enable-banking-private-key
+      EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
+      EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
       EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
       EnableBanking__TransientRetryCount: ${ENABLE_BANKING_TRANSIENT_RETRIES:-2}
       Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-15}
@@ -119,8 +120,6 @@ services:
       Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-360}
       Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
       Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
-    secrets:
-      - enable-banking-private-key
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 15s
@@ -199,6 +198,3 @@ volumes:
   fullworth-web-dataprotection:
   fullworth-codex-data:
 
-secrets:
-  enable-banking-private-key:
-    file: ./secrets/enable-banking-private-key.pem
