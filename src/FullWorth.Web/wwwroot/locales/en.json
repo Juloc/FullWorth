@@ -824,6 +824,7 @@
     "country": "Country (2-letter code)",
     "psu_personal": "Personal",
     "psu_business": "Business",
+    "businessNotice": "Business accounts are technically supported. Under Restricted Production, business use is only intended for evaluation or transition under Enable Banking's standard terms; ongoing business use requires an appropriate agreement.",
     "authMethod": "Authentication method",
     "bankDefault": "Let bank choose",
     "connect": "Continue to bank",
