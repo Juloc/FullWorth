@@ -168,7 +168,6 @@ public sealed class BankSyncFlowTests
         var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
         {
             OverlapDays = 7,
-            InitialHistoryDays = 180
         });
 
         var result = await service.SyncAllAsync(CancellationToken.None);
@@ -183,7 +182,7 @@ public sealed class BankSyncFlowTests
     }
 
     [Fact]
-    public async Task First_import_uses_initial_history_and_longest_strategy()
+    public async Task First_import_uses_longest_strategy_without_date_bounds()
     {
         using var environment = new TestBankingEnvironment();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -193,7 +192,6 @@ public sealed class BankSyncFlowTests
         var provider = StandardAccountProvider(includeAccountDetails: true);
         var service = environment.CreateSyncService(provider, backend, new BankingSyncOptions
         {
-            InitialHistoryDays = 30,
             OverlapDays = 7
         });
 
@@ -203,8 +201,8 @@ public sealed class BankSyncFlowTests
         Assert.Contains(provider.Requests, x => x.Uri.AbsolutePath == "/accounts/account-1");
         var transactionRequest = provider.Requests.Single(x => x.Uri.AbsolutePath == "/accounts/account-1/transactions");
         var query = TestBankingEnvironment.Query(transactionRequest.Uri);
-        Assert.Equal(today.AddDays(-30).ToString("yyyy-MM-dd"), query["date_from"]);
-        Assert.Equal(today.ToString("yyyy-MM-dd"), query["date_to"]);
+        Assert.False(query.ContainsKey("date_from"));
+        Assert.False(query.ContainsKey("date_to"));
         Assert.Equal("longest", query["strategy"]);
     }
 
