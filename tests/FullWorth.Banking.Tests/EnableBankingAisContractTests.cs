@@ -94,6 +94,120 @@ public sealed class EnableBankingAisContractTests
     }
 
     [Fact]
+    public async Task AuthorizationRequestSupportsDocumentedAccountRestrictions()
+    {
+        using var environment = new TestBankingEnvironment();
+        var handler = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.Equal("/auth", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"url\":\"https://bank.example/auth\",\"authorization_id\":\"auth-accounts\"}"));
+        });
+        var client = environment.CreateProvider(handler);
+
+        await client.StartAuthorizationAsync(
+            "Test Bank",
+            "DE",
+            "https://fullworth.example/connect/enable-banking/callback",
+            "state-accounts",
+            DateTimeOffset.UtcNow.AddDays(90),
+            null,
+            "anonymous-psu-id",
+            null,
+            CancellationToken.None,
+            psuType: "personal",
+            accounts:
+            [
+                new EnableBankingAccountIdentification(Iban: "DE89 3704 0044 0532 0130 00"),
+                new EnableBankingAccountIdentification(
+                    Other: new EnableBankingGenericIdentification("123456", "bban", "Example Bank"))
+            ]);
+
+        using var body = JsonDocument.Parse(Assert.Single(handler.Requests).Body!);
+        var accounts = body.RootElement.GetProperty("access").GetProperty("accounts");
+        Assert.Equal(2, accounts.GetArrayLength());
+        Assert.Equal("DE89370400440532013000", accounts[0].GetProperty("iban").GetString());
+        var other = accounts[1].GetProperty("other");
+        Assert.Equal("123456", other.GetProperty("identification").GetString());
+        Assert.Equal("BBAN", other.GetProperty("scheme_name").GetString());
+        Assert.Equal("Example Bank", other.GetProperty("issuer").GetString());
+    }
+
+    [Theory]
+    [InlineData("BOOK")]
+    [InlineData("CNCL")]
+    [InlineData("HOLD")]
+    [InlineData("OTHR")]
+    [InlineData("PDNG")]
+    [InlineData("RJCT")]
+    [InlineData("SCHD")]
+    public async Task TransactionsSupportEveryDocumentedTransactionStatusFilter(string status)
+    {
+        using var environment = new TestBankingEnvironment();
+        var handler = OkHandler("{\"transactions\":[]}");
+        var client = environment.CreateProvider(handler);
+
+        await client.GetTransactionsAsync(
+            "account-1",
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2026, 1, 31),
+            initialSync: false,
+            continuationKey: null,
+            transactionStatus: status,
+            CancellationToken.None);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains($"transaction_status={status}", request.Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("strategy=default", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InvalidTransactionStatusIsRejectedBeforeProviderCall()
+    {
+        using var environment = new TestBankingEnvironment();
+        var handler = OkHandler("{\"transactions\":[]}");
+        var client = environment.CreateProvider(handler);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => client.GetTransactionsAsync(
+            "account-1",
+            null,
+            null,
+            initialSync: false,
+            continuationKey: null,
+            transactionStatus: "UNKNOWN",
+            CancellationToken.None));
+
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task InvalidRequestedAccountShapeIsRejectedBeforeProviderCall()
+    {
+        using var environment = new TestBankingEnvironment();
+        var handler = OkHandler("{}");
+        var client = environment.CreateProvider(handler);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => client.StartAuthorizationAsync(
+            "Test Bank",
+            "DE",
+            "https://fullworth.example/callback",
+            "state",
+            DateTimeOffset.UtcNow.AddDays(30),
+            null,
+            null,
+            null,
+            CancellationToken.None,
+            accounts:
+            [
+                new EnableBankingAccountIdentification(
+                    Iban: "DE89370400440532013000",
+                    Other: new EnableBankingGenericIdentification("123456", "BBAN"))
+            ]));
+
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task CredentialsWithoutAuthMethodAreRejectedBeforeProviderCall()
     {
         using var environment = new TestBankingEnvironment();
