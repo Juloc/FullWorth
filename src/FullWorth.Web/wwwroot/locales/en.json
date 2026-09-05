@@ -847,6 +847,12 @@
     "bankDefault": "Let bank choose",
     "connect": "Continue to bank",
     "beta": "Beta",
+    "statusPage": "Enable Banking bank status",
+    "statusOk": "No problems detected",
+    "statusPossible": "Possible problems",
+    "statusMajor": "Major disruption",
+    "statusUnknown": "Status unclear",
+    "statusWarning": "Enable Banking currently detects problems with this bank, so the connection may fail.",
     "bankNotFound": "The bank was not found in the current Enable Banking institution list.",
     "bankRenamedHint": "The bank name may have changed. Please select the current bank.",
     "limitAccounts": "Limit access to specific accounts",
@@ -858,7 +864,7 @@
     "automaticHint": "FullWorth generates the RSA key, signs you in once through an Enable Banking email link and registers the application.",
     "manualTitle": "Set up manually",
     "manualHint": "Create the application in the Enable Banking Control Panel and import its application ID and PEM file.",
-    "automaticExplain": "FullWorth uses the passwordless sign-in flow implemented by the official Enable Banking CLI and then the documented application registration API. Control Panel tokens are not stored. If Enable Banking does not accept this sign-in flow for your instance, use manual setup.",
+    "automaticExplain": "FullWorth uses the passwordless sign-in flow implemented by the official Enable Banking CLI and then the documented application registration API. The short-lived Control Panel access token is not stored; only the refresh token is stored encrypted so FullWorth can read the official bank-status feed. If Enable Banking does not accept this sign-in flow for your instance, use manual setup.",
     "email": "Enable Banking email",
     "environment": "Environment",
     "environmentProduction": "Production · your real accounts",
@@ -876,7 +882,7 @@
     "retryVerification": "Retry verification",
     "tryAgain": "Start again",
     "useManual": "Set up manually",
-    "automaticSecurity": "The private RSA key stays in FullWorth and is stored encrypted after successful verification."
+    "automaticSecurity": "The private RSA key and Control Panel refresh token are stored encrypted. Short-lived Control Panel access tokens stay in memory only."
   },
   "aiAccess": {
     "title": "AI access",
