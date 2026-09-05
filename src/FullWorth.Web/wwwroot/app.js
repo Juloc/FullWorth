@@ -643,45 +643,83 @@ function openEnableBankingWizard(initialStatus){
   dlg.showModal();
 }
 
-function authMethodsFor(bank){
-  return (bank.auth_methods||[]).filter(m=>!(m&&typeof m==='object'&&m.hidden_method)).map(m=>{
-    if(typeof m==='string')return{name:m,label:m,credentials:[]};
-    return{name:m.name||m.id||'',label:m.display_name||m.name||m.id||'',credentials:Array.isArray(m.credentials)?m.credentials:[]};
-  }).filter(m=>m.name);
+function authMethodsFor(bank,psuType){
+  return (bank.auth_methods||[])
+    .filter(m=>!(m&&typeof m==='object'&&m.hidden_method))
+    .map(m=>{
+      if(typeof m==='string')return{name:m,label:m,psuType:null,approach:null,credentials:[]};
+      return{
+        name:m.name||m.id||'',
+        label:m.title||m.name||m.id||'',
+        psuType:m.psu_type||null,
+        approach:m.approach||null,
+        credentials:Array.isArray(m.credentials)?m.credentials:[]
+      };
+    })
+    .filter(m=>m.name&&(!m.psuType||!psuType||String(m.psuType).toLowerCase()===String(psuType).toLowerCase()));
 }
 
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
   const psuTypes=(bank.psu_types||['personal']).filter(Boolean);
-  const methods=authMethodsFor(bank);
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
     ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
-    ${methods.length?`<label>${esc(get('bankingSetup.authMethod'))}<select name="authMethod"><option value="">${esc(get('bankingSetup.bankDefault'))}</option>${methods.map(m=>`<option value="${esc(m.name)}">${esc(m.label)}</option>`).join('')}</select></label><div data-credentials></div>`:''}
+    <div data-auth-method></div>
+    <div data-credentials></div>
     <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
-  const form=dlg.querySelector('form'),credentialRoot=dlg.querySelector('[data-credentials]'),methodSelect=form.elements.authMethod;
+  const form=dlg.querySelector('form'),methodRoot=dlg.querySelector('[data-auth-method]'),credentialRoot=dlg.querySelector('[data-credentials]');
+  let methods=[];
+
   const drawCredentials=()=>{
-    if(!credentialRoot)return;
-    const method=methods.find(m=>m.name===methodSelect?.value);credentialRoot.innerHTML='';
+    credentialRoot.innerHTML='';
+    const methodSelect=form.elements.authMethod;
+    const method=methods.find(m=>m.name===methodSelect?.value);
     for(const field of method?.credentials||[]){
       const name=field.name||field.id;if(!name)continue;
-      const label=document.createElement('label');label.textContent=field.label||field.display_name||name;
+      const label=document.createElement('label');
+      label.append(document.createTextNode(field.title||name));
       const input=document.createElement('input');input.name='credential:'+name;input.autocomplete='off';
-      input.type=(field.type||'').toLowerCase().includes('password')?'password':'text';
-      if(field.pattern)try{input.pattern=field.pattern}catch{}
-      if(field.optional!==true&&field.required!==false)input.required=true;
-      label.append(input);credentialRoot.append(label);
+      input.type=/password|pin|secret/i.test(name+' '+(field.title||''))?'password':'text';
+      if(field.template)try{input.pattern=field.template}catch{}
+      input.required=field.required===true;
+      label.append(input);
+      if(field.description){
+        const hint=document.createElement('span');hint.className='row-sub';hint.textContent=field.description;label.append(hint);
+      }
+      credentialRoot.append(label);
     }
   };
-  if(methodSelect){methodSelect.onchange=drawCredentials;drawCredentials()}
+
+  const drawMethods=()=>{
+    const psuType=form.elements.psuType?.value||psuTypes[0]||'personal';
+    methods=authMethodsFor(bank,psuType);
+    methodRoot.innerHTML='';
+    credentialRoot.innerHTML='';
+    if(!methods.length)return;
+    const label=document.createElement('label');label.append(document.createTextNode(get('bankingSetup.authMethod')));
+    const select=document.createElement('select');select.name='authMethod';
+    const defaultOption=document.createElement('option');defaultOption.value='';defaultOption.textContent=get('bankingSetup.bankDefault');select.append(defaultOption);
+    for(const method of methods){
+      const option=document.createElement('option');option.value=method.name;
+      option.textContent=method.label+(method.approach?' · '+method.approach:'');
+      select.append(option);
+    }
+    select.onchange=drawCredentials;label.append(select);methodRoot.append(label);drawCredentials();
+  };
+
+  form.elements.psuType?.addEventListener('change',drawMethods);drawMethods();
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   form.onsubmit=async e=>{
     e.preventDefault();
     const fd=new FormData(form),authMethod=fd.get('authMethod')||null,credentials={};
+    const selectedPsuType=fd.get('psuType')||'personal';
+    const selectedMethod=authMethod?authMethodsFor(bank,selectedPsuType).find(m=>m.name===authMethod):null;
+    if(authMethod&&!selectedMethod){toast(get('common.error'));return}
     for(const[k,v]of fd.entries())if(k.startsWith('credential:')&&String(v).length)credentials[k.slice(11)]=String(v);
     const body={
       institutionName:bank.name,country:bank.country||'DE',validDays:365,
       authMethod,psuId:null,credentials:Object.keys(credentials).length?credentials:null,
       reconnectConnectionId,enableBankingProfileId:profileId,
-      psuType:fd.get('psuType')||'personal',language:state.lang,
+      psuType:selectedPsuType,language:state.lang,
       credentialsAutosubmit:Object.keys(credentials).length?true:null
     };
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;
