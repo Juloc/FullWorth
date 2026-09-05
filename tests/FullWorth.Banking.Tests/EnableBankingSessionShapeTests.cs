@@ -25,7 +25,7 @@ public sealed class EnableBankingSessionShapeTests
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Girokonto\",\"currency\":\"EUR\"}"));
             if (path == "/accounts/account-1/balances")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[]}"));
@@ -63,7 +63,7 @@ public sealed class EnableBankingSessionShapeTests
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"name\":\"Girokonto\",\"currency\":\"CHF\",\"account_id\":{\"iban\":\"CH00 1234 5678 9012 3456 7\"}}"));
             if (path == "/accounts/account-1/balances")
@@ -96,7 +96,7 @@ public sealed class EnableBankingSessionShapeTests
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"]}"));
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"identification_hash\":\"hash-real\",\"name\":\"Tagesgeld\",\"currency\":\"EUR\",\"product\":\"Sparen\"}"));
             if (path == "/accounts/account-1/balances")
@@ -129,7 +129,7 @@ public sealed class EnableBankingSessionShapeTests
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"]}"));
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Ohne Hash\"}"));
             throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
         });
@@ -155,7 +155,7 @@ public sealed class EnableBankingSessionShapeTests
             if (path == "/sessions/session-1")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\",\"account-2\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"},{\"uid\":\"account-2\"}]}"));
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"name\":\"Giro\",\"currency\":\"EUR\"}"));
             if (path == "/accounts/account-2")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"identification_hash\":\"hash-2\",\"name\":\"Depot\",\"currency\":\"EUR\"}"));
@@ -188,7 +188,7 @@ public sealed class EnableBankingSessionShapeTests
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"],\"accounts_data\":[{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\"}]}"));
             // The sandbox "Mock ASPSP" does not implement the account-details resource at all.
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"detail\":\"not found\"}", System.Net.HttpStatusCode.NotFound));
             if (path == "/accounts/account-1/balances")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"balances\":[{\"balance_amount\":{\"amount\":12.5,\"currency\":\"EUR\"},\"balance_type\":\"CLBD\"}]}"));
@@ -227,7 +227,7 @@ public sealed class EnableBankingSessionShapeTests
                 return Task.FromResult(TestBankingEnvironment.JsonResponse(
                     "{\"status\":\"AUTHORIZED\",\"accounts\":[\"account-1\"]}"));
             // No accounts_data AND no details resource: the account cannot be keyed and is skipped.
-            if (path == "/accounts/account-1")
+            if (path == "/accounts/account-1/details")
                 return Task.FromResult(TestBankingEnvironment.JsonResponse("{}", System.Net.HttpStatusCode.NotFound));
             throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
         });
