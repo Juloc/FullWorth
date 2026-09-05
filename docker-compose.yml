@@ -114,9 +114,9 @@ services:
       EnableBanking__PrivateKeyPath: /run/secrets/enable-banking-private-key
       EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
       EnableBanking__TransientRetryCount: ${ENABLE_BANKING_TRANSIENT_RETRIES:-2}
-      Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-365}
-      Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-365}
-      Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-365}
+      Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-15}
+      Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-360}
+      Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-360}
       Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
       Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
     secrets:
