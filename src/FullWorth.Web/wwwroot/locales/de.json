@@ -824,6 +824,7 @@
     "country": "Land (2-stelliger Code)",
     "psu_personal": "Privat",
     "psu_business": "Geschäftlich",
+    "businessNotice": "Geschäftskonten sind technisch unterstützt. Unter Restricted Production ist geschäftliche Nutzung nach den Enable-Banking-Standardbedingungen jedoch nur zur Evaluation bzw. Übergangsphase gedacht; dauerhafte Business-Nutzung benötigt eine passende Vereinbarung.",
     "authMethod": "Anmeldeverfahren",
     "bankDefault": "Bank auswählen lassen",
     "connect": "Zur Bank weiter",
