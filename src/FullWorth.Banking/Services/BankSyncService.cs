@@ -74,7 +74,7 @@ public sealed class BankSyncService(
             : await providerResolver.ResolveForUserAsync(caller.UserId, null, requireActive: true, ct);
         return await client.GetInstitutionsAsync(
             (country ?? _providerOptions.DefaultCountry).ToUpperInvariant(),
-            string.IsNullOrWhiteSpace(psuType) ? _providerOptions.DefaultPsuType : psuType,
+            string.IsNullOrWhiteSpace(psuType) ? null : psuType,
             ct);
     }
 
@@ -142,7 +142,7 @@ public sealed class BankSyncService(
                          seconds > 0
             ? seconds
             : (long)TimeSpan.FromDays(90).TotalSeconds;
-        var requested = TimeSpan.FromDays(Math.Clamp(request.ValidDays ?? 180, 1, 365));
+        var requested = TimeSpan.FromDays(Math.Clamp(request.ValidDays ?? 365, 1, 365));
         var validity = requested < TimeSpan.FromSeconds(maxSeconds)
             ? requested
             : TimeSpan.FromSeconds(maxSeconds);
