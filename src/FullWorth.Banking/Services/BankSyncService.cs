@@ -79,7 +79,8 @@ public sealed class BankSyncService(
     IOptions<EnableBankingOptions> providerOptions,
     IOptions<BankingSyncOptions> syncOptions,
     ILogger<BankSyncService> logger,
-    EnableBankingClientResolver? providerResolver = null)
+    EnableBankingClientResolver? providerResolver = null,
+    IngFinTsService? finTs = null)
 {
     private readonly EnableBankingOptions _providerOptions = providerOptions.Value;
     private readonly BankingSyncOptions _sync = syncOptions.Value;
@@ -508,7 +509,7 @@ public sealed class BankSyncService(
         var connection = await FindConnectionAsync(connectionId, ct);
         if (connection is null) return DisconnectStatus.NotFound;
 
-        if (!string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+        if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase) &&\n            !string.IsNullOrWhiteSpace(connection.ProviderSessionId))
         {
             var client = await ResolveProviderForConnectionAsync(connection, ct);
             try
@@ -575,6 +576,8 @@ public sealed class BankSyncService(
 
         var connection = await FindConnectionAsync(pointer.ConnectionId, ct)
             ?? throw new BankAccessException(false);
+        if (string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("FinTS transaction details are already part of the imported transaction.");
         if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
             (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= DateTimeOffset.UtcNow))
@@ -673,6 +676,17 @@ public sealed class BankSyncService(
     {
         if (string.IsNullOrWhiteSpace(connection.ProviderSessionId))
             return connection;
+
+        if (string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
+        {
+            if (finTs is not null)
+                return await finTs.SyncConnectionAsync(connection, bypassCadence, ct);
+
+            return await backend.UpsertConnectionAsync(ToWrite(
+                connection,
+                consecutiveFailures: connection.ConsecutiveFailures + 1,
+                lastError: "FINTS_NOT_CONFIGURED"), ct);
+        }
 
         var now = DateTimeOffset.UtcNow;
         if (!bypassCadence && !CanBackgroundSync(connection, now))
