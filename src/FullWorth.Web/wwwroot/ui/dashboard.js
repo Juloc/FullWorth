@@ -5,6 +5,7 @@
 import { money, converted } from './money.js';
 import { isPrivate } from './privacy.js';
 import { identityIcon } from './ux-kit.js';
+import { bindChartScrubber } from './chart-scrubber.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
 // endpoints that already exist. Per-widget title + width are user-configurable (§7); scope/period/
@@ -324,7 +325,12 @@ function renderIncomeExpensePeriod(ctx, body, cfg) {
     const cur = o?.currency || 'EUR';
     const marker = o?.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : '';
     // Privacy: a bar chart's geometry would leak the masked figures, so hide the chart body in privacy mode.
-    if (cfg.chart === 'bars') { body.innerHTML = (isPrivate() ? `<div class="widget-chart an-chart-private" aria-hidden="true">•••</div>` : monthlyBars(ctx, o?.byMonth || [], cur)) + marker; return; }
+    if (cfg.chart === 'bars') {
+      const rows = o?.byMonth || [];
+      body.innerHTML = (isPrivate() ? `<div class="widget-chart an-chart-private" aria-hidden="true">•••</div>` : monthlyBars(ctx, rows, cur)) + marker;
+      if (!isPrivate()) bindMonthlyBarsScrubber(ctx, body, rows, cur);
+      return;
+    }
     body.innerHTML = `<div class="widget-split big"><div><div class="row-sub">${ctx.esc(ctx.get('transactions.income'))}</div><strong class="amount positive">${money(o?.income ?? 0, cur)}</strong></div><div><div class="row-sub">${ctx.esc(ctx.get('transactions.expenses'))}</div><strong class="amount negative">${money(o?.expenses ?? 0, cur)}</strong></div></div>${marker}`;
   }).catch(() => { body.innerHTML = errorState(ctx); });
 }
@@ -344,5 +350,43 @@ function monthlyBars(ctx, rows, cur) {
     bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 4 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="1"></rect>`;
     bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 4 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="1"></rect>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.incomeExpense'))}" class="widget-chart">${bars}</svg>`;
+  const last = rows[rows.length - 1];
+  return `<div class="row-sub widget-chart-current">${ctx.esc(dashboardMonthLabel(last))} · ${ctx.esc(ctx.get('transactions.income'))} ${money(last.income || 0, cur)} · ${ctx.esc(ctx.get('transactions.expenses'))} ${money(last.expenses || 0, cur)}</div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('analytics.incomeExpense'))}" class="widget-chart">${bars}</svg>`;
+}
+
+function dashboardMonthLabel(row) {
+  const year = Number(row?.year), month = Number(row?.month);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return String(row?.month || '');
+  const locale = (document.documentElement.lang || '').startsWith('en') ? 'en-US' : 'de-DE';
+  return new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1));
+}
+
+function bindMonthlyBarsScrubber(ctx, body, rows, cur) {
+  const svg = body.querySelector('svg.widget-chart');
+  const readout = body.querySelector('.widget-chart-current');
+  if (!svg || !readout || !rows.length) return;
+  const max = Math.max(1, ...rows.map(row => Math.max(Number(row.income) || 0, Number(row.expenses) || 0)));
+  const w = 320, h = 96, pad = 6, slot = (w - pad * 2) / rows.length;
+  const points = rows.map((row, index) => {
+    const income = Number(row.income) || 0, expenses = Number(row.expenses) || 0;
+    const x = pad + slot * index + slot / 2;
+    return {
+      x,
+      label: dashboardMonthLabel(row),
+      markers: [
+        { y: h - 4 - (income / max) * (h - 12), className: 'income' },
+        { y: h - 4 - (expenses / max) * (h - 12), className: 'expense' }
+      ],
+      data: { income, expenses }
+    };
+  });
+  const original = readout.innerHTML;
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => {
+      readout.textContent = `${point.label} · ${ctx.get('transactions.income')} ${money(point.data.income, cur)} · ${ctx.get('transactions.expenses')} ${money(point.data.expenses, cur)}`;
+    },
+    onReset: () => { readout.innerHTML = original; },
+    formatAria: point => `${point.label}: ${ctx.get('transactions.income')} ${money(point.data.income, cur)}, ${ctx.get('transactions.expenses')} ${money(point.data.expenses, cur)}`
+  });
 }
