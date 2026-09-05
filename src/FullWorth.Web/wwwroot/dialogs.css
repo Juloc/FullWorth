@@ -4,6 +4,8 @@ dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min
 .setup-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
 .setup-choice:hover{background:var(--surface-2)}
 .setup-choice span{font-size:12px;color:var(--muted);line-height:1.45}
+.setup-meta{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2)}
+.setup-meta>div{display:grid;gap:2px;min-width:0}.setup-meta span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.setup-meta a{font-size:12px;overflow-wrap:anywhere}
 .setup-code{display:inline-block;margin-top:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:18px;font-weight:700;letter-spacing:.08em;user-select:all}
 .codex-login-action{display:grid;gap:8px}
 .setup-progress{font-size:12px;color:var(--muted);font-weight:700}
