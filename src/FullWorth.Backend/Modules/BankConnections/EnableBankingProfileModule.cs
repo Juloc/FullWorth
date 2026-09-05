@@ -107,8 +107,20 @@ public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher
     {
         var entity = await db.EnableBankingProfiles.SingleOrDefaultAsync(x => x.UserId == userId, ct);
         if (entity is null) return EnableBankingProfileDeleteResult.NotFound;
-        if (await db.BankConnections.AsNoTracking().AnyAsync(x => x.EnableBankingProfileId == entity.Id, ct))
+
+        var referenced = await db.BankConnections
+            .Where(x => x.EnableBankingProfileId == entity.Id)
+            .Select(x => new { x.Id, x.Status })
+            .ToListAsync(ct);
+        if (referenced.Any(x => !string.Equals(x.Status, "CLOSED", StringComparison.OrdinalIgnoreCase)))
             return EnableBankingProfileDeleteResult.InUse;
+
+        // CLOSED connections may intentionally retain imported history. They no longer need provider
+        // credentials, so detach them before deleting the encrypted BYO profile.
+        if (referenced.Count > 0)
+            await db.BankConnections
+                .Where(x => x.EnableBankingProfileId == entity.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.EnableBankingProfileId, (Guid?)null), ct);
 
         db.EnableBankingProfiles.Remove(entity);
         await db.SaveChangesAsync(ct);
