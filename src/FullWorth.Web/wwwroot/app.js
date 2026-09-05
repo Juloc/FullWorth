@@ -454,11 +454,15 @@ async function reconnectConnection(connection,button){
   try{
     const status=await bankApi('api/banking/status');
     if(!bankingReady(status)){if(button)button.disabled=false;return openEnableBankingWizard(status)}
-    const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(connection.country||'DE')}&psuType=${encodeURIComponent(connection.psuType||'personal')}`);
+    const country=(connection.country||'DE').toUpperCase();
+    const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}&psuType=${encodeURIComponent(connection.psuType||'personal')}`);
     const bank=(data.aspsps||[]).find(x=>(x.name||'').toLowerCase()===(connection.institutionName||'').toLowerCase());
-    if(!bank)throw new Error(get('bankingSetup.bankNotFound'));
     if(button)button.disabled=false;
-    return openBankConnectionOptions(bank,connection.id,status.profile?.id||null);
+    if(bank)return openBankConnectionOptions(bank,connection.id,status.profile?.id||null);
+    // ASPSP names can change. Fall back to the fresh provider list and let the user select the
+    // renamed successor while keeping the existing FullWorth connection id.
+    toast(get('bankingSetup.bankRenamedHint'));
+    return openBankDialog(connection,country);
   }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
 }
 function openAddAccountDialog(){
@@ -729,16 +733,18 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
   dlg.showModal();
 }
 
-async function openBankDialog(){
+async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   let status;
   try{status=await bankApi('api/banking/status')}catch(err){toast(err.message||get('common.error'));return}
   if(!bankingReady(status)){openEnableBankingWizard(status);return}
 
-  let data;
-  try{data=await bankApi('api/banking/institutions?country=DE')}catch(err){toast(err.message||get('common.error'));return}
-  const banks=(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.addBank'))}</h2><button value="cancel">×</button></div><input id="bank-search" type="search" placeholder="Bank"><div id="bank-options" class="bank-options"></div></form>`);
-  const box=dlg.querySelector('#bank-options');
+  const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(reconnectConnection?get('accounts.reconnect'):get('accounts.addBank'))}</h2><button value="cancel">×</button></div>
+    <label>${esc(get('bankingSetup.country'))}<input id="bank-country" value="${esc(String(initialCountry||'DE').toUpperCase())}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" autocapitalize="characters"></label>
+    <input id="bank-search" type="search" placeholder="Bank">
+    <div id="bank-options" class="bank-options"></div></form>`);
+  const box=dlg.querySelector('#bank-options'),search=dlg.querySelector('#bank-search'),countryInput=dlg.querySelector('#bank-country');
+  let banks=[];
+
   const draw=filter=>{
     box.innerHTML='';
     for(const bank of banks.filter(x=>!filter||(x.name||'').toLowerCase().includes(filter.toLowerCase())).slice(0,100)){
@@ -751,14 +757,30 @@ async function openBankDialog(){
       const title=document.createElement('strong');title.textContent=bank.name||'';text.appendChild(title);
       const groupName=typeof bank.group==='string'?bank.group:(bank.group?.name||bank.group?.title||'');
       const types=(bank.psu_types||[]).map(type=>get('bankingSetup.psu_'+type)||type).join(' / ');
-      const meta=[bank.country||'DE',groupName,types,bank.beta?get('bankingSetup.beta'):null].filter(Boolean);
+      const meta=[bank.country||countryInput.value.toUpperCase(),groupName,types,bank.beta?get('bankingSetup.beta'):null].filter(Boolean);
       const sub=document.createElement('span');sub.className='row-sub';sub.textContent=meta.join(' · ');text.appendChild(sub);
       b.appendChild(text);
-      b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,null,status.profile?.id||null)};
+      b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,reconnectConnection?.id||null,status.profile?.id||null)};
       box.appendChild(b);
     }
+    if(!banks.length)box.innerHTML=`<div class="row-sub">${esc(get('common.empty'))}</div>`;
   };
-  draw('');dlg.querySelector('#bank-search').oninput=e=>draw(e.target.value);dlg.showModal();
+
+  const loadCountry=async()=>{
+    const country=countryInput.value.trim().toUpperCase();
+    if(!/^[A-Z]{2}$/.test(country))return;
+    countryInput.value=country;box.innerHTML=`<div class="row-sub">${esc(get('bankingSetup.loading'))}</div>`;
+    try{
+      const data=await bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`);
+      banks=(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      draw(search.value);
+    }catch(err){banks=[];box.innerHTML=`<div class="row-sub">${esc(err.message||get('common.error'))}</div>`}
+  };
+  search.oninput=e=>draw(e.target.value);
+  countryInput.addEventListener('change',loadCountry);
+  countryInput.addEventListener('input',()=>{if(countryInput.value.trim().length===2)loadCountry()});
+  dlg.showModal();
+  await loadCountry();
 }
 
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
