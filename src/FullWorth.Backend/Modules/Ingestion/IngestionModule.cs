@@ -203,64 +203,78 @@ public sealed class IngestionService(
             if (!accounts.TryGetValue(accountGroup.Key, out var account)) continue;
             var sourceItems = accountGroup.ToList();
             var keys = sourceItems.Select(x => x.ExternalKey).Distinct().ToArray();
-            var existing = await db.Transactions.Where(x => x.AccountId == account.Id && keys.Contains(x.ExternalKey)).ToDictionaryAsync(x => x.ExternalKey, ct);
-            var pending = await db.Transactions
-                .Where(x => x.AccountId == account.Id && x.Status == PendingStatus && !keys.Contains(x.ExternalKey))
-                .ToListAsync(ct);
-            var reconciled = new HashSet<Guid>();
+            var existing = await db.Transactions
+                .Where(x => x.AccountId == account.Id && keys.Contains(x.ExternalKey))
+                .ToDictionaryAsync(x => x.ExternalKey, ct);
+
+            // Migration/reconciliation seam: older FullWorth builds used Enable Banking transaction_id
+            // as ExternalKey. The provider documents transaction_id as an unstable detail pointer, while
+            // entry_reference is the account-scoped cross-retrieval identifier. Match only UNIQUE stored
+            // entry references; ambiguous historical rows are deliberately left untouched.
+            var entryReferences = sourceItems
+                .Select(x => x.EntryReference)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var entryReferenceCandidates = entryReferences.Length == 0
+                ? []
+                : await db.Transactions
+                    .Where(x => x.AccountId == account.Id && x.EntryReference != null && entryReferences.Contains(x.EntryReference))
+                    .ToListAsync(ct);
+            var uniqueByEntryReference = entryReferenceCandidates
+                .GroupBy(x => x.EntryReference!, StringComparer.Ordinal)
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+
             foreach (var item in sourceItems)
             {
-                if (existing.TryGetValue(item.ExternalKey, out var entity))
+                FinanceTransaction entity;
+                if (existing.TryGetValue(item.ExternalKey, out var exact))
                 {
+                    entity = exact;
                     updated++;
                 }
-                else if (!IsPending(item.Status) && TryFindPendingMatch(pending, reconciled, item, out var match))
+                else if (!string.IsNullOrWhiteSpace(item.EntryReference) &&
+                         uniqueByEntryReference.TryGetValue(item.EntryReference, out var stableMatch))
                 {
-                    entity = match;
-                    reconciled.Add(entity.Id);
+                    entity = stableMatch;
                     entity.ExternalKey = item.ExternalKey;
                     existing[item.ExternalKey] = entity;
                     updated++;
                 }
                 else
                 {
+                    // Pending transactions commonly have no stable entry_reference. Never merge them
+                    // into BOOK entries merely because amount/payee/date look similar; that can merge
+                    // two real card transactions. The status-scoped deterministic fallback keeps them
+                    // separate unless Enable Banking supplies a stable entry_reference.
                     entity = new FinanceTransaction { AccountId = account.Id, ExternalKey = item.ExternalKey };
-                    db.Transactions.Add(entity); existing[item.ExternalKey] = entity; inserted++;
+                    db.Transactions.Add(entity);
+                    existing[item.ExternalKey] = entity;
+                    inserted++;
                 }
-                entity.ProviderTransactionId = item.ProviderTransactionId; entity.Status = item.Status; entity.BookingDate = item.BookingDate; entity.ValueDate = item.ValueDate;
-                entity.Amount = item.Amount; entity.Currency = item.Currency; entity.Counterparty = item.Counterparty; entity.NormalizedCounterparty = MerchantNormalization.Normalize(item.Counterparty);
-                entity.Description = item.Description; entity.MerchantCategoryCode = item.MerchantCategoryCode; entity.EntryReference = item.EntryReference;
-                entity.RawJson = cipher.Protect(item.RawJson) ?? "{}"; entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+                entity.ProviderTransactionId = item.ProviderTransactionId;
+                entity.Status = item.Status;
+                entity.BookingDate = item.BookingDate;
+                entity.ValueDate = item.ValueDate;
+                entity.Amount = item.Amount;
+                entity.Currency = item.Currency;
+                entity.Counterparty = item.Counterparty;
+                entity.NormalizedCounterparty = MerchantNormalization.Normalize(item.Counterparty);
+                entity.Description = item.Description;
+                entity.MerchantCategoryCode = item.MerchantCategoryCode;
+                entity.EntryReference = item.EntryReference;
+                entity.RawJson = cipher.Protect(item.RawJson) ?? "{}";
+                entity.UpdatedAt = DateTimeOffset.UtcNow;
                 if (entity.CategorizationSource != "manual")
                     ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, cloudMappings);
             }
         }
-        await db.SaveChangesAsync(ct); return (inserted, updated);
+        await db.SaveChangesAsync(ct);
+        return (inserted, updated);
     }
-
-    private const string PendingStatus = "PDNG";
-
-    private static bool IsPending(string? status) => string.Equals(status, PendingStatus, StringComparison.OrdinalIgnoreCase);
-
-    private static bool TryFindPendingMatch(
-        List<FinanceTransaction> pending,
-        HashSet<Guid> used,
-        TransactionBatchItem item,
-        out FinanceTransaction match)
-    {
-        var itemDate = item.BookingDate ?? item.ValueDate;
-        var itemCounterparty = MerchantNormalization.Normalize(item.Counterparty);
-        match = pending.FirstOrDefault(p =>
-            !used.Contains(p.Id) &&
-            p.Amount == item.Amount &&
-            string.Equals(p.Currency, item.Currency, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(p.NormalizedCounterparty, itemCounterparty, StringComparison.OrdinalIgnoreCase) &&
-            WithinWindow(p.BookingDate ?? p.ValueDate, itemDate, 5))!;
-        return match is not null;
-    }
-
-    private static bool WithinWindow(DateOnly? a, DateOnly? b, int days) =>
-        a.HasValue && b.HasValue && Math.Abs(a.Value.DayNumber - b.Value.DayNumber) <= days;
 
     private static void ApplyCategorization(
         FinanceTransaction tx,
