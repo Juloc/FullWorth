@@ -71,6 +71,30 @@ public sealed class BankingNotConfiguredTests
     }
 
     [Fact]
+    public async Task LegacyGlobalCredentialsDoNotAuthorizeNewUserConnections()
+    {
+        var keyFile = Path.Combine(Path.GetTempPath(), "eb-" + Guid.NewGuid().ToString("N") + ".pem");
+        await File.WriteAllTextAsync(keyFile, "legacy-key-placeholder");
+        try
+        {
+            using var client = ConfiguredClient(
+                keyFile,
+                "https://finance.example/connect/enable-banking/callback");
+
+            using var response = await client.SendAsync(
+                Request(HttpMethod.Get, "/api/banking/institutions?country=DE"));
+
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            Assert.Equal("banking_profile_not_ready", body?.Error);
+        }
+        finally
+        {
+            File.Delete(keyFile);
+        }
+    }
+
+    [Fact]
     public async Task LegacyGlobalSetupStillRequiresRedirectUrl()
     {
         var keyFile = Path.Combine(Path.GetTempPath(), "eb-" + Guid.NewGuid().ToString("N") + ".pem");
