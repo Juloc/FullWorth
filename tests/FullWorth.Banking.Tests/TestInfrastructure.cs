@@ -94,7 +94,11 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
                 write.LastSyncedAt,
                 write.NextSyncAllowedAt,
                 write.ConsecutiveFailures,
-                write.LastError);
+                write.LastError,
+                write.EnableBankingProfileId,
+                write.PsuType,
+                write.AuthMethod,
+                write.RequiredPsuHeadersJson);
 
             var index = Connections.FindIndex(x => x.Id == id);
             if (index >= 0) Connections[index] = dto;
