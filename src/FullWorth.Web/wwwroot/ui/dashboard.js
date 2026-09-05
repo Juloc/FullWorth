@@ -295,7 +295,7 @@ function renderWidget(type, ctx, body, data, cfg) {
       body.innerHTML = items.length ? items.map(x => {
         const name = x.merchantDisplayName || x.counterparty || '—';
         const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
-        return `<div class="fw-row is-drillable" role="button" tabindex="0" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
+        return `<div class="fw-row is-drillable" role="button" tabindex="0" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
       }).join('') : emptyState(ctx);
       body.querySelectorAll('[data-recent-tx]').forEach(r => bindDrill(r, () => ''));
     }).catch(() => { body.innerHTML = errorState(ctx); });

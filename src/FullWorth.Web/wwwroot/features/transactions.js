@@ -125,7 +125,7 @@ export async function renderTransactions(context) {
     tr.dataset.txId = x.id;
     tr.innerHTML =
       `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
-      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       `<td class="tx-cat">${ctx.esc(cat)}</td>` +
       `<td class="tx-acct">${ctx.esc(x.account || '')}</td>` +
       `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;

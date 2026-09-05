@@ -7,11 +7,37 @@ export function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&':
 // Deterministic hue (0–359) from a name, so a merchant/category keeps the same monogram tint everywhere.
 export function monogramHue(name) { let h = 0; const s = String(name || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
 
-// Left identity (UX rework §4): curated local brand logo → category-tinted monogram → transfer glyph.
-// No external/third-party logo lookups. `opts`: {logoAssetPath, isTransfer, isSavings}.
+// A small set of category glyphs keyed by stable semantic category keys (or the last/first segment of a
+// dotted key). Used as the middle identity tier when a booking has no brand logo but a known category
+// icon. Unknown keys fall through to the monogram. Line-art matching the rest of the icon set.
+const CATEGORY_ICONS = {
+  income: 'M12 5v14M5 12l7-7 7 7', salary: 'M12 5v14M5 12l7-7 7 7',
+  housing: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5', rent: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5', mortgage: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5',
+  groceries: 'M6 6h15l-1.5 9h-12L6 6ZM6 6 5 3H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2m8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2', food: 'M6 3v8a3 3 0 0 0 6 0V3M9 3v18M17 3c-1.5 0-2 2-2 5s.5 5 2 5v8', restaurants: 'M6 3v8a3 3 0 0 0 6 0V3M9 3v18M17 3c-1.5 0-2 2-2 5s.5 5 2 5v8',
+  transport: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', car: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', fuel: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2',
+  electricity: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', utilities: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', internet: 'M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19h.01',
+  health: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', shopping: 'M6 6h12v14l-3-2-3 2-3-2-3 2Z', leisure: 'M4 5h16v11H4zM8 20h8M12 16v4',
+  savings: 'M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8ZM8 11h.01', insurance: 'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z', travel: 'M2 16l20-7-7 20-3-8-8-3Z',
+};
+function categoryGlyph(iconKey) {
+  if (!iconKey) return null;
+  const key = String(iconKey).trim();
+  const path = CATEGORY_ICONS[key] || CATEGORY_ICONS[key.toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/).pop().toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/)[0].toLowerCase()];
+  return path ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>` : null;
+}
+// True for a categoryIconKey that is a literal emoji (some categories store an emoji in their Icon field).
+function isEmoji(s) { try { return /\p{Extended_Pictographic}/u.test(String(s || '')); } catch { return false; } }
+
+// Left identity (UX rework §4): curated local brand logo → category icon → category-tinted monogram, with
+// a transfer glyph override. No external/third-party logo lookups.
+// `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
 export function identityIcon(name, opts = {}) {
   if (opts.isTransfer) return `<span class="fw-ident fw-ident-transfer" aria-hidden="true">${opts.isSavings ? '↑' : '⇄'}</span>`;
   if (opts.logoAssetPath) return `<span class="fw-ident"><img class="fw-ident-logo" src="${esc(opts.logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"></span>`;
+  const iconKey = opts.categoryIconKey;
+  if (iconKey && isEmoji(iconKey)) return `<span class="fw-ident fw-ident-cat" aria-hidden="true">${esc(iconKey)}</span>`;
+  const glyph = categoryGlyph(iconKey);
+  if (glyph) return `<span class="fw-ident fw-ident-cat" aria-hidden="true">${glyph}</span>`;
   const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
   return `<span class="fw-ident fw-monogram" style="--ident-h:${monogramHue(name)}" aria-hidden="true">${esc(initial)}</span>`;
 }
