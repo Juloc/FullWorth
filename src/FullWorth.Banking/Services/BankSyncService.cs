@@ -278,8 +278,12 @@ public sealed class BankSyncService(
             throw;
         }
 
-        var sessionId = GetString(session, "session_id")
-            ?? throw new InvalidOperationException("Enable Banking did not return session_id.");
+        var sessionId = GetString(session, "session_id");
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            await MarkAuthorizationCompletionFailureAsync(connection, CancellationToken.None);
+            throw new InvalidOperationException("Enable Banking did not return session_id.");
+        }
 
         if (session.ValueKind != JsonValueKind.Object ||
             !session.TryGetProperty("access", out var access) ||
@@ -300,11 +304,10 @@ public sealed class BankSyncService(
             {
                 logger.LogWarning(
                     ex,
-                    "Malformed Enable Banking session {SessionId} could not be closed.",
-                    sessionId);
+                    "Malformed Enable Banking session could not be closed.");
             }
 
-            await MarkAuthorizationCompletionFailureAsync(connection, ct);
+            await MarkAuthorizationCompletionFailureAsync(connection, CancellationToken.None);
             throw new InvalidOperationException("Enable Banking did not return a valid access.valid_until.");
         }
 
