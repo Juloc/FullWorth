@@ -13,3 +13,48 @@ dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min
 .onboarding-dialog h3{margin:0;font-size:20px}
 .ai-access-setup label{display:grid;gap:6px}
 @media(max-width:560px){.setup-choice-grid{grid-template-columns:1fr}.dialog-actions{flex-wrap:wrap}.dialog-actions button{flex:1 1 auto}}
+
+/* Shared dialog shell: every app dialog is normalized by ui/dialog.js. */
+dialog.fw-dialog{overscroll-behavior:contain}
+dialog.fw-dialog .fw-dialog-card{min-width:0}
+dialog.fw-dialog .fw-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+dialog.fw-dialog .fw-dialog-head>h2,
+dialog.fw-dialog .fw-dialog-head>div{min-width:0}
+dialog.fw-dialog .fw-dialog-head-minimal{justify-content:flex-end}
+dialog.fw-dialog .fw-dialog-close{
+  display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--text);cursor:pointer
+}
+dialog.fw-dialog .fw-dialog-close:hover{background:var(--surface-2)}
+dialog.fw-dialog .fw-dialog-close svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+dialog.fw-dialog .dialog-actions{min-width:0}
+
+/* Phone dialogs are one consistent full-screen surface, matching transaction details. */
+@media(max-width:767px){
+  dialog.fw-dialog:not(.fw-dialog--sheet){
+    inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:0;
+    overflow:hidden;background:var(--surface)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet)::backdrop{background:var(--surface)}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-card{
+    width:100%;max-width:none;height:100%;max-height:none;min-height:100%;
+    margin:0;padding:0 var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+    border:0;border-radius:0;box-shadow:none;overflow-y:auto;overflow-x:hidden;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;align-content:start
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-head{
+    position:sticky;top:0;z-index:6;
+    margin:0 calc(var(--s4) * -1);
+    padding:calc(var(--s3) + env(safe-area-inset-top)) var(--s4) var(--s3);
+    background:var(--surface);border-bottom:1px solid var(--line)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close{
+    width:48px;height:48px;margin:-6px -8px -6px 0
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:25px;height:25px;stroke-width:2.1}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .bank-options{max-height:none;overflow:visible}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .dialog-actions{
+    width:100%;padding-top:var(--s2)
+  }
+}
+
