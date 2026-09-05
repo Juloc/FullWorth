@@ -874,8 +874,7 @@ function mergeBankOptions(rows){
   const merged=new Map();
   for(const row of Array.isArray(rows)?rows:[]){
     const name=bankNameKey(row?.name),country=String(row?.country||'').toUpperCase();
-    const logo=String(row?.logo||'');
-    const key=`${country}|${name}|${logo}`;
+    const key=`${country}|${name}`;
     if(!name||!country)continue;
     const existing=merged.get(key);
     if(!existing){
@@ -889,13 +888,14 @@ function mergeBankOptions(rows){
       if(!seen.has(signature)){existing.auth_methods.push(method);seen.add(signature)}
     }
     existing.beta=Boolean(existing.beta||row.beta);
+    if(!existing.logo&&row.logo)existing.logo=row.logo;
     if(!existing.group&&row.group)existing.group=row.group;
   }
   return [...merged.values()];
 }
 
 function providerStatusSeverity(value){
-  const status=String(value||'').toLowerCase();
+  const status=String(value||'').toLowerCase().replace(/[_-]+/g,' ');
   if(!status)return null;
   if(status.includes('major')||status.includes('disruption')||status.includes('critical')||status==='down')return'major';
   if(status.includes('possible')||status.includes('problem')||status.includes('warning')||status.includes('degraded'))return'possible';
@@ -910,16 +910,25 @@ function providerStatusLabel(severity){
   return get('bankingSetup.statusUnknown');
 }
 
+function bankStatusMatchKeys(value){
+  const full=bankNameKey(value),keys=new Set(full?[full]:[]);
+  const first=full.split(' ')[0]||'';
+  if(first.length>=3&&first.length<=5)keys.add(first);
+  return keys;
+}
+
 function applyProviderStatuses(banks,statusView){
   if(!statusView?.available||!Array.isArray(statusView.statuses))return banks;
   const rank={major:3,possible:2,unknown:1,ok:0};
   for(const bank of banks){
-    const names=new Set([bankNameKey(bank.name)]);
+    const names=bankStatusMatchKeys(bank.name);
     const groupName=typeof bank.group==='string'?bank.group:(bank.group?.name||bank.group?.title||'');
-    if(groupName)names.add(bankNameKey(groupName));
-    const matches=statusView.statuses.filter(s=>
-      String(s.country||'').toUpperCase()===String(bank.country||'').toUpperCase()&&
-      names.has(bankNameKey(s.brand)));
+    for(const key of bankStatusMatchKeys(groupName))names.add(key);
+    const matches=statusView.statuses.filter(s=>{
+      if(String(s.country||'').toUpperCase()!==String(bank.country||'').toUpperCase())return false;
+      const brandKeys=bankStatusMatchKeys(s.brand);
+      return [...brandKeys].some(key=>names.has(key));
+    });
     if(!matches.length)continue;
     const best=matches.map(s=>({raw:s.status,severity:providerStatusSeverity(s.status)}))
       .sort((a,b)=>(rank[b.severity]??-1)-(rank[a.severity]??-1))[0];
@@ -927,6 +936,49 @@ function applyProviderStatuses(banks,statusView){
     bank.providerStatusSeverity=best.severity;
   }
   return banks;
+}
+
+function openProviderStatusConnection(country,onConnected){
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('bankingSetup.statusConnect'))}</h2><button type="button" data-close>×</button></div>
+    <p class="row-sub">${esc(get('bankingSetup.statusConnectHint'))}</p>
+    <label>${esc(get('bankingSetup.email'))}<input name="email" type="email" autocomplete="email" required maxlength="254"></label>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.sendLogin'))}</button></div></form>`);
+  const form=dlg.querySelector('form');let pollTimer=null,closed=false;
+  const stop=()=>{closed=true;if(pollTimer)clearTimeout(pollTimer)};
+  dlg.addEventListener('close',stop);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+
+  const poll=async()=>{
+    if(closed)return;
+    try{
+      const current=await bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`);
+      if(current?.available){
+        toast(get('bankingSetup.statusConnected'),5000);
+        dlg.close();
+        if(onConnected)await onConnected();
+        return;
+      }
+    }catch{}
+    pollTimer=setTimeout(poll,2000);
+  };
+
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const submit=form.querySelector('[type="submit"]'),email=String(new FormData(form).get('email')||'').trim();
+    submit.disabled=true;
+    try{
+      await bankApi('api/banking/provider-status/connect/start',jsonBody({email}));
+      form.innerHTML=`<div class="panel-head"><h2>${esc(get('bankingSetup.statusConnect'))}</h2><button type="button" data-close>×</button></div>
+        <p>${esc(get('bankingSetup.statusEmailSent'))}</p>
+        <p class="row-sub">${esc(get('bankingSetup.waitingForEmail'))}</p>
+        <div class="dialog-actions"><button type="button" data-close-bottom>${esc(get('common.close'))}</button></div>`;
+      form.querySelector('[data-close]').onclick=()=>dlg.close();
+      form.querySelector('[data-close-bottom]').onclick=()=>dlg.close();
+      pollTimer=setTimeout(poll,1000);
+    }catch(err){toast(err.message||get('common.error'));submit.disabled=false}
+  };
+  dlg.showModal();
 }
 
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
@@ -1037,10 +1089,11 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(reconnectConnection?get('accounts.reconnect'):get('accounts.addBank'))}</h2><button value="cancel">×</button></div>
     <label>${esc(get('bankingSetup.country'))}<input id="bank-country" value="${esc(String(initialCountry||'DE').toUpperCase())}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" autocapitalize="characters"></label>
     <input id="bank-search" type="search" placeholder="Bank">
-    <p class="row-sub bank-status-link"><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a></p>
+    <div id="bank-status-tools" class="bank-status-tools"><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a><span data-status-state></span><button type="button" data-status-connect hidden>${esc(get('bankingSetup.statusConnect'))}</button></div>
     <div id="bank-options" class="bank-options"></div></form>`);
   const box=dlg.querySelector('#bank-options'),search=dlg.querySelector('#bank-search'),countryInput=dlg.querySelector('#bank-country');
-  let banks=[];
+  const statusTools=dlg.querySelector('#bank-status-tools'),statusState=statusTools.querySelector('[data-status-state]'),statusConnect=statusTools.querySelector('[data-status-connect]');
+  let banks=[],providerStatusState=null;
 
   const draw=filter=>{
     box.innerHTML='';
@@ -1075,12 +1128,22 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
         bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`),
         bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`).catch(()=>null)
       ]);
+      providerStatusState=providerStatus;
+      const canConnectStatus=providerStatus&&
+        (providerStatus.reason==='control_panel_access_unavailable'||providerStatus.reason==='control_panel_login_expired');
+      statusConnect.hidden=!canConnectStatus;
+      statusState.textContent=providerStatus?.available
+        ?get('bankingSetup.statusActive')
+        :(canConnectStatus?get('bankingSetup.statusConnectShort'):get('bankingSetup.statusUnavailable'));
       banks=applyProviderStatuses(
         mergeBankOptions(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||'')),
-        providerStatus);
+        providerStatusState);
       draw(search.value);
     }catch(err){banks=[];box.innerHTML=`<div class="row-sub">${esc(err.message||get('common.error'))}</div>`}
   };
+  statusConnect.onclick=()=>openProviderStatusConnection(
+    countryInput.value.trim().toUpperCase()||'DE',
+    loadCountry);
   search.oninput=e=>draw(e.target.value);
   countryInput.addEventListener('change',loadCountry);
   countryInput.addEventListener('input',()=>{if(countryInput.value.trim().length===2)loadCountry()});
