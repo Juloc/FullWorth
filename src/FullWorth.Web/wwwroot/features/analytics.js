@@ -150,11 +150,13 @@ function fillSpending(el, o, oPrev) {
 
 function spendingLine(rows) {
   const vals = rows.map(r => Math.abs(Number(r.expenses) || 0));
-  const max = Math.max(1, ...vals), w = 900, h = 200;
-  const pts = vals.map((v, i) => `${((i / (vals.length - 1 || 1)) * w).toFixed(1)},${(h - 20 - (v / max) * (h - 30)).toFixed(1)}`).join(' ');
-  const base = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
+  const max = Math.max(1, ...vals), w = 900, h = 200, baseY = h - 20;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - (v / max) * (h - 30)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
+  const base = `<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line>`;
   const labels = rows.map((r, i) => `<text x="${((i / (rows.length - 1 || 1)) * w).toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${base}<polyline points="${pts}" class="an-line-expense"/>${labels}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${areaGradient('an-grad-neg', 'an-g-neg')}${base}<path d="${area}" class="an-area" fill="url(#an-grad-neg)"></path><path d="${line}" class="an-line-expense"></path>${labels}</svg>`;
 }
 
 // 2) Income vs expenses — grouped bars per period, with income/expense/net numbers and both trends.
@@ -183,8 +185,8 @@ function inoutBars(rows) {
     const cx = pad + slot * i + slot / 2;
     const ih = ((Number(r.income) || 0) / max) * (h - 30);
     const eh = ((Number(r.expenses) || 0) / max) * (h - 30);
-    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="2"></rect>`;
-    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="2"></rect>`;
+    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="6"></rect>`;
+    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="6"></rect>`;
     bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`;
   });
   const baseline = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
@@ -213,13 +215,38 @@ function fillCategory(el, result) {
     return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
       <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
   }).join('');
-  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
+  // Screenshot parity: a soft category donut sits above the list, sharing its per-category palette; the
+  // list below doubles as the legend. Wrapped in chart() so privacy mode swaps its (leaking) geometry.
+  const donutHtml = categoryDonut(cats, total, cur);
+  const donut = donutHtml ? chart(() => donutHtml) : '';
+  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
     const go = () => window.fwNavScope && window.fwNavScope('transactions', `categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`);
     row.addEventListener('click', go);
     row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
+}
+
+// Soft category donut (screenshot parity): shares of the window's spend across ROOT categories only
+// (roots are disjoint and each rolls up its subtree, matching `total`), coloured from the same per-
+// category palette as the list. Rounded caps + a small inter-segment gap keep it in the soft FullWorth
+// style; the center carries the total, the list underneath serves as the legend. Returns '' when a donut
+// wouldn't say anything (fewer than two slices).
+function categoryDonut(cats, total, cur) {
+  const roots = cats.filter(c => !c.parentId)
+    .map(c => ({ val: Math.abs(Number(c.current) || 0), cat: categoryColorIndex(c.categoryId || c.name) }))
+    .filter(s => s.val > 0).sort((a, b) => b.val - a.val);
+  if (roots.length < 2 || total <= 0) return '';
+  const r = 64, cx = 80, cy = 80, circ = 2 * Math.PI * r, gap = 8;
+  let offset = 0, arcs = '';
+  for (const s of roots) {
+    const len = (s.val / total) * circ;
+    const dash = Math.max(0.75, len - gap);
+    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="16" stroke-linecap="round" class="donut-seg" data-cat="${s.cat}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    offset += len;
+  }
+  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(total, cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))}</span></div></div>`;
 }
 
 // 4) Spend by merchant — top merchants with brand identity, count/average, spend + per-row trend.
@@ -254,9 +281,11 @@ function fillNetWorth(el, history, currency) {
 
 function nwLine(vals) {
   const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const w = 900, h = 200;
-  const pts = vals.map((v, i) => `${((i / (vals.length - 1 || 1)) * w).toFixed(1)},${(h - ((v - min) / span) * (h - 20) - 10).toFixed(1)}`).join(' ');
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.trend'))}"><line x1="0" y1="${h - 10}" x2="${w}" y2="${h - 10}" class="an-zero"></line><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg>`;
+  const w = 900, h = 200, baseY = h - 10;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - ((v - min) / span) * (h - 20)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.trend'))}">${areaGradient('an-grad-nw', 'an-g-nw')}<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line><path d="${area}" class="an-area" fill="url(#an-grad-nw)"></path><path d="${line}" class="an-line-networth"></path></svg>`;
 }
 
 // 6) Forecast (optional) — kept as an explicitly-labelled estimate (§7.4). Independent of the cycle.
@@ -281,6 +310,28 @@ function categoryColorIndex(key) {
 }
 
 function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${esc(ctx.get('common.empty'))}</div></div>`; }
+
+// Catmull-Rom → cubic-bézier smoothing: turns [[x,y],…] into a soft SVG path `d` so the line/area charts
+// read as gentle curves instead of hard polylines (paired with stroke-linecap/-linejoin:round in CSS).
+function smoothPath(pts) {
+  if (!pts.length) return '';
+  if (pts.length < 3) return 'M' + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L');
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+// A soft vertical fade for area fills — a token colour up top, transparent at the bottom — referenced by
+// the returned <path fill="url(#id)">. Defining the gradient inside the SVG markup is allowed (it is not
+// an injected <style>); the stop colours/opacities live in the .an-g-* classes in app.css.
+function areaGradient(id, cls) {
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="${cls}-0"></stop><stop offset="1" class="${cls}-1"></stop></linearGradient></defs>`;
+}
 
 // §18: an amber note when foreign amounts couldn't be converted (a missing FX rate) so the figures are
 // understood as partial rather than silently dropping money.
@@ -384,7 +435,7 @@ function barChart(series, fmt, measure) {
     const cx = pad + slot * i + slot / 2;
     const bh = (Math.abs(Number(p.value) || 0) / max) * (h - 30);
     const cls = barClass(p.value);
-    out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(h - 20 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}" rx="2"></rect>`;
+    out += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(h - 20 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" class="${cls}" rx="6"></rect>`;
     out += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(shortLabel(p.label))}</text>`;
   });
   return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${out}</svg>`;
@@ -403,10 +454,12 @@ function hbarChart(series, fmt) {
 function lineChart(series, fmt) {
   const vals = series.map(p => Number(p.value) || 0);
   const min = Math.min(0, ...vals), max = Math.max(1, ...vals), span = (max - min) || 1;
-  const w = 900, h = 200;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1 || 1)) * w},${(h - ((v - min) / span) * (h - 20) - 10).toFixed(1)}`).join(' ');
+  const w = 900, h = 200, baseY = h - 10;
+  const pts = vals.map((v, i) => [(i / (vals.length - 1 || 1)) * w, baseY - ((v - min) / span) * (h - 20)]);
+  const line = smoothPath(pts);
+  const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
   const last = series[series.length - 1];
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${esc(last.label)}: ${fmt(last.value)}</div>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(ctx.get('analytics.builder.title'))}">${areaGradient('an-grad-line', 'an-g-line')}<path d="${area}" class="an-area" fill="url(#an-grad-line)"></path><path d="${line}" class="an-line-builder"></path></svg><div class="row-sub">${esc(last.label)}: ${fmt(last.value)}</div>`;
 }
 
 // Donut of the positive-valued slices (a donut of mixed signs is meaningless). Arc lengths via
@@ -415,11 +468,13 @@ function donutChart(series, fmt) {
   const positives = series.filter(p => Number(p.value) > 0);
   const total = positives.reduce((s, p) => s + Number(p.value), 0);
   if (!total) return emptyRow();
-  const r = 60, cx = 90, cy = 90, circ = 2 * Math.PI * r;
+  const r = 60, cx = 90, cy = 90, circ = 2 * Math.PI * r, gap = 8;
   let offset = 0, arcs = '';
   for (const p of positives) {
     const len = (Number(p.value) / total) * circ;
-    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="22" class="donut-seg" data-cat="${categoryColorIndex(p.key || p.label)}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    // Soft rounded arcs: round caps + shrink each dash by a few px so a small gap opens between segments.
+    const dash = Math.max(0.75, len - gap);
+    arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="18" stroke-linecap="round" class="donut-seg" data-cat="${categoryColorIndex(p.key || p.label)}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
     offset += len;
   }
   const legend = positives.map(p => `<div class="row-sub"><span class="cat-dot" data-cat="${categoryColorIndex(p.key || p.label)}"></span>${esc(p.label)} · ${fmt(p.value)}</div>`).join('');

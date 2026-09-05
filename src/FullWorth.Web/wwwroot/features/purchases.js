@@ -1,5 +1,6 @@
 import { bindGptReceiptTest } from './purchases-gpt-test.js';
 import { tryGptReceiptScan } from './purchases-gpt-normal.js';
+import { identityIcon } from '../ui/ux-kit.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank
@@ -32,10 +33,38 @@ export async function renderPurchases(context) {
   const recent = rows.filter(r => !reviewIds.has(r.id));
 
   const frag = document.createDocumentFragment();
+  frag.appendChild(summaryHeader(rows, needsReview.length));
   if (needsReview.length) section(frag, ctx.get('purchases.needsReview'), needsReview);
   if (recent.length) section(frag, ctx.get('purchases.recent'), recent);
   frag.appendChild(merchantSummary(rows));
   el.appendChild(frag);
+}
+
+// Concise summary strip (Finanzguru-style header): total spend, purchase count and — only when
+// something is pending — an attention-tinted "needs review" tile. Amounts use tabular numerals via
+// the shared .amount class. Naive cross-currency sum matches the merchant summary below.
+function summaryHeader(rows, needsReviewCount) {
+  const total = rows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
+  const cur = rows[0]?.currency || 'EUR';
+  const wrap = document.createElement('div');
+  wrap.className = 'purchase-summary';
+  wrap.innerHTML =
+    `<div class="purchase-stat"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.total'))}</span><span class="purchase-stat-v amount">${ctx.money(total, cur)}</span></div>` +
+    `<div class="purchase-stat"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.title'))}</span><span class="purchase-stat-v">${rows.length}</span></div>` +
+    (needsReviewCount ? `<div class="purchase-stat purchase-stat--review"><span class="purchase-stat-k">${ctx.esc(ctx.get('purchases.needsReview'))}</span><span class="purchase-stat-v">${needsReviewCount}</span></div>` : '');
+  return wrap;
+}
+
+// A word-label pill hung on a purchase name (Design System §10, matching the transactions markers):
+// amber "Prüfen" while a purchase is unconfirmed, neutral "Nicht verknüpft" while a confirmed receipt
+// still has no bank booking. Confirmed & linked purchases carry no pill, keeping the recent list calm.
+function attentionTag(x) {
+  if (x.status !== 'confirmed')
+    return `<span class="purchase-tag purchase-tag--review">${ctx.esc(ctx.get('purchases.review'))}</span>`;
+  const linked = x.source === 'amazon' ? true : !!x.transactionId;
+  if (!linked)
+    return `<span class="purchase-tag purchase-tag--unlinked">${ctx.esc(ctx.get('purchases.unlinked'))}</span>`;
+  return '';
 }
 
 function section(parent, title, rows) {
@@ -44,17 +73,20 @@ function section(parent, title, rows) {
   head.textContent = `${title} (${rows.length})`;
   parent.appendChild(head);
   for (const x of rows) {
-    const status = ctx.get('purchases.' + x.status);
-    const linked = x.source === 'amazon'
-      ? (x.status === 'confirmed' ? ctx.get('purchases.linked') : ctx.get('purchases.unlinked'))
-      : (x.transactionId ? ctx.get('purchases.linked') : ctx.get('purchases.unlinked'));
     const itemCount = (x.items || []).length;
     const source = x.source === 'amazon' ? 'Amazon' : x.source;
     const order = x.source === 'amazon' && x.externalOrderId ? ` · ${x.externalOrderId}` : '';
+    const name = x.merchant || x.externalOrderId || ctx.get('purchases.receipt');
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'purchase-row';
-    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(x.merchant || x.externalOrderId || ctx.get('purchases.receipt'))}</div><div class="row-sub">${ctx.esc(ctx.date(x.purchaseDate))} · ${ctx.esc(source)}${ctx.esc(order)} · ${itemCount} ${ctx.esc(ctx.get('purchases.items'))} · ${ctx.esc(status)} · ${ctx.esc(linked)}</div></div><div class="amount">${ctx.money(x.totalAmount, x.currency)}</div>`;
+    // Finanzguru-style identity row: merchant monogram / category icon, name with an attention pill,
+    // a calm sub-line (date · source · positions), and the total right-aligned with tabular numerals.
+    row.innerHTML =
+      `<span class="purchase-ident">${identityIcon(name, { categoryIconKey: x.categoryIconKey })}</span>` +
+      `<span class="row-main"><span class="purchase-title"><span class="purchase-name">${ctx.esc(name)}</span>${attentionTag(x)}</span>` +
+      `<span class="row-sub">${ctx.esc(ctx.date(x.purchaseDate))} · ${ctx.esc(source)}${ctx.esc(order)} · ${itemCount} ${ctx.esc(ctx.get('purchases.items'))}</span></span>` +
+      `<span class="amount">${ctx.money(x.totalAmount, x.currency)}</span>`;
     row.addEventListener('click', () => openDetail(x.id));
     parent.appendChild(row);
   }
@@ -70,12 +102,19 @@ function merchantSummary(rows) {
   }
   const top = [...byMerchant.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const cur = rows[0]?.currency || 'EUR';
+  const max = top.length ? top[0][1] : 0;
   const head = document.createElement('div');
   head.className = 'row-group';
   head.textContent = ctx.get('purchases.byMerchant');
   wrap.appendChild(head);
-  wrap.insertAdjacentHTML('beforeend', top.map(([m, total]) =>
-    `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(m)}</div></div><div class="amount">${ctx.money(total, cur)}</div></div>`).join(''));
+  // Ranked merchants with an identity monogram and a monochrome share bar (proportion of the top
+  // spender) so the biggest merchants read at a glance without introducing any non-neutral hue.
+  wrap.insertAdjacentHTML('beforeend', top.map(([m, total]) => {
+    const pct = max > 0 ? Math.max(4, Math.round((total / max) * 100)) : 0;
+    return `<div class="purchase-mrow"><span class="purchase-ident">${identityIcon(m, {})}</span>` +
+      `<span class="purchase-mrow-main"><span class="purchase-mrow-top"><span class="purchase-name">${ctx.esc(m)}</span><span class="amount">${ctx.money(total, cur)}</span></span>` +
+      `<span class="purchase-bar"><span style="width:${pct}%"></span></span></span></div>`;
+  }).join(''));
   return wrap;
 }
 

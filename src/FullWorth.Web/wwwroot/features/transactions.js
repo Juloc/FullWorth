@@ -166,6 +166,8 @@ export async function renderTransactions(context) {
   if (fromDate) q.set('from', fromDate);
   if (toDate) q.set('to', toDate);
   updateFilterBadge({ direction: dir, flags, from: fromDate, to: toDate, categoryId });
+  // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
+  body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
   const data = await ctx.api(`api/transactions?${q}`);
   let items = data.items || [];
@@ -173,6 +175,7 @@ export async function renderTransactions(context) {
   if (flags === 'pending') items = items.filter(x => x.status === 'PDNG');
   if (flags === 'ignored') items = items.filter(x => x.isIgnored);
 
+  renderSummary(items);
   body.innerHTML = '';
   let lastDate = null;
   for (const x of items) {
@@ -202,7 +205,58 @@ export async function renderTransactions(context) {
     tr.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(x); });
     body.appendChild(tr);
   }
-  if (!items.length) body.innerHTML = `<tr><td colspan="5" class="tx-empty">${ctx.esc(ctx.get('common.empty'))}</td></tr>`;
+  if (!items.length) {
+    const filtered = !!(text || dir || flags || fromDate || toDate || categoryId || accountId || groupId);
+    body.innerHTML = txEmptyState(filtered);
+  }
+}
+
+// Period summary strip (Finanzguru-style): income vs expense for the shown range. Transfers are neutral
+// and excluded-from-statistics rows don't count, so the two figures agree with what analytics reports.
+function renderSummary(items) {
+  const view = ctx.$('#view-transactions');
+  const panel = view.querySelector('.table-panel');
+  let bar = view.querySelector('#tx-summary');
+  if (!items.length || !panel) { bar?.remove(); return; }
+  let income = 0, expense = 0;
+  const cur = items[0]?.currency;
+  for (const x of items) {
+    if (x.isTransfer || x.isIgnored) continue;
+    const amt = Number(x.amount) || 0;
+    if (amt >= 0) income += amt; else expense += amt;
+  }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-summary'; bar.className = 'tx-summary'; panel.parentNode.insertBefore(bar, panel); }
+  const count = deLabel(`${items.length} Buchungen`, `${items.length} transactions`);
+  bar.innerHTML =
+    `<div class="fw-summary tx-summary-figs">` +
+    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.income'))}</span><span class="fw-summary-value tx-summary-income">${ctx.money(income, cur)}</span></div>` +
+    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.expenses'))}</span><span class="fw-summary-value tx-summary-expense">${ctx.money(expense, cur)}</span></div>` +
+    `</div><div class="tx-summary-meta">${ctx.esc(count)}</div>`;
+}
+
+// Loading skeleton rows: monochrome shimmer placeholders matching the row layout while the list loads.
+function txSkeletonRows(n = 7) {
+  const row =
+    `<tr class="tx-skeleton" aria-hidden="true">` +
+    `<td class="tx-date-cell"><span class="tx-sk-line tx-sk-sm"></span></td>` +
+    `<td class="tx-cp"><span class="tx-sk-avatar"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg"></span><span class="tx-sk-line tx-sk-md"></span></span></td>` +
+    `<td class="tx-cat"><span class="tx-sk-line tx-sk-md"></span></td>` +
+    `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm"></span></td>` +
+    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt"></span></td></tr>`;
+  return row.repeat(n);
+}
+
+// Empty state: a monochrome glyph plus a context-aware hint (filters active vs. genuinely no bookings yet).
+function txEmptyState(filtered) {
+  const title = ctx.get('common.empty');
+  const hint = filtered
+    ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
+    : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
+  return `<tr><td colspan="5" class="tx-empty"><div class="tx-empty-box">` +
+    `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>` +
+    `<span class="tx-empty-title">${ctx.esc(title)}</span>` +
+    `<span class="tx-empty-hint">${ctx.esc(hint)}</span>` +
+    `</div></td></tr>`;
 }
 
 // Booking-date header: Heute / Gestern / localized date (UX rework §4).

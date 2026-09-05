@@ -702,3 +702,161 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .loan-chart svg{width:100%;height:120px;color:var(--k2)}
 @media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ============================================================================
+   Round 4 — Finanzguru-style page polish (per-page workflow). Each block is
+   namespaced under its page prefix (dash-/contracts-/an-/nw-/purchase-/tx-) so
+   the rules cannot collide. FullWorth stays monochrome + --cat accents only.
+   ============================================================================ */
+
+/* --- Übersicht (Overview): calmer summary tiles + grouped account cards --- */
+.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1)}
+.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em}
+.widget-split.dash-metric-split{margin-top:var(--s2)}
+.dash-accounts{display:grid;gap:var(--s5)}
+.dash-group{display:grid}
+.dash-group-rows{display:grid}
+.dash-group-head{padding-top:2px;padding-bottom:var(--s3)}
+.dash-group-head .fw-row-title{font-size:15px}
+.dash-group-head .fw-row-sub{font-size:11px}
+.dash-group-head .fw-row-amt{font-size:15px}
+.dash-drill-chevron{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
+.dash-drill-chevron svg{width:16px;height:16px;display:block}
+.dash-group-head:hover .dash-drill-chevron,.dash-group-head:focus-visible .dash-drill-chevron{color:var(--text)}
+.dash-group .fw-row.is-drillable:focus-visible{outline:2px solid var(--text);outline-offset:-2px;border-radius:var(--radius-input)}
+
+/* --- Verträge (contracts): hero summary + grouped sections + sort sheet --- */
+.contracts-summary .fw-card-head{margin-bottom:var(--s2)}
+.contracts-hero{display:flex;flex-direction:column;gap:6px}
+.contracts-hero-fig{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.contracts-hero-value{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05;letter-spacing:-.01em}
+.contracts-hero-unit{color:var(--muted);font-size:15px;font-weight:600}
+.contracts-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:12px}
+.contracts-hero-annual{font-weight:600;color:var(--text)}
+.contracts-hero-dot{color:var(--line)}
+.contracts-sortbar{display:flex;align-items:center;justify-content:center;gap:var(--s2);width:100%;margin:var(--s2) 0 var(--s3);padding:11px 16px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);border-radius:var(--radius-pill);font-size:13px;font-weight:600;cursor:pointer}
+.contracts-sortbar:hover{background:var(--surface-3)}
+.contracts-sortbar-label{color:var(--muted)}
+.contracts-sortbar-label strong{color:var(--text);font-weight:700}
+.contracts-sortbar-caret{color:var(--muted);font-size:14px;line-height:1}
+.contracts-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding:var(--s4) 4px var(--s2)}
+.contracts-group-head:first-child{padding-top:var(--s2)}
+.contracts-group-id{display:flex;align-items:baseline;gap:6px;min-width:0}
+.contracts-group-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contracts-group-count{color:var(--muted);font-size:12px;font-weight:600;flex:0 0 auto}
+.contracts-group-sum{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;white-space:nowrap;flex:0 0 auto}
+.contracts-group-sum small{color:var(--muted);font-weight:600;font-size:11px;margin-left:4px}
+dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(560px,100vw)}
+.contracts-sortsheet{border-radius:16px 16px 0 0;padding:var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom,0px));max-height:86vh;overflow:auto;gap:var(--s2)}
+.contracts-sortsheet .panel-head h2{font-size:18px}
+.contracts-sortsheet.dialog-card [data-close]:not(.icon-button){background:var(--surface-3);color:var(--muted)}
+.contracts-sortsheet.dialog-card [data-close]:not(.icon-button):hover{background:var(--surface-3);color:var(--text)}
+.contracts-sortlist{display:flex;flex-direction:column}
+.contracts-sortopt{display:flex;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;padding:14px 6px;text-align:left;font-size:15px;color:var(--text);cursor:pointer}
+.contracts-sortopt+.contracts-sortopt{border-top:1px solid var(--line)}
+.contracts-sortopt:hover{background:var(--surface-2)}
+.contracts-sortopt-ic{width:24px;height:24px;flex:0 0 auto;color:var(--muted);display:grid;place-items:center}
+.contracts-sortopt-ic svg{width:22px;height:22px}
+.contracts-sortopt.active .contracts-sortopt-ic{color:var(--text)}
+.contracts-sortopt-label{flex:1;min-width:0}
+.contracts-sortopt.active .contracts-sortopt-label{font-weight:600}
+.contracts-sortopt-radio{position:relative;width:20px;height:20px;flex:0 0 auto;border:2px solid var(--line);border-radius:50%}
+.contracts-sortopt.active .contracts-sortopt-radio{border-color:var(--cta);background:var(--cta)}
+.contracts-sortopt.active .contracts-sortopt-radio::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid var(--cta-text);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.contracts-sortdir{display:flex;gap:var(--s2);margin-top:var(--s3)}
+.contracts-sortdir button{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:var(--radius-pill);padding:9px 12px;font-weight:600;font-size:13px;cursor:pointer}
+.contracts-sortdir button.active{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+
+/* --- Analyse (an-*): softened charts + category donut --- */
+.an-area{stroke:none}
+.an-chart .an-line-expense{stroke-linecap:round;stroke-linejoin:round}
+.an-chart .an-line-networth{stroke:var(--k2);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.an-chart .an-line-builder{stroke:var(--cta);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.an-g-neg-0{stop-color:var(--negative);stop-opacity:.18}
+.an-g-neg-1{stop-color:var(--negative);stop-opacity:0}
+.an-g-nw-0{stop-color:var(--k2);stop-opacity:.16}
+.an-g-nw-1{stop-color:var(--k2);stop-opacity:0}
+.an-g-line-0{stop-color:var(--cta);stop-opacity:.12}
+.an-g-line-1{stop-color:var(--cta);stop-opacity:0}
+.an-chart rect,.chart-empty svg rect{rx:6px}
+.an-donut{position:relative;width:180px;max-width:60vw;margin:0 auto var(--s5);aspect-ratio:1/1}
+.an-donut-svg{display:block;width:100%;height:100%;overflow:visible}
+.an-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;pointer-events:none}
+.an-donut-center .k{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1.1}
+.an-donut-center .l{font-size:11px;color:var(--muted)}
+
+/* --- Vermögen (nw-*): softened trend area + allocation donut --- */
+.nw-chart-area{fill:url(#nw-trend-grad)}
+.nw-trend-grad-top{stop-color:var(--cta);stop-opacity:.16}
+.nw-trend-grad-bottom{stop-color:var(--cta);stop-opacity:0}
+.nw-chart-line{stroke-linecap:round;stroke-linejoin:round}
+.nw-chart-grid{stroke:var(--line);stroke-width:1;opacity:.55}
+.nw-allocation .nw-alloc-chart{position:relative;width:min(260px,72%);margin:var(--s4) auto var(--s3);aspect-ratio:1/1}
+.nw-allocation .nw-donut{display:block;width:100%;height:auto;overflow:visible}
+.nw-allocation .nw-donut-track{fill:none;stroke:var(--surface-2);stroke-width:20}
+.nw-allocation .nw-donut-seg{fill:none;stroke-width:20;stroke-linecap:round}
+.nw-allocation .nw-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;pointer-events:none}
+.nw-allocation .nw-donut-value{font-size:22px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.15}
+.nw-allocation .nw-donut-label{font-size:12px;color:var(--muted)}
+.nw-allocation .nw-legend-pct{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;min-width:34px;text-align:right}
+
+/* --- Käufe (purchase-*): summary strip + identity rows + share bars --- */
+.purchase-summary{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);margin:0 0 var(--s4);padding:var(--s4);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+.purchase-stat{display:flex;flex-direction:column;gap:6px;min-width:0}
+.purchase-stat-k{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.purchase-stat-v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.purchase-stat--review .purchase-stat-v{color:var(--warning)}
+@media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
+.purchase-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--s3)}
+.purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
+.purchase-title{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.purchase-name{font-size:15px;font-weight:500;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.purchase-row .amount{align-self:center;text-align:right}
+.purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:11px;font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
+.purchase-tag--unlinked{background:var(--surface-3);color:var(--text)}
+.purchase-mrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.purchase-mrow:last-child{border-bottom:0}
+.purchase-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+.purchase-mrow-main{min-width:0;display:flex;flex-direction:column;gap:6px}
+.purchase-mrow-top{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+.purchase-mrow-top .purchase-name{font-weight:500}
+.purchase-mrow-top .amount{flex:0 0 auto}
+.purchase-bar{display:block;height:4px;border-radius:var(--radius-pill);background:var(--surface-3);overflow:hidden}
+.purchase-bar>span{display:block;height:100%;border-radius:inherit;background:var(--k4)}
+
+/* --- Buchungen (tx-*): period summary strip + skeleton + empty state --- */
+#view-transactions .tx-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s4);padding:var(--s3) var(--s4);margin-bottom:var(--s3);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+.tx-summary .tx-summary-figs{gap:var(--s6)}
+.tx-summary .tx-summary-fig{display:flex;flex-direction:column}
+.tx-summary .fw-summary-value{font-size:20px}
+.tx-summary .tx-summary-income{color:var(--positive)}
+.tx-summary .tx-summary-expense{color:var(--text)}
+.tx-summary .tx-summary-meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#view-transactions .tx-cp-main strong{font-size:14px;line-height:1.25}
+#view-transactions .tx-cp-main .row-sub{font-size:12px;margin-top:1px}
+.tx-skeleton td{vertical-align:middle}
+.tx-sk-avatar{display:inline-block;vertical-align:middle;width:38px;height:38px;border-radius:50%;margin-right:11px}
+.tx-skeleton .tx-cp-main{gap:6px}
+.tx-sk-line{display:block;height:10px;border-radius:var(--radius-pill)}
+.tx-sk-sm{width:52px}
+.tx-sk-md{width:96px}
+.tx-sk-lg{width:150px;height:12px}
+.tx-sk-amt{display:inline-block}
+.tx-sk-avatar,.tx-sk-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:tx-sk-shimmer 1.4s ease infinite}
+@keyframes tx-sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+@media(prefers-reduced-motion:reduce){.tx-sk-avatar,.tx-sk-line{animation:none}}
+.tx-empty{text-align:center}
+.tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s7,32px) var(--s4);color:var(--muted)}
+.tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
+.tx-empty-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tx-empty-title{color:var(--text);font-weight:600;font-size:14px}
+.tx-empty-hint{font-size:12px;max-width:34ch;line-height:1.4}
+@media(max-width:767px){
+  #view-transactions .tx-summary{padding:var(--s3)}
+  #view-transactions .tx-skeleton{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  #view-transactions .tx-skeleton>td{display:none;border:0;padding:0}
+  #view-transactions .tx-skeleton>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
+  #view-transactions .tx-skeleton>td.amount{display:block;flex:0 0 auto}
+  #view-transactions .tx-skeleton .tx-sk-avatar{margin-right:0}
+}

@@ -215,6 +215,9 @@ async function gatherData(ctx) {
 
 // Scoped-navigation helper for drillable widget rows (Overview → scoped bookings, UX rework §3).
 const DASH_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg>';
+// Muted drill affordance on grouped account headers (mirrors the reference overview's ">"): monochrome,
+// only signals the header opens the group's bookings — never a strong hue.
+const DASH_CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
 function bindDrill(el, queryFn) {
   const go = () => window.fwNavScope && window.fwNavScope('transactions', queryFn());
   el.addEventListener('click', go);
@@ -229,12 +232,12 @@ function renderWidget(type, ctx, body, data, cfg) {
   const cur = d?.currency || 'EUR';
   if (type === 'net-worth') {
     if (!d) { body.innerHTML = emptyState(ctx); return; }
-    body.innerHTML = `<div class="widget-metric"><strong>${money(d.netWorth, cur)}</strong></div><div class="widget-split"><span>${ctx.esc(ctx.get('dashboard.assets'))}: ${money(d.assets, cur)}</span><span>${ctx.esc(ctx.get('dashboard.liabilities'))}: ${money(d.liabilities, cur)}</span></div>${d.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''}`;
+    body.innerHTML = `<div class="widget-metric dash-metric"><strong>${money(d.netWorth, cur)}</strong></div><div class="widget-split dash-metric-split"><span>${ctx.esc(ctx.get('dashboard.assets'))}: ${money(d.assets, cur)}</span><span>${ctx.esc(ctx.get('dashboard.liabilities'))}: ${money(d.liabilities, cur)}</span></div>${d.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''}`;
     return;
   }
   if (type === 'available') {
     if (!d) { body.innerHTML = emptyState(ctx); return; }
-    body.innerHTML = `<div class="widget-metric"><strong>${money(d.accounts, cur)}</strong></div><div class="row-sub">${ctx.esc(ctx.get('widgets.availableHint'))}</div>`;
+    body.innerHTML = `<div class="widget-metric dash-metric"><strong>${money(d.accounts, cur)}</strong></div><div class="row-sub">${ctx.esc(ctx.get('widgets.availableHint'))}</div>`;
     return;
   }
   if (type === 'accounts') {
@@ -252,15 +255,18 @@ function renderWidget(type, ctx, body, data, cfg) {
     const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
     const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
     const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${ctx.esc(x.institutionName || '')}${x.ibanLast4 ? ' · ' + (isPrivate() ? '••••' : '•••• ' + ctx.esc(x.ibanLast4)) : ''}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
-    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div></div>`;
+    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
+    // Each group is its own calm block: a header row (folder monogram · name · subtotal · drill chevron)
+    // over its account rows, blocks spaced by whitespace rather than heavy rules (reference overview §3).
+    const groupBlock = (headHtml, accts) => `<section class="dash-group">${headHtml}<div class="dash-group-rows">${accts.map(acctRow).join('')}</div></section>`;
     let html = '';
     if (groups.length) {
-      for (const g of groups) { const accts = byGroup.get(g.id) || []; if (accts.length) html += groupHead(g, accts) + accts.map(acctRow).join(''); }
-      const ung = byGroup.get('') || []; if (ung.length) html += ung.map(acctRow).join('');
+      for (const g of groups) { const accts = byGroup.get(g.id) || []; if (accts.length) html += groupBlock(groupHead(g, accts), accts); }
+      const ung = byGroup.get('') || []; if (ung.length) html += `<section class="dash-group">${ung.map(acctRow).join('')}</section>`;
     } else {
-      html = a.map(acctRow).join('');
+      html = `<section class="dash-group">${a.map(acctRow).join('')}</section>`;
     }
-    body.innerHTML = html;
+    body.innerHTML = `<div class="dash-accounts">${html}</div>`;
     body.querySelectorAll('[data-acct]').forEach(r => bindDrill(r, () => 'accountId=' + encodeURIComponent(r.dataset.acct)));
     body.querySelectorAll('[data-group]').forEach(r => bindDrill(r, () => 'groupId=' + encodeURIComponent(r.dataset.group)));
     return;

@@ -181,16 +181,37 @@ function heroTrendInner() {
   return `${trendBadge(stats.pct, true)}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(isDe() ? win.lde : win.len)}</span></div>`;
 }
 
-// Reused/ported from the previous SVG trend rendering: a net-worth polyline with a soft area fill.
+// Smooth net-worth area chart: a Catmull-Rom-through-points curve emitted as a cubic-bezier <path>
+// (rounded joins/caps via CSS), with a token-coloured <linearGradient> that fades the fill to
+// transparent beneath the line and faint horizontal guides for depth. All geometry is derived from
+// the real history values — only the smoothing/softening is cosmetic; no data is invented.
+function smoothLinePath(pts) {
+  if (!pts.length) return '';
+  if (pts.length === 1) return `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i]; const p1 = pts[i]; const p2 = pts[i + 1]; const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6; const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6; const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
 function trendChartSvg(history, currency) {
   const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
   if (!usable.length) return `<div class="row-sub nw-chart-empty">${ctx.esc(t('noTrend'))}</div>`;
   const values = usable.map(point => Number(point.netWorth));
   const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1;
-  const width = 900; const height = 200;
-  const points = values.map((value, index) => `${(index / (values.length - 1 || 1)) * width},${height - ((value - min) / span) * (height - 24) - 12}`).join(' ');
-  const area = `0,${height} ${points} ${width},${height}`;
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><polygon class="nw-chart-fill" points="${area}"/><polyline class="nw-chart-line" points="${points}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(values.at(-1), currency)}</div>`;
+  const width = 900; const height = 200; const pad = 14;
+  const pts = values.map((value, index) => ({
+    x: (index / (values.length - 1 || 1)) * width,
+    y: height - ((value - min) / span) * (height - pad * 2) - pad
+  }));
+  const line = smoothLinePath(pts);
+  const area = `${line} L${width.toFixed(2)},${height} L0,${height} Z`;
+  const grid = [0.25, 0.5, 0.75].map(f => `<line class="nw-chart-grid" x1="0" y1="${(height * f).toFixed(1)}" x2="${width}" y2="${(height * f).toFixed(1)}" vector-effect="non-scaling-stroke"/>`).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(values.at(-1), currency)}</div>`;
 }
 
 function buildHeroCard() {
@@ -228,8 +249,29 @@ function wireHero(hero) {
 
 /* ---- Card 2: "Verteilung deines Vermögens" --------------------------------------------------- */
 
-function legendRow(label, amount, color, currency, negative = false) {
-  return `<div class="nw-legend-item"><span class="nw-dot" style="background:${color}"></span><span class="nw-legend-label">${ctx.esc(label)}</span><span class="nw-legend-amt${negative ? ' negative' : ''}">${ctx.money(amount, currency)}</span></div>`;
+// Donut geometry: a single ring whose segments are dash-slices of one radius. Round line-caps + a
+// per-segment gap subtracted from each arc make the slices read as soft rounded arcs (the caps fill
+// most of the gap back, leaving a hairline of breathing room). Colours stay on the --cat palette.
+const DONUT_R = 80;
+const DONUT_C = 2 * Math.PI * DONUT_R;
+
+function donutSvg(segments, assetSum, label, currency) {
+  const gap = segments.length > 1 ? 24 : 0; // circumference removed per slice; round caps add ~stroke-width back
+  let cursor = 0;
+  const arcs = segments.map(segment => {
+    const full = (segment.amount / assetSum) * DONUT_C;
+    const arc = Math.max(full - gap, 1);
+    const dash = `${arc.toFixed(2)} ${(DONUT_C - arc).toFixed(2)}`;
+    const offset = (-cursor).toFixed(2);
+    cursor += full;
+    return `<circle class="nw-donut-seg" cx="100" cy="100" r="${DONUT_R}" style="stroke:${segment.color}" stroke-dasharray="${dash}" stroke-dashoffset="${offset}"/>`;
+  }).join('');
+  return `<div class="nw-alloc-chart"><svg class="nw-donut" viewBox="0 0 200 200" role="img" aria-label="${ctx.esc(t('composition'))}"><circle class="nw-donut-track" cx="100" cy="100" r="${DONUT_R}"/><g transform="rotate(-90 100 100)">${arcs}</g></svg><div class="nw-donut-center"><span class="nw-donut-value">${ctx.money(assetSum, currency)}</span><span class="nw-donut-label">${ctx.esc(label)}</span></div></div>`;
+}
+
+function legendRow(label, amount, color, currency, negative = false, pct = null) {
+  const pctText = (pct !== null && Number.isFinite(pct)) ? `<span class="nw-legend-pct">${pct.toFixed(0)}%</span>` : '';
+  return `<div class="nw-legend-item"><span class="nw-dot" style="background:${color}"></span><span class="nw-legend-label">${ctx.esc(label)}</span>${pctText}<span class="nw-legend-amt${negative ? ' negative' : ''}">${ctx.money(amount, currency)}</span></div>`;
 }
 
 function buildAllocationCard() {
@@ -260,19 +302,18 @@ function buildAllocationCard() {
     return sectionCard(t('allocationTitle'), emptyRow(), { className: 'nw-allocation' });
   }
 
-  const assetBar = assetSum > 0
-    ? `<div class="nw-alloc-block"><p class="nw-alloc-cap"><span>${ctx.esc(t('wealthCap'))}</span><strong>${ctx.money(assetSum, currency)}</strong></p><div class="fw-alloc" role="img" aria-label="${ctx.esc(t('wealthCap'))}">${segments.map(segment =>
-      `<span style="width:${(segment.amount / assetSum * 100).toFixed(2)}%;background:${segment.color}"></span>`).join('')}</div></div>`
-    : '';
+  // Allocation-first: a soft donut of the asset mix leads, its legend (with shares) sits under it, and
+  // debt — which is not part of the asset ring — keeps its own thin bar beneath so it stays legible.
+  const donut = assetSum > 0 ? donutSvg(segments, assetSum, t('wealthCap'), currency) : '';
   const debtBar = liabilities > 0
     ? `<div class="nw-alloc-block"><p class="nw-alloc-cap"><span>${ctx.esc(t('debt'))}</span><strong class="negative">${ctx.money(-liabilities, currency)}</strong></p><div class="fw-alloc nw-alloc-debt" role="img" aria-label="${ctx.esc(t('debt'))}"><span style="width:${Math.min(100, assetSum > 0 ? liabilities / assetSum * 100 : 100).toFixed(2)}%;background:var(--negative)"></span></div></div>`
     : '';
 
-  const legendItems = segments.map(segment => legendRow(segment.label, segment.amount, segment.color, currency));
+  const legendItems = segments.map(segment => legendRow(segment.label, segment.amount, segment.color, currency, false, assetSum > 0 ? segment.amount / assetSum * 100 : null));
   if (liabilities > 0) legendItems.push(legendRow(t('debt'), -liabilities, 'var(--negative)', currency, true));
   const legend = `<div class="nw-legend">${legendItems.join('')}</div>`;
 
-  return sectionCard(t('allocationTitle'), `${assetBar}${debtBar}${legend}`, { className: 'nw-allocation' });
+  return sectionCard(t('allocationTitle'), `${donut}${legend}${debtBar}`, { className: 'nw-allocation' });
 }
 
 /* ---- Card 4: optional portfolio panel (ids preserved for parity/import enhancement modules) --- */
