@@ -50,11 +50,24 @@ public sealed class EnableBankingErrorClassifierTests
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
-    public void UnauthorizedWithoutConsentHintIsAuthRequired(HttpStatusCode status)
+    public void UnauthorizedWithoutConsentHintIsApplicationAuth(HttpStatusCode status)
     {
         var result = EnableBankingErrorClassifier.Classify(
             new EnableBankingApiException(status, "NOT_ALLOWED", "{}"));
+        Assert.Equal(BankErrorCategory.ApplicationAuth, result.Category);
+        Assert.Equal("ENABLE_BANKING_AUTH_FAILED", result.Code);
+    }
+
+    [Fact]
+    public void ExplicitAuthorizationRequiredCodeIsSessionAuthRequired()
+    {
+        var result = EnableBankingErrorClassifier.Classify(
+            new EnableBankingApiException(
+                HttpStatusCode.Unauthorized,
+                "AUTHORIZATION_REQUIRED",
+                "{}"));
         Assert.Equal(BankErrorCategory.AuthRequired, result.Category);
+        Assert.Equal("AUTHORIZATION_FAILED", result.Code);
     }
 
     [Theory]
