@@ -26,6 +26,13 @@ public sealed class EnableBankingOptions
 }
 
 public sealed record EnableBankingCredentials(string ApplicationId, string PrivateKeyPem);
+public sealed record EnableBankingGenericIdentification(
+    string Identification,
+    string SchemeName,
+    string? Issuer = null);
+public sealed record EnableBankingAccountIdentification(
+    string? Iban = null,
+    EnableBankingGenericIdentification? Other = null);
 public sealed record StartAuthorizationResult(string Url, string AuthorizationId, string? PsuIdHash);
 
 /// <summary>
@@ -191,7 +198,7 @@ public sealed class EnableBankingClient
         bool initialSync,
         string? continuationKey,
         CancellationToken ct) =>
-        GetTransactionsAsync(accountId, from, to, initialSync, continuationKey, null, null, ct);
+        GetTransactionsAsync(accountId, from, to, initialSync, continuationKey, null, null, null, ct);
 
     public Task<JsonElement> GetTransactionsAsync(
         string accountId,
@@ -199,6 +206,28 @@ public sealed class EnableBankingClient
         DateOnly? to,
         bool initialSync,
         string? continuationKey,
+        string? transactionStatus,
+        CancellationToken ct) =>
+        GetTransactionsAsync(accountId, from, to, initialSync, continuationKey, transactionStatus, null, null, ct);
+
+    public Task<JsonElement> GetTransactionsAsync(
+        string accountId,
+        DateOnly? from,
+        DateOnly? to,
+        bool initialSync,
+        string? continuationKey,
+        PsuContext? psuContext,
+        IReadOnlyCollection<string>? requiredPsuHeaders,
+        CancellationToken ct) =>
+        GetTransactionsAsync(accountId, from, to, initialSync, continuationKey, null, psuContext, requiredPsuHeaders, ct);
+
+    public Task<JsonElement> GetTransactionsAsync(
+        string accountId,
+        DateOnly? from,
+        DateOnly? to,
+        bool initialSync,
+        string? continuationKey,
+        string? transactionStatus,
         PsuContext? psuContext,
         IReadOnlyCollection<string>? requiredPsuHeaders,
         CancellationToken ct)
@@ -213,6 +242,10 @@ public sealed class EnableBankingClient
             if (from.HasValue) path += $"&date_from={from.Value:yyyy-MM-dd}";
             if (to.HasValue) path += $"&date_to={to.Value:yyyy-MM-dd}";
         }
+
+        var normalizedStatus = NormalizeTransactionStatus(transactionStatus);
+        if (normalizedStatus is not null)
+            path += $"&transaction_status={Uri.EscapeDataString(normalizedStatus)}";
 
         if (!string.IsNullOrWhiteSpace(continuationKey))
             path += $"&continuation_key={Uri.EscapeDataString(continuationKey)}";
@@ -232,14 +265,25 @@ public sealed class EnableBankingClient
         CancellationToken ct,
         string? psuType = null,
         string? language = null,
-        bool? credentialsAutosubmit = null)
+        bool? credentialsAutosubmit = null,
+        IReadOnlyCollection<EnableBankingAccountIdentification>? accounts = null)
     {
         if (credentials is { Count: > 0 } && string.IsNullOrWhiteSpace(authMethod))
             throw new ArgumentException("Enable Banking credentials may only be supplied together with auth_method.");
 
+        var access = new Dictionary<string, object?>
+        {
+            ["balances"] = true,
+            ["transactions"] = true,
+            ["valid_until"] = validUntil
+        };
+        var normalizedAccounts = NormalizeAccountAccess(accounts);
+        if (normalizedAccounts is { Length: > 0 })
+            access["accounts"] = normalizedAccounts;
+
         var body = new Dictionary<string, object?>
         {
-            ["access"] = new { balances = true, transactions = true, valid_until = validUntil },
+            ["access"] = access,
             ["aspsp"] = new { name = institutionName, country },
             ["state"] = state,
             ["redirect_url"] = redirectUrl,
@@ -267,6 +311,61 @@ public sealed class EnableBankingClient
             url,
             json.TryGetProperty("authorization_id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() ?? "" : "",
             json.TryGetProperty("psu_id_hash", out var hash) && hash.ValueKind == JsonValueKind.String ? hash.GetString() : null);
+    }
+
+    private static string? NormalizeTransactionStatus(string? transactionStatus)
+    {
+        if (string.IsNullOrWhiteSpace(transactionStatus)) return null;
+        var value = transactionStatus.Trim().ToUpperInvariant();
+        if (value is not ("BOOK" or "CNCL" or "HOLD" or "OTHR" or "PDNG" or "RJCT" or "SCHD"))
+            throw new ArgumentException("Unsupported Enable Banking transaction_status.");
+        return value;
+    }
+
+    private static object[]? NormalizeAccountAccess(IReadOnlyCollection<EnableBankingAccountIdentification>? accounts)
+    {
+        if (accounts is null || accounts.Count == 0) return null;
+        if (accounts.Count > 50)
+            throw new ArgumentException("At most 50 Enable Banking account identifiers may be requested.");
+
+        var result = new List<object>(accounts.Count);
+        foreach (var account in accounts)
+        {
+            var iban = account.Iban?.Replace(" ", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant();
+            var hasIban = !string.IsNullOrWhiteSpace(iban);
+            var hasOther = account.Other is not null;
+            if (hasIban == hasOther)
+                throw new ArgumentException("Each requested Enable Banking account must contain exactly one of iban or other.");
+
+            if (hasIban)
+            {
+                if (iban!.Length is < 15 or > 34 || iban.Any(character => !char.IsLetterOrDigit(character)))
+                    throw new ArgumentException("Requested Enable Banking IBAN is invalid.");
+                result.Add(new Dictionary<string, object?> { ["iban"] = iban });
+                continue;
+            }
+
+            var other = account.Other!;
+            var identification = (other.Identification ?? string.Empty).Trim();
+            var schemeName = (other.SchemeName ?? string.Empty).Trim().ToUpperInvariant();
+            var issuer = string.IsNullOrWhiteSpace(other.Issuer) ? null : other.Issuer.Trim();
+            if (identification.Length is < 1 or > 256)
+                throw new ArgumentException("Requested Enable Banking account identification is invalid.");
+            if (schemeName.Length is < 1 or > 64)
+                throw new ArgumentException("Requested Enable Banking account scheme_name is invalid.");
+            if (issuer is { Length: > 128 })
+                throw new ArgumentException("Requested Enable Banking account issuer is invalid.");
+
+            var generic = new Dictionary<string, object?>
+            {
+                ["identification"] = identification,
+                ["scheme_name"] = schemeName
+            };
+            if (issuer is not null) generic["issuer"] = issuer;
+            result.Add(new Dictionary<string, object?> { ["other"] = generic });
+        }
+
+        return result.ToArray();
     }
 
     private async Task<JsonElement> SendJsonAsync(
