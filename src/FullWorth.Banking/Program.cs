@@ -215,14 +215,21 @@ app.MapPost("/api/banking/connections/{id:guid}/sync", async (
 app.MapDelete("/api/banking/connections/{id:guid}", async (
     HttpContext http,
     Guid id,
+    bool? deleteLocalData,
     BankSyncService service,
     CancellationToken ct) =>
 {
     if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
 
-    return await service.DisconnectAsync(id, caller, BuildPsuContext(http), ct) switch
+    return await service.DisconnectAsync(
+        id,
+        caller,
+        BuildPsuContext(http),
+        deleteLocalData ?? true,
+        ct) switch
     {
         DisconnectStatus.Deleted => Results.NoContent(),
+        DisconnectStatus.ClosedDataRetained => Results.Ok(new { status = "closed_data_retained" }),
         DisconnectStatus.ProviderFailed => Results.StatusCode(StatusCodes.Status502BadGateway),
         _ => Results.NotFound()
     };
