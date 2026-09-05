@@ -145,6 +145,70 @@ public sealed class IntelligenceStore(
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task<AiUserSettings> GetOrCreateUserSettingsAsync(Guid userId, CancellationToken ct)
+    {
+        var settings = await db.AiUserSettings.SingleOrDefaultAsync(x => x.UserId == userId, ct);
+        if (settings is not null) return settings;
+
+        settings = new AiUserSettings { UserId = userId };
+        db.AiUserSettings.Add(settings);
+        await db.SaveChangesAsync(ct);
+        return settings;
+    }
+
+    public async Task<AiUserSettings> SelectUserCredentialAsync(
+        Guid userId,
+        Guid credentialId,
+        string? textModel,
+        string? visionModel,
+        CancellationToken ct)
+    {
+        var owned = await db.AiCredentials.AsNoTracking()
+            .AnyAsync(x => x.Id == credentialId && x.OwnerUserId == userId, ct);
+        if (!owned) throw new KeyNotFoundException("AI credential not found.");
+
+        var settings = await GetOrCreateUserSettingsAsync(userId, ct);
+        settings.Enabled = true;
+        settings.CredentialId = credentialId;
+        settings.TextModel = NormalizeModel(textModel);
+        settings.VisionModel = NormalizeModel(visionModel);
+        settings.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return settings;
+    }
+
+    public async Task ClearUserAccessAsync(Guid userId, CancellationToken ct)
+    {
+        var settings = await db.AiUserSettings.SingleOrDefaultAsync(x => x.UserId == userId, ct);
+        var credentials = await db.AiCredentials.Where(x => x.OwnerUserId == userId).ToListAsync(ct);
+        if (settings is not null)
+        {
+            settings.Enabled = false;
+            settings.CredentialId = null;
+            settings.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        db.AiCredentials.RemoveRange(credentials);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteOtherUserCredentialsAsync(Guid userId, Guid keepCredentialId, CancellationToken ct)
+    {
+        var stale = await db.AiCredentials
+            .Where(x => x.OwnerUserId == userId && x.Id != keepCredentialId)
+            .ToListAsync(ct);
+        if (stale.Count == 0) return;
+        db.AiCredentials.RemoveRange(stale);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static string? NormalizeModel(string? value)
+    {
+        var model = value?.Trim();
+        if (string.IsNullOrWhiteSpace(model)) return null;
+        if (model.Length > 120) throw new ArgumentException("Model name is too long.");
+        return model;
+    }
+
     public async Task<AiRun> StartRunAsync(string provider, string model, string capability, string jobType,
         Guid? userId, Guid? fullWorthSpaceId, int inputItemCount, CancellationToken ct)
     {
