@@ -178,7 +178,17 @@
     "purpose_savings": "Savings",
     "purpose_vacation": "Vacation goal",
     "purpose_reserve": "Reserve",
-    "purpose_other": "Other"
+    "purpose_other": "Other",
+    "bankDetails": "Load bank details",
+    "bankDetailsUnavailable": "No additional bank details are available for this transaction.",
+    "bankStatus": "Bank status",
+    "bankEntryReference": "Entry reference",
+    "bankTransactionId": "Provider transaction ID",
+    "bankCreditor": "Creditor",
+    "bankDebtor": "Debtor",
+    "bankAccount": "Counterparty account",
+    "bankCode": "Bank transaction code",
+    "bankRemittance": "Remittance information"
   },
   "purchases": {
     "title": "Purchases",
