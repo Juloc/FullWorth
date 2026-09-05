@@ -608,6 +608,8 @@ public sealed class BankSyncService(
         {
             BankErrorCategory.ConsentExpired when string.Equals(classification.Code, "SESSION_REVOKED", StringComparison.OrdinalIgnoreCase)
                 => "REVOKED",
+            BankErrorCategory.ConsentExpired when string.Equals(classification.Code, "SESSION_CLOSED", StringComparison.OrdinalIgnoreCase)
+                => "CLOSED",
             BankErrorCategory.ConsentExpired => "EXPIRED",
             BankErrorCategory.AuthRequired => "INVALID",
             _ => null
