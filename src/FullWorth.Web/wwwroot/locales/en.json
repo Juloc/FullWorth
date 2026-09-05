@@ -181,6 +181,7 @@
     "purpose_other": "Other",
     "bankDetails": "Load bank details",
     "bankDetailsUnavailable": "No additional bank details are available for this transaction.",
+    "bankReauthRequired": "Bank access expired or was revoked. Please reconnect the account.",
     "bankStatus": "Bank status",
     "bankEntryReference": "Entry reference",
     "bankTransactionId": "Provider transaction ID",
