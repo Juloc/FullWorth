@@ -302,6 +302,8 @@ app.MapGet("/connect/enable-banking/callback", async (
     try
     {
         var connection = await service.CompleteConnectionAsync(state, code, BuildPsuContext(http), ct);
+        if (connection.Status.ToUpperInvariant() is "EXPIRED" or "REVOKED" or "CLOSED" or "INVALID" or "CANCELLED")
+            return CallbackErrorRedirect("reauthorization_required", null);
         return Results.Redirect($"/?bankConnected={Uri.EscapeDataString(connection.InstitutionName)}");
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
