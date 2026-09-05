@@ -17,6 +17,7 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         new AddNotificationDedups().BuildSnapshotBaseline(modelBuilder);
         FullWorthDbContextSnapshotDeltaV20260902.Apply(modelBuilder);
         EnableBankingProfilesSnapshot.Apply(modelBuilder);
+        EnableBankingAccountIdentificationHashesSnapshot.Apply(modelBuilder);
 #pragma warning restore 612, 618
     }
 }
