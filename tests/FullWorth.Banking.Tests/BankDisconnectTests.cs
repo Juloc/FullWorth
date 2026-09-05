@@ -41,6 +41,40 @@ public sealed class BankDisconnectTests
 
 
     [Fact]
+    public async Task RevokedConsentCanStillBeDisconnectedLocallyWhenProviderRejectsDelete()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var connection = TestBankingEnvironment.AuthorizedConnection(sessionId: "session-revoked") with
+        {
+            Status = "REVOKED",
+            LastError = "SESSION_REVOKED"
+        };
+        backend.Connections.Add(connection);
+
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.Equal(HttpMethod.Delete, request.Method);
+            return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"SESSION_REVOKED\"}",
+                HttpStatusCode.Unauthorized));
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.DisconnectAsync(
+            connection.Id,
+            new BankingCaller(Guid.NewGuid(), Guid.NewGuid()),
+            null,
+            false,
+            CancellationToken.None);
+
+        Assert.Equal(DisconnectStatus.ClosedDataRetained, result);
+        Assert.Equal("CLOSED", backend.Connections.Single().Status);
+        Assert.Null(backend.Connections.Single().ProviderSessionId);
+        Assert.Single(provider.Requests);
+    }
+
+    [Fact]
     public async Task ReauthorizationPersistsNewSessionBeforeClosingSupersededSession()
     {
         using var environment = new TestBankingEnvironment();
