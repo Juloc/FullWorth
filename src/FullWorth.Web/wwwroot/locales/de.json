@@ -847,6 +847,12 @@
     "bankDefault": "Bank auswählen lassen",
     "connect": "Zur Bank weiter",
     "beta": "Beta",
+    "statusPage": "Enable-Banking-Bankstatus",
+    "statusOk": "Keine Probleme erkannt",
+    "statusPossible": "Mögliche Probleme",
+    "statusMajor": "Größere Störung",
+    "statusUnknown": "Status unklar",
+    "statusWarning": "Enable Banking erkennt aktuell Probleme bei dieser Bank. Die Verbindung kann deshalb fehlschlagen.",
     "bankNotFound": "Die Bank wurde in der aktuellen Enable-Banking-Liste nicht gefunden.",
     "bankRenamedHint": "Bankname hat sich möglicherweise geändert. Bitte wähle die aktuelle Bank aus.",
     "limitAccounts": "Zugriff auf bestimmte Konten begrenzen",
@@ -858,7 +864,7 @@
     "automaticHint": "FullWorth erzeugt den RSA-Schlüssel, meldet dich einmal per Enable-Banking-E-Mail-Link an und registriert die Application.",
     "manualTitle": "Manuell einrichten",
     "manualHint": "Application im Enable-Banking-Control-Panel selbst anlegen und Application ID + PEM-Datei importieren.",
-    "automaticExplain": "FullWorth nutzt dafür den passwortlosen Anmeldefluss aus dem offiziellen Enable-Banking-CLI und anschließend die dokumentierte Application-Registrierungs-API. Control-Panel-Tokens werden nicht gespeichert. Falls Enable Banking diesen Anmeldefluss für deine Instanz nicht akzeptiert, nutze die manuelle Einrichtung.",
+    "automaticExplain": "FullWorth nutzt dafür den passwortlosen Anmeldefluss aus dem offiziellen Enable-Banking-CLI und anschließend die dokumentierte Application-Registrierungs-API. Der kurzlebige Control-Panel-Zugriffstoken wird nicht gespeichert; nur das Refresh-Token wird verschlüsselt gespeichert, damit FullWorth den offiziellen Bankstatus abrufen kann. Falls Enable Banking diesen Anmeldefluss für deine Instanz nicht akzeptiert, nutze die manuelle Einrichtung.",
     "email": "Enable-Banking-E-Mail",
     "environment": "Umgebung",
     "environmentProduction": "Production · echte eigene Konten",
@@ -876,7 +882,7 @@
     "retryVerification": "Prüfung erneut versuchen",
     "tryAgain": "Neu starten",
     "useManual": "Manuell einrichten",
-    "automaticSecurity": "Der private RSA-Schlüssel bleibt in FullWorth und wird nach erfolgreicher Prüfung verschlüsselt gespeichert."
+    "automaticSecurity": "Der private RSA-Schlüssel und das Control-Panel-Refresh-Token werden verschlüsselt gespeichert. Kurzlebige Control-Panel-Zugriffstokens bleiben nur im Arbeitsspeicher."
   },
   "aiAccess": {
     "title": "KI-Zugang",
