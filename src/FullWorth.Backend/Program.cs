@@ -335,6 +335,7 @@ app.MapAuditEndpoints();
 app.MapMerchantEndpoints();
 app.MapTransferEndpoints();
 app.MapIngestionEndpoints();
+app.MapFinTsInvestmentSnapshotEndpoints();
 app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
