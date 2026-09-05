@@ -245,9 +245,14 @@ function renderWidget(type, ctx, body, data, cfg) {
     const groups = (data.groups || []).slice().sort((g1, g2) => (g1.sortOrder - g2.sortOrder) || (g1.name || '').localeCompare(g2.name || ''));
     const byGroup = new Map();
     for (const x of a) { const k = x.groupId || ''; if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(x); }
-    const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === cur ? s + Number(x.latestBalance.amount) : s), 0);
+    // The group subtotal is in the SPACE base currency: foreign accounts carry a converted `baseValue`,
+    // base-currency accounts have baseValue==null and their native amount IS the base amount. Derive the
+    // base currency from the accounts themselves (baseCurrency), never from the analytics response — that
+    // endpoint always reports EUR and would drop non-EUR base accounts from the sum and mislabel it.
+    const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
+    const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
     const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${ctx.esc(x.institutionName || '')}${x.ibanLast4 ? ' · ' + (isPrivate() ? '••••' : '•••• ' + ctx.esc(x.ibanLast4)) : ''}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
-    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), cur)}</div></div>`;
+    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div></div>`;
     let html = '';
     if (groups.length) {
       for (const g of groups) { const accts = byGroup.get(g.id) || []; if (accts.length) html += groupHead(g, accts) + accts.map(acctRow).join(''); }

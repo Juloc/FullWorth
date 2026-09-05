@@ -26,7 +26,11 @@ function categoryGlyph(iconKey) {
   return path ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>` : null;
 }
 // True for a categoryIconKey that is a literal emoji (some categories store an emoji in their Icon field).
-function isEmoji(s) { try { return /\p{Extended_Pictographic}/u.test(String(s || '')); } catch { return false; } }
+// Uses explicit ES6 code-point ranges (\u{…} with /u) rather than the \p{…} property escape — the latter
+// is ES2018 and, being a regex literal parsed eagerly, would throw at module load on an engine that lacks
+// it (the surrounding try/catch, which only wraps .test(), could not catch that).
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+function isEmoji(s) { try { return EMOJI_RE.test(String(s || '')); } catch { return false; } }
 
 // Left identity (UX rework §4): curated local brand logo → category icon → category-tinted monogram, with
 // a transfer glyph override. No external/third-party logo lookups.
@@ -75,15 +79,19 @@ export function cycleWindow(cycle, offset = 0, lang = 'de') {
   else if (cycle === 'quarter') { const q = Math.floor(end.getMonth() / 3); end.setMonth(q * 3 + 3, 0); start.setTime(end.getTime()); start.setMonth(start.getMonth() - n * 3 + 1, 1); }
   else if (cycle === 'year') { end.setMonth(11, 31); start.setTime(end.getTime()); start.setFullYear(start.getFullYear() - n + 1); start.setMonth(0, 1); }
   else { end.setMonth(end.getMonth() + 1, 0); start.setTime(end.getTime()); start.setMonth(start.getMonth() - n + 1, 1); }
-  // Shift by whole windows for prev/next.
+  // Shift by whole windows for prev/next. Shift the (always day-1 / week-start) `start`, which is safe,
+  // then DERIVE `end` from it — shifting the last-day-of-month `end` directly would overflow when the
+  // source day (e.g. Feb 29) doesn't exist in the target month, drifting `to` by a day at leap boundaries.
   if (offset) {
-    const shift = (d) => {
-      if (cycle === 'week') d.setDate(d.getDate() + offset * n * 7);
-      else if (cycle === 'quarter') d.setMonth(d.getMonth() + offset * n * 3);
-      else if (cycle === 'year') d.setFullYear(d.getFullYear() + offset * n);
-      else d.setMonth(d.getMonth() + offset * n);
-    };
-    shift(start); shift(end);
+    if (cycle === 'week') start.setDate(start.getDate() + offset * n * 7);
+    else if (cycle === 'quarter') start.setMonth(start.getMonth() + offset * n * 3);
+    else if (cycle === 'year') start.setFullYear(start.getFullYear() + offset * n);
+    else start.setMonth(start.getMonth() + offset * n);
+    end.setTime(start.getTime());
+    if (cycle === 'week') end.setDate(end.getDate() + n * 7 - 1);
+    else if (cycle === 'quarter') end.setMonth(end.getMonth() + n * 3, 0);
+    else if (cycle === 'year') end.setFullYear(end.getFullYear() + n - 1, 11, 31);
+    else end.setMonth(end.getMonth() + n, 0);
   }
   const label = cycle === 'week' ? (de ? `Letzte ${n} Wochen` : `Last ${n} weeks`)
     : cycle === 'month' ? (de ? `Letzte ${n} Monate` : `Last ${n} months`)

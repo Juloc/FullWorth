@@ -20,7 +20,10 @@ async function bundle(force=false){reset();if(!S.space)return{accounts:[],connec
   // and return the last-known/empty bundle instead of throwing. Without this a failed fetch never caches,
   // so the enhance() observer would refetch on every DOM mutation and turn one 429 into a request storm.
   try{const [a,c,g]=await Promise.all([req('api/accounts'),req('api/bank-connections'),req('api/account-groups')]);S.bundle={accounts:arr(a),connections:arr(c),groups:arr(g)};S.bundleAt=Date.now();return S.bundle}
-  catch(e){console.error(e);S.bundleAt=Date.now();return S.bundle||{accounts:[],connections:[],groups:[]}}}
+  // ASSIGN the fallback to S.bundle (not just return it): the 2.5s throttle guard above requires a truthy
+  // S.bundle, so on a COLD-START failure (S.bundle still null) an un-assigned fallback would leave the
+  // guard bypassed and every DOM mutation would refetch — the exact storm this cache is meant to prevent.
+  catch(e){console.error(e);S.bundleAt=Date.now();return S.bundle=(S.bundle||{accounts:[],connections:[],groups:[]})}}
 function bankKey(v){return(v||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/\b(ag|se|gmbh|bank|deutschland|germany)\b/g,'').replace(/[^a-z0-9]/g,'')}
 async function banks(){if(S.banks)return S.banks;try{S.banks=arr(await req('api/banking/institutions?country=DE',{},'banking'),'aspsps')}catch{S.banks=[]}return S.banks}
 function matchBank(name,bs){const k=bankKey(name);return bs.find(x=>bankKey(x.name)===k)||bs.find(x=>{const y=bankKey(x.name);return y.length>2&&(y.includes(k)||k.includes(y))})||null}
@@ -78,7 +81,11 @@ async function enhance(){if(S.busy)return;S.busy=true;
   // MutationObserver would see as new work and re-run enhance in a tight loop. Detach while we mutate, then
   // reconnect on the next frame so only genuine (navigation/data) DOM changes schedule the next pass.
   if(typeof uxObserver!=='undefined')uxObserver.disconnect();
-  try{ensureCss();reset();ensureNav();toolbar();if(S.initialConnections&&!S.restored&&$('#view-accounts')?.classList.contains('active')){S.restored=true;history.replaceState({view:'accounts'},'','/accounts/connections')}route();manualDialog();await decorateBankPicker();if(S.space){await prefs();const [bb,bs]=await Promise.all([bundle(),banks()]);if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){await decorateAccounts(bb,bs);await decorateConnections(bb,bs)}decorateOtherAccounts(bb,bs)}await unread();const tx=$('#view-transactions')?.classList.contains('active');if(tx&&!document.body.dataset.transactionsSeenActive){document.body.dataset.transactionsSeenActive='1';await markSeen()}else if(!tx)delete document.body.dataset.transactionsSeenActive}finally{S.busy=false;if(typeof uxObserver!=='undefined')requestAnimationFrame(()=>uxObserver.observe(document.documentElement,OBS_OPTS))}}
+  try{ensureCss();reset();ensureNav();toolbar();if(S.initialConnections&&!S.restored&&$('#view-accounts')?.classList.contains('active')){S.restored=true;history.replaceState({view:'accounts'},'','/accounts/connections')}route();manualDialog();await decorateBankPicker();if(S.space){await prefs();const [bb,bs]=await Promise.all([bundle(),banks()]);if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){await decorateAccounts(bb,bs);await decorateConnections(bb,bs)}decorateOtherAccounts(bb,bs)}await unread();const tx=$('#view-transactions')?.classList.contains('active');if(tx&&!document.body.dataset.transactionsSeenActive){document.body.dataset.transactionsSeenActive='1';await markSeen()}else if(!tx)delete document.body.dataset.transactionsSeenActive}finally{S.busy=false;
+    // Reconnect SYNCHRONOUSLY (not on the next frame): enhance's own mutations already happened while the
+    // observer was detached, so re-observing now cannot see them (no self-trigger) — but it minimises the
+    // window in which a concurrent app.js render could write rows the observer would otherwise miss.
+    if(typeof uxObserver!=='undefined')uxObserver.observe(document.documentElement,OBS_OPTS)}}
 function schedule(){if(S.queued)return;S.queued=true;requestAnimationFrame(()=>{S.queued=false;enhance().catch(console.error)})}
 document.addEventListener('click',e=>{if(e.target.closest('#add-group')){e.preventDefault();e.stopImmediatePropagation();S.groupMode?leaveGroups(false):enterGroups();return}if(e.target.closest('[data-sync],[data-reconnect],#refresh')){S.bundleAt=0;S.unreadAt=0;setTimeout(()=>unread(true),1200)}},true);
 window.addEventListener('popstate',()=>setTimeout(schedule));

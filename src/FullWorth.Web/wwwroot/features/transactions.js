@@ -7,15 +7,25 @@ import { attachCategoryPicker } from '../ui/category-picker.js';
 import { identityIcon } from '../ui/ux-kit.js';
 
 let ctx = null;
-// The URL ?query= merchant-drill term we last seeded into the search box (so a manual re-apply keeps the
-// user's edited term instead of re-seeding from the stale URL).
-let appliedUrlQuery = '';
-
 export function bindTransactions(context) {
   ctx = context;
-  ctx.$('#tx-apply').addEventListener('click', () => renderTransactions(ctx));
+  ctx.$('#tx-apply').addEventListener('click', applySearch);
+  ctx.$('#tx-query').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applySearch(); } });
   ctx.$('#tx-detect').addEventListener('click', detectTransfers);
   ctx.$('#tx-add').addEventListener('click', openBookingDialog);
+}
+
+// The URL is the SINGLE source of truth for the free-text search term, so the search box, the scope
+// banner and the actual list filter can never diverge — a merchant drill (?query=…) and a manual search
+// both flow through it. Applying a search writes the term into the URL (preserving the account/group/
+// category scope) and re-renders.
+function applySearch() {
+  const params = new URLSearchParams(location.search);
+  const v = ctx.$('#tx-query').value.trim();
+  if (v) params.set('query', v); else params.delete('query');
+  const qs = params.toString();
+  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
+  renderTransactions(ctx);
 }
 
 // Manual booking (UI_UX_SPEC §9.4): hand-enter an income/expense on a MANUAL account. Only manual
@@ -79,15 +89,12 @@ export async function renderTransactions(context) {
   const groupId = params.get('groupId') || '';
   const categoryId = params.get('categoryId') || '';
   const includeDescendants = params.get('includeDescendants') === 'true';
-  // A category/merchant drill-down from Analytics arrives as ?categoryId= (subtree-scoped) or ?query=
-  // (merchant name → counterparty search). Seed the toolbar search from the URL ONCE per drill so a
-  // drilled search is visible and editable — but never re-seed on a manual re-apply (that would clobber
-  // an edited term), tracked via appliedUrlQuery.
+  // The search term lives in the URL (?query=), set by a merchant drill or by applySearch(); reflect it
+  // into the box and use it for the request so the box, the scope banner and the list always agree.
   const urlQuery = params.get('query') || '';
-  if (!urlQuery) appliedUrlQuery = '';
-  else if (urlQuery !== appliedUrlQuery) { ctx.$('#tx-query').value = urlQuery; appliedUrlQuery = urlQuery; }
+  ctx.$('#tx-query').value = urlQuery;
   const q = new URLSearchParams({ limit: '500' });
-  const text = ctx.$('#tx-query').value.trim();
+  const text = urlQuery;
   const dir = ctx.$('#tx-direction').value;
   const flags = ctx.$('#tx-flags').value;
   if (text) q.set('query', text);
@@ -163,10 +170,7 @@ async function renderScope(scope) {
   if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
   const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
   bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
-  bar.querySelector('[data-back]').onclick = () => {
-    const qi = ctx.$('#tx-query'); if (qi && query) qi.value = ''; // clear a merchant-search drill
-    if (window.fwNavScope) window.fwNavScope(backTo, '');
-  };
+  bar.querySelector('[data-back]').onclick = () => { if (window.fwNavScope) window.fwNavScope(backTo, ''); };
   const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 
