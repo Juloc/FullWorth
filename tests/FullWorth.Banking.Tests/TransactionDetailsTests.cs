@@ -46,6 +46,39 @@ public sealed class TransactionDetailsTests
     }
 
     [Fact]
+    public async Task MissingSingleTransactionDetailDoesNotMarkConnectionFailed()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var connection = TestBankingEnvironment.AuthorizedConnection();
+        backend.Connections.Add(connection);
+        backend.ProviderPointer = new TransactionProviderPointer(
+            connection.Id,
+            "account-1",
+            "missing-tx");
+
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+            Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"TRANSACTION_NOT_FOUND\"}",
+                HttpStatusCode.NotFound)));
+        var service = environment.CreateSyncService(provider, backend);
+
+        await Assert.ThrowsAsync<FullWorth.Banking.EnableBanking.EnableBankingApiException>(() =>
+            service.GetTransactionDetailsAsync(
+                Guid.NewGuid(),
+                Caller,
+                null,
+                CancellationToken.None));
+
+        var final = backend.Connections.Single();
+        Assert.Equal("AUTHORIZED", final.Status);
+        Assert.Null(final.LastError);
+        Assert.Equal(0, final.ConsecutiveFailures);
+        Assert.Null(final.NextSyncAllowedAt);
+        Assert.Single(provider.Requests);
+    }
+
+    [Fact]
     public async Task ExpiredLocalConsentRequiresReauthorizationWithoutProviderCall()
     {
         using var environment = new TestBankingEnvironment();
