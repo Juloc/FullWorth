@@ -202,13 +202,16 @@ public sealed class BankSyncService(
             AuthorizationState: state,
             AuthorizationId: result.AuthorizationId,
             ProviderSessionId: existing?.ProviderSessionId,
-            Status: "PENDING_AUTHORIZATION",
+            // Reauthorization is staged beside the current connection. A valid/expired old session
+            // keeps its real status until the new callback succeeds; abandoning the bank flow must
+            // not silently turn an existing connection into PENDING forever.
+            Status: existing?.Status ?? "PENDING_AUTHORIZATION",
             ValidUntil: validUntil,
             LastAttemptAt: existing?.LastAttemptAt,
             LastSyncedAt: existing?.LastSyncedAt,
-            NextSyncAllowedAt: null,
-            ConsecutiveFailures: 0,
-            LastError: null,
+            NextSyncAllowedAt: existing?.NextSyncAllowedAt,
+            ConsecutiveFailures: existing?.ConsecutiveFailures ?? 0,
+            LastError: existing?.LastError,
             FullWorthSpaceId: caller.FullWorthSpaceId,
             AuthorizationUserId: caller.UserId,
             AuthorizationStateExpiresAt: stateExpiresAt,
@@ -218,6 +221,31 @@ public sealed class BankSyncService(
             RequiredPsuHeadersJson: JsonSerializer.Serialize(requiredPsuHeaders)), ct);
 
         return result.Url;
+    }
+
+    public async Task<bool> HandleAuthorizationErrorAsync(
+        string state,
+        string? providerError,
+        CancellationToken ct)
+    {
+        var connection = await backend.ConsumeStateAsync(state, ct);
+        if (connection is null) return false;
+
+        // A reconnect attempt is staged on top of an existing provider session. StartConnectionAsync
+        // intentionally preserved that old status, so cancelling the new flow only consumes the
+        // one-time state and leaves the previous connection untouched.
+        if (!string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return true;
+
+        var cancelled = string.Equals(providerError, "access_denied", StringComparison.OrdinalIgnoreCase) ||
+                        (providerError?.Contains("cancel", StringComparison.OrdinalIgnoreCase) ?? false);
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            status: cancelled ? "CANCELLED" : "INVALID",
+            clearNextSyncAllowedAt: true,
+            consecutiveFailures: 0,
+            lastError: cancelled ? "AUTHORIZATION_CANCELLED" : "AUTHORIZATION_FAILED"), ct);
+        return true;
     }
 
     public Task<BankConnectionDto> CompleteConnectionAsync(string state, string code, CancellationToken ct) =>
