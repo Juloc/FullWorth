@@ -24,7 +24,10 @@ public sealed class BankSyncWorker(IServiceScopeFactory scopes, IOptions<Banking
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
             catch (Exception ex) { logger.LogError(ex, "Scheduled bank synchronization failed."); }
 
-            var interval = TimeSpan.FromMinutes(Math.Max(360, _options.IntervalMinutes));
+            // This is only the scheduler wake-up interval. SyncAllAsync/CanBackgroundSync enforces the
+            // persisted >=6h provider-access cadence per connection, so frequent inspection does not
+            // generate frequent ASPSP requests.
+            var interval = TimeSpan.FromMinutes(Math.Clamp(_options.IntervalMinutes, 5, 60));
             await Task.Delay(interval, stoppingToken);
         }
     }
