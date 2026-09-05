@@ -46,6 +46,9 @@ internal sealed class BankingWebApplicationFactory : WebApplicationFactory<BankS
             if (request.Method == HttpMethod.Get &&
                 request.RequestUri!.AbsolutePath.StartsWith("/internal/banking/profiles/", StringComparison.Ordinal))
                 return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri!.AbsolutePath == "/internal/banking/connections/authorize")
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NoContent));
 
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
         }
