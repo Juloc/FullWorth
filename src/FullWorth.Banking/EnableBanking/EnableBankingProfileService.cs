@@ -45,7 +45,8 @@ public sealed class EnableBankingProfileService(
     public async Task<EnableBankingProfileView> VerifyAndSaveAsync(
         Guid userId,
         EnableBankingProfileVerifyRequest request,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? controlPanelRefreshToken = null)
     {
         var applicationId = (request.ApplicationId ?? string.Empty).Trim();
         var privateKeyPem = request.PrivateKeyPem ?? string.Empty;
@@ -69,7 +70,8 @@ public sealed class EnableBankingProfileService(
             verified.Active,
             verified.Services,
             verified.RedirectUrls,
-            DateTimeOffset.UtcNow), ct);
+            DateTimeOffset.UtcNow,
+            controlPanelRefreshToken), ct);
 
         return View(stored);
     }
