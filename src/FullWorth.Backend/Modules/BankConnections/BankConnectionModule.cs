@@ -264,7 +264,8 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
         return DecryptSecrets(entity);
     }
 
-    private static bool IsReauthHealth(string? health) => health is "reauthorization_required" or "expired";
+    private static bool IsReauthHealth(string? health) =>
+        health is "reauthorization_required" or "expired" or "revoked" or "closed";
 
     private async Task NotifyConnectionTransitionsAsync(
         BankConnection entity, bool isNew, int prevFailures, string? prevHealth, BankConnectionWrite request, DateTimeOffset now, CancellationToken ct)
