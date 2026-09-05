@@ -104,6 +104,12 @@ public static class CoachEndpoints
     {
         var group = app.MapGroup("/api/coach").WithTags("Coach");
 
+        group.MapGet("/models", async (
+            CurrentUserContext currentUser,
+            CoachModelCatalogService models,
+            CancellationToken ct) =>
+            Results.Ok(await models.GetAsync(currentUser.RequireUserId(), ct)));
+
         group.MapPost("/conversations", async (
             Guid fullWorthSpaceId,
             CreateCoachConversationRequest request,
