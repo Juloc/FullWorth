@@ -678,7 +678,9 @@ function authMethodsFor(bank,psuType){
 }
 
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
-  const psuTypes=(bank.psu_types||['personal']).filter(Boolean);
+  const psuTypes=Array.isArray(bank.psu_types)&&bank.psu_types.filter(Boolean).length
+    ? bank.psu_types.filter(Boolean)
+    : ['personal','business'];
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
     ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
     <p class="row-sub" data-business-notice hidden>${esc(get('bankingSetup.businessNotice'))}</p>
