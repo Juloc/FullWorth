@@ -212,10 +212,12 @@ public static class CodexReceiptTestEndpoints
         await authorization.IsFullWorthSpaceMemberAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
 
     // The browser never sees this value. It gives the shared internal sidecar a stable opaque namespace
-    // for one Finance user + one FullWorth Space so ChatGPT credentials and debug logs cannot cross users.
+    // for one FullWorth user. Space membership is still authorized by the Backend endpoint, while the
+    // AI login follows the user across their FullWorth Spaces.
     private static string BridgeScope(Guid userId, Guid fullWorthSpaceId)
     {
-        var input = Encoding.UTF8.GetBytes($"{userId:N}:{fullWorthSpaceId:N}");
+        _ = fullWorthSpaceId; // authorization stays space-scoped; AI login itself is user-scoped.
+        var input = Encoding.UTF8.GetBytes($"fullworth-ai:{userId:N}");
         return Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
     }
 
