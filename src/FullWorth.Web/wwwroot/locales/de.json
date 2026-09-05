@@ -604,6 +604,7 @@
     "health_expiring": "Läuft bald ab",
     "health_expired": "Abgelaufen",
     "health_error": "Fehler beim Abgleich",
+    "health_partial_history": "Historie unvollständig",
     "health_cooldown": "Wartet",
     "health_reauthorization_required": "Neu verbinden nötig",
     "expiresIn": "läuft in {days} Tagen ab",
