@@ -109,6 +109,7 @@ builder.Services.AddScoped<FullWorthSpaceInviteStore>();
 builder.Services.AddScoped<IAccountFullWorthSpaceMembership, AccountFullWorthSpaceMembership>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<BankConnectionStore>();
+builder.Services.AddScoped<EnableBankingProfileStore>();
 builder.Services.AddScoped<AccountStore>();
 builder.Services.AddScoped<TransactionStore>();
 builder.Services.AddScoped<SpendingReviewService>();
@@ -277,6 +278,7 @@ if (app.Environment.IsEnvironment("Testing"))
 app.MapBootstrapEndpoints();
 app.MapFullWorthSpaceEndpoints();
 app.MapBankConnectionEndpoints();
+app.MapEnableBankingProfileEndpoints();
 app.MapAccountEndpoints();
 app.MapAccountGroupEndpoints();
 app.MapTransactionEndpoints();
