@@ -545,6 +545,10 @@ body.locked{overflow:hidden}
 .bank-option-status-possible{box-shadow:inset 3px 0 0 var(--warning)}
 .bank-option-status-major{box-shadow:inset 3px 0 0 var(--negative)}
 .bank-status-link{margin:0}
+.bank-status-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.bank-status-tools a{white-space:nowrap}
+.bank-status-tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font:inherit}
+.bank-status-tools button:hover{background:var(--surface-2)}
 .bank-status-warning{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12px}
 .bank-status-warning.possible strong{color:var(--warning)}
 .bank-status-warning.major strong{color:var(--negative)}
