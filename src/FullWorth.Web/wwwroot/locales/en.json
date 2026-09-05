@@ -617,6 +617,8 @@
     "disconnected": "Bank disconnected",
     "syncStarted": "Sync running – fetching the latest data.",
     "syncCompleted": "Synchronization completed",
+    "syncPartial": "History only partially loaded",
+    "syncError": "Synchronization failed",
     "syncRunning": "A sync is already running.",
     "syncCooldown": "The bank hit its rate limit. Please try again later.",
     "syncReauth": "The consent has expired. Please reconnect the bank.",
