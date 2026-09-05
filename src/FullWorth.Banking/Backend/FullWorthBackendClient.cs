@@ -63,6 +63,8 @@ public sealed record FinanceIngestBatch(IngestConnectionDto Connection, IReadOnl
 public sealed record AccountSyncState(DateOnly? LatestBookingDate);
 public sealed record ConsumeStateBody(string State);
 public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
+public sealed record DeleteConnectionBody(Guid FullWorthSpaceId);
+public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
 
 public sealed record EnableBankingProfileDto(
     Guid Id,
@@ -178,6 +180,32 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AccountSyncState>(cancellationToken: ct);
+    }
+
+    public async Task<bool> DeleteConnectionDataAsync(Guid connectionId, Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/delete", new DeleteConnectionBody(fullWorthSpaceId));
+        request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+        response.EnsureSuccessStatusCode();
+        return true;
+    }
+
+    public async Task<TransactionProviderPointer?> GetTransactionProviderPointerAsync(
+        Guid transactionId,
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct)
+    {
+        using var request = Create(
+            HttpMethod.Get,
+            $"/internal/banking/transactions/{transactionId:D}/provider-pointer?fullWorthSpaceId={fullWorthSpaceId:D}");
+        request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
+        using var response = await http.SendAsync(request, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TransactionProviderPointer>(cancellationToken: ct);
     }
 
     public async Task IngestAsync(FinanceIngestBatch body, CancellationToken ct)
