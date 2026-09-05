@@ -10,6 +10,7 @@ public sealed class BankConnectionConsentHealthTests
     [InlineData("PENDING_AUTHORIZATION", "session", 30, 0, null, null, "reauthorization_required", 30)]
     [InlineData("AUTHORIZED", null, 30, 0, null, null, "reauthorization_required", 30)]
     [InlineData("AUTHORIZED", "session", -1, 2, "provider failure", 2, "expired", -1)]
+    [InlineData("AUTHORIZED", "session", 30, 1, "HISTORY_PAGE_LIMIT_REACHED", 2, "partial_history", 30)]
     [InlineData("AUTHORIZED", "session", 30, 1, null, 2, "error", 30)]
     [InlineData("AUTHORIZED", "session", 30, 0, null, 2, "cooldown", 30)]
     [InlineData("AUTHORIZED", "session", 7, 0, null, null, "expiring", 7)]
