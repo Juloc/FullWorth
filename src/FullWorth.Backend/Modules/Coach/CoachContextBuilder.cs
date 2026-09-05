@@ -1,6 +1,8 @@
 using System.Globalization;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Budgets;
+using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Modules.Portfolio;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +14,9 @@ public sealed class CoachContextBuilder(
     SpendingReviewService reviews,
     CurrencyConverter fx,
     BudgetStore budgetStore,
-    WealthOverviewService wealth)
+    WealthOverviewService wealth,
+    AccountStore accountStore,
+    ContractStore contractStore)
 {
     private static readonly HashSet<string> AvoidableNegativeReasons = new(StringComparer.Ordinal)
     {
@@ -122,6 +126,45 @@ public sealed class CoachContextBuilder(
         var positiveExamples = BuildExamples(currentRows, SpendingSentiment.Positive);
         var negativeExamples = BuildExamples(currentRows, SpendingSentiment.Negative);
 
+        var accountFacts = (await accountStore.ListForUserAsync(userId, fullWorthSpaceId, ct))
+            .Take(20)
+            .Select(account => new CoachAccountFact(
+                account.Id,
+                account.InstitutionName,
+                account.DisplayName,
+                account.LatestBalance?.Currency ?? account.Currency,
+                account.LatestBalance?.Amount,
+                account.IncludeInNetWorth))
+            .ToList();
+
+        var contractFacts = (await contractStore.ListForUserAsync(userId, fullWorthSpaceId, ct))
+            .Take(30)
+            .Select(contract => new CoachContractFact(
+                contract.Id,
+                contract.Name,
+                contract.ProviderName,
+                contract.Kind,
+                contract.Amount,
+                contract.Currency,
+                contract.BillingCycle,
+                contract.Interval,
+                contract.NextDueDate,
+                contract.IsActive))
+            .ToList();
+
+        var recentTransactions = currentRows
+            .OrderByDescending(x => x.Date)
+            .ThenByDescending(x => decimal.Abs(x.Amount))
+            .Take(30)
+            .Select(x => new CoachTransactionFact(
+                x.TransactionId,
+                x.Date,
+                x.MerchantName,
+                x.CategoryName,
+                x.Amount,
+                currency))
+            .ToList();
+
         var facts = new List<CoachFact>
         {
             new("cashflow:income", $"Income {from:yyyy-MM-dd}–{to:yyyy-MM-dd}", FormatMoney(income, currency)),
@@ -149,6 +192,30 @@ public sealed class CoachContextBuilder(
         foreach (var example in positiveExamples.Concat(negativeExamples))
             facts.Add(new($"review:{example.TransactionId}", example.Label, $"{example.Sentiment}: {FormatMoney(example.Amount, currency)}"));
 
+        facts.Add(new("accounts:count", "Visible accounts", accountFacts.Count.ToString(CultureInfo.InvariantCulture)));
+        foreach (var account in accountFacts.Take(12))
+            facts.Add(new(
+                $"account:{account.AccountId}",
+                $"{account.InstitutionName} · {account.DisplayName}",
+                account.Balance.HasValue ? FormatMoney(account.Balance.Value, account.Currency) : $"Balance unavailable · {account.Currency}"));
+
+        var activeContracts = contractFacts.Where(x => x.IsActive).ToList();
+        facts.Add(new("contracts:active-count", "Active contracts", activeContracts.Count.ToString(CultureInfo.InvariantCulture)));
+        foreach (var contract in activeContracts.Take(16))
+        {
+            var next = contract.NextDueDate.HasValue ? $", next {contract.NextDueDate:yyyy-MM-dd}" : string.Empty;
+            facts.Add(new(
+                $"contract:{contract.ContractId}",
+                contract.Name,
+                $"{FormatMoney(contract.Amount, contract.Currency)} · {contract.BillingCycle} × {contract.Interval}{next}"));
+        }
+
+        foreach (var transaction in recentTransactions.Take(12))
+            facts.Add(new(
+                $"transaction:{transaction.TransactionId}",
+                $"{transaction.Date:yyyy-MM-dd} · {transaction.Merchant}",
+                $"{FormatMoney(transaction.Amount, transaction.Currency)} · {transaction.Category}"));
+
         return new CoachContext(from, to, comparisonFrom, comparisonTo, currency, incomplete, income, outgoing, income - outgoing,
             previousIncome, previousOutgoing, previousIncome - previousOutgoing, currentNetWorth, averageMonthlySavings,
             categoryFacts, merchantFacts, reviewSummary, facts)
@@ -157,7 +224,10 @@ public sealed class CoachContextBuilder(
             TotalDebt = totalDebt,
             Budgets = budgetFacts,
             PositiveExamples = positiveExamples,
-            NegativeExamples = negativeExamples
+            NegativeExamples = negativeExamples,
+            Accounts = accountFacts,
+            Contracts = contractFacts,
+            RecentTransactions = recentTransactions
         };
     }
 
