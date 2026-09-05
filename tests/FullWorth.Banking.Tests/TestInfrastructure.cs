@@ -28,8 +28,11 @@ internal sealed class RecordingHttpMessageHandler(
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+        var contentHeaders = request.Content is null
+            ? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>()
+            : request.Content.Headers;
         var headers = request.Headers
-            .Concat(request.Content?.Headers ?? [])
+            .Concat(contentHeaders)
             .ToDictionary(
                 header => header.Key,
                 header => string.Join(",", header.Value),
