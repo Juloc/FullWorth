@@ -75,7 +75,11 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
             if (index < 0) return new(HttpStatusCode.NotFound);
             // Mimic one-time consumption: clear the state (like the real backend) so a replay finds
             // nothing, and return the CLEARED connection so callers don't resurrect the state on upsert.
-            var consumed = Connections[index] with { AuthorizationState = null };
+            var consumed = Connections[index] with
+            {
+                AuthorizationState = null,
+                AuthorizationStateExpiresAt = null
+            };
             Connections[index] = consumed;
             ConsumedStates.Add(body.State);
             return Json(consumed);
@@ -138,7 +142,8 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
                 write.PsuType,
                 write.AuthMethod,
                 write.RequiredPsuHeadersJson,
-                write.AuthorizationUserId);
+                write.AuthorizationUserId,
+                write.AuthorizationStateExpiresAt);
 
             var index = Connections.FindIndex(x => x.Id == id);
             if (index >= 0) Connections[index] = dto;
