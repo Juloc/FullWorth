@@ -70,6 +70,10 @@ builder.Services.AddHttpClient<OpenAiIntelligenceProvider>(client =>
 builder.Services.AddHttpClient<FullWorthCloudClient>();
 builder.Services.AddScoped<IFullWorthCloudClient>(services => services.GetRequiredService<FullWorthCloudClient>());
 builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
+builder.Services.AddScoped<OpenAiCompatibleIntelligenceProvider>();
+builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();
+builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiCompatibleIntelligenceProvider>());
+builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<CodexBridgeIntelligenceProvider>());
 builder.Services.AddScoped<IntelligenceProviderRegistry>();
 builder.Services.AddScoped<IntelligenceStore>();
 builder.Services.AddScoped<IntelligenceAdminBootstrapper>();
@@ -331,6 +335,7 @@ app.MapIngestionEndpoints();
 app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
+app.MapAiUserAccessEndpoints();
 app.MapIntelligenceSuggestionEndpoints();
 
 // Main feature-parity surfaces remain available. Product/review endpoints are compatibility facades
