@@ -198,14 +198,23 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
                 throw new ArgumentException("A new bank connection requires a validated FullWorthSpaceId.");
             if (!await db.FullWorthSpaces.AsNoTracking().AnyAsync(x => x.Id == space, ct))
                 throw new ArgumentException("FullWorthSpaceId does not exist.");
-            if (request.EnableBankingProfileId is { } profileId)
-            {
-                if (request.AuthorizationUserId is not { } authorizationUserId || authorizationUserId == Guid.Empty ||
-                    !await db.EnableBankingProfiles.AsNoTracking().AnyAsync(x => x.Id == profileId && x.UserId == authorizationUserId, ct))
-                    throw new ArgumentException("EnableBankingProfileId does not belong to the authorizing user.");
-            }
             entity = new BankConnection { FullWorthSpaceId = space };
             db.BankConnections.Add(entity);
+        }
+
+        var effectiveAuthorizationUserId = request.AuthorizationUserId ?? entity.AuthorizationUserId;
+        if (entity.AuthorizationUserId is { } existingAuthorizationUserId &&
+            request.AuthorizationUserId is { } requestedAuthorizationUserId &&
+            existingAuthorizationUserId != requestedAuthorizationUserId)
+            throw new ArgumentException("AuthorizationUserId cannot be changed for an existing bank connection.");
+
+        if (request.EnableBankingProfileId is { } profileId)
+        {
+            if (effectiveAuthorizationUserId is not { } authorizationUserId || authorizationUserId == Guid.Empty ||
+                !await db.EnableBankingProfiles.AsNoTracking().AnyAsync(
+                    x => x.Id == profileId && x.UserId == authorizationUserId,
+                    ct))
+                throw new ArgumentException("EnableBankingProfileId does not belong to the authorizing user.");
         }
         // Capture the connection's health BEFORE overwrite so we can notify owners on a genuine transition
         // (a new failure episode, or a slide into needs-reauth/expired) rather than on every sync.
