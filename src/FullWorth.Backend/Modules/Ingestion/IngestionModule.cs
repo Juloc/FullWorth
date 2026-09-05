@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
@@ -88,13 +89,44 @@ public sealed class IngestionService(
 
     private async Task<Dictionary<string, FinanceAccount>> UpsertAccountsAsync(BankConnection connection, string provider, IReadOnlyList<AccountBatchItem> items, CancellationToken ct)
     {
-        var hashes = items.Select(x => x.IdentificationHash).Distinct().ToArray();
-        var existing = await db.Accounts
-            .Where(x => x.FullWorthSpaceId == connection.FullWorthSpaceId && x.Provider == provider && hashes.Contains(x.IdentificationHash))
-            .ToDictionaryAsync(x => x.IdentificationHash, ct);
+        // Enable Banking can change the primary identification_hash while retaining the old hash in
+        // identification_hashes. Load the small account set for this provider/space and reconcile by
+        // ANY known hash before deciding that a new FinanceAccount is needed.
+        var storedAccounts = await db.Accounts
+            .Where(x => x.FullWorthSpaceId == connection.FullWorthSpaceId && x.Provider == provider)
+            .ToListAsync(ct);
+
+        var byHash = new Dictionary<string, List<FinanceAccount>>(StringComparer.Ordinal);
+        foreach (var stored in storedAccounts)
+            foreach (var hash in AccountHashes(stored))
+            {
+                if (!byHash.TryGetValue(hash, out var bucket)) byHash[hash] = bucket = [];
+                if (!bucket.Contains(stored)) bucket.Add(stored);
+            }
+
+        var result = new Dictionary<string, FinanceAccount>(StringComparer.Ordinal);
         foreach (var item in items)
         {
-            var isNew = !existing.TryGetValue(item.IdentificationHash, out var entity);
+            var incomingHashes = NormalizeHashes(item.IdentificationHash, item.IdentificationHashes);
+            FinanceAccount? entity = storedAccounts.FirstOrDefault(x =>
+                string.Equals(x.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal));
+            var isNew = entity is null;
+
+            if (entity is null)
+            {
+                var aliasMatches = incomingHashes
+                    .Where(byHash.ContainsKey)
+                    .SelectMany(hash => byHash[hash])
+                    .DistinctBy(x => x.Id)
+                    .ToList();
+
+                if (aliasMatches.Count > 1)
+                    throw new InvalidOperationException(
+                        "Enable Banking account identification hashes ambiguously match multiple stored accounts.");
+                entity = aliasMatches.SingleOrDefault();
+                isNew = entity is null;
+            }
+
             if (isNew)
             {
                 entity = new FinanceAccount
@@ -103,10 +135,35 @@ public sealed class IngestionService(
                     Provider = provider,
                     IdentificationHash = item.IdentificationHash
                 };
-                db.Accounts.Add(entity); existing[item.IdentificationHash] = entity;
+                db.Accounts.Add(entity);
+                storedAccounts.Add(entity);
             }
+            else if (!string.Equals(entity!.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal))
+            {
+                // Promote the provider's current primary hash while preserving the previous primary as
+                // an alias. Refuse to steal a primary hash already owned by a different account.
+                if (storedAccounts.Any(x => x.Id != entity.Id &&
+                    string.Equals(x.IdentificationHash, item.IdentificationHash, StringComparison.Ordinal)))
+                    throw new InvalidOperationException(
+                        "Enable Banking primary identification hash is already assigned to another account.");
+                entity.IdentificationHash = item.IdentificationHash;
+            }
+
             if (entity!.FullWorthSpaceId != connection.FullWorthSpaceId)
                 throw new InvalidOperationException("Account reconciliation cannot move accounts between FullWorth Spaces.");
+
+            var mergedHashes = NormalizeHashes(
+                entity.IdentificationHash,
+                AccountHashes(entity).Concat(incomingHashes));
+            entity.IdentificationHashesJson = JsonSerializer.Serialize(mergedHashes);
+
+            // Refresh the local lookup immediately so a second account in the same ingest batch cannot
+            // accidentally be created from an alias we just learned.
+            foreach (var hash in mergedHashes)
+            {
+                if (!byHash.TryGetValue(hash, out var bucket)) byHash[hash] = bucket = [];
+                if (!bucket.Any(x => x.Id == entity.Id)) bucket.Add(entity);
+            }
 
             var mayRefreshDisplayName = isNew ||
                 string.IsNullOrWhiteSpace(entity.DisplayName) ||
@@ -120,10 +177,31 @@ public sealed class IngestionService(
                 entity.IbanLast4 = item.IbanLast4;
             }
             entity.IsActive = item.IsActive; entity.UpdatedAt = DateTimeOffset.UtcNow;
+            result[item.IdentificationHash] = entity;
         }
         await db.SaveChangesAsync(ct);
-        await EnsureOrphanedAccountsHaveOwnerAsync(connection, existing.Values, ct);
-        return existing;
+        await EnsureOrphanedAccountsHaveOwnerAsync(connection, result.Values, ct);
+        return result;
+    }
+
+    private static IReadOnlyList<string> AccountHashes(FinanceAccount account)
+    {
+        var aliases = Array.Empty<string>();
+        if (!string.IsNullOrWhiteSpace(account.IdentificationHashesJson))
+        {
+            try { aliases = JsonSerializer.Deserialize<string[]>(account.IdentificationHashesJson) ?? []; }
+            catch (JsonException) { /* keep the current primary hash below */ }
+        }
+        return NormalizeHashes(account.IdentificationHash, aliases);
+    }
+
+    private static IReadOnlyList<string> NormalizeHashes(string primary, IEnumerable<string>? aliases)
+    {
+        var hashes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primary)) hashes.Add(primary.Trim());
+        if (aliases is not null)
+            hashes.AddRange(aliases.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
+        return hashes.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     private async Task EnsureOrphanedAccountsHaveOwnerAsync(BankConnection connection, IEnumerable<FinanceAccount> accounts, CancellationToken ct)
