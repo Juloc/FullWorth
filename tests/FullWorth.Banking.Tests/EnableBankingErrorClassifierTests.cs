@@ -38,6 +38,15 @@ public sealed class EnableBankingErrorClassifierTests
         Assert.Equal("SESSION_EXPIRED", result.Code);
     }
 
+    [Fact]
+    public void ClosedSessionKeepsClosedErrorCode()
+    {
+        var result = EnableBankingErrorClassifier.Classify(
+            new EnableBankingApiException(HttpStatusCode.Unauthorized, "SESSION_CLOSED", "{}"));
+        Assert.Equal(BankErrorCategory.ConsentExpired, result.Category);
+        Assert.Equal("SESSION_CLOSED", result.Code);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
