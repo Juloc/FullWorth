@@ -50,7 +50,21 @@ public sealed record ContractView(
     bool IsActive,
     string? Notes,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // Server-side normalized cost so every client agrees (§7): the recurring amount expressed per month
+    // and per year for the contract's billing cycle × interval.
+    decimal MonthlyEquivalent = 0m,
+    decimal AnnualizedAmount = 0m);
+
+// Optional server-side list filtering/sorting for the contracts view.
+public sealed record ContractListQuery(
+    string? Kind = null,
+    Guid? AccountId = null,
+    Guid? CategoryId = null,
+    bool? Active = null,
+    string? BillingCycle = null,
+    string? Sort = null,
+    string? Order = null);
 
 public enum ContractAccessLevel
 {
@@ -98,12 +112,82 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
     }
 
     public Task<List<ContractView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
-        Project(VisibleContracts(userId, fullWorthSpaceId)
-                .OrderBy(x => x.NextDueDate).ThenBy(x => x.Name))
-            .ToListAsync(ct);
+        ListForUserAsync(userId, fullWorthSpaceId, null, ct);
 
-    public Task<ContractView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
-        Project(VisibleContracts(userId, fullWorthSpaceId).Where(x => x.Id == contractId)).SingleOrDefaultAsync(ct);
+    public async Task<List<ContractView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, ContractListQuery? filter, CancellationToken ct)
+    {
+        var query = VisibleContracts(userId, fullWorthSpaceId);
+
+        // Server-side filters (all optional, additive). Cross-space ids naturally match nothing.
+        if (!string.IsNullOrWhiteSpace(filter?.Kind))
+        {
+            var kind = filter.Kind.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Kind == kind);
+        }
+        if (filter?.AccountId is { } accountId) query = query.Where(x => x.AccountId == accountId);
+        if (filter?.CategoryId is { } categoryId) query = query.Where(x => x.CategoryId == categoryId);
+        if (filter?.Active is { } active) query = query.Where(x => x.IsActive == active);
+        if (!string.IsNullOrWhiteSpace(filter?.BillingCycle))
+        {
+            var cycle = filter.BillingCycle.Trim().ToLowerInvariant();
+            query = query.Where(x => x.BillingCycle == cycle);
+        }
+
+        var contracts = await query.ToListAsync(ct);
+        var views = contracts.Select(ToView);
+        return Sort(views, filter).ToList();
+    }
+
+    public async Task<ContractView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
+    {
+        var contract = await VisibleContracts(userId, fullWorthSpaceId).SingleOrDefaultAsync(x => x.Id == contractId, ct);
+        return contract is null ? null : ToView(contract);
+    }
+
+    // Deterministic monthly/annual math shared by all clients (§7) via the ContractCycle cadence helper.
+    private static ContractView ToView(RecurringContract contract)
+    {
+        var annualized = Math.Round(contract.Amount * ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval), 2, MidpointRounding.AwayFromZero);
+        var monthly = Math.Round(contract.Amount * ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval) / 12m, 2, MidpointRounding.AwayFromZero);
+        return new ContractView(
+            contract.Id,
+            contract.FullWorthSpaceId,
+            contract.Name,
+            contract.ProviderName,
+            contract.Kind,
+            contract.CategoryId,
+            contract.AccountId,
+            contract.Amount,
+            contract.Currency,
+            contract.BillingCycle,
+            contract.Interval,
+            contract.StartDate,
+            contract.EndDate,
+            contract.NextDueDate,
+            contract.AutoDetected,
+            contract.IsActive,
+            contract.Notes,
+            contract.CreatedAt,
+            contract.UpdatedAt,
+            monthly,
+            annualized);
+    }
+
+    private static IEnumerable<ContractView> Sort(IEnumerable<ContractView> views, ContractListQuery? filter)
+    {
+        var descending = string.Equals(filter?.Order, "desc", StringComparison.OrdinalIgnoreCase);
+        Func<ContractView, IComparable?> key = (filter?.Sort?.Trim().ToLowerInvariant()) switch
+        {
+            "monthly" => v => v.MonthlyEquivalent,
+            "annual" or "annualized" => v => v.AnnualizedAmount,
+            "account" => v => v.AccountId,
+            "category" => v => v.CategoryId,
+            "name" => v => v.Name,
+            _ => v => v.NextDueDate ?? DateOnly.MaxValue, // default: next-due, nulls last
+        };
+        var ordered = descending ? views.OrderByDescending(key) : views.OrderBy(key);
+        return ordered.ThenBy(v => v.Name);
+    }
 
     public async Task<ContractAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
     {
@@ -233,28 +317,6 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             contract.FullWorthSpaceId == fullWorthSpaceId &&
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId) &&
             (contract.AccountId == null || db.AccountOwners.Any(owner => owner.AccountId == contract.AccountId.Value && owner.UserId == userId)));
-
-    private IQueryable<ContractView> Project(IQueryable<RecurringContract> contracts) =>
-        contracts.Select(contract => new ContractView(
-            contract.Id,
-            contract.FullWorthSpaceId,
-            contract.Name,
-            contract.ProviderName,
-            contract.Kind,
-            contract.CategoryId,
-            contract.AccountId,
-            contract.Amount,
-            contract.Currency,
-            contract.BillingCycle,
-            contract.Interval,
-            contract.StartDate,
-            contract.EndDate,
-            contract.NextDueDate,
-            contract.AutoDetected,
-            contract.IsActive,
-            contract.Notes,
-            contract.CreatedAt,
-            contract.UpdatedAt));
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking()
@@ -397,8 +459,9 @@ public static class ContractEndpoints
     {
         var group = app.MapGroup("/api/contracts").WithTags("Contracts");
 
-        group.MapGet("/", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
-            Results.Ok(await store.ListForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct)));
+        group.MapGet("/", async (Guid fullWorthSpaceId, string? kind, Guid? accountId, Guid? categoryId, bool? active, string? billingCycle, string? sort, string? order, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
+            Results.Ok(await store.ListForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId,
+                new ContractListQuery(kind, accountId, categoryId, active, billingCycle, sort, order), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
         {

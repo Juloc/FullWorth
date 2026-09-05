@@ -65,6 +65,15 @@ public sealed class TransactionStore(FullWorthDbContext db)
     {
         var q = AccessibleTransactions(userId, fullWorthSpaceId, requireOwner: false);
         if (request.AccountId.HasValue) q = q.Where(x => x.AccountId == request.AccountId.Value);
+        // Account-group scope: resolved server-side against accounts the caller can already see. `q` is
+        // already restricted to accessible accounts in the active space, so filtering to those whose
+        // GroupId matches never leaks another space's/account's rows — a foreign or unknown group simply
+        // matches no accessible account and returns nothing. NEVER trust a client-supplied account list.
+        if (request.AccountGroupId.HasValue)
+        {
+            var groupId = request.AccountGroupId.Value;
+            q = q.Where(x => db.Accounts.Any(a => a.Id == x.AccountId && a.GroupId == groupId));
+        }
         if (request.CategoryId.HasValue)
         {
             var categoryId = request.CategoryId.Value;
@@ -107,10 +116,11 @@ public sealed class TransactionStore(FullWorthDbContext db)
         var offset = Math.Max(0, request.Offset ?? 0);
         var limit = Math.Clamp(request.Limit ?? 200, 1, 5000);
         var total = await q.CountAsync(ct);
-        var items = await q.Skip(offset).Take(limit).Select(x => new
+        var rows = await q.Skip(offset).Take(limit).Select(x => new
         {
             x.Id,
             x.AccountId,
+            AccountSpaceId = db.Accounts.Where(a => a.Id == x.AccountId).Select(a => a.FullWorthSpaceId).FirstOrDefault(),
             Account = db.Accounts.Where(a => a.Id == x.AccountId).Select(a => a.DisplayName).FirstOrDefault(),
             x.BookingDate,
             x.ValueDate,
@@ -122,10 +132,6 @@ public sealed class TransactionStore(FullWorthDbContext db)
             x.MerchantCategoryCode,
             x.Status,
             x.CategoryId,
-            Category = db.Categories
-                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
-                .Select(c => c.Name)
-                .FirstOrDefault(),
             x.UserNote,
             x.IsIgnored,
             x.IsTransfer,
@@ -140,6 +146,68 @@ public sealed class TransactionStore(FullWorthDbContext db)
                     (p.Visibility != "private" || p.CreatedByUserId == userId))
                 .SelectMany(p => p.Items).Count()
         }).ToListAsync(ct);
+
+        // Resolve presentation identity (merchant + brand + category icon) once per page so the frontend
+        // never re-runs normalization (§4/§7). Data is per-space; when fullWorthSpaceId is null the page can
+        // span several spaces, so we build one resolver / category map per involved space.
+        var spaceIds = rows.Select(r => r.AccountSpaceId).Distinct().ToList();
+        var resolvers = await Merchants.MerchantBrandResolver.ForSpacesAsync(db, spaceIds, ct);
+        var categoryIds = rows.Where(r => r.CategoryId.HasValue).Select(r => r.CategoryId!.Value).Distinct().ToList();
+        var categoryRows = categoryIds.Count == 0
+            ? []
+            : await db.Categories.AsNoTracking()
+                .Where(c => spaceIds.Contains(c.FullWorthSpaceId) && categoryIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.FullWorthSpaceId, c.Name, c.Icon, c.Key })
+                .ToListAsync(ct);
+        // Keyed by (space, category) so a category is only attributed when it lives in the account's space.
+        var categoryByKey = categoryRows.ToDictionary(
+            c => (c.FullWorthSpaceId, c.Id),
+            c => (c.Name, IconKey: string.IsNullOrWhiteSpace(c.Icon) ? c.Key : c.Icon!.Trim()));
+
+        var items = rows.Select(r =>
+        {
+            var identity = resolvers.TryGetValue(r.AccountSpaceId, out var resolver)
+                ? resolver.Resolve(r.Counterparty, r.NormalizedCounterparty)
+                : Merchants.MerchantBrandIdentity.None;
+            string? categoryName = null;
+            string? categoryIconKey = null;
+            if (r.CategoryId is { } categoryId && categoryByKey.TryGetValue((r.AccountSpaceId, categoryId), out var cat))
+            {
+                categoryName = cat.Name;
+                categoryIconKey = cat.IconKey;
+            }
+            return new
+            {
+                r.Id,
+                r.AccountId,
+                r.Account,
+                r.BookingDate,
+                r.ValueDate,
+                r.Amount,
+                r.Currency,
+                r.Counterparty,
+                r.NormalizedCounterparty,
+                r.Description,
+                r.MerchantCategoryCode,
+                r.Status,
+                r.CategoryId,
+                Category = categoryName, // backward-compatible field
+                CategoryName = categoryName,
+                CategoryIconKey = categoryIconKey,
+                MerchantId = identity.MerchantId,
+                MerchantDisplayName = identity.MerchantDisplayName,
+                BrandKey = identity.BrandKey,
+                LogoAssetPath = identity.LogoAssetPath,
+                AccentKey = identity.AccentKey,
+                r.UserNote,
+                r.IsIgnored,
+                r.IsTransfer,
+                r.CategorizationSource,
+                r.UpdatedAt,
+                r.PurchaseCount,
+                r.PurchaseItemCount
+            };
+        }).ToList();
         return new { total, offset, limit, items };
     }
 
@@ -510,7 +578,7 @@ public sealed class TransactionStore(FullWorthDbContext db)
     }
 }
 
-public sealed record TransactionQuery(Guid? AccountId, Guid? CategoryId, DateOnly? From, DateOnly? To, string? Direction, string? Query, bool? IncludeIgnored, bool? TransfersOnly, string? Sort, string? Order, int? Offset, int? Limit);
+public sealed record TransactionQuery(Guid? AccountId, Guid? AccountGroupId, Guid? CategoryId, DateOnly? From, DateOnly? To, string? Direction, string? Query, bool? IncludeIgnored, bool? TransfersOnly, string? Sort, string? Order, int? Offset, int? Limit);
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 public sealed record AllocationLine(Guid? CategoryId, decimal Amount, string? Note, Guid? PurchaseItemId = null);
 public sealed record RefundLink(Guid? OriginalTransactionId, Guid? RefundCategoryId = null);
@@ -523,9 +591,9 @@ public static class TransactionEndpoints
     {
         var group = app.MapGroup("/api/transactions").WithTags("Transactions");
 
-        group.MapGet("/", async (Guid? fullWorthSpaceId, Guid? accountId, Guid? categoryId, DateOnly? from, DateOnly? to, string? direction, string? query, bool? includeIgnored, bool? transfersOnly, string? sort, string? order, int? offset, int? limit, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
+        group.MapGet("/", async (Guid? fullWorthSpaceId, Guid? accountId, Guid? accountGroupId, Guid? categoryId, DateOnly? from, DateOnly? to, string? direction, string? query, bool? includeIgnored, bool? transfersOnly, string? sort, string? order, int? offset, int? limit, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
             Results.Ok(await store.SearchForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId,
-                new(accountId, categoryId, from, to, direction, query, includeIgnored, transfersOnly, sort, order, offset, limit), ct)));
+                new(accountId, accountGroupId, categoryId, from, to, direction, query, includeIgnored, transfersOnly, sort, order, offset, limit), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {

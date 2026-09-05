@@ -19,6 +19,12 @@ public sealed class FinanceCategory
     public bool IsArchived { get; set; }
     public int SortOrder { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    // Stable fallback visual identity (§5): the explicit icon token when one is set, otherwise the
+    // immutable category Key. Computed/not persisted so clients always have a non-null key to map to an
+    // icon without re-deriving it. Kept out of the EF model via [NotMapped].
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string IconKey => string.IsNullOrWhiteSpace(Icon) ? Key : Icon.Trim();
 }
 
 public sealed class CategorizationRule

@@ -15,7 +15,7 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
     {
 #pragma warning disable 612, 618
         new AddNotificationDedups().BuildSnapshotBaseline(modelBuilder);
-        FullWorthDbContextSnapshotDeltaV20260902.Apply(modelBuilder);
+        FullWorthDbContextSnapshotDeltaV20260905.Apply(modelBuilder);
 #pragma warning restore 612, 618
     }
 }

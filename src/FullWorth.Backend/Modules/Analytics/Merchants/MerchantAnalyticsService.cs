@@ -1,4 +1,5 @@
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,9 @@ public sealed record MerchantCategorySlice(Guid? CategoryId, string Name, decima
 
 public sealed record MerchantAnalyticsItem(
     string Merchant,
+    Guid? MerchantId,
+    string? BrandKey,
+    string? LogoAssetPath,
     decimal CurrentSpend,
     int CurrentCount,
     decimal CurrentAverage,
@@ -16,36 +20,70 @@ public sealed record MerchantAnalyticsItem(
     decimal TrendPercent,
     List<MerchantCategorySlice> Categories);
 
-public sealed record MerchantAnalyticsResult(int Year, int Month, string Currency, int Top, List<MerchantAnalyticsItem> Merchants, bool Incomplete);
+public sealed record MerchantAnalyticsResult(
+    int Year,
+    int Month,
+    string Currency,
+    int Top,
+    List<MerchantAnalyticsItem> Merchants,
+    bool Incomplete,
+    DateOnly From,
+    DateOnly To,
+    string Granularity,
+    string ComparisonMode);
 
 /// <summary>
-/// Merchant spend analytics for a month, keyed by normalized counterparty: spend, visit/transaction
-/// count, average transaction, current vs previous period, and — for the top merchants — a category
-/// distribution via <see cref="ExpenseAllocationBuilder"/> (confirmed purchase item splits, no double
-/// counting). Merchant spend itself is transaction-level, so counts and totals never double count.
+/// Merchant spend analytics for the SELECTED period (§6), keyed by normalized counterparty: spend,
+/// visit/transaction count, average transaction, current vs comparison window, and — for the top
+/// merchants — a category distribution via <see cref="ExpenseAllocationBuilder"/> (confirmed purchase-item
+/// splits, no double counting). The period is whatever the caller asked for (never silently the current
+/// month). Optional account / account-group / category / merchant scope is resolved and enforced
+/// server-side against the caller's accessible accounts. Each returned merchant also carries its resolved
+/// registry id + brand so the browser does not re-run normalization.
 /// </summary>
 public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Backend.Modules.Fx.CurrencyConverter fx)
 {
-    public async Task<MerchantAnalyticsResult?> MerchantSpendForUserAsync(
-        Guid userId, Guid fullWorthSpaceId, int year, int month, string currency, int top, CancellationToken ct)
+    public async Task<MerchantAnalyticsResult?> MerchantSpendForUserAsync(Guid userId, Guid fullWorthSpaceId, AnalyticsQuery query, int top, CancellationToken ct)
     {
         if (!await db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(m => m.FullWorthSpaceId == fullWorthSpaceId && m.UserId == userId, ct))
             return null;
 
-        currency = NormalizeCurrency(currency);
+        var currency = query.Currency;
         top = Math.Clamp(top, 1, 100);
-        var currentStart = new DateOnly(year, month, 1);
-        var currentEnd = currentStart.AddMonths(1).AddDays(-1);
-        var previousStart = currentStart.AddMonths(-1);
-        var previousEnd = currentStart.AddDays(-1);
+        var comparison = query.ComparisonWindow();
 
-        var current = await ExpensesAsync(userId, fullWorthSpaceId, currentStart, currentEnd, ct);
-        var previous = await ExpensesAsync(userId, fullWorthSpaceId, previousStart, previousEnd, ct);
+        // Optional category scope (transaction-level subtree): restrict to merchants where the caller
+        // spent in that category. A missing/foreign category yields an empty (valid) report.
+        HashSet<Guid>? categoryScope = null;
+        if (query.CategoryId is { } scopeCategory)
+        {
+            if (!await db.Categories.AsNoTracking().AnyAsync(c => c.Id == scopeCategory && c.FullWorthSpaceId == fullWorthSpaceId, ct))
+                return Empty(query, top);
+            categoryScope = await CategorySubtreeAsync(fullWorthSpaceId, scopeCategory, query.IncludeCategoryDescendants, ct);
+        }
+
+        if (query.MerchantId is { } scopeMerchant &&
+            !await db.Set<Merchant>().AsNoTracking().AnyAsync(m => m.Id == scopeMerchant && m.FullWorthSpaceId == fullWorthSpaceId, ct))
+            return Empty(query, top);
+
+        var resolver = await MerchantBrandResolver.ForSpaceAsync(db, fullWorthSpaceId, ct);
+
+        var current = await ExpensesAsync(userId, fullWorthSpaceId, query, categoryScope, query.From, query.To, ct);
+        var previous = await ExpensesAsync(userId, fullWorthSpaceId, query, categoryScope, comparison.Start, comparison.End, ct);
+
+        // Merchant scope: keep only rows that resolve to the requested registry merchant.
+        if (query.MerchantId is { } merchantFilter)
+        {
+            current = current.Where(r => resolver.Resolve(r.Counterparty, r.Normalized).MerchantId == merchantFilter).ToList();
+            previous = previous.Where(r => resolver.Resolve(r.Counterparty, r.Normalized).MerchantId == merchantFilter).ToList();
+        }
 
         // One FX snapshot spans both windows; every merchant's spend is converted to the base currency at
         // each transaction's booking-date rate. A row with no rate is dropped (from spend AND count) and
         // marks the result incomplete — never assumed 1:1.
-        var acc = new FullWorth.Backend.Modules.Fx.FxAccumulator(await fx.PrepareAsync(currency, previousStart, currentEnd, ct));
+        var snapshotStart = Min(comparison.Start, query.From);
+        var snapshotEnd = query.To;
+        var acc = new FullWorth.Backend.Modules.Fx.FxAccumulator(await fx.PrepareAsync(currency, snapshotStart, snapshotEnd, ct));
         decimal? BaseSpend(ExpenseRow row) => acc.Convert(Math.Abs(row.Amount), row.Currency, row.Date);
 
         var previousByMerchant = new Dictionary<string, decimal>();
@@ -71,7 +109,8 @@ public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                 Merchant = group.Key,
                 Spend = group.Sum(row => currentBaseById[row.Id]),
                 Count = group.Count(),
-                TxIds = group.Select(row => row.Id).ToList()
+                TxIds = group.Select(row => row.Id).ToList(),
+                Sample = group.First()
             })
             .OrderByDescending(merchant => merchant.Spend)
             .ThenBy(merchant => merchant.Merchant)
@@ -82,8 +121,6 @@ public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Ba
         var topTxIds = currentByMerchant.SelectMany(merchant => merchant.TxIds).ToHashSet();
         var merchantByTx = current.Where(row => topTxIds.Contains(row.Id))
             .ToDictionary(row => row.Id, row => MerchantKey(row.Normalized, row.Counterparty));
-        // The builder returns base-currency allocations (foreign spend + linked refunds converted at their
-        // own value dates) and flags incomplete when a rate was missing.
         var (allocations, distributionIncomplete) = await new ExpenseAllocationBuilder(db).BuildAsync(
             fullWorthSpaceId,
             current.Where(row => topTxIds.Contains(row.Id)).Select(row => new ExpenseTx(row.Id, row.Amount, row.CategoryId, row.Currency, row.Date)).ToList(),
@@ -117,8 +154,12 @@ public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                         Round(slice.Value)))
                     .OrderByDescending(slice => slice.Amount).ToList()
                 : [];
+            var identity = resolver.Resolve(merchant.Sample.Counterparty, merchant.Sample.Normalized);
             return new MerchantAnalyticsItem(
                 merchant.Merchant,
+                identity.MerchantId,
+                identity.BrandKey,
+                identity.LogoAssetPath,
                 Round(merchant.Spend),
                 merchant.Count,
                 Round(merchant.Count == 0 ? 0m : merchant.Spend / merchant.Count),
@@ -128,14 +169,21 @@ public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                 categories);
         }).ToList();
 
-        return new MerchantAnalyticsResult(year, month, currency, top, items, acc.Incomplete || distributionIncomplete);
+        return new MerchantAnalyticsResult(query.From.Year, query.From.Month, currency, top, items,
+            acc.Incomplete || distributionIncomplete, query.From, query.To, query.NormalizedGranularity, query.NormalizedComparison);
     }
 
+    private static MerchantAnalyticsResult Empty(AnalyticsQuery query, int top) =>
+        new(query.From.Year, query.From.Month, query.Currency, top, [], false,
+            query.From, query.To, query.NormalizedGranularity, query.NormalizedComparison);
+
     // §18: no base-currency filter — foreign rows are carried with their currency + booking date so the
-    // caller can convert each to the base currency at its value-date rate.
+    // caller can convert each to the base currency at its value-date rate. Account/group and (optional)
+    // category scope are enforced against ACCESSIBLE accounts in the active space.
     private async Task<List<ExpenseRow>> ExpensesAsync(
-        Guid userId, Guid fullWorthSpaceId, DateOnly from, DateOnly to, CancellationToken ct) =>
-        await db.Transactions.AsNoTracking()
+        Guid userId, Guid fullWorthSpaceId, AnalyticsQuery query, HashSet<Guid>? categoryScope, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var rows = await db.Transactions.AsNoTracking()
             .Where(transaction =>
                 transaction.Amount < 0 &&
                 !transaction.IsIgnored &&
@@ -147,22 +195,48 @@ public sealed class MerchantAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                 db.Accounts.Any(account =>
                     account.Id == transaction.AccountId &&
                     account.FullWorthSpaceId == fullWorthSpaceId &&
+                    (!query.AccountId.HasValue || account.Id == query.AccountId.Value) &&
+                    (!query.AccountGroupId.HasValue || account.GroupId == query.AccountGroupId.Value) &&
                     account.Owners.Any(owner => owner.UserId == userId)))
             .Select(transaction => new ExpenseRow(transaction.Id, transaction.Amount, transaction.CategoryId, transaction.NormalizedCounterparty, transaction.Counterparty, transaction.Currency, transaction.BookingDate!.Value))
             .ToListAsync(ct);
+
+        if (categoryScope is not null)
+            rows = rows.Where(row => row.CategoryId.HasValue && categoryScope.Contains(row.CategoryId.Value)).ToList();
+        return rows;
+    }
+
+    private async Task<HashSet<Guid>> CategorySubtreeAsync(Guid fullWorthSpaceId, Guid root, bool includeDescendants, CancellationToken ct)
+    {
+        if (!includeDescendants) return [root];
+        var pairs = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .Select(category => new { category.Id, category.ParentId })
+            .ToListAsync(ct);
+        var childrenByParent = pairs.Where(p => p.ParentId.HasValue)
+            .GroupBy(p => p.ParentId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.Id).ToList());
+        var result = new HashSet<Guid>();
+        var stack = new Stack<Guid>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (!result.Add(current)) continue;
+            if (childrenByParent.TryGetValue(current, out var children))
+                foreach (var child in children) stack.Push(child);
+        }
+        return result;
+    }
 
     private static string MerchantKey(string? normalized, string? counterparty) =>
         !string.IsNullOrWhiteSpace(normalized) ? normalized.Trim()
         : !string.IsNullOrWhiteSpace(counterparty) ? counterparty.Trim()
         : "Unknown";
 
-    private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+    private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 
-    private static string NormalizeCurrency(string currency)
-    {
-        var normalized = string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
-        return normalized.Length == 3 && normalized.All(character => character is >= 'A' and <= 'Z') ? normalized : "EUR";
-    }
+    private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private sealed record ExpenseRow(Guid Id, decimal Amount, Guid? CategoryId, string? Normalized, string? Counterparty, string Currency, DateOnly Date);
 }
@@ -172,12 +246,15 @@ public static class MerchantAnalyticsEndpoints
     public static IEndpointRouteBuilder MapMerchantAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/analytics/merchants", async (
-            Guid fullWorthSpaceId, int? year, int? month, string? currency, int? top,
+            Guid fullWorthSpaceId, int? year, int? month, DateOnly? from, DateOnly? to, string? granularity,
+            Guid? accountId, Guid? accountGroupId, Guid? categoryId, bool? includeDescendants, Guid? merchantId,
+            string? comparison, string? currency, int? top,
             CurrentUserContext currentUser, MerchantAnalyticsService service, CancellationToken ct) =>
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var result = await service.MerchantSpendForUserAsync(
-                currentUser.RequireUserId(), fullWorthSpaceId, year ?? today.Year, month ?? today.Month, currency ?? "EUR", top ?? 10, ct);
+            var query = AnalyticsQuery.Create(from, to, granularity, year, month, accountId, accountGroupId,
+                categoryId, includeDescendants, merchantId, comparison, currency, today);
+            var result = await service.MerchantSpendForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, query, top ?? 10, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         }).WithTags("Analytics");
 

@@ -12,6 +12,13 @@ public sealed class Merchant
     public Guid FullWorthSpaceId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string NormalizedName { get; set; } = string.Empty;
+    // Local visual metadata (§4). When BrandOverridden is true these fields are authoritative for the
+    // merchant (a fully-null override intentionally means "no brand — use the category icon"). When it is
+    // false the brand is auto-resolved from the curated local catalog and these fields stay null.
+    public string? BrandKey { get; set; }
+    public string? LogoAssetPath { get; set; }
+    public string? AccentKey { get; set; }
+    public bool BrandOverridden { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -44,6 +51,9 @@ public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
         e.HasKey(x => x.Id);
         e.Property(x => x.Name).HasMaxLength(200);
         e.Property(x => x.NormalizedName).HasMaxLength(200);
+        e.Property(x => x.BrandKey).HasMaxLength(80);
+        e.Property(x => x.LogoAssetPath).HasMaxLength(400);
+        e.Property(x => x.AccentKey).HasMaxLength(40);
         e.HasIndex(x => new { x.FullWorthSpaceId, x.NormalizedName }).IsUnique();
         e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -67,11 +77,27 @@ public enum MerchantResult { Success, NotFound, Forbidden, Invalid }
 public sealed record MerchantOutcome<T>(MerchantResult Result, T? Value = default, string? Error = null);
 
 public sealed record MerchantAliasView(Guid Id, string NormalizedAlias);
-public sealed record MerchantView(Guid Id, string Name, string NormalizedName, IReadOnlyList<MerchantAliasView> Aliases);
-public sealed record ResolveView(string? Normalized, Guid? MerchantId, string? MerchantName);
+public sealed record MerchantView(
+    Guid Id,
+    string Name,
+    string NormalizedName,
+    IReadOnlyList<MerchantAliasView> Aliases,
+    string? BrandKey = null,
+    string? LogoAssetPath = null,
+    string? AccentKey = null,
+    bool BrandOverridden = false);
+public sealed record ResolveView(
+    string? Normalized,
+    Guid? MerchantId,
+    string? MerchantName,
+    string? BrandKey = null,
+    string? LogoAssetPath = null,
+    string? AccentKey = null);
 public sealed record MerchantWrite(string Name);
 public sealed record AliasWrite(string Alias);
 public sealed record MerchantMergeWrite(Guid SourceMerchantId);
+// Set a merchant's brand override; a fully-null body clears the override (auto-resolution resumes).
+public sealed record MerchantBrandWrite(string? BrandKey, string? LogoAssetPath, string? AccentKey);
 
 public sealed class MerchantStore(FullWorthDbContext db)
 {
@@ -85,7 +111,8 @@ public sealed class MerchantStore(FullWorthDbContext db)
                 x.Id, x.Name, x.NormalizedName,
                 db.Set<MerchantAlias>().Where(a => a.MerchantId == x.Id)
                     .OrderBy(a => a.NormalizedAlias)
-                    .Select(a => new MerchantAliasView(a.Id, a.NormalizedAlias)).ToList()))
+                    .Select(a => new MerchantAliasView(a.Id, a.NormalizedAlias)).ToList(),
+                x.BrandKey, x.LogoAssetPath, x.AccentKey, x.BrandOverridden))
             .ToListAsync(ct);
         return (true, merchants);
     }
@@ -168,7 +195,8 @@ public sealed class MerchantStore(FullWorthDbContext db)
             .Select(x => new MerchantView(x.Id, x.Name, x.NormalizedName,
                 db.Set<MerchantAlias>().Where(a => a.MerchantId == x.Id)
                     .OrderBy(a => a.NormalizedAlias)
-                    .Select(a => new MerchantAliasView(a.Id, a.NormalizedAlias)).ToList()))
+                    .Select(a => new MerchantAliasView(a.Id, a.NormalizedAlias)).ToList(),
+                x.BrandKey, x.LogoAssetPath, x.AccentKey, x.BrandOverridden))
             .SingleAsync(ct);
 
     public async Task<MerchantResult> DeleteForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid merchantId, CancellationToken ct)
@@ -224,23 +252,59 @@ public sealed class MerchantStore(FullWorthDbContext db)
         var normalized = MerchantNormalization.Normalize(counterparty);
         if (normalized is null) return (true, new ResolveView(null, null, null));
 
-        var aliases = await db.Set<MerchantAlias>().AsNoTracking()
-            .Where(a => a.FullWorthSpaceId == fullWorthSpaceId)
-            .Select(a => new { a.NormalizedAlias, a.MerchantId })
-            .ToListAsync(ct);
+        // Alias → merchant → brand via the shared resolver so the /resolve endpoint and the transaction
+        // DTO agree on identity and brand exactly.
+        var resolver = await MerchantBrandResolver.ForSpaceAsync(db, fullWorthSpaceId, ct);
+        var identity = resolver.Resolve(counterparty, normalized);
+        return (true, new ResolveView(normalized, identity.MerchantId, identity.MerchantDisplayName,
+            identity.BrandKey, identity.LogoAssetPath, identity.AccentKey));
+    }
 
-        // Most specific (longest) alias contained in the counterparty wins.
-        var match = aliases
-            .Where(a => normalized.Contains(a.NormalizedAlias, StringComparison.Ordinal))
-            .OrderByDescending(a => a.NormalizedAlias.Length)
-            .FirstOrDefault();
-        if (match is null) return (true, new ResolveView(normalized, null, null));
+    // Set (BrandOverridden=true) or clear (BrandOverridden=false, fields nulled) a merchant's brand. A set
+    // with a curated brand key auto-fills the logo/accent from the local catalog when the caller omits
+    // them. Owner-gated, mirroring rename/merge.
+    public async Task<MerchantOutcome<MerchantView>> SetBrandForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid merchantId, MerchantBrandWrite request, CancellationToken ct)
+    {
+        var role = await GetRoleAsync(userId, fullWorthSpaceId, ct);
+        if (role is null) return new(MerchantResult.NotFound);
+        if (role != FullWorthSpaceRoles.Owner) return new(MerchantResult.Forbidden);
 
-        var merchant = await db.Set<Merchant>().AsNoTracking()
-            .Where(m => m.Id == match.MerchantId)
-            .Select(m => new { m.Id, m.Name })
-            .SingleAsync(ct);
-        return (true, new ResolveView(normalized, merchant.Id, merchant.Name));
+        var merchant = await db.Set<Merchant>().SingleOrDefaultAsync(x => x.Id == merchantId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+        if (merchant is null) return new(MerchantResult.NotFound);
+
+        var brandKey = string.IsNullOrWhiteSpace(request.BrandKey) ? null : request.BrandKey.Trim();
+        var logo = string.IsNullOrWhiteSpace(request.LogoAssetPath) ? null : request.LogoAssetPath.Trim();
+        var accent = string.IsNullOrWhiteSpace(request.AccentKey) ? null : request.AccentKey.Trim();
+        // A known curated brand may be referenced by key alone; fill its default visuals when unspecified.
+        if (brandKey is not null && LocalBrandCatalog.IsKnownBrand(brandKey))
+        {
+            logo ??= LocalBrandCatalog.DefaultLogoAssetPath(brandKey);
+            accent ??= LocalBrandCatalog.DefaultAccentKey(brandKey);
+        }
+
+        merchant.BrandKey = brandKey;
+        merchant.LogoAssetPath = logo;
+        merchant.AccentKey = accent;
+        merchant.BrandOverridden = true;
+        await db.SaveChangesAsync(ct);
+        return new(MerchantResult.Success, await BuildViewAsync(merchantId, ct));
+    }
+
+    public async Task<MerchantOutcome<MerchantView>> ClearBrandForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid merchantId, CancellationToken ct)
+    {
+        var role = await GetRoleAsync(userId, fullWorthSpaceId, ct);
+        if (role is null) return new(MerchantResult.NotFound);
+        if (role != FullWorthSpaceRoles.Owner) return new(MerchantResult.Forbidden);
+
+        var merchant = await db.Set<Merchant>().SingleOrDefaultAsync(x => x.Id == merchantId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+        if (merchant is null) return new(MerchantResult.NotFound);
+
+        merchant.BrandKey = null;
+        merchant.LogoAssetPath = null;
+        merchant.AccentKey = null;
+        merchant.BrandOverridden = false;
+        await db.SaveChangesAsync(ct);
+        return new(MerchantResult.Success, await BuildViewAsync(merchantId, ct));
     }
 
     private Task<bool> IsMemberAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
@@ -288,6 +352,13 @@ public static class MerchantEndpoints
 
         group.MapDelete("/{id:guid}/aliases/{aliasId:guid}", async (Guid id, Guid aliasId, Guid fullWorthSpaceId, CurrentUserContext currentUser, MerchantStore store, CancellationToken ct) =>
             Status(await store.RemoveAliasForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, aliasId, ct)));
+
+        // Brand override (§4): set/replace a merchant's local visuals, or clear back to auto-detection.
+        group.MapPut("/{id:guid}/brand", async (Guid id, Guid fullWorthSpaceId, MerchantBrandWrite request, CurrentUserContext currentUser, MerchantStore store, CancellationToken ct) =>
+            Mutation(await store.SetBrandForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct)));
+
+        group.MapDelete("/{id:guid}/brand", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, MerchantStore store, CancellationToken ct) =>
+            Mutation(await store.ClearBrandForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
 
         return app;
     }

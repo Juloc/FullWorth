@@ -1,4 +1,5 @@
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,13 +19,25 @@ public sealed record CategoryAnalyticsItem(
     decimal TrendPercent,
     bool HasItemBreakdown);
 
-public sealed record CategoryAnalyticsResult(int Year, int Month, string Currency, List<CategoryAnalyticsItem> Categories, bool Incomplete);
+public sealed record CategoryAnalyticsResult(
+    int Year,
+    int Month,
+    string Currency,
+    List<CategoryAnalyticsItem> Categories,
+    bool Incomplete,
+    DateOnly From,
+    DateOnly To,
+    string Granularity,
+    string ComparisonMode);
 
 /// <summary>
-/// Category spend analytics for a month: current vs previous period, trailing 3/6/12-month averages,
-/// absolute/percentage trend, and a hierarchical roll-up so every category reports its own spend plus
-/// all descendants'. Spend is allocated via <see cref="ExpenseAllocationBuilder"/>, so confirmed
-/// purchase item splits are used without double counting the parent transaction.
+/// Category spend analytics for the SELECTED period (§6): current window vs the comparison window, plus
+/// trailing 3/6/12-period averages stepped by the query granularity, an absolute/percentage trend, and a
+/// hierarchical roll-up so every category reports its own spend plus all descendants'. The period is
+/// whatever the caller asked for (a past quarter returns that quarter — never silently the current month).
+/// Optional account / account-group / category / merchant scope is resolved and enforced server-side.
+/// Spend is allocated via <see cref="ExpenseAllocationBuilder"/> so confirmed purchase-item splits are
+/// used without double counting the parent transaction.
 /// </summary>
 public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Backend.Modules.Fx.CurrencyConverter fx)
 {
@@ -32,21 +45,27 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
     // and surfaced as CategoryId = null at the DTO boundary.
     private static readonly Guid Uncategorized = Guid.Empty;
 
-    public async Task<CategoryAnalyticsResult?> CategorySpendForUserAsync(
-        Guid userId, Guid fullWorthSpaceId, int year, int month, string currency, CancellationToken ct)
+    public async Task<CategoryAnalyticsResult?> CategorySpendForUserAsync(Guid userId, Guid fullWorthSpaceId, AnalyticsQuery query, CancellationToken ct)
     {
         if (!await db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(m => m.FullWorthSpaceId == fullWorthSpaceId && m.UserId == userId, ct))
             return null;
 
-        currency = NormalizeCurrency(currency);
-        var currentStart = new DateOnly(year, month, 1);
-        var currentEnd = currentStart.AddMonths(1).AddDays(-1);
-        var windowStart = currentStart.AddMonths(-12);
-        var currentKey = MonthKey(year, month);
+        var currency = query.Currency;
+        var comparison = query.ComparisonWindow();
+        // Load a window wide enough for the current period, the comparison period and the trailing 12.
+        var windowStart = Min(query.Shifted(12).Start, comparison.Start);
+        var currentEnd = query.To;
 
-        // Booked, non-ignored, non-transfer expenses the caller can see, across the trailing window.
-        // §18: include foreign currencies and convert each transaction's spend to the base currency at
-        // its booking-date rate; a missing rate marks the result incomplete and drops that allocation.
+        // A category scope filter that names a missing/foreign category yields an empty (but valid) report.
+        HashSet<Guid>? categoryScope = null;
+        if (query.CategoryId is { } scopeCategory)
+        {
+            if (!await db.Categories.AsNoTracking().AnyAsync(c => c.Id == scopeCategory && c.FullWorthSpaceId == fullWorthSpaceId, ct))
+                return Empty(query);
+        }
+
+        // Booked, non-ignored, non-transfer expenses the caller can see across the trailing window, with
+        // optional account / account-group scope enforced against ACCESSIBLE accounts in the active space.
         var rows = await db.Transactions.AsNoTracking()
             .Where(transaction =>
                 transaction.Amount < 0 &&
@@ -59,31 +78,29 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                 db.Accounts.Any(account =>
                     account.Id == transaction.AccountId &&
                     account.FullWorthSpaceId == fullWorthSpaceId &&
+                    (!query.AccountId.HasValue || account.Id == query.AccountId.Value) &&
+                    (!query.AccountGroupId.HasValue || account.GroupId == query.AccountGroupId.Value) &&
                     account.Owners.Any(owner => owner.UserId == userId)))
-            .Select(transaction => new { transaction.Id, Date = transaction.BookingDate!.Value, transaction.Amount, transaction.Currency, transaction.CategoryId })
+            .Select(transaction => new { transaction.Id, Date = transaction.BookingDate!.Value, transaction.Amount, transaction.Currency, transaction.CategoryId, transaction.NormalizedCounterparty, transaction.Counterparty })
             .ToListAsync(ct);
 
-        var monthByTransaction = rows.ToDictionary(row => row.Id, row => MonthKey(row.Date.Year, row.Date.Month));
+        // Merchant scope: keep only rows whose resolved merchant matches. Resolution reuses the shared
+        // alias → merchant resolver so it matches the transaction list exactly.
+        if (query.MerchantId is { } merchantId)
+        {
+            if (!await db.Set<Merchant>().AsNoTracking().AnyAsync(m => m.Id == merchantId && m.FullWorthSpaceId == fullWorthSpaceId, ct))
+                return Empty(query);
+            var resolver = await MerchantBrandResolver.ForSpaceAsync(db, fullWorthSpaceId, ct);
+            rows = rows.Where(r => resolver.Resolve(r.Counterparty, r.NormalizedCounterparty).MerchantId == merchantId).ToList();
+        }
+
+        var dateByTransaction = rows.ToDictionary(row => row.Id, row => row.Date);
         // The builder returns base-currency allocations (foreign spend + linked refunds converted at their
         // own value dates) and flags incomplete when a rate was missing.
         var (allocations, incomplete) = await new ExpenseAllocationBuilder(db).BuildAsync(
             fullWorthSpaceId,
             rows.Select(row => new ExpenseTx(row.Id, row.Amount, row.CategoryId, row.Currency, row.Date)).ToList(),
             fx, currency, ct);
-
-        // monthly[categoryKey][monthKey] = spend (in base currency); Guid.Empty = uncategorized.
-        var monthly = new Dictionary<Guid, Dictionary<int, decimal>>();
-        var itemBreakdownCurrent = new HashSet<Guid>();
-        foreach (var allocation in allocations)
-        {
-            if (!monthByTransaction.TryGetValue(allocation.TransactionId, out var monthKey)) continue;
-            var key = allocation.CategoryId ?? Uncategorized;
-            if (!monthly.TryGetValue(key, out var buckets))
-                monthly[key] = buckets = new Dictionary<int, decimal>();
-            buckets[monthKey] = buckets.GetValueOrDefault(monthKey) + allocation.Amount;
-            if (monthKey == currentKey && allocation.FromPurchaseItem)
-                itemBreakdownCurrent.Add(key);
-        }
 
         var categories = await db.Categories.AsNoTracking()
             .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
@@ -96,38 +113,90 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
             .GroupBy(category => category.ParentId!.Value)
             .ToDictionary(group => group.Key, group => group.Select(category => category.Id).ToList());
 
+        // Restrict to the requested category subtree (or that single category) when a category scope is set.
+        if (query.CategoryId is { } scoped)
+        {
+            categoryScope = query.IncludeCategoryDescendants
+                ? [.. Subtree(scoped, childrenByParent)]
+                : [scoped];
+            allocations = allocations.Where(a => a.CategoryId.HasValue && categoryScope.Contains(a.CategoryId.Value)).ToList();
+        }
+
+        // Leaf spend per category (Guid.Empty = uncategorized) for each window we report on.
+        Dictionary<Guid, decimal> SpendInWindow(DateOnly start, DateOnly end)
+        {
+            var acc = new Dictionary<Guid, decimal>();
+            foreach (var allocation in allocations)
+            {
+                if (!dateByTransaction.TryGetValue(allocation.TransactionId, out var date)) continue;
+                if (date < start || date > end) continue;
+                var key = allocation.CategoryId ?? Uncategorized;
+                acc[key] = acc.GetValueOrDefault(key) + allocation.Amount;
+            }
+            return acc;
+        }
+
+        var leafCurrent = SpendInWindow(query.From, query.To);
+        var leafPrevious = SpendInWindow(comparison.Start, comparison.End);
+        var leafShift = new Dictionary<Guid, decimal>[13];
+        for (var offset = 1; offset <= 12; offset++)
+        {
+            var (s, e) = query.Shifted(offset);
+            leafShift[offset] = SpendInWindow(s, e);
+        }
+
+        var itemBreakdownCurrent = new HashSet<Guid>();
+        foreach (var allocation in allocations)
+        {
+            if (!allocation.FromPurchaseItem) continue;
+            if (!dateByTransaction.TryGetValue(allocation.TransactionId, out var date)) continue;
+            if (date < query.From || date > query.To) continue;
+            itemBreakdownCurrent.Add(allocation.CategoryId ?? Uncategorized);
+        }
+
         var items = new List<CategoryAnalyticsItem>();
         foreach (var category in categories)
         {
+            if (categoryScope is not null && !categoryScope.Contains(category.Id)) continue;
             var subtree = Subtree(category.Id, childrenByParent);
-            var item = BuildItem(category.Id, nameById[category.Id], parentById[category.Id], subtree, monthly, itemBreakdownCurrent, currentKey);
+            var item = BuildItem(category.Id, nameById[category.Id], parentById[category.Id], subtree, leafCurrent, leafPrevious, leafShift, itemBreakdownCurrent);
             if (item is not null) items.Add(item);
         }
 
-        // Uncategorized spend has no place in the tree; surface it as its own row (CategoryId = null).
-        var uncategorized = BuildItem(null, "Uncategorized", null, [Uncategorized], monthly, itemBreakdownCurrent, currentKey);
-        if (uncategorized is not null) items.Add(uncategorized);
+        // Uncategorized spend has no place in the tree; surface it as its own row (CategoryId = null),
+        // unless the caller scoped to a specific category.
+        if (categoryScope is null)
+        {
+            var uncategorized = BuildItem(null, "Uncategorized", null, [Uncategorized], leafCurrent, leafPrevious, leafShift, itemBreakdownCurrent);
+            if (uncategorized is not null) items.Add(uncategorized);
+        }
 
         items = items.OrderByDescending(item => item.Current).ThenBy(item => item.Name).ToList();
-        return new CategoryAnalyticsResult(year, month, currency, items, incomplete);
+        return new CategoryAnalyticsResult(query.From.Year, query.From.Month, currency, items, incomplete,
+            query.From, query.To, query.NormalizedGranularity, query.NormalizedComparison);
     }
+
+    private static CategoryAnalyticsResult Empty(AnalyticsQuery query) =>
+        new(query.From.Year, query.From.Month, query.Currency, [], false,
+            query.From, query.To, query.NormalizedGranularity, query.NormalizedComparison);
 
     private static CategoryAnalyticsItem? BuildItem(
         Guid? categoryId, string name, Guid? parentId, IReadOnlyCollection<Guid> subtree,
-        Dictionary<Guid, Dictionary<int, decimal>> monthly, HashSet<Guid> itemBreakdownCurrent, int currentKey)
+        Dictionary<Guid, decimal> leafCurrent, Dictionary<Guid, decimal> leafPrevious,
+        Dictionary<Guid, decimal>[] leafShift, HashSet<Guid> itemBreakdownCurrent)
     {
-        decimal SpendAt(int monthKey) => subtree.Sum(cat =>
-            monthly.TryGetValue(cat, out var buckets) ? buckets.GetValueOrDefault(monthKey) : 0m);
+        static decimal SubtreeSum(Dictionary<Guid, decimal> source, IReadOnlyCollection<Guid> subtree) =>
+            subtree.Sum(category => source.GetValueOrDefault(category));
 
         decimal Average(int months)
         {
             var total = 0m;
-            for (var offset = 1; offset <= months; offset++) total += SpendAt(currentKey - offset);
+            for (var offset = 1; offset <= months; offset++) total += SubtreeSum(leafShift[offset], subtree);
             return total / months;
         }
 
-        var current = SpendAt(currentKey);
-        var previous = SpendAt(currentKey - 1);
+        var current = SubtreeSum(leafCurrent, subtree);
+        var previous = SubtreeSum(leafPrevious, subtree);
         var average3 = Average(3);
         var average6 = Average(6);
         var average12 = Average(12);
@@ -166,15 +235,9 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
         return result;
     }
 
-    private static int MonthKey(int year, int month) => year * 12 + (month - 1);
+    private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
-
-    private static string NormalizeCurrency(string currency)
-    {
-        var normalized = string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
-        return normalized.Length == 3 && normalized.All(character => character is >= 'A' and <= 'Z') ? normalized : "EUR";
-    }
 }
 
 public static class CategoryAnalyticsEndpoints
@@ -182,12 +245,15 @@ public static class CategoryAnalyticsEndpoints
     public static IEndpointRouteBuilder MapCategoryAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/analytics/categories", async (
-            Guid fullWorthSpaceId, int? year, int? month, string? currency,
+            Guid fullWorthSpaceId, int? year, int? month, DateOnly? from, DateOnly? to, string? granularity,
+            Guid? accountId, Guid? accountGroupId, Guid? categoryId, bool? includeDescendants, Guid? merchantId,
+            string? comparison, string? currency,
             CurrentUserContext currentUser, CategoryAnalyticsService service, CancellationToken ct) =>
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var result = await service.CategorySpendForUserAsync(
-                currentUser.RequireUserId(), fullWorthSpaceId, year ?? today.Year, month ?? today.Month, currency ?? "EUR", ct);
+            var query = AnalyticsQuery.Create(from, to, granularity, year, month, accountId, accountGroupId,
+                categoryId, includeDescendants, merchantId, comparison, currency, today);
+            var result = await service.CategorySpendForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, query, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         }).WithTags("Analytics");
 

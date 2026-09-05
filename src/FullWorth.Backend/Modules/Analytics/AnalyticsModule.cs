@@ -16,7 +16,10 @@ public sealed record ChartResult(string Currency, string Measure, string Dimensi
 
 public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Modules.Fx.CurrencyConverter fx)
 {
-    public async Task<object?> OverviewForUserAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct)
+    public Task<object?> OverviewForUserAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct) =>
+        OverviewForUserAsync(userId, fullWorthSpaceId, from, to, null, null, currency, ct);
+
+    public async Task<object?> OverviewForUserAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, Guid? accountId, Guid? accountGroupId, string currency, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         currency = NormalizeCurrency(currency);
@@ -29,6 +32,11 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
             .Where(transaction => !transaction.IsIgnored && !transaction.IsTransfer && transaction.Status != "PDNG");
         if (from.HasValue) query = query.Where(transaction => transaction.BookingDate >= from.Value);
         if (to.HasValue) query = query.Where(transaction => transaction.BookingDate <= to.Value);
+        // Account / account-group scope, resolved against the already-accessible account set (never a
+        // client-supplied id list). A foreign/unknown id matches no accessible account → empty result.
+        if (accountId.HasValue) query = query.Where(transaction => transaction.AccountId == accountId.Value);
+        if (accountGroupId.HasValue)
+            query = query.Where(transaction => db.Accounts.Any(a => a.Id == transaction.AccountId && a.GroupId == accountGroupId.Value));
 
         var transactions = await query.Select(transaction => new { transaction.Id, transaction.BookingDate, transaction.ValueDate, transaction.Amount, transaction.Currency, transaction.CategoryId, transaction.RefundOfTransactionId }).ToListAsync(ct);
         var txMeta = transactions.ToDictionary(t => t.Id, t => (t.Currency, Date: t.BookingDate ?? t.ValueDate ?? today));
@@ -454,8 +462,8 @@ public static class AnalyticsEndpoints
     {
         var group = app.MapGroup("/api/analytics").WithTags("Analytics");
 
-        group.MapGet("/overview", async (Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
-            ToResult(await service.OverviewForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency ?? "EUR", ct)));
+        group.MapGet("/overview", async (Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, Guid? accountId, Guid? accountGroupId, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
+            ToResult(await service.OverviewForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, from, to, accountId, accountGroupId, currency ?? "EUR", ct)));
 
         group.MapGet("/dashboard", async (Guid fullWorthSpaceId, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
         {
