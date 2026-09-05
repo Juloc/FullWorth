@@ -697,7 +697,7 @@ async function openBankDialog(){
   if(!bankingReady(status)){openEnableBankingWizard(status);return}
 
   let data;
-  try{data=await bankApi('api/banking/institutions?country=DE&psuType=personal')}catch(err){toast(err.message||get('common.error'));return}
+  try{data=await bankApi('api/banking/institutions?country=DE')}catch(err){toast(err.message||get('common.error'));return}
   const banks=(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.addBank'))}</h2><button value="cancel">×</button></div><input id="bank-search" type="search" placeholder="Bank"><div id="bank-options" class="bank-options"></div></form>`);
   const box=dlg.querySelector('#bank-options');
