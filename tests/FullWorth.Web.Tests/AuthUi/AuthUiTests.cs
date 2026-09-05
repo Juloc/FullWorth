@@ -126,9 +126,9 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         var html = await GetAsync("/auth/index.html");
         var js = await GetAsync("/auth/auth.js");
 
-        Assert.Contains("value=\"system\"", html);
-        Assert.Contains("value=\"light\"", html);
-        Assert.Contains("value=\"dark\"", html);
+        Assert.Contains("data-theme-icon=\"system\"", html);
+        Assert.Contains("data-theme-icon=\"light\"", html);
+        Assert.Contains("data-theme-icon=\"dark\"", html);
         Assert.Contains("finance.theme", js);
         Assert.Contains("finance.language", js);
         Assert.Contains("prefers-color-scheme: dark", js);
