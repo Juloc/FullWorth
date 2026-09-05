@@ -316,8 +316,15 @@ public sealed class IngestionService(
                     updated++;
                 }
                 else if (!string.IsNullOrWhiteSpace(item.EntryReference) &&
+                         string.Equals(item.ExternalKey, "er:" + item.EntryReference, StringComparison.Ordinal) &&
                          uniqueByEntryReference.TryGetValue(item.EntryReference, out var stableMatch))
                 {
+                    // Only the canonical entry_reference-keyed row may adopt an older transaction_id-keyed
+                    // row. The banking sync always keys a transaction that carries an entry_reference as
+                    // "er:{entry_reference}" (see BankSyncService), so any incoming item whose ExternalKey is
+                    // NOT that form is legacy/ambiguous historical data and must never merge into a row that
+                    // merely happens to share the same entry_reference — otherwise two distinct pending rows
+                    // collapse into one.
                     entity = stableMatch;
                     entity.ExternalKey = item.ExternalKey;
                     existing[item.ExternalKey] = entity;
