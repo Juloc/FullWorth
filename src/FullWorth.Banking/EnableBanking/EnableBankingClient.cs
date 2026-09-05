@@ -129,8 +129,21 @@ public sealed class EnableBankingClient
     public Task<JsonElement> GetSessionAsync(string sessionId, CancellationToken ct) =>
         SendJsonAsync(HttpMethod.Get, $"/sessions/{Uri.EscapeDataString(sessionId)}", null, null, null, ct);
 
+    public Task<JsonElement> DeleteSessionAsync(
+        string sessionId,
+        PsuContext? psuContext,
+        IReadOnlyCollection<string>? requiredPsuHeaders,
+        CancellationToken ct) =>
+        SendJsonAsync(
+            HttpMethod.Delete,
+            $"/sessions/{Uri.EscapeDataString(sessionId)}",
+            null,
+            psuContext,
+            requiredPsuHeaders,
+            ct);
+
     public Task<JsonElement> DeleteSessionAsync(string sessionId, PsuContext? psuContext, CancellationToken ct) =>
-        SendJsonAsync(HttpMethod.Delete, $"/sessions/{Uri.EscapeDataString(sessionId)}", null, psuContext, null, ct);
+        DeleteSessionAsync(sessionId, psuContext, null, ct);
 
     public Task<JsonElement> GetAccountAsync(
         string accountId,
