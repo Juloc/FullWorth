@@ -59,6 +59,7 @@ public sealed class BankConnectTenancyTests
         var backend = new FakeBackendHandler();
         var service = environment.CreateSyncService(InstitutionsThenAuth(), backend);
         var existingId = Guid.NewGuid();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection() with { Id = existingId });
 
         var url = await service.StartConnectionAsync(new("Test Bank", "DE", 180, null, null, null, existingId), Owner, CancellationToken.None);
 
