@@ -355,7 +355,7 @@ Persist useful normalized metadata without exposing unnecessary personal data:
 - optional credit limit when useful
 - identification hashes
 
-Do not persist postal addresses or other account-holder identity fields unless FullWorth later has a concrete product requirement.
+Do not persist AccountResource.name (account-holder name), postal addresses, legal-age data or other account-holder identity fields unless FullWorth later has a concrete product requirement. Display names use account details/product metadata instead.
 
 If /details is unsupported (404) but the session provides sufficient account metadata, sync continues.
 
