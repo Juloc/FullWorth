@@ -7,7 +7,7 @@ public static class BankingSyncStateEndpoints
 {
     public static IEndpointRouteBuilder MapBankingSyncStateEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/internal/banking/connections/{connectionId:guid}/accounts/{identificationHash}/sync-state", async (
+        app.MapGet("/internal/banking/connections/{connectionId:guid}/accounts/sync-state", async (
             Guid connectionId,
             string identificationHash,
             FullWorthDbContext db,
