@@ -1,8 +1,26 @@
 import { openRealEstateDetail } from './wealth-real-estate.js';
+import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
+import { renderLoans, bindLoans } from './loans.js';
 
-// Unified wealth view. Totals/history come from /api/wealth/*; type-specific modules own detail logic.
+// Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
+// offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?"), an allocation card
+// ("Verteilung deines Vermögens"), the optional portfolio panel, and finally the asset/liability/loan
+// editors behind a Details/Verwalten disclosure. Totals/history come from /api/wealth/*; type-specific
+// modules own their detail logic. A Reserve/Notgroschen card is intentionally NOT rendered because the
+// wealth overview API exposes no configured emergency-fund target (the plan only shows it when configured).
 let ctx = null;
 let lastOverview = null;
+
+// Trend window options for card 1's segmented control. `m` = months back from today.
+const WINDOWS = [
+  { m: 6, sde: '6 M', sen: '6M', lde: 'Letzte 6 Monate', len: 'Last 6 months' },
+  { m: 12, sde: '1 J', sen: '1Y', lde: 'Letzte 12 Monate', len: 'Last 12 months' },
+  { m: 24, sde: '2 J', sen: '2Y', lde: 'Letzte 2 Jahre', len: 'Last 2 years' },
+  { m: 60, sde: '5 J', sen: '5Y', lde: 'Letzte 5 Jahre', len: 'Last 5 years' }
+];
+
+// View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
+const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], portfolios: [], currency: 'EUR', windowMonths: 12 };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -23,7 +41,10 @@ const COPY = {
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
-    manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen'
+    manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
+    trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
+    manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
+    window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.'
   },
   en: {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
@@ -35,14 +56,16 @@ const COPY = {
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
-    manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated'
+    manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
+    trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
+    manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
+    window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.'
   }
 };
 
-function t(key) {
-  const lang = (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
-  return COPY[lang][key] || key;
-}
+function isDe() { return !(document.documentElement.lang || '').toLowerCase().startsWith('en'); }
+function t(key) { return COPY[isDe() ? 'de' : 'en'][key] || key; }
+function num(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
 
 function ensureStyles() {
   if (document.querySelector('link[data-wealth-assets-css]')) return;
@@ -53,11 +76,62 @@ function ensureStyles() {
   document.head.appendChild(link);
 }
 
+// New presentation-layer styles for the trend/allocation/manage cards. Injected once; everything else
+// reuses app.css `.fw-*` primitives and design tokens (--cat-1..--cat-8, --negative, --cta, spacing).
+function ensureUxStyles() {
+  if (document.getElementById('networth-ux-css')) return;
+  const style = document.createElement('style');
+  style.id = 'networth-ux-css';
+  style.textContent = `
+    .nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
+    .nw-hero .fw-summary-value{font-size:34px}
+    .nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+    .nw-trend-desc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+    .nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px}
+    .nw-delta.positive{color:var(--positive)}
+    .nw-delta.negative{color:var(--negative)}
+    .nw-window-label{color:var(--muted);font-size:11px}
+    .nw-windows{margin:var(--s3) 0}
+    .nw-chart{margin:var(--s2) 0}
+    .nw-chart svg{display:block;width:100%;height:140px}
+    .nw-chart-line{stroke:var(--cta)}
+    .nw-chart-fill{fill:var(--cta);opacity:.10}
+    .nw-chart-empty{padding:var(--s5) 0;text-align:center}
+    .nw-hero-metrics{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s3)}
+    .nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
+    .nw-hero-metrics strong.negative{color:var(--negative)}
+    .nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+    .nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
+    .nw-alloc-block{margin:var(--s2) 0 var(--s3)}
+    .nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
+    .nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
+    .nw-alloc-debt{background:var(--negative-soft)}
+    .nw-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px var(--s5);margin-top:var(--s3)}
+    .nw-legend-item{display:flex;align-items:center;gap:8px;font-size:13px}
+    .nw-dot{width:10px;height:10px;border-radius:3px;flex:none}
+    .nw-legend-label{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .nw-legend-amt{font-variant-numeric:tabular-nums;font-weight:600}
+    .nw-legend-amt.negative{color:var(--negative)}
+    .nw-manage{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);overflow:hidden}
+    .nw-manage>summary{position:relative;cursor:pointer;padding:var(--s4) calc(var(--s4) + 20px) var(--s4) var(--s4);display:flex;flex-direction:column;gap:2px;list-style:none;font-weight:600}
+    .nw-manage>summary::-webkit-details-marker{display:none}
+    .nw-manage>summary::after{content:'▾';position:absolute;right:var(--s4);top:var(--s4);color:var(--muted)}
+    .nw-manage[open]>summary::after{content:'▴'}
+    .nw-manage-hint{font-weight:400;color:var(--muted);font-size:12px}
+    .nw-manage-body{padding:0 var(--s4) var(--s4)}
+    .nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
+    .nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
+    #nw-investments .panel-head{margin-bottom:var(--s3)}
+  `;
+  document.head.appendChild(style);
+}
+
 export function bindNetWorth(context) {
+  // Just store ctx + ensure the shared asset stylesheet is present. The static index.html add/manage
+  // buttons are replaced when renderNetWorth rebuilds #view-networth, so their listeners are (re)wired
+  // there on freshly-created elements rather than here.
   ctx = context;
   ensureStyles();
-  ctx.$('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
-  ctx.$('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
 }
 
 export function newAsset(context) {
@@ -66,79 +140,207 @@ export function newAsset(context) {
   return openAssetWizard();
 }
 
+async function loadHistory(months) {
+  const end = new Date();
+  const start = new Date();
+  start.setMonth(end.getMonth() - months);
+  try { return await ctx.api(`api/wealth/history?from=${localDate(start)}&to=${localDate(end)}`) || []; }
+  catch { return []; }
+}
+
 export async function renderNetWorth(context) {
   ctx = context;
   ensureStyles();
-  const end = new Date();
-  const start = new Date();
-  start.setMonth(end.getMonth() - 12);
-  const [overview, history, assets, liabilities, accounts, portfolios] = await Promise.all([
-    ctx.api('api/wealth/overview'),
-    ctx.api(`api/wealth/history?from=${localDate(start)}&to=${localDate(end)}`).catch(() => []),
-    ctx.api('api/assets'),
-    ctx.api('api/liabilities'),
+  ensureUxStyles();
+  if (!nw.windowMonths) nw.windowMonths = 12;
+
+  let overview;
+  try { overview = await ctx.api('api/wealth/overview'); }
+  catch {
+    const host = ctx.$('#view-networth');
+    if (host) host.innerHTML = sectionCard(t('trendTitle'), `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`, { className: 'nw-hero' });
+    return;
+  }
+
+  const [history, assets, liabilities, accounts, portfolios] = await Promise.all([
+    loadHistory(nw.windowMonths),
+    ctx.api('api/assets').catch(() => []),
+    ctx.api('api/liabilities').catch(() => []),
     ctx.api('api/accounts').catch(() => []),
     ctx.api('api/investments/portfolios').catch(() => [])
   ]);
 
   lastOverview = overview;
-  const currency = overview.currency;
-  ctx.$('#nw-total').textContent = ctx.money(overview.netWorth, currency);
-  ctx.$('#nw-assets').textContent = ctx.money(overview.totalAssets, currency);
-  ctx.$('#nw-liabilities').textContent = ctx.money(overview.totalLiabilities, currency);
-  renderFxState(overview);
-
   const linkedInvestmentAccounts = new Set((portfolios || []).map(item => item.accountId).filter(Boolean));
-  renderAccounts((accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id)));
-  renderAssets(assets || []);
-  renderLiabilities(liabilities || []);
-  renderInvestments(portfolios || [], overview);
-  renderTrend(history || [], currency, overview);
-  setChange(history || [], currency);
+  nw.overview = overview;
+  nw.history = history || [];
+  nw.assets = assets || [];
+  nw.liabilities = liabilities || [];
+  nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id));
+  nw.portfolios = portfolios || [];
+  nw.currency = overview.currency;
+
+  paintNetWorth();
 }
 
-function renderFxState(overview) {
-  const card = ctx.$('#nw-total')?.closest('.metric');
-  let note = card?.querySelector('.fx-incomplete');
-  if (overview.isComplete) { note?.remove(); return; }
-  if (!note) {
-    note = document.createElement('div');
-    note.className = 'fx-incomplete';
-    card?.appendChild(note);
-  }
-  const missing = (overview.missingCurrencies || []).join(', ');
-  note.textContent = `${t('fxIncomplete')}${missing ? ` (${missing})` : ''}`;
+// Build the whole view, then populate the management lists and (re)wire every control on fresh elements.
+function paintNetWorth() {
+  const host = ctx.$('#view-networth');
+  if (!host) return;
+  host.innerHTML = `${buildHeroCard()}${buildAllocationCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+
+  const hero = host.querySelector('.nw-hero');
+  if (hero) wireHero(hero);
+  host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
+  host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
+
+  renderAccounts(nw.accounts);
+  renderAssets(nw.assets);
+  renderLiabilities(nw.liabilities);
+  renderInvestments(nw.portfolios, nw.overview);
+
+  // Loans are owned by features/loans.js. Re-bind its "add" button (our rebuilt markup replaced the
+  // static one) and re-render #nw-loans so the list survives internal refreshes, not just view opens.
+  bindLoans(ctx);
+  renderLoans(ctx);
 }
 
-function setChange(history, currency) {
-  const el = ctx.$('#nw-change');
-  if (!el) return;
+/* ---- Card 1: "Wie entwickelt sich dein Vermögen?" -------------------------------------------- */
+
+function trendStats(history) {
   const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
-  if (usable.length < 2) { el.textContent = '—'; el.className = ''; return; }
-  const delta = Number(usable.at(-1).netWorth) - Number(usable[0].netWorth);
-  el.textContent = `${!ctx.isPrivate() && delta > 0 ? '+' : ''}${ctx.money(delta, currency)}`;
-  el.className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
+  if (usable.length < 2) return { hasData: false, pct: 0, delta: 0 };
+  const first = Number(usable[0].netWorth);
+  const last = Number(usable.at(-1).netWorth);
+  const delta = last - first;
+  const pct = first !== 0 ? (delta / Math.abs(first)) * 100 : (delta !== 0 ? 100 : 0);
+  return { hasData: true, pct, delta };
 }
 
-function renderTrend(history, currency, overview) {
-  const el = ctx.$('#nw-trend');
-  if (!el) return;
-  const composition = [
-    [t('accounts'), overview.accounts?.amount || 0],
-    [t('manualAssets'), overview.manualAssets?.amount || 0],
-    [t('investments'), overview.investments?.amount || 0],
-    [t('debt'), -(overview.totalLiabilities || 0)]
-  ];
-  const legend = `<div class="wealth-composition" aria-label="${ctx.esc(t('composition'))}">${composition.map(([label, amount]) =>
-    `<div class="wealth-composition-item"><span>${ctx.esc(label)}</span><strong class="${amount < 0 ? 'negative' : ''}">${ctx.money(amount, currency)}</strong></div>`).join('')}</div>`;
+function heroTrendInner() {
+  const stats = trendStats(nw.history);
+  if (!stats.hasData) return `<span class="fw-trend">—</span>`;
+  const win = WINDOWS.find(w => w.m === nw.windowMonths) || WINDOWS[1];
+  const sign = (!ctx.isPrivate() && stats.delta > 0) ? '+' : '';
+  const cls = stats.delta > 0 ? 'positive' : stats.delta < 0 ? 'negative' : '';
+  return `${trendBadge(stats.pct, true)}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(isDe() ? win.lde : win.len)}</span></div>`;
+}
+
+// Reused/ported from the previous SVG trend rendering: a net-worth polyline with a soft area fill.
+function trendChartSvg(history, currency) {
   const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
-  if (!usable.length) { el.innerHTML = `${legend}${emptyRow()}`; return; }
+  if (!usable.length) return `<div class="row-sub nw-chart-empty">${ctx.esc(t('noTrend'))}</div>`;
   const values = usable.map(point => Number(point.netWorth));
   const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1;
-  const width = 900; const height = 210;
-  const points = values.map((value, index) => `${(index / (values.length - 1 || 1)) * width},${height - ((value - min) / span) * (height - 20) - 10}`).join(' ');
-  el.innerHTML = `${legend}<div class="wealth-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(values.at(-1), currency)}</div></div>`;
+  const width = 900; const height = 200;
+  const points = values.map((value, index) => `${(index / (values.length - 1 || 1)) * width},${height - ((value - min) / span) * (height - 24) - 12}`).join(' ');
+  const area = `0,${height} ${points} ${width},${height}`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><polygon class="nw-chart-fill" points="${area}"/><polyline class="nw-chart-line" points="${points}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(values.at(-1), currency)}</div>`;
 }
+
+function buildHeroCard() {
+  const overview = nw.overview;
+  const currency = nw.currency;
+  const seg = `<div class="fw-cycle nw-windows" role="tablist" aria-label="${ctx.esc(t('window'))}">${WINDOWS.map(w =>
+    `<button type="button" role="tab" data-window="${w.m}"${w.m === nw.windowMonths ? ' class="active" aria-selected="true"' : ' aria-selected="false"'}>${ctx.esc(isDe() ? w.sde : w.sen)}</button>`).join('')}</div>`;
+  const grossAssets = num(overview.totalAssets) + num(overview.accounts?.amount);
+  const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
+  const missing = (overview.missingCurrencies || []).join(', ');
+  const fx = overview.isComplete ? '' : `<p class="nw-fx">${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}</p>`;
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}<div class="nw-chart">${trendChartSvg(nw.history, currency)}</div>${metrics}${fx}`;
+  return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
+}
+
+function wireHero(hero) {
+  hero.querySelectorAll('[data-window]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const months = Number(button.dataset.window);
+      if (months === nw.windowMonths) return;
+      nw.windowMonths = months;
+      hero.querySelectorAll('[data-window]').forEach(other => {
+        const on = other === button;
+        other.classList.toggle('active', on);
+        other.setAttribute('aria-selected', String(on));
+      });
+      nw.history = await loadHistory(months);
+      const trendEl = hero.querySelector('.nw-hero-trend');
+      if (trendEl) trendEl.innerHTML = heroTrendInner();
+      const chartEl = hero.querySelector('.nw-chart');
+      if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history, nw.currency);
+    });
+  });
+}
+
+/* ---- Card 2: "Verteilung deines Vermögens" --------------------------------------------------- */
+
+function legendRow(label, amount, color, currency, negative = false) {
+  return `<div class="nw-legend-item"><span class="nw-dot" style="background:${color}"></span><span class="nw-legend-label">${ctx.esc(label)}</span><span class="nw-legend-amt${negative ? ' negative' : ''}">${ctx.money(amount, currency)}</span></div>`;
+}
+
+function buildAllocationCard() {
+  const overview = nw.overview;
+  const currency = nw.currency;
+  const accounts = num(overview.accounts?.amount);
+  const investments = num(overview.investments?.amount);
+  const manualTotal = num(overview.manualAssets?.amount);
+  // Split the (already FX-converted) manual-asset total into real estate vs. other assets using the
+  // native-currency proportion from the assets list, so both show as separate allocation segments.
+  const included = (nw.assets || []).filter(item => item.includeInNetWorth !== false);
+  const manualRaw = included.reduce((sum, item) => sum + num(item.currentValue), 0);
+  const realEstateRaw = included.filter(item => item.kind === 'real_estate').reduce((sum, item) => sum + num(item.currentValue), 0);
+  const realEstateRatio = manualRaw > 0 ? realEstateRaw / manualRaw : 0;
+  const realEstate = manualTotal * realEstateRatio;
+  const otherAssets = manualTotal - realEstate;
+  const liabilities = num(overview.totalLiabilities);
+
+  const segments = [
+    { label: t('accounts'), amount: accounts, color: 'var(--cat-2)' },
+    { label: t('investments'), amount: investments, color: 'var(--cat-1)' },
+    { label: t('realEstate'), amount: realEstate, color: 'var(--cat-3)' },
+    { label: t('otherValues'), amount: otherAssets, color: 'var(--cat-4)' }
+  ].filter(segment => segment.amount > 0.005);
+  const assetSum = segments.reduce((sum, segment) => sum + segment.amount, 0);
+
+  if (assetSum <= 0 && liabilities <= 0) {
+    return sectionCard(t('allocationTitle'), emptyRow(), { className: 'nw-allocation' });
+  }
+
+  const assetBar = assetSum > 0
+    ? `<div class="nw-alloc-block"><p class="nw-alloc-cap"><span>${ctx.esc(t('wealthCap'))}</span><strong>${ctx.money(assetSum, currency)}</strong></p><div class="fw-alloc" role="img" aria-label="${ctx.esc(t('wealthCap'))}">${segments.map(segment =>
+      `<span style="width:${(segment.amount / assetSum * 100).toFixed(2)}%;background:${segment.color}"></span>`).join('')}</div></div>`
+    : '';
+  const debtBar = liabilities > 0
+    ? `<div class="nw-alloc-block"><p class="nw-alloc-cap"><span>${ctx.esc(t('debt'))}</span><strong class="negative">${ctx.money(-liabilities, currency)}</strong></p><div class="fw-alloc nw-alloc-debt" role="img" aria-label="${ctx.esc(t('debt'))}"><span style="width:${Math.min(100, assetSum > 0 ? liabilities / assetSum * 100 : 100).toFixed(2)}%;background:var(--negative)"></span></div></div>`
+    : '';
+
+  const legendItems = segments.map(segment => legendRow(segment.label, segment.amount, segment.color, currency));
+  if (liabilities > 0) legendItems.push(legendRow(t('debt'), -liabilities, 'var(--negative)', currency, true));
+  const legend = `<div class="nw-legend">${legendItems.join('')}</div>`;
+
+  return sectionCard(t('allocationTitle'), `${assetBar}${debtBar}${legend}`, { className: 'nw-allocation' });
+}
+
+/* ---- Card 4: optional portfolio panel (ids preserved for parity/import enhancement modules) --- */
+
+function investmentsCardMarkup() {
+  // Kept `.panel-head` so feature-parity-ui.js / investment-import-ui.js / parity-final-ui.js can still
+  // inject their manage/import buttons, and #nw-investments / #nw-investments-list so their content and
+  // wealth-investment-consolidation.js keep their targets.
+  return `<article id="nw-investments" class="fw-card nw-invest" hidden><div class="panel-head fw-card-head"><h2 class="fw-card-title">${ctx.esc(t('investments'))}</h2></div><div id="nw-investments-list" class="rows"></div></article>`;
+}
+
+/* ---- Card 5: Details / Verwalten (management surfaces one level down) -------------------------- */
+
+function manageMarkup() {
+  const add = key => ({ label: ctx.get('common.add'), attr: `data-action="${key}"` });
+  const accountsCard = sectionCard(t('accounts'), `<div id="nw-accounts" class="rows"></div>`, { className: 'nw-sub' });
+  const assetsCard = sectionCard(t('manualAssets'), `<div id="assets-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-asset') });
+  const liabilitiesCard = sectionCard(t('debt'), `<div id="liabilities-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-liability') });
+  const loansCard = sectionCard(ctx.get('loans.title'), `<div id="nw-loans" class="rows"></div>`, { className: 'nw-sub', action: add('new-loan') });
+  return `<details class="nw-manage"><summary><span>${ctx.esc(t('manageTitle'))}</span><span class="nw-manage-hint">${ctx.esc(t('manageHint'))}</span></summary><div class="nw-manage-body">${accountsCard}${assetsCard}${liabilitiesCard}${loansCard}</div></details>`;
+}
+
+/* ---- Management list renderers (unchanged behaviour; targets live inside the Details section) --- */
 
 function renderAccounts(accounts) {
   const el = ctx.$('#nw-accounts'); if (!el) return; el.innerHTML = '';
@@ -223,6 +425,8 @@ function renderInvestments(portfolios, overview) {
     list.appendChild(row);
   }
 }
+
+/* ---- Add / edit / delete dialogs (unchanged) ------------------------------------------------- */
 
 function openAssetWizard() {
   const dlg = ctx.dialog(`<form method="dialog" class="dialog-card wealth-wizard"><div class="panel-head"><div><h2>${ctx.esc(t('addValue'))}</h2><div class="row-sub">${ctx.esc(t('chooseTypeHint'))}</div></div><button value="cancel" aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div><div class="wealth-type-grid" role="list" aria-label="${ctx.esc(t('chooseType'))}">${ASSET_KINDS.map(kind => `<button type="button" class="wealth-type" data-kind="${kind}" role="listitem"><strong>${ctx.esc(t(kind))}</strong></button>`).join('')}</div><div class="wealth-investment-hint">${ctx.esc(t('investmentHint'))}</div></form>`);

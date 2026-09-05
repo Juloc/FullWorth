@@ -4,6 +4,7 @@
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
 import { money, converted } from './money.js';
 import { isPrivate } from './privacy.js';
+import { identityIcon } from './ux-kit.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
 // endpoints that already exist. Per-widget title + width are user-configurable (§7); scope/period/
@@ -253,15 +254,23 @@ function renderWidget(type, ctx, body, data, cfg) {
     return;
   }
   if (type === 'upcoming') {
+    // Contracts due soon, with the shared brand/category identity (UX rework §4/Phase B).
     const items = d?.upcoming || [];
-    body.innerHTML = items.length ? items.slice(0, cfg?.limit || 6).map(x => `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(x.name)}</div><div class="row-sub">${ctx.date(x.nextDueDate)}</div></div><div class="amount negative">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx, 'dashboard.noUpcoming');
+    body.innerHTML = items.length ? items.slice(0, cfg?.limit || 6).map(x => `<div class="fw-row" style="cursor:default"><span class="tx-ident-slot">${identityIcon(x.name, { logoAssetPath: x.logoAssetPath })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.name)}</div><div class="fw-row-sub">${ctx.date(x.nextDueDate)}</div></div><div class="fw-row-amt amount negative">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx, 'dashboard.noUpcoming');
     return;
   }
   if (type === 'recent-tx') {
+    // Recent bookings share the transaction identity system (UX rework §4/Phase B): brand logo →
+    // category-tinted monogram → transfer glyph. Tapping opens the full booking list.
     body.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('widgets.recentHint'))}</div>`;
     ctx.api(`api/transactions?limit=${cfg?.limit || 6}`).then(tx => {
       const items = tx.items || [];
-      body.innerHTML = items.length ? items.map(x => `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(x.counterparty || '—')}</div><div class="row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(x.category || ctx.get('common.uncategorized'))}</div></div><div class="amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx);
+      body.innerHTML = items.length ? items.map(x => {
+        const name = x.merchantDisplayName || x.counterparty || '—';
+        const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
+        return `<div class="fw-row" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
+      }).join('') : emptyState(ctx);
+      body.querySelectorAll('[data-recent-tx]').forEach(r => r.addEventListener('click', () => window.fwNavScope && window.fwNavScope('transactions', '')));
     }).catch(() => { body.innerHTML = errorState(ctx); });
     return;
   }
