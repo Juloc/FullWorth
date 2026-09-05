@@ -109,7 +109,8 @@ public sealed class BankSyncService(
             throw new ArgumentException("InstitutionName is required and must not exceed 200 characters.");
 
         var country = NormalizeCountry(request.Country ?? _providerOptions.DefaultCountry);
-        var desiredPsuType = NormalizePsuType(request.PsuType ?? _providerOptions.DefaultPsuType);
+        // New connections default to private/personal accounts; business must be selected explicitly.
+        var desiredPsuType = NormalizePsuType(request.PsuType ?? "personal");
 
         var requestedProfileId = request.EnableBankingProfileId;
         var authorized = await backend.AuthorizeAsync(
