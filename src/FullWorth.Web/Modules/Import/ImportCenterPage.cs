@@ -74,8 +74,12 @@ public static class ImportCenterPageEndpoints
       <article id="investment-import" class="panel import-workflow" hidden>
         <div class="panel-head"><div><h2 id="inv-title">Depot importieren</h2><p class="row-sub" id="inv-hint"></p></div></div>
         <div class="import-form-grid">
-          <label class="field"><span id="inv-preset-label">Quelle</span><select id="inv-preset"><option value="parqet">Parqet</option><option value="finanzfluss">Finanzfluss Copilot</option><option value="generic">CSV / XLSX</option></select></label>
+          <label class="field"><span id="inv-preset-label">Quelle</span><select id="inv-preset"><option value="generic">CSV / XLSX</option><option value="traderepublic">Trade Republic</option><option value="parqet">Parqet</option><option value="finanzfluss">Finanzfluss Copilot</option></select></label>
           <label class="field"><span id="inv-portfolio-label">Zieldepot</span><select id="inv-portfolio"></select></label>
+          <div id="inv-new-portfolio-fields" class="import-form-grid span-2" hidden>
+            <label class="field"><span id="inv-new-portfolio-name-label">Depotname</span><input id="inv-new-portfolio-name" type="text" maxlength="120" value="Importiertes Depot"></label>
+            <label class="field"><span id="inv-new-portfolio-currency-label">Währung</span><input id="inv-new-portfolio-currency" type="text" maxlength="3" value="EUR"></label>
+          </div>
           <label class="field span-2"><span id="inv-file-label">Datei</span><input id="inv-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         </div>
         <div class="workflow-actions"><button id="inv-detect" class="primary-action" type="button">Datei analysieren</button></div>
