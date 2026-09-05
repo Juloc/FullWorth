@@ -324,15 +324,26 @@ async function openDetail(listItem) {
   const purchases = detail.purchases || [];
   const receiptPurchase = purchases.find(p => p.receiptImagePath || p.hasReceipt);
 
+  // Identity header (Finanzguru-style): brand logo / category icon / monogram + merchant name.
+  const name = listItem.merchantDisplayName || listItem.counterparty || t.counterparty || ctx.get('transactions.title');
+  const identity = identityIcon(name, { logoAssetPath: listItem.logoAssetPath, categoryIconKey: listItem.categoryIconKey, isTransfer: t.isTransfer });
+  // Transfer direction: money leaving THIS account → Von = this account, An = counterpart; else reversed.
+  const outgoing = Number(t.amount) < 0;
+  const vonAcct = outgoing ? (t.account || '') : (counterpart?.account || '');
+  const anAcct = outgoing ? (counterpart?.account || '') : (t.account || '');
+  const purposeOpts = ['', 'savings', 'vacation', 'reserve', 'other'].map(p => `<option value="${p}"${(t.transferPurpose || '') === p ? ' selected' : ''}>${p === '' ? ctx.esc(ctx.get('transactions.purposeNone')) : ctx.esc(ctx.get('transactions.purpose_' + p))}</option>`).join('');
+  // Inside the transfer block: a tappable Von→An counter-booking when linked, else a "choose" button.
+  const transferInner = counterpart
+    ? `${counterpart.id ? `<button type="button" class="tx-vonan" data-open-counterpart><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('Von', 'From'))}</span><span class="tx-vonan-acct">${ctx.esc(vonAcct)}</span></span><span class="tx-vonan-arrow" aria-hidden="true">→</span><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('An', 'To'))}</span><span class="tx-vonan-acct">${ctx.esc(anAcct)}</span></span><span class="tx-vonan-go" aria-hidden="true">›</span></button>` : ''}<button type="button" class="ghost danger tx-transfer-unpair" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>`
+    : `<button type="button" class="tx-choose-counter" data-transfer-link>${ctx.esc(deLabel('Gegenbuchung wählen', 'Choose counter-booking'))}</button>`;
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
-    <div class="panel-head"><h2>${ctx.esc(t.counterparty || ctx.get('transactions.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.cancel'))}">×</button></div>
+    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="tx-amount amount ${t.amount < 0 ? 'negative' : 'positive'}">${ctx.money(t.amount, t.currency)}</div>
-    <div class="row-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}${t.description ? ' · ' + ctx.esc(t.description) : ''}</div>
+    ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label class="check"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</label>
     <label class="check"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}>${ctx.esc(ctx.get('transactions.markTransfer'))}</label>
-    <label class="tx-purpose"${t.isTransfer ? '' : ' hidden'}>${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${['', 'savings', 'vacation', 'reserve', 'other'].map(p => `<option value="${p}"${(t.transferPurpose || '') === p ? ' selected' : ''}>${p === '' ? ctx.esc(ctx.get('transactions.purposeNone')) : ctx.esc(ctx.get('transactions.purpose_' + p))}</option>`).join('')}</select></label>
-    <div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.transferLink'))}</div><div class="row-sub">${counterpart ? ctx.esc(ctx.get('transactions.transferLinked').replace('{account}', counterpart.account)) : ctx.esc(ctx.get('transactions.transferHint'))}</div></div><div class="row-side">${counterpart ? `<button type="button" class="ghost danger" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>` : `<button type="button" class="ghost" data-transfer-link>${ctx.esc(ctx.get('transactions.transferLink'))}</button>`}</div></div>
+    <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
     ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
     ${receiptPurchase ? `<a class="row settings-link" href="/bff/backend/api/purchases/${receiptPurchase.id}/receipt?fullWorthSpaceId=${encodeURIComponent(spaceId())}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
@@ -364,9 +375,12 @@ async function openDetail(listItem) {
   if (t.categoryId) sel.value = t.categoryId;
   attachCategoryPicker(ctx, sel);
   const transferBox = dlg.querySelector('[name="transfer"]');
-  const purposeLabel = dlg.querySelector('.tx-purpose');
-  // The purpose select is only relevant while the transfer flag is on (§9.7).
-  transferBox.addEventListener('change', () => { purposeLabel.hidden = !transferBox.checked; });
+  const transferSection = dlg.querySelector('.tx-transfer');
+  // The transfer options (purpose select + "Gegenbuchung wählen" / the Von→An counter-booking) appear
+  // only while "Als Umbuchung markieren" is on (§9.7).
+  transferBox.addEventListener('change', () => { transferSection.hidden = !transferBox.checked; });
+  // Tapping the Von→An block opens the linked counter-booking's own detail.
+  dlg.querySelector('[data-open-counterpart]')?.addEventListener('click', () => { dlg.close(); openDetail(counterpart); });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('[data-save]').onclick = async () => {

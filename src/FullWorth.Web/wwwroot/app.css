@@ -435,21 +435,38 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 /* The global `label{display:grid}` (and other display rules) otherwise beat the UA [hidden] rule, so a
    `<label hidden>` (e.g. the transfer-purpose select on a non-transfer) leaked into view. Enforce it. */
 [hidden]{display:none!important}
-/* Clean, square close button for dialogs/drawers — the .panel-head button style made the × a lopsided
-   29×39 oval with a border. This is a proper 32px circular icon button. */
-.dialog-card [data-close]{width:32px;height:32px;padding:0;display:grid;place-items:center;border:0;background:transparent;border-radius:50%;color:var(--muted);font-size:23px;font-weight:400;line-height:1;cursor:pointer;flex:0 0 auto}
-.dialog-card [data-close]:hover{background:var(--surface-2);color:var(--text)}
-.tx-detail{width:min(500px,94vw)}
-/* Transaction detail drawer: calmer header + consistent section rhythm so it reads top-to-bottom instead
-   of as a wall of controls. */
-.tx-detail{gap:var(--s4)}
-.tx-detail .panel-head{margin-bottom:0;align-items:flex-start}
-.tx-detail .tx-amount{font-size:26px;font-weight:600;margin:0}
-.tx-detail>.row-sub{margin-top:calc(-1 * var(--s3))}
-.tx-detail .tx-refund{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-top:0}
+/* Close buttons. Generic text-× dialogs get a bigger/bolder borderless ×; the detail drawer uses a real
+   icon button (36px bordered circle, like the top-bar icons) with a bold ✕ glyph. */
+.dialog-card [data-close]:not(.icon-button){width:36px;height:36px;padding:0;display:grid;place-items:center;border:0;background:transparent;border-radius:50%;color:var(--text);font-size:26px;font-weight:600;line-height:1;cursor:pointer;flex:0 0 auto}
+.dialog-card [data-close]:not(.icon-button):hover{background:var(--surface-2)}
+.tx-close{flex:0 0 auto}
+.tx-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.tx-detail{width:min(500px,94vw);gap:var(--s4)}
+/* Transaction detail drawer — Finanzguru-style identity header + card sections that read top-to-bottom. */
+.tx-detail-head{align-items:center;gap:var(--s3)}
+.tx-detail-id{display:flex;align-items:center;gap:var(--s3);min-width:0}
+.tx-detail-id .fw-ident{width:44px;height:44px;font-size:17px}
+.tx-detail-idmain{min-width:0;display:flex;flex-direction:column}
+.tx-detail-idmain h2{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-detail-sub{color:var(--muted);font-size:12px;margin-top:2px}
+.tx-detail .tx-amount{font-size:28px;font-weight:600;margin:0}
+.tx-detail .tx-detail-desc{margin-top:calc(-1 * var(--s3))}
+.tx-detail .tx-refund,.tx-detail .tx-transfer{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
 .tx-detail .tx-note{margin-top:0}
-/* Injected advanced sections (category-review/tags, coach worth-rating) get the SAME calm grey-card look
-   as the built-in sections so they don't read as bolted-on. */
+/* Transfer block (revealed by the Umbuchung toggle): purpose + choose/Von→An counter-booking. */
+.tx-transfer{display:grid;gap:var(--s3)}
+.tx-transfer .tx-purpose{text-transform:none;letter-spacing:normal;color:var(--muted);font-size:12px;gap:5px;margin:0}
+.tx-choose-counter{width:100%;border:1px solid var(--cta);background:var(--cta);color:var(--cta-text);border-radius:var(--radius-pill);padding:10px 14px;font-weight:600;cursor:pointer}
+.tx-choose-counter:hover{opacity:.92}
+.tx-vonan{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:10px 12px;cursor:pointer}
+.tx-vonan:hover{background:var(--surface-2)}
+.tx-vonan-leg{display:flex;flex-direction:column;min-width:0;flex:1}
+.tx-vonan-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.tx-vonan-acct{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-vonan-arrow{color:var(--muted);flex:0 0 auto}
+.tx-vonan-go{color:var(--muted);flex:0 0 auto;font-size:18px;line-height:1}
+.tx-transfer-unpair{justify-self:start}
+/* Injected advanced sections (category-review/tags, coach worth-rating) share the calm grey-card look. */
 .tx-detail .coach-inline-review,.tx-detail .ci-detail-panel{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
 .tx-detail .coach-inline-review>*:first-child,.tx-detail .ci-detail-panel>*:first-child{margin-top:0}
 dialog.drawer{margin:0 0 0 auto;height:100%;max-height:100vh;border-radius:0;align-self:stretch}
