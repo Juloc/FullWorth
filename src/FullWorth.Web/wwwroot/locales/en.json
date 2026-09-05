@@ -604,6 +604,7 @@
     "health_expiring": "Expiring soon",
     "health_expired": "Expired",
     "health_error": "Sync error",
+    "health_partial_history": "History incomplete",
     "health_cooldown": "Waiting",
     "health_reauthorization_required": "Reconnect required",
     "expiresIn": "expires in {days} days",
