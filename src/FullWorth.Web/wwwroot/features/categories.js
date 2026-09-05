@@ -30,11 +30,26 @@ export async function renderCategories(context) {
   const roots = byParent.get('__root') || [];
   if (!roots.length) { tree.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; return; }
   const frag = document.createDocumentFragment();
-  for (const root of roots) renderNode(root, byParent, frag, 0, all);
+  frag.appendChild(summaryStrip(all, roots));
+  let catSeq = 0;
+  for (const root of roots) renderNode(root, byParent, frag, 0, all, (catSeq++ % 8) + 1);
   tree.appendChild(frag);
 }
 
-function renderNode(node, byParent, parent, depth, all) {
+// Small header/summary strip above the tree. Counts only; labels reuse existing i18n keys.
+function summaryStrip(all, roots) {
+  const archived = all.filter(c => c.isArchived).length;
+  const showArchived = ctx.$('#cat-archived').checked;
+  const item = (n, key) => `<div class="cat-sum-item"><strong>${n}</strong><span>${ctx.esc(ctx.get(key))}</span></div>`;
+  const el = document.createElement('div');
+  el.className = 'cat-summary';
+  el.innerHTML = item(all.length, 'categories.title')
+    + item(roots.length, 'categories.topLevel')
+    + (showArchived && archived ? item(archived, 'categories.archived') : '');
+  return el;
+}
+
+function renderNode(node, byParent, parent, depth, all, catIndex) {
   const children = byParent.get(node.id) || [];
   const row = document.createElement('div');
   row.className = 'cat-node' + (node.isArchived ? ' cat-archived' : '');
@@ -45,6 +60,7 @@ function renderNode(node, byParent, parent, depth, all) {
   row.innerHTML = `
     <div class="cat-row">
       <button class="cat-twist" ${children.length ? '' : 'disabled'} aria-label="${ctx.esc(ctx.get(isCollapsed ? 'categories.expand' : 'categories.collapse'))}">${children.length ? (isCollapsed ? '▸' : '▾') : '·'}</button>
+      <span class="cat-dot" data-cat="${catIndex}" aria-hidden="true"></span>
       <span class="cat-name">${node.icon ? ctx.esc(node.icon) + ' ' : ''}${ctx.esc(node.name)}${node.isArchived ? ` <span class="tx-marker">${ctx.esc(ctx.get('categories.archived'))}</span>` : ''}</span>
       <span class="cat-actions">
         <button class="icon-button" data-edit aria-label="${ctx.esc(ctx.get('categories.edit'))}" title="${ctx.esc(ctx.get('categories.edit'))}">✎</button>
@@ -62,7 +78,7 @@ function renderNode(node, byParent, parent, depth, all) {
   row.querySelector('[data-archive]')?.addEventListener('click', () => archive(node));
   row.querySelector('[data-restore]')?.addEventListener('click', () => restore(node));
   parent.appendChild(row);
-  if (!isCollapsed) for (const child of children) renderNode(child, byParent, parent, depth + 1, all);
+  if (!isCollapsed) for (const child of children) renderNode(child, byParent, parent, depth + 1, all, catIndex);
 }
 
 // Parent options exclude the node itself and its descendants (can't move under its own subtree).

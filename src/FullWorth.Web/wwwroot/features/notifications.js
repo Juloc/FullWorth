@@ -62,21 +62,29 @@ export async function renderNotifications(context) {
 
   body.innerHTML = `
     <p class="row-sub notif-intro">${ctx.esc(ctx.get('notifications.intro'))}</p>
-    <div class="row notif-push">
-      <div class="row-main"><div class="row-title">${ctx.esc(ctx.get('notifications.push'))}</div><div class="row-sub" data-push-status>${ctx.esc(ctx.get('notifications.pushOff'))}</div></div>
+    <div class="notif-push" data-push-state="off">
+      <div class="row-main">
+        <div class="row-title">${ctx.esc(ctx.get('notifications.push'))}</div>
+        <div class="row-sub notif-push-status"><span class="notif-dot" aria-hidden="true"></span><span data-push-status>${ctx.esc(ctx.get('notifications.pushOff'))}</span></div>
+      </div>
       <button type="button" class="ghost" data-push-toggle>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
     </div>
     <h3 class="notif-h">${ctx.esc(ctx.get('notifications.typesHeading'))}</h3>
-    ${TYPES.map(t => `<label class="row toggle-row"><div class="row-main"><div class="row-title">${ctx.esc(typeLabel(t))}</div></div><input type="checkbox" data-type="${t}" ${on(t) ? 'checked' : ''}></label>`).join('')}`;
+    <div class="rows notif-types">
+      ${TYPES.map(t => `<label class="row notif-type-row"><div class="row-main"><div class="row-title notif-type-title">${ctx.esc(typeLabel(t))}</div></div><span class="fw-toggle"><input type="checkbox" data-type="${t}" ${on(t) ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>`).join('')}
+    </div>
+    <p class="row-sub notif-foot">${ctx.esc(ctx.get('notifications.pushHint'))}</p>`;
 
+  const pushRow = body.querySelector('.notif-push');
   const statusEl = body.querySelector('[data-push-status]');
   const toggleBtn = body.querySelector('[data-push-toggle]');
+  const setStatus = (text, state) => { statusEl.textContent = text; if (state) pushRow.dataset.pushState = state; };
   const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if (!supported) {
-    statusEl.textContent = ctx.get('notifications.pushUnsupported');
+    setStatus(ctx.get('notifications.pushUnsupported'), 'blocked');
     toggleBtn.disabled = true;
   } else if (Notification.permission === 'granted') {
-    statusEl.textContent = ctx.get('notifications.pushOn');
+    setStatus(ctx.get('notifications.pushOn'), 'on');
     toggleBtn.textContent = ctx.get('notifications.pushDisable');
   }
 
@@ -85,18 +93,18 @@ export async function renderNotifications(context) {
     try {
       if (Notification.permission === 'granted') {
         await disablePush();
-        statusEl.textContent = ctx.get('notifications.pushOff');
+        setStatus(ctx.get('notifications.pushOff'), 'off');
         toggleBtn.textContent = ctx.get('notifications.pushEnable');
       } else {
         const res = await enablePush();
         if (res && res.ok) {
-          statusEl.textContent = ctx.get('notifications.pushOn');
+          setStatus(ctx.get('notifications.pushOn'), 'on');
           toggleBtn.textContent = ctx.get('notifications.pushDisable');
         } else {
           const key = res && res.reason === 'denied' ? 'pushDenied'
             : res && (res.reason === 'not-configured' || res.reason === 'no-key') ? 'pushNotConfigured'
             : 'pushUnsupported';
-          statusEl.textContent = ctx.get('notifications.' + key);
+          setStatus(ctx.get('notifications.' + key), 'blocked');
           ctx.toast(ctx.get('notifications.' + key));
         }
       }

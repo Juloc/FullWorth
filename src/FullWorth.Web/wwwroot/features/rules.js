@@ -30,7 +30,10 @@ export async function renderRules(context) {
   const list = ctx.$('#rules-list');
   list.innerHTML = '';
   if (!rows.length) {
-    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`;
+    list.innerHTML = `<div class="row state-empty rules-empty"><div class="rules-empty-inner">
+      <svg class="rules-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="7" cy="17" r="2"/></svg>
+      <div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>
+    </div></div>`;
     return;
   }
   const frag = document.createDocumentFragment();
@@ -40,10 +43,10 @@ export async function renderRules(context) {
     row.innerHTML = `
       <div class="row-main">
         <div class="row-title">${ctx.esc(r.name)} ${r.isEnabled ? '' : `<span class="tx-marker">${ctx.esc(ctx.get('rules.disabled'))}</span>`}</div>
-        <div class="row-sub">${ctx.esc(conditionSummary(r))}</div>
+        <div class="row-sub rule-summary">${conditionSummary(r)}</div>
       </div>
       <div class="row-side rule-actions">
-        <span class="rule-prio">${ctx.esc(ctx.get('rules.priority'))} ${r.priority}</span>
+        <span class="rule-prio" title="${ctx.esc(ctx.get('rules.priority'))}">${ctx.esc(ctx.get('rules.priority'))} ${ctx.esc(r.priority)}</span>
         <button class="icon-button" data-toggle aria-label="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}" title="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}">${r.isEnabled ? '⏸' : '▶'}</button>
         <button class="icon-button" data-edit aria-label="${ctx.esc(ctx.get('rules.edit'))}" title="${ctx.esc(ctx.get('rules.edit'))}">✎</button>
       </div>`;
@@ -54,21 +57,28 @@ export async function renderRules(context) {
   list.appendChild(frag);
 }
 
+// Builds the "when … → do …" summary for a rule row as safe HTML. Every dynamic value
+// (pattern, MCC, amounts) is escaped; the returned string is injected as innerHTML so the
+// condition/action parts can carry their own emphasis without a second escaping pass.
 function conditionSummary(r) {
+  const esc = ctx.esc;
   const parts = [];
-  if (r.pattern) parts.push(`${ctx.get('rules.field_' + fieldKey(r.matchField))} ${ctx.get('rules.mode_' + (r.matchMode || 'contains'))} „${r.pattern}"`);
-  if (r.direction && r.direction !== 'any') parts.push(ctx.get('rules.direction_' + r.direction));
+  if (r.pattern) parts.push(`${esc(ctx.get('rules.field_' + fieldKey(r.matchField)))} ${esc(ctx.get('rules.mode_' + (r.matchMode || 'contains')))} <span class="rule-term">„${esc(r.pattern)}"</span>`);
+  if (r.direction && r.direction !== 'any') parts.push(`<span class="rule-term">${esc(ctx.get('rules.direction_' + r.direction))}</span>`);
   if (r.minAmount != null || r.maxAmount != null) {
     const lo = r.minAmount != null ? r.minAmount : '';
     const hi = r.maxAmount != null ? r.maxAmount : '';
-    parts.push(`${lo}–${hi} €`);
+    parts.push(`<span class="rule-term">${esc(lo)}–${esc(hi)} €</span>`);
   }
-  if (r.merchantCategoryCode) parts.push(`MCC ${r.merchantCategoryCode}`);
+  if (r.merchantCategoryCode) parts.push(`<span class="rule-term">MCC ${esc(r.merchantCategoryCode)}</span>`);
   const action = [];
   if (r.markAsTransfer) action.push(ctx.get('rules.markTransfer'));
   if (r.stopProcessing) action.push(ctx.get('rules.stop'));
-  const head = parts.length ? parts.join(' · ') : ctx.get('rules.matchAll');
-  return action.length ? `${head} → ${action.join(', ')}` : head;
+  const head = parts.length ? parts.join('<span class="rule-sep" aria-hidden="true">·</span>') : esc(ctx.get('rules.matchAll'));
+  const when = `<span class="rule-when">${head}</span>`;
+  if (!action.length) return when;
+  const then = action.map(a => `<span class="rule-then-tag">${esc(a)}</span>`).join('');
+  return `${when}<span class="rule-arrow" aria-hidden="true">→</span><span class="rule-then">${then}</span>`;
 }
 
 // Toggle enable/disable by re-writing the rule with the flag flipped (no dedicated endpoint needed).

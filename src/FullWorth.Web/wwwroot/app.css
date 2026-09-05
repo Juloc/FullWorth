@@ -897,3 +897,142 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
   #view-transactions .tx-row>td.tx-cat,#view-transactions .tx-row>td.tx-acct,#view-transactions .tx-row>td.tx-go{display:none}
   #view-transactions .tx-row:not(.tx-is-transfer) td.amount.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
 }
+
+/* ============================================================================
+   Round 4b — remaining pages (tax / compensation / coach / categories / rules /
+   notifications). Namespaced per page; monochrome shell, colour only where it
+   carries meaning (green income/confirmed, red/amber status, --cat identity).
+   ============================================================================ */
+
+/* --- Steuern (tax.js): hero + softened category breakdown --- */
+.tax-hero{padding:var(--s5) var(--s6)}
+.tax-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s6);flex-wrap:wrap}
+.tax-hero-lead{min-width:0}
+.tax-hero .fw-summary-value{font-size:34px}
+.tax-hero-side{display:flex;gap:var(--s6);margin:0;flex-wrap:wrap}
+.tax-hero-side>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tax-hero-side dt{color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.tax-hero-side dd{margin:0;font-size:18px}
+.tax-hero .tax-pos{color:var(--positive)}
+.tax-hero .tax-warn{color:var(--warning)}
+.tax-alloc{display:flex;gap:3px;height:10px;margin-top:var(--s5)}
+.tax-alloc .tax-seg{height:100%;min-width:8px;border-radius:var(--radius-pill)}
+.tax-alloc .tax-seg[data-cat="1"]{background:var(--cat-1)}
+.tax-alloc .tax-seg[data-cat="2"]{background:var(--cat-2)}
+.tax-alloc .tax-seg[data-cat="3"]{background:var(--cat-3)}
+.tax-alloc .tax-seg[data-cat="4"]{background:var(--cat-4)}
+.tax-alloc .tax-seg[data-cat="5"]{background:var(--cat-5)}
+.tax-alloc .tax-seg[data-cat="6"]{background:var(--cat-6)}
+.tax-alloc .tax-seg[data-cat="7"]{background:var(--cat-7)}
+.tax-alloc .tax-seg[data-cat="8"]{background:var(--cat-8)}
+.tax-breakdown-list .tax-brow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);padding:10px 4px;border-bottom:1px solid var(--line)}
+.tax-breakdown-list .tax-brow:last-child{border-bottom:0}
+.tax-brow .cat-dot{width:4px;height:20px;border-radius:var(--radius-pill);margin-right:0}
+.tax-brow-main{min-width:0}
+.tax-brow-main .row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tax-brow .amount{white-space:nowrap;text-align:right}
+.tax-view .tax-cases{margin-top:var(--s4)}
+@media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
+
+/* --- Gehalt & Benefits (compensation.js): hero + Cash-Brutto donut + rows --- */
+.comp-result-primary .comp-hero-sub{display:block}
+.comp-result-primary .comp-hero-badge{margin-top:var(--s1)}
+.comp-dedu-head{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;padding:2px 0 var(--s4);border-bottom:1px solid var(--line);margin-bottom:var(--s3)}
+.comp-donut{width:116px;height:116px;flex:0 0 auto}
+.comp-donut-legend{display:grid;gap:var(--s2);flex:1 1 168px;min-width:160px}
+.comp-leg{display:flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted)}
+.comp-leg-label{flex:1 1 auto}
+.comp-leg-amt{color:var(--text)}
+.comp-sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.comp-sw-net{background:var(--positive)}
+.comp-sw-tax{background:var(--k2)}
+.comp-sw-social{background:var(--k4)}
+.comp-arc-track{fill:none;stroke:var(--surface-3);stroke-width:12}
+.comp-arc{fill:none;stroke-width:12;stroke-linecap:round}
+.comp-arc-net{stroke:url(#comp-net-grad)}
+.comp-arc-tax{stroke:var(--k2)}
+.comp-arc-social{stroke:var(--k4)}
+.comp-grad-a{stop-color:var(--positive)}
+.comp-grad-b{stop-color:var(--positive-soft)}
+.comp-donut-pct{font-size:17px;font-weight:600;fill:var(--text);text-anchor:middle;dominant-baseline:middle;font-variant-numeric:tabular-nums}
+.comp-donut-cap{font-size:7.5px;fill:var(--muted);text-anchor:middle;dominant-baseline:middle;text-transform:uppercase;letter-spacing:.12em}
+.comp-dedu-rows{display:grid}
+.comp-line{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.comp-line:last-child{border-bottom:0}
+.comp-line-key{display:flex;align-items:center;gap:var(--s2);min-width:0;color:var(--muted)}
+.comp-line-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.comp-line .amount{white-space:nowrap;text-align:right;flex:0 0 auto}
+.comp-line-sub{color:var(--muted);font-size:11px;margin-left:6px;opacity:.85;white-space:nowrap}
+.comp-line-total{margin-top:2px;padding-top:11px;border-top:1px solid var(--line);border-bottom:0}
+.comp-line-total .comp-line-key{color:var(--text);font-weight:600}
+.comp-amount-muted{color:var(--muted);font-weight:500}
+.comp-dot{width:8px;height:8px;border-radius:var(--radius-pill);flex:0 0 auto;background:var(--k3)}
+.comp-dot-tax{background:var(--k2)}
+.comp-dot-social{background:var(--k4)}
+.comp-dot-cat1{background:var(--cat-1)}
+.comp-dot-cat2{background:var(--cat-2)}
+.comp-dot-cat3{background:var(--cat-3)}
+.comp-dot-cat4{background:var(--cat-4)}
+.comp-dot-cat5{background:var(--cat-5)}
+.comp-dot-cat6{background:var(--cat-6)}
+.comp-dot-cat7{background:var(--cat-7)}
+.comp-dot-cat8{background:var(--cat-8)}
+@media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}
+
+/* --- Coach (coach-shell.js): status-tinted metrics + calm insight/review cards --- */
+#coach-summary .coach-metric strong{letter-spacing:-.01em}
+#coach-summary .coach-metric--good strong{color:var(--positive)}
+#coach-summary .coach-metric--bad strong{color:var(--negative)}
+.coach-insight-label{margin:var(--s4) 0 var(--s2);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.coach-insight-list{display:grid;gap:var(--s2)}
+.coach-insight{display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.coach-insight-dot{flex:0 0 auto;width:8px;height:8px;margin-top:6px;border-radius:var(--radius-pill);background:var(--k3)}
+.coach-insight-body{display:grid;gap:2px;min-width:0}
+.coach-insight-body strong{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+.coach-insight-body span{font-size:12px;color:var(--muted)}
+.coach-insight--good .coach-insight-dot{background:var(--positive)}
+.coach-insight--good .coach-insight-body span{color:var(--positive)}
+.coach-insight--warn .coach-insight-dot{background:var(--warning)}
+.coach-insight--warn .coach-insight-body span{color:var(--warning)}
+#coach-review-list{gap:var(--s3)}
+#coach-review-list .coach-review-row{padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+#coach-review-list .coach-review-row:last-child{border-bottom:1px solid var(--line)}
+
+/* --- Kategorien (categories.js): summary strip + per-category accent + calm rows --- */
+.cat-summary{display:flex;flex-wrap:wrap;gap:var(--s6);padding-bottom:var(--s4);margin-bottom:var(--s2);border-bottom:1px solid var(--line)}
+.cat-sum-item{display:flex;flex-direction:column;gap:3px}
+.cat-sum-item strong{font-size:19px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.cat-sum-item span{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+.cat-tree .cat-row .cat-dot{width:3px;height:17px;margin:0;border-radius:var(--radius-pill);flex:0 0 auto}
+.cat-tree .cat-row{transition:background .12s}
+.cat-tree .cat-row:hover,.cat-tree .cat-row:focus-within{background:var(--surface-2)}
+.cat-tree .cat-twist{border-radius:var(--radius-pill)}
+
+/* --- Regeln (rules.js): "when → do" summary, priority badge, empty state --- */
+#rules-list .rule-row{padding-top:13px;padding-bottom:13px}
+#rules-list .rule-row .row-title{font-weight:600}
+#rules-list .rule-summary{margin-top:5px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+#rules-list .rule-summary .rule-when{color:var(--muted)}
+#rules-list .rule-summary .rule-term{color:var(--text);font-weight:500}
+#rules-list .rule-summary .rule-sep{margin:0 6px;color:var(--muted)}
+#rules-list .rule-summary .rule-arrow{margin:0 7px;color:var(--muted);font-weight:600}
+#rules-list .rule-summary .rule-then-tag{display:inline-block;margin:1px 0;padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);font-size:11.5px;font-weight:500;line-height:1.6;vertical-align:baseline}
+#rules-list .rule-summary .rule-then-tag + .rule-then-tag{margin-left:4px}
+#rules-list .rule-row .rule-prio{padding:2px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:500;line-height:1.6}
+#rules-list .rules-empty{display:block;padding:var(--s6) var(--s4);text-align:center}
+#rules-list .rules-empty .rules-empty-inner{display:flex;flex-direction:column;align-items:center;gap:var(--s2)}
+#rules-list .rules-empty .rules-empty-icon{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+#rules-list .rules-empty .row-sub{margin-top:0}
+
+/* --- Benachrichtigungen (notifications.js): master card + status dot + switch rows --- */
+.notif-intro{margin-bottom:var(--s4)}
+.notif-push{padding:var(--s4) var(--s5);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);margin-bottom:var(--s4)}
+.notif-push .row-title{margin-bottom:2px}
+.notif-push-status{display:flex;align-items:center;gap:var(--s2)}
+.notif-dot{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-pill);background:var(--k4)}
+.notif-push[data-push-state="on"] .notif-dot{background:var(--positive)}
+.notif-push[data-push-state="blocked"] .notif-dot{background:var(--warning)}
+.notif-types{margin-top:var(--s1)}
+.notif-type-row{cursor:pointer;gap:var(--s4)}
+.notif-type-title{white-space:normal;overflow:visible;font-weight:400;line-height:1.35}
+.notif-foot{border-top:1px solid var(--line);margin-top:var(--s4);padding-top:var(--s3)}
