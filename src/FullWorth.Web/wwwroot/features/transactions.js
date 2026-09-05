@@ -221,7 +221,9 @@ async function openDetail(listItem) {
       target.hidden = false;
       button.hidden = true;
     } catch (err) {
-      ctx.toast(err.message || ctx.get('transactions.bankDetailsUnavailable'));
+      ctx.toast(err.message === 'reauthorization_required'
+        ? ctx.get('transactions.bankReauthRequired')
+        : (err.message || ctx.get('transactions.bankDetailsUnavailable')));
       button.disabled = false;
     }
   });
