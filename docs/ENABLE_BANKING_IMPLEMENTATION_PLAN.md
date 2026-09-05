@@ -1,6 +1,6 @@
 # Enable Banking AIS implementation plan
 
-Status: approved implementation plan, 2026-09-05  
+Status: code-complete static implementation audit, 2026-09-05 — real .NET CI/build and live Enable Banking validation still pending  
 Scope: FullWorth self-hosted banking integration using Enable Banking AIS. Payment initiation (PIS) is explicitly out of scope.
 
 ## Official resources
@@ -48,6 +48,30 @@ AIS is considered complete only when FullWorth correctly supports:
 20. automated regression coverage for all above behavior.
 
 PIS endpoints are not implemented.
+
+## Current verification status
+
+The repository implementation now covers the AIS definition of done above, including per-user BYO profiles,
+provider/session lifecycle, account hash aliases, stable transaction reconciliation, initial/full-history
+retrieval, incremental sync, PSU online context, consent close, retained-data disconnect, transaction
+details, error/health handling and legacy-connection compatibility.
+
+Static verification completed on 2026-09-05:
+
+- Enable Banking API contracts re-audited against the current official API reference/FAQ/Terms.
+- Web locale JSON parses successfully.
+- `app.js` passes a JavaScript syntax parse after removing ESM import declarations.
+- newly added banking test JSON literals were statically scanned and corrected.
+- migration/model-snapshot deltas were wired into the repository's existing snapshot composition.
+- no automatic GitHub Actions trigger was added; CI remains manual-only by repository policy.
+
+This document does **not** mark the integration production-ready yet. Remaining external verification:
+
+1. run `dotnet restore`, `dotnet build` and `dotnet test` (or manually dispatch the existing CI workflow)
+   against the current main revision;
+2. complete the Enable Banking sandbox checklist;
+3. complete at least one restricted Production test using the tester's own linked personal account;
+4. review resulting real-ASPSP behavior/logs for bank-specific deviations before declaring production readiness.
 
 ---
 
