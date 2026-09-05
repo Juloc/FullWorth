@@ -16,6 +16,33 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 
+// Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
+// feature-parity modules each keep their own fetch wrapper and independently pull the same
+// access/overview/category/list data on a shared render, which produced a burst of dozens of
+// duplicate requests (and made opening a detail sluggish). Dedupe within a short TTL, handing each
+// caller its own response clone; any mutation (non-GET) clears the cache so reads stay fresh.
+(function dedupeBackendGets(){
+  const real=window.fetch.bind(window);
+  const cache=new Map();const TTL=2000;
+  const urlOf=i=>{try{return typeof i==='string'?i:(i&&i.url)||'';}catch{return'';}};
+  const methodOf=(i,init)=>String((init&&init.method)||(i&&typeof i!=='string'&&i.method)||'GET').toUpperCase();
+  window.fetch=function(input,init){
+    const url=urlOf(input),method=methodOf(input,init);
+    const isBackend=url.includes('/bff/backend/');
+    if(method!=='GET'||!isBackend||(init&&init.body)){
+      const p=real(input,init);
+      if(method!=='GET'&&isBackend)cache.clear();
+      return p;
+    }
+    const hit=cache.get(url);
+    if(hit&&Date.now()-hit.t<TTL)return hit.p.then(r=>r.clone());
+    if(cache.size>200)cache.clear();
+    const p=real(input,init);
+    cache.set(url,{t:Date.now(),p});
+    p.then(r=>{if(!r.ok){const c=cache.get(url);if(c&&c.p===p)cache.delete(url);}},()=>{const c=cache.get(url);if(c&&c.p===p)cache.delete(url);});
+    return p.then(r=>r.clone());
+  };
+})();
 const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null};
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
