@@ -442,10 +442,24 @@ function openMoveToGroupDialog(account,groups){
 }
 // Disconnect a bank: permanently deletes the connection and all of its synced accounts + data.
 async function disconnectConnection(connection,button){
-  if(!await ctx.confirm(get('accounts.disconnectConfirm').replace('{name}',()=>connection.institutionName),{destructive:true,confirmLabel:get('accounts.disconnect')}))return;
-  if(button)button.disabled=true;
-  try{await bankApi(`api/banking/connections/${connection.id}`,{method:'DELETE'});toast(get('accounts.disconnected'));await loadAccountsView()}
-  catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.disconnect'))}: ${esc(connection.institutionName)}</h2><button type="button" data-close>×</button></div>
+    <p class="row-sub">${esc(get('accounts.disconnectProviderHint'))}</p>
+    <label class="check"><input type="radio" name="policy" value="keep" checked> <span>${esc(get('accounts.disconnectKeep'))}</span></label>
+    <label class="check"><input type="radio" name="policy" value="delete"> <span>${esc(get('accounts.disconnectDelete'))}</span></label>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="danger">${esc(get('accounts.disconnect'))}</button></div></form>`);
+  const form=dlg.querySelector('form');
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const deleteLocalData=new FormData(form).get('policy')==='delete';
+    if(deleteLocalData&&!await ctx.confirm(get('accounts.disconnectConfirm').replace('{name}',()=>connection.institutionName),{destructive:true,confirmLabel:get('accounts.disconnect')}))return;
+    if(button)button.disabled=true;form.querySelector('[type="submit"]').disabled=true;
+    try{
+      await bankApi(`api/banking/connections/${connection.id}?deleteLocalData=${deleteLocalData}`,{method:'DELETE'});
+      dlg.close();toast(get(deleteLocalData?'accounts.disconnected':'accounts.disconnectedKept'));await loadAccountsView();
+    }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false;form.querySelector('[type="submit"]').disabled=false}
+  };
+  dlg.showModal();
 }
 // §17: re-authorizes an expired/errored connection IN PLACE (reconnectConnectionId) instead of
 // creating a duplicate connection for the same institution.
