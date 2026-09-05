@@ -69,6 +69,131 @@ public sealed class BankConnectTenancyTests
     }
 
     [Fact]
+    public async Task ReconnectKeepsOldConsentValidityUntilNewSessionIsConfirmed()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var existingId = Guid.NewGuid();
+        var oldValidUntil = DateTimeOffset.UtcNow.AddDays(7);
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection() with
+        {
+            Id = existingId,
+            ValidUntil = oldValidUntil
+        });
+
+        DateTimeOffset? requestedValidUntil = null;
+        var provider = new RecordingHttpMessageHandler(async (request, _, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/aspsps")
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"aspsps\":[{\"name\":\"Test Bank\",\"country\":\"DE\",\"maximum_consent_validity\":7776000}]}");
+            if (request.RequestUri.AbsolutePath == "/auth")
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(
+                    await request.Content!.ReadAsStringAsync(ct));
+                requestedValidUntil = doc.RootElement
+                    .GetProperty("access")
+                    .GetProperty("valid_until")
+                    .GetDateTimeOffset();
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"url\":\"https://bank.example/a\",\"authorization_id\":\"auth-new\"}");
+            }
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.StartConnectionAsync(
+            new ConnectBankRequest(
+                "Test Bank", "DE", 180, null, null, null,
+                ReconnectConnectionId: existingId),
+            Owner,
+            CancellationToken.None);
+
+        Assert.NotNull(requestedValidUntil);
+        Assert.True(requestedValidUntil > oldValidUntil);
+        var staged = backend.Connections.Single();
+        Assert.Equal(oldValidUntil, staged.ValidUntil);
+        Assert.Equal("AUTHORIZED", staged.Status);
+        Assert.Equal("session-1", staged.ProviderSessionId);
+        Assert.NotNull(staged.AuthorizationState);
+    }
+
+    [Fact]
+    public async Task MalformedNewSessionIsClosedAndNewConnectionBecomesInvalid()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection() with
+        {
+            AuthorizationState = "state-malformed",
+            AuthorizationStateExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            ProviderSessionId = null,
+            Status = "PENDING_AUTHORIZATION"
+        });
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath == "/sessions")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                    "{\"session_id\":\"bad-session\",\"access\":{}}"));
+            if (request.Method == HttpMethod.Delete && request.RequestUri!.AbsolutePath == "/sessions/bad-session")
+                return Task.FromResult(TestBankingEnvironment.JsonResponse("{\"message\":\"OK\"}"));
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CompleteConnectionAsync(
+                "state-malformed",
+                "code",
+                CancellationToken.None));
+
+        var final = backend.Connections.Single();
+        Assert.Equal("INVALID", final.Status);
+        Assert.Equal("AUTHORIZATION_FAILED", final.LastError);
+        Assert.Null(final.AuthorizationState);
+        Assert.Null(final.AuthorizationStateExpiresAt);
+        Assert.Contains(provider.Requests, request =>
+            request.Method == HttpMethod.Delete &&
+            request.Uri.AbsolutePath == "/sessions/bad-session");
+    }
+
+    [Fact]
+    public async Task FailedReauthorizationExchangeLeavesOldSessionUntouched()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var oldValidUntil = DateTimeOffset.UtcNow.AddDays(5);
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection() with
+        {
+            AuthorizationState = "state-reconnect-fail",
+            AuthorizationStateExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            ValidUntil = oldValidUntil
+        });
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/sessions", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"ASPSP_ERROR\"}",
+                HttpStatusCode.BadRequest));
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await Assert.ThrowsAsync<FullWorth.Banking.EnableBanking.EnableBankingApiException>(() =>
+            service.CompleteConnectionAsync(
+                "state-reconnect-fail",
+                "code",
+                CancellationToken.None));
+
+        var final = backend.Connections.Single();
+        Assert.Equal("AUTHORIZED", final.Status);
+        Assert.Equal("session-1", final.ProviderSessionId);
+        Assert.Equal(oldValidUntil, final.ValidUntil);
+        Assert.Null(final.AuthorizationState);
+        Assert.Null(final.AuthorizationStateExpiresAt);
+    }
+
+    [Fact]
     public async Task ConsentValidityIsCappedToAspspMaximum()
     {
         using var environment = new TestBankingEnvironment();
