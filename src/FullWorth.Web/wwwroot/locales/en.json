@@ -603,6 +603,8 @@
     "health_authorized": "Active",
     "health_expiring": "Expiring soon",
     "health_expired": "Expired",
+    "health_revoked": "Revoked",
+    "health_closed": "Disconnected",
     "health_error": "Sync error",
     "health_partial_history": "History incomplete",
     "health_cooldown": "Waiting",
