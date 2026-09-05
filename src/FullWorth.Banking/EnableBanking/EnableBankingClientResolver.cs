@@ -48,10 +48,10 @@ public sealed class EnableBankingClientResolver(
             return (Create(profile.ApplicationId, profile.PrivateKeyPem), profile);
         }
 
-        if (LegacyConfigured)
-            return (CreateLegacy(), null);
-
-        throw new EnableBankingProfileNotConfiguredException("No Enable Banking profile is configured for this user.");
+        // Legacy/global credentials are intentionally NOT a fallback for new user-scoped
+        // connections. They exist only so pre-BYO connections with no profile id keep syncing.
+        throw new EnableBankingProfileNotConfiguredException(
+            "No user-owned Enable Banking profile is configured. Legacy global credentials are only available to existing legacy connections.");
     }
 
     public async Task<EnableBankingClient> ResolveForConnectionAsync(BankConnectionDto connection, CancellationToken ct)
