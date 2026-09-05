@@ -113,6 +113,31 @@ public sealed class ManualSyncTests
     }
 
     [Fact]
+    public async Task GenericUnauthorizedProviderResponseIsErrorNotReauthorizationOrRateLimit()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var connection = TestBankingEnvironment.AuthorizedConnection();
+        backend.Connections.Add(connection);
+        var provider = new RecordingHttpMessageHandler((_, _, _) => Task.FromResult(
+            TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"NOT_ALLOWED\"}",
+                HttpStatusCode.Unauthorized)));
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.RequestManualSyncAsync(
+            connection.Id,
+            Caller,
+            force: true,
+            CancellationToken.None);
+
+        Assert.Equal(ManualSyncStatus.Error, result.Status);
+        var final = backend.Connections.Single();
+        Assert.Equal("AUTHORIZED", final.Status);
+        Assert.Equal("ENABLE_BANKING_AUTH_FAILED", final.LastError);
+    }
+
+    [Fact]
     public async Task RevokedProviderConsentReturnsReauthorizationAndClearsCooldown()
     {
         using var environment = new TestBankingEnvironment();
