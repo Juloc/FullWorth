@@ -268,10 +268,11 @@ public sealed class EnableBankingSessionShapeTests
 
         var result = await service.SyncAllAsync(CancellationToken.None);
 
-        Assert.Equal(1, result.Synced);
+        Assert.Equal(0, result.Synced);
+        Assert.Equal(1, result.Failed);
         var final = backend.Upserts.Last();
         Assert.Equal("ACCOUNT_RESOLUTION_FAILED", final.LastError);
-        Assert.Equal(2, final.ConsecutiveFailures);
+        Assert.Equal(3, final.ConsecutiveFailures);
         Assert.Empty(backend.Ingests);
     }
 
