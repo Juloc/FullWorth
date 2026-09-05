@@ -400,14 +400,16 @@ html[data-theme="light"] .an-cat:hover{
 
 /* Dialogs and sheets remain clearly above the new card elevation. */
 dialog::backdrop{
-  background:rgba(11,15,20,.28);
-  backdrop-filter:blur(2px);
+  background:rgba(11,15,20,.42);
 }
 
-html[data-theme="light"] dialog .dialog-card,
-html[data-theme="light"] dialog.drawer{
+html[data-theme="light"] dialog .dialog-card{
   border-color:#d8dde3;
   box-shadow:0 24px 70px rgba(16,24,40,.18),0 8px 24px rgba(16,24,40,.10);
+}
+/* A drawer card is a full-height panel, not a floating box: one soft left-edge shadow, no all-round glow. */
+html[data-theme="light"] dialog.drawer .dialog-card{
+  box-shadow:-18px 0 44px rgba(16,24,40,.12);
 }
 
 #toast{
