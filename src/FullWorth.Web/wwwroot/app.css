@@ -47,10 +47,10 @@ a:hover{color:var(--muted)}
 .skip-link:focus{top:8px}
 
 .shell{min-height:100vh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
-body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) 1fr}
+body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
 
 /* Sidebar (§3.1) */
-.sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
+.sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
 .brand-logo{height:24px;width:auto;flex:0 0 auto;display:block}
@@ -497,10 +497,10 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 /* Injected advanced sections (category-review/tags, coach worth-rating) share the calm grey-card look. */
 .tx-detail .coach-inline-review,.tx-detail .ci-detail-panel{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
 .tx-detail .coach-inline-review>*:first-child,.tx-detail .ci-detail-panel>*:first-child{margin-top:0}
-dialog.drawer{margin:0 0 0 auto;width:min(460px,100vw);max-width:100vw;height:100%;max-height:100vh;border-radius:0;align-self:stretch}
+dialog.drawer{margin:0 0 0 auto;width:min(460px,100vw);max-width:100vw;height:100%;max-height:100vh;max-height:100dvh;border-radius:0;align-self:stretch}
 /* Inside a drawer the card IS the panel: fill it and drop the floating rounded-box radius/shadow so it
    reads as one clean right-hand sheet — not a shadowed card sitting on a blurred backdrop (§9.3). */
-dialog.drawer .dialog-card{width:100%;height:100%;max-height:100vh;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:none;overflow:auto;align-content:start}
+dialog.drawer .dialog-card{width:100%;height:100%;max-height:100vh;max-height:100dvh;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:none;overflow:auto;align-content:start}
 /* The detail close control is a real 36px icon button; reset the inherited button padding and make the
    SVG block-level so the ✕ sits dead-centre. */
 .tx-close{padding:0}
@@ -609,18 +609,22 @@ body.locked{overflow:hidden}
   #toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
 }
 @media(max-width:767px){
-  .topbar{padding-top:var(--s4)}
-  .topbar-title h1{font-size:24px}
+  .topbar{padding-top:var(--s4);align-items:flex-start}
+  .topbar-title h1{font-size:24px;overflow-wrap:anywhere}
+  .topbar-actions{flex-wrap:wrap;justify-content:flex-end;gap:6px}
+  .topbar-actions .primary-action{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .content-grid{grid-template-columns:1fr}
   .dashboard-grid{grid-template-columns:1fr}
   .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
   .span-2{grid-column:auto}
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}
-  select,input,textarea{min-height:40px}
-  button:not(#bottom-nav button){min-height:44px;font-size:16px}
+  select,input,textarea{min-height:44px;font-size:16px}
+  .icon-button,.primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button{min-height:44px}
   label.check input{min-height:0}
   .toolbar input[type=search]{min-width:100%}
+  .panel-head{align-items:flex-start;flex-wrap:wrap}
+  .panel-head-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end}
   .purchase-item{grid-template-columns:1fr 72px 92px}
   .purchase-item .item-category{grid-column:1/-1}
 }
@@ -1202,3 +1206,11 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 
 /* A non-interactive dashboard widget row (e.g. upcoming contracts) keeps the default cursor. */
 .fw-row-plain{cursor:default}
+
+
+@media(max-width:560px){
+  .rule-dialog .rule-grid,.tx-filter-range{grid-template-columns:1fr}
+  .detected-row,.notif-push,.tx-refund{grid-template-columns:1fr}
+  .detected-row .row-side,.tx-refund .row-side{justify-content:flex-start;flex-wrap:wrap}
+  .budget-detail-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
