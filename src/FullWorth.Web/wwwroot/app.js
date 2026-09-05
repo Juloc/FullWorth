@@ -982,6 +982,94 @@ function openProviderStatusConnection(country,onConnected){
   dlg.showModal();
 }
 
+function isIngEnableBank(bank){
+  const key=bankNameKey(bank?.name);
+  return key==='ing'||key==='ing diba'||key.startsWith('ing ')||key.includes('ing diba');
+}
+
+function ingFinTsBankOption(){
+  return{name:'ING',country:'DE',group:'FinTS',fullworthProvider:'fints',psu_types:['personal'],auth_methods:[]};
+}
+
+async function openIngConnectionOptions(reconnectConnection=null){
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('bankingSetup.ingFinTsTitle'))}</h2><button type="button" data-close>&times;</button></div>
+    <label>${esc(get('bankingSetup.ingFinTsMode'))}<select name="mode"><option value="fints" selected>${esc(get('bankingSetup.ingFinTsFull'))}</option><option value="enable">${esc(get('bankingSetup.ingEnableBankingOnly'))}</option></select></label>
+    <p class="row-sub" data-mode-hint></p>
+    <div data-fints-fields><label>${esc(get('bankingSetup.ingUserId'))}<input name="userId" autocomplete="username" required></label><label>${esc(get('bankingSetup.ingPin'))}<input name="pin" type="password" autocomplete="current-password" required></label></div>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
+  const form=dlg.querySelector('form'),mode=form.elements.mode,fields=dlg.querySelector('[data-fints-fields]'),hint=dlg.querySelector('[data-mode-hint]');
+  const draw=()=>{
+    const useFinTs=mode.value==='fints';
+    fields.hidden=!useFinTs;
+    form.elements.userId.required=useFinTs;
+    form.elements.pin.required=useFinTs;
+    hint.textContent=get(useFinTs?'bankingSetup.ingFinTsFullHint':'bankingSetup.ingEnableBankingHint');
+  };
+  draw();mode.onchange=draw;
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    try{
+      if(mode.value==='enable'){
+        const status=await bankApi('api/banking/status');
+        if(!bankingReady(status)){
+          dlg.close();
+          openEnableBankingWizard(status,{onClose:()=>openBankDialog(reconnectConnection,'DE')});
+          return;
+        }
+        const data=await bankApi('api/banking/institutions?country=DE');
+        const bank=mergeBankOptions(data.aspsps||[]).find(isIngEnableBank);
+        if(!bank)throw new Error(get('common.error'));
+        dlg.close();
+        openBankConnectionOptions(bank,reconnectConnection?.id||null,status.profile?.id||null);
+        return;
+      }
+      const fd=new FormData(form);
+      const result=await bankApi('api/banking/fints/ing/connect',jsonBody({
+        userId:String(fd.get('userId')||'').trim(),
+        pin:String(fd.get('pin')||''),
+        reconnectConnectionId:reconnectConnection?.id||null
+      }));
+      dlg.close();
+      if(result.status==='TAN_REQUIRED')openIngTanDialog(result);
+      else{toast(get('bankingSetup.ingConnected'));await loadAccountsView()}
+    }catch(err){toast(err.message||get('common.error'));submit.disabled=false}
+  };
+  dlg.showModal();
+}
+
+function openIngTanDialog(initial){
+  let current=initial;
+  const dlg=dialog('<div class="dialog-card"><div data-tan-content></div></div>');
+  const root=dlg.querySelector('[data-tan-content]');
+  const complete=async result=>{
+    current=result;
+    if(result.status!=='TAN_REQUIRED'){
+      dlg.close();toast(get('bankingSetup.ingConnected'));await loadAccountsView();return;
+    }
+    render();
+  };
+  const render=()=>{
+    const challenge=current.challenge||{};
+    const decoupled=challenge.isDecoupled===true;
+    root.innerHTML=`<div class="panel-head"><h2>${esc(get('bankingSetup.ingTan'))}</h2><button type="button" data-close>&times;</button></div>
+      ${challenge.challenge?`<p>${esc(challenge.challenge)}</p>`:''}<p class="row-sub">${esc(get(decoupled?'bankingSetup.ingDecoupledHint':'bankingSetup.ingTanHint'))}</p>
+      ${decoupled?'':`<label>${esc(get('bankingSetup.ingTan'))}<input name="tan" inputmode="numeric" autocomplete="one-time-code" required></label>`}
+      <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="button" data-submit>${esc(get(decoupled?'bankingSetup.ingPoll':'bankingSetup.connect'))}</button></div>`;
+    root.querySelector('[data-close]').onclick=()=>dlg.close();root.querySelector('[data-cancel]').onclick=()=>dlg.close();
+    root.querySelector('[data-submit]').onclick=async e=>{
+      const button=e.currentTarget;button.disabled=true;
+      try{
+        const path=decoupled?`api/banking/fints/connections/${encodeURIComponent(current.connectionId)}/poll`:`api/banking/fints/connections/${encodeURIComponent(current.connectionId)}/tan`;
+        const body=decoupled?jsonBody({}):jsonBody({tan:String(root.querySelector('[name="tan"]')?.value||'').trim()});
+        await complete(await bankApi(path,body));
+      }catch(err){toast(err.message||get('common.error'));button.disabled=false}
+    };
+  };
+  render();dlg.showModal();
+}
+
 function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=null){
   const psuTypes=Array.isArray(bank.psu_types)&&bank.psu_types.filter(Boolean).length
     ? bank.psu_types.filter(Boolean)
@@ -1083,9 +1171,8 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
 }
 
 async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
-  let status;
-  try{status=await bankApi('api/banking/status')}catch(err){toast(err.message||get('common.error'));return}
-  if(!bankingReady(status)){openEnableBankingWizard(status);return}
+  let status=null;
+  try{status=await bankApi('api/banking/status')}catch{}
 
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(reconnectConnection?get('accounts.reconnect'):get('accounts.addBank'))}</h2><button value="cancel">×</button></div>
     <label>${esc(get('bankingSetup.country'))}<input id="bank-country" value="${esc(String(initialCountry||'DE').toUpperCase())}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" autocapitalize="characters"></label>
@@ -1114,7 +1201,7 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       const sub=document.createElement('span');sub.className='row-sub';sub.textContent=meta.join(' · ');text.appendChild(sub);
       if(health&&health!=='ok')b.classList.add('bank-option-status-'+health);
       b.appendChild(text);
-      b.onclick=()=>{dlg.close();openBankConnectionOptions(bank,reconnectConnection?.id||null,status.profile?.id||null)};
+      b.onclick=()=>{dlg.close();if(bank.fullworthProvider==='fints')openIngConnectionOptions(reconnectConnection);else openBankConnectionOptions(bank,reconnectConnection?.id||null,status?.profile?.id||null)};
       box.appendChild(b);
     }
     if(!banks.length)box.innerHTML=`<div class="row-sub">${esc(get('common.empty'))}</div>`;
@@ -1124,6 +1211,10 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
     const country=countryInput.value.trim().toUpperCase();
     if(!/^[A-Z]{2}$/.test(country))return;
     countryInput.value=country;box.innerHTML=`<div class="row-sub">${esc(get('bankingSetup.loading'))}</div>`;
+    const ing=country==='DE'?[ingFinTsBankOption()]:[];
+    if(!bankingReady(status)){
+      providerStatusState=null;statusConnect.hidden=true;statusState.textContent=get('bankingSetup.notConfigured');banks=ing;draw(search.value);return;
+    }
     try{
       const [data,providerStatus]=await Promise.all([
         bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`),
@@ -1136,11 +1227,10 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       statusState.textContent=providerStatus?.available
         ?get('bankingSetup.statusActive')
         :(canConnectStatus?get('bankingSetup.statusConnectShort'):get('bankingSetup.statusUnavailable'));
-      banks=applyProviderStatuses(
-        mergeBankOptions(data.aspsps||[]).sort((a,b)=>(a.name||'').localeCompare(b.name||'')),
-        providerStatusState);
+      const enableBanks=mergeBankOptions(data.aspsps||[]).filter(bank=>country!=='DE'||!isIngEnableBank(bank)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      banks=[...ing,...applyProviderStatuses(enableBanks,providerStatusState)];
       draw(search.value);
-    }catch(err){banks=[];box.innerHTML=`<div class="row-sub">${esc(err.message||get('common.error'))}</div>`}
+    }catch(err){banks=ing;if(ing.length)draw(search.value);else box.innerHTML=`<div class="row-sub">${esc(err.message||get('common.error'))}</div>`}
   };
   statusConnect.onclick=()=>openProviderStatusConnection(
     countryInput.value.trim().toUpperCase()||'DE',
