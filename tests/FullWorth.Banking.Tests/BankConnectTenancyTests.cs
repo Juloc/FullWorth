@@ -29,6 +29,41 @@ public sealed class BankConnectTenancyTests
     private static ConnectBankRequest Request() => new("Test Bank", "DE", 180, null, null, null);
 
     [Fact]
+    public async Task Connect_defaults_to_personal_accounts_when_psu_type_is_omitted()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        string? requestedPsuType = null;
+        var provider = new RecordingHttpMessageHandler(async (request, _, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/aspsps")
+            {
+                var query = TestBankingEnvironment.Query(request.RequestUri);
+                Assert.Equal("personal", query["psu_type"]);
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"aspsps\":[{\"name\":\"Test Bank\",\"country\":\"DE\",\"psu_types\":[\"business\",\"personal\"]}]}");
+            }
+
+            if (request.RequestUri.AbsolutePath == "/auth")
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(
+                    await request.Content!.ReadAsStringAsync(ct));
+                requestedPsuType = json.RootElement.GetProperty("psu_type").GetString();
+                return TestBankingEnvironment.JsonResponse(
+                    "{\"url\":\"https://bank.example/a\",\"authorization_id\":\"auth-1\"}");
+            }
+
+            throw new Xunit.Sdk.XunitException($"Unexpected provider request: {request.RequestUri}");
+        });
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.StartConnectionAsync(Request(), Owner, CancellationToken.None);
+
+        Assert.Equal("personal", requestedPsuType);
+        Assert.Equal("personal", Assert.Single(backend.Upserts).PsuType);
+    }
+
+    [Fact]
     public async Task Connect_persists_a_random_expiring_state_bound_to_user_and_space()
     {
         using var environment = new TestBankingEnvironment();
