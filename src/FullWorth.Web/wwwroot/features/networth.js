@@ -1,5 +1,6 @@
 import { openRealEstateDetail } from './wealth-real-estate.js';
 import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
+import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
@@ -198,9 +199,9 @@ function smoothLinePath(pts) {
   return d;
 }
 
-function trendChartSvg(history, currency) {
+function trendChartGeometry(history) {
   const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
-  if (!usable.length) return `<div class="row-sub nw-chart-empty">${ctx.esc(t('noTrend'))}</div>`;
+  if (!usable.length) return null;
   const values = usable.map(point => Number(point.netWorth));
   const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1;
   const width = 900; const height = 200; const pad = 14;
@@ -208,10 +209,36 @@ function trendChartSvg(history, currency) {
     x: (index / (values.length - 1 || 1)) * width,
     y: height - ((value - min) / span) * (height - pad * 2) - pad
   }));
+  return { usable, values, width, height, pts };
+}
+
+function trendChartSvg(history) {
+  const geometry = trendChartGeometry(history);
+  if (!geometry) return `<div class="row-sub nw-chart-empty">${ctx.esc(t('noTrend'))}</div>`;
+  const { width, height, pts } = geometry;
   const line = smoothLinePath(pts);
   const area = `${line} L${width.toFixed(2)},${height} L0,${height} Z`;
   const grid = [0.25, 0.5, 0.75].map(f => `<line class="nw-chart-grid" x1="0" y1="${(height * f).toFixed(1)}" x2="${width}" y2="${(height * f).toFixed(1)}" vector-effect="non-scaling-stroke"/>`).join('');
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><div class="row-sub">${ctx.money(values.at(-1), currency)}</div>`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function bindNetWorthScrubber(hero) {
+  const svg = hero.querySelector('.nw-chart svg');
+  const valueEl = hero.querySelector('.nw-hero-value .fw-summary-value');
+  const geometry = trendChartGeometry(nw.history);
+  if (!svg || !valueEl || !geometry) return;
+  const points = geometry.usable.map((point, index) => ({
+    x: geometry.pts[index].x,
+    label: ctx.date(point.date),
+    markers: [{ y: geometry.pts[index].y }],
+    data: point
+  }));
+  bindChartScrubber(svg, points, {
+    initialIndex: points.length - 1,
+    onChange: point => { valueEl.innerHTML = ctx.money(point.data.netWorth, nw.currency); },
+    onReset: () => { valueEl.innerHTML = ctx.money(nw.overview.netWorth, nw.currency); },
+    formatAria: point => `${point.label}: ${ctx.money(point.data.netWorth, nw.currency)}`
+  });
 }
 
 function buildHeroCard() {
@@ -223,11 +250,12 @@ function buildHeroCard() {
   const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
   const missing = (overview.missingCurrencies || []).join(', ');
   const fx = overview.isComplete ? '' : `<p class="nw-fx">${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}</p>`;
-  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}<div class="nw-chart">${trendChartSvg(nw.history, currency)}</div>${metrics}${fx}`;
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${metrics}${fx}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
 }
 
 function wireHero(hero) {
+  bindNetWorthScrubber(hero);
   hero.querySelectorAll('[data-window]').forEach(button => {
     button.addEventListener('click', async () => {
       const months = Number(button.dataset.window);
@@ -242,7 +270,8 @@ function wireHero(hero) {
       const trendEl = hero.querySelector('.nw-hero-trend');
       if (trendEl) trendEl.innerHTML = heroTrendInner();
       const chartEl = hero.querySelector('.nw-chart');
-      if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history, nw.currency);
+      if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
+      bindNetWorthScrubber(hero);
     });
   });
 }
