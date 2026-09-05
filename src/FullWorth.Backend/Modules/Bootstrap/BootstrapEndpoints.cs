@@ -62,13 +62,11 @@ public static class BootstrapEndpoints
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.DisplayName))
                 return Results.BadRequest(new { error = "email and displayName are required." });
 
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
             try
             {
                 var user = await users.CreateAsync(new CreateUserRequest(request.Email, request.DisplayName), ct);
                 var spaceName = string.IsNullOrWhiteSpace(request.SpaceName) ? "Household" : request.SpaceName.Trim();
                 var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct);
-                await transaction.CommitAsync(ct);
                 return Results.Ok(new BootstrapAdminResponse(user.Id, space.Id));
             }
             catch (InvalidOperationException)
