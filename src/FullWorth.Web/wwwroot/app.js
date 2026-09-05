@@ -42,6 +42,7 @@ async function boot(){
   await showView(startView,{replace:true});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
   initLock(ctx,{onUnlock:loadCurrent});
+  await maybeOpenRegistrationOnboarding();
 }
 function handleConnectRedirect(){
   const params=new URLSearchParams(location.search);
@@ -547,7 +548,7 @@ async function openCategoryDialog(){
 }
 
 
-async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings()])}
+async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),renderAiAccessSettings()])}
 // Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
 // fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
 // which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
@@ -592,12 +593,13 @@ async function renderEnableBankingSettings(){
   }
 }
 
-function openEnableBankingWizard(initialStatus){
+function openEnableBankingWizard(initialStatus,options={}){
   let status=initialStatus;
   const dlg=dialog('<div class="dialog-card banking-setup"><div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div><div data-step></div></div>');
   const step=dlg.querySelector('[data-step]');
   dlg.querySelector('h2').textContent=get('bankingSetup.title');
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.addEventListener('close',()=>options.onClose?.(),{once:true});
 
   const showIntro=()=>{
     step.innerHTML=`<p>${esc(get('bankingSetup.privateIntro'))}</p>
