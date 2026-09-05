@@ -815,6 +815,7 @@
     "removeConfirm": "Remove the Enable Banking access from FullWorth? Existing bank connections must be disconnected first.",
     "recheck": "Recheck",
     "accountType": "Account type",
+    "country": "Country (2-letter code)",
     "psu_personal": "Personal",
     "psu_business": "Business",
     "authMethod": "Authentication method",
