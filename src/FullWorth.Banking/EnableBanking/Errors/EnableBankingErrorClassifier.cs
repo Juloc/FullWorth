@@ -50,11 +50,18 @@ public static class EnableBankingErrorClassifier
                 null);
 
         if (ContainsAny(providerCode, "CONSENT", "SESSION", "ACCESS_EXPIRED", "TOKEN_EXPIRED", "EXPIRED"))
+        {
+            var code = providerCode.Contains("REVOK", StringComparison.Ordinal)
+                ? "SESSION_REVOKED"
+                : providerCode.Contains("CLOSED", StringComparison.Ordinal)
+                    ? "SESSION_CLOSED"
+                    : "SESSION_EXPIRED";
             return new(
                 BankErrorCategory.ConsentExpired,
-                providerCode.Contains("REVOK", StringComparison.Ordinal) ? "SESSION_REVOKED" : "SESSION_EXPIRED",
-                "The bank consent has expired or been revoked; reconnect the account.",
+                code,
+                "The bank consent has expired, been revoked or been closed; reconnect the account.",
                 null);
+        }
 
         if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ||
             ContainsAny(providerCode, "UNAUTHORIZED", "FORBIDDEN"))
