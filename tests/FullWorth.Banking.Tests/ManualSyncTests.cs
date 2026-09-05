@@ -113,6 +113,32 @@ public sealed class ManualSyncTests
     }
 
     [Fact]
+    public async Task RevokedProviderConsentReturnsReauthorizationAndClearsCooldown()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var connection = TestBankingEnvironment.AuthorizedConnection();
+        backend.Connections.Add(connection);
+        var provider = new RecordingHttpMessageHandler((_, _, _) => Task.FromResult(
+            TestBankingEnvironment.JsonResponse(
+                "{\"error_code\":\"SESSION_REVOKED\"}",
+                HttpStatusCode.Unauthorized)));
+        var service = environment.CreateSyncService(provider, backend);
+
+        var result = await service.RequestManualSyncAsync(
+            connection.Id,
+            Caller,
+            force: true,
+            CancellationToken.None);
+
+        Assert.Equal(ManualSyncStatus.ReauthorizationRequired, result.Status);
+        var final = backend.Connections.Single();
+        Assert.Equal("REVOKED", final.Status);
+        Assert.Equal("SESSION_REVOKED", final.LastError);
+        Assert.Null(final.NextSyncAllowedAt);
+    }
+
+    [Fact]
     public async Task Returns_not_found_for_an_unknown_connection()
     {
         using var environment = new TestBankingEnvironment();
