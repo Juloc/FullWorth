@@ -22,6 +22,20 @@ public sealed class BankingCallbackProxyTests : IClassFixture<FullWorthWebFactor
     }
 
     [Fact]
+    public async Task SetupCallbackHtmlFromBankingServicePassesThroughToTheBrowser()
+    {
+        var responding = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddHttpClient("banking").ConfigurePrimaryHttpMessageHandler(() => new SetupCallbackStub())));
+
+        using var client = responding.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var response = await client.GetAsync("/connect/enable-banking/setup-callback?state=x&oobCode=y");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("Enable Banking setup completed", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CallbackRedirectFromBankingServicePassesThroughToTheBrowser()
     {
         var redirecting = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -32,6 +46,19 @@ public sealed class BankingCallbackProxyTests : IClassFixture<FullWorthWebFactor
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/?bankConnected=Testbank", response.Headers.GetValues("Location").Single());
+    }
+
+    private sealed class SetupCallbackStub : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("/connect/enable-banking/setup-callback", request.RequestUri!.AbsolutePath);
+            Assert.Equal("?state=x&oobCode=y", request.RequestUri.Query);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<h1>Enable Banking setup completed</h1>", System.Text.Encoding.UTF8, "text/html")
+            });
+        }
     }
 
     private sealed class RedirectingStub : HttpMessageHandler
