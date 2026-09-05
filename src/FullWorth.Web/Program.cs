@@ -314,6 +314,16 @@ app.MapMethods("/bff/banking/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"
     .RequireAuthorization()
     .RequireRateLimiting(RateLimitPolicies.BrowserApi);
 
+app.MapGet("/connect/enable-banking/setup-callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
+{
+    var client = factory.CreateClient("banking");
+    if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/setup-callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/setup-callback"], out var target))
+        return Results.BadRequest();
+    await ProxyAsync(context, client, target!, ct);
+    return Results.Empty;
+})
+    .AllowAnonymous();
+
 app.MapGet("/connect/enable-banking/callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
 {
     var client = factory.CreateClient("banking");
