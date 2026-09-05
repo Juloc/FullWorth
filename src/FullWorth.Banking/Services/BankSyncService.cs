@@ -1212,6 +1212,16 @@ public sealed class BankSyncService(
         bool autosubmit)
     {
         if (supplied is null || supplied.Count == 0) return;
+        if (supplied.Count > 20)
+            throw new ArgumentException("Too many Enable Banking credential fields.");
+        foreach (var (name, value) in supplied)
+        {
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 128)
+                throw new ArgumentException("Invalid Enable Banking credential field name.");
+            if (value is null || value.Length > 4096)
+                throw new ArgumentException($"Credential '{name}' exceeds the allowed size.");
+        }
+
         if (string.IsNullOrWhiteSpace(requestedMethod))
             throw new InvalidOperationException("Enable Banking credentials require an auth method.");
         if (!institution.TryGetProperty("auth_methods", out var methods) || methods.ValueKind != JsonValueKind.Array)
