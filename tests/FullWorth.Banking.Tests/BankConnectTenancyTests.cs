@@ -134,6 +134,36 @@ public sealed class BankConnectTenancyTests
         Assert.Equal("https://finance.test/connect/enable-banking/callback", sentRedirect);
     }
 
+    [Theory]
+    [InlineData("consumer")]
+    [InlineData("company")]
+    [InlineData("PERSON")]
+    public async Task InvalidPsuTypeIsRejectedBeforeAuthorizationOrProviderCall(string psuType)
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        var provider = new RecordingHttpMessageHandler((request, _, _) =>
+            throw new Xunit.Sdk.XunitException($"Provider must not be called: {request.RequestUri}"));
+        var service = environment.CreateSyncService(provider, backend);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.StartConnectionAsync(
+                new ConnectBankRequest(
+                    "Test Bank",
+                    "DE",
+                    90,
+                    null,
+                    null,
+                    null,
+                    PsuType: psuType),
+                Owner,
+                CancellationToken.None));
+
+        Assert.Equal(0, backend.AuthorizeCalls);
+        Assert.Empty(provider.Requests);
+        Assert.Empty(backend.Upserts);
+    }
+
     [Fact]
     public async Task Connect_is_forbidden_for_a_member_who_is_not_an_owner()
     {
