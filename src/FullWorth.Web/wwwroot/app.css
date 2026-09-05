@@ -243,6 +243,45 @@ label.check.inline{font-size:12px;color:var(--muted)}
 .tx-ignored{opacity:.6}
 .tx-marker{display:inline-block;font-size:12px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
 .tx-marker.pending{background:var(--surface-2);color:var(--text)}
+/* Merchant/category identity + booking-date grouping (UX rework §4) */
+.tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
+.tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0}
+.tx-cp-main strong{font-weight:600}
+.tx-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.tx-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
+html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
+.tx-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
+.tx-logo{width:100%;height:100%;object-fit:cover}
+.tx-ident.tx-logo-failed{background:var(--surface-2)}
+.tx-date-head td{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+.tx-date-head td>span{opacity:.85}
+/* Scope banner: account/group name + back path (UX rework §3) */
+.tx-scopebar{display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)}
+.tx-scope-back{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer;font-size:17px;line-height:1;padding:0}
+.tx-scope-back:hover{background:var(--surface-2)}
+.tx-scope-label{font-weight:600;font-size:15px}
+/* Account/group drill-down affordance (UX rework §3) */
+.row.is-drillable{cursor:pointer}
+.row.is-drillable:hover{background:var(--surface-2)}
+.group-head .row-main{display:flex;align-items:center;gap:6px;min-width:0}
+.group-chevron{width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;flex:0 0 auto;border-radius:6px}
+.group-chevron:hover{background:var(--surface-2)}
+.group-toggle{border:0;background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:default;padding:4px 2px;display:inline-flex;align-items:center;gap:8px;min-width:0}
+.group-toggle.is-drillable{cursor:pointer}
+.group-toggle.is-drillable:hover{text-decoration:underline}
+/* Mobile: the desktop transaction table becomes identity cards, never a compressed table (UX rework §4) */
+@media(max-width:767px){
+  #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
+  #view-transactions table{min-width:0;width:100%}
+  #view-transactions thead{display:none}
+  #view-transactions .tx-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  #view-transactions .tx-row>td{display:none;border:0;padding:0}
+  #view-transactions .tx-row>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
+  #view-transactions .tx-row>td.amount{display:block;flex:0 0 auto;font-size:15px}
+  #view-transactions .tx-cp-main{display:flex;min-width:0}
+  #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px}
+}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
 .tx-detail{width:min(500px,94vw)}
 .tx-detail .tx-amount{font-size:21px;font-weight:600;margin:2px 0 6px}

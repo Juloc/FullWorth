@@ -17,8 +17,10 @@ import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 
 const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null};
-// Mobile bottom nav shows exactly these four + "More" (UI_UX_SPEC §3.2); everything else lives in More.
-const MOBILE_PRIMARY=['dashboard','transactions','budgets','networth'];
+// Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
+// Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
+// permanent slot); everything else lives in More.
+const MOBILE_PRIMARY=['dashboard','contracts','analytics','networth'];
 const ALL_VIEWS=['dashboard','transactions','accounts','budgets','contracts','networth','analytics','purchases','categories','rules','notifications','merchants','audit','settings'];
 const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
@@ -89,7 +91,7 @@ function bind(){
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
   // `.sidebar button[data-view]` covers both #nav and the sidebar-foot (Settings) entry, so Settings
   // is reachable on desktop; #bottom-nav is the mobile bar.
-  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view,{query:''})));
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
@@ -129,9 +131,15 @@ function syncNavToggle(){const b=$('#nav-collapse');if(!b)return;const collapsed
 async function showView(view,opts={}){
   state.view=view;
   // Keep the URL in sync so a reload/deep-link lands on this screen and Back/Forward work.
-  const path=pathForView(view);
+  const base=pathForView(view);
+  // Scope query (e.g. /transactions?accountId=… or ?groupId=…): an explicit opts.query wins; otherwise
+  // keep the current query when re-entering the same path (boot/deep-link), else clear it on a fresh nav.
+  const query=opts.query!==undefined?String(opts.query):(location.pathname===base?location.search.replace(/^\?/,''):'');
+  const path=query?`${base}?${query}`:base;
   if(!opts.fromHistory){
-    if(opts.replace||location.pathname===path)history.replaceState({view},'',path);
+    // Replace when re-landing on the exact same URL (or asked to); push a real entry otherwise so
+    // drilling into a different account/group is a Back step.
+    if(opts.replace||location.pathname+location.search===path)history.replaceState({view},'',path);
     else history.pushState({view},'',path);
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
@@ -231,7 +239,12 @@ async function runSearch(query,results,dlg){
 
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
-const ctx={$,$$,api,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`};
+const ctx={$,$$,api,get,esc,date,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`,
+  // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
+  navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
+// Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
+// import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
+window.fwNavScope=(view,query)=>showView(view,{query:query||''});
 async function loadDashboard(){await renderDashboard(ctx)}
 
 async function loadBudgets(){
@@ -327,6 +340,12 @@ function accountRow(x,groups){
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
   row.querySelector('[data-edit-balance]')?.addEventListener('click',()=>openBalanceDialog(x));
   row.querySelector('[data-delete]')?.addEventListener('click',()=>deleteAccount(x));
+  // Drill-down (UX rework §3): the account row itself opens that account's bookings; management
+  // controls (edit/move/delete/balance) keep their own click and are excluded here.
+  row.dataset.accountId=x.id;row.classList.add('is-drillable');row.setAttribute('role','button');row.tabIndex=0;
+  const drill=e=>{if(e.target.closest('button,a,input,select'))return;showView('transactions',{query:'accountId='+encodeURIComponent(x.id)})};
+  row.addEventListener('click',drill);
+  row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();drill(e)}});
   return row;
 }
 async function loadAccountsView(){
@@ -346,9 +365,13 @@ async function loadAccountsView(){
   // Group header (g=null → the "Ungrouped" bucket). Collapse state persists in localStorage.
   const renderBucket=(g,accts)=>{
     const gid=g?g.id:'';const isCollapsed=collapsed.has(gid);
-    const head=document.createElement('div');head.className='row group-head';
-    head.innerHTML=`<div class="row-main"><button type="button" class="group-toggle" data-toggle>${isCollapsed?'▸':'▾'} ${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${money(total(accts),baseCur)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
-    head.querySelector('[data-toggle]').addEventListener('click',()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));loadAccountsView();});
+    const head=document.createElement('div');head.className='row group-head';head.dataset.groupId=gid;
+    // The chevron only expands/collapses; the name is a separate drill-down that opens all bookings of
+    // the group's accounts (UX rework §3). The name keeps class `group-toggle` for accounts-ux decoration.
+    const toggle=()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));loadAccountsView();};
+    head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${money(total(accts),baseCur)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
+    head.querySelector('[data-toggle]').addEventListener('click',toggle);
+    head.querySelector('[data-group-open]').addEventListener('click',()=>{if(g)showView('transactions',{query:'groupId='+encodeURIComponent(g.id)});else toggle();});
     head.querySelector('[data-rename]')?.addEventListener('click',()=>openGroupDialog(g));
     head.querySelector('[data-delgroup]')?.addEventListener('click',()=>deleteGroup(g));
     list.appendChild(head);

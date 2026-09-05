@@ -67,6 +67,12 @@ async function openBookingDialog() {
 export async function renderTransactions(context) {
   ctx = context;
   const body = ctx.$('#transactions-body');
+  // URL scope (UX rework §3): ?accountId= one account, ?groupId= every account in that group. The
+  // group is resolved to accessible accounts server-side (backend param accountGroupId) — the browser
+  // never sends a raw account-id list, so the scope stays authorization-safe.
+  const params = new URLSearchParams(location.search);
+  const accountId = params.get('accountId') || '';
+  const groupId = params.get('groupId') || '';
   const q = new URLSearchParams({ limit: '500' });
   const text = ctx.$('#tx-query').value.trim();
   const dir = ctx.$('#tx-direction').value;
@@ -75,6 +81,9 @@ export async function renderTransactions(context) {
   if (dir) q.set('direction', dir);
   if (flags === 'transfers') q.set('transfersOnly', 'true');
   if (flags === 'ignored') q.set('includeIgnored', 'true');
+  if (accountId) q.set('accountId', accountId);
+  if (groupId) q.set('accountGroupId', groupId);
+  await renderScope(accountId, groupId);
   const data = await ctx.api(`api/transactions?${q}`);
   let items = data.items || [];
   // 'pending'/'ignored' refine client-side over the fetched page (list endpoint has no pending filter).
@@ -82,16 +91,71 @@ export async function renderTransactions(context) {
   if (flags === 'ignored') items = items.filter(x => x.isIgnored);
 
   body.innerHTML = '';
+  let lastDate = null;
   for (const x of items) {
+    // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
+    // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
+    const day = String(x.bookingDate || '').slice(0, 10);
+    if (day !== lastDate) {
+      lastDate = day;
+      const head = document.createElement('tr');
+      head.className = 'tx-date-head';
+      head.innerHTML = `<td colspan="5"><span>${ctx.esc(dateHeading(day))}</span></td>`;
+      body.appendChild(head);
+    }
+    const name = x.merchantDisplayName || x.counterparty || '—';
+    const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
     const tr = document.createElement('tr');
     tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '');
     tr.tabIndex = 0;
-    tr.innerHTML = `<td>${ctx.date(x.bookingDate)}</td><td><strong>${ctx.esc(x.counterparty || '—')}</strong>${markers(x)}<div class="row-sub">${ctx.esc(x.description || '')}</div></td><td>${ctx.esc(x.category || ctx.get('common.uncategorized'))}</td><td>${ctx.esc(x.account || '')}</td><td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;
+    tr.dataset.txId = x.id;
+    tr.innerHTML =
+      `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
+      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(x, name)}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      `<td class="tx-cat">${ctx.esc(cat)}</td>` +
+      `<td class="tx-acct">${ctx.esc(x.account || '')}</td>` +
+      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}">${ctx.money(x.amount, x.currency)}</td>`;
     tr.addEventListener('click', () => openDetail(x));
     tr.addEventListener('keydown', e => { if (e.key === 'Enter') openDetail(x); });
     body.appendChild(tr);
   }
-  if (!items.length) body.innerHTML = `<tr><td colspan="5">${ctx.esc(ctx.get('common.empty'))}</td></tr>`;
+  if (!items.length) body.innerHTML = `<tr><td colspan="5" class="tx-empty">${ctx.esc(ctx.get('common.empty'))}</td></tr>`;
+}
+
+// Booking-date header: Heute / Gestern / localized date (UX rework §4).
+function dateHeading(day) {
+  if (!day) return '—';
+  const iso = d => { const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() + d); return t.toISOString().slice(0, 10); };
+  const today = ctx.get('common.today'), yesterday = ctx.get('common.yesterday');
+  if (day === iso(0) && today !== 'common.today') return today;
+  if (day === iso(-1) && yesterday !== 'common.yesterday') return yesterday;
+  return ctx.date(day);
+}
+
+// Left identity (UX rework §4): brand logo when a curated local asset exists, else a stable monogram
+// tinted deterministically from the merchant name. Transfers get their own glyph. No external lookups.
+function identityIcon(x, name) {
+  if (x.isTransfer) return `<span class="tx-ident tx-ident-transfer" aria-hidden="true">⇄</span>`;
+  if (x.logoAssetPath) return `<span class="tx-ident"><img class="tx-logo" src="${ctx.esc(x.logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.tx-ident').classList.add('tx-logo-failed');this.remove()"></span>`;
+  const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
+  let h = 0; const s = String(name || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return `<span class="tx-ident tx-monogram" style="--ident-h:${h % 360}" aria-hidden="true">${ctx.esc(initial)}</span>`;
+}
+
+// Scope banner (UX rework §3): shows the active account/group name and a clear back path to Konten.
+async function renderScope(accountId, groupId) {
+  const view = ctx.$('#view-transactions');
+  let bar = view.querySelector('#tx-scopebar');
+  if (!accountId && !groupId) { bar?.remove(); return; }
+  let label = '';
+  try {
+    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = a?.displayName || a?.institutionName || ''; }
+    else if (groupId) { const g = (await ctx.api('api/account-groups').catch(() => [])).find(g => String(g.id) === String(groupId)); label = g?.name || ''; }
+  } catch { /* label is best-effort; the list itself is already scoped server-side */ }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
+  bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back') === 'common.back' ? 'Konten' : ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
+  bar.querySelector('[data-back]').onclick = () => { if (window.fwNavScope) window.fwNavScope('accounts', ''); };
+  const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 
 // Markers are grey word-label pills hanging on the name (Design System §10): monochrome, never a
