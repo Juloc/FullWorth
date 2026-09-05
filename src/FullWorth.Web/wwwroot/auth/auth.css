@@ -16,6 +16,7 @@ html[data-theme="light"] .auth-hero-logo{content:url("/branding/fullworth-logo-l
 html[data-theme="dark"] .auth-hero-logo{content:url("/branding/fullworth-logo-dark.svg")}
 .auth-hero-name{margin:0;font-size:clamp(28px,5vw,34px);font-weight:700;letter-spacing:-.02em;line-height:1.05}
 .auth-hero-tagline{margin:0;color:var(--muted);font-size:14px}
+.auth-hero-beta{display:inline-block;margin-left:10px;padding:3px 9px;border:1px solid var(--line);border-radius:var(--radius-pill,999px);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);vertical-align:middle}
 .auth-card{width:min(100%,440px);background:linear-gradient(180deg,rgba(255,255,255,.985),rgba(255,255,255,.96));border:1px solid rgba(216,220,226,.95);border-radius:var(--radius-card);box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 22px rgba(16,24,40,.055),0 28px 70px rgba(16,24,40,.07);padding:clamp(20px,4vw,30px);animation:auth-enter .45s cubic-bezier(.2,.7,.2,1) both}
 html[data-theme="dark"] .auth-body{background:var(--bg)}
 html[data-theme="dark"] .auth-card{background:var(--surface);border-color:var(--line);box-shadow:var(--shadow-menu)}
