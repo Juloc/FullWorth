@@ -10,7 +10,8 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     private static readonly string[] RequiredAuthKeys =
     [
         "appDescription", "language", "theme", "email", "password", "showPassword", "hidePassword",
-        "signIn", "forgotPassword", "continue", "backToSignIn", "invalidCredentials",
+        "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms",
+        "forgotPassword", "continue", "backToSignIn", "invalidCredentials",
         "forgotConfirmation", "newPassword", "confirmPassword", "resetPassword", "passwordChanged",
         "passkey", "recoveryCode", "recoveryCodesShownOnce", "recoveryCodesStoreSecurely", "genericError"
     ];
@@ -25,11 +26,12 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task AuthShell_ContainsLoginForgotResetRecoveryAndPasskeyViews()
+    public async Task AuthShell_ContainsLoginRegisterForgotResetRecoveryAndPasskeyViews()
     {
         var html = await GetAsync("/auth/index.html");
 
         Assert.Contains("data-auth-view=\"login\"", html);
+        Assert.Contains("data-auth-view=\"register\"", html);
         Assert.Contains("data-auth-view=\"forgot-password\"", html);
         Assert.Contains("data-auth-view=\"reset-password\"", html);
         Assert.Contains("data-auth-view=\"recovery-code\"", html);
@@ -61,34 +63,26 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
 
         Assert.Contains("id=\"new-password\"", html);
         Assert.Contains("id=\"confirm-password\"", html);
-        // Two new-password fields in the reset view plus two in the invite-claim view.
-        Assert.Equal(4, CountOccurrences(html, "autocomplete=\"new-password\""));
+        // Two fields each in registration, reset, and invite-claim views.
+        Assert.Equal(6, CountOccurrences(html, "autocomplete=\"new-password\""));
         Assert.Contains("id=\"password-mismatch\"", html);
         Assert.Contains("aria-describedby=\"password-mismatch\"", html);
         Assert.Contains("data-i18n=\"auth.passwordHelp\"", html);
     }
 
     [Fact]
-    public async Task PublicRegistrationUi_IsAbsent()
+    public async Task PublicRegistrationUi_IsPresentAndLinksToLegalTerms()
     {
-        // Scope to the login surface + the auth locale subtree. The full locale files legitimately
-        // describe the Enable Banking "application registration" feature ("register the application"),
-        // which is unrelated to public user sign-up and must not trip this check.
-        var content = string.Join("\n",
-            await GetAsync("/auth/index.html"),
-            await GetAsync("/auth/auth.css"),
-            await GetAsync("/auth/auth.js"),
-            await GetAuthLocaleSectionAsync("de"),
-            await GetAuthLocaleSectionAsync("en"));
+        var html = await GetAsync("/auth/index.html");
+        var js = await GetAsync("/auth/auth.js");
 
-        foreach (var forbidden in new[]
-                 {
-                     "Create account", "Create an account", "Sign up", "Signup", "Register",
-                     "Konto erstellen", "Registrieren"
-                 })
-        {
-            AssertNotContains(content, forbidden);
-        }
+        Assert.Contains("data-auth-view=\"register\"", html);
+        Assert.Contains("id=\"register-form\"", html);
+        Assert.Contains("action=\"/auth/register\"", html);
+        Assert.Contains("https://fullworth.de/privacy/", html);
+        Assert.Contains("https://fullworth.de/terms/", html);
+        Assert.Contains("register: '/auth/register'", js);
+        Assert.Contains("acceptTerms", js);
     }
 
     [Fact]
@@ -121,7 +115,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
             Assert.False(string.IsNullOrWhiteSpace(value.GetString()), $"Empty auth.{key} in {locale}.json");
         }
 
-        foreach (var page in new[] { "login", "forgot-password", "reset-password", "recovery-code", "recovery-codes" })
+        foreach (var page in new[] { "login", "register", "forgot-password", "reset-password", "recovery-code", "recovery-codes" })
         {
             Assert.False(string.IsNullOrWhiteSpace(pages.GetProperty(page).GetProperty("title").GetString()));
             Assert.False(string.IsNullOrWhiteSpace(pages.GetProperty(page).GetProperty("subtitle").GetString()));
@@ -168,6 +162,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         var js = await GetAsync("/auth/auth.js");
 
         Assert.Contains("login: '/auth/login'", js);
+        Assert.Contains("register: '/auth/register'", js);
         Assert.Contains("passwordResetRequest: '/auth/password-reset/request'", js);
         Assert.Contains("passwordResetComplete: '/auth/password-reset/complete'", js);
         AssertNotContains(js, "caches.open");
@@ -267,6 +262,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         var program = File.ReadAllText(Path.Combine(projectRoot, "Program.cs"));
 
         Assert.Contains("/auth/login", program);
+        Assert.Contains("/auth/register", program);
         Assert.Contains("UseAuthentication", program);
         Assert.Contains("RequireAuthorization", program);
     }
