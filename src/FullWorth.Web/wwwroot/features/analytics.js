@@ -271,7 +271,10 @@ function fxMarker(incomplete) { return incomplete ? `<div class="fx-incomplete">
 // One-time CSS for the analytics-only layout primitives (card feet, KPI, merchant/category rows,
 // coloured trend lines, advanced disclosure). Everything else comes from app.css .fw-*/token classes.
 function injectCss() {
-  if (document.getElementById('analytics-ux-css')) return;
+  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
+  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
+  return;
+  // eslint-disable-next-line no-unreachable
   const s = document.createElement('style');
   s.id = 'analytics-ux-css';
   s.textContent = `

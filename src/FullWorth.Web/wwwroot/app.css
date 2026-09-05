@@ -333,6 +333,81 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 /* Allocation / composition bar */
 .fw-alloc{display:flex;height:12px;border-radius:var(--radius-pill);overflow:hidden;background:var(--surface-2);margin:var(--s2) 0}
 .fw-alloc>span{display:block;height:100%}
+/* ---- Per-feature UX-rework styles (moved out of runtime <style> blocks: the app CSP blocks injected
+   inline stylesheets, so these must live in a linked file). Analyses (an-*), contracts, net worth. ---- */
+.an-card-body{min-height:60px}
+.an-chart{display:block;width:100%;height:auto}
+.an-line-expense{stroke:var(--negative);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
+.an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
+.an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-kpi .k{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.an-kpi .k .positive{color:var(--positive)}
+.an-kpi .k .negative{color:var(--negative)}
+.an-kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
+.an-catrow{padding:8px 0;border-bottom:1px solid var(--line)}
+.an-catrow:last-child{border-bottom:0}
+.an-catrow-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:6px}
+.an-catrow-head .row-title{flex:1 1 auto;min-width:0}
+.an-catrow-head .amount{margin-left:auto}
+.an-mrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.an-mrow:last-child{border-bottom:0}
+.an-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+.an-mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.an-advanced{margin-top:var(--s5)}
+.an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
+.an-advanced>summary::-webkit-details-marker{display:none}
+.an-advanced>summary::before{content:"▸";color:var(--muted);margin-right:8px}
+.an-advanced[open]>summary::before{content:"▾"}
+.an-builder-controls{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0}
+.an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}
+.contracts-ux .detected-panel:not([hidden]){margin-bottom:var(--s4)}
+.contracts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);margin:var(--s3) 0}
+.contracts-sort{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:12px;margin-left:auto}
+.contracts-sort select{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font-size:12px;font-weight:600}
+.contracts-order{min-width:32px;text-align:center;line-height:1}
+.contracts-detect{border-style:dashed}
+.contract-row.contract-archived{opacity:.6}
+.contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
+.nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
+.nw-hero .fw-summary-value{font-size:34px}
+.nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.nw-trend-desc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px}
+.nw-delta.positive{color:var(--positive)}
+.nw-delta.negative{color:var(--negative)}
+.nw-window-label{color:var(--muted);font-size:11px}
+.nw-windows{margin:var(--s3) 0}
+.nw-chart{margin:var(--s2) 0}
+.nw-chart svg{display:block;width:100%;height:140px}
+.nw-chart-line{stroke:var(--cta);fill:none}
+.nw-chart-fill{fill:var(--cta);opacity:.10}
+.nw-chart-empty{padding:var(--s5) 0;text-align:center}
+.nw-hero-metrics{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s3)}
+.nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
+.nw-hero-metrics strong.negative{color:var(--negative)}
+.nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
+.nw-alloc-block{margin:var(--s2) 0 var(--s3)}
+.nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
+.nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
+.nw-alloc-debt{background:var(--negative-soft)}
+.nw-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px var(--s5);margin-top:var(--s3)}
+.nw-legend-item{display:flex;align-items:center;gap:8px;font-size:13px}
+.nw-dot{width:10px;height:10px;border-radius:3px;flex:none}
+.nw-legend-label{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nw-legend-amt{font-variant-numeric:tabular-nums;font-weight:600}
+.nw-legend-amt.negative{color:var(--negative)}
+.nw-manage{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);overflow:hidden}
+.nw-manage>summary{position:relative;cursor:pointer;padding:var(--s4) calc(var(--s4) + 20px) var(--s4) var(--s4);display:flex;flex-direction:column;gap:2px;list-style:none;font-weight:600}
+.nw-manage>summary::-webkit-details-marker{display:none}
+.nw-manage>summary::after{content:'▾';position:absolute;right:var(--s4);top:var(--s4);color:var(--muted)}
+.nw-manage[open]>summary::after{content:'▴'}
+.nw-manage-hint{font-weight:400;color:var(--muted);font-size:12px}
+.nw-manage-body{padding:0 var(--s4) var(--s4)}
+.nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
+.nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
+#nw-investments .panel-head{margin-bottom:var(--s3)}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
 .tx-detail{width:min(500px,94vw)}
 .tx-detail .tx-amount{font-size:21px;font-weight:600;margin:2px 0 6px}

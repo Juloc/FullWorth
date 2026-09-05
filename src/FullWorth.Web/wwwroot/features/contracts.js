@@ -161,7 +161,10 @@ function sortContracts(list) {
 
 // Injected once (no app.css edits). Everything else reuses the shared `.fw-*` and app.css classes.
 function injectCss() {
-  if (document.getElementById('contracts-ux-css')) return;
+  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
+  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
+  return;
+  // eslint-disable-next-line no-unreachable
   const style = document.createElement('style');
   style.id = 'contracts-ux-css';
   style.textContent = `

@@ -79,7 +79,10 @@ function ensureStyles() {
 // New presentation-layer styles for the trend/allocation/manage cards. Injected once; everything else
 // reuses app.css `.fw-*` primitives and design tokens (--cat-1..--cat-8, --negative, --cta, spacing).
 function ensureUxStyles() {
-  if (document.getElementById('networth-ux-css')) return;
+  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
+  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
+  return;
+  // eslint-disable-next-line no-unreachable
   const style = document.createElement('style');
   style.id = 'networth-ux-css';
   style.textContent = `
