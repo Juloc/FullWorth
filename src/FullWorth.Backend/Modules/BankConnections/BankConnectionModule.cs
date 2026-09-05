@@ -10,9 +10,13 @@ public sealed class BankConnection
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid FullWorthSpaceId { get; set; }
+    public Guid? EnableBankingProfileId { get; set; }
     public string Provider { get; set; } = "enable-banking";
     public string InstitutionName { get; set; } = string.Empty;
     public string Country { get; set; } = "DE";
+    public string PsuType { get; set; } = "personal";
+    public string? AuthMethod { get; set; }
+    public string RequiredPsuHeadersJson { get; set; } = "[]";
     public string? AuthorizationState { get; set; }
     // The OAuth state is bound to the user who initiated the connect and expires; it is consumed
     // exactly once at callback so a replayed callback cannot re-drive the flow.
@@ -164,6 +168,12 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
                 throw new ArgumentException("A new bank connection requires a validated FullWorthSpaceId.");
             if (!await db.FullWorthSpaces.AsNoTracking().AnyAsync(x => x.Id == space, ct))
                 throw new ArgumentException("FullWorthSpaceId does not exist.");
+            if (request.EnableBankingProfileId is { } profileId)
+            {
+                if (request.AuthorizationUserId is not { } authorizationUserId || authorizationUserId == Guid.Empty ||
+                    !await db.EnableBankingProfiles.AsNoTracking().AnyAsync(x => x.Id == profileId && x.UserId == authorizationUserId, ct))
+                    throw new ArgumentException("EnableBankingProfileId does not belong to the authorizing user.");
+            }
             entity = new BankConnection { FullWorthSpaceId = space };
             db.BankConnections.Add(entity);
         }
@@ -179,6 +189,11 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
         entity.Provider = request.Provider;
         entity.InstitutionName = request.InstitutionName;
         entity.Country = request.Country;
+        if (request.EnableBankingProfileId.HasValue)
+            entity.EnableBankingProfileId = request.EnableBankingProfileId;
+        entity.PsuType = string.IsNullOrWhiteSpace(request.PsuType) ? "personal" : request.PsuType;
+        entity.AuthMethod = request.AuthMethod;
+        entity.RequiredPsuHeadersJson = string.IsNullOrWhiteSpace(request.RequiredPsuHeadersJson) ? "[]" : request.RequiredPsuHeadersJson;
         entity.AuthorizationState = request.AuthorizationState;
         entity.AuthorizationUserId = request.AuthorizationUserId ?? entity.AuthorizationUserId;
         entity.AuthorizationStateExpiresAt = request.AuthorizationStateExpiresAt;
@@ -283,7 +298,7 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
     /// (null) for unknown/foreign resources so IDs cannot be probed, and false only for a member who
     /// is not an owner.
     /// </summary>
-    public async Task<BankConnectionAuthorizeResult> AuthorizeAsync(Guid userId, Guid fullWorthSpaceId, Guid? connectionId, CancellationToken ct)
+    public async Task<BankConnectionAuthorizeResult> AuthorizeAsync(Guid userId, Guid fullWorthSpaceId, Guid? connectionId, Guid? enableBankingProfileId, CancellationToken ct)
     {
         if (userId == Guid.Empty || fullWorthSpaceId == Guid.Empty) return BankConnectionAuthorizeResult.NotFound;
         var membership = await db.FullWorthSpaceMembers.AsNoTracking()
@@ -292,10 +307,24 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
             .SingleOrDefaultAsync(ct);
         if (membership is null) return BankConnectionAuthorizeResult.NotFound;
 
+        if (enableBankingProfileId is { } profileId &&
+            !await db.EnableBankingProfiles.AsNoTracking().AnyAsync(x => x.Id == profileId && x.UserId == userId, ct))
+            return BankConnectionAuthorizeResult.NotFound;
+
         if (connectionId is { } id)
         {
-            var exists = await db.BankConnections.AsNoTracking().AnyAsync(x => x.Id == id && x.FullWorthSpaceId == fullWorthSpaceId, ct);
-            if (!exists) return BankConnectionAuthorizeResult.NotFound;
+            var connection = await db.BankConnections.AsNoTracking()
+                .Where(x => x.Id == id && x.FullWorthSpaceId == fullWorthSpaceId)
+                .Select(x => new { x.AuthorizationUserId, x.EnableBankingProfileId })
+                .SingleOrDefaultAsync(ct);
+            if (connection is null) return BankConnectionAuthorizeResult.NotFound;
+            // A shared-space owner may see the connection, but only the user who supplied the
+            // Enable Banking application may drive/re-authorize it.
+            if (connection.AuthorizationUserId.HasValue && connection.AuthorizationUserId.Value != userId)
+                return BankConnectionAuthorizeResult.NotFound;
+            if (connection.EnableBankingProfileId.HasValue &&
+                !await db.EnableBankingProfiles.AsNoTracking().AnyAsync(x => x.Id == connection.EnableBankingProfileId.Value && x.UserId == userId, ct))
+                return BankConnectionAuthorizeResult.NotFound;
         }
 
         return membership == FullWorthSpaceRoles.Owner
@@ -382,9 +411,13 @@ public sealed record BankConnectionWrite(
     // is no LegacyId fallback on the live connect path any more.
     Guid? FullWorthSpaceId = null,
     Guid? AuthorizationUserId = null,
-    DateTimeOffset? AuthorizationStateExpiresAt = null);
+    DateTimeOffset? AuthorizationStateExpiresAt = null,
+    Guid? EnableBankingProfileId = null,
+    string PsuType = "personal",
+    string? AuthMethod = null,
+    string RequiredPsuHeadersJson = "[]");
 
-public sealed record BankConnectionAuthorizeRequest(Guid FullWorthSpaceId, Guid? ConnectionId);
+public sealed record BankConnectionAuthorizeRequest(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
 
 public enum BankConnectionAuthorizeResult { Authorized, Forbidden, NotFound }
 
@@ -432,7 +465,7 @@ public static class BankConnectionEndpoints
         {
             if (!Guid.TryParse(http.Request.Headers["X-FullWorth-User-Id"], out var userId))
                 return Results.BadRequest();
-            return await store.AuthorizeAsync(userId, request.FullWorthSpaceId, request.ConnectionId, ct) switch
+            return await store.AuthorizeAsync(userId, request.FullWorthSpaceId, request.ConnectionId, request.EnableBankingProfileId, ct) switch
             {
                 BankConnectionAuthorizeResult.Authorized => Results.NoContent(),
                 BankConnectionAuthorizeResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
