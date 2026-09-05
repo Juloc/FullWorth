@@ -658,8 +658,14 @@ function openEnableBankingWizard(initialStatus,options={}){
   const step=dlg.querySelector('[data-step]');
   dlg.querySelector('h2').textContent=get('bankingSetup.title');
   const stopAutoPoll=()=>{if(autoPoll){clearTimeout(autoPoll);autoPoll=null}};
+  const cancelAutoRegistration=()=>{
+    stopAutoPoll();
+    const id=autoRegistrationId;
+    autoRegistrationId=null;
+    if(id)bankApi(`api/banking/profile/register/${encodeURIComponent(id)}`,{method:'DELETE'}).catch(()=>{});
+  };
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
-  dlg.addEventListener('close',()=>{stopAutoPoll();options.onClose?.()},{once:true});
+  dlg.addEventListener('close',()=>{cancelAutoRegistration();options.onClose?.()},{once:true});
 
   const showIntro=()=>{
     stopAutoPoll();
@@ -731,8 +737,8 @@ function openEnableBankingWizard(initialStatus,options={}){
       : `<button type="button" data-again>${esc(get('bankingSetup.tryAgain'))}</button>`;
     step.innerHTML=`<p>${esc(registration?.status==='expired'?get('bankingSetup.autoExpired'):get('bankingSetup.autoFailed'))}</p>
       <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
-    step.querySelector('[data-manual]').onclick=showCredentials;
-    step.querySelector('[data-again]')?.addEventListener('click',showAutomatic);
+    step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
+    step.querySelector('[data-again]')?.addEventListener('click',()=>{cancelAutoRegistration();showAutomatic()});
     step.querySelector('[data-retry]')?.addEventListener('click',async e=>{
       e.currentTarget.disabled=true;
       try{
@@ -784,7 +790,7 @@ function openEnableBankingWizard(initialStatus,options={}){
         <div><span>${esc(get('bankingSetup.termsUrl'))}</span><a href="${esc(started.termsUrl||'https://fullworth.de/terms/')}" target="_blank" rel="noopener">${esc(started.termsUrl||'https://fullworth.de/terms/')} ↗</a></div>
       </div>
       <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
-    step.querySelector('[data-manual]').onclick=()=>{autoRegistrationId=null;showCredentials()};
+    step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     autoPoll=setTimeout(()=>pollAutomatic(started.id),800);
   };
 
