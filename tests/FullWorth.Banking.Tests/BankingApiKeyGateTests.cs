@@ -28,7 +28,7 @@ public sealed class BankingApiKeyGateTests
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
 
         // A mutating /api endpoint is gated the same way.
-        using var postRequest = new HttpRequestMessage(HttpMethod.Post, "/api/banking/sync");
+        using var postRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/banking/connections/{Guid.NewGuid():D}/sync");
         using var post = await client.SendAsync(postRequest);
         Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
     }
