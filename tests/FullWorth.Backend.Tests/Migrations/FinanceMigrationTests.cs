@@ -19,6 +19,7 @@ public sealed class FinanceMigrationTests
         "AuditEvents",
         "BalanceSnapshots",
         "BankConnections",
+        "EnableBankingProfiles",
         "Budgets",
         "Categories",
         "CategorizationRules",
