@@ -13,6 +13,9 @@ public sealed class EnableBankingOptions
     public string BaseUrl { get; set; } = "https://api.enablebanking.com";
     public string ApplicationId { get; set; } = string.Empty;
     public string PrivateKeyPath { get; set; } = "/run/secrets/enable-banking-private-key.pem";
+    // Optional legacy/global key for container deployments that do not mount a PEM file.
+    // New BYO profiles store their own encrypted PEM in FullWorth.Backend and do not use this value.
+    public string PrivateKeyBase64 { get; set; } = string.Empty;
     public string DefaultCountry { get; set; } = "DE";
     public string DefaultPsuType { get; set; } = "personal";
     // Callback URL is server configuration and is never accepted from a browser connect request.
@@ -367,9 +370,20 @@ public sealed class EnableBankingClient
     private string GetPrivateKeyPem()
     {
         if (_credentials is not null) return _credentials.PrivateKeyPem;
-        if (!File.Exists(_options.PrivateKeyPath))
-            throw new InvalidOperationException($"Enable Banking private key not found at '{_options.PrivateKeyPath}'.");
-        return File.ReadAllText(_options.PrivateKeyPath);
+        if (!string.IsNullOrWhiteSpace(_options.PrivateKeyBase64))
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(_options.PrivateKeyBase64.Trim()));
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException("Enable Banking legacy private key base64 is invalid.", ex);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(_options.PrivateKeyPath) && File.Exists(_options.PrivateKeyPath))
+            return File.ReadAllText(_options.PrivateKeyPath);
+        throw new InvalidOperationException("Enable Banking legacy private key is not configured.");
     }
 
     private void EnsureConfigured()
@@ -378,8 +392,10 @@ public sealed class EnableBankingClient
             throw new InvalidOperationException("Enable Banking application ID is not configured.");
         if (_credentials is not null && string.IsNullOrWhiteSpace(_credentials.PrivateKeyPem))
             throw new InvalidOperationException("Enable Banking private key is not configured.");
-        if (_credentials is null && !File.Exists(_options.PrivateKeyPath))
-            throw new InvalidOperationException($"Enable Banking private key not found at '{_options.PrivateKeyPath}'.");
+        if (_credentials is null &&
+            string.IsNullOrWhiteSpace(_options.PrivateKeyBase64) &&
+            (string.IsNullOrWhiteSpace(_options.PrivateKeyPath) || !File.Exists(_options.PrivateKeyPath)))
+            throw new InvalidOperationException("Enable Banking legacy private key is not configured.");
     }
 
     private static string B64(byte[] value) =>
