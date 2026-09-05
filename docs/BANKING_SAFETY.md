@@ -91,3 +91,11 @@ Removing a bank connection must go through `FullWorth.Banking`:
 3. only then remove the local connection/data
 
 There is deliberately no browser-accessible backend delete route that can bypass remote consent close.
+
+
+## Application authentication failures
+
+Enable Banking documents that HTTP 401 can represent errors other than an expired user session. FullWorth
+therefore bases consent-reconnect decisions on explicit provider session/consent error codes. A remaining
+401/403 is stored as `ENABLE_BANKING_AUTH_FAILED`, keeps the connection identity intact and is surfaced as
+an error so the BYO application/key can be rechecked; it is not mislabeled as a bank-consent expiry.
