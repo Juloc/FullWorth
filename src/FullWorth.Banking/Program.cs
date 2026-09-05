@@ -45,6 +45,7 @@ builder.Services.AddHttpClient<FullWorthBackendClient>((sp, client) =>
 builder.Services.AddScoped<EnableBankingClientResolver>();
 builder.Services.AddScoped<EnableBankingProfileService>();
 builder.Services.AddSingleton<EnableBankingControlPanelRegistrationService>();
+builder.Services.AddSingleton<EnableBankingControlPanelStatusService>();
 builder.Services.AddScoped<BankSyncService>();
 builder.Services.AddHostedService<BankSyncWorker>();
 
@@ -250,6 +251,23 @@ app.MapGet("/api/banking/institutions", async (
     catch (EnableBankingApiException ex)
     {
         return ProviderApiError(ex, consentAware: false);
+    }
+});
+
+app.MapGet("/api/banking/provider-status", async (
+    HttpContext http,
+    string? country,
+    EnableBankingControlPanelStatusService statusService,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await statusService.GetTodayAsync(userId, country, ct));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_status_query", message = ex.Message });
     }
 });
 
