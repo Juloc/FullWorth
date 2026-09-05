@@ -78,56 +78,8 @@ function ensureStyles() {
 
 // New presentation-layer styles for the trend/allocation/manage cards. Injected once; everything else
 // reuses app.css `.fw-*` primitives and design tokens (--cat-1..--cat-8, --negative, --cta, spacing).
-function ensureUxStyles() {
-  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
-  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
-  return;
-  // eslint-disable-next-line no-unreachable
-  const style = document.createElement('style');
-  style.id = 'networth-ux-css';
-  style.textContent = `
-    .nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
-    .nw-hero .fw-summary-value{font-size:34px}
-    .nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
-    .nw-trend-desc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
-    .nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px}
-    .nw-delta.positive{color:var(--positive)}
-    .nw-delta.negative{color:var(--negative)}
-    .nw-window-label{color:var(--muted);font-size:11px}
-    .nw-windows{margin:var(--s3) 0}
-    .nw-chart{margin:var(--s2) 0}
-    .nw-chart svg{display:block;width:100%;height:140px}
-    .nw-chart-line{stroke:var(--cta)}
-    .nw-chart-fill{fill:var(--cta);opacity:.10}
-    .nw-chart-empty{padding:var(--s5) 0;text-align:center}
-    .nw-hero-metrics{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s3)}
-    .nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
-    .nw-hero-metrics strong.negative{color:var(--negative)}
-    .nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
-    .nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
-    .nw-alloc-block{margin:var(--s2) 0 var(--s3)}
-    .nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
-    .nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
-    .nw-alloc-debt{background:var(--negative-soft)}
-    .nw-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px var(--s5);margin-top:var(--s3)}
-    .nw-legend-item{display:flex;align-items:center;gap:8px;font-size:13px}
-    .nw-dot{width:10px;height:10px;border-radius:3px;flex:none}
-    .nw-legend-label{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .nw-legend-amt{font-variant-numeric:tabular-nums;font-weight:600}
-    .nw-legend-amt.negative{color:var(--negative)}
-    .nw-manage{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);overflow:hidden}
-    .nw-manage>summary{position:relative;cursor:pointer;padding:var(--s4) calc(var(--s4) + 20px) var(--s4) var(--s4);display:flex;flex-direction:column;gap:2px;list-style:none;font-weight:600}
-    .nw-manage>summary::-webkit-details-marker{display:none}
-    .nw-manage>summary::after{content:'▾';position:absolute;right:var(--s4);top:var(--s4);color:var(--muted)}
-    .nw-manage[open]>summary::after{content:'▴'}
-    .nw-manage-hint{font-weight:400;color:var(--muted);font-size:12px}
-    .nw-manage-body{padding:0 var(--s4) var(--s4)}
-    .nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
-    .nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
-    #nw-investments .panel-head{margin-bottom:var(--s3)}
-  `;
-  document.head.appendChild(style);
-}
+// No-op: the net-worth layout CSS lives in app.css (the app CSP blocks injected inline <style>).
+function ensureUxStyles() { }
 
 export function bindNetWorth(context) {
   // Just store ctx + ensure the shared asset stylesheet is present. The static index.html add/manage

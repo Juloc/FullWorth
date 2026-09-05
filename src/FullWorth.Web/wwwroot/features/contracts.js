@@ -160,25 +160,8 @@ function sortContracts(list) {
 }
 
 // Injected once (no app.css edits). Everything else reuses the shared `.fw-*` and app.css classes.
-function injectCss() {
-  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
-  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
-  return;
-  // eslint-disable-next-line no-unreachable
-  const style = document.createElement('style');
-  style.id = 'contracts-ux-css';
-  style.textContent = `
-    .contracts-ux .detected-panel:not([hidden]){margin-bottom:var(--s4)}
-    .contracts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);margin:var(--s3) 0}
-    .contracts-sort{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:12px;margin-left:auto}
-    .contracts-sort select{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font-size:12px;font-weight:600}
-    .contracts-order{min-width:32px;text-align:center;line-height:1}
-    .contracts-detect{border-style:dashed}
-    .contract-row.contract-archived{opacity:.6}
-    .contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
-  `;
-  document.head.appendChild(style);
-}
+// No-op: the contracts layout CSS lives in app.css (the app CSP blocks injected inline <style>).
+function injectCss() { }
 
 // Price-change suggestions (UI_UX_SPEC §13): detected jumps in a subscription's recurring amount, shown
 // for the owner to accept (apply the new price to the contract) or dismiss. `detect` runs a fresh scan

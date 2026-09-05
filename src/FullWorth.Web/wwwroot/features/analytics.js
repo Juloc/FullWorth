@@ -293,42 +293,9 @@ function chart(build) { return ctx.isPrivate() ? `<div class="an-chart an-chart-
 
 // One-time CSS for the analytics-only layout primitives (card feet, KPI, merchant/category rows,
 // coloured trend lines, advanced disclosure). Everything else comes from app.css .fw-*/token classes.
-function injectCss() {
-  // Styles now live in app.css: the app's Content-Security-Policy blocks injected inline <style>, so
-  // this block never produced a stylesheet. Kept as a no-op to preserve the call sites.
-  return;
-  // eslint-disable-next-line no-unreachable
-  const s = document.createElement('style');
-  s.id = 'analytics-ux-css';
-  s.textContent = `
-.an-card-body{min-height:60px}
-.an-chart{display:block;width:100%;height:auto}
-.an-line-expense{stroke:var(--negative);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
-.an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
-.an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
-.an-kpi .k{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
-.an-kpi .k .positive{color:var(--positive)}
-.an-kpi .k .negative{color:var(--negative)}
-.an-kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
-.an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
-.an-catrow{padding:8px 0;border-bottom:1px solid var(--line)}
-.an-catrow:last-child{border-bottom:0}
-.an-catrow-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:6px}
-.an-catrow-head .row-title{flex:1 1 auto;min-width:0}
-.an-catrow-head .amount{margin-left:auto}
-.an-mrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
-.an-mrow:last-child{border-bottom:0}
-.an-mrow .fw-ident{width:32px;height:32px;font-size:13px}
-.an-mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
-.an-advanced{margin-top:var(--s5)}
-.an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
-.an-advanced>summary::-webkit-details-marker{display:none}
-.an-advanced>summary::before{content:"▸";color:var(--muted);margin-right:8px}
-.an-advanced[open]>summary::before{content:"▾"}
-.an-builder-controls{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0}
-.an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}`;
-  document.head.appendChild(s);
-}
+// No-op: the analytics layout CSS lives in app.css (the app CSP blocks injected inline <style>, so this
+// used to be dead). Kept as a stub so the renderAnalytics call site needs no change.
+function injectCss() { }
 
 // ---- Chart builder (§15.2): a bounded measure×dimension query rendered with the existing chart
 // techniques, plus saved analyses persisted in a preference. Demoted below the cards (advancedHtml). ----
