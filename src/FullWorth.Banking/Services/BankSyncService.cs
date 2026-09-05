@@ -922,6 +922,8 @@ public sealed class BankSyncService(
             clearNextSyncAllowedAt ? null : nextSyncAllowedAt ?? connection.NextSyncAllowedAt,
             consecutiveFailures ?? connection.ConsecutiveFailures,
             lastError,
+            AuthorizationUserId: connection.AuthorizationUserId,
+            AuthorizationStateExpiresAt: connection.AuthorizationStateExpiresAt,
             EnableBankingProfileId: connection.EnableBankingProfileId,
             PsuType: connection.PsuType,
             AuthMethod: connection.AuthMethod,
