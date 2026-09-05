@@ -1,0 +1,15 @@
+# Optional compatibility override for installations that still use one global Enable Banking RSA key.
+# New installations should NOT use this file; configure per-user BYO profiles in FullWorth instead.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.enable-banking-legacy.yml up -d
+services:
+  fullworth-banking:
+    environment:
+      EnableBanking__PrivateKeyPath: /run/secrets/enable-banking-private-key
+    secrets:
+      - enable-banking-private-key
+
+secrets:
+  enable-banking-private-key:
+    file: ./secrets/enable-banking-private-key.pem
