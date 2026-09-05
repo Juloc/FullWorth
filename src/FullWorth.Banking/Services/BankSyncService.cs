@@ -517,10 +517,19 @@ public sealed class BankSyncService(
         }
         catch (EnableBankingApiException ex)
         {
-            await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
-            var afterFailure = await FindConnectionAsync(pointer.ConnectionId, ct);
-            if (RequiresReauthorization(afterFailure))
-                throw new BankReauthorizationRequiredException();
+            var classification = EnableBankingErrorClassifier.Classify(ex);
+            if (classification.Category is BankErrorCategory.AuthRequired or
+                BankErrorCategory.ConsentExpired or
+                BankErrorCategory.RateLimit)
+            {
+                await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
+                var afterFailure = await FindConnectionAsync(pointer.ConnectionId, ct);
+                if (RequiresReauthorization(afterFailure))
+                    throw new BankReauthorizationRequiredException();
+            }
+
+            // A missing/rejected single transaction detail, PSU-context issue or transient detail
+            // failure must not poison the health/cooldown of an otherwise working bank connection.
             throw;
         }
 
