@@ -111,6 +111,85 @@ public sealed class EnableBankingProfileTests
     }
 
     [Fact]
+    public async Task ExistingConnectionCannotBeMovedToAnotherUsersProfile()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+
+        var owner = new FullWorthUser { EmailNormalized = "OWNER2@EXAMPLE.TEST", DisplayName = "Owner" };
+        var other = new FullWorthUser { EmailNormalized = "OTHER2@EXAMPLE.TEST", DisplayName = "Other" };
+        var space = new FullWorthSpace { Name = "Space", BaseCurrency = "EUR" };
+        db.Users.AddRange(owner, other);
+        db.FullWorthSpaces.Add(space);
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+        {
+            FullWorthSpaceId = space.Id,
+            UserId = owner.Id,
+            Role = FullWorthSpaceRoles.Owner
+        });
+
+        var ownerProfile = new EnableBankingProfile
+        {
+            UserId = owner.Id,
+            ApplicationId = "owner-app",
+            PrivateKeyPem = "protected",
+            KeyFingerprint = "owner-fp",
+            Environment = "PRODUCTION",
+            ApplicationName = "Owner",
+            Active = true
+        };
+        var otherProfile = new EnableBankingProfile
+        {
+            UserId = other.Id,
+            ApplicationId = "other-app",
+            PrivateKeyPem = "protected",
+            KeyFingerprint = "other-fp",
+            Environment = "PRODUCTION",
+            ApplicationName = "Other",
+            Active = true
+        };
+        db.EnableBankingProfiles.AddRange(ownerProfile, otherProfile);
+
+        var connection = new BankConnection
+        {
+            FullWorthSpaceId = space.Id,
+            EnableBankingProfileId = ownerProfile.Id,
+            AuthorizationUserId = owner.Id,
+            InstitutionName = "Bank",
+            Country = "DE",
+            Provider = "enable-banking",
+            Status = "AUTHORIZED"
+        };
+        db.BankConnections.Add(connection);
+        await db.SaveChangesAsync();
+
+        var store = new BankConnectionStore(db);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.UpsertAsync(new(
+            Id: connection.Id,
+            Provider: "enable-banking",
+            InstitutionName: "Bank",
+            Country: "DE",
+            AuthorizationState: null,
+            AuthorizationId: null,
+            ProviderSessionId: null,
+            Status: "AUTHORIZED",
+            ValidUntil: null,
+            LastAttemptAt: null,
+            LastSyncedAt: null,
+            NextSyncAllowedAt: null,
+            ConsecutiveFailures: 0,
+            LastError: null,
+            FullWorthSpaceId: space.Id,
+            AuthorizationUserId: owner.Id,
+            EnableBankingProfileId: otherProfile.Id), CancellationToken.None));
+
+        db.ChangeTracker.Clear();
+        var persisted = await db.BankConnections.AsNoTracking().SingleAsync(x => x.Id == connection.Id);
+        Assert.Equal(ownerProfile.Id, persisted.EnableBankingProfileId);
+        Assert.Equal(owner.Id, persisted.AuthorizationUserId);
+    }
+
+    [Fact]
     public async Task ProfileCannotBeDeletedWhileBankConnectionUsesIt()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
