@@ -652,24 +652,144 @@ async function renderEnableBankingSettings(){
 
 function openEnableBankingWizard(initialStatus,options={}){
   let status=initialStatus;
+  let autoPoll=null;
+  let autoRegistrationId=null;
   const dlg=dialog('<div class="dialog-card banking-setup"><div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div><div data-step></div></div>');
   const step=dlg.querySelector('[data-step]');
   dlg.querySelector('h2').textContent=get('bankingSetup.title');
+  const stopAutoPoll=()=>{if(autoPoll){clearTimeout(autoPoll);autoPoll=null}};
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
-  dlg.addEventListener('close',()=>options.onClose?.(),{once:true});
+  dlg.addEventListener('close',()=>{stopAutoPoll();options.onClose?.()},{once:true});
 
   const showIntro=()=>{
+    stopAutoPoll();
     step.innerHTML=`<p>${esc(get('bankingSetup.privateIntro'))}</p>
       <p class="row-sub">${esc(get('bankingSetup.privateBoundary'))}</p>
-      <p><a href="${ENABLE_BANKING_SIGN_IN}" target="_blank" rel="noopener">${esc(get('bankingSetup.openControlPanel'))} ↗</a></p>
       <label class="check"><input type="checkbox" data-ack> ${esc(get('bankingSetup.ack'))}</label>
       <div class="dialog-actions"><button type="button" data-next disabled>${esc(get('auth.continue'))}</button></div>`;
     const ack=step.querySelector('[data-ack]'),next=step.querySelector('[data-next]');
     ack.onchange=()=>next.disabled=!ack.checked;
-    next.onclick=showCredentials;
+    next.onclick=showSetupChoice;
+  };
+
+  const showSetupChoice=()=>{
+    stopAutoPoll();
+    step.innerHTML=`<p class="row-sub">${esc(get('bankingSetup.setupChoiceHint'))}</p>
+      <div class="setup-choice-grid">
+        <button type="button" class="setup-choice" data-auto><strong>${esc(get('bankingSetup.automaticTitle'))}</strong><span>${esc(get('bankingSetup.automaticHint'))}</span></button>
+        <button type="button" class="setup-choice" data-manual><strong>${esc(get('bankingSetup.manualTitle'))}</strong><span>${esc(get('bankingSetup.manualHint'))}</span></button>
+      </div>
+      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button></div>`;
+    step.querySelector('[data-auto]').onclick=showAutomatic;
+    step.querySelector('[data-manual]').onclick=showCredentials;
+    step.querySelector('[data-back]').onclick=showIntro;
+  };
+
+  const showAutomatic=()=>{
+    stopAutoPoll();
+    const callback=status?.callbackUrl||'';
+    step.innerHTML=`<form data-auto-form>
+      <p class="row-sub">${esc(get('bankingSetup.automaticExplain'))}</p>
+      <label>${esc(get('bankingSetup.email'))}<input name="email" type="email" autocomplete="email" required maxlength="254"></label>
+      <label>${esc(get('bankingSetup.environment'))}<select name="environment"><option value="PRODUCTION">${esc(get('bankingSetup.environmentProduction'))}</option><option value="SANDBOX">${esc(get('bankingSetup.environmentSandbox'))}</option></select></label>
+      <label>${esc(get('bankingSetup.callback'))}<input readonly value="${esc(callback)}"></label>
+      <p class="row-sub">${esc(get('bankingSetup.automaticSecurity'))}</p>
+      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button><button type="submit">${esc(get('bankingSetup.sendLogin'))}</button></div>
+    </form>`;
+    const form=step.querySelector('form');
+    step.querySelector('[data-back]').onclick=showSetupChoice;
+    form.onsubmit=async e=>{
+      e.preventDefault();
+      const button=form.querySelector('[type="submit"]');
+      const fd=new FormData(form);
+      button.disabled=true;
+      try{
+        const started=await bankApi('api/banking/profile/register/start',jsonBody({
+          email:String(fd.get('email')||'').trim(),
+          environment:String(fd.get('environment')||'PRODUCTION')
+        }));
+        autoRegistrationId=started.id;
+        showAutomaticWaiting(started);
+      }catch(err){
+        toast(err.message||get('common.error'));
+        button.disabled=false;
+      }
+    };
+  };
+
+  const automaticStatusText=value=>{
+    if(value==='waiting_for_email')return get('bankingSetup.waitingForEmail');
+    if(value==='registering')return get('bankingSetup.registeringApp');
+    if(value==='verifying')return get('bankingSetup.verifyingApp');
+    return get('bankingSetup.loading');
+  };
+
+  const showAutomaticFailure=registration=>{
+    stopAutoPoll();
+    const retry=registration?.canRetryVerification
+      ? `<button type="button" data-retry>${esc(get('bankingSetup.retryVerification'))}</button>`
+      : `<button type="button" data-again>${esc(get('bankingSetup.tryAgain'))}</button>`;
+    step.innerHTML=`<p>${esc(registration?.status==='expired'?get('bankingSetup.autoExpired'):get('bankingSetup.autoFailed'))}</p>
+      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
+    step.querySelector('[data-manual]').onclick=showCredentials;
+    step.querySelector('[data-again]')?.addEventListener('click',showAutomatic);
+    step.querySelector('[data-retry]')?.addEventListener('click',async e=>{
+      e.currentTarget.disabled=true;
+      try{
+        const next=await bankApi(`api/banking/profile/register/${encodeURIComponent(autoRegistrationId)}/retry`,jsonBody({}));
+        if(next.status==='completed'){
+          status=await bankApi('api/banking/status');
+          await renderEnableBankingSettings();
+          showProfile();
+          toast(get('bankingSetup.autoComplete'));
+          return;
+        }
+        showAutomaticFailure(next);
+      }catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
+    });
+  };
+
+  const pollAutomatic=async id=>{
+    if(id!==autoRegistrationId)return;
+    try{
+      const next=await bankApi(`api/banking/profile/register/${encodeURIComponent(id)}`);
+      if(id!==autoRegistrationId)return;
+      if(next.status==='completed'){
+        stopAutoPoll();
+        status=await bankApi('api/banking/status');
+        await renderEnableBankingSettings();
+        showProfile();
+        toast(get('bankingSetup.autoComplete'));
+        return;
+      }
+      if(next.status==='failed'||next.status==='expired'){
+        showAutomaticFailure(next);
+        return;
+      }
+      const statusEl=step.querySelector('[data-auto-status]');
+      if(statusEl)statusEl.textContent=automaticStatusText(next.status);
+    }catch(err){
+      const statusEl=step.querySelector('[data-auto-status]');
+      if(statusEl)statusEl.textContent=err.message||get('common.error');
+    }
+    autoPoll=setTimeout(()=>pollAutomatic(id),1500);
+  };
+
+  const showAutomaticWaiting=started=>{
+    stopAutoPoll();
+    step.innerHTML=`<p>${esc(get('bankingSetup.emailSent'))}</p>
+      <p class="row-sub" data-auto-status>${esc(get('bankingSetup.waitingForEmail'))}</p>
+      <div class="setup-meta">
+        <div><span>${esc(get('bankingSetup.privacyUrl'))}</span><a href="${esc(started.privacyUrl||'https://fullworth.de/privacy/')}" target="_blank" rel="noopener">${esc(started.privacyUrl||'https://fullworth.de/privacy/')} ↗</a></div>
+        <div><span>${esc(get('bankingSetup.termsUrl'))}</span><a href="${esc(started.termsUrl||'https://fullworth.de/terms/')}" target="_blank" rel="noopener">${esc(started.termsUrl||'https://fullworth.de/terms/')} ↗</a></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
+    step.querySelector('[data-manual]').onclick=()=>{autoRegistrationId=null;showCredentials()};
+    autoPoll=setTimeout(()=>pollAutomatic(started.id),800);
   };
 
   const showCredentials=()=>{
+    stopAutoPoll();
     const callback=status?.callbackUrl||'';
     step.innerHTML=`<p class="row-sub">${esc(get('bankingSetup.createApp'))}</p>
       <p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.apiApplications'))} ↗</a></p>
@@ -677,8 +797,8 @@ function openEnableBankingWizard(initialStatus,options={}){
       <label>${esc(get('bankingSetup.applicationId'))}<input data-app-id required autocomplete="off"></label>
       <label>${esc(get('bankingSetup.privateKey'))}<input data-key type="file" accept=".pem,text/plain" required></label>
       <p class="row-sub">${esc(get('bankingSetup.keyHint'))}</p>
-      <div class="dialog-actions"><button type="button" data-back>${esc(get('common.cancel'))}</button><button type="button" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
-    step.querySelector('[data-back]').onclick=showIntro;
+      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button><button type="button" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
+    step.querySelector('[data-back]').onclick=showSetupChoice;
     step.querySelector('[data-verify]').onclick=async e=>{
       const button=e.currentTarget,appId=step.querySelector('[data-app-id]').value.trim(),file=step.querySelector('[data-key]').files?.[0];
       if(!appId||!file){toast(get('bankingSetup.missingCredentials'));return}
@@ -694,6 +814,8 @@ function openEnableBankingWizard(initialStatus,options={}){
   };
 
   const showProfile=()=>{
+    stopAutoPoll();
+    autoRegistrationId=null;
     const p=status?.profile;
     if(!p){showIntro();return}
     const ready=p.environment==='SANDBOX'||p.active;
