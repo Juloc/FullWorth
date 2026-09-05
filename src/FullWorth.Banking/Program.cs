@@ -4,6 +4,7 @@ using System.Text;
 using FullWorth.Banking.Backend;
 using FullWorth.Banking.EnableBanking;
 using FullWorth.Banking.Services;
+using FullWorth.FinTs;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<EnableBankingOptions>(builder.Configuration.GetSection(EnableBankingOptions.SectionName));
 builder.Services.Configure<BackendOptions>(builder.Configuration.GetSection(BackendOptions.SectionName));
 builder.Services.Configure<BankingSyncOptions>(builder.Configuration.GetSection(BankingSyncOptions.SectionName));
+builder.Services.Configure<FinTsOptions>(builder.Configuration.GetSection(FinTsOptions.SectionName));
 builder.Services.AddSingleton<EnableBankingRequestPolicy>();
 builder.Services.AddSingleton<BankSyncConcurrencyGate>();
 
@@ -42,6 +44,14 @@ builder.Services.AddHttpClient<FullWorthBackendClient>((sp, client) =>
     client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromMinutes(5);
 });
+builder.Services.AddHttpClient("fints", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+builder.Services.AddScoped<IFinTsTransport>(services =>
+    new FinTsHttpTransport(services.GetRequiredService<IHttpClientFactory>().CreateClient("fints")));
+builder.Services.AddScoped<FinTsClient>();
+builder.Services.AddScoped<IngFinTsService>();
 builder.Services.AddScoped<EnableBankingClientResolver>();
 builder.Services.AddScoped<EnableBankingProfileService>();
 builder.Services.AddSingleton<EnableBankingControlPanelRegistrationService>();
@@ -289,6 +299,90 @@ app.MapPost("/api/banking/provider-status/connect/start", async (
     catch (InvalidOperationException ex)
     {
         return Results.Conflict(new { error = "status_connection_unavailable", message = ex.Message });
+    }
+});
+
+app.MapPost("/api/banking/fints/ing/connect", async (
+    HttpContext http,
+    ConnectIngFinTsRequest request,
+    IngFinTsService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await service.ConnectAsync(request, caller, ct));
+    }
+    catch (BankAccessException exception)
+    {
+        return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_fints_request", message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Json(new { error = "fints_not_configured", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (FinTsException ex)
+    {
+        return Results.BadRequest(new { error = ex.Code ?? "fints_error", message = "ING FinTS rejected the request." });
+    }
+});
+
+app.MapPost("/api/banking/fints/connections/{id:guid}/tan", async (
+    HttpContext http,
+    Guid id,
+    FinTsTanSubmitRequest request,
+    IngFinTsService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await service.ContinueTanAsync(id, caller, request.Tan, poll: false, ct));
+    }
+    catch (BankAccessException exception)
+    {
+        return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_fints_tan", message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "fints_tan_unavailable", message = ex.Message });
+    }
+    catch (FinTsException ex)
+    {
+        return Results.BadRequest(new { error = ex.Code ?? "fints_error", message = "ING FinTS rejected the TAN." });
+    }
+});
+
+app.MapPost("/api/banking/fints/connections/{id:guid}/poll", async (
+    HttpContext http,
+    Guid id,
+    IngFinTsService service,
+    CancellationToken ct) =>
+{
+    if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await service.ContinueTanAsync(id, caller, null, poll: true, ct));
+    }
+    catch (BankAccessException exception)
+    {
+        return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = "fints_poll_unavailable", message = ex.Message });
+    }
+    catch (FinTsException ex)
+    {
+        return Results.BadRequest(new { error = ex.Code ?? "fints_error", message = "ING FinTS rejected the status request." });
     }
 });
 
