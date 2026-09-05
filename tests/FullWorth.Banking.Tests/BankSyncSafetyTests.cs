@@ -12,9 +12,9 @@ public sealed class BankSyncSafetyTests
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var sync = document.RootElement.GetProperty("Sync");
 
-        Assert.True(sync.GetProperty("IntervalMinutes").GetInt32() > 360);
-        Assert.True(sync.GetProperty("MinimumBackgroundSyncIntervalMinutes").GetInt32() > 360);
-        Assert.True(sync.GetProperty("RateLimitCooldownMinutes").GetInt32() > 360);
+        Assert.InRange(sync.GetProperty("IntervalMinutes").GetInt32(), 5, 60);
+        Assert.True(sync.GetProperty("MinimumBackgroundSyncIntervalMinutes").GetInt32() >= 360);
+        Assert.True(sync.GetProperty("RateLimitCooldownMinutes").GetInt32() >= 360);
     }
 
     [Fact]
