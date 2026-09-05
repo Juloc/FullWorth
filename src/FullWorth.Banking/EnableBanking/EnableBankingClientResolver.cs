@@ -41,7 +41,9 @@ public sealed class EnableBankingClientResolver(
         {
             if (profile.UserId != userId)
                 throw new EnableBankingProfileNotConfiguredException("Enable Banking profile does not belong to the current user.");
-            if (requireActive && !profile.Active)
+            if (requireActive &&
+                string.Equals(profile.Environment, "PRODUCTION", StringComparison.OrdinalIgnoreCase) &&
+                !profile.Active)
                 throw new EnableBankingProfileNotConfiguredException("Enable Banking production application is not active yet.");
             return (Create(profile.ApplicationId, profile.PrivateKeyPem), profile);
         }
