@@ -13,6 +13,7 @@ internal static class EnableBankingProfilesSnapshot
             b.Property<bool>("Active").HasColumnType("boolean");
             b.Property<string>("ApplicationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
             b.Property<string>("ApplicationName").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("ControlPanelRefreshToken").HasColumnType("text");
             b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
             b.Property<string>("Environment").IsRequired().HasMaxLength(24).HasColumnType("character varying(24)");
             b.Property<string>("KeyFingerprint").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
