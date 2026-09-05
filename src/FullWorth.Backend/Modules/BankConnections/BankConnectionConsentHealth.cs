@@ -21,6 +21,8 @@ public static class BankConnectionConsentHealthCalculator
             return new("reauthorization_required", daysUntilExpiry);
         if (validUntil is { } expiredAt && expiredAt < now)
             return new("expired", daysUntilExpiry);
+        if (string.Equals(lastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
+            return new("partial_history", daysUntilExpiry);
         if (consecutiveFailures > 0 || lastError is not null)
             return new("error", daysUntilExpiry);
         if (nextSyncAllowedAt is { } cooldownEndsAt && cooldownEndsAt > now)
