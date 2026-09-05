@@ -11,15 +11,17 @@ instance. Run the banks **in this order** (each builds confidence for the next):
 
 > **Safety.** This is read-only validation of *your own* accounts. Do **not** run destructive or
 > load/attack testing against live bank or Enable Banking services. Respect the background sync
-> floor (≥ 360 min between automatic syncs) and the per-connection cooldown; use manual sync
-> sparingly. Enable Banking sandbox/credentials and the RSA key must already be configured
-> (`docs/OPERATIONS.md`). Capture screenshots/logs, not raw access tokens, when recording results.
+> floor (≥ 360 min between automatic syncs) and provider cooldowns. User-triggered online syncs may
+> use PSU headers but still must not be spammed. Configure the user's own Enable Banking application
+> through the FullWorth wizard first (`docs/OPERATIONS.md`). Capture screenshots/logs, never RSA
+> private keys/JWTs/session IDs, when recording results.
 
 ## Prerequisites (once)
 
 - [ ] Deployed instance reachable over HTTPS at your `FULLWORTH_PASSKEY_ORIGIN`.
-- [ ] `ENABLE_BANKING_APPLICATION_ID` set and the RSA key staged as the docker secret.
-- [ ] The Enable Banking application has your `…/connect/enable-banking/callback` redirect URL.
+- [ ] `ENABLE_BANKING_REDIRECT_URL` points to the deployed `…/connect/enable-banking/callback`.
+- [ ] The FullWorth user has verified their own Enable Banking application + PEM in the setup wizard.
+- [ ] For restricted Production, that application is active and its Linked Accounts belong to that Control Panel user.
 - [ ] You are signed in as an owner of the FullWorth Space under test.
 - [ ] Note the current UTC time and the configured `Sync__MinimumBackgroundSyncIntervalMinutes`
       (default 365) and `Sync__RateLimitCooldownMinutes` so cooldown expectations are exact.
@@ -36,7 +38,9 @@ Repeat the whole block for each bank, in the order above. Record PASS/FAIL + not
 - [ ] Accounts from the bank are discovered and listed under the FullWorth Space.
 
 ### B. Initial history
-- [ ] First sync backfills history up to `Sync__InitialHistoryDays` (default 180).
+- [ ] First sync sends `strategy=longest` with no `date_from`/`date_to`.
+- [ ] FullWorth imports every history page the ASPSP exposes until no `continuation_key` remains.
+- [ ] If an intermediate page is empty but has a continuation key, fetching still continues.
 - [ ] Transaction dates, amounts and currency match the bank's app/statement for a spot sample.
 - [ ] Expense/income signs are correct (expenses negative), counterparties populated.
 
@@ -56,10 +60,12 @@ Repeat the whole block for each bank, in the order above. Record PASS/FAIL + not
       floor / configured interval has elapsed.
 - [ ] Connection shows its `nextSyncAllowedAt` / cooldown correctly.
 
-### F. Manual sync during cooldown
-- [ ] Trigger a manual sync while in cooldown → result is **`cooldown`** (or `already_running`),
-      not an error, and no extra provider call is made beyond policy.
-- [ ] After cooldown elapses, a manual sync returns **`started`** and pulls new activity.
+### F. Manual/online sync
+- [ ] Trigger a manual sync from the browser and confirm available PSU headers reach Enable Banking.
+- [ ] If the ASPSP requires PSU headers, the request sends all required headers or none, never a partial set.
+- [ ] An ordinary background-cadence timestamp does not block a valid online sync.
+- [ ] A persisted `ASPSP_RATE_LIMIT_EXCEEDED` window **does** block the manual sync until its retry time.
+- [ ] The sync result is `completed` (or `already_running`/`cooldown`) and new activity is imported.
 
 ### G. Reconnect before / after expiry
 - [ ] Before expiry: re-authorize/refresh consent succeeds and keeps the same accounts/history
