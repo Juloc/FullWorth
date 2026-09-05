@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FullWorth.Banking.Backend;
 using FullWorth.Banking.EnableBanking;
 using Microsoft.Extensions.Options;
@@ -151,6 +152,7 @@ public sealed class BankSyncService(
             throw new InvalidOperationException($"Institution '{request.InstitutionName}' does not support PSU type '{desiredPsuType}'.");
 
         ValidateAuthMethod(institution, request.AuthMethod, desiredPsuType);
+        ValidateCredentials(institution, request.AuthMethod, desiredPsuType, request.Credentials, request.CredentialsAutosubmit == true);
         if (request.Credentials is { Count: > 0 } && string.IsNullOrWhiteSpace(request.AuthMethod))
             throw new InvalidOperationException("Credentials require an explicit Enable Banking auth method.");
 
@@ -593,6 +595,7 @@ public sealed class BankSyncService(
             account = ApplyDetails(account, resolved!.Value) with
             {
                 IdentificationHash = realHash,
+                IdentificationHashes = GetIdentificationHashes(resolved.Value, realHash),
                 NeedsHashResolution = false,
                 HasDetails = true
             };
@@ -1060,6 +1063,79 @@ public sealed class BankSyncService(
         if (!found)
             throw new InvalidOperationException(
                 $"Enable Banking auth method '{requestedMethod}' is not available for PSU type '{desiredPsuType}'.");
+    }
+
+    private static void ValidateCredentials(
+        JsonElement institution,
+        string? requestedMethod,
+        string desiredPsuType,
+        IReadOnlyDictionary<string, string>? supplied,
+        bool autosubmit)
+    {
+        if (supplied is null || supplied.Count == 0) return;
+        if (string.IsNullOrWhiteSpace(requestedMethod))
+            throw new InvalidOperationException("Enable Banking credentials require an auth method.");
+        if (!institution.TryGetProperty("auth_methods", out var methods) || methods.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("The selected Enable Banking auth method has no credential schema.");
+
+        JsonElement selected = default;
+        var found = false;
+        foreach (var method in methods.EnumerateArray())
+        {
+            if (method.ValueKind != JsonValueKind.Object) continue;
+            if (!string.Equals(GetString(method, "name"), requestedMethod, StringComparison.OrdinalIgnoreCase)) continue;
+            var methodPsuType = GetString(method, "psu_type");
+            if (!string.IsNullOrWhiteSpace(methodPsuType) &&
+                !string.Equals(methodPsuType, desiredPsuType, StringComparison.OrdinalIgnoreCase))
+                continue;
+            selected = method;
+            found = true;
+            break;
+        }
+        if (!found)
+            throw new InvalidOperationException("The selected Enable Banking auth method is unavailable.");
+
+        var schema = new Dictionary<string, (bool Required, string? Template)>(StringComparer.Ordinal);
+        if (selected.TryGetProperty("credentials", out var fields) && fields.ValueKind == JsonValueKind.Array)
+            foreach (var field in fields.EnumerateArray())
+            {
+                if (field.ValueKind != JsonValueKind.Object) continue;
+                var name = GetString(field, "name");
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                var required = field.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.True;
+                schema[name] = (required, GetString(field, "template"));
+            }
+
+        foreach (var (name, value) in supplied)
+        {
+            if (!schema.TryGetValue(name, out var definition))
+                throw new InvalidOperationException($"Credential '{name}' is not accepted by the selected Enable Banking auth method.");
+            if (string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException($"Credential '{name}' cannot be empty.");
+            if (!string.IsNullOrWhiteSpace(definition.Template))
+            {
+                try
+                {
+                    if (!Regex.IsMatch(value, definition.Template, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250)))
+                        throw new InvalidOperationException($"Credential '{name}' does not match the bank-required format.");
+                }
+                catch (ArgumentException)
+                {
+                    // Enable Banking templates are PCRE. Unsupported .NET constructs are validated
+                    // by Enable Banking/ASPSP rather than turning a valid provider schema into a 500.
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    throw new InvalidOperationException($"Credential '{name}' format validation timed out.");
+                }
+            }
+        }
+
+        if (autosubmit)
+            foreach (var (name, definition) in schema)
+                if (definition.Required && (!supplied.TryGetValue(name, out var value) || string.IsNullOrWhiteSpace(value)))
+                    throw new InvalidOperationException(
+                        $"Credential '{name}' is required when credentials_autosubmit is enabled.");
     }
 
     private static IReadOnlyList<string> GetStringArray(JsonElement root, string name) =>
