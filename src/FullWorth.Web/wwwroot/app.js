@@ -681,10 +681,11 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
   const psuTypes=(bank.psu_types||['personal']).filter(Boolean);
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(bank.name)}</h2><button type="button" data-close>×</button></div>
     ${psuTypes.length>1?`<label>${esc(get('bankingSetup.accountType'))}<select name="psuType">${psuTypes.map(x=>`<option value="${esc(x)}">${esc(get('bankingSetup.psu_'+x)||x)}</option>`).join('')}</select></label>`:`<input type="hidden" name="psuType" value="${esc(psuTypes[0]||'personal')}">`}
+    <p class="row-sub" data-business-notice hidden>${esc(get('bankingSetup.businessNotice'))}</p>
     <div data-auth-method></div>
     <div data-credentials></div>
     <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
-  const form=dlg.querySelector('form'),methodRoot=dlg.querySelector('[data-auth-method]'),credentialRoot=dlg.querySelector('[data-credentials]');
+  const form=dlg.querySelector('form'),methodRoot=dlg.querySelector('[data-auth-method]'),credentialRoot=dlg.querySelector('[data-credentials]'),businessNotice=dlg.querySelector('[data-business-notice]');
   let methods=[];
 
   const drawCredentials=()=>{
@@ -709,6 +710,7 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
 
   const drawMethods=()=>{
     const psuType=form.elements.psuType?.value||psuTypes[0]||'personal';
+    if(businessNotice)businessNotice.hidden=String(psuType).toLowerCase()!=='business';
     methods=authMethodsFor(bank,psuType);
     methodRoot.innerHTML='';
     credentialRoot.innerHTML='';
