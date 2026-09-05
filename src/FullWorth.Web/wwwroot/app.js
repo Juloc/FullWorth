@@ -382,7 +382,7 @@ async function syncConnection(id,button){
   try{
     const r=await bankApi(`api/banking/connections/${id}/sync?force=true`,{method:'POST'});
     const status=(r&&r.status)||'started';
-    const messages={started:'accounts.syncStarted',already_running:'accounts.syncRunning',cooldown:'accounts.syncCooldown',reauthorization_required:'accounts.syncReauth'};
+    const messages={started:'accounts.syncStarted',completed:'accounts.syncCompleted',already_running:'accounts.syncRunning',cooldown:'accounts.syncCooldown',reauthorization_required:'accounts.syncReauth'};
     toast(get(messages[status]||'accounts.syncStarted'));
     await loadCurrent();
   }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
