@@ -11,7 +11,7 @@ namespace FullWorth.Backend.Tests.BankConnections;
 public sealed class EnableBankingProfileTests
 {
     [Fact]
-    public async Task PrivateKeyIsEncryptedAtRestAndOnlyInternalDtoGetsPlaintext()
+    public async Task BankingSecretsAreEncryptedAtRestAndOnlyInternalDtoGetsPlaintext()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var cipher = Cipher();
@@ -22,6 +22,7 @@ public sealed class EnableBankingProfileTests
             IsActive = true
         };
         const string privateKey = "-----BEGIN PRIVATE KEY-----\nprivate-test-material\n-----END PRIVATE KEY-----";
+        const string refreshToken = "enable-banking-refresh-secret";
 
         Guid profileId;
         await using (var db = database.CreateContext())
@@ -40,7 +41,8 @@ public sealed class EnableBankingProfileTests
                 true,
                 ["AIS"],
                 ["https://fullworth.example/connect/enable-banking/callback"],
-                DateTimeOffset.UtcNow), CancellationToken.None);
+                DateTimeOffset.UtcNow,
+                refreshToken), CancellationToken.None);
 
             profileId = saved.Id;
             Assert.Equal(privateKey, saved.PrivateKeyPem);
@@ -51,11 +53,15 @@ public sealed class EnableBankingProfileTests
             var row = await db.EnableBankingProfiles.AsNoTracking().SingleAsync(x => x.Id == profileId);
             Assert.StartsWith("v1:", row.PrivateKeyPem);
             Assert.DoesNotContain("private-test-material", row.PrivateKeyPem, StringComparison.Ordinal);
+            Assert.NotNull(row.ControlPanelRefreshToken);
+            Assert.StartsWith("v1:", row.ControlPanelRefreshToken!);
+            Assert.DoesNotContain(refreshToken, row.ControlPanelRefreshToken!, StringComparison.Ordinal);
 
             var store = new EnableBankingProfileStore(db, cipher);
             var internalDto = await store.GetForUserAsync(user.Id, CancellationToken.None);
             Assert.NotNull(internalDto);
             Assert.Equal(privateKey, internalDto!.PrivateKeyPem);
+            Assert.Equal(refreshToken, internalDto.ControlPanelRefreshToken);
         }
     }
 
