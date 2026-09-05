@@ -175,7 +175,9 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
 
     public async Task<AccountSyncState?> GetAccountSyncStateAsync(Guid connectionId, string identificationHash, CancellationToken ct)
     {
-        using var request = Create(HttpMethod.Get, $"/internal/banking/connections/{connectionId}/accounts/{Uri.EscapeDataString(identificationHash)}/sync-state");
+        using var request = Create(
+            HttpMethod.Get,
+            $"/internal/banking/connections/{connectionId}/accounts/sync-state?identificationHash={Uri.EscapeDataString(identificationHash)}");
         using var response = await http.SendAsync(request, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
