@@ -28,7 +28,8 @@ public sealed record BankConnectionDto(
     Guid? EnableBankingProfileId = null,
     string PsuType = "personal",
     string? AuthMethod = null,
-    string RequiredPsuHeadersJson = "[]");
+    string RequiredPsuHeadersJson = "[]",
+    Guid? AuthorizationUserId = null);
 
 public sealed record BankConnectionWrite(
     Guid? Id,
