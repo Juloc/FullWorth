@@ -424,26 +424,13 @@ public sealed class BankSyncService(
                 ? DisconnectStatus.Deleted
                 : DisconnectStatus.NotFound;
 
-        await backend.UpsertConnectionAsync(new BankConnectionWrite(
-            Id: connection.Id,
-            Provider: connection.Provider,
-            InstitutionName: connection.InstitutionName,
-            Country: connection.Country,
-            AuthorizationState: null,
-            AuthorizationId: null,
-            ProviderSessionId: null,
-            Status: "CLOSED",
-            ValidUntil: connection.ValidUntil,
-            LastAttemptAt: connection.LastAttemptAt,
-            LastSyncedAt: connection.LastSyncedAt,
-            NextSyncAllowedAt: null,
-            ConsecutiveFailures: 0,
-            LastError: null,
-            EnableBankingProfileId: connection.EnableBankingProfileId,
-            PsuType: connection.PsuType,
-            AuthMethod: connection.AuthMethod,
-            RequiredPsuHeadersJson: connection.RequiredPsuHeadersJson), ct);
-        return DisconnectStatus.ClosedDataRetained;
+        return await backend.CloseConnectionRetainingDataAsync(
+            connectionId,
+            caller.UserId,
+            caller.FullWorthSpaceId,
+            ct)
+            ? DisconnectStatus.ClosedDataRetained
+            : DisconnectStatus.NotFound;
     }
 
     public async Task<ProviderTransactionDetailsView> GetTransactionDetailsAsync(
