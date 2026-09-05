@@ -364,6 +364,15 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
    inline stylesheets, so these must live in a linked file). Analyses (an-*), contracts, net worth. ---- */
 .an-card-body{min-height:60px}
 .an-chart{display:block;width:100%;height:auto}
+/* Shared pointer/touch chart scrubbing: mouse hover on desktop; press + drag on touch/pen. */
+svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.fw-chart-scrub-overlay,.fw-chart-scrub-overlay *{pointer-events:none}
+.fw-chart-scrub-guide{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 4;vector-effect:non-scaling-stroke;opacity:.75}
+.fw-chart-scrub-label{fill:var(--text);font:600 12px var(--font);paint-order:stroke;stroke:var(--surface);stroke-width:6px;stroke-linejoin:round}
+.fw-chart-scrub-marker{fill:var(--surface);stroke:var(--cta);stroke-width:2.5;vector-effect:non-scaling-stroke}
+.fw-chart-scrub-marker.positive,.fw-chart-scrub-marker.income{stroke:var(--positive)}
+.fw-chart-scrub-marker.negative,.fw-chart-scrub-marker.expense{stroke:var(--negative)}
+.fw-chart-scrub-marker.benchmark{stroke:var(--muted)}
 .an-line-expense{stroke:var(--negative);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
 .an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
 .an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
