@@ -228,6 +228,7 @@ public sealed class BankSyncService(
             ?? throw new InvalidOperationException("Unknown or expired authorization state.");
 
         var client = await ResolveProviderForConnectionAsync(connection, ct);
+        var previousSessionId = connection.ProviderSessionId;
         var session = await client.AuthorizeSessionAsync(code, ct);
         var sessionId = GetString(session, "session_id")
             ?? throw new InvalidOperationException("Enable Banking did not return session_id.");
@@ -245,6 +246,33 @@ public sealed class BankSyncService(
             validUntil: validUntil,
             lastError: null,
             consecutiveFailures: 0), ct);
+
+        // Reauthorization may replace a still-live old session. The new session is already durable,
+        // so closing the previous consent is best-effort and can never roll back a successful reconnect.
+        if (!string.IsNullOrWhiteSpace(previousSessionId) &&
+            !string.Equals(previousSessionId, sessionId, StringComparison.Ordinal))
+        {
+            try
+            {
+                await client.DeleteSessionAsync(
+                    previousSessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
+            }
+            catch (EnableBankingApiException ex) when (
+                ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
+            {
+                // Already closed/missing is equivalent to success.
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Old Enable Banking session for {Institution} could not be closed after reauthorization.",
+                    connection.InstitutionName);
+            }
+        }
 
         using var lease = await syncGate.EnterAsync(ct);
         try
