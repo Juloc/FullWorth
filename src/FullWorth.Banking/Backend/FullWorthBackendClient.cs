@@ -74,7 +74,6 @@ public sealed record EnableBankingProfileDto(
     Guid UserId,
     string ApplicationId,
     string PrivateKeyPem,
-    string? ControlPanelRefreshToken,
     string KeyFingerprint,
     string Environment,
     string ApplicationName,
@@ -82,7 +81,8 @@ public sealed record EnableBankingProfileDto(
     IReadOnlyList<string> Services,
     IReadOnlyList<string> RedirectUrls,
     DateTimeOffset? VerifiedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? ControlPanelRefreshToken = null);
 
 public sealed record EnableBankingProfileWrite(
     Guid UserId,
