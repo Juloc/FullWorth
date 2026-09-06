@@ -71,32 +71,12 @@ export async function ensureOfficialBrandCatalog(api, force = false) {
   return officialBrandCatalogLoad;
 }
 
-const BRAND_LOGOS = [
-  { aliases: ['VATTENFALL'], path: '/brands/vattenfall.svg' },
-  { aliases: ['ENBW'], path: '/brands/enbw.svg' },
-  { aliases: ['OBI'], path: '/brands/obi.svg' },
-  { aliases: ['LEBARA'], path: '/brands/lebara.svg' },
-  { aliases: ['VODAFONE'], path: '/brands/vodafone.svg' },
-  { aliases: ['LIDL'], path: '/brands/lidl.svg' },
-  { aliases: ['REWE'], path: '/brands/rewe.svg' },
-  { aliases: ['EDEKA'], path: '/brands/edeka.svg' },
-  { aliases: ['NETFLIX'], path: '/brands/netflix.svg' },
-  { aliases: ['SPOTIFY'], path: '/brands/spotify.svg' },
-  { aliases: ['DEUTSCHE BAHN', 'DB VERTRIEB', 'DB FERNVERKEHR', 'DB REGIO'], path: '/brands/deutschebahn.svg' },
-  { aliases: ['SHELL'], path: '/brands/shell.svg' },
-  { aliases: ['ARAL'], path: '/brands/aral.svg' },
-  { aliases: ['IKEA'], path: '/brands/ikea.svg' },
-  { aliases: ['ROSSMANN'], path: '/brands/rossmann.svg' },
-];
 function brandLogoPath(name) {
   const normalized = String(name || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, ' ').trim();
   if (!normalized) return null;
   const padded = ` ${normalized} `;
   for (const brand of OFFICIAL_BRAND_LOGOS) {
     if (padded.includes(` ${brand.alias} `)) return brand.path;
-  }
-  for (const brand of BRAND_LOGOS) {
-    if (brand.aliases.some(alias => padded.includes(` ${alias} `))) return brand.path;
   }
   return null;
 }
@@ -107,8 +87,8 @@ function brandLogoPath(name) {
 const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
 function isEmoji(s) { try { return EMOJI_RE.test(String(s || '')); } catch { return false; } }
 
-// Left identity (UX rework §4): curated local brand logo → category icon → category-tinted monogram, with
-// a transfer glyph override. No external/third-party logo lookups.
+// Left identity (UX rework §4): installed cloud/custom brand logo → category icon → category-tinted monogram,
+// with a transfer glyph override. No third-party logo lookup happens from transaction rendering.
 // `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
 export function identityIcon(name, opts = {}) {
   if (opts.isTransfer) return `<span class="fw-ident fw-ident-transfer" aria-hidden="true">${opts.isSavings ? '↑' : '⇄'}</span>`;
