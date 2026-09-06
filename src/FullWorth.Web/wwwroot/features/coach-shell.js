@@ -613,6 +613,7 @@ async function ask(text) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null, uiContext })
     });
     appendMessage(response.message);
+    renderContextActions();
     const modeText = response.message.mode === 'Ai'
       ? `${tr('KI', 'AI')}${response.message.model ? ` · ${response.message.model}` : ''}`
       : tr('Deterministisch', 'Deterministic');
@@ -670,6 +671,35 @@ function appendMessage(message) {
       details.appendChild(facts); article.appendChild(details);
     }
     root.appendChild(article); root.scrollTop = root.scrollHeight;
+  });
+}
+
+function renderContextActions(){
+  const context=capturePageContext();
+  if(!context?.entityType)return;
+  const actions=[];
+  const add=(label,run)=>actions.push({label,run});
+  const openView=view=>document.querySelector(`.sidebar [data-view="${view}"],#bottom-nav [data-view="${view}"]`)?.click();
+  if(context.entityType==='transaction'&&context.entityId){
+    add(tr('Kategorie ändern','Change category'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-transaction',{detail:{id:context.entityId}})));
+    add(tr('Regel erstellen','Create rule'),()=>{openView('rules');setTimeout(()=>$('#primary-action')?.click(),40)});
+  }else if(context.entityType==='contract'&&context.entityId){
+    add(tr('Vertrag öffnen','Open contract'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-contract',{detail:{id:context.entityId}})));
+  }else if(context.entityType==='account'&&context.entityId){
+    add(tr('Kontobuchungen öffnen','Open account transactions'),()=>window.fwNavScope?.('transactions','accountId='+encodeURIComponent(context.entityId)));
+  }else if(context.entityType==='budget'&&context.entityId){
+    add(tr('Budget öffnen','Open budget'),()=>{openView('budgets');setTimeout(()=>window.fwOpenBudget?.(context.entityId),50)});
+  }else if(['asset','liability','portfolio'].includes(context.entityType)){
+    add(tr('Vermögen öffnen','Open net worth'),()=>openView('networth'));
+  }else if(context.entityType==='transactions'){
+    add(tr('Auswahl in Buchungen ansehen','View selection in transactions'),()=>openView('transactions'));
+  }
+  if(!actions.length)return;
+  messageRoots().forEach(root=>{
+    const article=[...root.querySelectorAll('.coach-message.assistant')].at(-1);if(!article||article.querySelector('.coach-response-actions'))return;
+    const bar=document.createElement('div');bar.className='coach-response-actions';
+    actions.forEach(action=>{const b=document.createElement('button');b.type='button';b.className='ghost';b.textContent=action.label;b.addEventListener('click',action.run);bar.appendChild(b)});
+    article.appendChild(bar);
   });
 }
 
