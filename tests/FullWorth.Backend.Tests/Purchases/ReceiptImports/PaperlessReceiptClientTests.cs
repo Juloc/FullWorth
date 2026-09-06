@@ -58,23 +58,53 @@ public sealed class PaperlessReceiptClientTests
     }
 
     [Fact]
-    public async Task PreviewRejectsPaginationToAnotherHost()
+    public async Task PreviewRebasesPaginationToConfiguredServer()
     {
-        var handler = new SequenceHandler(JsonResponse("""
-            {"count":2,"next":"https://attacker.example/api/documents/?page=2","results":[
-              {"id":11,"title":"Receipt 11","created":"2026-08-30","document_type":null,"correspondent":null,"tags":[]}
-            ]}
-            """));
+        var handler = new SequenceHandler(
+            JsonResponse("""
+                {"count":2,"next":"http://paperless:8000/api/documents/?page=2","results":[
+                  {"id":11,"title":"Receipt 11","created":"2026-08-30","document_type":null,"correspondent":null,"tags":[]}
+                ]}
+                """),
+            JsonResponse("""
+                {"count":2,"next":null,"results":[
+                  {"id":12,"title":"Receipt 12","created":"2026-08-31","document_type":null,"correspondent":null,"tags":[]}
+                ]}
+                """));
         var client = CreateClient(handler);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.PreviewAsync(
+        var result = await client.PreviewAsync(
             "https://paperless.example.test/",
             "secret-token",
             new PaperlessPreviewRequest(Limit: 2),
-            CancellationToken.None));
+            CancellationToken.None);
 
-        Assert.Contains("leave the configured server", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Single(handler.Requests);
+        Assert.Equal(new[] { 11, 12 }, result.Documents.Select(x => x.Id).ToArray());
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.Equal("paperless.example.test", request.RequestUri!.Host));
+        Assert.Equal("/api/documents/", handler.Requests[1].RequestUri!.AbsolutePath);
+        Assert.Contains("page=2", handler.Requests[1].RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task FilterOptionsLoadsPaperlessMetadata()
+    {
+        var handler = new SequenceHandler(
+            JsonResponse("""{"count":1,"next":null,"results":[{"id":1,"name":"Receipt"}]}"""),
+            JsonResponse("""{"count":1,"next":null,"results":[{"id":2,"name":"Invoice"}]}"""),
+            JsonResponse("""{"count":1,"next":null,"results":[{"id":3,"name":"Shop"}]}"""),
+            JsonResponse("""{"count":1,"next":null,"results":[{"id":4,"name":"Archive"}]}"""),
+            JsonResponse("""{"count":1,"next":null,"results":[{"id":5,"name":"Amount"}]}"""));
+        var client = CreateClient(handler);
+
+        var result = await client.GetFilterOptionsAsync("https://paperless.example.test/", "secret-token", CancellationToken.None);
+
+        Assert.Equal("Receipt", Assert.Single(result.Tags).Name);
+        Assert.Equal("Invoice", Assert.Single(result.DocumentTypes).Name);
+        Assert.Equal("Shop", Assert.Single(result.Correspondents).Name);
+        Assert.Equal("Archive", Assert.Single(result.StoragePaths).Name);
+        Assert.Equal("Amount", Assert.Single(result.CustomFields).Name);
+        Assert.All(handler.Requests, request => Assert.Equal("paperless.example.test", request.RequestUri!.Host));
     }
 
     [Fact]
