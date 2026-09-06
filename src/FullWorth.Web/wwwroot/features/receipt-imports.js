@@ -533,7 +533,8 @@ function addPaperlessRule(initial = {}) {
     <button type="button" class="icon-button paperless-rule-remove" data-rule-remove aria-label="${esc(t('Filter entfernen', 'Remove filter'))}">×</button>`;
 
   host.appendChild(row);
-  row.querySelector('[data-rule-join]').value = initial.join || 'AND';
+  const defaultJoin = dialog.querySelector('[data-paperless-match]')?.value === 'OR' ? 'OR' : 'AND';
+  row.querySelector('[data-rule-join]').value = initial.join || defaultJoin;
   row.querySelector('[data-rule-not]').checked = Boolean(initial.not);
   row.querySelector('[data-rule-open]').value = String(initial.open || 0);
   row.querySelector('[data-rule-field]').value = initial.field || 'text';
@@ -688,9 +689,20 @@ function renderPaperlessPreview(preview) {
     el.innerHTML = `<div class="row-sub">${esc(t('Keine Dokumente gefunden.', 'No documents found.'))}</div>`;
     return;
   }
-  el.innerHTML = `<div class="receipt-import-preview-head"><label class="check inline"><input type="checkbox" data-paperless-all checked> ${esc(t('Alle auswählen', 'Select all'))}</label><span>${preview.count} ${esc(t('gefunden', 'found'))}${preview.truncated ? ` · ${esc(t('Vorschau begrenzt', 'preview limited'))}` : ''}</span></div>
-    <div class="receipt-import-docs">${docs.map(doc => `<label class="receipt-import-doc"><input type="checkbox" data-paperless-doc value="${doc.id}" checked><span><strong>${esc(doc.title || `#${doc.id}`)}</strong><small>${esc(paperlessDocumentMeta(doc))}</small></span></label>`).join('')}</div>`;
-  el.querySelector('[data-paperless-all]').onchange = event => el.querySelectorAll('[data-paperless-doc]').forEach(box => { box.checked = event.target.checked; });
+
+  const newDocs = docs.filter(doc => !doc.imported);
+  el.innerHTML = `<div class="receipt-import-preview-head">
+      <label class="check inline"><input type="checkbox" data-paperless-all ${newDocs.length ? 'checked' : 'disabled'}> ${esc(t('Alle neuen auswählen', 'Select all new'))}</label>
+      <span>${newDocs.length} ${esc(t('neu', 'new'))} · ${preview.count} ${esc(t('gefunden', 'found'))}${preview.truncated ? ` · ${esc(t('Vorschau begrenzt', 'preview limited'))}` : ''}</span>
+    </div>
+    <div class="receipt-import-docs">${docs.map(doc => `<label class="receipt-import-doc ${doc.imported ? 'imported' : ''}">
+      <input type="checkbox" data-paperless-doc value="${doc.id}" ${doc.imported ? 'disabled' : 'checked'}>
+      <span><strong>${esc(doc.title || `#${doc.id}`)}</strong><small>${esc(paperlessDocumentMeta(doc))}</small></span>
+      ${doc.imported ? `<em>${esc(t('bereits importiert', 'already imported'))}</em>` : ''}
+    </label>`).join('')}</div>`;
+
+  const all = el.querySelector('[data-paperless-all]');
+  if (all) all.onchange = event => el.querySelectorAll('[data-paperless-doc]:not(:disabled)').forEach(box => { box.checked = event.target.checked; });
 }
 
 function paperlessDocumentMeta(doc) {
