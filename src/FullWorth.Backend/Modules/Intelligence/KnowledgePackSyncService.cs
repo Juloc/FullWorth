@@ -10,13 +10,16 @@ public sealed record KnowledgePackSyncResult(
     string Status,
     string? Version,
     int MerchantMappings,
-    string? ErrorCode);
+    string? ErrorCode,
+    int BrandAssetsDownloaded = 0,
+    int BrandAssetsReused = 0);
 
 public sealed class KnowledgePackSyncService(
     IntelligenceDbContext db,
     CloudIntelligenceStateService stateService,
     CloudInstanceCredentialStore credentialStore,
     IFullWorthCloudClient cloud,
+    BrandPackService brandPacks,
     IConfiguration configuration,
     ILogger<KnowledgePackSyncService> logger)
 {
@@ -81,6 +84,7 @@ public sealed class KnowledgePackSyncService(
 
             var ontology = ProjectOntology(payload);
             var brands = ProjectBrands(payload);
+            var blobResolution = await ResolveBrandBlobsAsync(secret, brands, ct);
             var redirectMap = ontology.Redirects
                 .Where(x => x.EntityType == "category")
                 .ToDictionary(
@@ -104,6 +108,36 @@ public sealed class KnowledgePackSyncService(
                 throw new KnowledgePackVerificationException("knowledge_pack_brand_reference_invalid");
 
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var nowForBlobs = DateTimeOffset.UtcNow;
+            var resolvedHashes = blobResolution.Blobs.Keys.ToArray();
+            var cachedBlobs = await db.BrandAssetBlobs
+                .Where(x => resolvedHashes.Contains(x.ContentSha256))
+                .ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+            foreach (var resolved in blobResolution.Blobs.Values)
+            {
+                if (cachedBlobs.TryGetValue(resolved.ContentSha256, out var cached))
+                {
+                    cached.MediaType = resolved.MediaType;
+                    cached.ByteLength = resolved.ByteLength;
+                    cached.ContentBase64 = resolved.ContentBase64;
+                    cached.LastUsedAt = nowForBlobs;
+                }
+                else
+                {
+                    var row = new BrandAssetBlob
+                    {
+                        ContentSha256 = resolved.ContentSha256,
+                        MediaType = resolved.MediaType,
+                        ByteLength = resolved.ByteLength,
+                        ContentBase64 = resolved.ContentBase64,
+                        CreatedAt = nowForBlobs,
+                        LastUsedAt = nowForBlobs
+                    };
+                    db.BrandAssetBlobs.Add(row);
+                    cachedBlobs[resolved.ContentSha256] = row;
+                }
+            }
 
             db.OfficialMerchantMappings.RemoveRange(await db.OfficialMerchantMappings.ToListAsync(ct));
             db.OfficialBrandAliases.RemoveRange(await db.OfficialBrandAliases.ToListAsync(ct));
@@ -163,8 +197,15 @@ public sealed class KnowledgePackSyncService(
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
 
+            await brandPacks.PruneUnreferencedBlobsAsync(ct);
             await credentialStore.MarkUsedAsync(state.InstanceId, ct);
-            return new("installed", manifest.Version, mappings.Count, null);
+            return new(
+                "installed",
+                manifest.Version,
+                mappings.Count,
+                null,
+                blobResolution.Downloaded,
+                blobResolution.Reused);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -214,7 +255,7 @@ public sealed class KnowledgePackSyncService(
     {
         if (string.IsNullOrWhiteSpace(manifest.PackId) ||
             string.IsNullOrWhiteSpace(manifest.Version) ||
-            !string.Equals(manifest.SchemaVersion, KnowledgePackProtocol.SchemaVersion, StringComparison.Ordinal) ||
+            !KnowledgePackProtocol.IsSupportedSchemaVersion(manifest.SchemaVersion) ||
             !string.Equals(manifest.SignatureAlgorithm, KnowledgePackProtocol.SignatureAlgorithm, StringComparison.Ordinal) ||
             !string.Equals(NormalizeRegion(manifest.Region), expectedRegion, StringComparison.Ordinal) ||
             manifest.ContentSha256.Length != 64 ||
@@ -310,9 +351,16 @@ public sealed class KnowledgePackSyncService(
 
     private static ProjectedBrands ProjectBrands(KnowledgePackPayload payload)
     {
-        var assets = (payload.BrandAssets ?? [])
-            .Select(ToBrandAsset)
-            .ToList();
+        var assets = new List<OfficialBrandAsset>();
+        var embeddedBlobs = new Dictionary<string, VerifiedBrandBlob>(StringComparer.Ordinal);
+        foreach (var source in payload.BrandAssets ?? [])
+        {
+            var projected = ToBrandAsset(source, payload.SchemaVersion);
+            assets.Add(projected.Asset);
+            if (projected.EmbeddedBlob is not null)
+                embeddedBlobs[projected.EmbeddedBlob.ContentSha256] = projected.EmbeddedBlob;
+        }
+
         if (assets.Count != assets.Select(x => x.BrandKey).Distinct(StringComparer.Ordinal).Count() ||
             assets.Count != assets.Select(x => x.LogoKey).Distinct(StringComparer.Ordinal).Count())
             throw new KnowledgePackVerificationException("knowledge_pack_brand_duplicate_asset");
@@ -329,85 +377,144 @@ public sealed class KnowledgePackSyncService(
                 .Count())
             throw new KnowledgePackVerificationException("knowledge_pack_brand_duplicate_alias");
 
-        return new ProjectedBrands(assets, aliases);
+        return new ProjectedBrands(assets, aliases, embeddedBlobs.Values.ToList());
     }
 
-    private static OfficialBrandAsset ToBrandAsset(KnowledgePackBrandAssetPayload source)
+    private static ProjectedBrandAsset ToBrandAsset(
+        KnowledgePackBrandAssetPayload source,
+        string schemaVersion)
     {
-        var brandKey = NormalizeBrandKey(source.BrandKey);
-        var logoKey = NormalizeBrandKey(source.LogoKey);
+        string brandKey;
+        string logoKey;
+        try
+        {
+            brandKey = BrandAssetVerifier.NormalizeBrandKey(source.BrandKey);
+            logoKey = BrandAssetVerifier.NormalizeBrandKey(source.LogoKey);
+        }
+        catch (KnowledgePackVerificationException)
+        {
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+        }
+
         var canonicalName = Trim(source.CanonicalName, 200);
         var mediaType = source.MediaType?.Trim().ToLowerInvariant();
         var suppliedHash = source.ContentSha256?.Trim().ToLowerInvariant();
-        if (brandKey is null || logoKey is null || canonicalName is null ||
+        if (canonicalName is null ||
             mediaType != "image/svg+xml" ||
-            suppliedHash is null || suppliedHash.Length != 64 || !suppliedHash.All(Uri.IsHexDigit) ||
-            string.IsNullOrWhiteSpace(source.ContentBase64))
+            suppliedHash is null || suppliedHash.Length != 64 || !suppliedHash.All(Uri.IsHexDigit))
             throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
 
-        byte[] bytes;
-        try { bytes = Convert.FromBase64String(source.ContentBase64); }
-        catch (FormatException) { throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid"); }
-        if (bytes.Length is <= 0 or > 256 * 1024)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
-
-        var actualHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(actualHash),
-                Encoding.ASCII.GetBytes(suppliedHash)))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_hash_mismatch");
-
-        string svg;
-        try { svg = new UTF8Encoding(false, true).GetString(bytes); }
-        catch (DecoderFallbackException) { throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid"); }
-        var lowered = svg.ToLowerInvariant();
-        if (!lowered.Contains("<svg", StringComparison.Ordinal) ||
-            lowered.Contains("<script", StringComparison.Ordinal) ||
-            lowered.Contains("<foreignobject", StringComparison.Ordinal) ||
-            lowered.Contains("javascript:", StringComparison.Ordinal) ||
-            lowered.Contains("onload=", StringComparison.Ordinal) ||
-            lowered.Contains("onerror=", StringComparison.Ordinal) ||
-            lowered.Contains("<iframe", StringComparison.Ordinal) ||
-            lowered.Contains("<object", StringComparison.Ordinal) ||
-            lowered.Contains("<embed", StringComparison.Ordinal) ||
-            lowered.Contains("href=\"http", StringComparison.Ordinal) ||
-            lowered.Contains("href='http", StringComparison.Ordinal) ||
-            lowered.Contains("url(http", StringComparison.Ordinal) ||
-            lowered.Contains("xlink:href=", StringComparison.Ordinal))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_svg_unsafe");
-
-        var sourceName = Trim(source.SourceName, 200);
-        var sourceUrl = Trim(source.SourceUrl, 1000);
-        if (sourceUrl is not null &&
-            (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var parsed) || parsed.Scheme != Uri.UriSchemeHttps))
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
-
-        return new OfficialBrandAsset
+        VerifiedBrandBlob? embedded = null;
+        var byteLength = source.ByteLength;
+        if (!string.IsNullOrWhiteSpace(source.ContentBase64))
         {
-            BrandKey = brandKey,
-            CanonicalName = canonicalName,
-            LogoKey = logoKey,
-            MediaType = mediaType,
-            ContentBase64 = Convert.ToBase64String(bytes),
-            ContentSha256 = actualHash,
-            SourceName = sourceName,
-            SourceUrl = sourceUrl,
-            LicenseNote = Trim(source.LicenseNote, 500)
-        };
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(source.ContentBase64); }
+            catch (FormatException)
+            {
+                throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+            }
+            embedded = BrandAssetVerifier.VerifySvg(
+                bytes,
+                mediaType,
+                suppliedHash,
+                byteLength);
+            byteLength = embedded.ByteLength;
+        }
+        else if (schemaVersion == KnowledgePackProtocol.LegacySchemaVersion)
+        {
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+        }
+        else if (byteLength is <= 0 or > BrandAssetVerifier.MaximumAssetBytes)
+        {
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+        }
+
+        var sourceUrl = BrandAssetVerifier.NormalizeSourceUrl(source.SourceUrl);
+        return new ProjectedBrandAsset(
+            new OfficialBrandAsset
+            {
+                BrandKey = brandKey,
+                CanonicalName = canonicalName,
+                LogoKey = logoKey,
+                MediaType = mediaType,
+                ContentSha256 = suppliedHash,
+                ByteLength = byteLength,
+                SourceName = Trim(source.SourceName, 200),
+                SourceUrl = sourceUrl,
+                LicenseNote = Trim(source.LicenseNote, 500)
+            },
+            embedded);
+    }
+
+    private async Task<BrandBlobResolution> ResolveBrandBlobsAsync(
+        string secret,
+        ProjectedBrands brands,
+        CancellationToken ct)
+    {
+        if (brands.Assets.Count == 0)
+            return new BrandBlobResolution(new Dictionary<string, VerifiedBrandBlob>(StringComparer.Ordinal), 0, 0);
+
+        var hashes = brands.Assets.Select(x => x.ContentSha256).Distinct(StringComparer.Ordinal).ToArray();
+        var cached = await db.BrandAssetBlobs.AsNoTracking()
+            .Where(x => hashes.Contains(x.ContentSha256))
+            .ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+        var embedded = brands.EmbeddedBlobs.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
+        var resolved = new Dictionary<string, VerifiedBrandBlob>(StringComparer.Ordinal);
+        var downloaded = 0;
+        var reused = 0;
+
+        foreach (var asset in brands.Assets)
+        {
+            if (resolved.ContainsKey(asset.ContentSha256))
+                continue;
+
+            if (cached.TryGetValue(asset.ContentSha256, out var cachedBlob) &&
+                cachedBlob.ByteLength == asset.ByteLength &&
+                string.Equals(cachedBlob.MediaType, asset.MediaType, StringComparison.Ordinal))
+            {
+                resolved[asset.ContentSha256] = new VerifiedBrandBlob(
+                    cachedBlob.ContentSha256,
+                    cachedBlob.MediaType,
+                    cachedBlob.ByteLength,
+                    cachedBlob.ContentBase64);
+                reused++;
+                continue;
+            }
+
+            if (embedded.TryGetValue(asset.ContentSha256, out var embeddedBlob))
+            {
+                resolved[asset.ContentSha256] = embeddedBlob;
+                reused++;
+                continue;
+            }
+
+            var bytes = await cloud.DownloadKnowledgePackBrandAssetAsync(
+                secret,
+                asset.ContentSha256,
+                ct);
+            var verified = BrandAssetVerifier.VerifySvg(
+                bytes,
+                asset.MediaType,
+                asset.ContentSha256,
+                asset.ByteLength);
+            resolved[asset.ContentSha256] = verified;
+            downloaded++;
+        }
+
+        return new BrandBlobResolution(resolved, downloaded, reused);
     }
 
     private static OfficialBrandAlias ToBrandAlias(KnowledgePackBrandAliasPayload source)
     {
-        var alias = MerchantNormalization.Normalize(source.AliasKey);
-        var brandKey = NormalizeBrandKey(source.BrandKey);
-        if (alias is null || alias.Length > 300 || brandKey is null)
-            throw new KnowledgePackVerificationException("knowledge_pack_brand_alias_invalid");
+        var alias = BrandAssetVerifier.NormalizeAlias(source.AliasKey);
+        var brandKey = BrandAssetVerifier.NormalizeBrandKey(source.BrandKey);
 
         return new OfficialBrandAlias
         {
             AliasKey = alias,
             BrandKey = brandKey,
-            Country = NormalizeCountry(source.Country)
+            Country = BrandAssetVerifier.NormalizeCountry(source.Country)
         };
     }
 
@@ -595,8 +702,7 @@ public sealed class KnowledgePackSyncService(
             ?? throw new KnowledgePackVerificationException("knowledge_pack_merchant_invalid");
         var logoKey = string.IsNullOrWhiteSpace(source.LogoKey)
             ? null
-            : NormalizeBrandKey(source.LogoKey)
-              ?? throw new KnowledgePackVerificationException("knowledge_pack_merchant_invalid");
+            : BrandAssetVerifier.NormalizeBrandKey(source.LogoKey);
         if (string.IsNullOrWhiteSpace(source.CanonicalMerchantKey) ||
             string.IsNullOrWhiteSpace(source.CanonicalName) ||
             string.IsNullOrWhiteSpace(source.CategoryKey) ||
@@ -734,16 +840,6 @@ public sealed class KnowledgePackSyncService(
         return current;
     }
 
-    private static string? NormalizeBrandKey(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToLowerInvariant();
-        if (normalized.Length > 120) return null;
-        return normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-')
-            ? normalized
-            : null;
-    }
-
     private static string? NormalizeOntologyType(string? value)
     {
         var normalized = value?.Trim().ToLowerInvariant();
@@ -799,9 +895,19 @@ public sealed class KnowledgePackSyncService(
     }
 }
 
+internal sealed record ProjectedBrandAsset(
+    OfficialBrandAsset Asset,
+    VerifiedBrandBlob? EmbeddedBlob);
+
 internal sealed record ProjectedBrands(
     IReadOnlyList<OfficialBrandAsset> Assets,
-    IReadOnlyList<OfficialBrandAlias> Aliases);
+    IReadOnlyList<OfficialBrandAlias> Aliases,
+    IReadOnlyList<VerifiedBrandBlob> EmbeddedBlobs);
+
+internal sealed record BrandBlobResolution(
+    IReadOnlyDictionary<string, VerifiedBrandBlob> Blobs,
+    int Downloaded,
+    int Reused);
 
 internal sealed record ProjectedOntology(
     IReadOnlyList<OfficialOntologyEntity> Entities,
