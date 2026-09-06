@@ -20,7 +20,7 @@ public sealed class KnowledgePackSyncService(
     IConfiguration configuration,
     ILogger<KnowledgePackSyncService> logger)
 {
-    public const int MaximumPackBytes = 5 * 1024 * 1024;
+    public const int MaximumPackBytes = FullWorthCloudClient.MaximumKnowledgePackBytes;
     private const int ArchiveRetention = 3;
 
     public async Task<KnowledgePackSyncResult> SyncOnceAsync(CancellationToken ct)
