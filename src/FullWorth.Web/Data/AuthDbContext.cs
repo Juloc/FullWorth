@@ -1,4 +1,5 @@
 using FullWorth.Web.Modules.Auth;
+using FullWorth.Web.Modules.Admin;
 using FullWorth.Web.Modules.Passkeys;
 using FullWorth.Web.Modules.Recovery;
 using FullWorth.Web.Modules.Sessions;
@@ -11,6 +12,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     : IdentityUserContext<AuthUser, Guid>(options)
 {
     public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<AdminAuditEvent> AdminAuditEvents => Set<AdminAuditEvent>();
     public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
     public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
@@ -29,6 +31,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.Property(x => x.NormalizedUserName).IsRequired().HasMaxLength(256);
             entity.Property(x => x.FinanceUserId).IsRequired();
             entity.Property(x => x.IsDisabled).IsRequired();
+            entity.Property(x => x.IsAdmin).IsRequired();
             entity.Property(x => x.DeletionRequestedAt);
             entity.Property(x => x.DeletionScheduledFor);
             entity.Property(x => x.DeletionLeaseUntil);
@@ -46,6 +49,18 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
 
             entity.HasIndex(x => x.DeletionScheduledFor)
                 .HasDatabaseName("DeletionScheduledForIndex");
+        });
+
+        builder.Entity<AdminAuditEvent>(entity =>
+        {
+            entity.ToTable("AdminAuditEvents");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ActorAuthUserId).IsRequired();
+            entity.Property(x => x.Action).IsRequired().HasMaxLength(80);
+            entity.Property(x => x.Outcome).IsRequired().HasMaxLength(40);
+            entity.Property(x => x.OccurredAt).IsRequired();
+            entity.HasIndex(x => x.OccurredAt);
+            entity.HasIndex(x => x.TargetAuthUserId);
         });
 
         builder.Entity<UserSession>(entity =>
