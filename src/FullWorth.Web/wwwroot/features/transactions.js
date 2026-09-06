@@ -50,6 +50,18 @@ function updateCoachSelectionBar() {
       entityType: 'transactions',
       entityLabel: `${selectedForCoach.size} ${deLabel('Buchungen','transactions')}`,
       selectedIds: [...selectedForCoach.keys()],
+      selectedItems: items.slice(0, 20).map(item => ({
+        id: item.id,
+        label: item.merchantDisplayName || item.counterparty || deLabel('Buchung','Transaction'),
+        details: {
+          date: String(item.bookingDate || '').slice(0, 10),
+          amount: String(item.amount ?? ''),
+          currency: item.currency || '',
+          merchant: item.merchantDisplayName || item.counterparty || '',
+          category: item.categoryName || item.category || '',
+          account: item.account || ''
+        }
+      })),
       details: { count: String(selectedForCoach.size), amount: total == null ? '' : String(total), currency }
     });
   };
