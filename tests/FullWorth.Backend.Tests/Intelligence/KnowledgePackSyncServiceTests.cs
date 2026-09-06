@@ -82,6 +82,68 @@ public sealed class KnowledgePackSyncServiceTests
     }
 
     [Fact]
+    public async Task Signed_pack_with_redirect_cycle_is_rejected()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-4",
+            "TEST",
+            "dynamic.category.a.1234567890",
+            [
+                new KnowledgePackOntologyEntityPayload(
+                    "category", "dynamic.category.a.1234567890", "A", null, "merged", 2),
+                new KnowledgePackOntologyEntityPayload(
+                    "category", "dynamic.category.b.1234567890", "B", null, "merged", 2)
+            ],
+            null,
+            [
+                new KnowledgePackOntologyRedirectPayload(
+                    "category", "dynamic.category.a.1234567890", "dynamic.category.b.1234567890", 2),
+                new KnowledgePackOntologyRedirectPayload(
+                    "category", "dynamic.category.b.1234567890", "dynamic.category.a.1234567890", 2)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_ontology_redirect_cycle", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialOntologyRedirects.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Signed_pack_with_redirect_to_missing_active_target_is_rejected()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-5",
+            "TEST",
+            "dynamic.category.a.1234567890",
+            [
+                new KnowledgePackOntologyEntityPayload(
+                    "category", "dynamic.category.a.1234567890", "A", null, "merged", 2)
+            ],
+            null,
+            [
+                new KnowledgePackOntologyRedirectPayload(
+                    "category", "dynamic.category.a.1234567890", "housing.electricity", 2)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_ontology_redirect_target_invalid", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialOntologyEntities.ToListAsync());
+    }
+
+    [Fact]
     public async Task Invalid_new_signature_keeps_previous_verified_pack_active()
     {
         await using var fixture = await Fixture.CreateAsync();
