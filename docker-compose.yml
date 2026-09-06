@@ -32,7 +32,7 @@ services:
     # Experimental, internal-only bridge used by Purchases -> "GPT Scan · Test".
     # ChatGPT/Codex credentials are persisted only in this dedicated volume. It deliberately does
     # not receive FULLWORTH_BACKEND_INTERNAL_KEY; the bridge has its own least-privilege secret.
-    image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-1.2.0-rc.4}
+    image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-1.2.0-rc.6}
     build:
       context: .
       dockerfile: src/FullWorth.CodexBridge/Dockerfile
@@ -66,7 +66,7 @@ services:
   fullworth-backend:
     # Published to GHCR by .github/workflows/release.yml. `docker compose pull` fetches this image;
     # `docker compose up -d --build` still builds from source locally (build takes precedence on up).
-    image: ghcr.io/juloc/fullworth-backend:${FULLWORTH_VERSION:-1.2.0-rc.4}
+    image: ghcr.io/juloc/fullworth-backend:${FULLWORTH_VERSION:-1.2.0-rc.6}
     build:
       context: .
       dockerfile: src/FullWorth.Backend/Dockerfile
@@ -117,7 +117,7 @@ services:
       - /tmp
 
   fullworth-banking:
-    image: ghcr.io/juloc/fullworth-banking:${FULLWORTH_VERSION:-1.2.0-rc.4}
+    image: ghcr.io/juloc/fullworth-banking:${FULLWORTH_VERSION:-1.2.0-rc.6}
     build:
       context: .
       dockerfile: src/FullWorth.Banking/Dockerfile
@@ -161,7 +161,7 @@ services:
       - /tmp
 
   fullworth-web:
-    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-1.2.0-rc.4}
+    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-1.2.0-rc.6}
     build:
       context: .
       dockerfile: src/FullWorth.Web/Dockerfile
