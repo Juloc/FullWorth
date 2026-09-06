@@ -63,7 +63,11 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
     // service calls Enable Banking with the "v1:" ciphertext (→ 404) and re-encrypts it on write-back.
     public async Task<List<BankConnection>> ListAsync(CancellationToken ct)
     {
-        var items = await db.BankConnections.AsNoTracking().OrderBy(x => x.InstitutionName).ToListAsync(ct);
+        var items = await db.BankConnections.AsNoTracking()
+            .Where(x => x.AuthorizationUserId == null ||
+                        db.Users.Any(user => user.Id == x.AuthorizationUserId && user.IsActive && !user.IsTombstone))
+            .OrderBy(x => x.InstitutionName)
+            .ToListAsync(ct);
         foreach (var item in items) DecryptSecrets(item);
         return items;
     }
