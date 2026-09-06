@@ -69,12 +69,44 @@ builder.Services.AddDbContext<AuthDbContext>((services, options) =>
         npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "auth"));
 });
 
-builder.Services.AddAuthentication(options =>
+var authentication = builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
     options.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
     options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-}).AddIdentityCookies();
+});
+authentication.AddIdentityCookies();
+
+var googleClientId = builder.Configuration["ExternalAuth:Google:ClientId"];
+var googleClientSecret = builder.Configuration["ExternalAuth:Google:ClientSecret"];
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authentication.AddGoogle("Google", "Google", options =>
+    {
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+        options.SignInScheme = IdentityConstants.ExternalScheme;
+    });
+}
+
+var appleServiceId = builder.Configuration["ExternalAuth:Apple:ServiceId"];
+var appleTeamId = builder.Configuration["ExternalAuth:Apple:TeamId"];
+var applePrivateKeyId = builder.Configuration["ExternalAuth:Apple:PrivateKeyId"];
+var applePrivateKey = DecodeBase64Secret(builder.Configuration["ExternalAuth:Apple:PrivateKeyBase64"]);
+if (!string.IsNullOrWhiteSpace(appleServiceId)
+    && !string.IsNullOrWhiteSpace(appleTeamId)
+    && !string.IsNullOrWhiteSpace(applePrivateKeyId)
+    && !string.IsNullOrWhiteSpace(applePrivateKey))
+{
+    authentication.AddAppleID("Apple", "Apple", options =>
+    {
+        options.ServiceId = appleServiceId;
+        options.TeamId = appleTeamId;
+        options.PrivateKeyId = applePrivateKeyId;
+        options.PrivateKey = applePrivateKey;
+        options.SignInScheme = IdentityConstants.ExternalScheme;
+    });
+}
 
 builder.Services.AddAuthorization(options =>
 {
@@ -533,6 +565,21 @@ static async Task ProxyAsync(HttpContext context, HttpClient client, Uri target,
     if (response.Content.Headers.ContentType is not null)
         context.Response.ContentType = response.Content.Headers.ContentType.ToString();
     await response.Content.CopyToAsync(context.Response.Body, ct);
+}
+
+static string? DecodeBase64Secret(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        return null;
+
+    try
+    {
+        return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value.Trim()));
+    }
+    catch (FormatException)
+    {
+        return null;
+    }
 }
 
 public partial class Program { }
