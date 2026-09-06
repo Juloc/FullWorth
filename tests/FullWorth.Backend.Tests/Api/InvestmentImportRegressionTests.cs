@@ -222,6 +222,226 @@ WHERE "PortfolioId"=@portfolio ORDER BY "TradeDate"
     }
 
     [Fact]
+    public async Task TradeRepublicBuyCancellationReconcilesHoldingsAndCash()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+
+        const string csv = "date,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
+                           "2026-08-01,BUY,FUND,Core MSCI World,IE00B4L5Y983,1,50,-50,0,0,EUR,tr-buy-a\r\n" +
+                           "2026-08-01,BUY_CANCELLED,FUND,Core MSCI World,IE00B4L5Y983,-1,50,50,0,0,EUR,tr-cancel-a\r\n" +
+                           "2026-08-01,BUY,FUND,Core MSCI World,IE00B4L5Y983,1,50,-50,0,0,EUR,tr-buy-b\r\n";
+        var job = await UploadTradeRepublic(client, owner, csv);
+
+        using (var summaryRequest = UserRequest(HttpMethod.Get,
+                   $"/api/investment-import/jobs/{job:D}/summary?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner))
+        using (var summaryResponse = await client.SendAsync(summaryRequest))
+        {
+            Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
+            using var summary = JsonDocument.Parse(await summaryResponse.Content.ReadAsStringAsync());
+            var typeCounts = summary.RootElement.GetProperty("transactionTypes").EnumerateArray()
+                .ToDictionary(item => item.GetProperty("type").GetString()!, item => item.GetProperty("count").GetInt32());
+            Assert.Equal(2, typeCounts["buy"]);
+            Assert.Equal(1, typeCounts["cancellation"]);
+        }
+
+        using var commitRequest = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        commitRequest.Content = JsonContent.Create(new
+        {
+            portfolioId = (Guid?)null,
+            createPortfolio = new { name = "Trade Republic", currency = "EUR", providerName = "Trade Republic" },
+            securityMappings = new Dictionary<string, Guid?>(),
+            createMissingSecurities = true,
+            candidateIds = (Guid[]?)null
+        });
+        using var commit = await client.SendAsync(commitRequest);
+        Assert.Equal(HttpStatusCode.OK, commit.StatusCode);
+        using var body = JsonDocument.Parse(await commit.Content.ReadAsStringAsync());
+        var portfolioId = body.RootElement.GetProperty("portfolioId").GetGuid();
+        var reconciliation = body.RootElement.GetProperty("reconciliation");
+        Assert.True(reconciliation.GetProperty("healthy").GetBoolean());
+        Assert.Equal(1m, Assert.Single(reconciliation.GetProperty("positions").EnumerateArray()).GetProperty("quantity").GetDecimal());
+        var eur = Assert.Single(reconciliation.GetProperty("cashBalances").EnumerateArray());
+        Assert.Equal("EUR", eur.GetProperty("currency").GetString());
+        Assert.Equal(-50m, eur.GetProperty("amount").GetDecimal());
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var trades = connection.CreateCommand();
+            trades.CommandText = """
+SELECT "TradeType" FROM "InvestmentTrades"
+WHERE "PortfolioId"=@portfolio ORDER BY "TradeDate","CreatedAt","Id"
+""";
+            var p = trades.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolioId; trades.Parameters.Add(p);
+            await using var reader = await trades.ExecuteReaderAsync();
+            var types = new List<string>();
+            while (await reader.ReadAsync()) types.Add(reader.GetString(0));
+            Assert.Equal(3, types.Count);
+            Assert.Contains("cancellation", types);
+        });
+    }
+
+    [Fact]
+    public async Task InvestmentImportHistoryAndRollbackAreExact()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var portfolio = Guid.NewGuid();
+        var security = Guid.NewGuid();
+        await SeedOwnerPortfolioSecurity(factory, owner, portfolio, security);
+
+        const string csv = "Datum;Typ;ISIN;Stück;Kurs;Betrag;Währung;ID\r\n" +
+                           "30.08.2026;Kauf;DE000A1EWWW0;2;100,00;200,00;EUR;rollback-buy\r\n";
+        var job = await Upload(client, owner, csv);
+        using (var commit = await Commit(client, owner, job, portfolio))
+            Assert.Equal(HttpStatusCode.OK, commit.StatusCode);
+
+        using (var historyRequest = UserRequest(HttpMethod.Get,
+                   $"/api/investment-import/history?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner))
+        using (var historyResponse = await client.SendAsync(historyRequest))
+        {
+            Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+            using var history = JsonDocument.Parse(await historyResponse.Content.ReadAsStringAsync());
+            var item = Assert.Single(history.RootElement.EnumerateArray());
+            Assert.Equal(job, item.GetProperty("id").GetGuid());
+            Assert.Equal(portfolio, item.GetProperty("portfolioId").GetGuid());
+            Assert.Equal(1, item.GetProperty("linkedTrades").GetInt32());
+            Assert.True(item.GetProperty("rollbackAvailable").GetBoolean());
+        }
+
+        using (var rollbackRequest = UserRequest(HttpMethod.Post,
+                   $"/api/investment-import/jobs/{job:D}/rollback?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner))
+        using (var rollbackResponse = await client.SendAsync(rollbackRequest))
+        {
+            Assert.Equal(HttpStatusCode.OK, rollbackResponse.StatusCode);
+            using var rollback = JsonDocument.Parse(await rollbackResponse.Content.ReadAsStringAsync());
+            Assert.Equal(1, rollback.RootElement.GetProperty("removedTrades").GetInt32());
+            Assert.False(rollback.RootElement.GetProperty("portfolioRemoved").GetBoolean());
+        }
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var trades = connection.CreateCommand();
+            trades.CommandText = "SELECT count(*) FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio";
+            var p = trades.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolio; trades.Parameters.Add(p);
+            Assert.Equal(0L, Convert.ToInt64(await trades.ExecuteScalarAsync()));
+
+            await using var jobState = connection.CreateCommand();
+            jobState.CommandText = "SELECT \"Status\",\"RolledBackAt\" FROM \"InvestmentImportJobs\" WHERE \"Id\"=@job";
+            var j = jobState.CreateParameter(); j.ParameterName = "@job"; j.Value = job; jobState.Parameters.Add(j);
+            await using var reader = await jobState.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("rolled_back", reader.GetString(0));
+            Assert.False(reader.IsDBNull(1));
+        });
+    }
+
+    [Fact]
+    public async Task RollbackIsBlockedWhenLaterTradesDependOnImportedHoldings()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var portfolio = Guid.NewGuid();
+        var security = Guid.NewGuid();
+        await SeedOwnerPortfolioSecurity(factory, owner, portfolio, security);
+
+        const string csv = "Datum;Typ;ISIN;Stück;Kurs;Betrag;Währung;ID\r\n" +
+                           "30.08.2026;Kauf;DE000A1EWWW0;2;100,00;200,00;EUR;protected-buy\r\n";
+        var job = await Upload(client, owner, csv);
+        using (var commit = await Commit(client, owner, job, portfolio))
+            Assert.Equal(HttpStatusCode.OK, commit.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow.AddMinutes(1);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+INSERT INTO "InvestmentTrades"
+("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","Quantity","Price","Amount","Currency","Fees","Taxes","Source","CreatedAt","UpdatedAt")
+VALUES ({Guid.NewGuid()},{FullWorthSpaceDefaults.LegacyId},{portfolio},{security},{"sell"},{new DateOnly(2026,9,1)},{1m},{110m},{110m},{"EUR"},{0m},{0m},{"manual"},{now},{now})
+""");
+        });
+
+        using var rollbackRequest = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/rollback?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var rollback = await client.SendAsync(rollbackRequest);
+        Assert.Equal(HttpStatusCode.Conflict, rollback.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var trades = connection.CreateCommand();
+            trades.CommandText = "SELECT count(*) FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio";
+            var p = trades.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolio; trades.Parameters.Add(p);
+            Assert.Equal(2L, Convert.ToInt64(await trades.ExecuteScalarAsync()));
+
+            await using var jobState = connection.CreateCommand();
+            jobState.CommandText = "SELECT \"Status\",\"RolledBackAt\" FROM \"InvestmentImportJobs\" WHERE \"Id\"=@job";
+            var j = jobState.CreateParameter(); j.ParameterName = "@job"; j.Value = job; jobState.Parameters.Add(j);
+            await using var reader = await jobState.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("completed", reader.GetString(0));
+            Assert.True(reader.IsDBNull(1));
+        });
+    }
+
+    [Fact]
+    public async Task RollbackRemovesImportCreatedPortfolioAndUnusedSecurity()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+
+        const string csv = "date,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
+                           "2026-08-01,BUY,FUND,Core MSCI World,IE00B4L5Y983,1,100,-100,0,0,EUR,rollback-new-buy\r\n";
+        var job = await UploadTradeRepublic(client, owner, csv);
+
+        using var commitRequest = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        commitRequest.Content = JsonContent.Create(new
+        {
+            portfolioId = (Guid?)null,
+            createPortfolio = new { name = "Trade Republic", currency = "EUR", providerName = "Trade Republic" },
+            securityMappings = new Dictionary<string, Guid?>(),
+            createMissingSecurities = true,
+            candidateIds = (Guid[]?)null
+        });
+        using var commit = await client.SendAsync(commitRequest);
+        Assert.Equal(HttpStatusCode.OK, commit.StatusCode);
+        using var commitBody = JsonDocument.Parse(await commit.Content.ReadAsStringAsync());
+        var portfolioId = commitBody.RootElement.GetProperty("portfolioId").GetGuid();
+
+        using var rollbackRequest = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/rollback?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var rollback = await client.SendAsync(rollbackRequest);
+        Assert.Equal(HttpStatusCode.OK, rollback.StatusCode);
+        using var body = JsonDocument.Parse(await rollback.Content.ReadAsStringAsync());
+        Assert.Equal(1, body.RootElement.GetProperty("removedTrades").GetInt32());
+        Assert.Equal(1, body.RootElement.GetProperty("removedSecurities").GetInt32());
+        Assert.True(body.RootElement.GetProperty("portfolioRemoved").GetBoolean());
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var portfolio = connection.CreateCommand();
+            portfolio.CommandText = "SELECT count(*) FROM \"InvestmentPortfolios\" WHERE \"Id\"=@portfolio";
+            var p = portfolio.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolioId; portfolio.Parameters.Add(p);
+            Assert.Equal(0L, Convert.ToInt64(await portfolio.ExecuteScalarAsync()));
+        });
+    }
+
+    [Fact]
     public async Task OversellFailureRollsBackTradeCandidateAndJobMutations()
     {
         using var factory = new BackendWebApplicationFactory();

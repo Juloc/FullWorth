@@ -32,6 +32,9 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("Parqet", html);
         Assert.Contains("value=\"traderepublic\"", html);
         Assert.Contains("id=\"inv-new-portfolio-fields\"", html);
+        Assert.Contains("id=\"inv-type-summary\"", html);
+        Assert.Contains("id=\"inv-reconciliation\"", html);
+        Assert.Contains("id=\"inv-history\"", html);
         Assert.Contains("Broker-PDF", html);
         Assert.DoesNotContain("disabled-provider", html);
     }
@@ -106,6 +109,10 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("transaction_id", centerJs);
         Assert.Contains("assetClass", centerJs);
         Assert.Contains("sourceProvider='trade_republic'", centerJs);
+        Assert.Contains("transactionTypes", centerJs);
+        Assert.Contains("api/investment-import/history", centerJs);
+        Assert.Contains("/rollback?", centerJs);
+        Assert.Contains("renderInvestmentReconciliation", centerJs);
         Assert.Contains("identifier", centerJs);
         Assert.Contains("shares", centerJs);
         Assert.Contains("Auftraggeber/Empfänger", centerJs);
@@ -142,6 +149,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
                 Assert.Contains("createPortfolio", js);
                 Assert.Contains("assetClass", js);
                 Assert.Contains("sourceProvider='trade_republic'", js);
+                Assert.Contains("transactionTypes", js);
+                Assert.Contains("reconciliationHtml", js);
                 Assert.Contains("__new__", js);
             }
         }

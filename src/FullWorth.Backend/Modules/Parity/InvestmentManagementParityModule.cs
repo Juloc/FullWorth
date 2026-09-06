@@ -23,7 +23,7 @@ public static class InvestmentManagementParityEndpoints
 
     private static readonly HashSet<string> TradeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "buy", "sell", "dividend", "interest", "fee", "tax", "deposit", "withdrawal",
+        "buy", "sell", "cancellation", "dividend", "interest", "fee", "tax", "deposit", "withdrawal",
         "security_transfer_in", "security_transfer_out", "split", "other"
     };
 
@@ -188,7 +188,9 @@ WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
         {
             if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
         }
-        catch (Exception exception) when (exception.Message.Contains("Cannot sell", StringComparison.OrdinalIgnoreCase))
+        catch (Exception exception) when (exception.Message.Contains("Cannot sell", StringComparison.OrdinalIgnoreCase) ||
+                                          exception.Message.Contains("Cannot dispose", StringComparison.OrdinalIgnoreCase) ||
+                                          exception.Message.Contains("oversold", StringComparison.OrdinalIgnoreCase))
         {
             return Results.Conflict(new { error = exception.Message });
         }
@@ -350,7 +352,7 @@ VALUES (@watchlist,@security,@target,@notes,@sort)
             return "Amounts and currency are invalid.";
         if (request.SecurityId.HasValue && !await SecurityExists(db, fullWorthSpaceId, request.SecurityId.Value, ct))
             return "Security is invalid.";
-        if (type is "buy" or "sell" or "security_transfer_in" or "security_transfer_out" &&
+        if (type is "buy" or "sell" or "cancellation" or "security_transfer_in" or "security_transfer_out" &&
             (!request.SecurityId.HasValue || request.Quantity is null or <= 0))
             return "This transaction requires a security and positive quantity.";
         if (type is "buy" or "sell" && request.Price is null or <= 0 && request.GrossAmount is null or <= 0)

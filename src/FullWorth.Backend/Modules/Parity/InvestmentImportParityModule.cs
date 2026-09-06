@@ -49,11 +49,11 @@ public static class InvestmentImportParityEndpoints
     private const long MaxUploadBytes = 25L * 1024 * 1024;
     private static readonly HashSet<string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "buy", "sell", "dividend", "interest", "fee", "tax", "deposit", "withdrawal",
+        "buy", "sell", "cancellation", "dividend", "interest", "fee", "tax", "deposit", "withdrawal",
         "security_transfer_in", "security_transfer_out", "split", "other"
     };
     private static readonly HashSet<string> SecurityRequiredTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "buy", "sell", "security_transfer_in", "security_transfer_out", "split" };
+    { "buy", "sell", "cancellation", "security_transfer_in", "security_transfer_out", "split" };
 
     public static IEndpointRouteBuilder MapInvestmentImportParityEndpoints(this IEndpointRouteBuilder app)
     {
@@ -62,7 +62,10 @@ public static class InvestmentImportParityEndpoints
         group.MapPost("/upload", Upload);
         group.MapGet("/jobs/{jobId:guid}", GetJob);
         group.MapGet("/jobs/{jobId:guid}/summary", Summary);
+        group.MapGet("/history", History);
+        group.MapGet("/portfolios/{portfolioId:guid}/reconciliation", Reconciliation);
         group.MapPost("/jobs/{jobId:guid}/commit", Commit);
+        group.MapPost("/jobs/{jobId:guid}/rollback", Rollback);
         return app;
     }
 
@@ -313,9 +316,23 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
             securityKey = HasSecurityIdentity(candidate) ? SecurityKey(candidate) : null
         });
 
+        var transactionTypes = candidates
+            .Where(candidate => candidate.Status == "ready" && !string.IsNullOrWhiteSpace(candidate.TradeType))
+            .GroupBy(candidate => candidate.TradeType!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new
+            {
+                type = group.Key,
+                count = group.Count(),
+                amount = group.Sum(candidate => candidate.Amount)
+            })
+            .OrderByDescending(item => item.count)
+            .ThenBy(item => item.type)
+            .ToArray();
+
         return Results.Ok(new
         {
             securities = groups,
+            transactionTypes,
             ready = candidates.Count(candidate => candidate.Status == "ready"),
             errors = candidates.Count(candidate => candidate.Status == "error"),
             preview
@@ -363,6 +380,7 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
         var candidates = allCandidates
             .Where(candidate => candidate.Status == "ready" && (selectedIds is null || selectedIds.Contains(candidate.Id)))
             .OrderBy(candidate => candidate.TradeDate)
+            .ThenBy(candidate => TradeOrderPriority(candidate.TradeType))
             .ThenBy(candidate => candidate.RowNumber)
             .ToList();
         if (candidates.Count == 0) return Results.BadRequest(new { error = "No ready investment rows selected." });
@@ -455,6 +473,12 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,@assetType,@currency,'investment-imp
                         ("@isin", created.Isin), ("@wkn", created.Wkn), ("@ticker", created.Ticker),
                         ("@assetType", first.AssetType ?? "other"), ("@currency", created.Currency), ("@now", DateTimeOffset.UtcNow));
                     await createSecurity.ExecuteNonQueryAsync(ct);
+                    await using (var linkSecurity = ParitySql.Command(connection, """
+INSERT INTO "InvestmentImportSecurityLinks" ("ImportJobId","SecurityId","CreatedAt")
+VALUES (@job,@security,@now)
+ON CONFLICT DO NOTHING
+""", ("@job", jobId), ("@security", created.Id), ("@now", DateTimeOffset.UtcNow)))
+                        await linkSecurity.ExecuteNonQueryAsync(ct);
                     securities.Add(created);
                     resolution[group.Key] = created;
                 }
@@ -477,11 +501,12 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,@assetType,@currency,'investment-imp
                     throw new InvalidOperationException("Required security could not be resolved during commit.");
 
                 var now = DateTimeOffset.UtcNow;
+                var tradeId = Guid.NewGuid();
                 await using var insert = ParitySql.Command(connection, """
 INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,'import',@external,@notes,@now,@now)
-""", ("@id", Guid.NewGuid()), ("@space", fullWorthSpaceId), ("@portfolio", portfolioId),
+""", ("@id", tradeId), ("@space", fullWorthSpaceId), ("@portfolio", portfolioId),
                     ("@security", securityId), ("@type", candidate.TradeType), ("@tradeDate", candidate.TradeDate),
                     ("@settlement", candidate.SettlementDate), ("@quantity", candidate.Quantity),
                     ("@price", candidate.Price), ("@gross", candidate.GrossAmount), ("@amount", candidate.Amount),
@@ -489,21 +514,30 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
                     ("@withholding", candidate.WithholdingTax), ("@external", stableKey),
                     ("@notes", $"Imported row {candidate.RowNumber}"), ("@now", now));
                 await insert.ExecuteNonQueryAsync(ct);
+                await using (var linkTrade = ParitySql.Command(connection, """
+INSERT INTO "InvestmentImportTradeLinks" ("ImportJobId","TradeId","CreatedAt")
+VALUES (@job,@trade,@now)
+""", ("@job", jobId), ("@trade", tradeId), ("@now", now)))
+                    await linkTrade.ExecuteNonQueryAsync(ct);
                 imported++;
                 await MarkCandidateAsync(db, candidate.Id, "imported", ct);
             }
 
             await using (var updateJob = ParitySql.Command(connection, """
 UPDATE "InvestmentImportJobs"
-SET "Status"='completed',"ImportedCount"=@imported,"DuplicateCount"=@duplicates,"UpdatedAt"=@now,"CompletedAt"=@now
+SET "Status"='completed',"ImportedCount"=@imported,"DuplicateCount"=@duplicates,
+    "PortfolioId"=@portfolio,"PortfolioCreated"=@portfolioCreated,
+    "UpdatedAt"=@now,"CompletedAt"=@now
 WHERE "Id"=@id
-""", ("@imported", imported), ("@duplicates", duplicates), ("@now", DateTimeOffset.UtcNow), ("@id", jobId)))
+""", ("@imported", imported), ("@duplicates", duplicates), ("@portfolio", portfolioId),
+                ("@portfolioCreated", portfolioCreated), ("@now", DateTimeOffset.UtcNow), ("@id", jobId)))
                 await updateJob.ExecuteNonQueryAsync(ct);
 
             audit.Record(fullWorthSpaceId, userId, "investment.import.completed", "InvestmentImportJob", jobId);
             await db.SaveChangesAsync(ct);
+            var reconciliation = await BuildReconciliationAsync(db, fullWorthSpaceId, portfolioId, ct);
             await transaction.CommitAsync(ct);
-            return Results.Ok(new { imported, duplicates, total = candidates.Count, portfolioId, portfolioCreated });
+            return Results.Ok(new { imported, duplicates, total = candidates.Count, portfolioId, portfolioCreated, reconciliation });
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -518,6 +552,376 @@ WHERE "Id"=@id
                 error = "Investment import could not be applied. No investment transactions were imported. Check trade order, quantities and mappings."
             });
         }
+    }
+
+    private static async Task<IResult> History(
+        Guid fullWorthSpaceId,
+        int? limit,
+        CurrentUserContext currentUser,
+        FullWorthDbContext db,
+        CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await CanManageInvestments(db, userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var take = Math.Clamp(limit ?? 25, 1, 100);
+        var connection = await ParitySql.OpenAsync(db, ct);
+        await using var command = ParitySql.Command(connection, """
+SELECT j."Id",j."FileName",j."Status",j."SourceRowCount",j."ReadyCount",j."ImportedCount",j."DuplicateCount",j."ErrorCount",
+       j."PortfolioId",j."PortfolioCreated",j."CreatedAt",j."CompletedAt",j."RolledBackAt",p."Name" AS "PortfolioName",
+       (SELECT count(*) FROM "InvestmentImportTradeLinks" l WHERE l."ImportJobId"=j."Id") AS "LinkedTrades",
+       (SELECT count(*) FROM "InvestmentImportSecurityLinks" l WHERE l."ImportJobId"=j."Id") AS "CreatedSecurities"
+FROM "InvestmentImportJobs" j
+LEFT JOIN "InvestmentPortfolios" p ON p."Id"=j."PortfolioId"
+WHERE j."FullWorthSpaceId"=@space AND j."UserId"=@user
+ORDER BY j."CreatedAt" DESC
+LIMIT @limit
+""", ("@space", fullWorthSpaceId), ("@user", userId), ("@limit", take));
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var rows = new List<object>();
+        while (await reader.ReadAsync(ct))
+        {
+            var status = ParitySql.String(reader, "Status");
+            var rolledBackAt = ParitySql.NullableTimestamp(reader, "RolledBackAt");
+            var linkedTrades = Convert.ToInt32(reader["LinkedTrades"], CultureInfo.InvariantCulture);
+            rows.Add(new
+            {
+                id = ParitySql.Guid(reader, "Id"),
+                fileName = ParitySql.String(reader, "FileName"),
+                status,
+                sourceRows = ParitySql.Int(reader, "SourceRowCount"),
+                ready = ParitySql.Int(reader, "ReadyCount"),
+                imported = ParitySql.Int(reader, "ImportedCount"),
+                duplicates = ParitySql.Int(reader, "DuplicateCount"),
+                errors = ParitySql.Int(reader, "ErrorCount"),
+                portfolioId = ParitySql.NullableGuid(reader, "PortfolioId"),
+                portfolioName = ParitySql.NullableString(reader, "PortfolioName"),
+                portfolioCreated = reader.GetBoolean(reader.GetOrdinal("PortfolioCreated")),
+                linkedTrades,
+                createdSecurities = Convert.ToInt32(reader["CreatedSecurities"], CultureInfo.InvariantCulture),
+                rollbackAvailable = status == "completed" && rolledBackAt is null && linkedTrades > 0,
+                createdAt = ParitySql.Timestamp(reader, "CreatedAt"),
+                completedAt = ParitySql.NullableTimestamp(reader, "CompletedAt"),
+                rolledBackAt
+            });
+        }
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> Reconciliation(
+        Guid portfolioId,
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        FullWorthDbContext db,
+        CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await CanManageInvestments(db, userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await PortfolioExistsAsync(db, fullWorthSpaceId, portfolioId, ct))
+            return Results.NotFound();
+        return Results.Ok(await BuildReconciliationAsync(db, fullWorthSpaceId, portfolioId, ct));
+    }
+
+    private static async Task<IResult> Rollback(
+        Guid jobId,
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        FullWorthDbContext db,
+        AuditService audit,
+        CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await CanManageInvestments(db, userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var connection = await ParitySql.OpenAsync(db, ct);
+        string status;
+        Guid? portfolioId;
+        bool portfolioCreated;
+        DateTimeOffset? rolledBackAt;
+        await using (var read = ParitySql.Command(connection, """
+SELECT "Status","PortfolioId","PortfolioCreated","RolledBackAt"
+FROM "InvestmentImportJobs"
+WHERE "Id"=@job AND "FullWorthSpaceId"=@space AND "UserId"=@user
+""", ("@job", jobId), ("@space", fullWorthSpaceId), ("@user", userId)))
+        await using (var reader = await read.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct)) return Results.NotFound();
+            status = ParitySql.String(reader, "Status");
+            portfolioId = ParitySql.NullableGuid(reader, "PortfolioId");
+            portfolioCreated = reader.GetBoolean(reader.GetOrdinal("PortfolioCreated"));
+            rolledBackAt = ParitySql.NullableTimestamp(reader, "RolledBackAt");
+        }
+
+        if (rolledBackAt is not null || status == "rolled_back")
+            return Results.BadRequest(new { error = "This investment import has already been rolled back." });
+        if (status != "completed")
+            return Results.BadRequest(new { error = "Only completed investment imports can be rolled back." });
+
+        int linkedTrades;
+        await using (var count = ParitySql.Command(connection,
+            "SELECT count(*) FROM \"InvestmentImportTradeLinks\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
+            linkedTrades = Convert.ToInt32(await count.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+        if (linkedTrades == 0)
+            return Results.BadRequest(new { error = "This import predates exact provenance tracking or created no trades, so automatic rollback is not available." });
+
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        try
+        {
+            await using (var defer = ParitySql.Command(connection, "SET CONSTRAINTS ALL DEFERRED"))
+                await defer.ExecuteNonQueryAsync(ct);
+
+            var createdSecurityIds = new List<Guid>();
+            await using (var securities = ParitySql.Command(connection,
+                "SELECT \"SecurityId\" FROM \"InvestmentImportSecurityLinks\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
+            await using (var securityReader = await securities.ExecuteReaderAsync(ct))
+                while (await securityReader.ReadAsync(ct)) createdSecurityIds.Add(ParitySql.Guid(securityReader, "SecurityId"));
+
+            int removedTrades;
+            await using (var removeTrades = ParitySql.Command(connection, """
+DELETE FROM "InvestmentTrades" t
+USING "InvestmentImportTradeLinks" l
+WHERE l."ImportJobId"=@job AND l."TradeId"=t."Id" AND t."FullWorthSpaceId"=@space
+""", ("@job", jobId), ("@space", fullWorthSpaceId)))
+                removedTrades = await removeTrades.ExecuteNonQueryAsync(ct);
+
+            var removedSecurities = 0;
+            foreach (var securityId in createdSecurityIds)
+            {
+                await using var removeSecurity = ParitySql.Command(connection, """
+DELETE FROM "Securities" s
+WHERE s."Id"=@security AND s."FullWorthSpaceId"=@space
+  AND NOT EXISTS (SELECT 1 FROM "InvestmentTrades" t WHERE t."SecurityId"=s."Id")
+  AND NOT EXISTS (SELECT 1 FROM "SecurityPrices" p WHERE p."SecurityId"=s."Id")
+  AND NOT EXISTS (SELECT 1 FROM "WatchlistItems" w WHERE w."SecurityId"=s."Id")
+  AND NOT EXISTS (SELECT 1 FROM "InvestmentPortfolios" p WHERE p."BenchmarkSecurityId"=s."Id")
+""", ("@security", securityId), ("@space", fullWorthSpaceId));
+                removedSecurities += await removeSecurity.ExecuteNonQueryAsync(ct);
+            }
+
+            var portfolioRemoved = false;
+            if (portfolioCreated && portfolioId.HasValue)
+            {
+                await using var removePortfolio = ParitySql.Command(connection, """
+DELETE FROM "InvestmentPortfolios" p
+WHERE p."Id"=@portfolio AND p."FullWorthSpaceId"=@space
+  AND NOT EXISTS (SELECT 1 FROM "InvestmentTrades" t WHERE t."PortfolioId"=p."Id")
+""", ("@portfolio", portfolioId.Value), ("@space", fullWorthSpaceId));
+                portfolioRemoved = await removePortfolio.ExecuteNonQueryAsync(ct) > 0;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            await using (var candidates = ParitySql.Command(connection, """
+UPDATE "InvestmentImportCandidates"
+SET "DuplicateStatus"='rolled_back'
+WHERE "ImportJobId"=@job AND "DuplicateStatus"='imported'
+""", ("@job", jobId)))
+                await candidates.ExecuteNonQueryAsync(ct);
+
+            await using (var update = ParitySql.Command(connection, """
+UPDATE "InvestmentImportJobs"
+SET "Status"='rolled_back',"RolledBackAt"=@now,"UpdatedAt"=@now
+WHERE "Id"=@job
+""", ("@job", jobId), ("@now", now)))
+                await update.ExecuteNonQueryAsync(ct);
+
+            audit.Record(fullWorthSpaceId, userId, "investment.import.rolled_back", "InvestmentImportJob", jobId);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return Results.Ok(new
+            {
+                jobId,
+                removedTrades,
+                removedSecurities,
+                keptSecurities = createdSecurityIds.Count - removedSecurities,
+                portfolioRemoved
+            });
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            return Results.Conflict(new
+            {
+                error = "Rollback would leave the investment ledger inconsistent or a linked resource is still required. Nothing was removed."
+            });
+        }
+    }
+
+    private static async Task<object> BuildReconciliationAsync(
+        FullWorthDbContext db,
+        Guid fullWorthSpaceId,
+        Guid portfolioId,
+        CancellationToken ct)
+    {
+        var connection = await ParitySql.OpenAsync(db, ct);
+        string portfolioName;
+        string portfolioCurrency;
+        await using (var portfolio = ParitySql.Command(connection, """
+SELECT "Name","Currency" FROM "InvestmentPortfolios"
+WHERE "Id"=@portfolio AND "FullWorthSpaceId"=@space
+""", ("@portfolio", portfolioId), ("@space", fullWorthSpaceId)))
+        await using (var reader = await portfolio.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct))
+                return new { portfolioId, exists = false, healthy = false, warnings = new[] { new ReconciliationWarning("portfolio_missing", "error", "Portfolio does not exist.") } };
+            portfolioName = ParitySql.String(reader, "Name");
+            portfolioCurrency = ParitySql.String(reader, "Currency");
+        }
+
+        var positions = new Dictionary<Guid, PositionAccumulator>();
+        var cash = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var warnings = new List<ReconciliationWarning>();
+        var otherEvents = 0;
+        var tradeCount = 0;
+
+        await using var command = ParitySql.Command(connection, """
+SELECT t."Id",t."SecurityId",t."TradeType",t."TradeDate",t."Quantity",t."Amount",t."Currency",
+       t."Fees",t."Taxes",t."WithholdingTax",s."Name" AS "SecurityName",s."Isin"
+FROM "InvestmentTrades" t
+LEFT JOIN "Securities" s ON s."Id"=t."SecurityId"
+WHERE t."PortfolioId"=@portfolio AND t."FullWorthSpaceId"=@space
+ORDER BY t."TradeDate",t."CreatedAt",t."Id"
+""", ("@portfolio", portfolioId), ("@space", fullWorthSpaceId));
+        await using var tradeReader = await command.ExecuteReaderAsync(ct);
+        while (await tradeReader.ReadAsync(ct))
+        {
+            tradeCount++;
+            var type = ParitySql.String(tradeReader, "TradeType");
+            var securityId = ParitySql.NullableGuid(tradeReader, "SecurityId");
+            var quantity = ParitySql.NullableDecimal(tradeReader, "Quantity") ?? 0m;
+            var amount = ParitySql.Decimal(tradeReader, "Amount");
+            var currency = ParitySql.String(tradeReader, "Currency");
+            var fees = ParitySql.Decimal(tradeReader, "Fees");
+            var taxes = ParitySql.Decimal(tradeReader, "Taxes");
+            var withholding = ParitySql.Decimal(tradeReader, "WithholdingTax");
+
+            if (type == "other") otherEvents++;
+
+            if (!cash.TryAdd(currency, CashImpact(type, amount, fees, taxes, withholding)))
+                cash[currency] += CashImpact(type, amount, fees, taxes, withholding);
+
+            if (!securityId.HasValue) continue;
+            if (!positions.TryGetValue(securityId.Value, out var position))
+            {
+                position = new PositionAccumulator(
+                    securityId.Value,
+                    ParitySql.NullableString(tradeReader, "SecurityName") ?? securityId.Value.ToString("D"),
+                    ParitySql.NullableString(tradeReader, "Isin"));
+                positions[securityId.Value] = position;
+            }
+
+            switch (type)
+            {
+                case "buy":
+                case "security_transfer_in":
+                    position.Quantity += quantity;
+                    break;
+                case "sell":
+                case "security_transfer_out":
+                case "cancellation":
+                    position.Quantity -= quantity;
+                    break;
+                case "split" when quantity > 0:
+                    position.Quantity *= quantity;
+                    break;
+            }
+            position.MinimumQuantity = Math.Min(position.MinimumQuantity, position.Quantity);
+        }
+
+        foreach (var position in positions.Values.Where(position => position.MinimumQuantity < -0.0000000001m))
+            warnings.Add(new ReconciliationWarning(
+                "negative_position",
+                "error",
+                $"{position.Name} became negative during ledger replay ({position.MinimumQuantity:0.##########})."));
+
+        foreach (var balance in cash.Where(item => item.Value < -0.01m))
+            warnings.Add(new ReconciliationWarning(
+                "negative_cash",
+                "warning",
+                $"Estimated cash balance is negative: {balance.Value:0.00} {balance.Key}."));
+
+        if (cash.Count > 1)
+            warnings.Add(new ReconciliationWarning(
+                "mixed_currencies",
+                "warning",
+                "The portfolio contains multiple transaction currencies; cash is shown separately per currency."));
+
+        if (otherEvents > 0)
+            warnings.Add(new ReconciliationWarning(
+                "unclassified_events",
+                "info",
+                $"{otherEvents} event(s) are classified as other and are excluded from estimated cash movement."));
+
+        var positionRows = positions.Values
+            .Where(position => Math.Abs(position.Quantity) > 0.0000000001m)
+            .OrderBy(position => position.Name)
+            .Select(position => new
+            {
+                securityId = position.SecurityId,
+                name = position.Name,
+                isin = position.Isin,
+                quantity = position.Quantity
+            })
+            .ToArray();
+        var cashRows = cash.OrderBy(item => item.Key)
+            .Select(item => new { currency = item.Key, amount = item.Value })
+            .ToArray();
+
+        return new
+        {
+            portfolioId,
+            portfolioName,
+            portfolioCurrency,
+            tradeCount,
+            positions = positionRows,
+            cashBalances = cashRows,
+            warnings,
+            healthy = warnings.All(warning => warning.Severity != "error")
+        };
+    }
+
+    private static decimal CashImpact(string type, decimal amount, decimal fees, decimal taxes, decimal withholding) =>
+        type switch
+        {
+            "deposit" => amount,
+            "withdrawal" => -amount,
+            "buy" => -(amount + fees + taxes + withholding),
+            "sell" => amount - fees - taxes - withholding,
+            "cancellation" => amount - fees - taxes - withholding,
+            "dividend" or "interest" => amount - fees - taxes - withholding,
+            "fee" => -(amount > 0 ? amount : fees),
+            "tax" => -(amount > 0 ? amount : taxes + withholding),
+            _ => 0m
+        };
+
+    private static int TradeOrderPriority(string? type) =>
+        type switch
+        {
+            "buy" or "security_transfer_in" => 0,
+            "split" => 1,
+            "sell" or "security_transfer_out" or "cancellation" => 2,
+            _ => 3
+        };
+
+    private static async Task<bool> PortfolioExistsAsync(
+        FullWorthDbContext db,
+        Guid space,
+        Guid portfolioId,
+        CancellationToken ct)
+    {
+        var connection = await ParitySql.OpenAsync(db, ct);
+        await using var command = ParitySql.Command(connection,
+            "SELECT EXISTS(SELECT 1 FROM \"InvestmentPortfolios\" WHERE \"Id\"=@portfolio AND \"FullWorthSpaceId\"=@space)",
+            ("@portfolio", portfolioId), ("@space", space));
+        return Convert.ToBoolean(await command.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
     }
 
     private static Candidate ParseCandidate(
@@ -769,8 +1173,9 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
             "securitytransferin" or "transferin" or "eingang" => "security_transfer_in",
             "securitytransferout" or "transferout" or "ausgang" => "security_transfer_out",
             "redemption" => "sell",
+            "buycancelled" or "buycanceled" or "kaufstorno" or "stornokauf" => "cancellation",
             "split" or "aktiensplit" => "split",
-            "other" or "sonstiges" or "compensation" or "buycancelled" => "other",
+            "other" or "sonstiges" or "compensation" => "other",
             _ => value?.Trim().ToLowerInvariant() ?? ""
         };
     }
@@ -1058,6 +1463,17 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         string Status,
         string? Error,
         string DuplicateStatus);
+
+    private sealed record ReconciliationWarning(string Code, string Severity, string Message);
+
+    private sealed class PositionAccumulator(Guid securityId, string name, string? isin)
+    {
+        public Guid SecurityId { get; } = securityId;
+        public string Name { get; } = name;
+        public string? Isin { get; } = isin;
+        public decimal Quantity { get; set; }
+        public decimal MinimumQuantity { get; set; }
+    }
 
     private sealed record ExistingSecurity(
         Guid Id,
