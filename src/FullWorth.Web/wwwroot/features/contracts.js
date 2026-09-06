@@ -407,7 +407,8 @@ async function resolvePriceChange(id, action) {
 // secondary context, amount with its recurrence, and the next due date when it is still meaningful.
 function rowFor(c) {
   const row = document.createElement('div');
-  row.className = 'fw-row contract-row' + (c.isActive ? '' : ' contract-archived');
+  const lifecycle = lifecycleStatus(c);
+  row.className = 'fw-row contract-row' + (lifecycle === 'archived' ? ' contract-archived' : '');
   row.tabIndex = 0;
   row.setAttribute('role', 'button');
   const cycleKey = c.billingCycle || 'monthly';
@@ -418,8 +419,20 @@ function rowFor(c) {
   // For non-monthly cadences show the normalized monthly figure so rows stay comparable at a glance.
   const permo = (cycleKey !== 'monthly' && Number(c.monthlyEquivalent) > 0)
     ? `≈ ${ctx.money(c.monthlyEquivalent, c.currency)} / ${t('Mon.', 'mo.')}` : '';
-  const marker = c.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`;
-  const sub = [(cat || kind), due, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
+  const statusMarker = lifecycle === 'archived'
+    ? ctx.get('contracts.archived')
+    : lifecycle === 'cancelled'
+      ? ctx.get('contracts.status_cancelled')
+      : lifecycle === 'planned'
+        ? ctx.get('contracts.status_planned')
+        : '';
+  const marker = statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : '';
+  const cancellationHint = lifecycle === 'cancelled' && c.cancellation?.cancellationSentAt
+    ? `${ctx.get('contracts.cancelledOn')}: ${ctx.date(c.cancellation.cancellationSentAt)}`
+    : lifecycle === 'planned' && c.cancellation?.cancellationDeadline
+      ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
+      : '';
+  const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
   row.innerHTML = `${identityIcon(c.name, { logoAssetPath: c.logoAssetPath })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
