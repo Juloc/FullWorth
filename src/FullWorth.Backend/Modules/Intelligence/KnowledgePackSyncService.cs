@@ -80,6 +80,7 @@ public sealed class KnowledgePackSyncService(
             var payload = DeserializeAndValidatePayload(manifest, payloadBytes);
 
             var ontology = ProjectOntology(payload);
+            var brands = ProjectBrands(payload);
             var redirectMap = ontology.Redirects.ToDictionary(
                 x => x.FromCanonicalKey,
                 x => x.ToCanonicalKey,
@@ -96,14 +97,22 @@ public sealed class KnowledgePackSyncService(
                 .Select(g => g.OrderByDescending(x => x.Confidence).First())
                 .ToList();
 
+            var brandKeys = brands.Assets.Select(x => x.BrandKey).ToHashSet(StringComparer.Ordinal);
+            if (mappings.Any(x => x.LogoKey is not null && !brandKeys.Contains(x.LogoKey)))
+                throw new KnowledgePackVerificationException("knowledge_pack_brand_reference_invalid");
+
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
             db.OfficialMerchantMappings.RemoveRange(await db.OfficialMerchantMappings.ToListAsync(ct));
+            db.OfficialBrandAliases.RemoveRange(await db.OfficialBrandAliases.ToListAsync(ct));
+            db.OfficialBrandAssets.RemoveRange(await db.OfficialBrandAssets.ToListAsync(ct));
             db.OfficialOntologyAliases.RemoveRange(await db.OfficialOntologyAliases.ToListAsync(ct));
             db.OfficialOntologyRedirects.RemoveRange(await db.OfficialOntologyRedirects.ToListAsync(ct));
             db.OfficialOntologyEntities.RemoveRange(await db.OfficialOntologyEntities.ToListAsync(ct));
 
             db.OfficialMerchantMappings.AddRange(mappings);
+            db.OfficialBrandAssets.AddRange(brands.Assets);
+            db.OfficialBrandAliases.AddRange(brands.Aliases);
             db.OfficialOntologyEntities.AddRange(ontology.Entities);
             db.OfficialOntologyAliases.AddRange(ontology.Aliases);
             db.OfficialOntologyRedirects.AddRange(ontology.Redirects);
@@ -283,10 +292,110 @@ public sealed class KnowledgePackSyncService(
             payload.Merchants.Count > 100_000 ||
             (payload.OntologyEntities?.Count ?? 0) > 50_000 ||
             (payload.OntologyAliases?.Count ?? 0) > 100_000 ||
-            (payload.OntologyRedirects?.Count ?? 0) > 50_000)
+            (payload.OntologyRedirects?.Count ?? 0) > 50_000 ||
+            (payload.BrandAssets?.Count ?? 0) > 5_000 ||
+            (payload.BrandAliases?.Count ?? 0) > 100_000)
             throw new KnowledgePackVerificationException("knowledge_pack_payload_invalid");
 
         return payload;
+    }
+
+    private static ProjectedBrands ProjectBrands(KnowledgePackPayload payload)
+    {
+        var assets = (payload.BrandAssets ?? [])
+            .Select(ToBrandAsset)
+            .ToList();
+        if (assets.Count != assets.Select(x => x.BrandKey).Distinct(StringComparer.Ordinal).Count() ||
+            assets.Count != assets.Select(x => x.LogoKey).Distinct(StringComparer.Ordinal).Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_duplicate_asset");
+
+        var brandKeys = assets.Select(x => x.BrandKey).ToHashSet(StringComparer.Ordinal);
+        var aliases = (payload.BrandAliases ?? [])
+            .Select(ToBrandAlias)
+            .ToList();
+        if (aliases.Any(x => !brandKeys.Contains(x.BrandKey)))
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_orphan_alias");
+        if (aliases.Count != aliases
+                .Select(x => (x.AliasKey, x.Country))
+                .Distinct()
+                .Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_duplicate_alias");
+
+        return new ProjectedBrands(assets, aliases);
+    }
+
+    private static OfficialBrandAsset ToBrandAsset(KnowledgePackBrandAssetPayload source)
+    {
+        var brandKey = NormalizeBrandKey(source.BrandKey);
+        var logoKey = NormalizeBrandKey(source.LogoKey);
+        var canonicalName = Trim(source.CanonicalName, 200);
+        var mediaType = source.MediaType?.Trim().ToLowerInvariant();
+        var suppliedHash = source.ContentSha256?.Trim().ToLowerInvariant();
+        if (brandKey is null || logoKey is null || canonicalName is null ||
+            mediaType != "image/svg+xml" ||
+            suppliedHash is null || suppliedHash.Length != 64 || !suppliedHash.All(Uri.IsHexDigit) ||
+            string.IsNullOrWhiteSpace(source.ContentBase64))
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+
+        byte[] bytes;
+        try { bytes = Convert.FromBase64String(source.ContentBase64); }
+        catch (FormatException) { throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid"); }
+        if (bytes.Length is <= 0 or > 256 * 1024)
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+
+        var actualHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.ASCII.GetBytes(actualHash),
+                Encoding.ASCII.GetBytes(suppliedHash)))
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_hash_mismatch");
+
+        string svg;
+        try { svg = new UTF8Encoding(false, true).GetString(bytes); }
+        catch (DecoderFallbackException) { throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid"); }
+        var lowered = svg.ToLowerInvariant();
+        if (!lowered.Contains("<svg", StringComparison.Ordinal) ||
+            lowered.Contains("<script", StringComparison.Ordinal) ||
+            lowered.Contains("<foreignobject", StringComparison.Ordinal) ||
+            lowered.Contains("javascript:", StringComparison.Ordinal) ||
+            lowered.Contains("onload=", StringComparison.Ordinal) ||
+            lowered.Contains("onerror=", StringComparison.Ordinal) ||
+            lowered.Contains("href=\"http", StringComparison.Ordinal) ||
+            lowered.Contains("xlink:href=", StringComparison.Ordinal))
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_svg_unsafe");
+
+        var sourceName = Trim(source.SourceName, 200);
+        var sourceUrl = Trim(source.SourceUrl, 1000);
+        if (sourceUrl is not null &&
+            (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var parsed) || parsed.Scheme != Uri.UriSchemeHttps))
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_asset_invalid");
+
+        return new OfficialBrandAsset
+        {
+            BrandKey = brandKey,
+            CanonicalName = canonicalName,
+            LogoKey = logoKey,
+            MediaType = mediaType,
+            ContentBase64 = Convert.ToBase64String(bytes),
+            ContentSha256 = actualHash,
+            SourceName = sourceName,
+            SourceUrl = sourceUrl,
+            LicenseNote = Trim(source.LicenseNote, 500)
+        };
+    }
+
+    private static OfficialBrandAlias ToBrandAlias(KnowledgePackBrandAliasPayload source)
+    {
+        var alias = MerchantNormalization.Normalize(source.AliasKey);
+        var brandKey = NormalizeBrandKey(source.BrandKey);
+        if (alias is null || alias.Length > 300 || brandKey is null)
+            throw new KnowledgePackVerificationException("knowledge_pack_brand_alias_invalid");
+
+        return new OfficialBrandAlias
+        {
+            AliasKey = alias,
+            BrandKey = brandKey,
+            Country = NormalizeCountry(source.Country)
+        };
     }
 
     private static ProjectedOntology ProjectOntology(KnowledgePackPayload payload)
@@ -602,6 +711,16 @@ public sealed class KnowledgePackSyncService(
         return current;
     }
 
+    private static string? NormalizeBrandKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToLowerInvariant();
+        if (normalized.Length > 120) return null;
+        return normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-')
+            ? normalized
+            : null;
+    }
+
     private static string? NormalizeOntologyType(string? value) =>
         value?.Trim().ToLowerInvariant() == "category" ? "category" : null;
 
@@ -651,6 +770,10 @@ public sealed class KnowledgePackSyncService(
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 }
+
+internal sealed record ProjectedBrands(
+    IReadOnlyList<OfficialBrandAsset> Assets,
+    IReadOnlyList<OfficialBrandAlias> Aliases);
 
 internal sealed record ProjectedOntology(
     IReadOnlyList<OfficialOntologyEntity> Entities,
