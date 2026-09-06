@@ -17,6 +17,9 @@ public static class AuthEndpoints
         group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapPost("/change-password", ChangePasswordAsync).RequireAuthorization();
+        group.MapGet("/account-deletion/status", AccountDeletionStatusAsync).RequireAuthorization();
+        group.MapPost("/account-deletion/request", RequestAccountDeletionAsync).RequireAuthorization().RequireRateLimiting(RateLimitPolicies.BrowserApi);
+        group.MapPost("/account-deletion/cancel", CancelAccountDeletionAsync).RequireAuthorization().RequireRateLimiting(RateLimitPolicies.BrowserApi);
         group.MapPost("/password-reset/request", RequestPasswordResetAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.PasswordReset);
         group.MapPost("/password-reset/complete", ResetPasswordAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.PasswordReset);
         group.MapPost("/claim", ClaimInviteAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.PasswordReset);
@@ -28,13 +31,16 @@ public static class AuthEndpoints
         HttpContext context,
         LoginRequest request,
         AuthSessionCoordinator sessions,
+        AccountDeletionService deletion,
         CancellationToken ct)
     {
         var result = await sessions.LoginAsync(request, context, ct);
         if (!result.Succeeded)
             return Results.Json(result, statusCode: StatusCodes.Status401Unauthorized);
 
-        var returnUrl = GetSafeReturnUrl(context);
+        var returnUrl = result.User is not null && await deletion.IsPendingAsync(result.User.Id, ct)
+            ? "/account/deletion"
+            : GetSafeReturnUrl(context);
         return Results.Ok(new
         {
             result.Succeeded,
@@ -84,6 +90,40 @@ public static class AuthEndpoints
             request.NewPassword,
             ct);
         return result.Succeeded ? Results.NoContent() : Results.BadRequest(result);
+    }
+
+    private static async Task<IResult> AccountDeletionStatusAsync(
+        HttpContext context,
+        AccountDeletionService deletion,
+        CancellationToken ct)
+    {
+        var status = await deletion.GetStatusAsync(context.User, ct);
+        return status is null ? Results.Unauthorized() : Results.Ok(status);
+    }
+
+    private static async Task<IResult> RequestAccountDeletionAsync(
+        HttpContext context,
+        AccountDeletionRequest request,
+        AccountDeletionService deletion,
+        CancellationToken ct)
+    {
+        var (status, error) = await deletion.RequestAsync(context.User, request.CurrentPassword, ct);
+        if (status is not null) return Results.Ok(status);
+        return error == "invalid_password"
+            ? Results.BadRequest(new { error = "invalid_password" })
+            : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    private static async Task<IResult> CancelAccountDeletionAsync(
+        HttpContext context,
+        AccountDeletionService deletion,
+        CancellationToken ct)
+    {
+        var (status, error) = await deletion.CancelAsync(context.User, ct);
+        if (status is not null) return Results.Ok(status);
+        return error is "deletion_deadline_passed" or "purge_in_progress"
+            ? Results.Conflict(new { error })
+            : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<IResult> RequestPasswordResetAsync(
