@@ -148,6 +148,36 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
+    public void NoNewNativeConfirmCalls()
+    {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            // Legacy migration allow-list. This list may only shrink.
+            "admin/admin.js",
+            "features/access-setup.js",
+            "features/compensation-extended.js",
+            "features/compensation-history.js",
+            "features/compensation.js",
+            "features/finanzguru-import-page.js",
+            "features/investment-performance-ui.js",
+            "features/parity-final-ui.js",
+            "features/purchase-articles-advanced-actions.js",
+            "features/purchase-articles-workspace.js",
+            "features/purchase-discount-actions.js",
+            "features/receipt-imports.js",
+            "features/tax-review-extra.js",
+            "intelligence/brand-packs.js",
+            "intelligence/intelligence.js",
+            "passkeys/passkeys.js"
+        };
+
+        AssertNoNewViolations(
+            new Regex(@"(?<![\.\w])confirm\s*\(|window\.confirm\s*\(", RegexOptions.Compiled),
+            allowed,
+            "Use ui/confirm.js instead of native confirm().");
+    }
+
+    [Fact]
     public void NoNewGlobalDomPatchObservers()
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
