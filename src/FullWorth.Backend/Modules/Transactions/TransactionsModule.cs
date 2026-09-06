@@ -2,6 +2,7 @@ using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
+using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
@@ -71,29 +72,157 @@ public enum TransactionDeleteResult { Deleted, NotFound, NotManual, Referenced }
 public enum TransferLinkResult { Linked, NotFound, Invalid }
 public enum TransferUnlinkResult { Unlinked, NotFound, NotLinked }
 
+public sealed record TransactionListItem(
+    Guid Id,
+    Guid AccountId,
+    string? Account,
+    DateOnly? BookingDate,
+    DateOnly? ValueDate,
+    decimal Amount,
+    string Currency,
+    string? Counterparty,
+    string? NormalizedCounterparty,
+    string? Description,
+    string? MerchantCategoryCode,
+    string Status,
+    Guid? CategoryId,
+    string? CategoryName,
+    string? CategoryIconKey,
+    string? UserNote,
+    bool IsIgnored,
+    bool IsTransfer,
+    string CategorizationSource,
+    DateTimeOffset UpdatedAt,
+    int PurchaseCount,
+    int PurchaseItemCount,
+    Guid? MerchantId,
+    string? MerchantDisplayName);
+
 public sealed class TransactionStore(FullWorthDbContext db)
 {
     public async Task<object> SearchForUserAsync(Guid userId, Guid? fullWorthSpaceId, TransactionQuery request, CancellationToken ct)
     {
         var q = AccessibleTransactions(userId, fullWorthSpaceId, requireOwner: false);
-        if (request.AccountId.HasValue) q = q.Where(x => x.AccountId == request.AccountId.Value);
+
+        if (request.AccountId.HasValue)
+            q = q.Where(x => x.AccountId == request.AccountId.Value);
+
+        if (request.AccountGroupId.HasValue)
+        {
+            var accountGroupId = request.AccountGroupId.Value;
+            q = q.Where(x => db.Accounts.Any(account =>
+                account.Id == x.AccountId &&
+                account.GroupId == accountGroupId &&
+                (!fullWorthSpaceId.HasValue || account.FullWorthSpaceId == fullWorthSpaceId.Value)));
+        }
+
         if (request.CategoryId.HasValue)
         {
             var categoryId = request.CategoryId.Value;
-            q = q.Where(x =>
-                x.CategoryId == categoryId ||
-                db.TransactionAllocations.Any(a => a.TransactionId == x.Id && a.CategoryId == categoryId) ||
-                db.Purchases.Any(p =>
-                    (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
-                    (p.Visibility != "private" || p.CreatedByUserId == userId) &&
-                    p.Items.Any(i => i.CategoryId == categoryId)));
+            IReadOnlyCollection<Guid> categoryIds = [categoryId];
+
+            if (request.IncludeDescendants == true)
+            {
+                var categorySpaceId = fullWorthSpaceId;
+                if (!categorySpaceId.HasValue)
+                {
+                    categorySpaceId = await db.Categories.AsNoTracking()
+                        .Where(category =>
+                            category.Id == categoryId &&
+                            db.FullWorthSpaceMembers.Any(member =>
+                                member.FullWorthSpaceId == category.FullWorthSpaceId &&
+                                member.UserId == userId))
+                        .Select(category => (Guid?)category.FullWorthSpaceId)
+                        .SingleOrDefaultAsync(ct);
+                }
+
+                if (!categorySpaceId.HasValue)
+                {
+                    q = q.Where(_ => false);
+                    categoryIds = Array.Empty<Guid>();
+                }
+                else
+                {
+                    var tree = await db.Categories.AsNoTracking()
+                        .Where(category => category.FullWorthSpaceId == categorySpaceId.Value)
+                        .Select(category => new { category.Id, category.ParentId })
+                        .ToListAsync(ct);
+                    var children = tree
+                        .Where(category => category.ParentId.HasValue)
+                        .GroupBy(category => category.ParentId!.Value)
+                        .ToDictionary(group => group.Key, group => group.Select(category => category.Id).ToList());
+                    var resolved = new HashSet<Guid>();
+                    var pending = new Stack<Guid>();
+                    pending.Push(categoryId);
+                    while (pending.Count > 0)
+                    {
+                        var current = pending.Pop();
+                        if (!resolved.Add(current)) continue;
+                        if (children.TryGetValue(current, out var descendants))
+                            foreach (var child in descendants) pending.Push(child);
+                    }
+                    categoryIds = resolved;
+                }
+            }
+
+            if (categoryIds.Count > 0)
+            {
+                q = q.Where(x =>
+                    (x.CategoryId.HasValue && categoryIds.Contains(x.CategoryId.Value)) ||
+                    db.TransactionAllocations.Any(a =>
+                        a.TransactionId == x.Id &&
+                        a.CategoryId.HasValue &&
+                        categoryIds.Contains(a.CategoryId.Value)) ||
+                    db.Purchases.Any(p =>
+                        (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
+                        (p.Visibility != "private" || p.CreatedByUserId == userId) &&
+                        p.Items.Any(i => i.CategoryId.HasValue && categoryIds.Contains(i.CategoryId.Value))));
+            }
         }
+
         if (request.From.HasValue) q = q.Where(x => x.BookingDate >= request.From.Value);
         if (request.To.HasValue) q = q.Where(x => x.BookingDate <= request.To.Value);
         if (request.Direction == "income") q = q.Where(x => x.Amount > 0);
         if (request.Direction == "expense") q = q.Where(x => x.Amount < 0);
-        if (request.IncludeIgnored != true) q = q.Where(x => !x.IsIgnored);
+
+        if (request.IgnoredOnly == true) q = q.Where(x => x.IsIgnored);
+        else if (request.IncludeIgnored != true) q = q.Where(x => !x.IsIgnored);
+
         if (request.TransfersOnly == true) q = q.Where(x => x.IsTransfer);
+        if (request.RefundOnly == true) q = q.Where(x => x.RefundOfTransactionId != null);
+
+        if (request.HasReceipt.HasValue)
+        {
+            var hasReceipt = request.HasReceipt.Value;
+            q = q.Where(x =>
+                (db.Purchases.Any(p =>
+                    (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
+                    (p.Visibility != "private" || p.CreatedByUserId == userId))) == hasReceipt);
+        }
+
+        var normalizedStatus = request.Status?.Trim().ToLowerInvariant();
+        if (normalizedStatus == "pending") q = q.Where(x => x.Status == "PDNG");
+        if (normalizedStatus == "booked") q = q.Where(x => x.Status != "PDNG");
+
+        if (request.MinAmount.HasValue)
+        {
+            var minimum = Math.Abs(request.MinAmount.Value);
+            q = q.Where(x => Math.Abs(x.Amount) >= minimum);
+        }
+        if (request.MaxAmount.HasValue)
+        {
+            var maximum = Math.Abs(request.MaxAmount.Value);
+            q = q.Where(x => Math.Abs(x.Amount) <= maximum);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Merchant))
+        {
+            var merchantPattern = $"%{request.Merchant.Trim()}%";
+            q = q.Where(x =>
+                (x.NormalizedCounterparty != null && EF.Functions.ILike(x.NormalizedCounterparty, merchantPattern)) ||
+                (x.Counterparty != null && EF.Functions.ILike(x.Counterparty, merchantPattern)));
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Query))
         {
             var pattern = $"%{request.Query.Trim()}%";
@@ -119,11 +248,10 @@ public sealed class TransactionStore(FullWorthDbContext db)
         var offset = Math.Max(0, request.Offset ?? 0);
         var limit = Math.Clamp(request.Limit ?? 200, 1, 5000);
         var total = await q.CountAsync(ct);
-        var items = await q.Skip(offset).Take(limit).Select(x => new
-        {
+        var items = await q.Skip(offset).Take(limit).Select(x => new TransactionListItem(
             x.Id,
             x.AccountId,
-            Account = db.Accounts.Where(a => a.Id == x.AccountId).Select(a => a.DisplayName).FirstOrDefault(),
+            db.Accounts.Where(a => a.Id == x.AccountId).Select(a => a.DisplayName).FirstOrDefault(),
             x.BookingDate,
             x.ValueDate,
             x.Amount,
@@ -134,32 +262,59 @@ public sealed class TransactionStore(FullWorthDbContext db)
             x.MerchantCategoryCode,
             x.Status,
             x.CategoryId,
-            Category = db.Categories
-                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
-                .Select(c => c.Name)
+            db.Categories
+                .Where(category => category.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == category.FullWorthSpaceId))
+                .Select(category => category.Name)
                 .FirstOrDefault(),
-            CategoryName = db.Categories
-                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
-                .Select(c => c.Name)
-                .FirstOrDefault(),
-            CategoryIconKey = db.Categories
-                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
-                .Select(c => c.Icon != null && c.Icon != "" ? c.Icon : c.Key)
+            db.Categories
+                .Where(category => category.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == category.FullWorthSpaceId))
+                .Select(category => category.Icon != null && category.Icon != "" ? category.Icon : category.Key)
                 .FirstOrDefault(),
             x.UserNote,
             x.IsIgnored,
             x.IsTransfer,
             x.CategorizationSource,
             x.UpdatedAt,
-            PurchaseCount = db.Purchases.Count(p =>
+            db.Purchases.Count(p =>
                 (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
                 (p.Visibility != "private" || p.CreatedByUserId == userId)),
-            PurchaseItemCount = db.Purchases
+            db.Purchases
                 .Where(p =>
                     (p.TransactionId == x.Id || p.PaymentLinks.Any(link => link.TransactionId == x.Id)) &&
                     (p.Visibility != "private" || p.CreatedByUserId == userId))
-                .SelectMany(p => p.Items).Count()
-        }).ToListAsync(ct);
+                .SelectMany(p => p.Items).Count(),
+            null,
+            null)).ToListAsync(ct);
+
+        if (fullWorthSpaceId.HasValue && items.Count > 0)
+        {
+            var merchants = await db.Merchants.AsNoTracking()
+                .Where(merchant => merchant.FullWorthSpaceId == fullWorthSpaceId.Value)
+                .Select(merchant => new { merchant.Id, merchant.Name, merchant.NormalizedName })
+                .ToListAsync(ct);
+            var aliases = await db.MerchantAliases.AsNoTracking()
+                .Where(alias => alias.FullWorthSpaceId == fullWorthSpaceId.Value)
+                .Select(alias => new { alias.MerchantId, alias.NormalizedAlias })
+                .ToListAsync(ct);
+            var merchantNames = merchants.ToDictionary(merchant => merchant.Id, merchant => merchant.Name);
+            var matchers = new List<(string Key, Guid MerchantId)>();
+            matchers.AddRange(merchants.Where(merchant => !string.IsNullOrWhiteSpace(merchant.NormalizedName))
+                .Select(merchant => (merchant.NormalizedName, merchant.Id)));
+            matchers.AddRange(aliases.Where(alias => !string.IsNullOrWhiteSpace(alias.NormalizedAlias))
+                .Select(alias => (alias.NormalizedAlias, alias.MerchantId)));
+            matchers = matchers.OrderByDescending(item => item.Key.Length).ToList();
+
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                var normalized = item.NormalizedCounterparty ?? MerchantNormalization.Normalize(item.Counterparty);
+                if (normalized is null) continue;
+                var match = matchers.FirstOrDefault(candidate => normalized.Contains(candidate.Key, StringComparison.Ordinal));
+                if (match.MerchantId == Guid.Empty || !merchantNames.TryGetValue(match.MerchantId, out var merchantName)) continue;
+                items[index] = item with { MerchantId = match.MerchantId, MerchantDisplayName = merchantName };
+            }
+        }
+
         return new { total, offset, limit, items };
     }
 
@@ -581,7 +736,28 @@ public sealed class TransactionStore(FullWorthDbContext db)
     }
 }
 
-public sealed record TransactionQuery(Guid? AccountId, Guid? CategoryId, DateOnly? From, DateOnly? To, string? Direction, string? Query, bool? IncludeIgnored, bool? TransfersOnly, string? Sort, string? Order, int? Offset, int? Limit);
+public sealed record TransactionQuery(
+    Guid? AccountId,
+    Guid? CategoryId,
+    DateOnly? From,
+    DateOnly? To,
+    string? Direction,
+    string? Query,
+    bool? IncludeIgnored,
+    bool? TransfersOnly,
+    string? Sort,
+    string? Order,
+    int? Offset,
+    int? Limit,
+    Guid? AccountGroupId = null,
+    bool? IncludeDescendants = null,
+    string? Merchant = null,
+    decimal? MinAmount = null,
+    decimal? MaxAmount = null,
+    bool? RefundOnly = null,
+    bool? HasReceipt = null,
+    string? Status = null,
+    bool? IgnoredOnly = null);
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 public sealed record AllocationLine(Guid? CategoryId, decimal Amount, string? Note, Guid? PurchaseItemId = null);
 public sealed record RefundLink(Guid? OriginalTransactionId, Guid? RefundCategoryId = null);
@@ -594,9 +770,37 @@ public static class TransactionEndpoints
     {
         var group = app.MapGroup("/api/transactions").WithTags("Transactions");
 
-        group.MapGet("/", async (Guid? fullWorthSpaceId, Guid? accountId, Guid? categoryId, DateOnly? from, DateOnly? to, string? direction, string? query, bool? includeIgnored, bool? transfersOnly, string? sort, string? order, int? offset, int? limit, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
+        group.MapGet("/", async (
+            Guid? fullWorthSpaceId,
+            Guid? accountId,
+            Guid? categoryId,
+            DateOnly? from,
+            DateOnly? to,
+            string? direction,
+            string? query,
+            bool? includeIgnored,
+            bool? transfersOnly,
+            string? sort,
+            string? order,
+            int? offset,
+            int? limit,
+            Guid? accountGroupId,
+            bool? includeDescendants,
+            string? merchant,
+            decimal? minAmount,
+            decimal? maxAmount,
+            bool? refundOnly,
+            bool? hasReceipt,
+            string? status,
+            bool? ignoredOnly,
+            CurrentUserContext currentUser,
+            TransactionStore store,
+            CancellationToken ct) =>
             Results.Ok(await store.SearchForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId,
-                new(accountId, categoryId, from, to, direction, query, includeIgnored, transfersOnly, sort, order, offset, limit), ct)));
+                new TransactionQuery(
+                    accountId, categoryId, from, to, direction, query, includeIgnored, transfersOnly,
+                    sort, order, offset, limit, accountGroupId, includeDescendants, merchant,
+                    minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {
