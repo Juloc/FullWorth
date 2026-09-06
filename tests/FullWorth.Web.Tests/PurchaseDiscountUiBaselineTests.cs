@@ -61,7 +61,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     {
         var sw = Read("sw.js");
 
-        Assert.Contains("const VERSION = 'v55';", sw);
+        Assert.Contains("const VERSION = 'v57';", sw);
         Assert.Contains("/features/purchase-discount-actions.js", sw);
         Assert.DoesNotContain("/api/purchases", sw);
     }

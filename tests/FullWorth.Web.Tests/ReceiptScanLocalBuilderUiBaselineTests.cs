@@ -47,7 +47,7 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
     public void Service_worker_precaches_local_builder()
     {
         var sw = Read("sw.js");
-        Assert.Contains("const VERSION = 'v55'", sw);
+        Assert.Contains("const VERSION = 'v57'", sw);
         Assert.Contains("/features/receipt-scan-local-builder.js", sw);
     }
 

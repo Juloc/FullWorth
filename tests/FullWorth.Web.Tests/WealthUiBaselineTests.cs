@@ -147,7 +147,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("Accept: 'application/zip'", portability);
         Assert.Contains("cache: 'no-store'", portability);
         Assert.Contains("stopImmediatePropagation", portability);
-        Assert.Contains("const VERSION = 'v55'", sw);
+        Assert.Contains("const VERSION = 'v57'", sw);
         Assert.Contains("'/features/wealth-portability.js'", sw);
         Assert.Contains("url.pathname.startsWith('/bff')", sw);
         Assert.DoesNotContain("/bff/backend/api/export/wealth-backup", sw);
@@ -188,7 +188,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         }
         var sw = await GetAsync("/sw.js");
 
-        Assert.Contains("const VERSION = 'v55'", sw);
+        Assert.Contains("const VERSION = 'v57'", sw);
         foreach (var path in new[]
                  {
                      "'/features/networth.js'", "'/features/wealth-assets.css'",
