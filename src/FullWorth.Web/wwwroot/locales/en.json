@@ -305,7 +305,17 @@
     "cancelStatus_planned": "Cancellation planned",
     "cancelStatus_sent": "Cancellation sent",
     "cancelStatus_confirmed": "Cancellation confirmed",
-    "cancelStatus_cancelled": "Cancelled"
+    "cancelStatus_cancelled": "Cancelled",
+    "merge": "Link another contract",
+    "mergeTitle": "Link contracts",
+    "mergeHint": "Select entries that represent the same contract. Accounts and previous payment names remain in history.",
+    "mergeConfirm": "Merge",
+    "mergeNone": "No other contracts are available to link.",
+    "mergedSources": "Linked entries",
+    "mergedSourcesHint": "These entries belong to this contract and are kept for account and payment history.",
+    "unmerge": "Unlink",
+    "mergedToast": "Contracts merged.",
+    "unmergedToast": "Contract link removed."
   },
   "budgets": {
     "title": "Budgets",
