@@ -64,6 +64,9 @@ public sealed class KnowledgePackSyncService(
             }
 
             ValidateManifest(manifest, region);
+            if (installation is not null &&
+                !IsStrictlyNewerVersion(manifest.Version, installation.Version))
+                throw new KnowledgePackVerificationException("knowledge_pack_downgrade_rejected");
 
             var payloadBytes = await cloud.DownloadKnowledgePackAsync(
                 secret,
@@ -389,6 +392,25 @@ public sealed class KnowledgePackSyncService(
         {
             return null;
         }
+    }
+
+    private static bool IsStrictlyNewerVersion(string candidate, string current)
+    {
+        if (!TrySequence(candidate, out var candidateSequence) ||
+            !TrySequence(current, out var currentSequence))
+            return false;
+        return candidateSequence > currentSequence;
+    }
+
+    private static bool TrySequence(string version, out long sequence)
+    {
+        sequence = 0;
+        if (string.IsNullOrWhiteSpace(version)) return false;
+        var separator = version.LastIndexOf('-');
+        return separator > 0 &&
+               separator < version.Length - 1 &&
+               long.TryParse(version[(separator + 1)..], out sequence) &&
+               sequence > 0;
     }
 
     private static string NormalizeRegion(string? value) =>
