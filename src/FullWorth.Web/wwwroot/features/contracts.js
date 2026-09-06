@@ -538,7 +538,7 @@ async function openDetail(id) {
     [ctx.get('contracts.noticePeriod'), periodLabel(cancellation?.noticePeriodValue, cancellation?.noticePeriodUnit)],
     [ctx.get('contracts.cancellationDeadline'), cancellation?.cancellationDeadline ? ctx.date(cancellation.cancellationDeadline) : '—'],
     [ctx.get('contracts.renewalPeriod'), periodLabel(cancellation?.renewalPeriodValue, cancellation?.renewalPeriodUnit)],
-    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? ctx.get('common.yes') : ctx.get('common.no')],
+    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? t('Ja', 'Yes') : t('Nein', 'No')],
     [ctx.get('contracts.cancelledOn'), cancellation?.cancellationSentAt ? ctx.dateTime(cancellation.cancellationSentAt) : '—'],
     [ctx.get('contracts.confirmedOn'), cancellation?.cancellationConfirmedAt ? ctx.dateTime(cancellation.cancellationConfirmedAt) : '—'],
     [ctx.get('contracts.customerNumber'), cancellation?.customerNumber || '—']
