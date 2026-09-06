@@ -95,11 +95,22 @@ public static class ImportCenterPageEndpoints
         <section id="inv-review-section" hidden>
           <h3 id="inv-security-title">Wertpapiere prüfen</h3>
           <div id="inv-security-summary" class="rows"></div>
+          <h3 id="inv-type-title">Gefundene Buchungstypen</h3>
+          <div id="inv-type-summary" class="rows"></div>
           <label class="check import-option"><input id="inv-create-securities" type="checkbox" checked><span id="inv-create-securities-label">Fehlende Wertpapiere automatisch anlegen</span></label>
           <div id="inv-review-summary" class="metric-grid import-metrics"></div>
           <div class="workflow-actions"><button id="inv-commit" class="primary-action" type="button">Depot importieren</button></div>
         </section>
         <div id="inv-result" class="rows" hidden></div>
+        <section id="inv-reconciliation" hidden>
+          <h3 id="inv-reconciliation-title">Depot-Prüfung</h3>
+          <div id="inv-reconciliation-summary" class="metric-grid import-metrics"></div>
+          <div id="inv-reconciliation-warnings" class="rows"></div>
+        </section>
+        <section id="inv-history-section">
+          <h3 id="inv-history-title">Letzte Depotimporte</h3>
+          <div id="inv-history" class="rows"></div>
+        </section>
       </article>
     </section>
   </main>
