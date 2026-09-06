@@ -41,7 +41,12 @@ public sealed class IngestionService(
         var connection = await UpsertConnectionAsync(batch.Connection, ct);
         var accountMap = await UpsertAccountsAsync(connection, batch.Connection.Provider, batch.Accounts, ct);
         var balanceCount = await InsertBalancesAsync(accountMap, batch.Balances, ct);
-        var (inserted, updated) = await UpsertTransactionsAsync(connection.FullWorthSpaceId, accountMap, batch.Transactions, ct);
+        var (inserted, updated) = await UpsertTransactionsAsync(
+            connection.FullWorthSpaceId,
+            batch.Connection.Country,
+            accountMap,
+            batch.Transactions,
+            ct);
 
         if (finanzguruReconciliation is not null)
             await finanzguruReconciliation.ReconcileAsync(connection.FullWorthSpaceId, accountMap.Values, ct);
@@ -245,7 +250,12 @@ public sealed class IngestionService(
         await db.SaveChangesAsync(ct); return inserted;
     }
 
-    private async Task<(int Inserted, int Updated)> UpsertTransactionsAsync(Guid fullWorthSpaceId, Dictionary<string, FinanceAccount> accounts, IReadOnlyList<TransactionBatchItem> items, CancellationToken ct)
+    private async Task<(int Inserted, int Updated)> UpsertTransactionsAsync(
+        Guid fullWorthSpaceId,
+        string? country,
+        Dictionary<string, FinanceAccount> accounts,
+        IReadOnlyList<TransactionBatchItem> items,
+        CancellationToken ct)
     {
         var inserted = 0; var updated = 0;
         var rules = await db.CategorizationRules.AsNoTracking()
@@ -260,8 +270,6 @@ public sealed class IngestionService(
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();
-        // Sourced merchant knowledge distribution now lives outside this instance; the rule engine
-        // tolerates an empty cloud-mapping set and falls back to rules/learning/catalog.
         IReadOnlyList<OfficialMerchantCategoryMapping> cloudMappings = Array.Empty<OfficialMerchantCategoryMapping>();
         if (intelligenceDb is not null && activeCategoryIds.Length > 0)
         {
@@ -269,6 +277,22 @@ public sealed class IngestionService(
                 .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.IsActive && activeCategoryIds.Contains(x.CategoryId))
                 .OrderBy(x => x.NormalizedCounterparty).ThenBy(x => x.Direction)
                 .Select(x => new LearnedMerchantCategoryMapping(x.NormalizedCounterparty, x.Direction, x.CategoryId))
+                .ToListAsync(ct);
+
+            var normalizedCountry = string.IsNullOrWhiteSpace(country)
+                ? "GLOBAL"
+                : country.Trim().ToUpperInvariant();
+            cloudMappings = await intelligenceDb.OfficialMerchantMappings.AsNoTracking()
+                .Where(x => x.CategoryKey != null &&
+                            (x.Country == "GLOBAL" || x.Country == normalizedCountry))
+                .OrderBy(x => x.AliasKey)
+                .ThenBy(x => x.Direction)
+                .ThenByDescending(x => x.Confidence)
+                .Select(x => new OfficialMerchantCategoryMapping(
+                    x.AliasKey,
+                    x.Direction,
+                    x.CategoryKey!,
+                    x.Confidence))
                 .ToListAsync(ct);
         }
 

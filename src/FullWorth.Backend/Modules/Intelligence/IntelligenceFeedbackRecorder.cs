@@ -91,11 +91,22 @@ public sealed class IntelligenceFeedbackRecorder(
         Guid? oldCategoryId,
         Guid? newCategoryId,
         string action,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? cloudMerchantAlias = null,
+        string? categoryKey = null,
+        string? categoryName = null,
+        bool categoryIsCustom = false,
+        string? categoryLocale = null)
     {
         var normalizedMerchant = MerchantNormalization.Normalize(normalizedCounterparty);
         var normalizedDirection = NormalizeDirection(direction);
-        return TryRecordAsync(new IntelligenceFeedbackEvent
+        var cloudAlias = MerchantNormalization.Normalize(cloudMerchantAlias);
+        var cloudEligible = cloudAlias is not null &&
+                            normalizedDirection is not null &&
+                            !string.IsNullOrWhiteSpace(categoryKey) &&
+                            !string.IsNullOrWhiteSpace(categoryName);
+
+        var feedback = new IntelligenceFeedbackEvent
         {
             FullWorthSpaceId = fullWorthSpaceId,
             UserId = userId,
@@ -106,23 +117,75 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = JsonSerializer.Serialize(new { categoryId = oldCategoryId }),
             NewValueJson = JsonSerializer.Serialize(new { categoryId = newCategoryId }),
             Source = "user",
-            // Normalized counterparty text and an unhashed/predictably hashed merchant string are not
-            // sufficient cloud identities. Keep the feedback local until merchant canonicalization can
-            // supply a stable public FullWorth merchant/provider key.
-            CloudEligible = false,
+            CloudEligible = cloudEligible,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        };
+
+        CloudOutboxProjection? projection = null;
+        if (cloudEligible)
+        {
+            projection = new CloudOutboxProjection(
+                "merchant_mapping",
+                JsonSerializer.Serialize(new
+                {
+                    alias = cloudAlias,
+                    mapping = new
+                    {
+                        categoryKey = categoryKey!.Trim(),
+                        categoryAlias = categoryName!.Trim(),
+                        categoryLocale = NormalizeLocale(categoryLocale),
+                        categoryIsCustom
+                    },
+                    direction = normalizedDirection,
+                    action = "corrected",
+                    confidence = 1m,
+                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
+                }));
+        }
+
+        return TryRecordAsync(feedback, ct, projection);
     }
 
     private async Task<bool> TryRecordAsync(
         IntelligenceFeedbackEvent feedback,
-        CancellationToken ct)
+        CancellationToken ct,
+        CloudOutboxProjection? cloudProjection = null)
     {
         try
         {
             db.IntelligenceFeedbackEvents.Add(feedback);
-            // Feedback capture is best-effort. The primary FinanceDb mutation that triggered this
-            // recorder remains intentionally independent and is never rolled back by it.
+
+            if (feedback.CloudEligible && cloudProjection is not null)
+            {
+                var state = await db.CloudConnectionStates.AsNoTracking()
+                    .SingleOrDefaultAsync(x =>
+                        x.ScopeKey == CloudConnectionState.InstanceScopeKey &&
+                        x.Mode == CloudIntelligenceModes.Enabled, ct);
+                if (state is not null)
+                {
+                    var hasCurrentConsent = await db.CloudIntelligenceConsents.AsNoTracking().AnyAsync(x =>
+                        x.InstanceId == state.InstanceId &&
+                        x.PolicyVersion == CloudIntelligencePolicy.CurrentVersion &&
+                        x.RevokedAt == null, ct);
+                    if (hasCurrentConsent)
+                    {
+                        db.CloudSubmissionOutbox.Add(new CloudSubmissionOutbox
+                        {
+                            InstanceId = state.InstanceId,
+                            FeedbackEventId = feedback.Id,
+                            IdempotencyKey = $"feedback:{feedback.Id:N}:schema:{CloudIntelligencePolicy.SubmissionSchemaVersion}",
+                            SchemaVersion = CloudIntelligencePolicy.SubmissionSchemaVersion,
+                            EventType = cloudProjection.EventType,
+                            PayloadJson = cloudProjection.PayloadJson,
+                            Status = CloudSubmissionStatuses.Queued,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        });
+                    }
+                }
+            }
+
+            // Feedback + outbox commit together. The primary FinanceDb mutation that triggered this
+            // recorder remains intentionally independent and is never rolled back by cloud persistence.
             await db.SaveChangesAsync(ct);
             return true;
         }
@@ -161,4 +224,18 @@ public sealed class IntelligenceFeedbackRecorder(
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : Normalize(value);
+
+    private static string NormalizeLocale(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "und";
+        var primary = value.Split(',', StringSplitOptions.RemoveEmptyEntries)[0]
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)[0]
+            .Trim()
+            .Replace('_', '-')
+            .ToLowerInvariant();
+        if (primary.Length is < 2 or > 20) return "und";
+        return primary.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-') ? primary : "und";
+    }
+
+    private sealed record CloudOutboxProjection(string EventType, string PayloadJson);
 }
