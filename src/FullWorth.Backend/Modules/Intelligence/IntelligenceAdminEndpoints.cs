@@ -86,11 +86,11 @@ public static class IntelligenceAdminEndpoints
         group.MapGet("/cloud", async (
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,
-            IntelligenceDbContext db,
+            CloudIntelligenceStateService cloudState,
             CancellationToken ct) =>
         {
             if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            return Results.Ok(await new CloudIntelligenceStateService(db).GetAsync(ct));
+            return Results.Ok(await cloudState.GetAsync(ct));
         });
 
         group.MapPost("/cloud/enable", async (
@@ -98,16 +98,40 @@ public static class IntelligenceAdminEndpoints
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,
             IntelligenceDbContext db,
+            CloudIntelligenceStateService cloudState,
+            IFullWorthCloudClient cloud,
+            CloudInstanceCredentialStore credentialStore,
             CancellationToken ct) =>
         {
             var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
             if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
             try
             {
-                var state = await new CloudIntelligenceStateService(db).EnableAsync(actorUserId.Value, request, ct);
+                var state = await cloudState.EnableAsync(actorUserId.Value, request, ct);
                 IntelligenceAuditWriter.Record(db, actorUserId.Value, "cloud.enabled", "CloudConnectionState", outcome: CloudIntelligencePolicy.CurrentVersion);
                 await db.SaveChangesAsync(ct);
-                return Results.Ok(state);
+
+                // Registration is best-effort. Enabling Cloud Intelligence must never make setup fail
+                // because the platform is temporarily unavailable; the outbox will retry later.
+                try
+                {
+                    var registration = await cloud.RegisterAsync(
+                        state.InstanceId,
+                        CloudIntelligencePolicy.CurrentVersion,
+                        request.ClientVersion ?? "unknown",
+                        ct);
+                    await credentialStore.SaveAsync(registration, ct);
+                    await cloudState.SetTransportStatusAsync(
+                        state.InstanceId, null, registration.EntitlementStatus,
+                        DateTimeOffset.UtcNow, null, ct);
+                }
+                catch (FullWorthCloudException ex)
+                {
+                    await cloudState.SetTransportStatusAsync(
+                        state.InstanceId, ex.ErrorCode, null, null, null, ct);
+                }
+
+                return Results.Ok(await cloudState.GetAsync(ct));
             }
             catch (ArgumentException ex)
             {
@@ -124,14 +148,29 @@ public static class IntelligenceAdminEndpoints
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,
             IntelligenceDbContext db,
+            CloudIntelligenceStateService cloudState,
             CancellationToken ct) =>
         {
             var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
             if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var state = await new CloudIntelligenceStateService(db).DisableAsync(ct);
+            var state = await cloudState.DisableAsync(actorUserId.Value, ct);
             IntelligenceAuditWriter.Record(db, actorUserId.Value, "cloud.disabled", "CloudConnectionState", outcome: "revoked");
             await db.SaveChangesAsync(ct);
             return Results.Ok(state);
+        });
+
+        group.MapPost("/cloud/sync", async (
+            CurrentUserContext currentUser,
+            IntelligenceAdminAuthorizer authorizer,
+            CloudLearningOutboxUploader uploader,
+            KnowledgePackSyncService knowledgePacks,
+            CancellationToken ct) =>
+        {
+            if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null)
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var sent = await uploader.UploadOnceAsync(ct);
+            var pack = await knowledgePacks.SyncOnceAsync(ct);
+            return Results.Ok(new { sent, pack });
         });
 
         group.MapGet("/providers", async (
