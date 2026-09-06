@@ -27,7 +27,12 @@ public sealed record EnableBankingProviderStatusConnectRequest(string Email);
 public sealed record EnableBankingProviderStatusConnectStart(
     string Id,
     string Status,
-    string SetupCallbackUrl);
+    string SetupCallbackUrl,
+    bool ManualCompletionRequired);
+
+public sealed record EnableBankingProviderStatusConnectCompleteRequest(
+    string Id,
+    string LoginLinkOrCode);
 
 public sealed record EnableBankingProviderStatusConnectCallbackResult(
     bool Success,
@@ -85,23 +90,30 @@ public sealed class EnableBankingControlPanelStatusService(
         if (!_pendingConnections.TryAdd(id, pending))
             throw new InvalidOperationException("Unable to create Enable Banking status setup state.");
 
+        var manualCompletionRequired = false;
         try
         {
-            var body = JsonSerializer.Serialize(new
+            var response = await StartEmailSignInAsync(email, setupCallbackUrl, ct);
+            if (!IsSuccess(response.StatusCode) && IsContinueUrlRejected(response.Body))
             {
-                requestType = "EMAIL_SIGNIN",
-                email,
-                continueUrl = setupCallbackUrl,
-                canHandleCodeInApp = true
-            }, JsonOptions);
-            var response = await SendControlPanelAsync(
-                HttpMethod.Post,
-                "/api/relyingparty/getOobConfirmationCode",
-                new StringContent(body, Encoding.UTF8, "application/json"),
-                bearerToken: null,
-                ct);
-            if ((int)response.StatusCode is < 200 or > 299)
-                throw new InvalidOperationException("Enable Banking could not start the Control Panel sign-in.");
+                // Enable Banking's Control Panel authentication is backed by a Firebase email-link
+                // flow. Self-hosted FullWorth domains are not necessarily allow-listed there.
+                // Fall back to the same loopback continue URL used by Enable Banking's official CLI;
+                // the browser can then paste the resulting localhost URL back into FullWorth.
+                setupCallbackUrl = "http://localhost:8888/";
+                manualCompletionRequired = true;
+                response = await StartEmailSignInAsync(email, setupCallbackUrl, ct);
+            }
+
+            if (!IsSuccess(response.StatusCode))
+            {
+                var safeMessage = SafeLoginStartMessage(response.Body);
+                logger.LogWarning(
+                    "Enable Banking Control Panel sign-in start returned {StatusCode} ({Reason}).",
+                    (int)response.StatusCode,
+                    SafeControlPanelReason(response.Body));
+                throw new InvalidOperationException(safeMessage);
+            }
         }
         catch
         {
@@ -109,7 +121,26 @@ public sealed class EnableBankingControlPanelStatusService(
             throw;
         }
 
-        return new(id, "waiting_for_email", setupCallbackUrl);
+        return new(id, "waiting_for_email", setupCallbackUrl, manualCompletionRequired);
+    }
+
+    public async Task<EnableBankingProviderStatusConnectCallbackResult> CompleteConnectionManuallyAsync(
+        Guid userId,
+        EnableBankingProviderStatusConnectCompleteRequest request,
+        CancellationToken ct)
+    {
+        if (userId == Guid.Empty)
+            throw new ArgumentException("A FullWorth user is required.");
+        if (string.IsNullOrWhiteSpace(request.Id) ||
+            !_pendingConnections.TryGetValue(request.Id, out var pending) ||
+            pending.UserId != userId)
+            return new(false, "expired", "setup_expired");
+
+        var oobCode = ExtractOobCode(request.LoginLinkOrCode);
+        if (string.IsNullOrWhiteSpace(oobCode))
+            return new(false, "waiting_for_email", "missing_oob_code");
+
+        return await CompleteConnectionAsync(request.Id, oobCode, ct);
     }
 
     public async Task<EnableBankingProviderStatusConnectCallbackResult> CompleteConnectionAsync(
@@ -348,6 +379,27 @@ public sealed class EnableBankingControlPanelStatusService(
         return new(response.StatusCode, await response.Content.ReadAsStringAsync(ct));
     }
 
+    private Task<ControlPanelResponse> StartEmailSignInAsync(
+        string email,
+        string continueUrl,
+        CancellationToken ct)
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            requestType = "EMAIL_SIGNIN",
+            email,
+            continueUrl,
+            canHandleCodeInApp = true
+        }, JsonOptions);
+
+        return SendControlPanelAsync(
+            HttpMethod.Post,
+            "/api/relyingparty/getOobConfirmationCode",
+            new StringContent(body, Encoding.UTF8, "application/json"),
+            bearerToken: null,
+            ct);
+    }
+
     private async Task<ControlPanelResponse> SendControlPanelAsync(
         HttpMethod method,
         string path,
@@ -363,6 +415,121 @@ public sealed class EnableBankingControlPanelStatusService(
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         return new(response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+    }
+
+    private static bool IsSuccess(HttpStatusCode statusCode) =>
+        (int)statusCode is >= 200 and <= 299;
+
+    private static bool IsContinueUrlRejected(string body)
+    {
+        var reason = SafeControlPanelReason(body);
+        return reason is "INVALID_CONTINUE_URI" or "UNAUTHORIZED_CONTINUE_URI" or "UNAUTHORIZED_DOMAIN";
+    }
+
+    private static string SafeLoginStartMessage(string body)
+    {
+        var reason = SafeControlPanelReason(body);
+        return reason switch
+        {
+            "EMAIL_NOT_FOUND" or "USER_NOT_FOUND" =>
+                "No Enable Banking account exists for this email address.",
+            "TOO_MANY_ATTEMPTS_TRY_LATER" or "TOO_MANY_REQUESTS" =>
+                "Enable Banking temporarily blocked sign-in requests. Try again later.",
+            "INVALID_CONTINUE_URI" or "UNAUTHORIZED_CONTINUE_URI" or "UNAUTHORIZED_DOMAIN" =>
+                "Enable Banking rejected the sign-in callback.",
+            _ => "Enable Banking could not start the Control Panel sign-in."
+        };
+    }
+
+    private static string SafeControlPanelReason(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return "UNKNOWN";
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.TryGetProperty("error", out var error))
+            {
+                if (error.ValueKind == JsonValueKind.String)
+                    return NormalizeReason(error.GetString());
+                if (error.ValueKind == JsonValueKind.Object &&
+                    error.TryGetProperty("message", out var nested) &&
+                    nested.ValueKind == JsonValueKind.String)
+                    return NormalizeReason(nested.GetString());
+            }
+            if (root.TryGetProperty("message", out var message) &&
+                message.ValueKind == JsonValueKind.String)
+                return NormalizeReason(message.GetString());
+        }
+        catch (JsonException)
+        {
+            // The provider body is never returned to the browser. Reduce any text response to a
+            // stable allow-listed code below instead of logging the raw payload.
+        }
+
+        var upper = body.ToUpperInvariant();
+        foreach (var known in new[]
+                 {
+                     "INVALID_CONTINUE_URI",
+                     "UNAUTHORIZED_CONTINUE_URI",
+                     "UNAUTHORIZED_DOMAIN",
+                     "EMAIL_NOT_FOUND",
+                     "USER_NOT_FOUND",
+                     "TOO_MANY_ATTEMPTS_TRY_LATER",
+                     "TOO_MANY_REQUESTS"
+                 })
+            if (upper.Contains(known, StringComparison.Ordinal))
+                return known;
+
+        return "UNKNOWN";
+    }
+
+    private static string NormalizeReason(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "UNKNOWN";
+        var normalized = new string(value
+            .Trim()
+            .ToUpperInvariant()
+            .Select(character => char.IsAsciiLetterOrDigit(character) ? character : '_')
+            .Take(120)
+            .ToArray());
+        while (normalized.Contains("__", StringComparison.Ordinal))
+            normalized = normalized.Replace("__", "_", StringComparison.Ordinal);
+        return normalized.Trim('_');
+    }
+
+    private static string? ExtractOobCode(string? value)
+    {
+        var raw = (value ?? string.Empty).Trim();
+        if (raw.Length is < 4 or > 8192) return null;
+
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+            return raw.Contains(' ') ? null : raw;
+
+        var direct = QueryValue(uri.Query, "oobCode") ?? QueryValue(uri.Fragment, "oobCode");
+        if (!string.IsNullOrWhiteSpace(direct)) return direct;
+
+        var nested = QueryValue(uri.Query, "link");
+        if (!string.IsNullOrWhiteSpace(nested) &&
+            Uri.TryCreate(Uri.UnescapeDataString(nested), UriKind.Absolute, out var nestedUri))
+            return QueryValue(nestedUri.Query, "oobCode") ?? QueryValue(nestedUri.Fragment, "oobCode");
+
+        return null;
+    }
+
+    private static string? QueryValue(string queryOrFragment, string key)
+    {
+        var query = queryOrFragment.TrimStart('?', '#');
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = part.IndexOf('=');
+            var rawKey = separator < 0 ? part : part[..separator];
+            if (!string.Equals(Uri.UnescapeDataString(rawKey.Replace("+", " ", StringComparison.Ordinal)), key, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var rawValue = separator < 0 ? string.Empty : part[(separator + 1)..];
+            return Uri.UnescapeDataString(rawValue.Replace("+", " ", StringComparison.Ordinal));
+        }
+        return null;
     }
 
     private string BuildStatusCallbackUrl(string id)
