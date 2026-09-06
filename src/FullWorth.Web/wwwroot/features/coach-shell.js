@@ -162,6 +162,7 @@ function installQuickAccess() {
   dock.hidden = true;
   dock.setAttribute('aria-label', 'FullWorth Coach');
   dock.innerHTML = `
+    <div id="coach-dock-resizer" class="coach-dock-resizer" role="separator" aria-orientation="vertical" aria-label="${esc(tr('Coach-Breite ändern', 'Resize Coach'))}" tabindex="0"></div>
     <header class="coach-dock-header">
       <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
       <div class="coach-dock-actions">
@@ -195,6 +196,74 @@ function installQuickAccess() {
   $('#coach-dock-new')?.addEventListener('click', restartConversation);
   $('#coach-dock-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-dock-input').value); });
   $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
+  initDockResize();
+}
+
+function initDockResize() {
+  const dock = $('#coach-dock');
+  const handle = $('#coach-dock-resizer');
+  if (!dock || !handle) return;
+  const key = 'finance.coach.dockWidth';
+  const minWidth = 260;
+  const desktopMode = () => window.matchMedia('(min-width:768px)').matches;
+  const maxWidth = () => {
+    const sidebar = document.body.classList.contains('nav-collapsed')
+      ? 72
+      : document.querySelector('.sidebar')?.getBoundingClientRect().width || 0;
+    const minMain = window.innerWidth < 1100 ? 280 : 420;
+    return Math.max(minWidth, Math.min(600, window.innerWidth - sidebar - minMain));
+  };
+  const apply = value => {
+    if (!desktopMode()) return;
+    const fallback = dock.getBoundingClientRect().width || 420;
+    const width = Math.max(minWidth, Math.min(maxWidth(), Math.round(Number(value) || fallback)));
+    document.documentElement.style.setProperty('--coach-dock-w', `${width}px`);
+    handle.setAttribute('aria-valuemin', String(minWidth));
+    handle.setAttribute('aria-valuemax', String(maxWidth()));
+    handle.setAttribute('aria-valuenow', String(width));
+    return width;
+  };
+
+  let pointerId = null;
+  handle.addEventListener('pointerdown', event => {
+    if (!desktopMode()) return;
+    pointerId = event.pointerId;
+    handle.setPointerCapture(pointerId);
+    handle.classList.add('is-dragging');
+    document.body.classList.add('coach-dock-resizing');
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove', event => {
+    if (pointerId !== event.pointerId) return;
+    apply(window.innerWidth - event.clientX);
+  });
+  const finish = event => {
+    if (pointerId === null || event.pointerId !== pointerId) return;
+    pointerId = null;
+    handle.classList.remove('is-dragging');
+    document.body.classList.remove('coach-dock-resizing');
+    const width = apply(dock.getBoundingClientRect().width);
+    if (width) localStorage.setItem(key, String(width));
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+  handle.addEventListener('keydown', event => {
+    if (!desktopMode() || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const current = dock.getBoundingClientRect().width;
+    const next = event.key === 'Home' ? minWidth : event.key === 'End' ? maxWidth() : current + (event.key === 'ArrowLeft' ? 10 : -10);
+    const width = apply(next);
+    if (width) localStorage.setItem(key, String(width));
+  });
+
+  const clamp = () => {
+    if (!desktopMode() || !dockOpen) return;
+    const width = apply(Number(localStorage.getItem(key)) || dock.getBoundingClientRect().width);
+    if (width) localStorage.setItem(key, String(width));
+  };
+  window.addEventListener('resize', clamp);
+  window.addEventListener('fullworth:sidebar-resize', clamp);
+  window.fwClampCoachWidth = clamp;
 }
 
 function setSelectedModel(value) {
@@ -219,6 +288,11 @@ async function openDock() {
   const dock = $('#coach-dock');
   if (dock) dock.hidden = false;
   document.body.classList.add('coach-dock-open');
+  if (window.matchMedia('(min-width:768px)').matches) {
+    window.fwClampCoachWidth?.();
+    window.fwClampSidebarWidth?.();
+    window.fwClampCoachWidth?.();
+  }
   syncQuickAccess();
   setMascotLabel();
   renderStarters();
