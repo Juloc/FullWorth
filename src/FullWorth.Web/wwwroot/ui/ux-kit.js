@@ -49,7 +49,11 @@ let officialBrandCatalogLoad = null;
 let officialBrandCatalogLoadedAt = 0;
 
 export function installOfficialBrandCatalog(catalog) {
-  const assets = new Map((catalog?.assets || []).map(x => [String(x.brandKey || '').toLowerCase(), x.dataUri]));
+  const resolveAssetPath = x => {
+    const path = x?.assetPath || x?.dataUri || '';
+    return path.startsWith('/api/') ? `/bff/backend${path}` : path;
+  };
+  const assets = new Map((catalog?.assets || []).map(x => [String(x.brandKey || '').toLowerCase(), resolveAssetPath(x)]));
   OFFICIAL_BRAND_LOGOS = (catalog?.aliases || [])
     .map(x => ({
       alias: String(x.aliasKey || '').trim().toUpperCase(),
