@@ -238,6 +238,17 @@ app.UseAuthorization();
 app.UseFullWorthAntiforgery();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "fullworth-web" })).AllowAnonymous();
+
+var fredokaFontBase64Path = Path.Combine(
+    app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"),
+    "fonts",
+    "Fredoka-Variable.base64");
+var fredokaFontBytes = new Lazy<byte[]>(() =>
+    Convert.FromBase64String(File.ReadAllText(fredokaFontBase64Path)));
+app.MapGet("/fonts/Fredoka-Variable.ttf", () =>
+        Results.File(fredokaFontBytes.Value, "font/ttf"))
+    .AllowAnonymous();
+
 app.MapGet("/appsettings.json", () => Results.NotFound()).AllowAnonymous();
 app.MapFullWorthAntiforgeryTokenEndpoint();
 
