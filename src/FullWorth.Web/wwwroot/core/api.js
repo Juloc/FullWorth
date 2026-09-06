@@ -43,7 +43,9 @@ export function createApiClient(options = {}) {
     let detail = null;
     try {
       detail = await response.clone().json();
-      message = detail?.message || detail?.error || detail?.title || message;
+      message = detail?.message || detail?.error || detail?.title
+        || (typeof detail?.detail === 'string' ? detail.detail : null)
+        || message;
       if (detail?.detail?.conflict) message += ` (${detail.detail.conflict})`;
     } catch {
       // Keep HTTP status when the body is not JSON.
