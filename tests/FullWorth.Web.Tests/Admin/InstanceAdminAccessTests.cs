@@ -58,6 +58,31 @@ public sealed class InstanceAdminAccessTests
             Assert.DoesNotContain(forbidden, json, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task LastOperationalAdminCannotBeDisabledDemotedOrDeleted()
+    {
+        await using var factory = new FullWorthWebFactory();
+        var admin = await CreateUserAsync(factory);
+        await SetAdminAsync(factory, admin.Id);
+
+        using var client = CreateClient(factory);
+        var cookie = await LoginAsync(client, admin.Email);
+
+        foreach (var action in new[] { "disable", "revoke-admin", "schedule-deletion" })
+        {
+            using var response = await SendAsync(
+                client,
+                HttpMethod.Post,
+                $"/auth/admin/users/{admin.Id}/{action}",
+                cookie);
+
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            var json = await response.Content.ReadAsStringAsync();
+            Assert.Contains("last_admin", json, StringComparison.Ordinal);
+        }
+    }
+
     private static HttpClient CreateClient(FullWorthWebFactory factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
         {
