@@ -106,6 +106,70 @@ public sealed class AccountDeletionService(
         return (ToStatus(user, now), null);
     }
 
+    public async Task<(AccountDeletionStatusDto? Status, string? Error)> RequestForAdminAsync(
+        Guid authUserId,
+        CancellationToken ct)
+    {
+        var user = await users.FindByIdAsync(authUserId.ToString());
+        if (user is null) return (null, "invalid_user");
+        if (user.IsDisabled) return (null, "user_disabled");
+
+        var now = timeProvider.GetUtcNow();
+        if (user.DeletionRequestedAt.HasValue)
+            return (ToStatus(user, now), null);
+
+        if (!await SetBackendActiveAsync(user.FinanceUserId, active: false, ct))
+            return (null, "backend_deactivation_failed");
+
+        user.DeletionRequestedAt = now;
+        user.DeletionScheduledFor = now.Add(options.RecoveryWindow);
+        user.DeletionLeaseUntil = null;
+        user.DeletionLastError = null;
+
+        var result = await users.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            _ = await SetBackendActiveAsync(user.FinanceUserId, active: true, CancellationToken.None);
+            return (null, "state_update_failed");
+        }
+
+        await sessions.RevokeAllSessionsAsync(user.Id, ct);
+        return (ToStatus(user, now), null);
+    }
+
+    public async Task<(AccountDeletionStatusDto? Status, string? Error)> CancelForAdminAsync(
+        Guid authUserId,
+        CancellationToken ct)
+    {
+        var user = await users.FindByIdAsync(authUserId.ToString());
+        if (user is null) return (null, "invalid_user");
+        if (!user.DeletionRequestedAt.HasValue)
+            return (ToStatus(user, timeProvider.GetUtcNow()), null);
+
+        var now = timeProvider.GetUtcNow();
+        if (user.DeletionScheduledFor is null || now >= user.DeletionScheduledFor.Value)
+            return (null, "deletion_deadline_passed");
+        if (user.DeletionLeaseUntil is { } lease && lease > now)
+            return (null, "purge_in_progress");
+
+        if (!await SetBackendActiveAsync(user.FinanceUserId, active: true, ct))
+            return (null, "backend_reactivation_failed");
+
+        user.DeletionRequestedAt = null;
+        user.DeletionScheduledFor = null;
+        user.DeletionLeaseUntil = null;
+        user.DeletionLastError = null;
+
+        var result = await users.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            _ = await SetBackendActiveAsync(user.FinanceUserId, active: false, CancellationToken.None);
+            return (null, "state_update_failed");
+        }
+
+        return (ToStatus(user, now), null);
+    }
+
     public async Task<bool> IsPendingAsync(Guid authUserId, CancellationToken ct)
     {
         if (authUserId == Guid.Empty) return false;
