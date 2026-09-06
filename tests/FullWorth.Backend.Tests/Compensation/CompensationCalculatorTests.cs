@@ -48,6 +48,74 @@ public sealed class CompensationCalculatorTests
     }
 
     [Fact]
+    public void TaxClass4Factor_ReducesClass4WageTax()
+    {
+        var normal = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with
+        {
+            TaxClass = 4,
+            TaxClass4Factor = 1m
+        });
+        var factored = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with
+        {
+            TaxClass = 4,
+            TaxClass4Factor = 0.8m
+        });
+
+        Assert.Equal(Math.Round(normal.EstimatedIncomeTaxAnnual * 0.8m, 2, MidpointRounding.AwayFromZero), factored.EstimatedIncomeTaxAnnual);
+        Assert.True(factored.EstimatedIncomeTaxAnnual < normal.EstimatedIncomeTaxAnnual);
+    }
+
+    [Fact]
+    public void CompanyCar_AutomaticallyChoosesQuarterRuleForQualifyingElectricCar()
+    {
+        var input = new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 80_000m,
+            VehicleType: "electric",
+            AcquisitionDate: new DateOnly(2026, 1, 1));
+
+        Assert.Equal(0.25m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(input));
+    }
+
+    [Fact]
+    public void CompanyCar_2026HybridNeeds80KmOrLowCo2ForHalfRule()
+    {
+        var qualifying = new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            VehicleType: "hybrid",
+            AcquisitionDate: new DateOnly(2026, 1, 1),
+            ElectricRangeKm: 80m,
+            Co2GramsPerKm: 60m);
+        var notQualifying = qualifying with { ElectricRangeKm = 70m };
+
+        Assert.Equal(0.5m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(qualifying));
+        Assert.Equal(1m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(notQualifying));
+    }
+
+    [Fact]
+    public void CompanyCar_DailyCommuteMethodUsesActualDays()
+    {
+        var monthly = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            TaxableListPriceFactor: 1m,
+            VehicleType: "manual",
+            OneWayCommuteKm: 30m,
+            CommuteMethod: "monthly"));
+        var daily = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            TaxableListPriceFactor: 1m,
+            VehicleType: "manual",
+            OneWayCommuteKm: 30m,
+            CommuteMethod: "daily",
+            CommuteDaysPerMonth: 5));
+
+        Assert.True(daily < monthly);
+    }
+
+    [Fact]
     public void CompanyCar_UsesOnePercentAndCommuteMethod()
     {
         var annual = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
