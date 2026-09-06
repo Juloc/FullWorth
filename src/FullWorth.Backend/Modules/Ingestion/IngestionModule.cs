@@ -31,7 +31,8 @@ public sealed class IngestionService(
     FullWorth.Backend.Security.FieldCipher? fieldCipher = null,
     FullWorth.Backend.Modules.Notifications.BudgetNotificationService? budgetNotifications = null,
     FinanzguruAccountReconciliationService? finanzguruReconciliation = null,
-    IntelligenceDbContext? intelligenceDb = null)
+    IntelligenceDbContext? intelligenceDb = null,
+    CloudOntologyResolver? cloudOntologyResolver = null)
 {
     private readonly FullWorth.Backend.Security.FieldCipher cipher = fieldCipher ?? FullWorth.Backend.Security.FieldCipher.Null;
     private readonly AuditService audit = auditService ?? new AuditService(db);
@@ -263,10 +264,19 @@ public sealed class IngestionService(
             .OrderBy(x => x.Priority).ThenBy(x => x.Id).ToListAsync(ct);
         var activeCategoryRows = await db.Categories.AsNoTracking()
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && !x.IsArchived)
-            .Select(x => new { x.Key, x.Id })
+            .Select(x => new { x.Key, x.Name, x.Id })
             .ToListAsync(ct);
-        var activeCategoryIdsByKey = activeCategoryRows
+        IReadOnlyDictionary<string, Guid> activeCategoryIdsByKey = activeCategoryRows
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
+        if (cloudOntologyResolver is not null && intelligenceDb is not null)
+        {
+            activeCategoryIdsByKey = await cloudOntologyResolver.ExpandCategoryMapAsync(
+                activeCategoryRows
+                    .Select(x => new LocalCategorySemanticCandidate(x.Id, x.Key, x.Name))
+                    .ToList(),
+                country,
+                ct);
+        }
         var activeCategoryIds = activeCategoryRows.Select(x => x.Id).ToArray();
 
         IReadOnlyList<LearnedMerchantCategoryMapping> learnedMappings = Array.Empty<LearnedMerchantCategoryMapping>();

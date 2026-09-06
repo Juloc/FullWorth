@@ -79,18 +79,34 @@ public sealed class KnowledgePackSyncService(
             VerifyPayloadBytes(manifest, payloadBytes);
             var payload = DeserializeAndValidatePayload(manifest, payloadBytes);
 
+            var ontology = ProjectOntology(payload);
+            var redirectMap = ontology.Redirects.ToDictionary(
+                x => x.FromCanonicalKey,
+                x => x.ToCanonicalKey,
+                StringComparer.Ordinal);
             var mappings = payload.Merchants
                 .Where(x => !string.IsNullOrWhiteSpace(x.CategoryKey))
-                .Select(x => ToEntity(manifest, x))
+                .Select(x =>
+                {
+                    var mapping = ToEntity(manifest, x);
+                    mapping.CategoryKey = ResolveRedirectKey(mapping.CategoryKey!, redirectMap);
+                    return mapping;
+                })
                 .GroupBy(x => new { x.AliasKey, x.Direction, x.Country })
                 .Select(g => g.OrderByDescending(x => x.Confidence).First())
                 .ToList();
 
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            var existingMappings = await db.OfficialMerchantMappings.ToListAsync(ct);
-            db.OfficialMerchantMappings.RemoveRange(existingMappings);
+            db.OfficialMerchantMappings.RemoveRange(await db.OfficialMerchantMappings.ToListAsync(ct));
+            db.OfficialOntologyAliases.RemoveRange(await db.OfficialOntologyAliases.ToListAsync(ct));
+            db.OfficialOntologyRedirects.RemoveRange(await db.OfficialOntologyRedirects.ToListAsync(ct));
+            db.OfficialOntologyEntities.RemoveRange(await db.OfficialOntologyEntities.ToListAsync(ct));
+
             db.OfficialMerchantMappings.AddRange(mappings);
+            db.OfficialOntologyEntities.AddRange(ontology.Entities);
+            db.OfficialOntologyAliases.AddRange(ontology.Aliases);
+            db.OfficialOntologyRedirects.AddRange(ontology.Redirects);
 
             installation ??= new KnowledgePackInstallation
             {
@@ -264,10 +280,168 @@ public sealed class KnowledgePackSyncService(
             !string.Equals(payload.SchemaVersion, manifest.SchemaVersion, StringComparison.Ordinal) ||
             !string.Equals(NormalizeRegion(payload.Region), NormalizeRegion(manifest.Region), StringComparison.Ordinal) ||
             payload.Merchants is null ||
-            payload.Merchants.Count > 100_000)
+            payload.Merchants.Count > 100_000 ||
+            (payload.OntologyEntities?.Count ?? 0) > 50_000 ||
+            (payload.OntologyAliases?.Count ?? 0) > 100_000 ||
+            (payload.OntologyRedirects?.Count ?? 0) > 50_000)
             throw new KnowledgePackVerificationException("knowledge_pack_payload_invalid");
 
         return payload;
+    }
+
+    private static ProjectedOntology ProjectOntology(KnowledgePackPayload payload)
+    {
+        var entities = (payload.OntologyEntities ?? [])
+            .Select(ToOntologyEntity)
+            .ToList();
+        if (entities.Count != entities
+                .Select(x => (x.EntityType, x.CanonicalKey))
+                .Distinct()
+                .Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_duplicate_entity");
+
+        var entityKeys = entities
+            .Select(x => (x.EntityType, x.CanonicalKey))
+            .ToHashSet();
+
+        var aliases = (payload.OntologyAliases ?? [])
+            .Select(ToOntologyAlias)
+            .ToList();
+        if (aliases.Any(x => !entityKeys.Contains((x.EntityType, x.CanonicalKey))))
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_orphan_alias");
+
+        var redirects = (payload.OntologyRedirects ?? [])
+            .Select(ToOntologyRedirect)
+            .ToList();
+        if (redirects.Count != redirects
+                .Select(x => (x.EntityType, x.FromCanonicalKey))
+                .Distinct()
+                .Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_duplicate_redirect");
+
+        var redirectMaps = redirects
+            .GroupBy(x => x.EntityType, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyDictionary<string, string>)g.ToDictionary(
+                    x => x.FromCanonicalKey,
+                    x => x.ToCanonicalKey,
+                    StringComparer.Ordinal),
+                StringComparer.Ordinal);
+        ValidateRedirectGraph(redirectMaps);
+
+        var activeEntityKeys = entities
+            .Where(x => x.Status == "active")
+            .Select(x => (x.EntityType, x.CanonicalKey))
+            .ToHashSet();
+        foreach (var redirect in redirects)
+        {
+            var terminal = ResolveRedirectKey(
+                redirect.FromCanonicalKey,
+                redirectMaps[redirect.EntityType]);
+            if (!activeEntityKeys.Contains((redirect.EntityType, terminal)))
+                throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_target_invalid");
+        }
+
+        return new ProjectedOntology(entities, aliases, redirects);
+    }
+
+    private static OfficialOntologyEntity ToOntologyEntity(KnowledgePackOntologyEntityPayload source)
+    {
+        var entityType = NormalizeOntologyType(source.EntityType);
+        var canonicalKey = NormalizeCanonicalKey(source.CanonicalKey);
+        var displayName = Trim(source.DisplayName, 200);
+        var parent = NormalizeOptionalCanonicalKey(source.ParentCanonicalKey);
+        var status = source.Status?.Trim().ToLowerInvariant();
+
+        if (entityType is null || canonicalKey is null || displayName is null ||
+            status is not ("active" or "provisional" or "merged") ||
+            source.Version < 1)
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_entity_invalid");
+
+        return new OfficialOntologyEntity
+        {
+            EntityType = entityType,
+            CanonicalKey = canonicalKey,
+            DisplayName = displayName,
+            ParentCanonicalKey = parent,
+            Status = status,
+            Version = source.Version
+        };
+    }
+
+    private static OfficialOntologyAlias ToOntologyAlias(KnowledgePackOntologyAliasPayload source)
+    {
+        var entityType = NormalizeOntologyType(source.EntityType);
+        var canonicalKey = NormalizeCanonicalKey(source.CanonicalKey);
+        var aliasText = Trim(source.Alias, 200);
+        var normalized = MerchantNormalization.Normalize(aliasText);
+        var suppliedNormalized = Trim(source.NormalizedAlias, 200);
+        var locale = NormalizeLocale(source.Locale);
+        var country = NormalizeCountry(source.Country);
+
+        if (entityType is null || canonicalKey is null || aliasText is null || normalized is null ||
+            suppliedNormalized is null ||
+            !string.Equals(normalized, suppliedNormalized, StringComparison.Ordinal) ||
+            source.Confidence is < 0m or > 1m ||
+            source.DistinctInstances < 0 ||
+            source.Version < 1)
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_alias_invalid");
+
+        return new OfficialOntologyAlias
+        {
+            EntityType = entityType,
+            CanonicalKey = canonicalKey,
+            Alias = aliasText,
+            NormalizedAlias = normalized,
+            Locale = locale,
+            Country = country,
+            Confidence = source.Confidence,
+            DistinctInstances = source.DistinctInstances,
+            Version = source.Version
+        };
+    }
+
+    private static OfficialOntologyRedirect ToOntologyRedirect(KnowledgePackOntologyRedirectPayload source)
+    {
+        var entityType = NormalizeOntologyType(source.EntityType);
+        var from = NormalizeCanonicalKey(source.FromCanonicalKey);
+        var to = NormalizeCanonicalKey(source.ToCanonicalKey);
+        if (entityType is null || from is null || to is null ||
+            string.Equals(from, to, StringComparison.Ordinal) ||
+            source.Version < 1)
+            throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_invalid");
+
+        return new OfficialOntologyRedirect
+        {
+            EntityType = entityType,
+            FromCanonicalKey = from,
+            ToCanonicalKey = to,
+            Version = source.Version
+        };
+    }
+
+    private static void ValidateRedirectGraph(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> redirectMaps)
+    {
+        foreach (var map in redirectMaps.Values)
+        {
+            foreach (var start in map.Keys)
+            {
+                var current = start;
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                for (var depth = 0; depth <= 20; depth++)
+                {
+                    if (!seen.Add(current))
+                        throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_cycle");
+                    if (!map.TryGetValue(current, out var next))
+                        break;
+                    current = next;
+                    if (depth == 20)
+                        throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_too_deep");
+                }
+            }
+        }
     }
 
     private static OfficialMerchantMapping ToEntity(KnowledgePackManifest manifest, KnowledgePackMerchantPayload source)
@@ -413,6 +587,57 @@ public sealed class KnowledgePackSyncService(
                sequence > 0;
     }
 
+    private static string ResolveRedirectKey(
+        string canonicalKey,
+        IReadOnlyDictionary<string, string> redirects)
+    {
+        var current = canonicalKey.Trim().ToLowerInvariant();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var depth = 0; depth < 20 && seen.Add(current); depth++)
+        {
+            if (!redirects.TryGetValue(current, out var next) || string.IsNullOrWhiteSpace(next))
+                return current;
+            current = next;
+        }
+        return current;
+    }
+
+    private static string? NormalizeOntologyType(string? value) =>
+        value?.Trim().ToLowerInvariant() == "category" ? "category" : null;
+
+    private static string? NormalizeCanonicalKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToLowerInvariant();
+        if (normalized.Length > 180) return null;
+        return normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-')
+            ? normalized
+            : null;
+    }
+
+    private static string? NormalizeOptionalCanonicalKey(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : NormalizeCanonicalKey(value);
+
+    private static string NormalizeLocale(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "und";
+        var normalized = value.Trim().Replace('_', '-').ToLowerInvariant();
+        return normalized.Length is >= 2 and <= 20 &&
+               normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-')
+            ? normalized
+            : "und";
+    }
+
+    private static string NormalizeCountry(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "GLOBAL";
+        var normalized = value.Trim().ToUpperInvariant();
+        return normalized == "GLOBAL" ||
+               (normalized.Length == 2 && normalized.All(char.IsAsciiLetter))
+            ? normalized
+            : "GLOBAL";
+    }
+
     private static string NormalizeRegion(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "GLOBAL" : value.Trim().ToUpperInvariant();
 
@@ -426,6 +651,11 @@ public sealed class KnowledgePackSyncService(
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 }
+
+internal sealed record ProjectedOntology(
+    IReadOnlyList<OfficialOntologyEntity> Entities,
+    IReadOnlyList<OfficialOntologyAlias> Aliases,
+    IReadOnlyList<OfficialOntologyRedirect> Redirects);
 
 public sealed class KnowledgePackVerificationException(string errorCode) : Exception(errorCode)
 {
