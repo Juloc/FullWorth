@@ -151,6 +151,14 @@ main:focus{outline:none}
 .amount.negative{color:var(--negative)}
 .amount.positive{color:var(--positive)}
 button,input,select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-input);padding:9px 11px}
+/* Shared action button variants. Feature code should use only these three visual roles. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 14px;border-radius:var(--radius-pill);font-weight:600;line-height:1.1;white-space:nowrap;cursor:pointer}
+.btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+.btn-primary:hover{opacity:.9}
+.btn-secondary{background:var(--surface);color:var(--text);border-color:var(--line)}
+.btn-secondary:hover{background:var(--surface-2)}
+.btn-danger{background:transparent;color:var(--negative);border-color:transparent}
+.btn-danger:hover{background:var(--surface-2)}
 /* Field focus thickens/recolours the border to the CTA — no glow, no shape change (Design System §07). */
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--cta)}
 input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--negative)}
@@ -665,7 +673,7 @@ body.locked{overflow:hidden}
   .metric strong{font-size:20px}
   select,input,textarea{min-height:44px;font-size:16px}
   .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
-  .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button{min-height:44px}
+  .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button,.btn{min-height:44px}
   label.check input{min-height:0}
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}
@@ -674,7 +682,8 @@ body.locked{overflow:hidden}
   .purchase-item .item-category{grid-column:1/-1}
 }
 /* Rules (§11) */
-.ghost{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:var(--radius-pill);font-weight:600}
+.ghost{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:var(--radius-pill);font-weight:600}
+.ghost:hover{background:var(--surface-2)}
 .rule-actions{display:flex;align-items:center;gap:var(--s2)}
 .rule-prio{color:var(--muted);font-size:12px;white-space:nowrap}
 .rule-off{opacity:.6}
@@ -687,7 +696,8 @@ body.locked{overflow:hidden}
 .preview-row .preview-amt{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* Contracts (§13) */
 /* Destructive actions are text-only, never a filled surface or even an outline (Design System §06). */
-button.danger{border:0;color:var(--negative);background:transparent}
+button.danger{border-color:transparent;color:var(--negative);background:transparent}
+button.danger:hover{background:var(--surface-2)}
 .contract-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 .contract-archived{opacity:.6}
 .row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}
@@ -698,11 +708,9 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .detected-copy{min-width:0}
 .detected-copy .row-title,.detected-copy .row-sub{overflow:hidden;text-overflow:ellipsis}
 .detected-side{gap:var(--s2)}
-.detected-actions{display:flex;align-items:center;gap:4px}
-.detected-actions [data-dismiss]{border:0;background:transparent;color:var(--muted);padding:7px 6px}
-.detected-actions [data-accept]{background:var(--cta);color:var(--cta-text);border-color:var(--cta);padding:8px 13px}
-.contracts-more-suggestions{display:block;margin:var(--s2) auto 0;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:12px;padding:8px 12px;cursor:pointer}
-.contracts-more-suggestions:hover{color:var(--text)}
+.detected-actions{display:flex;align-items:center;gap:6px}
+.detected-actions .btn{min-height:34px;padding:7px 12px}
+.contracts-more-suggestions{display:flex;margin:var(--s2) auto 0;font-size:12px}
 /* Removable pill list (merchant aliases) — a generic component for short tag chips with a remove ×. */
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1;padding:4px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
