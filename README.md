@@ -22,4 +22,4 @@ Deployment, backup, and security documentation is available in [docs](docs/). Th
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+FullWorth is source-available proprietary software. Personal, non-commercial self-hosting and modification are permitted under the [FullWorth Proprietary License](LICENSE). Redistribution, commercial use, hosted use for third parties, and use in competing products require prior written permission.
