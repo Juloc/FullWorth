@@ -1,3 +1,4 @@
+import { ButtonRole, buttonClass } from './buttons.js';
 // Themed confirmation dialog (§26/§30) replacing native window.confirm(), which renders as an
 // unstyled browser prompt and cannot be skinned for the app's light/dark theme. Destructive actions
 // render the confirm button as plain red text with no border/fill (Design System §06 "zerstörend:
@@ -11,7 +12,7 @@ export function confirmDialog(ctx, message, opts = {}) {
     const dlg = ctx.dialog(`<div class="dialog-card confirm-dialog">
       <h2>${ctx.esc(title)}</h2>
       <p class="row-sub">${ctx.esc(message)}</p>
-      <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(cancelLabel)}</button><button type="button" class="${opts.destructive ? 'danger' : ''}" data-confirm>${ctx.esc(confirmLabel)}</button></div>
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(cancelLabel)}</button><button type="button" class="${buttonClass(opts.destructive ? ButtonRole.Danger : ButtonRole.Primary)}" data-confirm>${ctx.esc(confirmLabel)}</button></div>
     </div>`);
     let settled = false;
     const finish = value => {
