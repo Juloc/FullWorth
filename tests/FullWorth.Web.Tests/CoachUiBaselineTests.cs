@@ -45,6 +45,11 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("Was habe ich bereut?", shell);
         Assert.Contains("Was war es wert?", shell);
         Assert.Contains("Wann erreiche ich 100.000 €?", shell);
+        Assert.Contains("id=\"coach-launcher\"", shell);
+        Assert.Contains("id=\"coach-dock\"", shell);
+        Assert.Contains("finance.coach.quickAccess", shell);
+        Assert.Contains("restartConversation", shell);
+        Assert.Contains("api/coach/conversations?limit=1", shell);
     }
 
     private async Task<string> GetAsync(string path)

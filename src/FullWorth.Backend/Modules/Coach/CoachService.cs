@@ -20,6 +20,15 @@ public sealed class CoachService(
     {
         await EnsureMemberAsync(userId, fullWorthSpaceId, ct);
         var now = DateTimeOffset.UtcNow;
+        var active = await Conversations
+            .Where(x => x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId && x.ArchivedAt == null)
+            .ToListAsync(ct);
+        foreach (var existing in active)
+        {
+            existing.ArchivedAt = now;
+            existing.UpdatedAt = now;
+        }
+
         var entity = new CoachConversation
         {
             FullWorthSpaceId = fullWorthSpaceId,
@@ -40,7 +49,7 @@ public sealed class CoachService(
         limit = Math.Clamp(limit, 1, 50);
         return await Conversations.AsNoTracking()
             .Where(x => x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId && x.ArchivedAt == null)
-            .OrderByDescending(x => x.UpdatedAt).Take(limit)
+            .OrderByDescending(x => x.UpdatedAt).Take(1)
             .Select(x => new CoachConversationDto(x.Id, x.Title, x.MascotId, x.CreatedAt, x.UpdatedAt))
             .ToListAsync(ct);
     }
@@ -57,11 +66,16 @@ public sealed class CoachService(
 
     public async Task<bool> ArchiveConversationAsync(Guid userId, Guid fullWorthSpaceId, Guid id, CancellationToken ct)
     {
-        var conversation = await Conversations.SingleOrDefaultAsync(x =>
-            x.Id == id && x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId && x.ArchivedAt == null, ct);
-        if (conversation is null) return false;
-        conversation.ArchivedAt = DateTimeOffset.UtcNow;
-        conversation.UpdatedAt = DateTimeOffset.UtcNow;
+        var conversations = await Conversations
+            .Where(x => x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId && x.ArchivedAt == null)
+            .ToListAsync(ct);
+        if (!conversations.Any(x => x.Id == id)) return false;
+        var now = DateTimeOffset.UtcNow;
+        foreach (var conversation in conversations)
+        {
+            conversation.ArchivedAt = now;
+            conversation.UpdatedAt = now;
+        }
         await db.SaveChangesAsync(ct);
         return true;
     }

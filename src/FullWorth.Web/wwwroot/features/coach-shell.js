@@ -1,4 +1,5 @@
 const $ = selector => document.querySelector(selector);
+const $ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const lang = () => (localStorage.getItem('finance.language') || (navigator.language || 'de')).startsWith('de') ? 'de' : 'en';
 const spaceId = () => localStorage.getItem('finance.space');
@@ -9,6 +10,9 @@ let reviews = new Map();
 let loading = false;
 let modelCatalog = null;
 let selectedModel = '';
+let currentConversationSpaceId = null;
+let dockOpen = false;
+const quickAccessKey = 'finance.coach.quickAccess';
 
 const reasonLabels = {
   necessary: ['Notwendig', 'Necessary'], good_value: ['Gutes Preis-Leistungs-Verhältnis', 'Good value'], quality_of_life: ['Lebensqualität', 'Quality of life'],
@@ -72,7 +76,7 @@ function installShell() {
       <div class="coach-main">
         <article class="panel coach-hero">
           <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
-          <span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span>
+          <div class="coach-head-actions"><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span></div>
         </article>
         <article class="panel coach-chat-panel">
           <div id="coach-starters" class="coach-starters"></div>
@@ -100,12 +104,11 @@ function installShell() {
     </div>`;
   $('#main')?.appendChild(section);
 
+  installQuickAccess();
+  installSettingsToggle();
   $('#coach-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-input').value); });
-  $('#coach-model')?.addEventListener('change', event => {
-    selectedModel = event.target.value || '';
-    if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
-    else localStorage.removeItem('finance.coach.model');
-  });
+  $('#coach-new-chat')?.addEventListener('click', restartConversation);
+  $('#coach-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   $('#coach-review-refresh')?.addEventListener('click', () => loadReviews());
   $('#refresh')?.addEventListener('click', event => {
     if (!active) return;
@@ -120,7 +123,115 @@ function installShell() {
   $('#bottom-more')?.addEventListener('click', () => queueMicrotask(injectMobileMore));
   window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
   window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
+  window.addEventListener('storage', event => { if (event.key === quickAccessKey) syncQuickAccess(); });
   if (document.readyState === 'complete' && isCoachPath()) activate(false);
+  syncQuickAccess();
+}
+
+function quickAccessEnabled() { return localStorage.getItem(quickAccessKey) !== '0'; }
+
+function installSettingsToggle() {
+  const grid = $('#view-settings .settings-grid');
+  if (!grid || $('#coach-quick-access-setting')) return;
+  const label = document.createElement('label');
+  label.className = 'fw-toggle-row settings-toggle';
+  label.innerHTML = `<span>${esc(tr('Coach-Sprechblase', 'Coach chat bubble'))}</span><span class="fw-toggle"><input id="coach-quick-access-setting" type="checkbox"><span class="fw-toggle-track"></span></span>`;
+  const input = label.querySelector('input');
+  input.checked = quickAccessEnabled();
+  input.addEventListener('change', () => {
+    localStorage.setItem(quickAccessKey, input.checked ? '1' : '0');
+    syncQuickAccess();
+  });
+  grid.appendChild(label);
+}
+
+function installQuickAccess() {
+  if ($('#coach-launcher')) return;
+  const launcher = document.createElement('button');
+  launcher.id = 'coach-launcher';
+  launcher.className = 'coach-launcher';
+  launcher.type = 'button';
+  launcher.setAttribute('aria-label', tr('Coach öffnen', 'Open Coach'));
+  launcher.setAttribute('title', tr('Coach öffnen', 'Open Coach'));
+  launcher.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg>';
+  launcher.addEventListener('click', openDock);
+
+  const dock = document.createElement('aside');
+  dock.id = 'coach-dock';
+  dock.className = 'coach-dock';
+  dock.hidden = true;
+  dock.setAttribute('aria-label', 'FullWorth Coach');
+  dock.innerHTML = `
+    <header class="coach-dock-header">
+      <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
+      <div class="coach-dock-actions">
+        <button id="coach-dock-new" type="button" class="icon-button" aria-label="${esc(tr('Neu starten', 'New chat'))}" title="${esc(tr('Neu starten', 'New chat'))}">↻</button>
+        <button id="coach-dock-page" type="button" class="icon-button" aria-label="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}" title="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}">↗</button>
+        <button id="coach-dock-close" type="button" class="icon-button coach-dock-close" aria-label="${esc(tr('Schließen', 'Close'))}" title="${esc(tr('Schließen', 'Close'))}">×</button>
+      </div>
+    </header>
+    <div class="coach-dock-chat">
+      <div id="coach-dock-starters" class="coach-starters"></div>
+      <div id="coach-dock-messages" class="coach-messages" aria-live="polite"></div>
+      <form id="coach-dock-form" class="coach-composer">
+        <label class="sr-only" for="coach-dock-input">${esc(tr('Frage an FullWorth', 'Question for FullWorth'))}</label>
+        <textarea id="coach-dock-input" rows="2" maxlength="2000" placeholder="${esc(tr('Frag FullWorth …', 'Ask FullWorth …'))}"></textarea>
+        <div class="coach-composer-footer">
+          <label class="coach-model-picker" for="coach-dock-model">
+            <span class="sr-only">${esc(tr('KI-Modell', 'AI model'))}</span>
+            <select id="coach-dock-model" aria-label="${esc(tr('KI-Modell', 'AI model'))}"><option value="">${esc(tr('Automatisch', 'Automatic'))}</option></select>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
+          </label>
+          <button id="coach-dock-send" type="submit" class="primary-action coach-send" aria-label="${esc(tr('Senden', 'Send'))}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
+          </button>
+        </div>
+      </form>
+    </div>`;
+
+  document.body.append(launcher, dock);
+  $('#coach-dock-close')?.addEventListener('click', closeDock);
+  $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); activate(true); });
+  $('#coach-dock-new')?.addEventListener('click', restartConversation);
+  $('#coach-dock-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-dock-input').value); });
+  $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
+}
+
+function setSelectedModel(value) {
+  selectedModel = value || '';
+  if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
+  else localStorage.removeItem('finance.coach.model');
+  $('#coach-model,#coach-dock-model').forEach(select => { if (select.value !== selectedModel) select.value = selectedModel; });
+}
+
+function syncQuickAccess() {
+  installSettingsToggle();
+  const setting = $('#coach-quick-access-setting');
+  if (setting) setting.checked = quickAccessEnabled();
+  if (!quickAccessEnabled() && dockOpen) closeDock();
+  const launcher = $('#coach-launcher');
+  if (launcher) launcher.hidden = !quickAccessEnabled() || active || dockOpen;
+}
+
+async function openDock() {
+  if (!quickAccessEnabled()) return;
+  dockOpen = true;
+  const dock = $('#coach-dock');
+  if (dock) dock.hidden = false;
+  document.body.classList.add('coach-dock-open');
+  syncQuickAccess();
+  setMascotLabel();
+  renderStarters();
+  try { await Promise.all([loadConversation(), loadModels()]); } catch (error) { renderError(error); }
+  queueMicrotask(() => $('#coach-dock-input')?.focus());
+}
+
+function closeDock() {
+  dockOpen = false;
+  document.body.classList.remove('coach-dock-open');
+  const dock = $('#coach-dock');
+  if (dock) dock.hidden = true;
+  syncQuickAccess();
 }
 
 function injectMobileMore() {
@@ -135,6 +246,7 @@ function injectMobileMore() {
 }
 
 function activate(push) {
+  if (dockOpen) closeDock();
   active = true;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   $('#view-coach')?.classList.add('active');
@@ -146,6 +258,7 @@ function activate(push) {
   $('#page-subtitle').textContent = tr('Deine Daten erklären, Ausgaben bewerten und Ziele berechnen.', 'Explain your data, review spending and calculate goals.');
   const primary = $('#primary-action'); if (primary) primary.hidden = true;
   if (push && !isCoachPath()) history.pushState({ view: 'coach' }, '', '/coach');
+  syncQuickAccess();
   loadAll();
 }
 
@@ -154,6 +267,7 @@ function deactivate() {
   $('#view-coach')?.classList.remove('active');
   $('#coach-nav')?.classList.remove('active');
   $('#coach-nav')?.setAttribute('aria-current', 'false');
+  syncQuickAccess();
 }
 
 async function loadAll() {
@@ -168,12 +282,14 @@ async function loadAll() {
 
 function setMascotLabel() {
   const mascot = localStorage.getItem('finance.mascot');
-  $('#coach-mascot-label').textContent = mascot ? `${tr('Maskottchen', 'Mascot')}: ${mascot}` : tr('FullWorth-Daten im sicheren Kontext', 'FullWorth data in secure context');
+  const label = mascot ? `${tr('Maskottchen', 'Mascot')}: ${mascot}` : tr('FullWorth-Daten im sicheren Kontext', 'FullWorth data in secure context');
+  if ($('#coach-mascot-label')) $('#coach-mascot-label').textContent = label;
+  if ($('#coach-dock-subtitle')) $('#coach-dock-subtitle').textContent = label;
 }
 
 async function loadModels() {
-  const select = $('#coach-model');
-  if (!select) return;
+  const selects = $('#coach-model,#coach-dock-model');
+  if (!selects.length) return;
   try {
     modelCatalog = await api('api/coach/models');
   } catch {
@@ -185,6 +301,7 @@ async function loadModels() {
   selectedModel = models.some(model => model.id === stored) ? stored : '';
   if (!selectedModel && stored) localStorage.removeItem('finance.coach.model');
 
+  const configure = select => {
   select.innerHTML = '';
   const auto = document.createElement('option');
   auto.value = '';
@@ -202,6 +319,8 @@ async function loadModels() {
   });
   select.value = selectedModel;
   select.disabled = !modelCatalog?.configured;
+  };
+  selects.forEach(configure);
 
   const mode = $('#coach-mode');
   if (mode) {
@@ -215,18 +334,24 @@ function renderStarters() {
   const starters = lang() === 'de'
     ? ['Wo ist mein Geld hin?', 'Was habe ich bereut?', 'Was war es wert?', 'Was könnte ich reduzieren?', 'Wann erreiche ich 100.000 €?']
     : ['Where did my money go?', 'What did I regret?', 'What was worth it?', 'What could I reduce?', 'When could I reach €100,000?'];
-  const root = $('#coach-starters');
-  root.innerHTML = '';
-  starters.forEach(text => {
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'coach-chip'; button.textContent = text;
-    button.addEventListener('click', () => ask(text)); root.appendChild(button);
+  $('#coach-starters,#coach-dock-starters').forEach(root => {
+    root.innerHTML = '';
+    starters.forEach(text => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'coach-chip'; button.textContent = text;
+      button.addEventListener('click', () => ask(text)); root.appendChild(button);
+    });
   });
 }
 
 async function loadConversation() {
-  const conversations = await api('api/coach/conversations?limit=10');
-  if (!currentConversationId) currentConversationId = conversations?.[0]?.id || null;
-  if (!currentConversationId) { $('#coach-messages').innerHTML = `<div class="coach-empty">${esc(tr('Stelle eine Frage. Ein Chat wird beim ersten Senden angelegt.', 'Ask a question. A chat is created when you first send one.'))}</div>`; return; }
+  const sid = spaceId();
+  if (currentConversationSpaceId !== sid) {
+    currentConversationId = null;
+    currentConversationSpaceId = sid;
+  }
+  const conversations = await api('api/coach/conversations?limit=1');
+  currentConversationId = conversations?.[0]?.id || null;
+  if (!currentConversationId) { renderMessages([]); return; }
   const detail = await api(`api/coach/conversations/${currentConversationId}`);
   renderMessages(detail.messages || []);
 }
@@ -238,14 +363,17 @@ async function ensureConversation() {
     body: JSON.stringify({ title: null, mascotId: localStorage.getItem('finance.mascot') || null })
   });
   currentConversationId = created.id;
+  currentConversationSpaceId = spaceId();
   return currentConversationId;
 }
 
 async function ask(text) {
   const question = String(text || '').trim();
   if (!question) return;
-  const input = $('#coach-input'); const send = $('#coach-send');
-  input.value = ''; send.disabled = true;
+  const inputs = $('#coach-input,#coach-dock-input');
+  const sends = $('#coach-send,#coach-dock-send');
+  inputs.forEach(input => { input.value = ''; });
+  sends.forEach(send => { send.disabled = true; });
   appendMessage({ role: 'User', text: question, facts: [] });
   try {
     const id = await ensureConversation();
@@ -253,46 +381,71 @@ async function ask(text) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null })
     });
     appendMessage(response.message);
-    $('#coach-mode').textContent = response.message.mode === 'Ai'
+    const modeText = response.message.mode === 'Ai'
       ? `${tr('KI', 'AI')}${response.message.model ? ` · ${response.message.model}` : ''}`
       : tr('Deterministisch', 'Deterministic');
+    if ($('#coach-mode')) $('#coach-mode').textContent = modeText;
     renderFollowUps(response.followUps || []);
     await loadReviews(false);
   } catch (error) { appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] }); }
-  finally { send.disabled = false; input.focus(); }
+  finally {
+    sends.forEach(send => { send.disabled = false; });
+    (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
+  }
 }
 
+async function restartConversation() {
+  const id = currentConversationId;
+  if (id) {
+    try { await api(`api/coach/conversations/${id}`, { method: 'DELETE' }); }
+    catch (error) { renderError(error); return; }
+  }
+  currentConversationId = null;
+  currentConversationSpaceId = spaceId();
+  renderMessages([]);
+  renderStarters();
+  (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
+}
+
+function messageRoots() { return $('#coach-messages,#coach-dock-messages'); }
+
 function renderMessages(messages) {
-  const root = $('#coach-messages'); root.innerHTML = '';
-  if (!messages.length) root.innerHTML = `<div class="coach-empty">${esc(tr('Noch keine Nachrichten.', 'No messages yet.'))}</div>`;
+  messageRoots().forEach(root => {
+    root.innerHTML = '';
+    if (!messages.length) root.innerHTML = `<div class="coach-empty">${esc(tr('Noch keine Nachrichten.', 'No messages yet.'))}</div>`;
+  });
   messages.forEach(appendMessage);
 }
 
 function appendMessage(message) {
-  const root = $('#coach-messages'); root.querySelector('.coach-empty')?.remove();
-  const article = document.createElement('article');
-  article.className = `coach-message ${String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant'}`;
-  const text = document.createElement('div'); text.className = 'coach-message-text'; text.textContent = message.text || '';
-  article.appendChild(text);
-  if (String(message.role).toLowerCase() !== 'user' && (message.model || message.provider)) {
-    const meta = document.createElement('div');
-    meta.className = 'coach-message-meta';
-    meta.textContent = [message.provider, message.model].filter(Boolean).join(' · ');
-    article.appendChild(meta);
-  }
-  if (message.facts?.length) {
-    const details = document.createElement('details'); details.className = 'coach-evidence';
-    const summary = document.createElement('summary'); summary.textContent = tr('Verwendete Fakten', 'Evidence'); details.appendChild(summary);
-    const facts = document.createElement('div'); facts.className = 'coach-facts';
-    message.facts.forEach(fact => { const chip = document.createElement('span'); chip.className = 'coach-fact'; chip.textContent = `${fact.label}: ${fact.value}`; facts.appendChild(chip); });
-    details.appendChild(facts); article.appendChild(details);
-  }
-  root.appendChild(article); root.scrollTop = root.scrollHeight;
+  messageRoots().forEach(root => {
+    root.querySelector('.coach-empty')?.remove();
+    const article = document.createElement('article');
+    article.className = `coach-message ${String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant'}`;
+    const text = document.createElement('div'); text.className = 'coach-message-text'; text.textContent = message.text || '';
+    article.appendChild(text);
+    if (String(message.role).toLowerCase() !== 'user' && (message.model || message.provider)) {
+      const meta = document.createElement('div');
+      meta.className = 'coach-message-meta';
+      meta.textContent = [message.provider, message.model].filter(Boolean).join(' · ');
+      article.appendChild(meta);
+    }
+    if (message.facts?.length) {
+      const details = document.createElement('details'); details.className = 'coach-evidence';
+      const summary = document.createElement('summary'); summary.textContent = tr('Verwendete Fakten', 'Evidence'); details.appendChild(summary);
+      const facts = document.createElement('div'); facts.className = 'coach-facts';
+      message.facts.forEach(fact => { const chip = document.createElement('span'); chip.className = 'coach-fact'; chip.textContent = `${fact.label}: ${fact.value}`; facts.appendChild(chip); });
+      details.appendChild(facts); article.appendChild(details);
+    }
+    root.appendChild(article); root.scrollTop = root.scrollHeight;
+  });
 }
 
 function renderFollowUps(items) {
-  const root = $('#coach-starters'); root.innerHTML = '';
-  items.slice(0, 3).forEach(text => { const b = document.createElement('button'); b.type = 'button'; b.className = 'coach-chip'; b.textContent = text; b.addEventListener('click', () => ask(text)); root.appendChild(b); });
+  $('#coach-starters,#coach-dock-starters').forEach(root => {
+    root.innerHTML = '';
+    items.slice(0, 3).forEach(text => { const b = document.createElement('button'); b.type = 'button'; b.className = 'coach-chip'; b.textContent = text; b.addEventListener('click', () => ask(text)); root.appendChild(b); });
+  });
 }
 
 async function loadReviews(renderCandidates = true) {
@@ -401,6 +554,6 @@ async function clearReview(tx, row) {
 
 async function refreshSummaryOnly() { renderSummary(await api('api/spending-reviews/summary')); }
 function showInlineError(row, message) { let error = row.querySelector('.coach-inline-error'); if (!error) { error = document.createElement('div'); error.className = 'coach-inline-error'; row.appendChild(error); } error.textContent = message; }
-function renderError(error) { const root = $('#coach-messages'); if (root) root.innerHTML = `<div class="coach-empty">${esc(tr('Coach konnte nicht geladen werden: ', 'Coach could not be loaded: ') + error.message)}</div>`; }
+function renderError(error) { messageRoots().forEach(root => { root.innerHTML = `<div class="coach-empty">${esc(tr('Coach konnte nicht geladen werden: ', 'Coach could not be loaded: ') + error.message)}</div>`; }); }
 
 installShell();
