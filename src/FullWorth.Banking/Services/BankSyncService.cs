@@ -510,7 +510,8 @@ public sealed class BankSyncService(
         var connection = await FindConnectionAsync(connectionId, ct);
         if (connection is null) return DisconnectStatus.NotFound;
 
-        if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase) &&\n            !string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+        if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(connection.ProviderSessionId))
         {
             var client = await ResolveProviderForConnectionAsync(connection, ct);
             try
