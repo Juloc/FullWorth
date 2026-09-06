@@ -592,6 +592,7 @@
     "externalAccountNotFound": "No FullWorth account is linked to this Google or Apple account yet. You can create one here.",
     "externalRegistrationFailed": "Registration with Google or Apple could not be completed.",
     "externalFailed": "Sign-in with Google or Apple could not be completed.",
+    "externalTwoFactorRequired": "Two-factor authentication is enabled for this account. Sign in with email, password, and your authenticator code.",
     "createAccount": "Create account",
     "displayName": "Name",
     "register": "Create account",
