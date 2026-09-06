@@ -237,6 +237,23 @@ app.Use(async (context, next) =>
     await next();
 });
 
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/admin") &&
+        !context.Request.Path.Equals("/admin") &&
+        !context.Request.Path.Equals("/admin/"))
+    {
+        var admin = context.RequestServices.GetRequiredService<InstanceAdminService>();
+        if (await admin.GetCurrentAdminAsync(context.User, context.RequestAborted) is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseStaticFiles();
 app.UseAuthorization();
 app.UseFullWorthAntiforgery();
