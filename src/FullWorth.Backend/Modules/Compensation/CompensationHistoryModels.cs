@@ -7,6 +7,15 @@ public sealed record CompensationHistoryWrite(
     string? Note,
     CompensationProfileInput Profile);
 
+public sealed record CompensationHistoryDelta(
+    decimal GrossAnnual,
+    decimal CashNetAnnual,
+    decimal EmployerCostAnnual,
+    decimal FullWorthValueAnnual,
+    decimal EffectiveHourlyValue,
+    decimal TaxesAnnual,
+    decimal SocialInsuranceAnnual);
+
 public sealed record CompensationHistoryEntry(
     Guid Id,
     Guid FullWorthSpaceId,
@@ -17,6 +26,8 @@ public sealed record CompensationHistoryEntry(
     string? Note,
     IReadOnlyList<string> ChangedFields,
     CompensationProfileInput ResolvedProfile,
+    CompensationCalculationResult Calculation,
+    CompensationHistoryDelta? DeltaFromPrevious,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -25,6 +36,13 @@ public sealed record CompensationTimelinePoint(
     decimal ContractualGrossAnnual,
     decimal EstimatedCashNetAnnual,
     decimal FullWorthCompensationValueAnnual,
+    decimal EmployerTotalCostAnnual,
+    decimal EffectiveNetValuePerWorkingHour,
+    decimal MarginalNetFromNext100Gross,
+    decimal TaxesAnnual,
+    decimal SocialInsuranceAnnual,
+    decimal PersonalBenefitsValueAnnual,
+    decimal CompanyCarNetCashImpactAnnual,
     decimal PurchasingPowerMaintenanceGrossAnnual,
     decimal NominalChangeFromBaselinePercent,
     decimal InflationFromBaselinePercent,
