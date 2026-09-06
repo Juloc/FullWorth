@@ -202,7 +202,7 @@ public sealed class CoachService(
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : NormalizeUiMap(context.Details, AllowedUiDetailKeys, 14, 180);
         var selectedIds = entityType is null
-            ? []
+            ? Array.Empty<string>()
             : (context.SelectedIds ?? [])
                 .Select(value => NormalizeUiValue(value, 100))
                 .Where(value => value is not null)
