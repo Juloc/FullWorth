@@ -44,6 +44,33 @@ function categoryGlyph(iconKey) {
   return path ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>` : null;
 }
 
+let OFFICIAL_BRAND_LOGOS = [];
+let officialBrandCatalogLoad = null;
+let officialBrandCatalogLoadedAt = 0;
+
+export function installOfficialBrandCatalog(catalog) {
+  const assets = new Map((catalog?.assets || []).map(x => [String(x.brandKey || '').toLowerCase(), x.dataUri]));
+  OFFICIAL_BRAND_LOGOS = (catalog?.aliases || [])
+    .map(x => ({ alias: String(x.aliasKey || '').trim().toUpperCase(), path: assets.get(String(x.brandKey || '').toLowerCase()) }))
+    .filter(x => x.alias && x.path)
+    .sort((a, b) => b.alias.length - a.alias.length);
+  officialBrandCatalogLoadedAt = Date.now();
+  return OFFICIAL_BRAND_LOGOS.length;
+}
+
+export async function ensureOfficialBrandCatalog(api, force = false) {
+  const age = Date.now() - officialBrandCatalogLoadedAt;
+  if (!force && OFFICIAL_BRAND_LOGOS.length && age < 6 * 60 * 60 * 1000) return true;
+  if (!force && !OFFICIAL_BRAND_LOGOS.length && officialBrandCatalogLoadedAt && age < 30 * 1000) return false;
+  if (officialBrandCatalogLoad) return officialBrandCatalogLoad;
+  officialBrandCatalogLoad = Promise.resolve()
+    .then(() => api('api/intelligence/brand-catalog'))
+    .then(catalog => installOfficialBrandCatalog(catalog) > 0)
+    .catch(() => { officialBrandCatalogLoadedAt = Date.now(); return false; })
+    .finally(() => { officialBrandCatalogLoad = null; });
+  return officialBrandCatalogLoad;
+}
+
 const BRAND_LOGOS = [
   { aliases: ['VATTENFALL'], path: '/brands/vattenfall.svg' },
   { aliases: ['ENBW'], path: '/brands/enbw.svg' },
@@ -65,6 +92,9 @@ function brandLogoPath(name) {
   const normalized = String(name || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, ' ').trim();
   if (!normalized) return null;
   const padded = ` ${normalized} `;
+  for (const brand of OFFICIAL_BRAND_LOGOS) {
+    if (padded.includes(` ${brand.alias} `)) return brand.path;
+  }
   for (const brand of BRAND_LOGOS) {
     if (brand.aliases.some(alias => padded.includes(` ${alias} `))) return brand.path;
   }
