@@ -94,10 +94,15 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
         state.LastErrorCode = null;
         state.UpdatedAt = now;
 
-        // Cloud Intelligence is reciprocal. Opt-out revokes consent and drops the rotatable instance
-        // credential so nothing can be transmitted after a later re-enable without fresh enrollment.
+        // Opt-out revokes consent, drops the rotatable credential and discards anything that has not
+        // already been transmitted. Re-enabling starts with fresh consent and fresh learning events.
         db.CloudInstanceCredentials.RemoveRange(await db.CloudInstanceCredentials
             .Where(x => x.InstanceId == state.InstanceId)
+            .ToListAsync(ct));
+        db.CloudSubmissionOutbox.RemoveRange(await db.CloudSubmissionOutbox
+            .Where(x => x.InstanceId == state.InstanceId &&
+                        x.Status != CloudSubmissionStatuses.Sent &&
+                        x.Status != CloudSubmissionStatuses.DeadLetter)
             .ToListAsync(ct));
 
         await db.SaveChangesAsync(ct);
