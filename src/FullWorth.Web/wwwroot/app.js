@@ -192,6 +192,7 @@ function bind(){
   bindDashboard(ctx);
   $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
   $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
+  $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
   // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
@@ -240,12 +241,34 @@ function syncResponsiveSidebar(){
 }
 window.fwSyncResponsiveSidebar=syncResponsiveSidebar;
 
+function layoutWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
+function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
+function resetLayout(){
+  ['finance.sidebar.width','finance.sidebar.width.desktop','finance.sidebar.width.tablet','finance.coach.dockWidth','finance.coach.dockWidth.desktop','finance.coach.dockWidth.tablet'].forEach(key=>localStorage.removeItem(key));
+  localStorage.setItem('finance.navCollapsed','0');
+  document.body.classList.remove('nav-collapsed','nav-auto-collapsed');
+  document.documentElement.style.removeProperty('--sidebar-w');
+  document.documentElement.style.removeProperty('--coach-dock-w');
+  window.dispatchEvent(new CustomEvent('fullworth:layout-reset'));
+  window.dispatchEvent(new Event('resize'));
+  syncResponsiveSidebar();
+  toast(state.lang==='de'?'Layout zurückgesetzt':'Layout reset');
+}
+
 function initResizableSidebar(){
   const sidebar=$('.sidebar');
   if(!sidebar)return;
-  const key='finance.sidebar.width';
   const minWidth=176;
+  const defaults={desktop:228,tablet:196};
   const desktopMode=()=>window.matchMedia('(min-width:768px)').matches;
+  const key=()=>sidebarWidthKey();
+  const defaultWidth=()=>defaults[layoutWidthMode()];
+  const savedWidth=()=>{
+    const scoped=Number(localStorage.getItem(key()));
+    if(scoped>0)return scoped;
+    const legacy=Number(localStorage.getItem('finance.sidebar.width'));
+    return legacy>0?legacy:defaultWidth();
+  };
   const maxWidth=()=>{
     const coach=document.body.classList.contains('coach-dock-open')?$('#coach-dock')?.getBoundingClientRect().width||0:0;
     const minMain=window.innerWidth<1100?280:420;
@@ -253,7 +276,7 @@ function initResizableSidebar(){
   };
   const apply=value=>{
     if(!desktopMode())return;
-    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||sidebar.getBoundingClientRect().width||228)));
+    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||savedWidth())));
     document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
     handle.setAttribute('aria-valuemax',String(maxWidth()));
     handle.setAttribute('aria-valuenow',String(width));
@@ -261,6 +284,7 @@ function initResizableSidebar(){
     syncResponsiveSidebar();
     return width;
   };
+  const save=width=>{if(width)localStorage.setItem(key(),String(width))};
   const handle=document.createElement('div');
   handle.className='sidebar-resizer';
   handle.setAttribute('role','separator');
@@ -269,50 +293,35 @@ function initResizableSidebar(){
   handle.setAttribute('aria-valuemin',String(minWidth));
   handle.tabIndex=0;
   sidebar.appendChild(handle);
-
-  const saved=Number(localStorage.getItem(key));
-  if(saved>0)apply(saved);
+  apply(savedWidth());
 
   let pointerId=null;
   handle.addEventListener('pointerdown',event=>{
-    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
-    pointerId=event.pointerId;
-    handle.setPointerCapture(pointerId);
-    handle.classList.add('is-dragging');
-    document.body.classList.add('sidebar-resizing');
-    event.preventDefault();
+    if(!desktopMode()||sidebarEffectivelyCollapsed())return;
+    pointerId=event.pointerId;handle.setPointerCapture(pointerId);
+    handle.classList.add('is-dragging');document.body.classList.add('sidebar-resizing');event.preventDefault();
   });
-  handle.addEventListener('pointermove',event=>{
-    if(pointerId!==event.pointerId)return;
-    apply(event.clientX);
-  });
+  handle.addEventListener('pointermove',event=>{if(pointerId===event.pointerId)apply(event.clientX)});
   const finish=event=>{
     if(pointerId===null||event.pointerId!==pointerId)return;
-    pointerId=null;
-    handle.classList.remove('is-dragging');
-    document.body.classList.remove('sidebar-resizing');
-    const width=apply(sidebar.getBoundingClientRect().width);
-    if(width)localStorage.setItem(key,String(width));
+    pointerId=null;handle.classList.remove('is-dragging');document.body.classList.remove('sidebar-resizing');
+    save(apply(sidebar.getBoundingClientRect().width));
   };
   handle.addEventListener('pointerup',finish);
   handle.addEventListener('pointercancel',finish);
+  handle.addEventListener('dblclick',()=>save(apply(defaultWidth())));
   handle.addEventListener('keydown',event=>{
-    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
-    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    if(!desktopMode()||sidebarEffectivelyCollapsed()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
     event.preventDefault();
     const current=sidebar.getBoundingClientRect().width;
-    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?10:-10);
-    const width=apply(next);
-    if(width)localStorage.setItem(key,String(width));
+    const step=event.shiftKey?40:10;
+    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?step:-step);
+    save(apply(next));
   });
-  window.addEventListener('resize',()=>{
-    if(!desktopMode()){syncResponsiveSidebar();return}
-    const current=Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width;
-    apply(current);
-    syncResponsiveSidebar();
-  });
+  window.addEventListener('resize',()=>{if(!desktopMode()){syncResponsiveSidebar();return}apply(savedWidth());syncResponsiveSidebar()});
   window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
-  window.fwClampSidebarWidth=()=>apply(Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width);
+  window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
+  window.fwClampSidebarWidth=()=>apply(savedWidth());
 }
 async function showView(view,opts={}){
   state.view=view;
@@ -330,9 +339,11 @@ async function showView(view,opts={}){
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
   $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
-  $$('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  $('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
   $('#bottom-more').classList.toggle('active',MORE_VIEWS.includes(view));
-  renderPageHeader();await loadCurrent();
+  renderPageHeader();
+  window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
+  await loadCurrent();
 }
 async function loadCurrent(){
   try{
