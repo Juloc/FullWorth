@@ -1008,7 +1008,7 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "explain": "FullWorth uses shared, versioned knowledge for better automatic mappings and aggregate benchmarks.",
-    "shared": "Only required minimized learning and statistical data is shared, such as recognized merchants, category aliases, aggregated contract costs and savings rate, plus coarse comparison buckets. No individual transactions, income amounts, IBAN, account number, e-mail, user ID, notes, or bank credentials.",
+    "shared": "Only required minimized learning and statistical data is shared, such as recognized merchants, category aliases, confirmed provider/product aliases, aggregated contract costs and savings rate, plus coarse comparison buckets. No individual transactions, income amounts, IBAN, account number, e-mail, user ID, notes, or bank credentials.",
     "useCloud": "Use FullWorth Cloud Intelligence",
     "localWins": "Manual decisions and local rules always take precedence over cloud knowledge.",
     "savedEnabled": "Cloud Intelligence enabled.",

@@ -12,7 +12,7 @@ public static class CloudIntelligencePolicy
 {
     // Bump when materially changing what may be contributed. Existing consent must not silently cover
     // new data categories after a material policy change.
-    public const string CurrentVersion = "2026-09-06.2";
+    public const string CurrentVersion = "2026-09-06.3";
     public const string SubmissionSchemaVersion = "1";
 }
 
