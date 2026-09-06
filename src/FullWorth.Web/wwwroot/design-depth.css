@@ -346,7 +346,6 @@ html[data-theme="light"] .an-cat:hover{
 .progress>span{
   border-radius:999px;
   transform-origin:left center;
-  animation:fw-progress-in .7s var(--fw-ease) both;
 }
 
 .progress.ontrack>span{
@@ -361,14 +360,13 @@ html[data-theme="light"] .an-cat:hover{
   background:linear-gradient(90deg,#e03131,#ef5a5a);
 }
 
-/* Charts: animate bars and line paths once when inserted. */
+/* Charts: bars render at full size immediately; line paths still trace in once when inserted. */
 .widget-chart rect,
 .chart-empty svg rect,
 .bar-income,
 .bar-expense{
   transform-box:fill-box;
   transform-origin:center bottom;
-  animation:fw-bar-in .62s var(--fw-ease) both;
 }
 
 .chart-empty svg path:not(.donut-seg),
@@ -379,34 +377,17 @@ html[data-theme="light"] .an-cat:hover{
   animation:fw-line-in 1.05s var(--fw-ease) .08s forwards;
 }
 
-/* Views and cards enter gently. Re-rendered dashboard widgets are staggered. */
-.view.active{
-  animation:fw-view-in .28s var(--fw-ease) both;
+/* Views and cards enter gently, but ONLY on user-initiated navigation (contract: .view-enter,
+   added by app.js and removed on animationend). Plain .view.active on boot/history nav gets no
+   animation, so content is fully visible at its final position on first paint. */
+.view.view-enter{
+  animation:fw-view-in .12s ease-out both;
 }
 
-.dashboard-grid > .widget{
-  opacity:0;
-  transform:translateY(10px);
-  animation:fw-card-in .46s var(--fw-ease) forwards;
+.view-enter .dashboard-grid > .widget,
+.view-enter .metric-grid > .metric{
+  animation:fw-card-in .12s ease-out both;
 }
-.dashboard-grid > .widget:nth-child(1){animation-delay:25ms}
-.dashboard-grid > .widget:nth-child(2){animation-delay:70ms}
-.dashboard-grid > .widget:nth-child(3){animation-delay:115ms}
-.dashboard-grid > .widget:nth-child(4){animation-delay:160ms}
-.dashboard-grid > .widget:nth-child(5){animation-delay:205ms}
-.dashboard-grid > .widget:nth-child(6){animation-delay:250ms}
-.dashboard-grid > .widget:nth-child(7){animation-delay:295ms}
-.dashboard-grid > .widget:nth-child(n+8){animation-delay:330ms}
-
-.metric-grid > .metric{
-  opacity:0;
-  transform:translateY(8px);
-  animation:fw-card-in .4s var(--fw-ease) forwards;
-}
-.metric-grid > .metric:nth-child(1){animation-delay:20ms}
-.metric-grid > .metric:nth-child(2){animation-delay:65ms}
-.metric-grid > .metric:nth-child(3){animation-delay:110ms}
-.metric-grid > .metric:nth-child(4){animation-delay:155ms}
 
 /* Dialogs and sheets remain clearly above the new card elevation. */
 dialog::backdrop{
@@ -427,22 +408,13 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @keyframes fw-card-in{
-  to{opacity:1;transform:translateY(0)}
+  from{opacity:.85}
+  to{opacity:1}
 }
 
 @keyframes fw-view-in{
-  from{opacity:.72;transform:translateY(4px)}
-  to{opacity:1;transform:translateY(0)}
-}
-
-@keyframes fw-progress-in{
-  from{transform:scaleX(0)}
-  to{transform:scaleX(1)}
-}
-
-@keyframes fw-bar-in{
-  from{transform:scaleY(.06);opacity:.35}
-  to{transform:scaleY(1);opacity:1}
+  from{opacity:.85}
+  to{opacity:1}
 }
 
 @keyframes fw-line-in{
@@ -487,14 +459,9 @@ html[data-theme="light"] dialog.drawer .dialog-card{
 }
 
 @media(prefers-reduced-motion:reduce){
-  .view.active,
-  .dashboard-grid > .widget,
-  .metric-grid > .metric,
-  .progress>span,
-  .widget-chart rect,
-  .chart-empty svg rect,
-  .bar-income,
-  .bar-expense,
+  .view.view-enter,
+  .view-enter .dashboard-grid > .widget,
+  .view-enter .metric-grid > .metric,
   .chart-empty svg path,
   .contract-trend svg path,
   .loan-chart svg path{

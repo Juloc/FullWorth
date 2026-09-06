@@ -59,3 +59,18 @@ dialog.fw-dialog .dialog-actions{min-width:0}
   }
 }
 
+/* Desktop/tablet: anchor non-drawer, non-sheet dialogs near the top instead of letting the
+   native dialog auto-center. Async content that grows after open then only extends downward,
+   never re-centering (jumping) the whole card. */
+@media(min-width:768px){
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet){
+    margin-top:max(var(--s8),10vh);
+    margin-bottom:auto;
+    max-height:calc(100dvh - 2 * var(--s8));
+  }
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet) .fw-dialog-card{
+    max-height:inherit;
+    overflow-y:auto;
+  }
+}
+
