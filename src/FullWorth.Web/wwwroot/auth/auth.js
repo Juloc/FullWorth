@@ -7,6 +7,7 @@ const preferences = {
 
 const endpoints = Object.freeze({
   providers: '/auth/providers',
+  externalTwoFactor: '/auth/external/two-factor',
   login: '/auth/login',
   register: '/auth/register',
   passwordResetRequest: '/auth/password-reset/request',
@@ -350,7 +351,10 @@ async function submitLogin(form) {
 
 async function submitTwoFactor(form) {
   hideMessage($('#two-factor-error'));
-  if (!form.reportValidity() || !state.pendingLogin) {
+  if (!form.reportValidity()) return;
+
+  const external = new URLSearchParams(location.search).get('external') === '1';
+  if (!external && !state.pendingLogin) {
     showView('login');
     return;
   }
@@ -360,11 +364,14 @@ async function submitTwoFactor(form) {
 
   try {
     const body = new FormData(form);
-    const response = await postJson(endpoints.login, {
-      email: state.pendingLogin.email,
-      password: state.pendingLogin.password,
-      code: String(body.get('code') || '')
-    });
+    const code = String(body.get('code') || '');
+    const response = external
+      ? await postJson(endpoints.externalTwoFactor, { code })
+      : await postJson(endpoints.login, {
+          email: state.pendingLogin.email,
+          password: state.pendingLogin.password,
+          code
+        });
     const payload = await readJson(response);
 
     if (response.ok) {
@@ -593,9 +600,6 @@ function showSessionStatus() {
     showMessage(target);
   } else if (status === 'external-failed') {
     target.textContent = get('auth.externalFailed');
-    showMessage(target);
-  } else if (status === 'external-two-factor-required') {
-    target.textContent = get('auth.externalTwoFactorRequired');
     showMessage(target);
   }
 }
