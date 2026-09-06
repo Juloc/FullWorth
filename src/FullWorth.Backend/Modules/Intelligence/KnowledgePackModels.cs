@@ -55,6 +55,22 @@ public sealed record KnowledgePackOntologyRedirectPayload(
     string ToCanonicalKey,
     int Version);
 
+public sealed record KnowledgePackBrandAssetPayload(
+    string BrandKey,
+    string CanonicalName,
+    string LogoKey,
+    string MediaType,
+    string ContentBase64,
+    string ContentSha256,
+    string? SourceName,
+    string? SourceUrl,
+    string? LicenseNote);
+
+public sealed record KnowledgePackBrandAliasPayload(
+    string AliasKey,
+    string BrandKey,
+    string? Country);
+
 public sealed record KnowledgePackPayload(
     string PackId,
     string Version,
@@ -63,7 +79,9 @@ public sealed record KnowledgePackPayload(
     IReadOnlyList<KnowledgePackMerchantPayload> Merchants,
     IReadOnlyList<KnowledgePackOntologyEntityPayload>? OntologyEntities = null,
     IReadOnlyList<KnowledgePackOntologyAliasPayload>? OntologyAliases = null,
-    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? OntologyRedirects = null);
+    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? OntologyRedirects = null,
+    IReadOnlyList<KnowledgePackBrandAssetPayload>? BrandAssets = null,
+    IReadOnlyList<KnowledgePackBrandAliasPayload>? BrandAliases = null);
 
 public sealed class KnowledgePackInstallation
 {
@@ -111,6 +129,28 @@ public sealed class OfficialMerchantMapping
     public string? LogoKey { get; set; }
 }
 
+
+public sealed class OfficialBrandAsset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string BrandKey { get; set; } = string.Empty;
+    public string CanonicalName { get; set; } = string.Empty;
+    public string LogoKey { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image/svg+xml";
+    public string ContentBase64 { get; set; } = string.Empty;
+    public string ContentSha256 { get; set; } = string.Empty;
+    public string? SourceName { get; set; }
+    public string? SourceUrl { get; set; }
+    public string? LicenseNote { get; set; }
+}
+
+public sealed class OfficialBrandAlias
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string AliasKey { get; set; } = string.Empty;
+    public string BrandKey { get; set; } = string.Empty;
+    public string Country { get; set; } = "GLOBAL";
+}
 
 public sealed class OfficialOntologyEntity
 {
@@ -201,6 +241,30 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.Confidence).HasPrecision(6, 5);
             entity.Property(x => x.Domain).HasMaxLength(255);
             entity.Property(x => x.LogoKey).HasMaxLength(180);
+        });
+
+        modelBuilder.Entity<OfficialBrandAsset>(entity =>
+        {
+            entity.HasIndex(x => x.BrandKey).IsUnique();
+            entity.HasIndex(x => x.LogoKey).IsUnique();
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.CanonicalName).HasMaxLength(200);
+            entity.Property(x => x.LogoKey).HasMaxLength(120);
+            entity.Property(x => x.MediaType).HasMaxLength(80);
+            entity.Property(x => x.ContentBase64).HasColumnType("text");
+            entity.Property(x => x.ContentSha256).HasMaxLength(64);
+            entity.Property(x => x.SourceName).HasMaxLength(200);
+            entity.Property(x => x.SourceUrl).HasMaxLength(1000);
+            entity.Property(x => x.LicenseNote).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<OfficialBrandAlias>(entity =>
+        {
+            entity.HasIndex(x => new { x.AliasKey, x.Country }).IsUnique();
+            entity.HasIndex(x => x.BrandKey);
+            entity.Property(x => x.AliasKey).HasMaxLength(300);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.Country).HasMaxLength(8);
         });
 
         modelBuilder.Entity<OfficialOntologyEntity>(entity =>
