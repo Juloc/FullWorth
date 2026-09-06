@@ -234,9 +234,12 @@ public static class AuthEndpoints
     {
         var (status, error) = await deletion.RequestAsync(context.User, request.CurrentPassword, ct);
         if (status is not null) return Results.Ok(status);
-        return error == "invalid_password"
-            ? Results.BadRequest(new { error = "invalid_password" })
-            : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        return error switch
+        {
+            "invalid_password" => Results.BadRequest(new { error = "invalid_password" }),
+            "last_admin" => Results.Conflict(new { error = "last_admin" }),
+            _ => Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
+        };
     }
 
     private static async Task<IResult> CancelAccountDeletionAsync(
