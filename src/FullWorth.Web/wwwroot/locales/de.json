@@ -719,7 +719,15 @@
     "passkeysHint": "Passkeys und Sitzungen verwalten",
     "lockHint": "PIN für die Sperre bei Inaktivität festlegen",
     "toggleTheme": "Hell/Dunkel umschalten",
-    "data": "Daten & Verwaltung"
+    "data": "Daten & Verwaltung",
+    "account": "Konto",
+    "deleteAccount": "Konto löschen",
+    "deleteAccountHint": "Konto sperren und nach 7 Tagen endgültig löschen",
+    "deleteAccountExplain": "Dein Konto wird sofort für die normale Nutzung gesperrt. Sieben Tage lang kannst du es vollständig reaktivieren. Danach beginnt die irreversible Löschung deiner persönlichen Daten.",
+    "deleteAccountConfirm": "Ich verstehe, dass die Löschung nach Ablauf der 7 Tage nicht rückgängig gemacht werden kann.",
+    "deleteAccountAction": "Konto zur Löschung vormerken",
+    "deleteAccountPasswordInvalid": "Das aktuelle Passwort ist nicht korrekt.",
+    "deleteAccountFailed": "Die Kontolöschung konnte nicht sicher vorgemerkt werden."
   },
   "merchants": {
     "title": "Händler",
