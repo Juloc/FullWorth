@@ -152,7 +152,7 @@ public static class GermanCompensationCalculator
         var provisionAllowance = WageTaxProvisionAllowance2026(gross, input);
         var taxableIncome = Math.Max(0m, gross - employeeLump - specialExpense - singleParent - provisionAllowance);
 
-        var incomeTax = WageTaxForClass2026(taxableIncome, input.TaxClass);
+        var incomeTax = ApplyTaxClass4Factor(WageTaxForClass2026(taxableIncome, input.TaxClass), input);
         var childAllowance = input.TaxClass switch
         {
             3 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceFull2026,
@@ -160,7 +160,7 @@ public static class GermanCompensationCalculator
             _ => 0m
         };
         var soliTaxableIncome = Math.Max(0m, taxableIncome - childAllowance);
-        var soliAssessmentTax = WageTaxForClass2026(soliTaxableIncome, input.TaxClass);
+        var soliAssessmentTax = ApplyTaxClass4Factor(WageTaxForClass2026(soliTaxableIncome, input.TaxClass), input);
         var soliLimit = input.TaxClass == 3 ? 40_700m : 20_350m;
         var fullSoli = soliAssessmentTax * 0.055m;
         var reducedSoli = Math.Max(0m, (soliAssessmentTax - soliLimit) * 0.119m);
@@ -175,13 +175,47 @@ public static class GermanCompensationCalculator
             RoundMoney(taxableIncome));
     }
 
+    public static decimal DetermineCompanyCarListPriceFactor(CompanyCarInput input)
+    {
+        var manual = input.TaxableListPriceFactor is 0.25m or 0.5m or 1m
+            ? input.TaxableListPriceFactor
+            : 1m;
+        var type = (input.VehicleType ?? "manual").Trim().ToLowerInvariant();
+        if (type is "" or "manual") return manual;
+        if (type is "combustion" or "ice") return 1m;
+
+        var acquisition = input.AcquisitionDate ?? new DateOnly(2026, 1, 1);
+        if (type is "electric" or "bev")
+        {
+            var limit = acquisition >= new DateOnly(2025, 7, 1) ? 100_000m
+                : acquisition >= new DateOnly(2024, 1, 1) ? 70_000m
+                : 60_000m;
+            return input.ListPrice <= limit ? 0.25m : 0.5m;
+        }
+
+        if (type is "hybrid" or "phev")
+        {
+            var minimumRange = acquisition >= new DateOnly(2025, 1, 1) ? 80m
+                : acquisition >= new DateOnly(2022, 1, 1) ? 60m
+                : 40m;
+            var qualifiesByRange = input.ElectricRangeKm >= minimumRange;
+            var qualifiesByCo2 = input.Co2GramsPerKm > 0m && input.Co2GramsPerKm <= 50m;
+            return qualifiesByRange || qualifiesByCo2 ? 0.5m : 1m;
+        }
+
+        return manual;
+    }
+
     public static decimal CompanyCarTaxableBenefitAnnual(CompanyCarInput input)
     {
         if (!input.Enabled || input.ListPrice <= 0m) return 0m;
-        var factor = input.TaxableListPriceFactor is 0.25m or 0.5m or 1m ? input.TaxableListPriceFactor : 1m;
+        var factor = DetermineCompanyCarListPriceFactor(input);
         var taxableListPrice = input.ListPrice * factor;
         var privateUse = taxableListPrice * 0.01m;
-        var commute = taxableListPrice * 0.0003m * Math.Max(0m, input.OneWayCommuteKm);
+        var distance = Math.Max(0m, input.OneWayCommuteKm);
+        var commute = string.Equals(input.CommuteMethod, "daily", StringComparison.OrdinalIgnoreCase)
+            ? taxableListPrice * 0.00002m * distance * Math.Clamp(input.CommuteDaysPerMonth, 0, 31)
+            : taxableListPrice * 0.0003m * distance;
         var monthly = Math.Max(0m, privateUse + commute - Math.Max(0m, input.EmployeeContributionMonthly));
         return RoundMoney(monthly * 12m);
     }
@@ -224,6 +258,12 @@ public static class GermanCompensationCalculator
             social,
             carTaxable,
             carEmployeeCost);
+    }
+
+    private static decimal ApplyTaxClass4Factor(decimal tax, CompensationProfileInput input)
+    {
+        if (input.TaxClass != 4) return tax;
+        return RoundMoney(tax * Math.Clamp(input.TaxClass4Factor, 0.001m, 1m));
     }
 
     private static decimal WageTaxForClass2026(decimal taxableIncome, int taxClass) => taxClass switch
@@ -338,20 +378,28 @@ public static class GermanCompensationCalculator
     private static CompensationAssumptions Assumptions() => new(
         2026,
         "tax-class-aware annualized wage-tax planning estimate",
-        "BMF PAP 2026 / EStG §32a; tax classes 1-6 and statutory-insurance Vorsorgepauschale modeled locally",
+        "BMF PAP 2026 / EStG §32a; tax classes 1-6, tax-class-IV factor and statutory-insurance Vorsorgepauschale modeled locally",
         "BMAS/BMG/BA 2026 contribution rates and ceilings",
         InflationIndex.Source,
         InflationIndex.DataAsOf,
-        "Planning estimate only. The full BMF PAP has additional inputs for special payments, private insurance, allowances, pension income and the tax-class-IV factor procedure; actual payroll and tax assessment can differ.");
+        "Planning estimate only. The full BMF PAP has additional inputs for exact special-payment payroll, private insurance, individual allowances and pension income; actual payroll and tax assessment can differ.");
 
     private static void Validate(CompensationProfileInput input)
     {
         if (string.IsNullOrWhiteSpace(input.Name)) throw new ArgumentException("Name is required.");
         if (input.AnnualGross < 0m || input.AnnualBonus < 0m) throw new ArgumentOutOfRangeException(nameof(input.AnnualGross));
         if (input.TaxClass is < 1 or > 6) throw new ArgumentOutOfRangeException(nameof(input.TaxClass));
+        if (input.TaxClass == 4 && (input.TaxClass4Factor <= 0m || input.TaxClass4Factor > 1m))
+            throw new ArgumentOutOfRangeException(nameof(input.TaxClass4Factor));
+        if (input.SalaryPaymentsPerYear is < 12 or > 14)
+            throw new ArgumentOutOfRangeException(nameof(input.SalaryPaymentsPerYear));
+        if (!string.Equals(input.GrossInputMode, "annual", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(input.GrossInputMode, "monthly", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("GrossInputMode must be annual or monthly.", nameof(input.GrossInputMode));
         if (input.ChildrenUnder25 < 0) throw new ArgumentOutOfRangeException(nameof(input.ChildrenUnder25));
         if (input.WeeklyHours <= 0m) throw new ArgumentOutOfRangeException(nameof(input.WeeklyHours));
-        if (input.CompanyCar is { } car && (car.ListPrice < 0m || car.OneWayCommuteKm < 0m || car.EmployeeContributionMonthly < 0m))
+        if (input.CompanyCar is { } car && (car.ListPrice < 0m || car.OneWayCommuteKm < 0m || car.EmployeeContributionMonthly < 0m
+            || car.ElectricRangeKm < 0m || car.Co2GramsPerKm < 0m || car.CommuteDaysPerMonth is < 0 or > 31))
             throw new ArgumentOutOfRangeException(nameof(input.CompanyCar));
         if (input.OccupationalPension is { } pension && (pension.EmployeeContributionMonthly < 0m || pension.EmployerContributionMonthly < 0m))
             throw new ArgumentOutOfRangeException(nameof(input.OccupationalPension));
