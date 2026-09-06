@@ -13,6 +13,7 @@ public static class CloudBenchmarkEndpoints
 
         group.MapGet("/", async (
             string metricKey,
+            string? entityKey,
             string? currency,
             string? country,
             string? regionBucket,
@@ -60,17 +61,30 @@ public static class CloudBenchmarkEndpoints
 
             try
             {
-                var result = await cloud.GetBenchmarkAsync(
-                    secret,
-                    metricKey,
-                    currency,
-                    country,
-                    regionBucket,
-                    householdSizeBand,
-                    incomeBand,
-                    ageBand,
-                    observedMonth,
-                    ct);
+                var result = string.IsNullOrWhiteSpace(entityKey)
+                    ? await cloud.GetBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        currency,
+                        country,
+                        regionBucket,
+                        householdSizeBand,
+                        incomeBand,
+                        ageBand,
+                        observedMonth,
+                        ct)
+                    : await cloud.GetEntityBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        entityKey,
+                        currency,
+                        country,
+                        regionBucket,
+                        householdSizeBand,
+                        incomeBand,
+                        ageBand,
+                        observedMonth,
+                        ct);
                 return result is null ? Results.NoContent() : Results.Ok(result);
             }
             catch (ArgumentException ex)
@@ -214,6 +228,161 @@ public static class CloudBenchmarkEndpoints
                 available = items.Count > 0,
                 observedMonth,
                 items
+            });
+        });
+
+        group.MapGet("/contracts/{contractId:guid}", async (
+            Guid contractId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FullWorthDbContext financeDb,
+            CloudOperationalRegistryResolver registryResolver,
+            CloudIntelligenceStateService cloudState,
+            CloudInstanceCredentialStore credentials,
+            IFullWorthCloudClient cloud,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            var contract = await financeDb.Contracts.AsNoTracking()
+                .Where(x =>
+                    x.Id == contractId &&
+                    x.FullWorthSpaceId == fullWorthSpaceId &&
+                    (x.AccountId == null || financeDb.AccountOwners.Any(owner =>
+                        owner.AccountId == x.AccountId && owner.UserId == userId)))
+                .Select(x => new
+                {
+                    x.ProviderName,
+                    x.Amount,
+                    x.Currency,
+                    x.BillingCycle,
+                    x.Interval,
+                    CategoryKey = financeDb.Categories
+                        .Where(category =>
+                            category.Id == x.CategoryId &&
+                            category.FullWorthSpaceId == fullWorthSpaceId &&
+                            !category.IsArchived)
+                        .Select(category => category.Key)
+                        .FirstOrDefault()
+                })
+                .SingleOrDefaultAsync(ct);
+            if (contract is null) return Results.NotFound();
+
+            var metricKey = CloudContractBenchmarkContributionService.MetricForCategory(contract.CategoryKey);
+            var currency = NormalizeCurrency(contract.Currency);
+            if (metricKey is null || currency is null)
+                return Results.Ok(new { available = false });
+
+            var localMonthly = Math.Abs(contract.Amount) *
+                               ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval) / 12m;
+            if (localMonthly is <= 0m or > 1_000_000m)
+                return Results.Ok(new { available = false });
+
+            if (!await cloudState.HasCurrentActiveConsentAsync(ct))
+                return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
+
+            var state = await cloudState.GetEnabledStateAsync(ct);
+            if (state is null)
+                return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
+
+            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                try
+                {
+                    var registration = await cloud.RegisterAsync(
+                        state.InstanceId,
+                        CloudIntelligencePolicy.CurrentVersion,
+                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        ct);
+                    await credentials.SaveAsync(registration, ct);
+                    secret = registration.Credential;
+                }
+                catch (FullWorthCloudException)
+                {
+                    return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
+                }
+            }
+
+            var country = await SpaceCountryAsync(financeDb, fullWorthSpaceId, ct);
+            var provider = await registryResolver.ResolveProviderAsync(
+                contract.ProviderName,
+                country,
+                ct);
+            var observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM");
+
+            FullWorthCloudBenchmark? aggregate = null;
+            var scope = "category";
+            if (provider is not null)
+            {
+                try
+                {
+                    aggregate = await cloud.GetEntityBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        provider.ProviderKey,
+                        currency,
+                        country,
+                        null,
+                        null,
+                        null,
+                        null,
+                        observedMonth,
+                        ct);
+                    if (aggregate is not null)
+                        scope = "provider";
+                }
+                catch (Exception ex) when (ex is FullWorthCloudException or NotSupportedException)
+                {
+                    aggregate = null;
+                }
+            }
+
+            if (aggregate is null)
+            {
+                try
+                {
+                    aggregate = await cloud.GetBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        currency,
+                        country,
+                        null,
+                        null,
+                        null,
+                        null,
+                        observedMonth,
+                        ct);
+                }
+                catch (FullWorthCloudException)
+                {
+                    aggregate = null;
+                }
+            }
+
+            if (aggregate is null)
+                return Results.Ok(new
+                {
+                    available = false,
+                    localMonthly = Math.Round(localMonthly, 2),
+                    observedMonth
+                });
+
+            return Results.Ok(new
+            {
+                available = true,
+                scope,
+                metricKey,
+                currency,
+                localMonthly = Math.Round(localMonthly, 2),
+                observedMonth,
+                providerKey = scope == "provider" ? provider?.ProviderKey : null,
+                providerName = scope == "provider" ? provider?.CanonicalName : null,
+                aggregate.ObservationCount,
+                aggregate.DistinctInstanceCount,
+                aggregate.Median,
+                aggregate.Mean,
+                aggregate.P25,
+                aggregate.P75
             });
         });
 
@@ -370,6 +539,28 @@ public static class CloudBenchmarkEndpoints
         if (!string.IsNullOrWhiteSpace(aggregate.Country))
             return "country";
         return "all";
+    }
+
+    private static async Task<string?> SpaceCountryAsync(
+        FullWorthDbContext db,
+        Guid fullWorthSpaceId,
+        CancellationToken ct)
+    {
+        var countries = (await db.BankConnections.AsNoTracking()
+                .Where(x =>
+                    x.FullWorthSpaceId == fullWorthSpaceId &&
+                    x.Country != null &&
+                    x.Country != "")
+                .Select(x => x.Country)
+                .Distinct()
+                .Take(3)
+                .ToListAsync(ct))
+            .Select(x => x?.Trim().ToUpperInvariant())
+            .Where(x => x is { Length: 2 } && x.All(char.IsAsciiLetter))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return countries.Count == 1 ? countries[0] : null;
     }
 
     private static string? NormalizeCurrency(string? value)

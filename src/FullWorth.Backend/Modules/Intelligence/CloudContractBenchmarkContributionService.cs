@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Contracts;
@@ -7,12 +9,14 @@ namespace FullWorth.Backend.Modules.Intelligence;
 
 /// <summary>
 /// Creates privacy-safe, instance-level contract benchmark observations from structured local contracts.
-/// No contract/provider/account/user identifier or free text is included in the cloud payload.
+/// Provider-specific rows may include only a reviewed canonical provider key from the signed knowledge
+/// pack; no local contract/account/user identifier or raw provider free text is included in the payload.
 /// </summary>
 public sealed class CloudContractBenchmarkContributionService(
     FullWorthDbContext financeDb,
     IntelligenceDbContext intelligenceDb,
-    CloudIntelligenceStateService cloudState)
+    CloudIntelligenceStateService cloudState,
+    CloudOperationalRegistryResolver registryResolver)
 {
     public async Task<int> QueueCurrentAsync(DateTimeOffset now, CancellationToken ct)
     {
@@ -31,6 +35,7 @@ public sealed class CloudContractBenchmarkContributionService(
                 x.Currency,
                 x.BillingCycle,
                 x.Interval,
+                x.ProviderName,
                 CategoryKey = financeDb.Categories
                     .Where(c => c.Id == x.CategoryId &&
                                 c.FullWorthSpaceId == x.FullWorthSpaceId &&
@@ -40,41 +45,58 @@ public sealed class CloudContractBenchmarkContributionService(
             })
             .ToListAsync(ct);
 
-        var observations = contracts
-            .Select(x =>
-            {
-                var metricKey = MetricForCategory(x.CategoryKey);
-                var currency = NormalizeCurrency(x.Currency);
-                if (metricKey is null || currency is null) return null;
+        var country = await InstanceCountryAsync(ct);
+        var observations = new List<ContractBenchmarkSource>();
+        foreach (var contract in contracts)
+        {
+            var metricKey = MetricForCategory(contract.CategoryKey);
+            var currency = NormalizeCurrency(contract.Currency);
+            if (metricKey is null || currency is null) continue;
 
-                var monthly = Math.Abs(x.Amount) *
-                              ContractCycle.PeriodsPerYear(x.BillingCycle, x.Interval) / 12m;
-                if (monthly is <= 0m or > 1_000_000m) return null;
+            var monthly = Math.Abs(contract.Amount) *
+                          ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval) / 12m;
+            if (monthly is <= 0m or > 1_000_000m) continue;
 
-                return new ContractBenchmarkSource(metricKey, currency, monthly);
-            })
-            .Where(x => x is not null)
-            .Cast<ContractBenchmarkSource>()
-            .ToList();
+            // Existing broad metric stays available.
+            observations.Add(new ContractBenchmarkSource(metricKey, currency, monthly, null));
+
+            // Provider-specific statistics use only a reviewed canonical key from the verified pack.
+            // Raw provider names never enter the cloud benchmark payload.
+            var provider = await registryResolver.ResolveProviderAsync(
+                contract.ProviderName,
+                country,
+                ct);
+            if (provider is not null)
+                observations.Add(new ContractBenchmarkSource(
+                    metricKey,
+                    currency,
+                    monthly,
+                    provider.ProviderKey));
+        }
 
         if (observations.Count == 0)
             return 0;
-
-        var country = await InstanceCountryAsync(ct);
         var observedMonth = now.ToString("yyyy-MM");
         var revisionDate = now.ToString("yyyy-MM-dd");
         var queued = 0;
 
-        foreach (var group in observations.GroupBy(x => new { x.MetricKey, x.Currency }))
+        foreach (var group in observations.GroupBy(x => new { x.MetricKey, x.Currency, x.EntityKey }))
         {
-            // One observation per instance/metric/currency/month. If several matching contracts exist
-            // locally, use their median so a household with several lines/policies does not dominate.
+            // One observation per instance/metric/entity/currency/month. Multiple local contracts for
+            // the same bucket collapse to a median so one household cannot dominate the cloud aggregate.
             var value = Math.Round(Median(group.Select(x => x.MonthlyValue)), 2);
-            var idempotencyKey =
-                $"benchmark:{group.Key.MetricKey}:{group.Key.Currency}:{observedMonth}:{revisionDate}";
+            var idempotencyKey = group.Key.EntityKey is null
+                ? $"benchmark:{group.Key.MetricKey}:{group.Key.Currency}:{observedMonth}:{revisionDate}"
+                : ProviderBenchmarkIdempotencyKey(
+                    group.Key.MetricKey,
+                    group.Key.EntityKey,
+                    group.Key.Currency,
+                    observedMonth,
+                    revisionDate);
             var payload = JsonSerializer.Serialize(new
             {
                 metricKey = group.Key.MetricKey,
+                entityKey = group.Key.EntityKey,
                 value,
                 currency = group.Key.Currency,
                 country,
@@ -161,6 +183,19 @@ public sealed class CloudContractBenchmarkContributionService(
             : null;
     }
 
+    private static string ProviderBenchmarkIdempotencyKey(
+        string metricKey,
+        string entityKey,
+        string currency,
+        string observedMonth,
+        string revisionDate)
+    {
+        var material = Encoding.UTF8.GetBytes(
+            $"fullworth:contract-provider-benchmark:v1:{metricKey}:{entityKey}:{currency}:{observedMonth}:{revisionDate}");
+        var hash = Convert.ToHexString(SHA256.HashData(material)).ToLowerInvariant();
+        return $"benchmark-provider:{hash[..48]}";
+    }
+
     private static decimal Median(IEnumerable<decimal> values)
     {
         var sorted = values.OrderBy(x => x).ToArray();
@@ -174,7 +209,8 @@ public sealed class CloudContractBenchmarkContributionService(
     private sealed record ContractBenchmarkSource(
         string MetricKey,
         string Currency,
-        decimal MonthlyValue);
+        decimal MonthlyValue,
+        string? EntityKey);
 }
 
 public sealed class CloudContractBenchmarkContributionWorker(
