@@ -65,6 +65,10 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("if (!question || responding) return;", shell);
         Assert.Contains("setThinking(true)", shell);
         Assert.Contains("coach-thinking-dots", shell);
+        Assert.Contains("installComposerKeyboard", shell);
+        Assert.Contains("input.closest('form')?.requestSubmit()", shell);
+        Assert.Contains("Number(numbered[2]) + 1", shell);
+        Assert.Contains("event.shiftKey", shell);
         Assert.Contains("@keyframes coach-thinking-bounce", coachCss);
         Assert.Contains("prefers-reduced-motion:reduce", coachCss);
     }

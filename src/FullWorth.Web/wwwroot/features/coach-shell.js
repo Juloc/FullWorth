@@ -112,6 +112,7 @@ function installShell() {
   installQuickAccess();
   installSettingsToggle();
   $('#coach-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-input').value); });
+  installComposerKeyboard($('#coach-input'));
   $('#coach-new-chat')?.addEventListener('click', restartConversation);
   $('#coach-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   $('#coach-review-refresh')?.addEventListener('click', () => loadReviews());
@@ -151,6 +152,35 @@ function installShell() {
 }
 
 function quickAccessEnabled() { return localStorage.getItem(quickAccessKey) !== '0'; }
+
+function installComposerKeyboard(input) {
+  if (!input || input.dataset.coachKeyboard === '1') return;
+  input.dataset.coachKeyboard = '1';
+  input.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    if (!event.shiftKey) {
+      event.preventDefault();
+      input.closest('form')?.requestSubmit();
+      return;
+    }
+
+    event.preventDefault();
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const currentLine = before.slice(lineStart);
+    const numbered = currentLine.match(/^(\s*)(\d+)([.)])\s*/);
+    const bullet = currentLine.match(/^(\s*)([-*+])\s+/);
+    const continuation = numbered
+      ? `${numbered[1]}${Number(numbered[2]) + 1}${numbered[3]} `
+      : bullet ? `${bullet[1]}${bullet[2]} ` : '';
+    const insertion = `\n${continuation}`;
+    input.setRangeText(insertion, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
 
 function installSettingsToggle() {
   const grid = $('#view-settings .settings-grid');
@@ -223,6 +253,7 @@ function installQuickAccess() {
   $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); activate(true); });
   $('#coach-dock-new')?.addEventListener('click', restartConversation);
   $('#coach-dock-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-dock-input').value); });
+  installComposerKeyboard($('#coach-dock-input'));
   $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   initDockResize();
   initDockSwipe();
