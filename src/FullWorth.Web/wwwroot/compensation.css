@@ -16,3 +16,7 @@
 .field-help{display:block;color:var(--muted,#6d737c);font-size:.7rem;line-height:1.35}
 .field-summary{grid-column:1/-1;padding:10px 12px;border-radius:10px;background:var(--surface-2,#f0f2f4);color:var(--muted,#6d737c);font-size:.76rem;line-height:1.4}
 [hidden]{display:none!important}
+
+.comp-advanced{margin-top:16px;border-top:1px solid var(--border,#e3e5e8);padding-top:12px}
+.comp-advanced summary{cursor:pointer;font-size:.8rem;font-weight:700;color:var(--muted,#6d737c)}
+.comp-advanced[open] summary{margin-bottom:4px}
