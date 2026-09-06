@@ -13,6 +13,7 @@ public static class CloudBenchmarkEndpoints
 
         group.MapGet("/", async (
             string metricKey,
+            string? entityKey,
             string? currency,
             string? country,
             string? regionBucket,
@@ -60,17 +61,30 @@ public static class CloudBenchmarkEndpoints
 
             try
             {
-                var result = await cloud.GetBenchmarkAsync(
-                    secret,
-                    metricKey,
-                    currency,
-                    country,
-                    regionBucket,
-                    householdSizeBand,
-                    incomeBand,
-                    ageBand,
-                    observedMonth,
-                    ct);
+                var result = string.IsNullOrWhiteSpace(entityKey)
+                    ? await cloud.GetBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        currency,
+                        country,
+                        regionBucket,
+                        householdSizeBand,
+                        incomeBand,
+                        ageBand,
+                        observedMonth,
+                        ct)
+                    : await cloud.GetEntityBenchmarkAsync(
+                        secret,
+                        metricKey,
+                        entityKey,
+                        currency,
+                        country,
+                        regionBucket,
+                        householdSizeBand,
+                        incomeBand,
+                        ageBand,
+                        observedMonth,
+                        ct);
                 return result is null ? Results.NoContent() : Results.Ok(result);
             }
             catch (ArgumentException ex)
