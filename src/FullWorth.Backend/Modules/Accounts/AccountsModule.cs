@@ -17,6 +17,9 @@ public sealed class FinanceAccount
     // Keep the aliases so a later session can resolve the same account even when the primary hash changes.
     public string IdentificationHashesJson { get; set; } = "[]";
     public string ProviderAccountId { get; set; } = string.Empty;
+    // Import archive accounts can be explicitly and persistently mapped to their canonical account.
+    // Null for ordinary accounts and for imports that have not been confirmed by the user yet.
+    public Guid? ImportLinkedAccountId { get; set; }
     public string InstitutionName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string? Product { get; set; }
