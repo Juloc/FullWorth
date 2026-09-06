@@ -31,7 +31,7 @@ public static class AuthEndpoints
         HttpContext context,
         LoginRequest request,
         AuthSessionCoordinator sessions,
-        AccountDeletionService deletion,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var result = await sessions.LoginAsync(request, context, ct);
@@ -94,7 +94,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> AccountDeletionStatusAsync(
         HttpContext context,
-        AccountDeletionService deletion,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var status = await deletion.GetStatusAsync(context.User, ct);
@@ -104,7 +104,7 @@ public static class AuthEndpoints
     private static async Task<IResult> RequestAccountDeletionAsync(
         HttpContext context,
         AccountDeletionRequest request,
-        AccountDeletionService deletion,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var (status, error) = await deletion.RequestAsync(context.User, request.CurrentPassword, ct);
@@ -116,7 +116,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> CancelAccountDeletionAsync(
         HttpContext context,
-        AccountDeletionService deletion,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var (status, error) = await deletion.CancelAsync(context.User, ct);
