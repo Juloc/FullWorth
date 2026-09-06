@@ -1,6 +1,6 @@
 import { bindGptReceiptTest } from './purchases-gpt-test.js';
 import { tryGptReceiptScan } from './purchases-gpt-normal.js';
-import { identityIcon } from '../ui/ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank
@@ -20,6 +20,7 @@ export function bindPurchases(context) {
 
 export async function renderPurchases(context) {
   ctx = context;
+  await ensureOfficialBrandCatalog(ctx.api);
   const source = ctx.$('#purchase-source').value;
   const q = source ? `?source=${encodeURIComponent(source)}` : '';
   const rows = (await ctx.api(`api/purchases${q}`)) || [];

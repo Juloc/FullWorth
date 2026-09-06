@@ -34,6 +34,8 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<KnowledgePackInstallation> KnowledgePackInstallations => Set<KnowledgePackInstallation>();
     public DbSet<KnowledgePackArchive> KnowledgePackArchives => Set<KnowledgePackArchive>();
     public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
+    public DbSet<OfficialBrandAsset> OfficialBrandAssets => Set<OfficialBrandAsset>();
+    public DbSet<OfficialBrandAlias> OfficialBrandAliases => Set<OfficialBrandAlias>();
     public DbSet<OfficialOntologyEntity> OfficialOntologyEntities => Set<OfficialOntologyEntity>();
     public DbSet<OfficialOntologyAlias> OfficialOntologyAliases => Set<OfficialOntologyAlias>();
     public DbSet<OfficialOntologyRedirect> OfficialOntologyRedirects => Set<OfficialOntologyRedirect>();

@@ -350,6 +350,7 @@ app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
 app.MapCloudBenchmarkEndpoints();
+app.MapBrandCatalogEndpoints();
 app.MapAiUserAccessEndpoints();
 app.MapIntelligenceSuggestionEndpoints();
 

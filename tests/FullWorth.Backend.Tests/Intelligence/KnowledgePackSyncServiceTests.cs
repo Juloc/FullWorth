@@ -42,6 +42,110 @@ public sealed class KnowledgePackSyncServiceTests
     }
 
     [Fact]
+    public async Task Signed_pack_installs_self_contained_brand_assets_and_aliases()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var svg = Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><path d=\"M0 0h10v10H0z\"/></svg>");
+        var hash = Convert.ToHexString(SHA256.HashData(svg)).ToLowerInvariant();
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-11",
+            "VATTENFALL EUROPE SALES",
+            "housing.electricity",
+            brandAssets:
+            [
+                new KnowledgePackBrandAssetPayload(
+                    "vattenfall", "Vattenfall", "vattenfall", "image/svg+xml",
+                    Convert.ToBase64String(svg), hash,
+                    "test", "https://example.test/vattenfall.svg", "test provenance")
+            ],
+            brandAliases:
+            [
+                new KnowledgePackBrandAliasPayload("VATTENFALL", "vattenfall", "DE")
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("installed", result.Status);
+        var asset = await fixture.Db.OfficialBrandAssets.SingleAsync();
+        Assert.Equal("vattenfall", asset.BrandKey);
+        Assert.Equal(hash, asset.ContentSha256);
+        Assert.Equal(Convert.ToBase64String(svg), asset.ContentBase64);
+        var alias = await fixture.Db.OfficialBrandAliases.SingleAsync();
+        Assert.Equal("VATTENFALL", alias.AliasKey);
+        Assert.Equal("vattenfall", alias.BrandKey);
+    }
+
+    [Fact]
+    public async Task Brand_asset_hash_mismatch_rejects_whole_pack()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var svg = Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-12",
+            "TEST",
+            "other",
+            brandAssets:
+            [
+                new KnowledgePackBrandAssetPayload(
+                    "test", "Test", "test", "image/svg+xml",
+                    Convert.ToBase64String(svg), new string('0', 64),
+                    null, null, null)
+            ],
+            brandAliases:
+            [
+                new KnowledgePackBrandAliasPayload("TEST", "test", null)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_brand_asset_hash_mismatch", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialBrandAssets.ToListAsync());
+        Assert.Empty(await fixture.Db.OfficialBrandAliases.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Active_svg_content_in_brand_pack_is_rejected()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var svg = Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>");
+        var hash = Convert.ToHexString(SHA256.HashData(svg)).ToLowerInvariant();
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-13",
+            "TEST",
+            "other",
+            brandAssets:
+            [
+                new KnowledgePackBrandAssetPayload(
+                    "test", "Test", "test", "image/svg+xml",
+                    Convert.ToBase64String(svg), hash,
+                    null, null, null)
+            ],
+            brandAliases:
+            [
+                new KnowledgePackBrandAliasPayload("TEST", "test", null)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_brand_svg_unsafe", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialBrandAssets.ToListAsync());
+    }
+
+    [Fact]
     public async Task Signed_pack_installs_ontology_and_applies_category_redirect()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -203,7 +307,9 @@ public sealed class KnowledgePackSyncServiceTests
         string categoryKey,
         IReadOnlyList<KnowledgePackOntologyEntityPayload>? ontologyEntities = null,
         IReadOnlyList<KnowledgePackOntologyAliasPayload>? ontologyAliases = null,
-        IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ontologyRedirects = null)
+        IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ontologyRedirects = null,
+        IReadOnlyList<KnowledgePackBrandAssetPayload>? brandAssets = null,
+        IReadOnlyList<KnowledgePackBrandAliasPayload>? brandAliases = null)
     {
         var payload = new KnowledgePackPayload(
             "fullworth-official",
@@ -224,7 +330,9 @@ public sealed class KnowledgePackSyncServiceTests
             ],
             ontologyEntities,
             ontologyAliases,
-            ontologyRedirects);
+            ontologyRedirects,
+            brandAssets,
+            brandAliases);
 
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions
         {

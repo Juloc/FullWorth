@@ -4,7 +4,7 @@
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
 import { money, converted, maskIdentifier } from './money.js';
 import { isPrivate } from './privacy.js';
-import { identityIcon } from './ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
 import { bindChartScrubber } from './chart-scrubber.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
@@ -70,6 +70,7 @@ function periodToRange(period) {
 let editing = false;
 
 export async function renderDashboard(ctx) {
+  await ensureOfficialBrandCatalog(ctx.api);
   const grid = ctx.$('#dashboard-grid');
   const bar = ctx.$('#dashboard-editbar');
   bar.hidden = !editing;
