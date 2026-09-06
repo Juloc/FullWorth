@@ -120,11 +120,41 @@ public sealed class ContractDetectionService(
             .Select(contract => (contract.ProviderName!.Trim(), contract.Currency.Trim().ToUpperInvariant()))
             .ToHashSet();
 
-        return result
+        var deduplicated = result
+            .GroupBy(candidate => new
+            {
+                Provider = CandidateProviderKey(candidate.Counterparty),
+                Currency = candidate.Currency.Trim().ToUpperInvariant(),
+                candidate.BillingCycle,
+                candidate.Interval,
+                Amount = Math.Round(candidate.TypicalAmount, 2)
+            })
+            .Select(group => group
+                .OrderByDescending(candidate => candidate.Confidence)
+                .ThenByDescending(candidate => candidate.Samples)
+                .First());
+
+        return deduplicated
             .Where(candidate => !dismissed.Contains((candidate.Counterparty, candidate.Currency)))
             .Where(candidate => !accepted.Contains((candidate.Counterparty.Trim(), candidate.Currency.Trim().ToUpperInvariant())))
             .OrderByDescending(x => x.Confidence).ThenBy(x => x.NextDueDate).ToList();
 
+    }
+
+    private static string CandidateProviderKey(string value)
+    {
+        var normalized = new string((value ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
+            .ToArray());
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var legalSuffixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "AG", "GMBH", "KG", "OHG", "SE", "SA", "SAS", "BV", "NV", "INC", "LTD", "LLC", "PLC", "AB"
+        };
+        while (tokens.Count > 1 && legalSuffixes.Contains(tokens[^1])) tokens.RemoveAt(tokens.Count - 1);
+        return string.Join(' ', tokens);
     }
 
     public async Task<ContractMutationOutcome> AcceptForUserAsync(Guid userId, Guid fullWorthSpaceId, ContractCandidate candidate, CancellationToken ct)
