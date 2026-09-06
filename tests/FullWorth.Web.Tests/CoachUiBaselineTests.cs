@@ -79,6 +79,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("fullworth:view-change", app);
         Assert.Contains("window.fwOpenBudget", app);
         Assert.Contains("selectedForCoach", transactions);
+        Assert.Contains("selectedItems", transactions);
         Assert.Contains("data-tx-select", transactions);
         Assert.Contains("fullworth:coach-open", transactions);
         Assert.Contains("fullworth:coach-open", contracts);
