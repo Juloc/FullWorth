@@ -37,6 +37,48 @@ public sealed class ContractDetectionCandidateLifecycleTests
         Assert.DoesNotContain(remaining!, item => item.GetProperty("counterparty").GetString() == "netflix");
     }
 
+    [Fact]
+    public async Task EquivalentProviderLegalSuffixes_AreShownAsOneCandidate()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await factory.SeedAsync(async db =>
+        {
+            for (var i = 4; i >= 1; i--)
+            {
+                foreach (var counterparty in new[] { "commerzbank", "commerzbank ag" })
+                {
+                    db.Transactions.Add(new FinanceTransaction
+                    {
+                        AccountId = s.Account,
+                        ExternalKey = $"{counterparty.Replace(" ", "-")}-{i}",
+                        Amount = -942.33m,
+                        Currency = "EUR",
+                        Counterparty = counterparty.ToUpperInvariant(),
+                        NormalizedCounterparty = counterparty,
+                        BookingDate = today.AddMonths(-i),
+                        CategorizationSource = "none"
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(Request(HttpMethod.Get, $"/api/contracts/detection?fullWorthSpaceId={s.Space}", s.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var candidates = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var commerzbank = candidates!
+            .Where(item => item.GetProperty("counterparty").GetString()!.StartsWith("commerzbank", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.Single(commerzbank);
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId)
     {
         var request = new HttpRequestMessage(method, path);

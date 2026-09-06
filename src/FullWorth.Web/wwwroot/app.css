@@ -423,11 +423,14 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .an-builder-controls{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0}
 .an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}
 .contracts-ux .detected-panel:not([hidden]){margin-bottom:var(--s4)}
-.contracts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);margin:var(--s3) 0}
+.contracts-controls{display:block;margin:var(--s2) 0 0}
+.contracts-listcard [data-type-chips],.contracts-controls [data-status-chips]{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:var(--s2)}
+.contracts-listcard [data-type-chips]::-webkit-scrollbar,.contracts-controls [data-status-chips]::-webkit-scrollbar{display:none}
+.contracts-listcard [data-type-chips] .fw-chip,.contracts-controls [data-status-chips] .fw-chip{flex:0 0 auto}
+.contracts-toolbar{display:flex;justify-content:flex-end;margin:0 0 var(--s3)}
 .contracts-sort{display:inline-flex;align-items:center;gap:var(--s2);color:var(--muted);font-size:12px;margin-left:auto}
 .contracts-sort select{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font-size:12px;font-weight:600}
 .contracts-order{min-width:32px;text-align:center;line-height:1}
-.contracts-detect{border-style:dashed}
 .contract-row.contract-archived{opacity:.6}
 .contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
 .nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
@@ -680,8 +683,17 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .contract-archived{opacity:.6}
 .row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}
 .detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2,var(--surface))}
-.detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
-.detected-row:last-child{border-bottom:0}
+.detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.detected-row:last-of-type{border-bottom:0}
+.detected-main{display:flex;align-items:center;gap:var(--s3);min-width:0}
+.detected-copy{min-width:0}
+.detected-copy .row-title,.detected-copy .row-sub{overflow:hidden;text-overflow:ellipsis}
+.detected-side{gap:var(--s2)}
+.detected-actions{display:flex;align-items:center;gap:4px}
+.detected-actions [data-dismiss]{border:0;background:transparent;color:var(--muted);padding:7px 6px}
+.detected-actions [data-accept]{background:var(--cta);color:var(--cta-text);border-color:var(--cta);padding:8px 13px}
+.contracts-more-suggestions{display:block;margin:var(--s2) auto 0;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:12px;padding:8px 12px;cursor:pointer}
+.contracts-more-suggestions:hover{color:var(--text)}
 /* Removable pill list (merchant aliases) — a generic component for short tag chips with a remove ×. */
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1;padding:4px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
@@ -805,11 +817,10 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .contracts-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:12px}
 .contracts-hero-annual{font-weight:600;color:var(--text)}
 .contracts-hero-dot{color:var(--line)}
-.contracts-sortbar{display:flex;align-items:center;justify-content:center;gap:var(--s2);width:100%;margin:var(--s2) 0 var(--s3);padding:11px 16px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);border-radius:var(--radius-pill);font-size:13px;font-weight:600;cursor:pointer}
-.contracts-sortbar:hover{background:var(--surface-3)}
-.contracts-sortbar-label{color:var(--muted)}
-.contracts-sortbar-label strong{color:var(--text);font-weight:700}
-.contracts-sortbar-caret{color:var(--muted);font-size:14px;line-height:1}
+.contracts-sortbar{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);width:auto;margin:0;padding:7px 11px;border:0;background:transparent;color:var(--muted);border-radius:var(--radius-pill);font-size:12px;font-weight:600;cursor:pointer}
+.contracts-sortbar:hover{background:var(--surface-2);color:var(--text)}
+.contracts-sortbar strong{color:inherit;font-weight:700}
+.contracts-sortbar-caret{color:inherit;font-size:13px;line-height:1}
 .contracts-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding:var(--s4) 4px var(--s2)}
 .contracts-group-head:first-child{padding-top:var(--s2)}
 .contracts-group-id{display:flex;align-items:baseline;gap:6px;min-width:0}
@@ -1274,4 +1285,16 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
   .tx-coach-selection button{min-height:38px}
   .tx-select-wrap{width:28px;height:28px;margin-right:2px}
   .account-coach-button,.nw-coach{min-height:34px}
+}
+
+@media(max-width:560px){
+  .contracts-listcard{padding-left:var(--s3);padding-right:var(--s3)}
+  .detected-panel{padding:var(--s3)}
+  .detected-row .detected-side{justify-content:space-between;flex-wrap:nowrap;width:100%}
+  .detected-actions{margin-left:auto}
+  .contract-row .fw-row-amt{margin-left:auto}
+}
+
+@media(max-width:767px){
+  .contracts-list{padding-bottom:56px}
 }

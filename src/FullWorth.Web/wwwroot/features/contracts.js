@@ -10,6 +10,8 @@ import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../u
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
 const KINDS = ['subscription', 'contract', 'insurance', 'loan', 'other'];
+const DETECTED_BATCH_SIZE = 3;
+let detectedVisibleCount = DETECTED_BATCH_SIZE;
 // Populated on every render so the price-change panel can show a contract's name/currency from its id.
 let contractsById = new Map();
 // The full contract set plus best-effort id→name maps, kept at module scope so the filter/sort chips
@@ -141,6 +143,7 @@ export function newContract(context) { if (context) ctx = context; return openCo
 
 export async function renderContracts(context) {
   ctx = context;
+  detectedVisibleCount = DETECTED_BATCH_SIZE;
   await ensureOfficialBrandCatalog(ctx.api);
   injectCss();
   const host = ctx.$('#view-contracts');
@@ -202,13 +205,14 @@ function viewHtml() {
   const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
   // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
   const controls = `<div class="contracts-controls">
-    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
-    <button type="button" class="fw-chip contracts-detect" data-detect>${esc(ctx.get('contracts.detect'))}</button>
+    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}</div>
   </div>
-  <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
-    <span class="contracts-sortbar-label">${esc(t('Sortieren nach', 'Sort by'))} <strong data-sort-current>${esc(sortLabel())}</strong></span>
-    <span class="contracts-sortbar-caret" aria-hidden="true">⇅</span>
-  </button>`;
+  <div class="contracts-toolbar">
+    <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
+      <strong data-sort-current>${esc(sortLabel())}</strong>
+      <span class="contracts-sortbar-caret" aria-hidden="true">⇅</span>
+    </button>
+  </div>`;
 
   const listCard = sectionCard('', `${typeChips}${controls}<div class="contracts-list" data-list></div>`, { className: 'contracts-listcard' });
 
@@ -284,8 +288,6 @@ function wireControls(host) {
     view.status = btn.dataset.status; setActive(host, '[data-status-chips] .fw-chip', btn); renderList(host);
   });
   host.querySelector('[data-sort-open]')?.addEventListener('click', () => openSortSheet(host));
-  // The detect action stays, but as a subtle contextual control rather than the header's focal point.
-  host.querySelector('[data-detect]')?.addEventListener('click', () => { loadDetected(true); loadPriceChanges(true); });
 }
 
 function setActive(host, selector, activeEl) {
@@ -433,18 +435,12 @@ function rowFor(c) {
       ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
       : '';
   const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
-  row.innerHTML = `${identityIcon(c.name, { logoAssetPath: c.logoAssetPath })}
+  row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
       <div class="fw-row-sub">${sub}</div>
     </div>
     <div class="fw-row-amt">${ctx.money(c.amount, c.currency)}<small>${ctx.esc(cycle)}</small></div>`;
-  const coach = document.createElement('button');
-  coach.type = 'button'; coach.className = 'icon-button contract-coach'; coach.dataset.coach = '';
-  coach.setAttribute('aria-label', t('Coach fragen','Ask Coach')); coach.title = t('Coach fragen','Ask Coach');
-  coach.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg>';
-  row.appendChild(coach);
-  coach.addEventListener('click', event => { event.stopPropagation(); askCoachAboutContract(c); });
   const open = () => openDetail(c.id);
   row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
   row.addEventListener('keydown', e => { if (!e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
@@ -464,18 +460,39 @@ async function loadDetected(interactive) {
     return;
   }
   box.hidden = false;
-  const items = candidates.map((cand, i) => `
+  const visible = candidates.slice(0, detectedVisibleCount);
+  const items = visible.map((cand, i) => {
+    const due = cand.nextDueDate ? ` · ${ctx.esc(ctx.get('contracts.nextDue'))}: ${ctx.esc(ctx.date(cand.nextDueDate))}` : '';
+    return `
     <div class="detected-row" data-i="${i}">
-      <div class="row-main">
-        <div class="row-title">${ctx.esc(cand.counterparty)}</div>
-        <div class="row-sub">${ctx.esc(ctx.get('contracts.cycle_' + (cand.billingCycle || 'monthly')))} · ${ctx.esc(ctx.get('contracts.confidence'))} ${Math.round((cand.confidence || 0) * 100)}%</div>
+      <div class="row-main detected-main">
+        ${identityIcon(cand.counterparty)}
+        <div class="detected-copy">
+          <div class="row-title">${ctx.esc(cand.counterparty)}</div>
+          <div class="row-sub">${ctx.esc(ctx.get('contracts.cycle_' + (cand.billingCycle || 'monthly')))}${due}</div>
+        </div>
       </div>
-      <div class="row-side"><span class="amount">${ctx.money(cand.typicalAmount, cand.currency)}</span><button type="button" class="ghost danger" data-dismiss>${ctx.esc(ctx.get('contracts.dismiss'))}</button><button type="button" class="ghost" data-accept>${ctx.esc(ctx.get('contracts.accept'))}</button></div>
-    </div>`).join('');
-  box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('contracts.detectedTitle'))}</h3></div>${items}`;
+      <div class="row-side detected-side">
+        <span class="amount">${ctx.money(cand.typicalAmount, cand.currency)}</span>
+        <div class="detected-actions">
+          <button type="button" class="ghost" data-dismiss>${ctx.esc(ctx.get('contracts.dismiss'))}</button>
+          <button type="button" class="ghost" data-accept>${ctx.esc(ctx.get('contracts.accept'))}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  const remaining = Math.max(0, candidates.length - visible.length);
+  const more = remaining
+    ? `<button type="button" class="contracts-more-suggestions" data-detected-more>${ctx.esc(t(`Weitere ${remaining} anzeigen`, `Show ${remaining} more`))}</button>`
+    : '';
+  box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('contracts.detectedTitle'))}</h3></div>${items}${more}`;
   box.querySelectorAll('.detected-row').forEach(el => {
-    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(candidates[Number(el.dataset.i)], el));
-    el.querySelector('[data-dismiss]').addEventListener('click', () => dismissCandidate(candidates[Number(el.dataset.i)]));
+    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(visible[Number(el.dataset.i)], el));
+    el.querySelector('[data-dismiss]').addEventListener('click', () => dismissCandidate(visible[Number(el.dataset.i)], el));
+  });
+  box.querySelector('[data-detected-more]')?.addEventListener('click', () => {
+    detectedVisibleCount += DETECTED_BATCH_SIZE;
+    loadDetected(false);
   });
 }
 
