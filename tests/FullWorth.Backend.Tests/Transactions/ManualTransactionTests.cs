@@ -80,17 +80,22 @@ public sealed class ManualTransactionTests
     }
 
     [Fact]
-    public async Task Rejects_booking_on_a_synced_account()
+    public async Task Allows_manual_correction_on_a_synced_account()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
         var s = await SeedAsync(database);
         await using var db = database.CreateContext();
         var store = new TransactionStore(db);
 
-        var (result, _) = await store.CreateManualForOwnerAsync(s.Owner, Space,
-            new CreateTransactionRequest(s.BankAccount, 5m, "expense", null, null, "Nope", null, null), CancellationToken.None);
-        Assert.Equal(TransactionCreateResult.NotManual, result);
-        Assert.Equal(1, await db.Transactions.CountAsync()); // only the pre-seeded imported row
+        var (result, id) = await store.CreateManualForOwnerAsync(s.Owner, Space,
+            new CreateTransactionRequest(s.BankAccount, 5m, "expense", new DateOnly(2022, 3, 4), null, "Fehlende Buchung", null, null), CancellationToken.None);
+        Assert.Equal(TransactionCreateResult.Created, result);
+
+        var correction = await db.Transactions.AsNoTracking().SingleAsync(tx => tx.Id == id);
+        Assert.StartsWith("manual:", correction.ExternalKey);
+        Assert.Equal(-5m, correction.Amount);
+        Assert.True(correction.UseForBalanceHistory);
+        Assert.Equal(2, await db.Transactions.CountAsync());
     }
 
     [Fact]
