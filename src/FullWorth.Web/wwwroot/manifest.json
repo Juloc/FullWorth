@@ -38,7 +38,7 @@
   },
   "icons": [
     {
-      "src": "/pwa/icon.svg",
+      "src": "/pwa/icon.svg?v=3",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
