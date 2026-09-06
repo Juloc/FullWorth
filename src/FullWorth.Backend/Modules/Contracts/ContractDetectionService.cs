@@ -111,7 +111,10 @@ public sealed class ContractDetectionService(
         var accepted = (await db.Contracts.AsNoTracking()
                 .Where(contract => contract.FullWorthSpaceId == fullWorthSpaceId &&
                                    contract.AutoDetected &&
-                                   contract.ProviderName != null)
+                                   contract.ProviderName != null &&
+                                   (contract.AccountId == null || db.AccountOwners.Any(owner =>
+                                       owner.AccountId == contract.AccountId.Value &&
+                                       owner.UserId == userId)))
                 .Select(contract => new { contract.ProviderName, contract.Currency })
                 .ToListAsync(ct))
             .Select(contract => (contract.ProviderName!.Trim(), contract.Currency.Trim().ToUpperInvariant()))
