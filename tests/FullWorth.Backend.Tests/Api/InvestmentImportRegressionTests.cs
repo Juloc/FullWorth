@@ -345,6 +345,56 @@ WHERE "PortfolioId"=@portfolio ORDER BY "TradeDate","CreatedAt","Id"
     }
 
     [Fact]
+    public async Task RollbackIsBlockedWhenLaterTradesDependOnImportedHoldings()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var portfolio = Guid.NewGuid();
+        var security = Guid.NewGuid();
+        await SeedOwnerPortfolioSecurity(factory, owner, portfolio, security);
+
+        const string csv = "Datum;Typ;ISIN;Stück;Kurs;Betrag;Währung;ID\r\n" +
+                           "30.08.2026;Kauf;DE000A1EWWW0;2;100,00;200,00;EUR;protected-buy\r\n";
+        var job = await Upload(client, owner, csv);
+        using (var commit = await Commit(client, owner, job, portfolio))
+            Assert.Equal(HttpStatusCode.OK, commit.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var now = DateTimeOffset.UtcNow.AddMinutes(1);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+INSERT INTO "InvestmentTrades"
+("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","Quantity","Price","Amount","Currency","Fees","Taxes","Source","CreatedAt","UpdatedAt")
+VALUES ({Guid.NewGuid()},{FullWorthSpaceDefaults.LegacyId},{portfolio},{security},{"sell"},{new DateOnly(2026,9,1)},{1m},{110m},{110m},{"EUR"},{0m},{0m},{"manual"},{now},{now})
+""");
+        });
+
+        using var rollbackRequest = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/jobs/{job:D}/rollback?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var rollback = await client.SendAsync(rollbackRequest);
+        Assert.Equal(HttpStatusCode.Conflict, rollback.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open) await connection.OpenAsync();
+            await using var trades = connection.CreateCommand();
+            trades.CommandText = "SELECT count(*) FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio";
+            var p = trades.CreateParameter(); p.ParameterName = "@portfolio"; p.Value = portfolio; trades.Parameters.Add(p);
+            Assert.Equal(2L, Convert.ToInt64(await trades.ExecuteScalarAsync()));
+
+            await using var jobState = connection.CreateCommand();
+            jobState.CommandText = "SELECT \"Status\",\"RolledBackAt\" FROM \"InvestmentImportJobs\" WHERE \"Id\"=@job";
+            var j = jobState.CreateParameter(); j.ParameterName = "@job"; j.Value = job; jobState.Parameters.Add(j);
+            await using var reader = await jobState.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("completed", reader.GetString(0));
+            Assert.True(reader.IsDBNull(1));
+        });
+    }
+
+    [Fact]
     public async Task RollbackRemovesImportCreatedPortfolioAndUnusedSecurity()
     {
         using var factory = new BackendWebApplicationFactory();
