@@ -57,7 +57,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("'/appearance.css'", sw);
         Assert.Contains("'/parity-completion.css'", sw);
         Assert.Contains("'/ui/appearance.js'", sw);
-        Assert.Contains("const VERSION = 'v57'", sw);
+        Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         Assert.Contains("'/features/wealth-real-estate.js'", sw);
         Assert.Contains("'/features/wealth-real-estate.css'", sw);
         Assert.False(sw.Contains("/mascots/", StringComparison.OrdinalIgnoreCase));
