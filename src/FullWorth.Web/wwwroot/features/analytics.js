@@ -15,6 +15,7 @@ const PERIODS = ['7d', 'month', 'quarter', 'year', '1y', '5y', 'all'];
 // Global cycle state (UX rework §6): the chosen cycle + how many whole windows we've paged back.
 let cycle = 'month';
 let offset = 0;
+let activeWindow = null;
 
 const CYCLE_LABELS = { week: ['Woche', 'Week'], month: ['Monat', 'Month'], quarter: ['Quartal', 'Quarter'], year: ['Jahr', 'Year'] };
 
@@ -36,6 +37,7 @@ export async function renderAnalytics(context) {
 
   const lang = isDe() ? 'de' : 'en';
   const win = cycleWindow(cycle, offset, lang);
+  activeWindow = win;
 
   view.innerHTML = shellHtml(win);
   wireControls(view);
@@ -46,8 +48,8 @@ export async function renderAnalytics(context) {
 
   // All card queries share the selected window. overviewPrev backs the income/spending trend badges.
   const [overview, overviewPrev, history, categories, merchants, forecast, catList] = await Promise.all([
-    ctx.api(`api/analytics/overview?from=${from}&to=${to}`).catch(() => null),
-    ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}`).catch(() => null),
+    ctx.api(`api/analytics/overview?from=${from}&to=${to}&granularity=${gran}`).catch(() => null),
+    ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
     ctx.api(`api/analytics/categories?from=${from}&to=${to}&granularity=${gran}${cmp}`).catch(() => null),
     ctx.api(`api/analytics/merchants?from=${from}&to=${to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
@@ -211,9 +213,45 @@ function pct(cur, prev) { cur = Number(cur) || 0; prev = Number(prev) || 0; if (
 function kpi(valueHtml, label) { return `<div class="an-kpi"><span class="k">${valueHtml}</span><span class="l">${label}</span></div>`; }
 
 function monthLabel(row) {
+  if (row?.start) {
+    const start = new Date(String(row.start).slice(0, 10) + 'T12:00:00');
+    if (!Number.isNaN(start.getTime())) {
+      if (activeWindow?.granularity === 'week')
+        return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' }).format(start);
+      if (activeWindow?.granularity === 'month')
+        return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', { month: 'short', year: 'numeric' }).format(start);
+    }
+  }
+  if (row?.label && activeWindow?.granularity !== 'month') return String(row.label);
   const year = Number(row?.year), month = Number(row?.month);
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return String(row?.label || row?.month || '');
   return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1));
+}
+
+function axisPeriodLabel(row) {
+  const granularity = activeWindow?.granularity || 'month';
+  if (granularity === 'quarter' || granularity === 'year') return String(row?.label || '');
+  if (row?.start) {
+    const start = new Date(String(row.start).slice(0, 10) + 'T12:00:00');
+    if (!Number.isNaN(start.getTime())) {
+      if (granularity === 'week')
+        return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', { day: '2-digit', month: '2-digit' }).format(start);
+      if (granularity === 'month') return String(start.getMonth() + 1).padStart(2, '0');
+    }
+  }
+  return String(row?.month ?? row?.label ?? '');
+}
+
+function analyticsTxScope(extra = '') {
+  const p = new URLSearchParams();
+  if (activeWindow?.from) p.set('from', activeWindow.from);
+  if (activeWindow?.to) p.set('to', activeWindow.to);
+  p.set('status', 'booked');
+  if (extra) {
+    const more = new URLSearchParams(extra);
+    more.forEach((value, key) => p.set(key, value));
+  }
+  return p.toString();
 }
 
 function bindSpendingScrubber(el, rows, currency) {
@@ -341,7 +379,7 @@ function bindBuilderScrubber(el, series, fmt, chartType) {
 function fillSpending(el, o, oPrev) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
-  const rows = o?.byMonth || [];
+  const rows = o?.byPeriod || o?.byMonth || [];
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
   const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
@@ -356,7 +394,7 @@ function spendingLine(rows) {
   const line = smoothPath(pts);
   const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
   const base = `<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line>`;
-  const labels = rows.map((r, i) => `<text x="${((i / (rows.length - 1 || 1)) * w).toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`).join('');
+  const labels = rows.map((r, i) => `<text x="${((i / (rows.length - 1 || 1)) * w).toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(axisPeriodLabel(r))}</text>`).join('');
   return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${areaGradient('an-grad-neg', 'an-g-neg')}${base}<path d="${area}" class="an-area" fill="url(#an-grad-neg)"></path><path d="${line}" class="an-line-expense"></path>${labels}</svg>`;
 }
 
@@ -364,7 +402,7 @@ function spendingLine(rows) {
 function fillInout(el, o, oPrev) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
-  const rows = o?.byMonth || [];
+  const rows = o?.byPeriod || o?.byMonth || [];
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
   const incTrend = pct(o?.income || 0, oPrev?.income || 0);
   const expTrend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
@@ -389,7 +427,7 @@ function inoutBars(rows) {
     const eh = ((Number(r.expenses) || 0) / max) * (h - 30);
     bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="6"></rect>`;
     bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="6"></rect>`;
-    bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${String(r.month).padStart(2, '0')}</text>`;
+    bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(axisPeriodLabel(r))}</text>`;
   });
   const baseline = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
   return `<div class="an-legend"><span class="lg lg-income">${esc(ctx.get('transactions.income'))}</span><span class="lg lg-expense">${esc(ctx.get('transactions.expenses'))}</span></div>
@@ -424,7 +462,7 @@ function fillCategory(el, result, catIcon) {
   el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
-    const go = () => window.fwNavScope && window.fwNavScope('transactions', `categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`);
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`));
     row.addEventListener('click', go);
     row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
@@ -466,7 +504,7 @@ function fillMerchant(el, result) {
   el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
     const q = row.dataset.merchant;
     if (!q) return;
-    const go = () => window.fwNavScope && window.fwNavScope('transactions', `query=${encodeURIComponent(q)}`);
+    const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&merchant=${encodeURIComponent(q)}`));
     row.addEventListener('click', go);
     row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
