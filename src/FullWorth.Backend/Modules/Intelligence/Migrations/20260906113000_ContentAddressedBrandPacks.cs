@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "BrandAssetBlobs" (
     "ContentSha256" character varying(64) NOT NULL,
     "MediaType" character varying(80) NOT NULL,
     "ByteLength" integer NOT NULL,
-    "ContentBase64" text NOT NULL,
+    "Content" bytea NOT NULL,
     "CreatedAt" timestamp with time zone NOT NULL,
     "LastUsedAt" timestamp with time zone NOT NULL,
     CONSTRAINT "PK_BrandAssetBlobs" PRIMARY KEY ("Id")
@@ -26,13 +26,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_BrandAssetBlobs_ContentSha256"
     ON "BrandAssetBlobs" ("ContentSha256");
 
 INSERT INTO "BrandAssetBlobs"
-    ("Id", "ContentSha256", "MediaType", "ByteLength", "ContentBase64", "CreatedAt", "LastUsedAt")
+    ("Id", "ContentSha256", "MediaType", "ByteLength", "Content", "CreatedAt", "LastUsedAt")
 SELECT
     gen_random_uuid(),
     lower("ContentSha256"),
     "MediaType",
     octet_length(decode("ContentBase64", 'base64')),
-    "ContentBase64",
+    decode("ContentBase64", 'base64'),
     NOW(),
     NOW()
 FROM "OfficialBrandAssets"
@@ -108,7 +108,7 @@ ALTER TABLE "OfficialBrandAssets"
     ADD COLUMN IF NOT EXISTS "ContentBase64" text NOT NULL DEFAULT '';
 
 UPDATE "OfficialBrandAssets" a
-SET "ContentBase64" = b."ContentBase64"
+SET "ContentBase64" = encode(b."Content", 'base64')
 FROM "BrandAssetBlobs" b
 WHERE lower(a."ContentSha256") = b."ContentSha256";
 
