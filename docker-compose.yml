@@ -161,7 +161,7 @@ services:
       - /tmp
 
   fullworth-web:
-    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-1.2.0-rc.1}
+    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_WEB_VERSION:-1.2.0-rc.2}
     build:
       context: .
       dockerfile: src/FullWorth.Web/Dockerfile
