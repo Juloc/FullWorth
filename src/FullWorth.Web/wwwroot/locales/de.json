@@ -305,7 +305,17 @@
     "cancelStatus_planned": "Kündigung geplant",
     "cancelStatus_sent": "Kündigung gesendet",
     "cancelStatus_confirmed": "Kündigung bestätigt",
-    "cancelStatus_cancelled": "Gekündigt"
+    "cancelStatus_cancelled": "Gekündigt",
+    "merge": "Mit anderem Vertrag verbinden",
+    "mergeTitle": "Verträge verbinden",
+    "mergeHint": "Wähle Einträge, die derselbe Vertrag sind. Konten und bisherige Zahlungsnamen bleiben als Historie erhalten.",
+    "mergeConfirm": "Zusammenführen",
+    "mergeNone": "Keine weiteren Verträge zum Verbinden vorhanden.",
+    "mergedSources": "Verbundene Einträge",
+    "mergedSourcesHint": "Diese Einträge gehören zu diesem Vertrag und bleiben für Konto- und Zahlungshistorie erhalten.",
+    "unmerge": "Verbindung lösen",
+    "mergedToast": "Verträge zusammengeführt.",
+    "unmergedToast": "Verbindung gelöst."
   },
   "budgets": {
     "title": "Budgets",
