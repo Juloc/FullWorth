@@ -14,6 +14,9 @@ let currentConversationSpaceId = null;
 let dockOpen = false;
 const quickAccessKey = 'finance.coach.quickAccess';
 const pageContextKey = 'finance.coach.pageContext';
+const pinnedKey = 'finance.coach.pinned';
+let currentObjectContext = null;
+const excludedContext = new Set();
 
 const reasonLabels = {
   necessary: ['Notwendig', 'Necessary'], good_value: ['Gutes Preis-Leistungs-Verhältnis', 'Good value'], quality_of_life: ['Lebensqualität', 'Quality of life'],
@@ -124,7 +127,21 @@ function installShell() {
   $('#bottom-more')?.addEventListener('click', () => queueMicrotask(injectMobileMore));
   window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
   window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
-  window.addEventListener('storage', event => { if (event.key === quickAccessKey) syncQuickAccess(); });
+  window.addEventListener('storage', event => {
+    if (event.key === quickAccessKey) syncQuickAccess();
+    if (event.key === pinnedKey) syncPinButton();
+  });
+  window.addEventListener('fullworth:view-change', () => {
+    if(!dockOpen)return;
+    if(isPinned()){currentObjectContext=null;excludedContext.clear();renderPageContext();renderStarters();}
+    else closeDock();
+  });
+  window.addEventListener('fullworth:coach-open', event => {
+    setObjectContext(event.detail||null);
+    if(!dockOpen)openDock();else {renderPageContext();renderStarters();$('#coach-dock-input')?.focus();}
+  });
+  window.addEventListener('fullworth:layout-reset',()=>{localStorage.removeItem(pinnedKey);syncPinButton()});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&dockOpen&&!document.querySelector('dialog[open]')){event.preventDefault();closeDock()}});
   document.addEventListener('change', event => { if (dockOpen && event.target.closest('.view.active')) renderPageContext(); });
   document.addEventListener('input', event => { if (dockOpen && event.target.closest('.view.active') && event.target.id === 'tx-query') renderPageContext(); });
   if (document.readyState === 'complete' && isCoachPath()) activate(false);
@@ -169,6 +186,7 @@ function installQuickAccess() {
     <header class="coach-dock-header">
       <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
       <div class="coach-dock-actions">
+        <button id="coach-dock-pin" type="button" class="icon-button coach-dock-pin" aria-label="${esc(tr('Coach anheften', 'Pin Coach'))}" title="${esc(tr('Coach anheften', 'Pin Coach'))}" aria-pressed="false">⌖</button>
         <button id="coach-dock-new" type="button" class="icon-button" aria-label="${esc(tr('Neu starten', 'New chat'))}" title="${esc(tr('Neu starten', 'New chat'))}">↻</button>
         <button id="coach-dock-page" type="button" class="icon-button" aria-label="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}" title="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}">↗</button>
         <button id="coach-dock-close" type="button" class="icon-button coach-dock-close" aria-label="${esc(tr('Schließen', 'Close'))}" title="${esc(tr('Schließen', 'Close'))}">×</button>
@@ -196,31 +214,53 @@ function installQuickAccess() {
 
   document.body.append(launcher, dock);
   $('#coach-dock-close')?.addEventListener('click', closeDock);
+  $('#coach-dock-pin')?.addEventListener('click', () => {
+    localStorage.setItem(pinnedKey, isPinned() ? '0' : '1');
+    syncPinButton();
+  });
   $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); activate(true); });
   $('#coach-dock-new')?.addEventListener('click', restartConversation);
   $('#coach-dock-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-dock-input').value); });
   $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   initDockResize();
+  initDockSwipe();
+  syncPinButton();
+}
+
+function dockWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
+function dockWidthKey(){return `finance.coach.dockWidth.${dockWidthMode()}`}
+function isPinned(){return localStorage.getItem(pinnedKey)==='1'}
+function syncPinButton(){
+  const button=$('#coach-dock-pin');if(!button)return;
+  const pinned=isPinned();
+  button.setAttribute('aria-pressed',String(pinned));
+  button.classList.toggle('active',pinned);
+  const label=pinned?tr('Coach lösen','Unpin Coach'):tr('Coach anheften','Pin Coach');
+  button.setAttribute('aria-label',label);button.title=label;
 }
 
 function initDockResize() {
   const dock = $('#coach-dock');
   const handle = $('#coach-dock-resizer');
   if (!dock || !handle) return;
-  const key = 'finance.coach.dockWidth';
   const minWidth = 260;
+  const defaults={desktop:420,tablet:320};
   const desktopMode = () => window.matchMedia('(min-width:768px)').matches;
+  const key=()=>dockWidthKey();
+  const defaultWidth=()=>defaults[dockWidthMode()];
+  const savedWidth=()=>{
+    const scoped=Number(localStorage.getItem(key()));if(scoped>0)return scoped;
+    const legacy=Number(localStorage.getItem('finance.coach.dockWidth'));return legacy>0?legacy:defaultWidth();
+  };
   const maxWidth = () => {
     const sidebar = document.body.classList.contains('nav-collapsed') || document.body.classList.contains('nav-auto-collapsed')
-      ? 72
-      : document.querySelector('.sidebar')?.getBoundingClientRect().width || 0;
+      ? 72 : document.querySelector('.sidebar')?.getBoundingClientRect().width || 0;
     const minMain = window.innerWidth < 1100 ? 280 : 420;
     return Math.max(minWidth, Math.min(600, window.innerWidth - sidebar - minMain));
   };
   const apply = value => {
     if (!desktopMode()) return;
-    const fallback = dock.getBoundingClientRect().width || 420;
-    const width = Math.max(minWidth, Math.min(maxWidth(), Math.round(Number(value) || fallback)));
+    const width = Math.max(minWidth, Math.min(maxWidth(), Math.round(Number(value) || savedWidth())));
     document.documentElement.style.setProperty('--coach-dock-w', `${width}px`);
     handle.setAttribute('aria-valuemin', String(minWidth));
     handle.setAttribute('aria-valuemax', String(maxWidth()));
@@ -228,50 +268,59 @@ function initDockResize() {
     window.dispatchEvent(new CustomEvent('fullworth:coach-resize', { detail: { width } }));
     return width;
   };
+  const save=width=>{if(width)localStorage.setItem(key(),String(width))};
 
   let pointerId = null;
   handle.addEventListener('pointerdown', event => {
     if (!desktopMode()) return;
-    pointerId = event.pointerId;
-    handle.setPointerCapture(pointerId);
-    handle.classList.add('is-dragging');
-    document.body.classList.add('coach-dock-resizing');
-    event.preventDefault();
+    pointerId = event.pointerId; handle.setPointerCapture(pointerId);
+    handle.classList.add('is-dragging'); document.body.classList.add('coach-dock-resizing'); event.preventDefault();
   });
-  handle.addEventListener('pointermove', event => {
-    if (pointerId !== event.pointerId) return;
-    apply(window.innerWidth - event.clientX);
-  });
+  handle.addEventListener('pointermove', event => { if (pointerId === event.pointerId) apply(window.innerWidth - event.clientX); });
   const finish = event => {
     if (pointerId === null || event.pointerId !== pointerId) return;
-    pointerId = null;
-    handle.classList.remove('is-dragging');
-    document.body.classList.remove('coach-dock-resizing');
-    const width = apply(dock.getBoundingClientRect().width);
-    if (width) localStorage.setItem(key, String(width));
+    pointerId = null; handle.classList.remove('is-dragging'); document.body.classList.remove('coach-dock-resizing');
+    save(apply(dock.getBoundingClientRect().width));
   };
   handle.addEventListener('pointerup', finish);
   handle.addEventListener('pointercancel', finish);
+  handle.addEventListener('dblclick',()=>save(apply(defaultWidth())));
   handle.addEventListener('keydown', event => {
     if (!desktopMode() || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const current = dock.getBoundingClientRect().width;
-    const next = event.key === 'Home' ? minWidth : event.key === 'End' ? maxWidth() : current + (event.key === 'ArrowLeft' ? 10 : -10);
-    const width = apply(next);
-    if (width) localStorage.setItem(key, String(width));
+    const step=event.shiftKey?40:10;
+    const next = event.key === 'Home' ? minWidth : event.key === 'End' ? maxWidth() : current + (event.key === 'ArrowLeft' ? step : -step);
+    save(apply(next));
   });
 
-  const clamp = () => {
-    if (!desktopMode() || !dockOpen) return;
-    const width = apply(Number(localStorage.getItem(key)) || dock.getBoundingClientRect().width);
-    if (width) localStorage.setItem(key, String(width));
-  };
+  const clamp = () => { if (desktopMode() && dockOpen) save(apply(savedWidth())); };
   window.addEventListener('resize', clamp);
   window.addEventListener('fullworth:sidebar-resize', clamp);
+  window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
   window.fwClampCoachWidth = clamp;
 }
 
-function readFilterValue(id) {
+function initDockSwipe(){
+  const dock=$('#coach-dock'),header=$('.coach-dock-header',dock);if(!dock||!header)return;
+  let id=null,startY=0,lastY=0;
+  header.addEventListener('pointerdown',event=>{
+    if(!window.matchMedia('(max-width:767px)').matches||event.target.closest('button'))return;
+    id=event.pointerId;startY=lastY=event.clientY;header.setPointerCapture(id);dock.classList.add('is-swiping');
+  });
+  header.addEventListener('pointermove',event=>{
+    if(event.pointerId!==id)return;lastY=event.clientY;
+    const dy=Math.max(0,lastY-startY);dock.style.transform=`translateY(${dy}px)`;
+  });
+  const end=event=>{
+    if(event.pointerId!==id)return;
+    const dy=Math.max(0,lastY-startY);id=null;dock.classList.remove('is-swiping');dock.style.transform='';
+    if(dy>90)closeDock();
+  };
+  header.addEventListener('pointerup',end);header.addEventListener('pointercancel',end);
+}
+
+function readFilterValue(id) {function readFilterValue(id) {
   const element = document.getElementById(id);
   if (!element) return null;
   if (element.type === 'checkbox') return element.checked ? 'true' : null;
@@ -279,51 +328,76 @@ function readFilterValue(id) {
   return value || null;
 }
 
+function safeObjectContext(value){
+  if(!value||typeof value!=='object')return null;
+  const details={};
+  for(const [key,val] of Object.entries(value.details||{})){
+    if(val==null)continue;details[String(key).slice(0,40)]=String(val).slice(0,180);
+  }
+  return {
+    entityType:String(value.entityType||'').slice(0,40)||null,
+    entityId:value.entityId==null?null:String(value.entityId).slice(0,100),
+    entityLabel:value.entityLabel==null?null:String(value.entityLabel).slice(0,160),
+    details,
+    selectedIds:Array.isArray(value.selectedIds)?value.selectedIds.slice(0,20).map(x=>String(x).slice(0,100)):[]
+  };
+}
+
+function setObjectContext(value){
+  currentObjectContext=safeObjectContext(value);
+  excludedContext.clear();
+  renderPageContext();renderStarters();
+}
 function capturePageContext() {
   const activeView = all('.view.active').find(view => view.id !== 'view-coach');
+  let base=null;
   if (!activeView) {
-    try { return JSON.parse(sessionStorage.getItem(pageContextKey) || 'null'); } catch { return null; }
+    try { base=JSON.parse(sessionStorage.getItem(pageContextKey) || 'null'); } catch { base=null; }
+  } else {
+    const page = activeView.id.replace(/^view-/, '');
+    const filters = {};
+    const queryKeys = new Set(['accountId','groupId','categoryId','merchantId','transactionId','direction','flags','period']);
+    const params = new URLSearchParams(location.search);
+    for (const [key, value] of params) if (queryKeys.has(key) && value) filters[key] = value.slice(0, 160);
+    const pageFilters = {
+      transactions: [['tx-query','query'],['tx-direction','direction'],['tx-flags','flags']],
+      contracts: [['contracts-archived','archived']],
+      analytics: [['an-period','period'],['an-measure','measure'],['an-dimension','dimension'],['an-cperiod','comparisonPeriod'],['an-ctype','chartType']],
+      audit: [['audit-action','auditAction'],['audit-entity-type','entityType']]
+    };
+    for (const [id, key] of pageFilters[page] || []) { const value = readFilterValue(id); if (value) filters[key] = value.slice(0, 160); }
+    base={page:page.slice(0,40),title:($('#page-title')?.textContent||page).trim().slice(0,100),path:(location.pathname+location.search).slice(0,180),filters};
+    sessionStorage.setItem(pageContextKey,JSON.stringify(base));
   }
-
-  const page = activeView.id.replace(/^view-/, '');
-  const filters = {};
-  const queryKeys = new Set(['accountId','groupId','categoryId','merchantId','transactionId','direction','flags','period']);
-  const params = new URLSearchParams(location.search);
-  for (const [key, value] of params) if (queryKeys.has(key) && value) filters[key] = value.slice(0, 160);
-
-  const pageFilters = {
-    transactions: [['tx-query','query'],['tx-direction','direction'],['tx-flags','flags']],
-    contracts: [['contracts-archived','archived']],
-    analytics: [['an-period','period'],['an-measure','measure'],['an-dimension','dimension'],['an-cperiod','comparisonPeriod'],['an-ctype','chartType']],
-    audit: [['audit-action','auditAction'],['audit-entity-type','entityType']]
-  };
-  for (const [id, key] of pageFilters[page] || []) {
-    const value = readFilterValue(id);
-    if (value) filters[key] = value.slice(0, 160);
-  }
-
-  const context = {
-    page: page.slice(0, 40),
-    title: ($('#page-title')?.textContent || page).trim().slice(0, 100),
-    path: (location.pathname + location.search).slice(0, 180),
-    filters
-  };
-  sessionStorage.setItem(pageContextKey, JSON.stringify(context));
+  if(!base)return null;
+  const context={...base,filters:{...(base.filters||{})}};
+  for(const key of Object.keys(context.filters))if(excludedContext.has(`filter:${key}`))delete context.filters[key];
+  if(currentObjectContext&&!excludedContext.has('entity'))Object.assign(context,currentObjectContext);
   return context;
 }
 
+function renderContextRoot(root,context){
+  if(!root)return;root.replaceChildren();
+  if(!context){root.textContent=tr('Kein Seitenkontext','No page context');return}
+  const add=(label,key,removable=true)=>{
+    const b=document.createElement(removable?'button':'span');
+    b.className='coach-context-chip';b.textContent=label;
+    if(removable){b.type='button';b.title=tr('Aus Kontext entfernen','Remove from context');b.addEventListener('click',()=>{excludedContext.add(key);renderPageContext();renderStarters()})}
+    root.appendChild(b);
+  };
+  add(context.title||context.page,'page',false);
+  if(context.entityType) add(context.entityLabel||context.entityType,'entity');
+  for(const [key,value] of Object.entries(context.filters||{})) add(`${key}: ${value}`,`filter:${key}`);
+  if((context.selectedIds||[]).length) add(`${context.selectedIds.length} ${tr('ausgewählt','selected')}`,'entity');
+}
 function renderPageContext() {
   const context = capturePageContext();
-  const filterCount = context ? Object.keys(context.filters || {}).length : 0;
-  const label = context
-    ? `${tr('Kontext', 'Context')}: ${context.title || context.page}${filterCount ? ` · ${filterCount} ${tr('Filter', 'filters')}` : ''}`
-    : tr('Kein Seitenkontext', 'No page context');
-  if ($('#coach-page-context')) $('#coach-page-context').textContent = label;
-  if ($('#coach-dock-context')) $('#coach-dock-context').textContent = label;
+  renderContextRoot($('#coach-page-context'),context);
+  renderContextRoot($('#coach-dock-context'),context);
   return context;
 }
 
-function setSelectedModel(value) {
+function setSelectedModel(value) {function setSelectedModel(value) {
   selectedModel = value || '';
   if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
   else localStorage.removeItem('finance.coach.model');
@@ -364,7 +438,7 @@ function closeDock() {
   dockOpen = false;
   document.body.classList.remove('coach-dock-open');
   const dock = $('#coach-dock');
-  if (dock) dock.hidden = true;
+  if (dock) { dock.hidden = true; dock.style.transform=''; }
   window.dispatchEvent(new Event('resize'));
   window.fwSyncResponsiveSidebar?.();
   syncQuickAccess();
@@ -468,10 +542,29 @@ async function loadModels() {
   }
 }
 
+function starterQuestions(){
+  const context=capturePageContext(),type=context?.entityType;
+  if(type==='transaction')return lang()==='de'
+    ? ['Ist diese Buchung ungewöhnlich?','Passt die Kategorie?','Wie wirkt sie sich auf mein Budget aus?']
+    : ['Is this transaction unusual?','Does the category fit?','How does it affect my budget?'];
+  if(type==='transactions')return lang()==='de'
+    ? ['Was fällt bei diesen Buchungen auf?','Welche davon sind vermeidbar?','Wie könnte ich sie sinnvoll gruppieren?']
+    : ['What stands out in these transactions?','Which of them may be avoidable?','How should I group them?'];
+  if(type==='contract')return lang()==='de'
+    ? ['Ist dieser Vertrag auffällig teuer?','Wie hoch sind die Jahreskosten?','Wo könnte ich sparen?']
+    : ['Is this contract unusually expensive?','What is the annual cost?','Where could I save?'];
+  if(type==='account')return lang()==='de'
+    ? ['Was fällt bei diesem Konto auf?','Wie entwickelt sich mein Geldfluss hier?','Welche Ausgaben stechen heraus?']
+    : ['What stands out for this account?','How is cash flow developing here?','Which expenses stand out?'];
+  if(type==='asset'||type==='liability')return lang()==='de'
+    ? ['Wie wirkt sich das auf mein Vermögen aus?','Was sollte ich dabei beobachten?','Wie hat sich der Wert entwickelt?']
+    : ['How does this affect my net worth?','What should I watch here?','How has the value developed?'];
+  return lang()==='de'
+    ? ['Wo ist mein Geld hin?','Was habe ich bereut?','Was war es wert?','Was könnte ich reduzieren?','Wann erreiche ich 100.000 €?']
+    : ['Where did my money go?','What did I regret?','What was worth it?','What could I reduce?','When could I reach €100,000?'];
+}
 function renderStarters() {
-  const starters = lang() === 'de'
-    ? ['Wo ist mein Geld hin?', 'Was habe ich bereut?', 'Was war es wert?', 'Was könnte ich reduzieren?', 'Wann erreiche ich 100.000 €?']
-    : ['Where did my money go?', 'What did I regret?', 'What was worth it?', 'What could I reduce?', 'When could I reach €100,000?'];
+  const starters=starterQuestions();
   all('#coach-starters,#coach-dock-starters').forEach(root => {
     root.innerHTML = '';
     starters.forEach(text => {
@@ -481,7 +574,7 @@ function renderStarters() {
   });
 }
 
-async function loadConversation() {
+async function loadConversation() {async function loadConversation() {
   const sid = spaceId();
   if (currentConversationSpaceId !== sid) {
     currentConversationId = null;
