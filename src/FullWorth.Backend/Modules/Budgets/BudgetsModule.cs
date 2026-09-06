@@ -169,7 +169,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             var carryMode = ResolveCarryMode(budget);
             if (carryMode != CarryOverMode.Disabled)
             {
-                var activeFrom = BudgetActiveFrom(budget);
+                var activeFrom = BudgetActiveFrom(budget, cycle);
                 var priorPeriods = PriorPeriods(cycle, activeFrom, period);
                 if (priorPeriods.Count > 0)
                 {
@@ -234,7 +234,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         var carryMode = ResolveCarryMode(budget);
         if (carryMode != CarryOverMode.Disabled)
         {
-            var activeFrom = BudgetActiveFrom(budget);
+            var activeFrom = BudgetActiveFrom(budget, cycle);
             var priorPeriods = PriorPeriods(cycle, activeFrom, period);
             if (priorPeriods.Count > 0)
             {
@@ -299,8 +299,12 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             ? CarryOverMode.Disabled
             : budget.CarryOverOverspend ? CarryOverMode.Enabled : CarryOverMode.PositiveOnly;
 
-    private static DateOnly BudgetActiveFrom(Budget budget) =>
-        budget.StartDate ?? DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+    private static DateOnly BudgetActiveFrom(Budget budget, BudgetCycleDefinition cycle)
+    {
+        if (budget.StartDate is { } explicitStart) return explicitStart;
+        var created = DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+        return BudgetCycleCalculator.CurrentPeriod(cycle, created).Start;
+    }
 
     private static List<BudgetCyclePeriod> PriorPeriods(
         BudgetCycleDefinition cycle,
