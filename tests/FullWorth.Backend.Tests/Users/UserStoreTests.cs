@@ -122,6 +122,40 @@ public sealed class UserStoreTests
             store.CreateAsync(new CreateUserRequest("  ALICE@EXAMPLE.COM  ", "Other Alice"), CancellationToken.None));
     }
 
+
+    [Fact]
+    public async Task TombstonesStayDistinctAndCannotBeReactivated()
+    {
+        await using var database = await UsersSqliteDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var store = new UserStore(db);
+
+        var first = await store.CreateAsync(new CreateUserRequest("first@example.com", "First"), CancellationToken.None);
+        var second = await store.CreateAsync(new CreateUserRequest("second@example.com", "Second"), CancellationToken.None);
+
+        Assert.True(await store.TombstoneAsync(first.Id, CancellationToken.None));
+        Assert.True(await store.TombstoneAsync(second.Id, CancellationToken.None));
+
+        var firstDeleted = await store.GetAsync(first.Id, CancellationToken.None);
+        var secondDeleted = await store.GetAsync(second.Id, CancellationToken.None);
+
+        Assert.NotNull(firstDeleted);
+        Assert.NotNull(secondDeleted);
+        Assert.True(firstDeleted!.IsTombstone);
+        Assert.True(secondDeleted!.IsTombstone);
+        Assert.False(firstDeleted.IsActive);
+        Assert.False(secondDeleted.IsActive);
+        Assert.Equal("Deleted user", firstDeleted.DisplayName);
+        Assert.Equal("Deleted user", secondDeleted.DisplayName);
+        Assert.NotEqual(firstDeleted.Id, secondDeleted.Id);
+        Assert.NotEqual(firstDeleted.EmailNormalized, secondDeleted.EmailNormalized);
+        Assert.Contains(firstDeleted.Id.ToString("N").ToUpperInvariant(), firstDeleted.EmailNormalized);
+        Assert.Contains(secondDeleted.Id.ToString("N").ToUpperInvariant(), secondDeleted.EmailNormalized);
+
+        Assert.False(await store.SetActiveAsync(first.Id, true, CancellationToken.None));
+        Assert.False((await store.GetAsync(first.Id, CancellationToken.None))!.IsActive);
+    }
+
     [Fact]
     public void FullWorthUserContainsNoAuthenticationCredentialFields()
     {
@@ -132,7 +166,7 @@ public sealed class UserStoreTests
             .ToArray();
 
         Assert.Equal(
-            new[] { "CreatedAt", "DisplayName", "Email", "EmailNormalized", "Id", "IsActive", "OnboardingCompletedAt", "OnboardingVersion", "UpdatedAt" },
+            new[] { "CreatedAt", "DisplayName", "Email", "EmailNormalized", "Id", "IsActive", "IsTombstone", "OnboardingCompletedAt", "OnboardingVersion", "UpdatedAt" },
             propertyNames);
     }
 }
