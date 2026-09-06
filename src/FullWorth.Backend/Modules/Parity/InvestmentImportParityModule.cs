@@ -28,6 +28,8 @@ public sealed record InvestmentImportColumnMapping(
     string? Fees,
     string? Taxes,
     string? WithholdingTax,
+    string? AssetClass,
+    string? SourceProvider,
     string? ExternalKey);
 
 public sealed record InvestmentImportPortfolioCreate(
@@ -144,7 +146,7 @@ public static class InvestmentImportParityEndpoints
         {
             mapping.TradeDate, mapping.TradeType, mapping.SettlementDate, mapping.SecurityName,
             mapping.Isin, mapping.Wkn, mapping.Ticker, mapping.Quantity, mapping.Price, mapping.GrossAmount,
-            mapping.Amount, mapping.Currency, mapping.Fees, mapping.Taxes, mapping.WithholdingTax, mapping.ExternalKey
+            mapping.Amount, mapping.Currency, mapping.Fees, mapping.Taxes, mapping.WithholdingTax, mapping.AssetClass, mapping.ExternalKey
         }.Where(value => !string.IsNullOrWhiteSpace(value));
         if (mappedColumns.Any(column => !headers.Contains(column!)))
             return Results.BadRequest(new { error = "Mapping references an unknown column." });
@@ -174,7 +176,7 @@ public static class InvestmentImportParityEndpoints
                 errorCount++;
                 candidates.Add(new Candidate(
                     Guid.NewGuid(), index + 1, null, null, null, null, null, null, null,
-                    null, null, null, 0m, "EUR", 0m, 0m, 0m, null,
+                    null, null, null, 0m, "EUR", 0m, 0m, 0m, null, null,
                     Sha256($"invalid|{index + 1}|{rows[index].Count}"), "error", exception.Message, "new"));
             }
         }
@@ -198,14 +200,14 @@ VALUES (@id,@space,@user,@file,@sha,@status,@source,@ready,0,0,@errors,@now,@now
         {
             await using var command = ParitySql.Command(connection, """
 INSERT INTO "InvestmentImportCandidates"
-("Id","ImportJobId","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker",
+("Id","ImportJobId","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker","AssetType",
  "Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","ExternalKey","RowFingerprint",
  "ValidationStatus","DuplicateStatus","ValidationError","CreatedAt")
-VALUES (@id,@job,@row,@tradeDate,@settlement,@type,@name,@isin,@wkn,@ticker,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,@external,@fingerprint,@status,'new',@error,@now)
+VALUES (@id,@job,@row,@tradeDate,@settlement,@type,@name,@isin,@wkn,@ticker,@assetType,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,@external,@fingerprint,@status,'new',@error,@now)
 """, ("@id", candidate.Id), ("@job", jobId), ("@row", candidate.RowNumber),
                 ("@tradeDate", candidate.TradeDate), ("@settlement", candidate.SettlementDate),
                 ("@type", candidate.TradeType), ("@name", candidate.SecurityName), ("@isin", candidate.Isin),
-                ("@wkn", candidate.Wkn), ("@ticker", candidate.Ticker), ("@quantity", candidate.Quantity),
+                ("@wkn", candidate.Wkn), ("@ticker", candidate.Ticker), ("@assetType", candidate.AssetType), ("@quantity", candidate.Quantity),
                 ("@price", candidate.Price), ("@gross", candidate.GrossAmount), ("@amount", candidate.Amount),
                 ("@currency", candidate.Currency), ("@fees", candidate.Fees), ("@taxes", candidate.Taxes),
                 ("@withholding", candidate.WithholdingTax), ("@external", candidate.ExternalKey),
@@ -275,6 +277,7 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
                     isin = first.Isin,
                     wkn = first.Wkn,
                     ticker = first.Ticker,
+                    assetType = first.AssetType,
                     currency = first.Currency,
                     count = group.Count(),
                     autoMatchId = match?.Id,
@@ -295,6 +298,7 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
             candidate.Isin,
             candidate.Wkn,
             candidate.Ticker,
+            candidate.AssetType,
             candidate.Quantity,
             candidate.Price,
             candidate.GrossAmount,
@@ -446,10 +450,10 @@ VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,true,true,false,@now,@now
                     await using var createSecurity = ParitySql.Command(connection, """
 INSERT INTO "Securities"
 ("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","ProviderKey","IsActive","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@name,@isin,@wkn,@ticker,'other',@currency,'investment-import',true,@now,@now)
+VALUES (@id,@space,@name,@isin,@wkn,@ticker,@assetType,@currency,'investment-import',true,@now,@now)
 """, ("@id", created.Id), ("@space", fullWorthSpaceId), ("@name", created.Name),
                         ("@isin", created.Isin), ("@wkn", created.Wkn), ("@ticker", created.Ticker),
-                        ("@currency", created.Currency), ("@now", DateTimeOffset.UtcNow));
+                        ("@assetType", first.AssetType ?? "other"), ("@currency", created.Currency), ("@now", DateTimeOffset.UtcNow));
                     await createSecurity.ExecuteNonQueryAsync(ct);
                     securities.Add(created);
                     resolution[group.Key] = created;
@@ -538,9 +542,10 @@ WHERE "Id"=@id
         var fees = Math.Abs(ParseOptionalAmount(Cell(mapping.Fees)) ?? 0m);
         var taxes = Math.Abs(ParseOptionalAmount(Cell(mapping.Taxes)) ?? 0m);
         var withholding = Math.Abs(ParseOptionalAmount(Cell(mapping.WithholdingTax)) ?? 0m);
+        var assetType = NormalizeAssetType(Cell(mapping.AssetClass), mapping.SourceProvider);
         return new Candidate(
             Guid.NewGuid(), rowNumber, tradeDate, settlementDate, type, securityName, isin, wkn, ticker,
-            quantity, price, gross, amount, currency, fees, taxes, withholding,
+            quantity, price, gross, amount, currency, fees, taxes, withholding, assetType,
             Clean(Cell(mapping.ExternalKey)), "", "ready", null, "new");
     }
 
@@ -624,7 +629,7 @@ FROM "Securities" WHERE "FullWorthSpaceId"=@space AND "IsActive"=true
     {
         var connection = await ParitySql.OpenAsync(db, ct);
         await using var command = ParitySql.Command(connection, """
-SELECT "Id","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker","Quantity","Price",
+SELECT "Id","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker","AssetType","Quantity","Price",
  "GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","ExternalKey","RowFingerprint","ValidationStatus","DuplicateStatus","ValidationError"
 FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
 """, ("@job", jobId));
@@ -637,7 +642,7 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
                 ParitySql.NullableDate(reader, "TradeDate"), ParitySql.NullableDate(reader, "SettlementDate"),
                 ParitySql.NullableString(reader, "TradeType"), ParitySql.NullableString(reader, "SecurityName"),
                 ParitySql.NullableString(reader, "Isin"), ParitySql.NullableString(reader, "Wkn"),
-                ParitySql.NullableString(reader, "Ticker"), ParitySql.NullableDecimal(reader, "Quantity"),
+                ParitySql.NullableString(reader, "Ticker"), ParitySql.NullableString(reader, "AssetType"), ParitySql.NullableDecimal(reader, "Quantity"),
                 ParitySql.NullableDecimal(reader, "Price"), ParitySql.NullableDecimal(reader, "GrossAmount"),
                 ParitySql.Decimal(reader, "Amount"), ParitySql.String(reader, "Currency"),
                 ParitySql.Decimal(reader, "Fees"), ParitySql.Decimal(reader, "Taxes"),
@@ -716,6 +721,7 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         candidate.Isin ?? "",
         candidate.Wkn ?? "",
         candidate.Ticker ?? "",
+        candidate.AssetType ?? "",
         Normalize(candidate.SecurityName ?? ""),
         candidate.Quantity?.ToString(CultureInfo.InvariantCulture) ?? "",
         candidate.Price?.ToString(CultureInfo.InvariantCulture) ?? "",
@@ -740,7 +746,10 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
             Find("price", "kurs"), Find("gross", "brutto", "gross amount"),
             Find("amount", "betrag", "net", "netto"), Find("currency", "währung", "waehrung"),
             Find("fees", "gebühren", "gebuehren", "fee"), Find("taxes", "steuern", "tax"),
-            Find("withholding tax", "quellensteuer"), Find("id", "transaction id", "order id", "external id"));
+            Find("withholding tax", "quellensteuer"),
+            Find("asset class", "asset_class", "asset type", "assettype", "anlageklasse", "wertpapierart"),
+            null,
+            Find("id", "transaction id", "order id", "external id"));
     }
 
     private static string NormalizeTradeType(string? value)
@@ -755,13 +764,34 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
             "fee" or "fees" or "gebuehr" or "gebühr" or "gebuehren" or "gebühren" => "fee",
             "tax" or "taxes" or "steuer" or "steuern" or "taxoptimization" or "secaccount" => "tax",
             "deposit" or "einzahlung" or "customerinbound" or "customerinpayment" or "transferinbound" or "transferinstantinbound" => "deposit",
-            "withdrawal" or "auszahlung" or "customeroutboundrequest" or "transferoutbound" or "transferinstantoutbound" or "cardtransaction" => "withdrawal",
+            "withdrawal" or "auszahlung" or "customeroutboundrequest" or "transferoutbound" or "transferinstantoutbound" => "withdrawal",
+            "cardtransaction" => "other",
             "securitytransferin" or "transferin" or "eingang" => "security_transfer_in",
             "securitytransferout" or "transferout" or "ausgang" => "security_transfer_out",
             "redemption" => "sell",
             "split" or "aktiensplit" => "split",
             "other" or "sonstiges" or "compensation" or "buycancelled" => "other",
             _ => value?.Trim().ToLowerInvariant() ?? ""
+        };
+    }
+
+    private static string? NormalizeAssetType(string? value, string? sourceProvider)
+    {
+        var normalized = Normalize(value ?? "");
+        var provider = Normalize(sourceProvider ?? "");
+        return normalized switch
+        {
+            "" => null,
+            "stock" or "aktie" or "equity" => "stock",
+            "etf" => "etf",
+            "fund" or "fonds" when provider == "traderepublic" => "etf",
+            "fund" or "fonds" or "mutualfund" => "fund",
+            "derivative" or "derivatives" or "derivat" or "derivate" or "warrant" or "certificate" => "derivative",
+            "bond" or "anleihe" => "bond",
+            "crypto" or "cryptocurrency" or "krypto" => "crypto",
+            "commodity" or "rohstoff" or "metal" or "metall" => "commodity",
+            "cash" or "geld" => "cash",
+            _ => "other"
         };
     }
 
@@ -1014,6 +1044,7 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         string? Isin,
         string? Wkn,
         string? Ticker,
+        string? AssetType,
         decimal? Quantity,
         decimal? Price,
         decimal? GrossAmount,

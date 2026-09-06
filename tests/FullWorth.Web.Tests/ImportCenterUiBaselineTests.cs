@@ -104,6 +104,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("isTradeRepublicExport", centerJs);
         Assert.Contains("createPortfolio", centerJs);
         Assert.Contains("transaction_id", centerJs);
+        Assert.Contains("assetClass", centerJs);
+        Assert.Contains("sourceProvider='trade_republic'", centerJs);
         Assert.Contains("identifier", centerJs);
         Assert.Contains("shares", centerJs);
         Assert.Contains("Auftraggeber/Empfänger", centerJs);
@@ -138,6 +140,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
             {
                 Assert.Contains("Trade Republic", js);
                 Assert.Contains("createPortfolio", js);
+                Assert.Contains("assetClass", js);
+                Assert.Contains("sourceProvider='trade_republic'", js);
                 Assert.Contains("__new__", js);
             }
         }
