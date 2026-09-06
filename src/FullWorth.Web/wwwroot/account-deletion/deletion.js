@@ -5,8 +5,26 @@ const error = document.querySelector('#error');
 const title = document.querySelector('#title');
 const message = document.querySelector('#message');
 
+let csrfToken = null;
+
+async function csrf(){
+  if(csrfToken) return csrfToken;
+  const response = await fetch('/auth/antiforgery',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok) throw new Error('csrf');
+  csrfToken = (await response.json()).token;
+  return csrfToken;
+}
+
+async function post(path){
+  return fetch(path,{
+    method:'POST',
+    credentials:'same-origin',
+    headers:{'X-CSRF-TOKEN':await csrf()}
+  });
+}
+
 async function status(){
-  const response = await fetch('/auth/account-deletion/status',{credentials:'same-origin'});
+  const response = await fetch('/auth/account-deletion/status',{credentials:'same-origin',cache:'no-store'});
   if(!response.ok){ location.assign('/auth/login'); return; }
   const data = await response.json();
   if(!data.pending){
@@ -26,15 +44,17 @@ async function status(){
 reactivate.addEventListener('click', async ()=>{
   reactivate.disabled=true;
   error.hidden=true;
-  const response = await fetch('/auth/account-deletion/cancel',{method:'POST',credentials:'same-origin'});
-  if(response.ok){ location.assign('/'); return; }
+  try{
+    const response = await post('/auth/account-deletion/cancel');
+    if(response.ok){ location.assign('/'); return; }
+  }catch{}
   error.textContent='Die Reaktivierung konnte nicht abgeschlossen werden.';
   error.hidden=false;
   reactivate.disabled=false;
 });
 
 logout.addEventListener('click', async ()=>{
-  await fetch('/auth/logout',{method:'POST',credentials:'same-origin'});
+  try{ await post('/auth/logout'); }catch{}
   location.assign('/auth/login');
 });
 
