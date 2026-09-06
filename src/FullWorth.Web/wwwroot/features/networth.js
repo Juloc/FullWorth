@@ -7,8 +7,8 @@ import { renderLoans, bindLoans } from './loans.js';
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?"), an allocation card
 // ("Verteilung deines Vermögens"), the optional portfolio panel, and finally the asset/liability/loan
 // editors behind a Details/Verwalten disclosure. Totals/history come from /api/wealth/*; type-specific
-// modules own their detail logic. A Reserve/Notgroschen card is intentionally NOT rendered because the
-// wealth overview API exposes no configured emergency-fund target (the plan only shows it when configured).
+// modules own their detail logic. The optional emergency-fund card is driven by an explicit per-user,
+// per-space target preference and never invents a target automatically.
 let ctx = null;
 let lastOverview = null;
 
@@ -24,7 +24,7 @@ const WINDOWS = [
 ];
 
 // View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
-const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], portfolios: [], currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
+const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -49,7 +49,8 @@ const COPY = {
     trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
     window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.',
-    customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.'
+    customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.',
+    emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.'
   },
   en: {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
@@ -65,7 +66,8 @@ const COPY = {
     trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
     window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.',
-    customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.'
+    customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
+    emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.'
   }
 };
 
@@ -139,12 +141,14 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, assets, liabilities, accounts, portfolios] = await Promise.all([
+  const [history, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
     loadHistory(nw.windowMonths),
     ctx.api('api/assets').catch(() => []),
     ctx.api('api/liabilities').catch(() => []),
     ctx.api('api/accounts').catch(() => []),
-    ctx.api('api/investments/portfolios').catch(() => [])
+    ctx.api('api/account-groups').catch(() => []),
+    ctx.api('api/investments/portfolios').catch(() => []),
+    ctx.api('api/preferences/wealth.emergencyFund').catch(() => ({ value: {} }))
   ]);
 
   lastOverview = overview;
@@ -154,7 +158,9 @@ export async function renderNetWorth(context) {
   nw.assets = assets || [];
   nw.liabilities = liabilities || [];
   nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id));
+  nw.accountGroups = accountGroups || [];
   nw.portfolios = portfolios || [];
+  nw.emergency = emergencyPref?.value && typeof emergencyPref.value === 'object' ? emergencyPref.value : {};
   nw.currency = overview.currency;
 
   paintNetWorth();
@@ -164,12 +170,14 @@ export async function renderNetWorth(context) {
 function paintNetWorth() {
   const host = ctx.$('#view-networth');
   if (!host) return;
-  host.innerHTML = `${buildHeroCard()}${buildAllocationCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+  host.innerHTML = `${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
 
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
   host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
   host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
+  host.querySelectorAll('[data-action="emergency-fund"]').forEach(button => button.addEventListener('click', () => openEmergencyFundDialog()));
+  host.querySelectorAll('[data-emergency-w]').forEach(bar => { bar.style.width = bar.dataset.emergencyW + '%'; });
 
   renderAccounts(nw.accounts);
   renderAssets(nw.assets);
@@ -400,6 +408,107 @@ function buildAllocationCard() {
   return sectionCard(t('allocationTitle'), `${donut}${legend}${debtBar}`, { className: 'nw-allocation' });
 }
 
+/* ---- Card 3: optional emergency fund / Notgroschen ----------------------------------------- */
+
+function emergencyAccounts() {
+  const pref = nw.emergency || {};
+  return (nw.accounts || []).filter(account => {
+    if (account.isActive === false || account.includeInNetWorth === false) return false;
+    if (pref.accountId && String(account.id) !== String(pref.accountId)) return false;
+    if (pref.accountGroupId && String(account.groupId || '') !== String(pref.accountGroupId)) return false;
+    return true;
+  });
+}
+
+function emergencyCurrentAmount() {
+  return emergencyAccounts().reduce((sum, account) => {
+    if (account.baseValue != null) return sum + num(account.baseValue);
+    if (account.latestBalance && account.latestBalance.currency === nw.currency) return sum + num(account.latestBalance.amount);
+    return sum;
+  }, 0);
+}
+
+function emergencyScopeLabel() {
+  const pref = nw.emergency || {};
+  if (pref.accountId) {
+    const account = (nw.accounts || []).find(item => String(item.id) === String(pref.accountId));
+    return account?.displayName || account?.institutionName || t('emergencyAll');
+  }
+  if (pref.accountGroupId) {
+    const group = (nw.accountGroups || []).find(item => String(item.id) === String(pref.accountGroupId));
+    return group?.name || t('emergencyAll');
+  }
+  return t('emergencyAll');
+}
+
+function buildEmergencyCard() {
+  const pref = nw.emergency || {};
+  const target = num(pref.targetAmount);
+  if (pref.enabled !== true || target <= 0) return '';
+  const current = emergencyCurrentAmount();
+  const pct = Math.max(0, Math.min(100, target > 0 ? current / target * 100 : 0));
+  const body = `<div class="nw-emergency">
+    <div class="fw-summary">
+      <div><span class="fw-summary-label">${ctx.esc(t('emergencyCurrent'))}</span><span class="fw-summary-value">${ctx.money(current, nw.currency)}</span></div>
+      <div><span class="fw-summary-label">${ctx.esc(t('emergencyTarget'))}</span><span class="fw-summary-value">${ctx.money(target, nw.currency)}</span></div>
+    </div>
+    <div class="progress ontrack"><span data-emergency-w="${pct.toFixed(2)}"></span></div>
+    <div class="row-sub">${ctx.esc(Math.round(pct) + ' % · ' + emergencyScopeLabel())}</div>
+  </div>`;
+  return sectionCard(t('emergencyTitle'), body, {
+    sub: t('emergencyHint'),
+    className: 'nw-emergency-card',
+    action: { label: t('emergencyEdit'), attr: 'data-action="emergency-fund"' }
+  });
+}
+
+async function openEmergencyFundDialog() {
+  const pref = nw.emergency || {};
+  const accountOptions = (nw.accounts || []).filter(account => account.isActive !== false).map(account =>
+    `<option value="account:${ctx.esc(account.id)}"${String(pref.accountId || '') === String(account.id) ? ' selected' : ''}>${ctx.esc(account.displayName || account.institutionName)}</option>`).join('');
+  const groupOptions = (nw.accountGroups || []).map(group =>
+    `<option value="group:${ctx.esc(group.id)}"${String(pref.accountGroupId || '') === String(group.id) ? ' selected' : ''}>${ctx.esc(group.name)}</option>`).join('');
+  const scopeValue = pref.accountId ? 'account:' + pref.accountId : pref.accountGroupId ? 'group:' + pref.accountGroupId : '';
+  const dlg = ctx.dialog(`<form class="dialog-card" method="dialog">
+    <div class="panel-head"><h2>${ctx.esc(t('emergencyTitle'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <label class="check"><input type="checkbox" name="enabled"${pref.enabled === true ? ' checked' : ''}>${ctx.esc(t('emergencyEnabled'))}</label>
+    <label>${ctx.esc(t('emergencyTarget'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="target" value="${ctx.esc(pref.targetAmount || '')}" placeholder="0,00"></label>
+    <label>${ctx.esc(t('emergencyScope'))}<select name="scope"><option value="">${ctx.esc(t('emergencyAll'))}</option><optgroup label="${ctx.esc(t('accounts'))}">${accountOptions}</optgroup><optgroup label="${ctx.esc(isDe() ? 'Kontogruppen' : 'Account groups')}">${groupOptions}</optgroup></select></label>
+    <div class="row-sub" data-error hidden></div>
+    <div class="dialog-actions"><button type="button" class="ghost" data-close2>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.save'))}</button></div>
+  </form>`);
+  const scope = dlg.querySelector('[name="scope"]'); if (scope) scope.value = scopeValue;
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-close2]').onclick = () => dlg.close();
+  dlg.querySelector('[data-save]').onclick = async () => {
+    const fd = new FormData(dlg.querySelector('form'));
+    const enabled = !!fd.get('enabled');
+    const targetAmount = Number(fd.get('target') || 0);
+    const error = dlg.querySelector('[data-error]');
+    if (enabled && (!Number.isFinite(targetAmount) || targetAmount <= 0)) {
+      if (error) { error.hidden = false; error.textContent = t('emergencyInvalid'); }
+      return;
+    }
+    const selectedScope = String(fd.get('scope') || '');
+    const next = {
+      enabled,
+      targetAmount: Number.isFinite(targetAmount) ? targetAmount : 0,
+      accountId: selectedScope.startsWith('account:') ? selectedScope.slice(8) : null,
+      accountGroupId: selectedScope.startsWith('group:') ? selectedScope.slice(6) : null
+    };
+    try {
+      await ctx.api('api/preferences/wealth.emergencyFund', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next)
+      });
+      dlg.close();
+      await renderNetWorth(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  };
+  dlg.showModal();
+}
+
 /* ---- Card 4: optional portfolio panel (ids preserved for parity/import enhancement modules) --- */
 
 function investmentsCardMarkup() {
@@ -417,7 +526,9 @@ function manageMarkup() {
   const assetsCard = sectionCard(t('manualAssets'), `<div id="assets-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-asset') });
   const liabilitiesCard = sectionCard(t('debt'), `<div id="liabilities-list" class="rows"></div>`, { className: 'nw-sub', action: add('new-liability') });
   const loansCard = sectionCard(ctx.get('loans.title'), `<div id="nw-loans" class="rows"></div>`, { className: 'nw-sub', action: add('new-loan') });
-  return `<details class="nw-manage"><summary><span>${ctx.esc(t('manageTitle'))}</span><span class="nw-manage-hint">${ctx.esc(t('manageHint'))}</span></summary><div class="nw-manage-body">${accountsCard}${assetsCard}${liabilitiesCard}${loansCard}</div></details>`;
+  const emergencyBody = `<div class="row-sub">${ctx.esc((nw.emergency?.enabled === true && num(nw.emergency?.targetAmount) > 0) ? ctx.money(nw.emergency.targetAmount, nw.currency) + ' · ' + emergencyScopeLabel() : t('emergencyHint'))}</div>`;
+  const emergencyCard = sectionCard(t('emergencyTitle'), emergencyBody, { className: 'nw-sub', action: { label: (nw.emergency?.enabled === true ? t('emergencyEdit') : t('emergencySetup')), attr: 'data-action="emergency-fund"' } });
+  return `<details class="nw-manage"><summary><span>${ctx.esc(t('manageTitle'))}</span><span class="nw-manage-hint">${ctx.esc(t('manageHint'))}</span></summary><div class="nw-manage-body">${emergencyCard}${accountsCard}${assetsCard}${liabilitiesCard}${loansCard}</div></details>`;
 }
 
 /* ---- Management list renderers (unchanged behaviour; targets live inside the Details section) --- */
