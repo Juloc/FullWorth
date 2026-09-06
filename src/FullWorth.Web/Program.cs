@@ -310,6 +310,7 @@ foreach (var route in new[]
 {
     "/auth",
     "/auth/login",
+    "/auth/two-factor",
     "/auth/register",
     "/auth/forgot-password",
     "/auth/reset-password",
