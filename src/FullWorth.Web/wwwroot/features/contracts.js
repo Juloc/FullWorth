@@ -503,11 +503,16 @@ async function dismissCandidate(candidate) {
 }
 
 async function openDetail(id) {
-  let contract, activity;
+  let contract, activity, cancellation;
   try {
-    contract = await ctx.api(`api/contracts/${id}`);
-    activity = await ctx.api(`api/contracts/${id}/activity`);
+    [contract, activity, cancellation] = await Promise.all([
+      ctx.api(`api/contracts/${id}`),
+      ctx.api(`api/contracts/${id}/activity`),
+      ctx.api(`api/contract-parity/${id}/cancellation`)
+    ]);
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  contract.cancellation = cancellation;
+  const lifecycle = lifecycleStatus(contract);
 
   const valueMode = ctx.get('contracts.mode_' + (activity?.valueMode || 'manual'));
   const next = activity?.nextExpected ? ctx.date(activity.nextExpected) : '—';
@@ -527,20 +532,31 @@ async function openDetail(id) {
     [ctx.get('contracts.billingCycle'), ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'))],
     [ctx.get('contracts.kind'), ctx.get('contracts.kind_' + (contract.kind || 'contract'))],
     [ctx.get('contracts.startDate'), contract.startDate ? ctx.date(contract.startDate) : '—'],
-    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—']
+    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—'],
+    [ctx.get('contracts.status'), lifecycle === 'archived' ? ctx.get('contracts.archived') : cancellationStatusLabel(cancellation?.cancellationStatus)],
+    [ctx.get('contracts.minimumTermEnd'), cancellation?.minimumTermEnd ? ctx.date(cancellation.minimumTermEnd) : '—'],
+    [ctx.get('contracts.noticePeriod'), periodLabel(cancellation?.noticePeriodValue, cancellation?.noticePeriodUnit)],
+    [ctx.get('contracts.cancellationDeadline'), cancellation?.cancellationDeadline ? ctx.date(cancellation.cancellationDeadline) : '—'],
+    [ctx.get('contracts.renewalPeriod'), periodLabel(cancellation?.renewalPeriodValue, cancellation?.renewalPeriodUnit)],
+    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? ctx.get('common.yes') : ctx.get('common.no')],
+    [ctx.get('contracts.cancelledOn'), cancellation?.cancellationSentAt ? ctx.dateTime(cancellation.cancellationSentAt) : '—'],
+    [ctx.get('contracts.confirmedOn'), cancellation?.cancellationConfirmedAt ? ctx.dateTime(cancellation.cancellationConfirmedAt) : '—'],
+    [ctx.get('contracts.customerNumber'), cancellation?.customerNumber || '—']
   ].map(([k, v]) => `<div class="detail-item"><span class="detail-k">${ctx.esc(k)}</span><span class="detail-v">${ctx.esc(v)}</span></div>`).join('');
 
+  const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
   const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
-    <div class="panel-head"><h2>${ctx.esc(contract.name)}${contract.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="panel-head"><h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     ${contract.providerName ? `<div class="row-sub">${ctx.esc(contract.providerName)}</div>` : ''}
     <div class="detail-grid">${meta}</div>
+    ${cancellation?.providerContact ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.providerContact'))}</h3><div class="row-sub">${ctx.esc(cancellation.providerContact)}</div></div>` : ''}
     ${trend}
     <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
     ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
     <div class="dialog-actions">
       <button type="button" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
       ${contract.isActive
-        ? `<button type="button" class="danger" data-cancel-contract>${ctx.esc(ctx.get('contracts.cancel'))}</button>`
+        ? `<button type="button" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
         : `<button type="button" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
     </div>
   </div>`);
@@ -550,9 +566,10 @@ async function openDetail(id) {
   dlg.querySelector('.dialog-actions')?.prepend(coachAction);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
-  dlg.querySelector('[data-cancel-contract]')?.addEventListener('click', async () => {
-    if (!await ctx.confirm(ctx.get('contracts.cancelConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.cancel') })) return;
-    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.cancelled')); await renderContracts(ctx); }
+  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => { dlg.close(); openCancellationDialog(contract, cancellation); });
+  dlg.querySelector('[data-archive]')?.addEventListener('click', async () => {
+    if (!await ctx.confirm(ctx.get('contracts.archiveConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.archive') })) return;
+    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.archivedToast')); await renderContracts(ctx); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
   dlg.querySelector('[data-reactivate]')?.addEventListener('click', async () => {
