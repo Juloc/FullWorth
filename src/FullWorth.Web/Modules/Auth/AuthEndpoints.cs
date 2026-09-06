@@ -1,18 +1,28 @@
+using System.Security.Claims;
 using FullWorth.Web.Security.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
 
 namespace FullWorth.Web.Modules.Auth;
 
 public static class AuthEndpoints
 {
+    private const string ExternalModeItem = "fullworth:external-mode";
+    private const string ExternalReturnUrlItem = "fullworth:external-return-url";
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/auth");
 
+        group.MapGet("/providers", ProvidersAsync).AllowAnonymous();
+        group.MapGet("/external/{provider}", StartExternalAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
+        group.MapGet("/external/callback", ExternalCallbackAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
@@ -25,6 +35,121 @@ public static class AuthEndpoints
         group.MapPost("/claim", ClaimInviteAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.PasswordReset);
 
         return endpoints;
+    }
+
+    private static async Task<IResult> ProvidersAsync(
+        IAuthenticationSchemeProvider schemes,
+        IOptions<RegistrationOptions> registration)
+    {
+        return Results.Ok(new
+        {
+            registrationEnabled = registration.Value.Enabled,
+            google = await schemes.GetSchemeAsync("Google") is not null,
+            apple = await schemes.GetSchemeAsync("Apple") is not null
+        });
+    }
+
+    private static async Task<IResult> StartExternalAsync(
+        HttpContext context,
+        string provider,
+        IAuthenticationSchemeProvider schemes,
+        SignInManager<AuthUser> signInManager,
+        IOptions<RegistrationOptions> registration)
+    {
+        if (context.User.Identity?.IsAuthenticated == true)
+            return Results.Redirect("/");
+
+        var scheme = NormalizeProvider(provider);
+        if (scheme is null || await schemes.GetSchemeAsync(scheme) is null)
+            return Results.NotFound();
+
+        var mode = string.Equals(context.Request.Query["mode"], "register", StringComparison.OrdinalIgnoreCase)
+            ? "register"
+            : "login";
+        if (mode == "register" && !registration.Value.Enabled)
+            return Results.Redirect("/auth/register?status=registration-disabled");
+
+        var properties = signInManager.ConfigureExternalAuthenticationProperties(
+            scheme,
+            "/auth/external/callback");
+        properties.Items[ExternalModeItem] = mode;
+        properties.Items[ExternalReturnUrlItem] = GetSafeReturnUrl(context);
+
+        return Results.Challenge(properties, [scheme]);
+    }
+
+    private static async Task<IResult> ExternalCallbackAsync(
+        HttpContext context,
+        SignInManager<AuthUser> signInManager,
+        UserManager<AuthUser> userManager,
+        AuthSessionCoordinator sessions,
+        RegistrationService registration,
+        AccountDeletionService deletion,
+        CancellationToken ct)
+    {
+        var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
+        var info = await signInManager.GetExternalLoginInfoAsync();
+        if (!external.Succeeded || external.Properties is null || info is null)
+            return Results.Redirect("/auth/login?status=external-failed");
+
+        var mode = external.Properties.Items.TryGetValue(ExternalModeItem, out var storedMode)
+            ? storedMode
+            : "login";
+        var returnUrl = external.Properties.Items.TryGetValue(ExternalReturnUrlItem, out var storedReturnUrl)
+            ? GetSafeReturnUrl(context, storedReturnUrl)
+            : "/";
+
+        var user = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+        if (user is null)
+        {
+            var email = GetExternalEmail(info.Principal);
+            if (email.Length > 0)
+            {
+                user = await userManager.FindByEmailAsync(email);
+                if (user is not null)
+                {
+                    var linked = await userManager.AddLoginAsync(user, info);
+                    if (!linked.Succeeded)
+                    {
+                        var linkedUser = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+                        if (linkedUser?.Id != user.Id)
+                        {
+                            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+                            return Results.Redirect("/auth/login?status=external-failed");
+                        }
+                    }
+                }
+            }
+        }
+
+        if (user is null)
+        {
+            if (!string.Equals(mode, "register", StringComparison.Ordinal))
+            {
+                await context.SignOutAsync(IdentityConstants.ExternalScheme);
+                return Results.Redirect("/auth/register?status=external-account-not-found");
+            }
+
+            var registered = await registration.RegisterExternalAsync(info, context, ct);
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            return registered.Succeeded
+                ? Results.Redirect(returnUrl)
+                : Results.Redirect(registered.Error == "registration_disabled"
+                    ? "/auth/register?status=registration-disabled"
+                    : "/auth/register?status=external-registration-failed");
+        }
+
+        if (!await sessions.SignInUserAsync(user, context, ct))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Results.Redirect("/auth/login?status=external-failed");
+        }
+
+        await context.SignOutAsync(IdentityConstants.ExternalScheme);
+        if (await deletion.IsPendingAsync(user.Id, ct))
+            return Results.Redirect("/account/deletion");
+
+        return Results.Redirect(returnUrl);
     }
 
     private static async Task<IResult> LoginAsync(
@@ -156,9 +281,24 @@ public static class AuthEndpoints
         return result.Succeeded ? Results.Ok(result) : Results.BadRequest(result);
     }
 
-    private static string GetSafeReturnUrl(HttpContext context)
+    private static string GetExternalEmail(ClaimsPrincipal principal) =>
+        (principal.FindFirstValue(ClaimTypes.Email)
+            ?? principal.FindFirstValue("email")
+            ?? string.Empty).Trim();
+
+    private static string? NormalizeProvider(string? provider) =>
+        provider?.Trim().ToLowerInvariant() switch
+        {
+            "google" => "Google",
+            "apple" => "Apple",
+            _ => null
+        };
+
+    private static string GetSafeReturnUrl(HttpContext context) =>
+        GetSafeReturnUrl(context, context.Request.Query["returnUrl"].ToString());
+
+    private static string GetSafeReturnUrl(HttpContext context, string? candidate)
     {
-        var candidate = context.Request.Query["returnUrl"].ToString();
         if (string.IsNullOrWhiteSpace(candidate))
             return "/";
 
