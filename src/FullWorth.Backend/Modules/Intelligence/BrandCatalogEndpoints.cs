@@ -20,20 +20,32 @@ public static class BrandCatalogEndpoints
 
             var installation = await db.KnowledgePackInstallations.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.ScopeKey == KnowledgePackProtocol.InstallationScopeKey, ct);
-            var assets = await db.OfficialBrandAssets.AsNoTracking()
+            var assetRows = await db.OfficialBrandAssets.AsNoTracking()
                 .OrderBy(x => x.BrandKey)
                 .Select(x => new
                 {
                     x.BrandKey,
                     x.CanonicalName,
                     x.LogoKey,
-                    dataUri = "data:" + x.MediaType + ";base64," + x.ContentBase64,
+                    x.MediaType,
+                    x.ContentBase64,
                     x.ContentSha256,
                     x.SourceName,
                     x.SourceUrl,
                     x.LicenseNote
                 })
                 .ToListAsync(ct);
+            var assets = assetRows.Select(x => new
+            {
+                x.BrandKey,
+                x.CanonicalName,
+                x.LogoKey,
+                dataUri = "data:" + x.MediaType + ";base64," + x.ContentBase64,
+                x.ContentSha256,
+                x.SourceName,
+                x.SourceUrl,
+                x.LicenseNote
+            }).ToList();
             var aliases = await db.OfficialBrandAliases.AsNoTracking()
                 .OrderBy(x => x.AliasKey)
                 .Select(x => new { x.AliasKey, x.BrandKey, x.Country })
