@@ -112,8 +112,7 @@ public static class BrandCatalogEndpoints
                     userId,
                     "brand_pack.imported",
                     "CustomBrandPack",
-                    pack.Id,
-                    $"{pack.Name}@{pack.Version}");
+                    pack.Id);
                 await db.SaveChangesAsync(ct);
                 return Results.Ok(pack);
             }
