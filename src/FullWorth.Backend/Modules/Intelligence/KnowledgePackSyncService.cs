@@ -319,7 +319,16 @@ public sealed class KnowledgePackSyncService(
                 .Count())
             throw new KnowledgePackVerificationException("knowledge_pack_ontology_duplicate_redirect");
 
-        ValidateRedirectGraph(redirects);
+        var redirectMaps = redirects
+            .GroupBy(x => x.EntityType, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyDictionary<string, string>)g.ToDictionary(
+                    x => x.FromCanonicalKey,
+                    x => x.ToCanonicalKey,
+                    StringComparer.Ordinal),
+                StringComparer.Ordinal);
+        ValidateRedirectGraph(redirectMaps);
 
         var activeEntityKeys = entities
             .Where(x => x.Status == "active")
@@ -329,9 +338,7 @@ public sealed class KnowledgePackSyncService(
         {
             var terminal = ResolveRedirectKey(
                 redirect.FromCanonicalKey,
-                redirects
-                    .Where(x => x.EntityType == redirect.EntityType)
-                    .ToDictionary(x => x.FromCanonicalKey, x => x.ToCanonicalKey, StringComparer.Ordinal));
+                redirectMaps[redirect.EntityType]);
             if (!activeEntityKeys.Contains((redirect.EntityType, terminal)))
                 throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_target_invalid");
         }
@@ -414,11 +421,11 @@ public sealed class KnowledgePackSyncService(
         };
     }
 
-    private static void ValidateRedirectGraph(IReadOnlyList<OfficialOntologyRedirect> redirects)
+    private static void ValidateRedirectGraph(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> redirectMaps)
     {
-        foreach (var group in redirects.GroupBy(x => x.EntityType, StringComparer.Ordinal))
+        foreach (var map in redirectMaps.Values)
         {
-            var map = group.ToDictionary(x => x.FromCanonicalKey, x => x.ToCanonicalKey, StringComparer.Ordinal);
             foreach (var start in map.Keys)
             {
                 var current = start;
