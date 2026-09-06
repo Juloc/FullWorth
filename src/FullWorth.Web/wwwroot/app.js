@@ -198,9 +198,47 @@ function bind(){
   document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
 }
 function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());$('#privacy-default').checked=privacyDefault()}
-function toggleSidebar(){const collapsed=!document.body.classList.contains('nav-collapsed');document.body.classList.toggle('nav-collapsed',collapsed);localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');syncNavToggle()}
+function toggleSidebar(){
+  const collapsed=!document.body.classList.contains('nav-collapsed');
+  document.body.classList.toggle('nav-collapsed',collapsed);
+  localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');
+  if(collapsed)document.body.classList.remove('nav-auto-collapsed');
+  syncResponsiveSidebar();
+}
+function sidebarEffectivelyCollapsed(){return document.body.classList.contains('nav-collapsed')||document.body.classList.contains('nav-auto-collapsed')}
 // Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
-function syncNavToggle(){const b=$('#nav-collapse');if(!b)return;const collapsed=document.body.classList.contains('nav-collapsed');b.textContent=collapsed?'›':'‹';const label=get(collapsed?'nav.expand':'nav.collapse');b.setAttribute('aria-label',label);b.title=label}
+function syncNavToggle(){
+  const b=$('#nav-collapse');if(!b)return;
+  const manual=document.body.classList.contains('nav-collapsed');
+  const autoOnly=document.body.classList.contains('nav-auto-collapsed')&&!manual;
+  const collapsed=manual||autoOnly;
+  b.textContent=collapsed?'›':'‹';
+  b.disabled=autoOnly;
+  const label=autoOnly
+    ? (state.lang==='de'?'Navigation wegen Platz automatisch eingeklappt':'Navigation automatically collapsed for available space')
+    : get(collapsed?'nav.expand':'nav.collapse');
+  b.setAttribute('aria-label',label);b.title=label;
+}
+function syncResponsiveSidebar(){
+  const desktop=window.matchMedia('(min-width:768px)').matches;
+  const manual=document.body.classList.contains('nav-collapsed');
+  if(!desktop||manual){
+    const changed=document.body.classList.contains('nav-auto-collapsed');
+    document.body.classList.remove('nav-auto-collapsed');
+    syncNavToggle();
+    if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
+    return;
+  }
+  const desiredSidebar=Math.max(176,Number(localStorage.getItem('finance.sidebar.width'))||228);
+  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
+  const minMain=window.innerWidth<1100?420:520;
+  const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
+  const changed=document.body.classList.contains('nav-auto-collapsed')!==shouldCollapse;
+  document.body.classList.toggle('nav-auto-collapsed',shouldCollapse);
+  syncNavToggle();
+  if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
+}
+window.fwSyncResponsiveSidebar=syncResponsiveSidebar;
 
 function initResizableSidebar(){
   const sidebar=$('.sidebar');
@@ -220,6 +258,7 @@ function initResizableSidebar(){
     handle.setAttribute('aria-valuemax',String(maxWidth()));
     handle.setAttribute('aria-valuenow',String(width));
     window.dispatchEvent(new CustomEvent('fullworth:sidebar-resize',{detail:{width}}));
+    syncResponsiveSidebar();
     return width;
   };
   const handle=document.createElement('div');
@@ -267,10 +306,12 @@ function initResizableSidebar(){
     if(width)localStorage.setItem(key,String(width));
   });
   window.addEventListener('resize',()=>{
-    if(!desktopMode())return;
+    if(!desktopMode()){syncResponsiveSidebar();return}
     const current=Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width;
     apply(current);
+    syncResponsiveSidebar();
   });
+  window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
   window.fwClampSidebarWidth=()=>apply(Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width);
 }
 async function showView(view,opts={}){
@@ -1366,4 +1407,5 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
 
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
 initResizableSidebar();
+syncResponsiveSidebar();
 boot();

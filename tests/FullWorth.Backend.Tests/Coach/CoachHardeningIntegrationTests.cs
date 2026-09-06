@@ -112,6 +112,49 @@ public sealed class CoachHardeningIntegrationTests
     }
 
     [Fact]
+    public async Task CurrentPageContextIsPassedSeparatelyToCoachProvider()
+    {
+        var provider = new CapturingProvider();
+        using var factory = FactoryWithProvider(provider);
+        var seed = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+        var conversationId = await CreateConversation(client, seed.UserId, seed.SpaceId);
+
+        using var ask = Request(HttpMethod.Post, $"/api/coach/conversations/{conversationId}/messages?fullWorthSpaceId={seed.SpaceId}", seed.UserId,
+            JsonContent.Create(new
+            {
+                text = "Was fällt dir hier auf?",
+                uiContext = new
+                {
+                    page = "transactions",
+                    title = "Buchungen",
+                    path = "/transactions?accountId=abc",
+                    filters = new Dictionary<string, string>
+                    {
+                        ["accountId"] = "abc",
+                        ["direction"] = "expense",
+                        ["notAllowed"] = "ignore-me"
+                    }
+                }
+            }));
+        using var response = await client.SendAsync(ask);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.NotNull(provider.LastRequest?.UiContext);
+        Assert.Equal("transactions", provider.LastRequest!.UiContext!.Page);
+        Assert.Equal("Buchungen", provider.LastRequest.UiContext.Title);
+        Assert.Equal("expense", provider.LastRequest.UiContext.Filters!["direction"]);
+        Assert.DoesNotContain("notAllowed", provider.LastRequest.UiContext.Filters.Keys);
+
+        using var reload = Request(HttpMethod.Get, $"/api/coach/conversations/{conversationId}?fullWorthSpaceId={seed.SpaceId}", seed.UserId);
+        using var reloaded = await client.SendAsync(reload);
+        using var json = JsonDocument.Parse(await reloaded.Content.ReadAsStringAsync());
+        var userMessage = json.RootElement.GetProperty("messages").EnumerateArray().First();
+        Assert.Equal("Was fällt dir hier auf?", userMessage.GetProperty("text").GetString());
+        Assert.DoesNotContain("Buchungen", userMessage.GetProperty("text").GetString());
+    }
+
+    [Fact]
     public async Task ProviderFailureFallsBackToDeterministicAnswer()
     {
         var provider = new CapturingProvider { Throw = true };

@@ -50,6 +50,10 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("finance.coach.quickAccess", shell);
         Assert.Contains("restartConversation", shell);
         Assert.Contains("api/coach/conversations?limit=1", shell);
+        Assert.Contains("finance.coach.pageContext", shell);
+        Assert.Contains("capturePageContext", shell);
+        Assert.Contains("uiContext", shell);
+        Assert.Contains("Kontext", shell);
     }
 
     private async Task<string> GetAsync(string path)

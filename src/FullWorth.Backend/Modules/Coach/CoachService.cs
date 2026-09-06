@@ -94,7 +94,8 @@ public sealed class CoachService(
 
         var context = await contextBuilder.BuildAsync(userId, fullWorthSpaceId, request.From, request.To, ct);
         var fallback = deterministic.Answer(text, context);
-        var answer = await TryAiAsync(userId, fullWorthSpaceId, conversation, text, context, request.Model, fallback, ct);
+        var uiContext = NormalizeUiContext(request.UiContext);
+        var answer = await TryAiAsync(userId, fullWorthSpaceId, conversation, text, context, request.Model, uiContext, fallback, ct);
         var assistant = new CoachMessage
         {
             ConversationId = conversationId,
@@ -119,26 +120,27 @@ public sealed class CoachService(
         var context = await contextBuilder.BuildAsync(userId, fullWorthSpaceId, request.From, request.To, ct);
         var fallback = deterministic.Answer(text, context);
         var provider = await providerResolver.ResolveAsync(userId, fullWorthSpaceId, ct);
-        return provider is null ? fallback : await CompleteWithProviderAsync(provider, text, context, [], null, request.Model, fallback, ct);
+        var uiContext = NormalizeUiContext(request.UiContext);
+        return provider is null ? fallback : await CompleteWithProviderAsync(provider, text, context, [], null, request.Model, uiContext, fallback, ct);
     }
 
-    private async Task<CoachAnswer> TryAiAsync(Guid userId, Guid fullWorthSpaceId, CoachConversation conversation, string text, CoachContext context, string? requestedModel, CoachAnswer fallback, CancellationToken ct)
+    private async Task<CoachAnswer> TryAiAsync(Guid userId, Guid fullWorthSpaceId, CoachConversation conversation, string text, CoachContext context, string? requestedModel, CoachUiContext? uiContext, CoachAnswer fallback, CancellationToken ct)
     {
         var provider = await providerResolver.ResolveAsync(userId, fullWorthSpaceId, ct);
         if (provider is null) return fallback;
         var tailRows = await Messages.AsNoTracking().Where(x => x.ConversationId == conversation.Id)
             .OrderByDescending(x => x.CreatedAt).Take(8).ToListAsync(ct);
         var tail = tailRows.OrderBy(x => x.CreatedAt).Select(ToDto).ToList();
-        return await CompleteWithProviderAsync(provider, text, context, tail, conversation.MascotId, requestedModel, fallback, ct);
+        return await CompleteWithProviderAsync(provider, text, context, tail, conversation.MascotId, requestedModel, uiContext, fallback, ct);
     }
 
     private async Task<CoachAnswer> CompleteWithProviderAsync(ICoachTextProvider provider, string text, CoachContext context,
-        IReadOnlyList<CoachMessageDto> tail, string? mascotId, string? requestedModel, CoachAnswer fallback, CancellationToken ct)
+        IReadOnlyList<CoachMessageDto> tail, string? mascotId, string? requestedModel, CoachUiContext? uiContext, CoachAnswer fallback, CancellationToken ct)
     {
         try
         {
             // Review notes are deliberately absent from CoachContext, so they cannot leak to external providers.
-            var result = await provider.CompleteAsync(new(text, context, tail, mascotId, requestedModel), ct);
+            var result = await provider.CompleteAsync(new(text, context, tail, mascotId, requestedModel, uiContext), ct);
             if (string.IsNullOrWhiteSpace(result.Text) || result.Text.Length > 6000) return fallback;
             var allowed = context.Facts.ToDictionary(x => x.Id, StringComparer.Ordinal);
             var facts = result.FactIds.Where(allowed.ContainsKey).Distinct(StringComparer.Ordinal).Take(12).Select(id => allowed[id]).ToList();
@@ -164,6 +166,38 @@ public sealed class CoachService(
         var value = text.Trim();
         if (value.Length > 2000) throw new ArgumentException("Question must not exceed 2000 characters.");
         return value;
+    }
+
+    private static readonly HashSet<string> AllowedUiFilterKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "accountId", "groupId", "categoryId", "merchantId", "transactionId",
+        "direction", "flags", "query", "period", "measure", "dimension",
+        "comparisonPeriod", "chartType", "archived", "auditAction", "entityType"
+    };
+
+    private static CoachUiContext? NormalizeUiContext(CoachUiContext? context)
+    {
+        if (context is null || string.IsNullOrWhiteSpace(context.Page)) return null;
+        var page = NormalizeUiValue(context.Page, 40) ?? "unknown";
+        var title = NormalizeUiValue(context.Title, 100);
+        var path = NormalizeUiValue(context.Path, 180);
+        var filters = (context.Filters ?? new Dictionary<string, string>())
+            .Where(pair => AllowedUiFilterKeys.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            .Take(12)
+            .Select(pair => new KeyValuePair<string, string>(
+                pair.Key,
+                NormalizeUiValue(pair.Value, 160) ?? string.Empty))
+            .Where(pair => pair.Value.Length > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        return new(page, title, path, filters);
+    }
+
+    private static string? NormalizeUiValue(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var cleaned = string.Concat(value.Trim().Where(ch => !char.IsControl(ch)));
+        if (cleaned.Length == 0) return null;
+        return cleaned.Length <= maxLength ? cleaned : cleaned[..maxLength];
     }
 
     private static string? NormalizeTitle(string? title)
