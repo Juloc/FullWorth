@@ -122,6 +122,78 @@ public sealed class WealthOverviewIntegrationTests
     }
 
     [Fact]
+    public async Task BookingActivityKeepsArchivedFinanzguruHistoryVisibleWithoutMakingItWealth()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        var importedAccountId = Guid.NewGuid();
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Accounts.Add(new FinanceAccount
+            {
+                Id = importedAccountId,
+                FullWorthSpaceId = scenario.Space,
+                Provider = "finanzguru-import",
+                IdentificationHash = $"fg-{importedAccountId:N}",
+                ProviderAccountId = $"finanzguru:{importedAccountId:N}",
+                InstitutionName = "Finanzguru Import",
+                DisplayName = "Altes Girokonto",
+                Currency = "EUR",
+                IsActive = false,
+                IncludeInNetWorth = false
+            });
+            db.AccountOwners.Add(Owner(importedAccountId, scenario.Owner));
+            db.Transactions.AddRange(
+                new FullWorth.Backend.Modules.Transactions.FinanceTransaction
+                {
+                    AccountId = importedAccountId,
+                    ExternalKey = "finanzguru:old-2020",
+                    Status = "BOOK",
+                    BookingDate = new DateOnly(2020, 5, 12),
+                    ValueDate = new DateOnly(2020, 5, 12),
+                    Amount = -25m,
+                    Currency = "EUR",
+                    RawJson = "{}"
+                },
+                new FullWorth.Backend.Modules.Transactions.FinanceTransaction
+                {
+                    AccountId = importedAccountId,
+                    ExternalKey = "finanzguru:old-2022",
+                    Status = "BOOK",
+                    BookingDate = new DateOnly(2022, 2, 4),
+                    ValueDate = new DateOnly(2022, 2, 4),
+                    Amount = 100m,
+                    Currency = "EUR",
+                    RawJson = "{}"
+                });
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(UserRequest(
+            $"/api/wealth/booking-activity?fullWorthSpaceId={scenario.Space}&from=2020-01-01&to=2022-12-31",
+            scenario.Owner));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var points = json.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, points.Length);
+        Assert.Equal("2020-05-01", points[0].GetProperty("month").GetString());
+        Assert.Equal(1, points[0].GetProperty("count").GetInt32());
+        Assert.Equal(1, points[0].GetProperty("importedCount").GetInt32());
+        Assert.Equal("2022-02-01", points[1].GetProperty("month").GetString());
+        Assert.Equal(1, points[1].GetProperty("importedCount").GetInt32());
+
+        using var history = await client.SendAsync(UserRequest(
+            $"/api/wealth/history?fullWorthSpaceId={scenario.Space}&from=2020-01-01&to=2022-12-31",
+            scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var historyJson = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        Assert.Empty(historyJson.RootElement.EnumerateArray());
+    }
+
+    [Fact]
     public async Task NonMemberCannotReadWealthOverviewOrHistory()
     {
         using var factory = new BackendWebApplicationFactory();
@@ -132,9 +204,12 @@ public sealed class WealthOverviewIntegrationTests
             $"/api/wealth/overview?fullWorthSpaceId={scenario.Space}", scenario.Outside));
         using var history = await client.SendAsync(UserRequest(
             $"/api/wealth/history?fullWorthSpaceId={scenario.Space}", scenario.Outside));
+        using var activity = await client.SendAsync(UserRequest(
+            $"/api/wealth/booking-activity?fullWorthSpaceId={scenario.Space}", scenario.Outside));
 
         Assert.Equal(HttpStatusCode.NotFound, overview.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, activity.StatusCode);
     }
 
     [Fact]
