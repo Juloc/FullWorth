@@ -5,8 +5,17 @@ namespace FullWorth.Backend.Modules.Budgets.Cycles;
 /// </summary>
 public enum BudgetCycleType
 {
+    /// <summary>A single calendar day.</summary>
+    CalendarDay,
+
     /// <summary>A calendar month: 1st … last day of the month.</summary>
     CalendarMonth,
+
+    /// <summary>A calendar quarter: Jan–Mar, Apr–Jun, Jul–Sep or Oct–Dec.</summary>
+    CalendarQuarter,
+
+    /// <summary>A calendar year: Jan 1 … Dec 31.</summary>
+    CalendarYear,
 
     /// <summary>A monthly salary/pay cycle anchored on a day-of-month (e.g. paid on the 25th).</summary>
     PayCycle,
@@ -57,9 +66,21 @@ public readonly record struct BudgetCycleDefinition
     /// <summary>Window length in days. Only used for <see cref="BudgetCycleType.Custom"/>.</summary>
     public int CustomLengthDays { get; }
 
+    /// <summary>A window that spans exactly one calendar day.</summary>
+    public static BudgetCycleDefinition CalendarDay() =>
+        new(BudgetCycleType.CalendarDay, 1, default, 0);
+
     /// <summary>A window that always spans one whole calendar month.</summary>
     public static BudgetCycleDefinition CalendarMonth() =>
         new(BudgetCycleType.CalendarMonth, 1, default, 0);
+
+    /// <summary>A window that always spans one calendar quarter.</summary>
+    public static BudgetCycleDefinition CalendarQuarter() =>
+        new(BudgetCycleType.CalendarQuarter, 1, default, 0);
+
+    /// <summary>A window that always spans one calendar year.</summary>
+    public static BudgetCycleDefinition CalendarYear() =>
+        new(BudgetCycleType.CalendarYear, 1, default, 0);
 
     /// <summary>
     /// A monthly window that rolls over on <paramref name="anchorDay"/> (1–31). If a month is
@@ -97,7 +118,10 @@ public static class BudgetCycleCalculator
     public static BudgetCyclePeriod CurrentPeriod(BudgetCycleDefinition definition, DateOnly reference) =>
         definition.Type switch
         {
+            BudgetCycleType.CalendarDay => new BudgetCyclePeriod(reference, reference),
             BudgetCycleType.CalendarMonth => CalendarMonth(reference),
+            BudgetCycleType.CalendarQuarter => CalendarQuarter(reference),
+            BudgetCycleType.CalendarYear => CalendarYear(reference),
             BudgetCycleType.PayCycle => PayCycle(definition.AnchorDay, reference),
             BudgetCycleType.Custom => Custom(definition.AnchorStart, definition.CustomLengthDays, reference),
             _ => throw new ArgumentOutOfRangeException(nameof(definition), definition.Type, "Unknown budget cycle type."),
@@ -115,6 +139,19 @@ public static class BudgetCycleCalculator
     {
         var start = new DateOnly(reference.Year, reference.Month, 1);
         return new BudgetCyclePeriod(start, start.AddMonths(1).AddDays(-1));
+    }
+
+    private static BudgetCyclePeriod CalendarQuarter(DateOnly reference)
+    {
+        var startMonth = ((reference.Month - 1) / 3) * 3 + 1;
+        var start = new DateOnly(reference.Year, startMonth, 1);
+        return new BudgetCyclePeriod(start, start.AddMonths(3).AddDays(-1));
+    }
+
+    private static BudgetCyclePeriod CalendarYear(DateOnly reference)
+    {
+        var start = new DateOnly(reference.Year, 1, 1);
+        return new BudgetCyclePeriod(start, new DateOnly(reference.Year, 12, 31));
     }
 
     private static BudgetCyclePeriod PayCycle(int anchorDay, DateOnly reference)
@@ -166,10 +203,14 @@ public static class BudgetCycleResolver
     {
         // A known Monday, used only when a weekly/bi-weekly budget has no explicit start anchor.
         var weekAnchor = startDate ?? new DateOnly(2024, 1, 1);
-        return period switch
+        return period.Trim().ToLowerInvariant() switch
         {
+            "daily" or "day" => BudgetCycleDefinition.CalendarDay(),
             "weekly" => BudgetCycleDefinition.Custom(weekAnchor, 7),
             "biweekly" or "fortnightly" => BudgetCycleDefinition.Custom(weekAnchor, 14),
+            "monthly" or "month" => BudgetCycleDefinition.CalendarMonth(),
+            "quarterly" or "quarter" => BudgetCycleDefinition.CalendarQuarter(),
+            "yearly" or "annual" or "year" => BudgetCycleDefinition.CalendarYear(),
             "paycycle" or "pay-cycle" or "salary" => BudgetCycleDefinition.PayCycle(startDate?.Day ?? 1),
             "custom" when startDate is { } start && endDate is { } end && end >= start
                 => BudgetCycleDefinition.Custom(start, end.DayNumber - start.DayNumber + 1),

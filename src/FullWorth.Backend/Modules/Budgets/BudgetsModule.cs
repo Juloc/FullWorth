@@ -1,5 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
+using FullWorth.Backend.Modules.Budgets.CarryOver;
 using FullWorth.Backend.Modules.Budgets.Cycles;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Parity;
@@ -20,6 +21,7 @@ public sealed class Budget
     public string Currency { get; set; } = "EUR";
     public string Period { get; set; } = "monthly";
     public bool CarryOver { get; set; }
+    public bool CarryOverOverspend { get; set; }
     public bool IsActive { get; set; } = true;
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
@@ -40,7 +42,10 @@ public sealed record BudgetView(
     DateOnly? StartDate,
     DateOnly? EndDate,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public bool CarryOverOverspend { get; init; }
+}
 
 /// <summary>Budget-vs-actual for the budget's current cycle window, plus a cycle-end forecast (§12)
 /// and the transactions that make up the spend (for the detail view).</summary>
@@ -60,7 +65,13 @@ public sealed record BudgetPeriodStatus(
     decimal ProjectedOverUnder,
     string Trend,
     bool PartialAccess,
-    IReadOnlyList<BudgetContributionRow> Contributing);
+    IReadOnlyList<BudgetContributionRow> Contributing)
+{
+    public decimal BaseBudgetAmount { get; init; }
+    public decimal CarryIn { get; init; }
+    public bool CarryOver { get; init; }
+    public bool CarryOverOverspend { get; init; }
+}
 
 /// <summary>A single expense that counts toward a budget's cycle spend, for the detail list.</summary>
 public sealed record BudgetContributionRow(Guid Id, DateOnly? BookingDate, string? Counterparty, decimal Amount, string Currency, string? Category);
@@ -133,22 +144,52 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         var signals = new List<BudgetSignal>(budgets.Count);
         foreach (var budget in budgets)
         {
-            var period = BudgetCycleCalculator.CurrentPeriod(ResolveCycle(budget), asOf);
-            var query = db.Transactions.AsNoTracking().Where(transaction =>
-                !transaction.IsIgnored &&
-                !transaction.IsTransfer &&
-                transaction.Amount < 0 &&
-                transaction.BookingDate != null &&
-                transaction.BookingDate >= period.Start &&
-                transaction.BookingDate <= period.End &&
-                db.Accounts.Any(account => account.Id == transaction.AccountId && account.FullWorthSpaceId == fullWorthSpaceId));
-            if (budget.CategoryId.HasValue)
-                query = query.Where(transaction => transaction.CategoryId == budget.CategoryId.Value);
+            var cycle = ResolveCycle(budget);
+            var period = BudgetCycleCalculator.CurrentPeriod(cycle, asOf);
 
-            var spent = -(await query.SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
-            var percentUsed = budget.Amount == 0m
-                ? 0m
-                : Math.Round(spent / budget.Amount * 100m, 2, MidpointRounding.AwayFromZero);
+            IQueryable<FinanceTransaction> ExpensesBetween(DateOnly from, DateOnly to)
+            {
+                var query = db.Transactions.AsNoTracking().Where(transaction =>
+                    !transaction.IsIgnored &&
+                    !transaction.IsTransfer &&
+                    transaction.Amount < 0 &&
+                    transaction.BookingDate != null &&
+                    transaction.BookingDate >= from &&
+                    transaction.BookingDate <= to &&
+                    db.Accounts.Any(account => account.Id == transaction.AccountId && account.FullWorthSpaceId == fullWorthSpaceId));
+                return budget.CategoryId.HasValue
+                    ? query.Where(transaction => transaction.CategoryId == budget.CategoryId.Value)
+                    : query;
+            }
+
+            var spent = -(await ExpensesBetween(period.Start, period.End)
+                .SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
+
+            var carryIn = 0m;
+            var carryMode = ResolveCarryMode(budget);
+            if (carryMode != CarryOverMode.Disabled)
+            {
+                var activeFrom = BudgetActiveFrom(budget, cycle);
+                var priorPeriods = PriorPeriods(cycle, activeFrom, period);
+                if (priorPeriods.Count > 0)
+                {
+                    var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
+                    var historyTo = period.Start.AddDays(-1);
+                    var history = await ExpensesBetween(historyFrom, historyTo)
+                        .Select(transaction => new { Date = transaction.BookingDate!.Value, transaction.Amount })
+                        .ToListAsync(ct);
+                    var spentByPeriod = history
+                        .GroupBy(row => BudgetCycleCalculator.CurrentPeriod(cycle, row.Date).Start)
+                        .ToDictionary(group => group.Key, group => -group.Sum(row => row.Amount));
+                    var priorSpends = priorPeriods
+                        .Select(previous => spentByPeriod.GetValueOrDefault(previous.Start))
+                        .ToList();
+                    carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
+                }
+            }
+
+            var effectiveAmount = budget.Amount + carryIn;
+            var percentUsed = CalculatePercentUsed(effectiveAmount, spent);
             signals.Add(new BudgetSignal(budget.Id, budget.Name, percentUsed, period.Start));
         }
         return signals;
@@ -189,11 +230,32 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
                 : query;
         }
 
+        var carryIn = 0m;
+        var carryMode = ResolveCarryMode(budget);
+        if (carryMode != CarryOverMode.Disabled)
+        {
+            var activeFrom = BudgetActiveFrom(budget, cycle);
+            var priorPeriods = PriorPeriods(cycle, activeFrom, period);
+            if (priorPeriods.Count > 0)
+            {
+                var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
+                var history = await ExpensesIn(new BudgetCyclePeriod(historyFrom, period.Start.AddDays(-1)))
+                    .Select(transaction => new { Date = transaction.BookingDate!.Value, transaction.Amount })
+                    .ToListAsync(ct);
+                var spentByPeriod = history
+                    .GroupBy(row => BudgetCycleCalculator.CurrentPeriod(cycle, row.Date).Start)
+                    .ToDictionary(group => group.Key, group => -group.Sum(row => row.Amount));
+                var priorSpends = priorPeriods
+                    .Select(previous => spentByPeriod.GetValueOrDefault(previous.Start))
+                    .ToList();
+                carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
+            }
+        }
+
+        var effectiveBudget = budget.Amount + carryIn;
         var spent = -(await ExpensesIn(period).SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
-        var remaining = budget.Amount - spent;
-        var percentUsed = budget.Amount == 0m
-            ? 0m
-            : Math.Round(spent / budget.Amount * 100m, 2, MidpointRounding.AwayFromZero);
+        var remaining = effectiveBudget - spent;
+        var percentUsed = CalculatePercentUsed(effectiveBudget, spent);
 
         var previous = BudgetCycleCalculator.PreviousPeriod(cycle, asOf);
         var previousSpent = -(await ExpensesIn(previous).SumAsync(transaction => (decimal?)transaction.Amount, ct) ?? 0m);
@@ -202,7 +264,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         var totalDays = period.End.DayNumber - period.Start.DayNumber + 1;
         var elapsedDays = Math.Clamp(asOf.DayNumber - period.Start.DayNumber + 1, 0, totalDays);
         var forecast = Forecast.BudgetForecastCalculator.Project(
-            new Forecast.BudgetForecastInput(budget.Amount, spent, totalDays, elapsedDays, historicalDaily));
+            new Forecast.BudgetForecastInput(effectiveBudget, spent, totalDays, elapsedDays, historicalDaily));
 
         var contributing = await ExpensesIn(period)
             .OrderByDescending(transaction => transaction.BookingDate)
@@ -219,12 +281,55 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
 
         return new BudgetPeriodStatus(
             budget.Id, budget.Name, budget.CategoryId, budget.Currency, budget.Period,
-            period.Start, period.End, budget.Amount, spent, remaining, percentUsed,
-            forecast.ProjectedEndSpend, forecast.ProjectedOverUnder, forecast.Trend.ToString(), partialAccess, contributing);
+            period.Start, period.End, effectiveBudget, spent, remaining, percentUsed,
+            forecast.ProjectedEndSpend, forecast.ProjectedOverUnder, forecast.Trend.ToString(), partialAccess, contributing)
+        {
+            BaseBudgetAmount = budget.Amount,
+            CarryIn = carryIn,
+            CarryOver = budget.CarryOver,
+            CarryOverOverspend = budget.CarryOverOverspend
+        };
     }
 
     private static BudgetCycleDefinition ResolveCycle(Budget budget) =>
         BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
+
+    private static CarryOverMode ResolveCarryMode(Budget budget) =>
+        !budget.CarryOver
+            ? CarryOverMode.Disabled
+            : budget.CarryOverOverspend ? CarryOverMode.Enabled : CarryOverMode.PositiveOnly;
+
+    private static DateOnly BudgetActiveFrom(Budget budget, BudgetCycleDefinition cycle)
+    {
+        if (budget.StartDate is { } explicitStart) return explicitStart;
+        var created = DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+        return BudgetCycleCalculator.CurrentPeriod(cycle, created).Start;
+    }
+
+    private static List<BudgetCyclePeriod> PriorPeriods(
+        BudgetCycleDefinition cycle,
+        DateOnly activeFrom,
+        BudgetCyclePeriod current)
+    {
+        if (activeFrom >= current.Start) return [];
+
+        var periods = new List<BudgetCyclePeriod>();
+        var cursor = BudgetCycleCalculator.CurrentPeriod(cycle, activeFrom);
+        var guard = 0;
+        while (cursor.Start < current.Start && guard++ < 20000)
+        {
+            periods.Add(cursor);
+            cursor = BudgetCycleCalculator.CurrentPeriod(cycle, cursor.EndExclusive);
+        }
+        return periods;
+    }
+
+    private static decimal CalculatePercentUsed(decimal effectiveBudget, decimal spent)
+    {
+        if (effectiveBudget > 0m)
+            return Math.Round(spent / effectiveBudget * 100m, 2, MidpointRounding.AwayFromZero);
+        return spent > 0m || effectiveBudget < 0m ? 101m : 0m;
+    }
 
     public async Task<BudgetAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid budgetId, CancellationToken ct)
     {
@@ -308,7 +413,10 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             budget.StartDate,
             budget.EndDate,
             budget.CreatedAt,
-            budget.UpdatedAt));
+            budget.UpdatedAt)
+        {
+            CarryOverOverspend = budget.CarryOverOverspend
+        });
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking()
@@ -334,6 +442,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         entity.Currency = request.Currency.Trim().ToUpperInvariant();
         entity.Period = request.Period.Trim().ToLowerInvariant();
         entity.CarryOver = request.CarryOver;
+        entity.CarryOverOverspend = request.CarryOver && (request.CarryOverOverspend ?? true);
         entity.IsActive = request.IsActive;
         entity.StartDate = request.StartDate;
         entity.EndDate = request.EndDate;
@@ -341,7 +450,11 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
     }
 }
 
-public sealed record BudgetWrite(string Name, Guid? CategoryId, decimal Amount, string Currency, string Period, bool CarryOver, bool IsActive, DateOnly? StartDate, DateOnly? EndDate);
+public sealed record BudgetWrite(string Name, Guid? CategoryId, decimal Amount, string Currency, string Period, bool CarryOver, bool IsActive, DateOnly? StartDate, DateOnly? EndDate)
+{
+    // Nullable preserves compatibility with older clients: omitted means the old full carry-over behavior.
+    public bool? CarryOverOverspend { get; init; }
+}
 
 public static class BudgetEndpoints
 {
