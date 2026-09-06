@@ -24,6 +24,25 @@ const view = { kind: '', status: 'active', sort: 'due', order: 'asc' };
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
 function t(de, en) { return lang() ? de : en; }
 
+const CANCELLED_STATES = new Set(['sent', 'confirmed', 'cancelled']);
+function cancellationStatus(c) { return c?.cancellationStatus || 'none'; }
+function lifecycleStatus(c) {
+  if (!c?.isActive) return 'archived';
+  const status = cancellationStatus(c.cancellation);
+  if (CANCELLED_STATES.has(status)) return 'cancelled';
+  if (status === 'planned') return 'planned';
+  return 'active';
+}
+function cancellationStatusLabel(status) {
+  const key = 'contracts.cancelStatus_' + (status || 'none');
+  const label = ctx.get(key);
+  return label === key ? (status || '—') : label;
+}
+function periodLabel(value, unit) {
+  if (value == null || !unit) return '—';
+  return `${value} ${ctx.get('contracts.period_' + unit)}`;
+}
+
 // Monochrome line glyph for the sort bottom-sheet (matches the shared `.more-sheet` icon language).
 function sortIcon(paths) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -128,6 +147,13 @@ export async function renderContracts(context) {
   let rows = [];
   try { rows = (await ctx.api('api/contracts')) || []; }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); rows = []; }
+  try {
+    const cancellationRows = (await ctx.api('api/contract-parity/cancellations')) || [];
+    const cancellationById = new Map(cancellationRows.map(item => [item.contractId, item]));
+    rows.forEach(contract => { contract.cancellation = cancellationById.get(contract.id) || null; });
+  } catch {
+    rows.forEach(contract => { contract.cancellation = null; });
+  }
   contractsById = new Map(rows.map(c => [c.id, c]));
   allContracts = rows;
   // The list DTO only carries category/account ids; resolve their names best-effort for the row context
@@ -176,7 +202,7 @@ function viewHtml() {
   const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
   // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
   const controls = `<div class="contracts-controls">
-    <div class="fw-chips" data-status-chips>${statusChip('active', t('Aktiv', 'Active'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
+    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
     <button type="button" class="fw-chip contracts-detect" data-detect>${esc(ctx.get('contracts.detect'))}</button>
   </div>
   <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
@@ -304,8 +330,10 @@ function categoryLabel(c) { return c.categoryId ? (categoryNames.get(c.categoryI
 function filterContracts(list) {
   return list.filter(c => {
     if (view.kind && (c.kind || '') !== view.kind) return false;
-    if (view.status === 'active' && !c.isActive) return false;
-    if (view.status === 'archived' && c.isActive) return false;
+    const lifecycle = lifecycleStatus(c);
+    if (view.status === 'active' && !['active', 'planned'].includes(lifecycle)) return false;
+    if (view.status === 'cancelled' && lifecycle !== 'cancelled') return false;
+    if (view.status === 'archived' && lifecycle !== 'archived') return false;
     return true;
   });
 }
@@ -433,17 +461,23 @@ async function loadDetected(interactive) {
     </div>`).join('');
   box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('contracts.detectedTitle'))}</h3></div>${items}`;
   box.querySelectorAll('.detected-row').forEach(el => {
-    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(candidates[Number(el.dataset.i)]));
+    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(candidates[Number(el.dataset.i)], el));
     el.querySelector('[data-dismiss]').addEventListener('click', () => dismissCandidate(candidates[Number(el.dataset.i)]));
   });
 }
 
-async function acceptCandidate(candidate) {
+async function acceptCandidate(candidate, row) {
+  const buttons = row ? [...row.querySelectorAll('button')] : [];
+  buttons.forEach(button => { button.disabled = true; });
   try {
     await ctx.api('api/contracts/detection/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(candidate) });
+    row?.remove();
     ctx.toast(ctx.get('common.saved'));
     await renderContracts(ctx);
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  } catch (err) {
+    buttons.forEach(button => { button.disabled = false; });
+    ctx.toast(err.message || ctx.get('common.error'));
+  }
 }
 
 // Reject a detected candidate so it stops reappearing in future detection runs.
