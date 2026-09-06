@@ -679,9 +679,12 @@ async function openDetail(id) {
       <button type="button" class="btn btn-secondary" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button>
     </div>`;
   }).join('');
-  const mergedSourcesSection = mergedSourceRows
-    ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.mergedSources'))}</h3><div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesHint'))}</div>${mergedSourceRows}</div>`
-    : '';
+  const mergedSourcesSection = `<div class="detail-section">
+    <h3>${ctx.esc(ctx.get('contracts.mergedSources'))}</h3>
+    <div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesHint'))}</div>
+    ${mergedSourceRows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesNone'))}</div>`}
+    <button type="button" class="btn btn-secondary contract-merge-add" data-merge>${ctx.esc(ctx.get('contracts.merge'))}</button>
+  </div>`;
 
   const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
   const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
@@ -696,7 +699,6 @@ async function openDetail(id) {
     ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
     <div class="dialog-actions">
       <button type="button" class="btn btn-secondary" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
-      <button type="button" class="btn btn-secondary" data-merge>${ctx.esc(ctx.get('contracts.merge'))}</button>
       ${contract.isActive
         ? `<button type="button" class="btn btn-secondary" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="btn btn-danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
         : `<button type="button" class="btn btn-primary" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
