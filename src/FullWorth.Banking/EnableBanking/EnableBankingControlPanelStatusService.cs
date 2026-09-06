@@ -423,7 +423,11 @@ public sealed class EnableBankingControlPanelStatusService(
     private static bool IsContinueUrlRejected(string body)
     {
         var reason = SafeControlPanelReason(body);
-        return reason is "INVALID_CONTINUE_URI" or "UNAUTHORIZED_CONTINUE_URI" or "UNAUTHORIZED_DOMAIN";
+        return reason is
+            "INVALID_CONTINUE_URI" or
+            "UNAUTHORIZED_CONTINUE_URI" or
+            "UNAUTHORIZED_DOMAIN" or
+            "INVALID_DYNAMIC_LINK_DOMAIN";
     }
 
     private static string SafeLoginStartMessage(string body)
@@ -435,7 +439,10 @@ public sealed class EnableBankingControlPanelStatusService(
                 "No Enable Banking account exists for this email address.",
             "TOO_MANY_ATTEMPTS_TRY_LATER" or "TOO_MANY_REQUESTS" =>
                 "Enable Banking temporarily blocked sign-in requests. Try again later.",
-            "INVALID_CONTINUE_URI" or "UNAUTHORIZED_CONTINUE_URI" or "UNAUTHORIZED_DOMAIN" =>
+            "INVALID_CONTINUE_URI" or
+            "UNAUTHORIZED_CONTINUE_URI" or
+            "UNAUTHORIZED_DOMAIN" or
+            "INVALID_DYNAMIC_LINK_DOMAIN" =>
                 "Enable Banking rejected the sign-in callback.",
             _ => "Enable Banking could not start the Control Panel sign-in."
         };
@@ -444,6 +451,8 @@ public sealed class EnableBankingControlPanelStatusService(
     private static string SafeControlPanelReason(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return "UNKNOWN";
+
+        string? providerMessage = null;
         try
         {
             using var document = JsonDocument.Parse(body);
@@ -451,34 +460,36 @@ public sealed class EnableBankingControlPanelStatusService(
             if (root.TryGetProperty("error", out var error))
             {
                 if (error.ValueKind == JsonValueKind.String)
-                    return NormalizeReason(error.GetString());
-                if (error.ValueKind == JsonValueKind.Object &&
-                    error.TryGetProperty("message", out var nested) &&
-                    nested.ValueKind == JsonValueKind.String)
-                    return NormalizeReason(nested.GetString());
+                    providerMessage = error.GetString();
+                else if (error.ValueKind == JsonValueKind.Object &&
+                         error.TryGetProperty("message", out var nested) &&
+                         nested.ValueKind == JsonValueKind.String)
+                    providerMessage = nested.GetString();
             }
-            if (root.TryGetProperty("message", out var message) &&
+
+            if (providerMessage is null &&
+                root.TryGetProperty("message", out var message) &&
                 message.ValueKind == JsonValueKind.String)
-                return NormalizeReason(message.GetString());
+                providerMessage = message.GetString();
         }
         catch (JsonException)
         {
-            // The provider body is never returned to the browser. Reduce any text response to a
-            // stable allow-listed code below instead of logging the raw payload.
+            // Fall through to the same allow-listed scan for non-JSON provider responses.
         }
 
-        var upper = body.ToUpperInvariant();
+        var normalized = NormalizeReason(providerMessage ?? body);
         foreach (var known in new[]
                  {
                      "INVALID_CONTINUE_URI",
                      "UNAUTHORIZED_CONTINUE_URI",
                      "UNAUTHORIZED_DOMAIN",
+                     "INVALID_DYNAMIC_LINK_DOMAIN",
                      "EMAIL_NOT_FOUND",
                      "USER_NOT_FOUND",
                      "TOO_MANY_ATTEMPTS_TRY_LATER",
                      "TOO_MANY_REQUESTS"
                  })
-            if (upper.Contains(known, StringComparison.Ordinal))
+            if (normalized.Contains(known, StringComparison.Ordinal))
                 return known;
 
         return "UNKNOWN";
@@ -491,7 +502,7 @@ public sealed class EnableBankingControlPanelStatusService(
             .Trim()
             .ToUpperInvariant()
             .Select(character => char.IsAsciiLetterOrDigit(character) ? character : '_')
-            .Take(120)
+            .Take(240)
             .ToArray());
         while (normalized.Contains("__", StringComparison.Ordinal))
             normalized = normalized.Replace("__", "_", StringComparison.Ordinal);
