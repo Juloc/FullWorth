@@ -45,7 +45,7 @@ import { createDialog } from './ui/dialog.js';
     return p.then(r=>r.clone());
   };
 })();
-const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null};
+const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null,capabilities:{admin:false,twoFactorEnabled:false}};
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
@@ -67,13 +67,24 @@ const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s
 async function boot(){
   setMoneyLocale(state.lang);
   $('#theme').value=state.theme;$('#language').value=state.lang;applyTheme();
-  await loadMessages();bind();syncPrivacyToggle();syncNavToggle();
+  await loadMessages();await loadCapabilities();bind();syncAdminVisibility();syncPrivacyToggle();syncNavToggle();
   const startView=handleConnectRedirect()||viewFromPath(location.pathname);
   try{await loadSpaces()}catch(e){console.error(e);toast(get('common.error'))}
   await showView(startView,{replace:true});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
   initLock(ctx,{onUnlock:loadCurrent});
   await accessSetup.maybeOpenRegistrationOnboarding();
+}
+async function loadCapabilities(){
+  try{
+    const response=await fetch('/auth/capabilities',{cache:'no-store'});
+    if(response.ok)state.capabilities=await response.json();
+  }catch{}
+}
+function syncAdminVisibility(){
+  const show=Boolean(state.capabilities?.admin);
+  $('#admin-nav')?.toggleAttribute('hidden',!show);
+  $('#admin-settings-link')?.toggleAttribute('hidden',!show);
 }
 function handleConnectRedirect(){
   const params=new URLSearchParams(location.search);
@@ -128,6 +139,57 @@ async function openDeleteAccountDialog(){
   dlg.showModal();
 }
 
+async function openTwoFactorDialog(){
+  let status;
+  try{
+    status=await fetch('/auth/two-factor/status',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject());
+  }catch{toast(get('common.error'));return}
+
+  if(status.enabled){
+    const dlg=dialog(`
+      <form class="dialog-card" id="two-factor-disable-form">
+        <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
+        <p class="row-sub">${get('twoFactor.enabled')}</p>
+        <label><span>${get('twoFactor.code')}</span><input id="two-factor-disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+        <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit" class="danger">${get('twoFactor.disable')}</button></div>
+      </form>`);
+    dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
+    dlg.querySelector('form').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const code=dlg.querySelector('#two-factor-disable-code').value;
+      const response=await fetch('/auth/two-factor/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      if(response.ok){state.capabilities.twoFactorEnabled=false;dlg.close();toast(get('twoFactor.disabled'));return}
+      toast(get('twoFactor.invalidCode'));
+    });
+    dlg.showModal();return;
+  }
+
+  let setup;
+  try{
+    const response=await fetch('/auth/two-factor/setup',{method:'POST'});
+    if(!response.ok)throw new Error();
+    setup=await response.json();
+  }catch{toast(get('common.error'));return}
+
+  const dlg=dialog(`
+    <form class="dialog-card" id="two-factor-enable-form">
+      <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
+      <p class="row-sub">${get('twoFactor.setupHelp')}</p>
+      <div class="row"><div class="row-main"><div class="row-title">${get('twoFactor.sharedKey')}</div><div class="row-sub"><code style="user-select:all;word-break:break-all">${esc(setup.sharedKey)}</code></div></div></div>
+      <label><span>${get('twoFactor.code')}</span><input id="two-factor-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit">${get('twoFactor.enable')}</button></div>
+    </form>`);
+  dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
+  dlg.querySelector('form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const code=dlg.querySelector('#two-factor-enable-code').value;
+    const response=await fetch('/auth/two-factor/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    if(response.ok){state.capabilities.twoFactorEnabled=true;dlg.close();toast(get('twoFactor.enabledToast'));return}
+    toast(get('twoFactor.invalidCode'));
+  });
+  dlg.showModal();
+}
+
 async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
 function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
@@ -168,6 +230,9 @@ function bind(){
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
   $('#delete-account')?.addEventListener('click',openDeleteAccountDialog);
+  $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
+  $('#admin-settings-link')?.addEventListener('click',()=>location.assign('/admin'));
+  $('#two-factor-settings')?.addEventListener('click',openTwoFactorDialog);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',openSearch);
