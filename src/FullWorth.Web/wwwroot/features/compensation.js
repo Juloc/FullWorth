@@ -103,10 +103,15 @@ function readProfile(){
     salaryPaymentsPerYear:payments,
     taxClass,
     taxClass4Factor:taxClass===4?Math.min(1,Math.max(0.001,number('tax-class4-factor')||1)):1,
+    annualTaxAllowance:Math.max(0,number('annual-tax-allowance')),
+    childAllowanceUnits:value('child-allowance-units')===''?null:Math.max(0,number('child-allowance-units')),
     stateCode:value('state-code'),
     churchTax:$('#church-tax').checked,
     childrenUnder25:Math.max(0,Math.round(number('children'))),
+    age:value('employee-age')===''?null:Math.max(0,Math.round(number('employee-age'))),
     childlessCareSurcharge:$('#childless-surcharge').checked,
+    pensionInsuranceEnabled:$('#pension-insurance').checked,
+    unemploymentInsuranceEnabled:$('#unemployment-insurance').checked,
     healthInsuranceAdditionalRatePercent:number('health-addon'),
     weeklyHours:number('weekly-hours'),
     vacationDays:Math.round(number('vacation-days')),
@@ -144,11 +149,15 @@ function fillProfile(profile){
   set('gross-input',mode==='monthly'?(Number(profile.annualGross)||0)/payments:profile.annualGross);
   set('annual-bonus',profile.annualBonus);
   set('tax-class',profile.taxClass||1);
-  set('tax-class4-factor',profile.taxClass4Factor??1);
+  set('tax-class4-factor',profile.taxClass4Factor||1);
+  set('annual-tax-allowance',profile.annualTaxAllowance??0);
+  set('child-allowance-units',profile.childAllowanceUnits??'');
   set('state-code',profile.stateCode||'BW');
   $('#church-tax').checked=!!profile.churchTax;
-  set('children',profile.childrenUnder25??0);
-  $('#childless-surcharge').checked=!!profile.childlessCareSurcharge;
+  set('children',profile.childrenUnder25??0);set('employee-age',profile.age??'');
+  $('#childless-surcharge').checked=profile.childlessCareSurcharge!==false;
+  $('#pension-insurance').checked=profile.pensionInsuranceEnabled!==false;
+  $('#unemployment-insurance').checked=profile.unemploymentInsuranceEnabled!==false;
   set('health-addon',profile.healthInsuranceAdditionalRatePercent??2.9);
   set('weekly-hours',profile.weeklyHours??40);
   set('vacation-days',profile.vacationDays??30);
