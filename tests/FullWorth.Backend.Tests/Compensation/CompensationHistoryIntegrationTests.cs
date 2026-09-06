@@ -77,6 +77,35 @@ public sealed class CompensationHistoryIntegrationTests
     }
 
     [Fact]
+    public async Task DeletingFirstBaselinePromotesNextEventToValidBaseline()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var userId = await SeedUserAsync(factory);
+        using var client = factory.CreateClient();
+
+        var baseline = await CreateAsync(client, userId, new CompensationHistoryWrite(
+            new DateOnly(2024, 1, 1), "salary", "Startgehalt", null, Profile(50_000m)));
+
+        var tax = await CreateAsync(client, userId, new CompensationHistoryWrite(
+            new DateOnly(2025, 1, 1), "tax", "Steuerklasse IV", null,
+            Profile(50_000m) with { TaxClass = 4, TaxClass4Factor = 0.9m }));
+
+        using var delete = await client.SendAsync(UserRequest(
+            HttpMethod.Delete,
+            $"/api/compensation/history/{baseline.Id}?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}",
+            userId));
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var history = await GetHistoryAsync(client, userId);
+        var remaining = Assert.Single(history);
+
+        Assert.Equal(tax.Id, remaining.Id);
+        Assert.Equal(50_000m, remaining.ResolvedProfile.AnnualGross);
+        Assert.Equal(4, remaining.ResolvedProfile.TaxClass);
+        Assert.True(remaining.ChangedFields.Count > 1);
+    }
+
+    [Fact]
     public async Task TimelineIncludesInflationAndAnnualCompensationMetrics()
     {
         using var factory = new BackendWebApplicationFactory();
