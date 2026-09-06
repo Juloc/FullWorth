@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using FullWorth.Web.Data;
 using FullWorth.Web.Modules.Auth;
+using FullWorth.Web.Modules.Admin;
 using FullWorth.Web.Modules.Bootstrap;
 using FullWorth.Web.Modules.Passkeys;
 using FullWorth.Web.Modules.Pin;
@@ -105,6 +106,8 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthSessionCoordinator>();
 builder.Services.AddScoped<RegistrationService>();
 builder.Services.AddScoped<AccountDeletionService>();
+builder.Services.AddScoped<InstanceAdminService>();
+builder.Services.AddScoped<TwoFactorService>();
 builder.Services.AddHostedService<AccountDeletionPurgeWorker>();
 builder.Services.AddScoped<InviteClaimService>();
 builder.Services.AddScoped<ISessionPersistence, AuthSessionPersistence>();
@@ -196,6 +199,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await authDb.Database.MigrateAsync();
     await FirstRunBootstrapper.TryRunAsync(scope.ServiceProvider, app.Logger, CancellationToken.None);
+    await InstanceAdminBootstrapper.EnsureAsync(scope.ServiceProvider, app.Logger, CancellationToken.None);
 }
 
 // First in the pipeline: shape any unhandled exception as problem+json without leaking internals.
@@ -272,6 +276,25 @@ foreach (var route in new[]
     }).AllowAnonymous();
 }
 
+var adminShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin", "index.html");
+foreach (var route in new[] { "/admin", "/admin/" })
+{
+    app.MapGet(route, async (
+        HttpContext context,
+        InstanceAdminService admin,
+        CancellationToken ct) =>
+    {
+        if (await admin.GetCurrentAdminAsync(context.User, ct) is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(adminShellPath, ct);
+    }).RequireAuthorization();
+}
+
 var accountDeletionShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "account-deletion", "index.html");
 app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct) =>
 {
@@ -287,6 +310,8 @@ app.MapGet("/settings/security/passkeys", async (HttpContext context, Cancellati
 }).RequireAuthorization();
 
 app.MapAuthEndpoints();
+app.MapTwoFactorEndpoints();
+app.MapInstanceAdminEndpoints();
 app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapPasskeyEndpoints();
