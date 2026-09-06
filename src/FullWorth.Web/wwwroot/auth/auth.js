@@ -277,12 +277,7 @@ async function submitClaim(form) {
   setSubmitting(button, true);
 
   try {
-    const response = await fetch(endpoints.claim, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ token, newPassword })
-    });
+    const response = await postJson(endpoints.claim, { token, newPassword });
 
     if (response.ok) {
       const payload = await readJson(response);
@@ -319,14 +314,9 @@ async function submitLogin(form) {
 
   try {
     const body = new FormData(form);
-    const response = await fetch(endpoints.login, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        email: String(body.get('email') || ''),
-        password: String(body.get('password') || '')
-      })
+    const response = await postJson(endpoints.login, {
+      email: String(body.get('email') || ''),
+      password: String(body.get('password') || '')
     });
 
     const payload = await readJson(response);
@@ -370,15 +360,10 @@ async function submitTwoFactor(form) {
 
   try {
     const body = new FormData(form);
-    const response = await fetch(endpoints.login, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        email: state.pendingLogin.email,
-        password: state.pendingLogin.password,
-        code: String(body.get('code') || '')
-      })
+    const response = await postJson(endpoints.login, {
+      email: state.pendingLogin.email,
+      password: state.pendingLogin.password,
+      code: String(body.get('code') || '')
     });
     const payload = await readJson(response);
 
@@ -419,17 +404,12 @@ async function submitRegister(form) {
 
   try {
     const body = new FormData(form);
-    const response = await fetch(endpoints.register, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        displayName: String(body.get('displayName') || ''),
-        email: String(body.get('email') || ''),
-        password,
-        acceptTerms: body.get('acceptTerms') === 'on',
-        confirmAdult: body.get('confirmAdult') === 'on'
-      })
+    const response = await postJson(endpoints.register, {
+      displayName: String(body.get('displayName') || ''),
+      email: String(body.get('email') || ''),
+      password,
+      acceptTerms: body.get('acceptTerms') === 'on',
+      confirmAdult: body.get('confirmAdult') === 'on'
     });
 
     if (response.ok) {
@@ -456,11 +436,8 @@ async function submitForgotPassword(form) {
 
   try {
     const body = new FormData(form);
-    await fetch(endpoints.passwordResetRequest, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ email: String(body.get('email') || '') })
+    await postJson(endpoints.passwordResetRequest, {
+      email: String(body.get('email') || '')
     });
 
     form.hidden = true;
@@ -501,12 +478,7 @@ async function submitResetPassword(form) {
   setSubmitting(button, true);
 
   try {
-    const response = await fetch(endpoints.passwordResetComplete, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ email, token, newPassword })
-    });
+    const response = await postJson(endpoints.passwordResetComplete, { email, token, newPassword });
 
     if (response.ok) {
       form.hidden = true;
@@ -533,14 +505,9 @@ async function submitRecoveryCode(form) {
 
   try {
     const body = new FormData(form);
-    const response = await fetch(endpoints.recoveryCodeRedeem, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        email: String(body.get('email') || ''),
-        recoveryCode: String(body.get('recoveryCode') || '')
-      })
+    const response = await postJson(endpoints.recoveryCodeRedeem, {
+      email: String(body.get('email') || ''),
+      recoveryCode: String(body.get('recoveryCode') || '')
     });
 
     if (response.ok) {
@@ -646,6 +613,29 @@ function showMessage(element) {
 
 function hideMessage(element) {
   if (element) element.hidden = true;
+}
+
+async function postJson(url, payload) {
+  const tokenResponse = await fetch('/auth/antiforgery', {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
+  });
+  if (!tokenResponse.ok) throw new Error('Antiforgery token unavailable.');
+
+  const tokenPayload = await readJson(tokenResponse);
+  const token = tokenPayload?.token;
+  if (!token) throw new Error('Antiforgery token missing.');
+
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': token
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify(payload)
+  });
 }
 
 async function readJson(response) {
