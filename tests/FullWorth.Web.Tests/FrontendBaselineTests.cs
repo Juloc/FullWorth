@@ -63,6 +63,8 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
 
         Assert.Contains("api/intelligence/brand-catalog", kit);
         Assert.Contains("OFFICIAL_BRAND_LOGOS", kit);
+        Assert.Contains("priority: Number(x.priority) || 0", kit);
+        Assert.Contains("b.priority - a.priority", kit);
         Assert.Contains("ensureOfficialBrandCatalog", transactions);
         Assert.Contains("brandLogoPath", kit);
         Assert.DoesNotContain("/brands/", kit, StringComparison.OrdinalIgnoreCase);
