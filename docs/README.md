@@ -4,6 +4,7 @@
 
 - [Roadmap](../ROADMAP.md) — scope and release priorities
 - [Product decisions](PRODUCT_DECISIONS.md) — product rules and trade-offs
+- [Potential finance data ideas](POTENTIAL_FINANCE_DATA_IDEAS.md) — non-binding ideas that require a decision on whether and how they should work before becoming roadmap or implementation work
 - [UI/UX specification](UI_UX_SPEC.md) — application behaviour and interface
 - [Simple finance-app UX rework plan](SIMPLE_FINANCE_APP_UX_REWORK_PLAN.md) — account/group booking drill-down, merchant/category identity, W/M/Q/Y analyses, contract filters and simplified mobile information architecture
 - [Simple finance-app UX gap-closure plan](SIMPLE_FINANCE_APP_UX_GAP_CLOSURE_PLAN.md) — closes the remaining backend, analytics, filter, contract and emergency-fund gaps found by audit
