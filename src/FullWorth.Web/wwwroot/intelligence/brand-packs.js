@@ -1,27 +1,24 @@
-const apiBase = '/bff/backend/api/intelligence/admin/brand-packs/custom';
+import { api as sharedApi } from '../core/services.js';
 const $ = id => document.getElementById(id);
 
 async function api(path = '', init = {}) {
-  const response = await fetch(apiBase + path, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init.headers || {})
+  try {
+    return await sharedApi(`api/intelligence/admin/brand-packs/custom${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers || {})
+      }
+    });
+  } catch (error) {
+    if (error?.status === 401) {
+      location.href = `/auth/login?returnUrl=${encodeURIComponent(location.pathname)}`;
+      throw new Error('unauthorized');
     }
-  });
-  if (response.status === 401) {
-    location.href = `/auth/login?returnUrl=${encodeURIComponent(location.pathname)}`;
-    throw new Error('unauthorized');
+    if (error?.status === 403) throw new Error('Nur Instanz-Administratoren können Brand-Packs verwalten.');
+    throw error;
   }
-  if (response.status === 403) throw new Error('Nur Instanz-Administratoren können Brand-Packs verwalten.');
-  if (!response.ok) {
-    let detail = null;
-    try { detail = await response.json(); } catch { }
-    throw new Error(detail?.error || detail?.message || `HTTP ${response.status}`);
-  }
-  if (response.status === 204) return null;
-  return response.json();
 }
 
 function esc(v) {
