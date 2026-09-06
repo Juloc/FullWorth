@@ -23,6 +23,24 @@ public sealed class AuthSessionCoordinator(
         if (user is null || user.IsDisabled || await users.IsLockedOutAsync(user))
             return LoginResultDto.InvalidCredentials();
 
+        if (await users.GetTwoFactorEnabledAsync(user))
+        {
+            if (string.IsNullOrWhiteSpace(request.Code))
+                return LoginResultDto.TwoFactorRequired();
+
+            var validCode = await users.VerifyTwoFactorTokenAsync(
+                user,
+                TokenOptions.DefaultAuthenticatorProvider,
+                request.Code.Replace(" ", string.Empty).Replace("-", string.Empty).Trim());
+            if (!validCode)
+            {
+                await users.AccessFailedAsync(user);
+                return LoginResultDto.InvalidTwoFactor();
+            }
+
+            await users.ResetAccessFailedCountAsync(user);
+        }
+
         var securityStamp = await users.GetSecurityStampAsync(user);
         var session = await sessions.CreateSessionAsync(
             user.Id,
