@@ -64,6 +64,9 @@ Instance administrators can import JSON from **AI & Intelligence → Eigene Bran
 `contentSha256` is optional for custom packs. If supplied, FullWorth verifies it. Otherwise FullWorth
 computes the hash while importing.
 
+Importing a pack again with the same `name` replaces that pack's metadata/assets atomically, so custom
+packs can be updated without changing their precedence slot or touching the official FullWorth pack.
+
 ## Safety limits
 
 - SVG only (`image/svg+xml`)
