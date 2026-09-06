@@ -14,10 +14,11 @@ public sealed class AuthMigrationTests
     private const string InitialMigration = "20260812193000_InitialAuthSchema";
     private const string IntegrationMigration = "20260812202000_SessionsAndRecoveryCodes";
     private const string PasskeyMigration = "20260812235500_Passkeys";
-    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration];
+    private const string AccountDeletionMigration = "20260906100000_AccountDeletion";
+    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration];
 
     [Fact]
-    public async Task WaveCAuthDatabase_UpgradesToPasskeysAndPreservesExistingUser()
+    public async Task ExistingAuthDatabase_UpgradesThroughPasskeysAndAccountDeletionAndPreservesExistingUser()
     {
         await using var database = await PostgresAuthDatabase.CreateAsync();
         await using var services = AuthTestServices.Build(database.ConnectionString);
@@ -36,10 +37,14 @@ public sealed class AuthMigrationTests
         Assert.True(created.Succeeded);
 
         await migrator.MigrateAsync(PasskeyMigration);
-
-        Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await TableExistsAsync(database.ConnectionString, "PasskeyCredentials"));
         Assert.True(await TableExistsAsync(database.ConnectionString, "PasskeyChallenges"));
+
+        await migrator.MigrateAsync(AccountDeletionMigration);
+
+        Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionRequestedAt"));
         Assert.True((await auth.ValidatePasswordAsync(email, "correct horse battery staple")).Succeeded);
         Assert.False(db.Database.HasPendingModelChanges());
     }
@@ -57,6 +62,7 @@ public sealed class AuthMigrationTests
         Assert.Equal(4, await CountIdentityTablesAsync(database.ConnectionString));
         foreach (var table in new[] { "UserSessions", "RecoveryCodes", "PasskeyCredentials", "PasskeyChallenges", "__EFMigrationsHistory" })
             Assert.True(await TableExistsAsync(database.ConnectionString, table));
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Accounts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Transactions"));
         Assert.False(db.Database.HasPendingModelChanges());
@@ -181,6 +187,18 @@ public sealed class AuthMigrationTests
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'auth' AND table_name LIKE 'AspNet%';";
         return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+
+    private static async Task<bool> ColumnExistsAsync(string connectionString, string tableName, string columnName)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'auth' AND table_name = @table AND column_name = @column);";
+        command.Parameters.AddWithValue("table", tableName);
+        command.Parameters.AddWithValue("column", columnName);
+        return (bool)(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task<bool> TableExistsAsync(string connectionString, string tableName)
