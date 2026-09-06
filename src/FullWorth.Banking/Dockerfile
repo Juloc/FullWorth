@@ -1,8 +1,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/FullWorth.Banking/FullWorth.Banking.csproj src/FullWorth.Banking/
+COPY src/FullWorth.FinTs/FullWorth.FinTs.csproj src/FullWorth.FinTs/
 RUN dotnet restore src/FullWorth.Banking/FullWorth.Banking.csproj
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
+COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
 RUN dotnet publish src/FullWorth.Banking/FullWorth.Banking.csproj -c Release -o /app /p:UseAppHost=false
 
