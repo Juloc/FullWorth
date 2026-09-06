@@ -6,6 +6,9 @@ try {
 
   const visualTheme = localStorage.getItem('finance.visualTheme') || 'clean';
   document.documentElement.dataset.visualTheme = ['clean', 'cute'].includes(visualTheme) ? visualTheme : 'clean';
+
+  const font = localStorage.getItem('finance.font') || 'default';
+  document.documentElement.dataset.font = ['default', 'fredoka'].includes(font) ? font : 'default';
 } catch {
 }
 
