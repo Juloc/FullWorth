@@ -38,6 +38,7 @@ public static class ContractParityEndpoints
         group.MapGet("/transaction/{transactionId:guid}/links",GetTransactionLinks);
         group.MapPost("/{contractId:guid}/split",SplitContract);
         group.MapPost("/merge",MergeContracts);
+        group.MapDelete("/merge/{targetContractId:guid}/{sourceContractId:guid}",UnmergeContracts);
         group.MapGet("/cancellations",ListCancellations);
         group.MapGet("/{contractId:guid}/cancellation",GetCancellation);
         group.MapPut("/{contractId:guid}/cancellation",PutCancellation);
@@ -86,17 +87,107 @@ WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space ORDER BY c."Name"
         parent.IsActive=false;parent.UpdatedAt=now;audit.Record(fullWorthSpaceId,uid,"contract.split","RecurringContract",contractId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.Ok(new{bundleId,archivedContractId=contractId,contracts=children.Select(x=>new{x.Contract.Id,x.Contract.Name,x.Contract.Amount})});
     }
 
-    private static async Task<IResult> MergeContracts(Guid fullWorthSpaceId,ContractMergeWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> MergeContracts(
+        Guid fullWorthSpaceId,
+        ContractMergeWrite request,
+        CurrentUserContext currentUser,
+        FullWorthDbContext db,
+        ContractStore store,
+        CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db,uid,fullWorthSpaceId,"contracts.manage",ct))return Results.StatusCode(403);var ids=(request.ContractIds??[]).Distinct().ToArray();if(ids.Length<2)return Results.BadRequest(new{error="Select at least two contracts."});var contracts=await db.Contracts.Where(x=>x.FullWorthSpaceId==fullWorthSpaceId&&ids.Contains(x.Id)).ToListAsync(ct);if(contracts.Count!=ids.Length)return Results.NotFound();foreach(var contract in contracts)if(!await CanWriteContract(db,uid,fullWorthSpaceId,contract.Id,ct))return Results.NotFound();if(contracts.Select(x=>x.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count()>1)return Results.BadRequest(new{error="Contracts with different currencies cannot be merged."});var target=request.TargetContractId.HasValue?contracts.SingleOrDefault(x=>x.Id==request.TargetContractId):contracts[0];if(target is null)return Results.BadRequest(new{error="Target contract must be part of the selection."});
-        if(request.TargetCategoryId.HasValue&&!await db.Categories.AsNoTracking().AnyAsync(x=>x.Id==request.TargetCategoryId.Value&&x.FullWorthSpaceId==fullWorthSpaceId,ct))return Results.BadRequest(new{error="Target category is invalid."});if(request.TargetAccountId.HasValue){var writable=await ParitySql.WritableAccountIdsAsync(db,uid,fullWorthSpaceId,ct);if(!writable.Contains(request.TargetAccountId.Value))return Results.BadRequest(new{error="Target account is inaccessible."});}
-        target.Name=string.IsNullOrWhiteSpace(request.TargetName)?target.Name:request.TargetName.Trim();if(request.TargetCategoryId.HasValue)target.CategoryId=request.TargetCategoryId;if(request.TargetAccountId.HasValue)target.AccountId=request.TargetAccountId;target.UpdatedAt=DateTimeOffset.UtcNow;await using var transaction=await db.Database.BeginTransactionAsync(ct);var c=await ParitySql.OpenAsync(db,ct);
-        foreach(var source in contracts.Where(x=>x.Id!=target.Id)){await using(var move=ParitySql.Command(c,"""
-INSERT INTO "ContractTransactionLinks" ("Id","FullWorthSpaceId","ContractId","TransactionId","Amount","LinkSource","Confidence","CreatedAt")
-SELECT gen_random_uuid(),"FullWorthSpaceId",@target,"TransactionId","Amount","LinkSource","Confidence","CreatedAt" FROM "ContractTransactionLinks" WHERE "ContractId"=@source
-ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"="ContractTransactionLinks"."Amount"+EXCLUDED."Amount"
-""",("@target",target.Id),("@source",source.Id)))await move.ExecuteNonQueryAsync(ct);source.IsActive=false;source.UpdatedAt=DateTimeOffset.UtcNow;}
-        audit.Record(fullWorthSpaceId,uid,"contract.merged","RecurringContract",target.Id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{targetId=target.Id,archived=contracts.Where(x=>x.Id!=target.Id).Select(x=>x.Id)});
+        var userId = currentUser.RequireUserId();
+        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+            return Results.StatusCode(403);
+
+        var ids = (request.ContractIds ?? Array.Empty<Guid>())
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        if (ids.Length < 2) return Results.BadRequest(new { error = "Select at least two contracts." });
+
+        var contracts = await db.Contracts
+            .Where(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == null &&
+                ids.Contains(contract.Id))
+            .ToListAsync(ct);
+        if (contracts.Count != ids.Length) return Results.NotFound();
+
+        foreach (var contract in contracts)
+            if (!await CanWriteContract(db, userId, fullWorthSpaceId, contract.Id, ct))
+                return Results.NotFound();
+
+        if (contracts.Select(contract => contract.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            return Results.BadRequest(new { error = "Contracts with different currencies cannot be merged." });
+
+        var target = request.TargetContractId.HasValue
+            ? contracts.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)
+            : contracts[0];
+        if (target is null) return Results.BadRequest(new { error = "Target contract must be part of the selection." });
+
+        if (request.TargetCategoryId.HasValue &&
+            !await db.Categories.AsNoTracking().AnyAsync(category =>
+                category.Id == request.TargetCategoryId.Value &&
+                category.FullWorthSpaceId == fullWorthSpaceId, ct))
+            return Results.BadRequest(new { error = "Target category is invalid." });
+
+        if (request.TargetAccountId.HasValue)
+        {
+            var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            if (!writable.Contains(request.TargetAccountId.Value))
+                return Results.BadRequest(new { error = "Target account is inaccessible." });
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!string.IsNullOrWhiteSpace(request.TargetName)) target.Name = request.TargetName.Trim();
+        if (request.TargetCategoryId.HasValue) target.CategoryId = request.TargetCategoryId;
+        if (request.TargetAccountId.HasValue) target.AccountId = request.TargetAccountId;
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var sourceIds = ids.Where(id => id != target.Id).ToArray();
+        var outcome = await store.MergeForUserAsync(
+            userId,
+            fullWorthSpaceId,
+            target.Id,
+            new ContractMergeRequest(sourceIds),
+            ct);
+
+        if (outcome.Result != ContractMutationResult.Success)
+            return outcome.Result switch
+            {
+                ContractMutationResult.NotFound => Results.NotFound(),
+                ContractMutationResult.Forbidden => Results.StatusCode(403),
+                ContractMutationResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge." }),
+                _ => Results.StatusCode(409)
+            };
+
+        await transaction.CommitAsync(ct);
+        return Results.Ok(new { targetId = target.Id, merged = sourceIds });
+    }
+
+    private static async Task<IResult> UnmergeContracts(
+        Guid targetContractId,
+        Guid sourceContractId,
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        ContractStore store,
+        CancellationToken ct)
+    {
+        var result = await store.UnmergeForUserAsync(
+            currentUser.RequireUserId(),
+            fullWorthSpaceId,
+            targetContractId,
+            sourceContractId,
+            ct);
+
+        return result switch
+        {
+            ContractMutationResult.Success => Results.NoContent(),
+            ContractMutationResult.NotFound => Results.NotFound(),
+            ContractMutationResult.Forbidden => Results.StatusCode(403),
+            ContractMutationResult.Invalid => Results.BadRequest(),
+            _ => Results.StatusCode(409)
+        };
     }
 
     private static async Task<IResult> ListCancellations(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
