@@ -56,7 +56,7 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task TransactionIdentity_UsesCloudBrandPackThenLocalAndCategoryFallbacks()
+    public async Task TransactionIdentity_UsesInstalledBrandPackThenCategoryFallbacks()
     {
         var kit = await GetAsync("/ui/ux-kit.js");
         var transactions = await GetAsync("/features/transactions.js");
@@ -65,11 +65,20 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("OFFICIAL_BRAND_LOGOS", kit);
         Assert.Contains("ensureOfficialBrandCatalog", transactions);
         Assert.Contains("brandLogoPath", kit);
-        Assert.Contains("/brands/vodafone.svg", kit); // bundled bootstrap fallback when cloud is disabled/not installed
+        Assert.DoesNotContain("/brands/", kit, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("categoryIconKey", kit);
         Assert.Contains("categoryIconKey: x.categoryIconKey", transactions);
         Assert.DoesNotContain("logo.clearbit", kit, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("google.com/s2/favicons", kit, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MerchantBrandSvgs_AreNotBundledInWebRoot()
+    {
+        var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
+        var directory = Path.Combine(environment.WebRootPath, "brands");
+        if (!Directory.Exists(directory)) return;
+        Assert.Empty(Directory.EnumerateFiles(directory, "*.svg", SearchOption.AllDirectories));
     }
 
     [Fact]
