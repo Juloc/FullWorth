@@ -180,6 +180,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         var js = await GetAsync("/auth/auth.js");
 
         Assert.Contains("providers: '/auth/providers'", js);
+        Assert.Contains("externalTwoFactor: '/auth/external/two-factor'", js);
         Assert.Contains("login: '/auth/login'", js);
         Assert.Contains("register: '/auth/register'", js);
         Assert.Contains("passwordResetRequest: '/auth/password-reset/request'", js);
@@ -187,6 +188,18 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         AssertNotContains(js, "caches.open");
         AssertNotContains(js, "caches.put");
         AssertNotContains(js, "cache-first");
+    }
+
+    [Fact]
+    public async Task AuthJavaScript_SendsAntiforgeryTokenForAuthPosts()
+    {
+        var js = await GetAsync("/auth/auth.js");
+
+        Assert.Contains("fetch('/auth/antiforgery'", js);
+        Assert.Contains("'X-CSRF-TOKEN': token", js);
+        Assert.Contains("postJson(endpoints.login", js);
+        Assert.Contains("postJson(endpoints.register", js);
+        Assert.Contains("postJson(endpoints.externalTwoFactor", js);
     }
 
     [Fact]
