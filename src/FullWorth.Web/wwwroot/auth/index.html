@@ -35,6 +35,20 @@
             <h1 data-auth-page-title data-i18n="auth.pages.login.title"></h1>
           </div>
 
+          <div class="auth-social" data-auth-social="login" hidden>
+            <button class="auth-provider" type="button" data-external-provider="google" data-external-mode="login" hidden>
+              <span class="auth-provider-mark" aria-hidden="true">G</span>
+              <span data-i18n="auth.continueGoogle"></span>
+            </button>
+            <button class="auth-provider" type="button" data-external-provider="apple" data-external-mode="login" hidden>
+              <span class="auth-provider-mark auth-provider-mark-apple" aria-hidden="true">●</span>
+              <span data-i18n="auth.continueApple"></span>
+            </button>
+          </div>
+          <div class="auth-divider auth-divider-labelled" data-auth-social-divider="login" hidden>
+            <span></span><em data-i18n="auth.orWithEmail"></em><span></span>
+          </div>
+
           <form id="login-form" class="auth-form" method="post" action="/auth/login" novalidate>
             <label for="login-email">
               <span data-i18n="auth.email"></span>
@@ -59,8 +73,8 @@
           </form>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=forgot-password" data-i18n="auth.forgotPassword"></a>
-            <a href="/auth/register" data-i18n="auth.createAccount"></a>
+            <a href="/auth/forgot-password" data-i18n="auth.forgotPassword"></a>
+            <a href="/auth/register" data-registration-link hidden data-i18n="auth.createAccount"></a>
           </div>
 
           <div class="auth-divider" aria-hidden="true"><span></span></div>
@@ -95,6 +109,23 @@
           <div class="auth-heading">
             <h1 data-auth-page-title data-i18n="auth.pages.register.title"></h1>
             <p data-i18n="auth.pages.register.subtitle"></p>
+          </div>
+
+          <div id="registration-disabled-state" class="auth-message auth-message-status" role="status" hidden data-i18n="auth.registrationDisabled"></div>
+
+          <div class="auth-social" data-auth-social="register" hidden>
+            <button class="auth-provider" type="button" data-external-provider="google" data-external-mode="register" hidden>
+              <span class="auth-provider-mark" aria-hidden="true">G</span>
+              <span data-i18n="auth.registerGoogle"></span>
+            </button>
+            <button class="auth-provider" type="button" data-external-provider="apple" data-external-mode="register" hidden>
+              <span class="auth-provider-mark auth-provider-mark-apple" aria-hidden="true">●</span>
+              <span data-i18n="auth.registerApple"></span>
+            </button>
+            <p class="auth-social-legal" data-i18n="auth.socialRegisterLegal"></p>
+          </div>
+          <div class="auth-divider auth-divider-labelled" data-auth-social-divider="register" hidden>
+            <span></span><em data-i18n="auth.orWithEmail"></em><span></span>
           </div>
 
           <form id="register-form" class="auth-form" method="post" action="/auth/register" novalidate>
@@ -162,7 +193,7 @@
           <div id="forgot-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
           </div>
         </section>
 
@@ -192,11 +223,11 @@
           <div id="reset-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
           <div id="reset-success" class="auth-message auth-message-success auth-final-state" role="status" hidden>
             <strong data-i18n="auth.passwordChanged"></strong>
-            <a class="auth-primary auth-link-button" href="/auth/index.html?view=login" data-i18n="auth.signInAgain"></a>
+            <a class="auth-primary auth-link-button" href="/auth/login" data-i18n="auth.signInAgain"></a>
           </div>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
           </div>
         </section>
 
@@ -226,11 +257,11 @@
           <div id="claim-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.genericError"></div>
           <div id="claim-existing" class="auth-message auth-message-success auth-final-state" role="status" hidden>
             <strong data-i18n="auth.claimExisting"></strong>
-            <a class="auth-primary auth-link-button" href="/auth/index.html?view=login" data-i18n="auth.signInAgain"></a>
+            <a class="auth-primary auth-link-button" href="/auth/login" data-i18n="auth.signInAgain"></a>
           </div>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
           </div>
         </section>
 
@@ -256,7 +287,7 @@
           <div id="recovery-code-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.recoveryError"></div>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
           </div>
         </section>
 
@@ -278,7 +309,7 @@
           <div id="copy-recovery-status" class="auth-message auth-message-status" role="status" hidden data-i18n="auth.copied"></div>
 
           <div class="auth-links">
-            <a href="/auth/index.html?view=login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
           </div>
         </section>
       </article>
