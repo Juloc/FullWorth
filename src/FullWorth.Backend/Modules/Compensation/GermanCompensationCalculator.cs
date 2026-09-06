@@ -263,7 +263,8 @@ public static class GermanCompensationCalculator
     private static decimal ApplyTaxClass4Factor(decimal tax, CompensationProfileInput input)
     {
         if (input.TaxClass != 4) return tax;
-        return RoundMoney(tax * Math.Clamp(input.TaxClass4Factor, 0.001m, 1m));
+        var factor = input.TaxClass4Factor <= 0m ? 1m : Math.Clamp(input.TaxClass4Factor, 0.001m, 1m);
+        return RoundMoney(tax * factor);
     }
 
     private static decimal WageTaxForClass2026(decimal taxableIncome, int taxClass) => taxClass switch
@@ -389,11 +390,12 @@ public static class GermanCompensationCalculator
         if (string.IsNullOrWhiteSpace(input.Name)) throw new ArgumentException("Name is required.");
         if (input.AnnualGross < 0m || input.AnnualBonus < 0m) throw new ArgumentOutOfRangeException(nameof(input.AnnualGross));
         if (input.TaxClass is < 1 or > 6) throw new ArgumentOutOfRangeException(nameof(input.TaxClass));
-        if (input.TaxClass == 4 && (input.TaxClass4Factor <= 0m || input.TaxClass4Factor > 1m))
+        if (input.TaxClass == 4 && (input.TaxClass4Factor < 0m || input.TaxClass4Factor > 1m))
             throw new ArgumentOutOfRangeException(nameof(input.TaxClass4Factor));
-        if (input.SalaryPaymentsPerYear is < 12 or > 14)
+        if (input.SalaryPaymentsPerYear != 0 && input.SalaryPaymentsPerYear is < 12 or > 14)
             throw new ArgumentOutOfRangeException(nameof(input.SalaryPaymentsPerYear));
-        if (!string.Equals(input.GrossInputMode, "annual", StringComparison.OrdinalIgnoreCase)
+        if (!string.IsNullOrWhiteSpace(input.GrossInputMode)
+            && !string.Equals(input.GrossInputMode, "annual", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(input.GrossInputMode, "monthly", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("GrossInputMode must be annual or monthly.", nameof(input.GrossInputMode));
         if (input.ChildrenUnder25 < 0) throw new ArgumentOutOfRangeException(nameof(input.ChildrenUnder25));
