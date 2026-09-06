@@ -992,7 +992,7 @@ public sealed class BankSyncService(
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
                         true, account.HasDetails, AccountIdentificationHashes(account),
-                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency)],
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
                     firstPersist ? balances : [],
                     chunk), ct);
                 firstPersist = false;
@@ -1006,7 +1006,7 @@ public sealed class BankSyncService(
                     [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
                         account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
                         true, account.HasDetails, AccountIdentificationHashes(account),
-                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency)],
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
                     balances,
                     []), ct);
                 firstPersist = false;
@@ -1104,6 +1104,7 @@ public sealed class BankSyncService(
             GetString(json, "currency") ?? "EUR",
             GetIbanLast4(json),
             IdentificationHashes: GetIdentificationHashes(json, hash),
+            Iban: GetIban(json),
             HasDetails: display is not null,
             Usage: GetString(json, "usage"),
             PsuStatus: GetString(json, "psu_status"),
@@ -1157,7 +1158,8 @@ public sealed class BankSyncService(
             CreditLimitAmount = GetNestedDecimal(details, "credit_limit", "amount") ?? account.CreditLimitAmount,
             CreditLimitCurrency = GetNestedString(details, "credit_limit", "currency") ?? account.CreditLimitCurrency,
             Currency = GetString(details, "currency") ?? account.Currency,
-            IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4
+            IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4,
+            Iban = GetIban(details) ?? account.Iban
         };
     }
 
@@ -1267,7 +1269,8 @@ public sealed class BankSyncService(
             description,
             GetString(json, "merchant_category_code"),
             entryReference,
-            json.GetRawText());
+            json.GetRawText(),
+            GetCounterpartyAccountIdentifier(json));
     }
 
     private static string? GetCounterparty(JsonElement json)
@@ -1305,24 +1308,43 @@ public sealed class BankSyncService(
             .ToArray();
     }
 
-    private static string? GetPartyAccountLast4(JsonElement json, string child)
+    private static string? GetPartyAccountIdentifier(JsonElement json, string child)
     {
         if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty(child, out var account))
             return null;
-        var value = GetString(account, "iban")
-                    ?? GetString(account, "bban")
-                    ?? GetString(account, "masked_pan")
-                    ?? GetString(account, "pan");
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = new string(value.Where(char.IsLetterOrDigit).ToArray());
-        return normalized.Length >= 4 ? normalized[^4..] : normalized;
+        return NormalizeAccountIdentifier(
+            GetString(account, "iban")
+            ?? GetString(account, "bban")
+            ?? GetString(account, "masked_pan")
+            ?? GetString(account, "pan"));
     }
+
+    private static string? GetCounterpartyAccountIdentifier(JsonElement json)
+    {
+        var debit = string.Equals(GetString(json, "credit_debit_indicator"), "DBIT", StringComparison.OrdinalIgnoreCase);
+        return GetPartyAccountIdentifier(json, debit ? "creditor_account" : "debtor_account");
+    }
+
+    private static string? GetPartyAccountLast4(JsonElement json, string child)
+    {
+        var normalized = GetPartyAccountIdentifier(json, child);
+        return normalized is { Length: >= 4 } ? normalized[^4..] : normalized;
+    }
+
+    private static string? GetIban(JsonElement json) =>
+        NormalizeAccountIdentifier(GetNestedString(json, "account_id", "iban"));
 
     private static string? GetIbanLast4(JsonElement json)
     {
-        var iban = GetNestedString(json, "account_id", "iban")
-            ?.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var iban = GetIban(json);
         return iban is { Length: >= 4 } ? iban[^4..] : null;
+    }
+
+    private static string? NormalizeAccountIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = new string(value.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        return normalized.Length == 0 ? null : normalized;
     }
 
     private static string Fingerprint(
@@ -1608,5 +1630,6 @@ public sealed class BankSyncService(
         string? Usage = null,
         string? PsuStatus = null,
         decimal? CreditLimitAmount = null,
-        string? CreditLimitCurrency = null);
+        string? CreditLimitCurrency = null,
+        string? Iban = null);
 }

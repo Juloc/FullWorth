@@ -20,9 +20,9 @@ public sealed record BankConnectionBatch(Guid? ConnectionId, string Provider, st
 // HasDetails=false marks metadata as placeholder-quality (the provider's session payload carried no
 // account details and the details resource was unavailable): it may seed a NEW account but must not
 // overwrite previously stored real names/currency on existing ones.
-public sealed record AccountBatchItem(string IdentificationHash, string ProviderAccountId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool HasDetails = true, IReadOnlyList<string>? IdentificationHashes = null, string? Usage = null, string? PsuStatus = null, decimal? CreditLimitAmount = null, string? CreditLimitCurrency = null);
+public sealed record AccountBatchItem(string IdentificationHash, string ProviderAccountId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool HasDetails = true, IReadOnlyList<string>? IdentificationHashes = null, string? Usage = null, string? PsuStatus = null, decimal? CreditLimitAmount = null, string? CreditLimitCurrency = null, string? Iban = null);
 public sealed record BalanceBatchItem(string IdentificationHash, decimal Amount, string Currency, string BalanceType, DateOnly? ReferenceDate, DateTimeOffset CapturedAt);
-public sealed record TransactionBatchItem(string IdentificationHash, string ExternalKey, string? ProviderTransactionId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? EntryReference, string RawJson);
+public sealed record TransactionBatchItem(string IdentificationHash, string ExternalKey, string? ProviderTransactionId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? EntryReference, string RawJson, string? CounterpartyAccountIdentifier = null);
 public sealed record FinanceIngestBatch(BankConnectionBatch Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions);
 
 public sealed class IngestionService(
@@ -32,7 +32,8 @@ public sealed class IngestionService(
     FullWorth.Backend.Modules.Notifications.BudgetNotificationService? budgetNotifications = null,
     FinanzguruAccountReconciliationService? finanzguruReconciliation = null,
     IntelligenceDbContext? intelligenceDb = null,
-    CloudOntologyResolver? cloudOntologyResolver = null)
+    CloudOntologyResolver? cloudOntologyResolver = null,
+    TransferDetectionService? transferDetection = null)
 {
     private readonly FullWorth.Backend.Security.FieldCipher cipher = fieldCipher ?? FullWorth.Backend.Security.FieldCipher.Null;
     private readonly AuditService audit = auditService ?? new AuditService(db);
@@ -63,6 +64,12 @@ public sealed class IngestionService(
             connection.Id);
         audit.Record(connection.FullWorthSpaceId, null, "external.write.used", "BankingIngestion", connection.Id);
         await db.SaveChangesAsync(ct);
+
+        // Re-run exact transfer detection after every account sync, including metadata-only batches.
+        // Older unlinked bookings can therefore become matchable when IBAN metadata appears later.
+        if (transferDetection is not null && accountMap.Count > 0)
+            await transferDetection.DetectForSpaceAsync(connection.FullWorthSpaceId, apply: true, ct);
+
         await transaction.CommitAsync(ct);
 
         if (budgetNotifications is not null && (inserted > 0 || updated > 0))
@@ -178,6 +185,8 @@ public sealed class IngestionService(
                 entity.CreditLimitAmount = item.CreditLimitAmount; entity.CreditLimitCurrency = item.CreditLimitCurrency;
                 entity.IbanLast4 = item.IbanLast4;
             }
+            var ibanLookup = AccountIdentifierLookup.Create(item.Iban, cipher);
+            if (ibanLookup is not null) entity.IbanLookup = ibanLookup;
             entity.IsActive = item.IsActive; entity.UpdatedAt = DateTimeOffset.UtcNow;
             result[item.IdentificationHash] = entity;
         }
@@ -387,6 +396,8 @@ public sealed class IngestionService(
                 entity.Description = item.Description;
                 entity.MerchantCategoryCode = item.MerchantCategoryCode;
                 entity.EntryReference = item.EntryReference;
+                var counterpartyLookup = AccountIdentifierLookup.Create(item.CounterpartyAccountIdentifier, cipher);
+                if (counterpartyLookup is not null) entity.CounterpartyAccountLookup = counterpartyLookup;
                 entity.RawJson = cipher.Protect(item.RawJson) ?? "{}";
                 entity.UpdatedAt = observedAt;
 

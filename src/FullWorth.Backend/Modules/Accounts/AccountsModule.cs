@@ -30,6 +30,8 @@ public sealed class FinanceAccount
     public string? CreditLimitCurrency { get; set; }
     public string Currency { get; set; } = "EUR";
     public string? IbanLast4 { get; set; }
+    // Keyed lookup token for exact transfer matching. The full IBAN is never persisted.
+    public string? IbanLookup { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IncludeInNetWorth { get; set; } = true;
     public int SortOrder { get; set; }
