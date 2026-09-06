@@ -32,7 +32,6 @@ public sealed record FullWorthCloudSubmissionEvent(
 
 public sealed record FullWorthCloudBenchmark(
     string MetricKey,
-    string? EntityKey,
     string? Currency,
     string? Country,
     string? RegionBucket,
@@ -47,7 +46,8 @@ public sealed record FullWorthCloudBenchmark(
     decimal P25,
     decimal P75,
     decimal Min,
-    decimal Max);
+    decimal Max,
+    string? EntityKey = null);
 
 public sealed record FullWorthCloudPrice(
     string ProductKey,
