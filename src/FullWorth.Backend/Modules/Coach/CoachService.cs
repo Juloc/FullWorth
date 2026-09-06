@@ -175,22 +175,57 @@ public sealed class CoachService(
         "comparisonPeriod", "chartType", "archived", "auditAction", "entityType"
     };
 
+    private static readonly HashSet<string> AllowedUiDetailKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "date", "amount", "currency", "merchant", "category", "account",
+        "kind", "status", "nextDueDate", "monthlyEquivalent", "annualized",
+        "balance", "value", "includeInNetWorth", "count"
+    };
+
+    private static readonly HashSet<string> AllowedUiEntityTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "transaction", "transactions", "account", "contract", "asset", "liability", "budget", "portfolio"
+    };
+
     private static CoachUiContext? NormalizeUiContext(CoachUiContext? context)
     {
         if (context is null || string.IsNullOrWhiteSpace(context.Page)) return null;
         var page = NormalizeUiValue(context.Page, 40) ?? "unknown";
         var title = NormalizeUiValue(context.Title, 100);
         var path = NormalizeUiValue(context.Path, 180);
-        var filters = (context.Filters ?? new Dictionary<string, string>())
-            .Where(pair => AllowedUiFilterKeys.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
-            .Take(12)
+        var filters = NormalizeUiMap(context.Filters, AllowedUiFilterKeys, 12, 160);
+        var entityType = NormalizeUiValue(context.EntityType, 40);
+        if (entityType is not null && !AllowedUiEntityTypes.Contains(entityType)) entityType = null;
+        var entityId = entityType is null ? null : NormalizeUiValue(context.EntityId, 100);
+        var entityLabel = entityType is null ? null : NormalizeUiValue(context.EntityLabel, 160);
+        var details = entityType is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : NormalizeUiMap(context.Details, AllowedUiDetailKeys, 14, 180);
+        var selectedIds = entityType is null
+            ? []
+            : (context.SelectedIds ?? [])
+                .Select(value => NormalizeUiValue(value, 100))
+                .Where(value => value is not null)
+                .Select(value => value!)
+                .Distinct(StringComparer.Ordinal)
+                .Take(20)
+                .ToArray();
+        return new(page, title, path, filters, entityType, entityId, entityLabel, details, selectedIds);
+    }
+
+    private static Dictionary<string, string> NormalizeUiMap(
+        IReadOnlyDictionary<string, string>? source,
+        HashSet<string> allowedKeys,
+        int maxItems,
+        int maxLength)
+        => (source ?? new Dictionary<string, string>())
+            .Where(pair => allowedKeys.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            .Take(maxItems)
             .Select(pair => new KeyValuePair<string, string>(
                 pair.Key,
-                NormalizeUiValue(pair.Value, 160) ?? string.Empty))
+                NormalizeUiValue(pair.Value, maxLength) ?? string.Empty))
             .Where(pair => pair.Value.Length > 0)
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-        return new(page, title, path, filters);
-    }
 
     private static string? NormalizeUiValue(string? value, int maxLength)
     {
