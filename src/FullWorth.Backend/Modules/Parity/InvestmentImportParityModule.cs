@@ -747,7 +747,12 @@ WHERE "Id"=@job
         }
         catch
         {
-            await transaction.RollbackAsync(ct);
+            // The deferred ledger-integrity trigger (TR_InvestmentTrades_ValidateLedger) can only fail at
+            // COMMIT, which already aborts the transaction server-side. Rolling it back again then throws a
+            // secondary "transaction has completed" error that would surface as a 500, so swallow it and
+            // still return a clean 409 — nothing was persisted.
+            try { await transaction.RollbackAsync(ct); }
+            catch { /* transaction already rolled back by the failed commit */ }
             return Results.Conflict(new
             {
                 error = "Rollback would leave the investment ledger inconsistent or a linked resource is still required. Nothing was removed."

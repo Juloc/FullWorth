@@ -74,7 +74,7 @@ public sealed class UserStore(DbContext db)
         if (user is null) return false;
         if (user.IsTombstone) return true;
 
-        user.EmailNormalized = $"DELETED-{user.Id:N}@INVALID.FULLWORTH";
+        user.EmailNormalized = $"DELETED-{user.Id.ToString("N").ToUpperInvariant()}@INVALID.FULLWORTH";
         user.DisplayName = "Deleted user";
         user.IsActive = false;
         user.IsTombstone = true;

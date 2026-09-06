@@ -74,8 +74,9 @@ public sealed class ManualTransactionTests
             await store.GetForUserAsync(s.Owner, Space, s.ImportedTx, CancellationToken.None),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         using var detailDoc = JsonDocument.Parse(detailJson);
-        Assert.Equal("Lebensmittel", detailDoc.RootElement.GetProperty("categoryName").GetString());
-        Assert.Equal("🛒", detailDoc.RootElement.GetProperty("categoryIconKey").GetString());
+        var detailTx = detailDoc.RootElement.GetProperty("transaction");
+        Assert.Equal("Lebensmittel", detailTx.GetProperty("categoryName").GetString());
+        Assert.Equal("🛒", detailTx.GetProperty("categoryIconKey").GetString());
     }
 
     [Fact]
