@@ -212,13 +212,17 @@ public sealed class FinanzguruImportService(
             var hash = IdentificationHash(sourceKey);
             importAccounts.TryGetValue(hash, out var importedAccount);
 
-            // Prefer a real bank account even when an older Finanzguru archive already exists. This is
-            // what makes re-imports safe after the user connects the account later: stable Finanzguru
-            // external keys are then found on the live account instead of being recreated in the archive.
+            // A user-confirmed link is authoritative and survives later re-imports, including imports
+            // whose source account has no usable IBAN. Without such a link, retain the conservative
+            // unique-IBAN heuristic for convenient automatic matching.
             var normalizedReference = NormalizeAccountReference(sample.ReferenceAccount);
             var ibanLast4 = LooksLikeIban(normalizedReference) ? normalizedReference[^4..] : null;
-            FinanceAccount? liveMatch = null;
-            if (ibanLast4 is not null)
+            FinanceAccount? liveMatch = importedAccount?.ImportLinkedAccountId is { } linkedId
+                ? ownedAccounts.SingleOrDefault(account =>
+                    account.Id == linkedId &&
+                    string.Equals(account.Currency, sample.Currency, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (liveMatch is null && ibanLast4 is not null)
             {
                 var candidates = ownedAccounts
                     .Where(account => string.Equals(account.IbanLast4, ibanLast4, StringComparison.OrdinalIgnoreCase)
