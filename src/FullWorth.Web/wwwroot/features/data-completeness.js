@@ -117,6 +117,6 @@ export function finanzguruCompletenessNotice(state, options = {}) {
 
   return `<div class="data-completeness-warning" role="status">
     <div class="data-completeness-copy"><strong>${esc(title)}</strong><span>${esc(body)}</span></div>
-    <a class="secondary" href="/settings/import/finanzguru/xlsx#import-link-heading">${esc(action)}</a>
+    <a class="ghost data-completeness-action" href="/settings/import/finanzguru/xlsx#import-link-heading">${esc(action)}</a>
   </div>`;
 }
