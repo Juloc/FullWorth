@@ -689,7 +689,7 @@ async function openDetail(id) {
     </div>
   </div>`);
   const coachAction = document.createElement('button');
-  coachAction.type = 'button'; coachAction.className = 'ghost'; coachAction.textContent = t('Coach fragen','Ask Coach');
+  coachAction.type = 'button'; coachAction.className = 'btn btn-secondary'; coachAction.textContent = t('Coach fragen','Ask Coach');
   coachAction.addEventListener('click', () => { dlg.close(); askCoachAboutContract(contract, activity); });
   dlg.querySelector('.dialog-actions')?.prepend(coachAction);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
