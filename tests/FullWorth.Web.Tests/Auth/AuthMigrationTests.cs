@@ -46,8 +46,6 @@ public sealed class AuthMigrationTests
 
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
-        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
-        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionRequestedAt"));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
         Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
@@ -72,6 +70,8 @@ public sealed class AuthMigrationTests
         foreach (var table in new[] { "UserSessions", "RecoveryCodes", "PasskeyCredentials", "PasskeyChallenges", "__EFMigrationsHistory" })
             Assert.True(await TableExistsAsync(database.ConnectionString, table));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
+        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Accounts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Transactions"));
         Assert.False(db.Database.HasPendingModelChanges());
