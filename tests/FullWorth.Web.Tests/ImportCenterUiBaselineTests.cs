@@ -67,6 +67,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         var html = EmbeddedHtml(typeof(FinanzguruImportPageEndpoints));
 
         Assert.Contains("id=\"finanzguru-form\"", html);
+        Assert.Contains("id=\"import-link-list\"", html);
+        Assert.Contains("href=\"/accounts\"", html);
         Assert.Contains("href=\"/settings/import\"", html);
     }
 
@@ -128,6 +130,20 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("api/investment-import/pdf/ocr-detect", pdfJs);
         Assert.Contains("api/investment-import/upload", pdfJs);
         Assert.Contains("t.ocr", pdfJs);
+    }
+
+    [Fact]
+    public async Task FinanzguruProviderPage_SupportsExplicitAccountLinkingAndBalanceAnchors()
+    {
+        using var response = await client.GetAsync("/features/finanzguru-import-page.js");
+        response.EnsureSuccessStatusCode();
+        var js = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("api/import/finanzguru/accounts", js);
+        Assert.Contains("/link?fullWorthSpaceId=", js);
+        Assert.Contains("/confirm-history?fullWorthSpaceId=", js);
+        Assert.Contains("currentBalance", js);
+        Assert.Contains("/transactions?accountId=", js);
     }
 
     [Fact]
