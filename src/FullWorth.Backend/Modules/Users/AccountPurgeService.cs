@@ -193,6 +193,9 @@ public sealed class AccountPurgeService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         foreach (var descriptor in ordered)
+            await ClearRestrictSelfReferencesAsync(db, descriptor, spaceId, ct);
+
+        foreach (var descriptor in ordered)
         {
             var predicate = BuildSpacePredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
             await ExecuteDeleteAsync(db, descriptor, predicate, "spaceId", spaceId, ct);
@@ -207,7 +210,15 @@ public sealed class AccountPurgeService(
             .Select(entity => new
             {
                 Entity = entity,
-                Depth = FindUserOwnershipDepth(entity, new HashSet<IEntityType>())
+                DirectOwnership = entity.GetProperties().Where(p => OwnershipUserPropertyNames.Contains(p.Name)).ToArray(),
+                SpaceOwned = PersonalDataPurgeManifest.Describe(entity).IsSpaceOwned
+            })
+            .Where(x => x.DirectOwnership.Length > 0 || !x.SpaceOwned)
+            .Select(x => new
+            {
+                x.Entity,
+                x.DirectOwnership,
+                Depth = FindUserOwnershipDepth(x.Entity, new HashSet<IEntityType>())
             })
             .Where(x => x.Depth.HasValue)
             .Select(x => new PurgeEntityDescriptor(
@@ -215,7 +226,7 @@ public sealed class AccountPurgeService(
                 x.Entity.GetTableName()!,
                 x.Entity.GetSchema(),
                 x.Depth,
-                x.Entity.GetProperties().Where(p => OwnershipUserPropertyNames.Contains(p.Name)).ToArray(),
+                x.DirectOwnership,
                 Array.Empty<IProperty>(),
                 false,
                 false,
