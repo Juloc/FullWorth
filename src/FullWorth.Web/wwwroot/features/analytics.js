@@ -109,9 +109,11 @@ async function loadSavingsBenchmark() {
 
     const filter = result.peerFilter === 'country_income'
       ? t('Land + Einkommensbereich', 'country + income band')
-      : result.peerFilter === 'country'
-        ? t('Land', 'country')
-        : t('alle verfügbaren', 'all available');
+      : result.peerFilter === 'income'
+        ? t('Einkommensbereich', 'income band')
+        : result.peerFilter === 'country'
+          ? t('Land', 'country')
+          : t('alle verfügbaren', 'all available');
 
     const body = `<div class="an-card-foot">
       ${kpi(savingsPct(local), esc(t('Deine Sparquote', 'Your savings rate')))}
