@@ -1160,16 +1160,16 @@ function openProviderStatusConnection(country,onConnected){
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
 
+  const connected=async()=>{
+    toast(get('bankingSetup.statusConnected'),5000);
+    dlg.close();
+    if(onConnected)await onConnected();
+  };
   const poll=async()=>{
     if(closed)return;
     try{
       const current=await bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`);
-      if(current?.available){
-        toast(get('bankingSetup.statusConnected'),5000);
-        dlg.close();
-        if(onConnected)await onConnected();
-        return;
-      }
+      if(current?.available){await connected();return}
     }catch{}
     pollTimer=setTimeout(poll,2000);
   };
@@ -1179,14 +1179,34 @@ function openProviderStatusConnection(country,onConnected){
     const submit=form.querySelector('[type="submit"]'),email=String(new FormData(form).get('email')||'').trim();
     submit.disabled=true;
     try{
-      await bankApi('api/banking/provider-status/connect/start',jsonBody({email}));
+      const started=await bankApi('api/banking/provider-status/connect/start',jsonBody({email}));
+      const manual=started?.manualCompletionRequired===true;
       form.innerHTML=`<div class="panel-head"><h2>${esc(get('bankingSetup.statusConnect'))}</h2><button type="button" data-close>×</button></div>
-        <p>${esc(get('bankingSetup.statusEmailSent'))}</p>
-        <p class="row-sub">${esc(get('bankingSetup.waitingForEmail'))}</p>
-        <div class="dialog-actions"><button type="button" data-close-bottom>${esc(get('common.close'))}</button></div>`;
+        <p>${esc(get(manual?'bankingSetup.statusEmailSentManual':'bankingSetup.statusEmailSent'))}</p>
+        ${manual?`<label>${esc(get('bankingSetup.statusLoginLink'))}<input name="loginLink" type="text" autocomplete="off" required placeholder="http://localhost:8888/?oobCode=…"></label>
+          <p class="row-sub">${esc(get('bankingSetup.statusManualHint'))}</p>`:`<p class="row-sub">${esc(get('bankingSetup.waitingForEmail'))}</p>`}
+        <div class="dialog-actions"><button type="button" data-close-bottom>${esc(get('common.close'))}</button>${manual?`<button type="button" data-complete>${esc(get('bankingSetup.statusCompleteLogin'))}</button>`:''}</div>`;
       form.querySelector('[data-close]').onclick=()=>dlg.close();
       form.querySelector('[data-close-bottom]').onclick=()=>dlg.close();
-      pollTimer=setTimeout(poll,1000);
+      if(manual){
+        const complete=form.querySelector('[data-complete]'),input=form.querySelector('[name="loginLink"]');
+        complete.onclick=async()=>{
+          complete.disabled=true;
+          try{
+            const result=await bankApi('api/banking/provider-status/connect/complete',jsonBody({
+              id:started.id,
+              loginLinkOrCode:String(input.value||'').trim()
+            }));
+            if(!result?.success){
+              toast(get(result?.errorCode==='missing_oob_code'?'bankingSetup.statusManualInvalid':'common.error'));
+              complete.disabled=false;
+              return;
+            }
+            await connected();
+          }catch(err){toast(err.message||get('common.error'));complete.disabled=false}
+        };
+        input.focus();
+      }else pollTimer=setTimeout(poll,1000);
     }catch(err){toast(err.message||get('common.error'));submit.disabled=false}
   };
   dlg.showModal();
