@@ -58,6 +58,11 @@ public sealed record TransactionStatusHistoryItem(
     string? FromStatus,
     DateTimeOffset ObservedAt);
 
+internal sealed record TransactionStatusAuditRow(
+    string Action,
+    string? MetadataJson,
+    DateTimeOffset OccurredAt);
+
 public enum TransactionClassificationResult { Updated, NotFound, InvalidCategory }
 public enum AllocationResult { Updated, NotFound, InvalidCategory, InvalidPurchaseItem, Unbalanced }
 public enum RefundLinkResult { Updated, NotFound, Invalid }
@@ -232,7 +237,7 @@ public sealed class TransactionStore(FullWorthDbContext db)
             .OrderByDescending(x => x.OccurredAt)
             .ThenByDescending(x => x.Id)
             .Take(20)
-            .Select(x => new { x.Action, x.MetadataJson, x.OccurredAt })
+            .Select(x => new TransactionStatusAuditRow(x.Action, x.MetadataJson, x.OccurredAt))
             .ToListAsync(ct);
         var statusHistory = rawStatusHistory
             .Select(ParseStatusHistory)
@@ -244,23 +249,23 @@ public sealed class TransactionStore(FullWorthDbContext db)
         return new { transaction = tx, transferCounterpart = counterpart, purchases, statusHistory };
     }
 
-    private static TransactionStatusHistoryItem? ParseStatusHistory(dynamic row)
+    private static TransactionStatusHistoryItem? ParseStatusHistory(TransactionStatusAuditRow row)
     {
-        if (string.Equals((string)row.Action, "transaction.pending_observed", StringComparison.Ordinal))
-            return new TransactionStatusHistoryItem("PDNG", null, (DateTimeOffset)row.OccurredAt);
+        if (string.Equals(row.Action, "transaction.pending_observed", StringComparison.Ordinal))
+            return new TransactionStatusHistoryItem("PDNG", null, row.OccurredAt);
 
-        if (!string.Equals((string)row.Action, "transaction.status_changed", StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace((string?)row.MetadataJson))
+        if (!string.Equals(row.Action, "transaction.status_changed", StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(row.MetadataJson))
             return null;
 
         try
         {
             var metadata = JsonSerializer.Deserialize<TransactionStatusAuditMetadata>(
-                (string)row.MetadataJson,
+                row.MetadataJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             return metadata is null
                 ? null
-                : new TransactionStatusHistoryItem(metadata.ToStatus, metadata.FromStatus, (DateTimeOffset)row.OccurredAt);
+                : new TransactionStatusHistoryItem(metadata.ToStatus, metadata.FromStatus, row.OccurredAt);
         }
         catch (JsonException)
         {
