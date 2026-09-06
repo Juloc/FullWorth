@@ -304,9 +304,10 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         pack.UpdatedAt = now;
 
         var hashes = preparedAssets.Select(x => x.Blob.ContentSha256).Distinct().ToArray();
-        var existing = await db.BrandAssetBlobs
+        var existingRows = await db.BrandAssetBlobs
             .Where(x => hashes.Contains(x.ContentSha256))
-            .ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+            .ToListAsync(ct);
+        var existing = existingRows.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
         foreach (var prepared in preparedAssets)
         {
             if (existing.TryGetValue(prepared.Blob.ContentSha256, out var cached))
@@ -369,7 +370,8 @@ public sealed class BrandPackService(IntelligenceDbContext db)
     public async Task<(IReadOnlyList<BrandCatalogAssetView> Assets, IReadOnlyList<BrandCatalogAliasView> Aliases)>
         GetEffectiveCatalogAsync(CancellationToken ct)
     {
-        var blobs = await db.BrandAssetBlobs.AsNoTracking().ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+        var blobRows = await db.BrandAssetBlobs.AsNoTracking().ToListAsync(ct);
+        var blobs = blobRows.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
         var officialAssets = await db.OfficialBrandAssets.AsNoTracking().ToListAsync(ct);
         var officialAliases = await db.OfficialBrandAliases.AsNoTracking().ToListAsync(ct);
 
@@ -380,10 +382,10 @@ public sealed class BrandPackService(IntelligenceDbContext db)
             .ToListAsync(ct);
         var packIds = packs.Select(x => x.Id).ToArray();
         var customAssets = packIds.Length == 0
-            ? []
+            ? new List<CustomBrandAsset>()
             : await db.CustomBrandAssets.AsNoTracking().Where(x => packIds.Contains(x.PackId)).ToListAsync(ct);
         var customAliases = packIds.Length == 0
-            ? []
+            ? new List<CustomBrandAlias>()
             : await db.CustomBrandAliases.AsNoTracking().Where(x => packIds.Contains(x.PackId)).ToListAsync(ct);
 
         var assets = new Dictionary<string, BrandCatalogAssetView>(StringComparer.Ordinal);
