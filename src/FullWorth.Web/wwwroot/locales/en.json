@@ -583,6 +583,15 @@
         "subtitle": "Enter the 6-digit code from Google Authenticator or your TOTP app."
       }
     },
+    "continueGoogle": "Continue with Google",
+    "continueApple": "Continue with Apple",
+    "registerGoogle": "Sign up with Google",
+    "registerApple": "Sign up with Apple",
+    "orWithEmail": "or with email",
+    "socialRegisterLegal": "By continuing, you confirm that you are at least 18 and accept the terms of use and privacy notice.",
+    "externalAccountNotFound": "No FullWorth account is linked to this Google or Apple account yet. You can create one here.",
+    "externalRegistrationFailed": "Registration with Google or Apple could not be completed.",
+    "externalFailed": "Sign-in with Google or Apple could not be completed.",
     "createAccount": "Create account",
     "displayName": "Name",
     "register": "Create account",
