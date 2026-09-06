@@ -24,5 +24,6 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-Use the exact version in `FULLWORTH_VERSION` when deploying published images. Pre-release tags publish
-only their exact version and commit-sha image tags.
+Use the exact version in `FULLWORTH_VERSION` when deploying published images. The compose stack uses
+this single version for backend, banking, web and codex so a deployment cannot accidentally mix release
+candidates. Pre-release tags publish only their exact version and commit-sha image tags.
