@@ -92,8 +92,14 @@ public sealed class ReceiptImportService(
         try { baseUri = PaperlessReceiptClient.NormalizeBaseUri(request.BaseUrl); }
         catch (UriFormatException ex) { return (null, null, ex.Message); }
 
+        var previous = await store.GetPaperlessConnectionAsync(fullWorthSpaceId, ct);
         var test = await paperless.TestAsync(baseUri.ToString(), request.ApiToken, ct);
         if (!test.Success) return (null, test.ServerVersion, test.Error);
+
+        if (previous is not null &&
+            !string.Equals(PaperlessReceiptClient.NormalizeBaseUri(previous.BaseUrl).ToString(), baseUri.ToString(), StringComparison.OrdinalIgnoreCase))
+            await store.DisablePaperlessAutoImportAsync(fullWorthSpaceId, ct);
+
         var protectedToken = cipher.Protect(request.ApiToken.Trim())
             ?? throw new InvalidOperationException("Paperless token could not be protected.");
         await store.UpsertPaperlessConnectionAsync(fullWorthSpaceId, userId, baseUri.ToString(), protectedToken, request.DefaultQuery, request.IsEnabled, ct);
