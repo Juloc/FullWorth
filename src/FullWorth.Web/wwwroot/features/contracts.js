@@ -405,7 +405,7 @@ function rowFor(c) {
   coach.addEventListener('click', event => { event.stopPropagation(); askCoachAboutContract(c); });
   const open = () => openDetail(c.id);
   row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
-  row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  row.addEventListener('keydown', e => { if (!e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
   return row;
 }
 
