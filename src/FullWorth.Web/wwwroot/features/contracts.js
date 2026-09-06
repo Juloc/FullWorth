@@ -713,7 +713,7 @@ async function openDetail(id) {
     const sourceId = button.dataset.unmerge;
     button.disabled = true;
     try {
-      await ctx.api(`api/contracts/${id}/merge/${sourceId}`, { method: 'DELETE' });
+      await ctx.api(`api/contract-parity/merge/${id}/${sourceId}`, { method: 'DELETE' });
       dlg.close();
       ctx.toast(ctx.get('contracts.unmergedToast'));
       await renderContracts(ctx);
@@ -746,7 +746,7 @@ function mergeCandidateScore(primary, candidate) {
 
 async function openMergeDialog(contract) {
   const candidates = allContracts
-    .filter(candidate => candidate.id !== contract.id)
+    .filter(candidate => candidate.id !== contract.id && (candidate.currency || '') === (contract.currency || ''))
     .slice()
     .sort((a, b) => {
       const score = mergeCandidateScore(contract, b) - mergeCandidateScore(contract, a);
@@ -785,7 +785,10 @@ async function openMergeDialog(contract) {
     if (!sourceContractIds.length) return;
     submit.disabled = true;
     try {
-      await ctx.api(`api/contracts/${contract.id}/merge`, jsonBody({ sourceContractIds }, 'POST'));
+      await ctx.api('api/contract-parity/merge', jsonBody({
+        contractIds: [contract.id, ...sourceContractIds],
+        targetContractId: contract.id
+      }, 'POST'));
       dlg.close();
       ctx.toast(ctx.get('contracts.mergedToast'));
       await renderContracts(ctx);
