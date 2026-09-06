@@ -9,10 +9,10 @@ public sealed class BudgetWizardUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task WizardExposesFlexiblePeriodsRolloverModesAndWeeklyGroceriesPreset()
     {
-        var app = await GetAsync("/app.js");
+        var budgets = await GetAsync("/features/budgets.js");
         var de = await GetAsync("/locales/de.json");
 
-        Assert.Contains("'daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom'", app);
+        Assert.Contains("'daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom'", budgets);
         Assert.Contains("data-budget-preset=\"weekly-groceries\"", app);
         Assert.Contains("carryOver:rolloverMode!=='reset'", app);
         Assert.Contains("carryOverOverspend:rolloverMode==='full'", app);
