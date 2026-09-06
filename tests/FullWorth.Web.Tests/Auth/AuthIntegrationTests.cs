@@ -241,6 +241,32 @@ public sealed class AuthIntegrationTests
     }
 
     [Fact]
+    public async Task ExternalAuthCapabilities_AreSafeWhenProvidersAreNotConfigured()
+    {
+        await using var factory = new FullWorthWebFactory();
+        using var client = CreateClient(factory);
+
+        using var response = await client.GetAsync("/auth/providers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(json.RootElement.GetProperty("registrationEnabled").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("google").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("apple").GetBoolean());
+    }
+
+    [Fact]
+    public async Task UnknownExternalProvider_ReturnsNotFound()
+    {
+        await using var factory = new FullWorthWebFactory();
+        using var client = CreateClient(factory);
+
+        using var response = await client.GetAsync("/auth/external/github");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task LogoutRevokesSessionAndReplayedCookieIsDenied()
     {
         await using var factory = new FullWorthWebFactory();
