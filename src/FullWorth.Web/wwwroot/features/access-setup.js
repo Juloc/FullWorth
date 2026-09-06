@@ -315,6 +315,79 @@ export function createAccessSetup(ctx, openBankingWizard) {
     start();
   }
 
+  async function renderCloudSettings() {
+    const panel = document.querySelector('#cloud-intelligence-panel');
+    const row = document.querySelector('#cloud-intelligence-settings');
+    const sub = document.querySelector('#cloud-intelligence-status');
+    if (!panel || !row || !sub) return;
+
+    try {
+      const status = await api('api/intelligence/admin/cloud');
+      panel.hidden = false;
+      sub.textContent = status.mode === 'enabled'
+        ? get('cloudIntelligence.enabled')
+        : get('cloudIntelligence.disabled');
+      if (status.lastErrorCode)
+        sub.textContent += ' · ' + status.lastErrorCode;
+      row.onclick = () => openCloudWizard(status);
+    } catch {
+      panel.hidden = true;
+    }
+  }
+
+  function openCloudWizard(initialStatus, options = {}) {
+    let status = initialStatus;
+    const dlg = dialog(
+      '<div class="dialog-card banking-setup cloud-intelligence-setup">' +
+      '<div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div>' +
+      '<div data-step></div></div>');
+    const step = dlg.querySelector('[data-step]');
+    dlg.querySelector('h2').textContent = get('cloudIntelligence.title');
+    dlg.querySelector('[data-close]').onclick = () => dlg.close();
+    dlg.addEventListener('close', () => options.onClose?.(), { once: true });
+
+    const draw = () => {
+      const enabledByDefault = status?.requiresSetupDecision
+        ? true
+        : status?.mode === 'enabled';
+      step.innerHTML =
+        '<p>' + esc(get('cloudIntelligence.explain')) + '</p>' +
+        '<p class="row-sub">' + esc(get('cloudIntelligence.shared')) + '</p>' +
+        '<label class="check"><input type="checkbox" data-enabled ' + (enabledByDefault ? 'checked' : '') + '> ' +
+          esc(get('cloudIntelligence.useCloud')) + '</label>' +
+        '<p class="row-sub">' + esc(get('cloudIntelligence.localWins')) + '</p>' +
+        '<div class="dialog-actions"><button type="button" data-cancel>' + esc(get('common.cancel')) + '</button>' +
+        '<button type="button" data-save>' + esc(get('common.save')) + '</button></div>';
+
+      step.querySelector('[data-cancel]').onclick = () => dlg.close();
+      step.querySelector('[data-save]').onclick = async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        const enabled = step.querySelector('[data-enabled]').checked;
+        try {
+          if (enabled) {
+            status = await api('api/intelligence/admin/cloud/enable', jsonBody({
+              policyVersion: status.currentPolicyVersion,
+              locale: document.documentElement.lang || navigator.language || 'und',
+              clientVersion: 'web'
+            }));
+          } else {
+            status = await api('api/intelligence/admin/cloud/disable', jsonBody({}));
+          }
+          await renderCloudSettings();
+          dlg.close();
+          toast(get(enabled ? 'cloudIntelligence.savedEnabled' : 'cloudIntelligence.savedDisabled'));
+        } catch (error) {
+          toast(error.message || get('common.error'));
+          button.disabled = false;
+        }
+      };
+    };
+
+    dlg.showModal();
+    draw();
+  }
+
   async function maybeOpenRegistrationOnboarding() {
     let onboarding;
     try { onboarding = await api('api/onboarding/status'); }
@@ -343,7 +416,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       try { ai = await api('api/intelligence/access'); } catch {}
 
       step.innerHTML =
-        '<div class="setup-progress">1 / 2</div>' +
+        '<div class="setup-progress">1 / 3</div>' +
         '<h3>' + esc(get('onboarding.aiTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.aiText')) + '</p>' +
         '<div class="row-sub">' +
@@ -369,7 +442,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       const configured = Boolean(bank?.profile);
 
       step.innerHTML =
-        '<div class="setup-progress">2 / 2</div>' +
+        '<div class="setup-progress">2 / 3</div>' +
         '<h3>' + esc(get('onboarding.bankTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.bankText')) + '</p>' +
         '<div class="row-sub">' +
@@ -389,7 +462,51 @@ export function createAccessSetup(ctx, openBankingWizard) {
       step.querySelector('[data-back]').onclick = aiStep;
       step.querySelector('[data-setup]').onclick =
         () => openBankingWizard(bank, { onClose: bankStep });
-      step.querySelector('[data-finish]').onclick = finish;
+      step.querySelector('[data-finish]').textContent = get('onboarding.continueOrSkip');
+      step.querySelector('[data-finish]').onclick = cloudStep;
+    };
+
+    const cloudStep = async () => {
+      let cloud = null;
+      try { cloud = await api('api/intelligence/admin/cloud'); }
+      catch {
+        await finish();
+        return;
+      }
+
+      const checked = cloud.requiresSetupDecision ? true : cloud.mode === 'enabled';
+      step.innerHTML =
+        '<div class="setup-progress">3 / 3</div>' +
+        '<h3>' + esc(get('onboarding.cloudTitle')) + '</h3>' +
+        '<p>' + esc(get('onboarding.cloudText')) + '</p>' +
+        '<label class="check"><input type="checkbox" data-cloud ' + (checked ? 'checked' : '') + '> ' +
+          esc(get('cloudIntelligence.useCloud')) + '</label>' +
+        '<p class="row-sub">' + esc(get('cloudIntelligence.shared')) + '</p>' +
+        '<div class="dialog-actions">' +
+          '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
+          '<button type="button" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
+        '</div>';
+
+      step.querySelector('[data-back]').onclick = bankStep;
+      step.querySelector('[data-finish]').onclick = async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          if (step.querySelector('[data-cloud]').checked) {
+            await api('api/intelligence/admin/cloud/enable', jsonBody({
+              policyVersion: cloud.currentPolicyVersion,
+              locale: document.documentElement.lang || navigator.language || 'und',
+              clientVersion: 'web'
+            }));
+          } else {
+            await api('api/intelligence/admin/cloud/disable', jsonBody({}));
+          }
+          await finish();
+        } catch (error) {
+          toast(error.message || get('common.error'));
+          button.disabled = false;
+        }
+      };
     };
 
     const finish = async () => {
@@ -409,6 +526,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
   return {
     renderAiAccessSettings,
     openAiAccessWizard,
+    renderCloudSettings,
+    openCloudWizard,
     maybeOpenRegistrationOnboarding
   };
 }
