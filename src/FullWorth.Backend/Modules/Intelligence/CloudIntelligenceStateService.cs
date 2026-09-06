@@ -15,6 +15,7 @@ public sealed record CloudIntelligenceStateView(
     string? EntitlementStatus,
     DateTimeOffset? LastRegistrationAt,
     DateTimeOffset? LastSubmissionAt,
+    DateTimeOffset? LastKnowledgePackCheckAt,
     string? LastErrorCode,
     DateTimeOffset UpdatedAt);
 
@@ -192,6 +193,7 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
             state.EntitlementStatus,
             state.LastRegistrationAt,
             state.LastSubmissionAt,
+            state.LastKnowledgePackCheckAt,
             state.LastErrorCode,
             state.UpdatedAt);
     }
