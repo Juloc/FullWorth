@@ -50,7 +50,9 @@ public sealed record ContractView(
     bool IsActive,
     string? Notes,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    decimal MonthlyEquivalent = 0,
+    decimal AnnualizedAmount = 0);
 
 public enum ContractAccessLevel
 {
@@ -254,7 +256,19 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             contract.IsActive,
             contract.Notes,
             contract.CreatedAt,
-            contract.UpdatedAt));
+            contract.UpdatedAt,
+            contract.Amount * (
+                contract.BillingCycle == "weekly" ? 52m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
+                contract.BillingCycle == "quarterly" ? 1m / (3m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
+                contract.BillingCycle == "yearly" ? 1m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
+                contract.BillingCycle == "daily" ? 365m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
+                1m / (contract.Interval <= 0 ? 1 : contract.Interval)),
+            contract.Amount * (
+                contract.BillingCycle == "weekly" ? 52m / (contract.Interval <= 0 ? 1 : contract.Interval) :
+                contract.BillingCycle == "quarterly" ? 4m / (contract.Interval <= 0 ? 1 : contract.Interval) :
+                contract.BillingCycle == "yearly" ? 1m / (contract.Interval <= 0 ? 1 : contract.Interval) :
+                contract.BillingCycle == "daily" ? 365m / (contract.Interval <= 0 ? 1 : contract.Interval) :
+                12m / (contract.Interval <= 0 ? 1 : contract.Interval))));
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking()
