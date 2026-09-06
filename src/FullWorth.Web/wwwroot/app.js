@@ -607,7 +607,7 @@ async function openCategoryDialog(){
 }
 
 
-async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings()])}
+async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
 // Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
 // fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
 // which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
