@@ -24,6 +24,19 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task WealthTrendSupportsTenYearsMaxAndCustomDateRange()
+    {
+        var js = await GetAsync("/features/networth.js");
+        Assert.Contains("{ m: 120", js);
+        Assert.Contains("{ m: 0", js);
+        Assert.Contains("data-range-from", js);
+        Assert.Contains("data-range-to", js);
+        Assert.Contains("data-range-apply", js);
+        Assert.Contains("windowMonths = -1", js);
+        Assert.Contains("URLSearchParams", js);
+    }
+
+    [Fact]
     public async Task AssetWizardUsesCanonicalTaxonomyAndValuationHistory()
     {
         var js = await GetAsync("/features/networth.js");
