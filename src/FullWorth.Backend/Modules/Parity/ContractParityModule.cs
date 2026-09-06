@@ -12,6 +12,20 @@ public sealed record ContractSplitComponent(string Name, decimal Amount, Guid? C
 public sealed record ContractSplitWrite(string BundleName, IReadOnlyList<ContractSplitComponent> Components, string HistoryMode = "from_now");
 public sealed record ContractMergeWrite(IReadOnlyList<Guid> ContractIds, Guid? TargetContractId = null, string? TargetName = null, Guid? TargetCategoryId = null, Guid? TargetAccountId = null);
 public sealed record CancellationWrite(DateOnly? MinimumTermEnd,int? NoticePeriodValue,string? NoticePeriodUnit,int? RenewalPeriodValue,string? RenewalPeriodUnit,bool AutoRenews,DateOnly? CancellationDeadline,string CancellationStatus,string? CustomerNumber,string? ProviderContact);
+public sealed record CancellationDetailsView(
+    DateOnly? MinimumTermEnd,
+    int? NoticePeriodValue,
+    string? NoticePeriodUnit,
+    int? RenewalPeriodValue,
+    string? RenewalPeriodUnit,
+    bool AutoRenews,
+    DateOnly? CancellationDeadline,
+    string CancellationStatus,
+    string? CustomerNumber,
+    string? ProviderContact,
+    DateTimeOffset? CancellationSentAt,
+    DateTimeOffset? CancellationConfirmedAt,
+    DateTimeOffset? UpdatedAt);
 
 public static class ContractParityEndpoints
 {
@@ -24,6 +38,7 @@ public static class ContractParityEndpoints
         group.MapGet("/transaction/{transactionId:guid}/links",GetTransactionLinks);
         group.MapPost("/{contractId:guid}/split",SplitContract);
         group.MapPost("/merge",MergeContracts);
+        group.MapGet("/cancellations",ListCancellations);
         group.MapGet("/{contractId:guid}/cancellation",GetCancellation);
         group.MapPut("/{contractId:guid}/cancellation",PutCancellation);
         group.MapGet("/{contractId:guid}/cancellation-letter",CancellationLetter);
@@ -84,7 +99,58 @@ ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"="ContractTrans
         audit.Record(fullWorthSpaceId,uid,"contract.merged","RecurringContract",target.Id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{targetId=target.Id,archived=contracts.Where(x=>x.Id!=target.Id).Select(x=>x.Id)});
     }
 
-    private static async Task<IResult> GetCancellation(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT * FROM \"ContractCancellationDetails\" WHERE \"ContractId\"=@id",("@id",contractId));await using var r=await cmd.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))return Results.Ok(new CancellationWrite(null,null,null,null,null,false,null,"none",null,null));return Results.Ok(new CancellationWrite(ParitySql.NullableDate(r,"MinimumTermEnd"),r.IsDBNull(r.GetOrdinal("NoticePeriodValue"))?null:ParitySql.Int(r,"NoticePeriodValue"),ParitySql.NullableString(r,"NoticePeriodUnit"),r.IsDBNull(r.GetOrdinal("RenewalPeriodValue"))?null:ParitySql.Int(r,"RenewalPeriodValue"),ParitySql.NullableString(r,"RenewalPeriodUnit"),ParitySql.Bool(r,"AutoRenews"),ParitySql.NullableDate(r,"CancellationDeadline"),ParitySql.String(r,"CancellationStatus"),ParitySql.NullableString(r,"CustomerNumber"),ParitySql.NullableString(r,"ProviderContact")));}
+    private static async Task<IResult> ListCancellations(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    {
+        var uid=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();
+        var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var c=await ParitySql.OpenAsync(db,ct);
+        await using var cmd=ParitySql.Command(c,"""
+SELECT c."Id" AS "ContractId",c."AccountId",d."MinimumTermEnd",d."CancellationDeadline",d."CancellationStatus",d."AutoRenews",d."CancellationSentAt",d."CancellationConfirmedAt"
+FROM "Contracts" c
+JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id"
+WHERE c."FullWorthSpaceId"=@space
+ORDER BY c."Name"
+""",("@space",fullWorthSpaceId));
+        await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
+        while(await r.ReadAsync(ct))
+        {
+            var accountId=ParitySql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;
+            rows.Add(new{
+                contractId=ParitySql.Guid(r,"ContractId"),
+                minimumTermEnd=ParitySql.NullableDate(r,"MinimumTermEnd"),
+                cancellationDeadline=ParitySql.NullableDate(r,"CancellationDeadline"),
+                cancellationStatus=ParitySql.String(r,"CancellationStatus"),
+                autoRenews=ParitySql.Bool(r,"AutoRenews"),
+                cancellationSentAt=ParitySql.NullableTimestamp(r,"CancellationSentAt"),
+                cancellationConfirmedAt=ParitySql.NullableTimestamp(r,"CancellationConfirmedAt")
+            });
+        }
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> GetCancellation(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    {
+        var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();
+        var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
+SELECT "MinimumTermEnd","NoticePeriodValue","NoticePeriodUnit","RenewalPeriodValue","RenewalPeriodUnit","AutoRenews","CancellationDeadline","CancellationStatus","CustomerNumber","ProviderContact","CancellationSentAt","CancellationConfirmedAt","UpdatedAt"
+FROM "ContractCancellationDetails" WHERE "ContractId"=@id
+""",("@id",contractId));
+        await using var r=await cmd.ExecuteReaderAsync(ct);
+        if(!await r.ReadAsync(ct))return Results.Ok(new CancellationDetailsView(null,null,null,null,null,false,null,"none",null,null,null,null,null));
+        return Results.Ok(new CancellationDetailsView(
+            ParitySql.NullableDate(r,"MinimumTermEnd"),
+            r.IsDBNull(r.GetOrdinal("NoticePeriodValue"))?null:ParitySql.Int(r,"NoticePeriodValue"),
+            ParitySql.NullableString(r,"NoticePeriodUnit"),
+            r.IsDBNull(r.GetOrdinal("RenewalPeriodValue"))?null:ParitySql.Int(r,"RenewalPeriodValue"),
+            ParitySql.NullableString(r,"RenewalPeriodUnit"),
+            ParitySql.Bool(r,"AutoRenews"),
+            ParitySql.NullableDate(r,"CancellationDeadline"),
+            ParitySql.String(r,"CancellationStatus"),
+            ParitySql.NullableString(r,"CustomerNumber"),
+            ParitySql.NullableString(r,"ProviderContact"),
+            ParitySql.NullableTimestamp(r,"CancellationSentAt"),
+            ParitySql.NullableTimestamp(r,"CancellationConfirmedAt"),
+            ParitySql.NullableTimestamp(r,"UpdatedAt")));
+    }
 
     private static async Task<IResult> PutCancellation(Guid contractId,Guid fullWorthSpaceId,CancellationWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);if(request.NoticePeriodValue<0||request.RenewalPeriodValue<0||request.CancellationStatus is not("none" or "planned" or "sent" or "confirmed" or "cancelled"))return Results.BadRequest(new{error="Invalid cancellation metadata."});var deadline=request.CancellationDeadline??CalculateDeadline(request.MinimumTermEnd,request.NoticePeriodValue,request.NoticePeriodUnit);var now=DateTimeOffset.UtcNow;var sent=request.CancellationStatus is "sent" or "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var confirmed=request.CancellationStatus is "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
 INSERT INTO "ContractCancellationDetails" ("ContractId","MinimumTermEnd","NoticePeriodValue","NoticePeriodUnit","RenewalPeriodValue","RenewalPeriodUnit","AutoRenews","CancellationDeadline","CancellationStatus","CancellationSentAt","CancellationConfirmedAt","CustomerNumber","ProviderContact","UpdatedAt") VALUES (@id,@term,@npv,@npu,@rpv,@rpu,@renews,@deadline,@status,@sent,@confirmed,@customer,@contact,@now)
