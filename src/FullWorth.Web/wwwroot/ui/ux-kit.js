@@ -18,12 +18,36 @@ const CATEGORY_ICONS = {
   electricity: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', utilities: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z', internet: 'M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19h.01',
   health: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', shopping: 'M6 6h12v14l-3-2-3 2-3-2-3 2Z', leisure: 'M4 5h16v11H4zM8 20h8M12 16v4',
   savings: 'M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8ZM8 11h.01', insurance: 'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z', travel: 'M2 16l20-7-7 20-3-8-8-3Z',
+  vehicle: 'M5 17h14l1-5-2-4H6l-2 4-1 5ZM7 18v2M17 18v2', subscriptions: 'M5 7h14v10H5zM9 21h6M12 17v4', education: 'M3 9l9-5 9 5-9 5-9-5Zm4 3v5c3 2 7 2 10 0v-5', pets: 'M8 11c-2 0-3-2-2-3s3 0 3 2m7 1c2 0 3-2 2-3s-3 0-3 2m-3 1c-3 0-5 3-3 6 1 2 5 2 6 0 2-3 0-6-3-6Z', fees: 'M4 6h16v12H4zM8 10h8M8 14h5', taxes: 'M5 3h14v18H5zM8 8h8M8 12h8M8 16h5', donations: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', debt: 'M4 8h16v12H4zM8 4h8v4M8 13h8', transfers: 'M5 8h12m0 0-3-3m3 3-3 3M19 16H7m0 0 3-3m-3 3 3 3', cash: 'M3 6h18v12H3zM7 12h.01M17 12h.01M12 9v6', family: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20c0-4 2-6 5-6s5 2 5 6m-2 0c0-4 2-6 5-6s5 2 5 6', other: 'M5 12h.01M12 12h.01M19 12h.01',
 };
 function categoryGlyph(iconKey) {
   if (!iconKey) return null;
   const key = String(iconKey).trim();
   const path = CATEGORY_ICONS[key] || CATEGORY_ICONS[key.toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/).pop().toLowerCase()] || CATEGORY_ICONS[key.split(/[.\-_ ]/)[0].toLowerCase()];
   return path ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>` : null;
+}
+
+const BRAND_LOGOS = [
+  { aliases: ['VODAFONE'], path: '/brands/vodafone.svg' },
+  { aliases: ['LIDL'], path: '/brands/lidl.svg' },
+  { aliases: ['REWE'], path: '/brands/rewe.svg' },
+  { aliases: ['EDEKA'], path: '/brands/edeka.svg' },
+  { aliases: ['NETFLIX'], path: '/brands/netflix.svg' },
+  { aliases: ['SPOTIFY'], path: '/brands/spotify.svg' },
+  { aliases: ['DEUTSCHE BAHN', 'DB VERTRIEB', 'DB FERNVERKEHR', 'DB REGIO'], path: '/brands/deutschebahn.svg' },
+  { aliases: ['SHELL'], path: '/brands/shell.svg' },
+  { aliases: ['ARAL'], path: '/brands/aral.svg' },
+  { aliases: ['IKEA'], path: '/brands/ikea.svg' },
+  { aliases: ['ROSSMANN'], path: '/brands/rossmann.svg' },
+];
+function brandLogoPath(name) {
+  const normalized = String(name || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, ' ').trim();
+  if (!normalized) return null;
+  const padded = ` ${normalized} `;
+  for (const brand of BRAND_LOGOS) {
+    if (brand.aliases.some(alias => padded.includes(` ${alias} `))) return brand.path;
+  }
+  return null;
 }
 // True for a categoryIconKey that is a literal emoji (some categories store an emoji in their Icon field).
 // Uses explicit ES6 code-point ranges (\u{…} with /u) rather than the \p{…} property escape — the latter
@@ -37,7 +61,9 @@ function isEmoji(s) { try { return EMOJI_RE.test(String(s || '')); } catch { ret
 // `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
 export function identityIcon(name, opts = {}) {
   if (opts.isTransfer) return `<span class="fw-ident fw-ident-transfer" aria-hidden="true">${opts.isSavings ? '↑' : '⇄'}</span>`;
-  if (opts.logoAssetPath) return `<span class="fw-ident"><img class="fw-ident-logo" src="${esc(opts.logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"></span>`;
+  const inferredBrandLogo = !opts.logoAssetPath ? brandLogoPath(name) : null;
+  const logoAssetPath = opts.logoAssetPath || inferredBrandLogo;
+  if (logoAssetPath) return `<span class="fw-ident"><img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"></span>`;
   const iconKey = opts.categoryIconKey;
   if (iconKey && isEmoji(iconKey)) return `<span class="fw-ident fw-ident-cat" aria-hidden="true">${esc(iconKey)}</span>`;
   const glyph = categoryGlyph(iconKey);
