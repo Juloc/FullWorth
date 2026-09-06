@@ -101,8 +101,11 @@ public sealed class ReceiptImportService(
         return (stored is null ? null : ToView(stored), test.ServerVersion, null);
     }
 
-    public Task DeletePaperlessConnectionAsync(Guid fullWorthSpaceId, CancellationToken ct) =>
-        store.DeletePaperlessConnectionAsync(fullWorthSpaceId, ct);
+    public async Task DeletePaperlessConnectionAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        await store.DisablePaperlessAutoImportAsync(fullWorthSpaceId, ct);
+        await store.DeletePaperlessConnectionAsync(fullWorthSpaceId, ct);
+    }
 
     public async Task<(bool Success, string? ServerVersion, string? Error)> TestPaperlessAsync(Guid fullWorthSpaceId, CancellationToken ct)
     {
@@ -146,6 +149,10 @@ public sealed class ReceiptImportService(
             ? await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, existingId, ct)
             : null;
         if (presetId.HasValue && existing is null) throw new ReceiptImportException("Paperless preset was not found.");
+
+        var siblings = await store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct);
+        if (siblings.Any(x => x.Id != id && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ReceiptImportException("A Paperless preset with this name already exists.");
 
         var query = string.IsNullOrWhiteSpace(request.Query) ? null : request.Query.Trim();
         if (query?.Length > 4000) throw new ReceiptImportException("Paperless query is too long.");
