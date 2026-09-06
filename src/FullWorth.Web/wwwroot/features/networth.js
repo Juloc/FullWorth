@@ -405,6 +405,27 @@ function renderAssets(assets) {
   el.appendChild(frag);
 }
 
+function askCoachAboutWealth(entityType, item, label, amount) {
+  window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
+    entityType,
+    entityId: item.id,
+    entityLabel: label,
+    details: {
+      value: entityType === 'asset' ? String(amount ?? '') : '',
+      balance: entityType === 'liability' ? String(amount ?? '') : '',
+      currency: item.currency || '',
+      kind: item.kind || '',
+      includeInNetWorth: String(item.includeInNetWorth !== false)
+    }
+  }}));
+}
+
+function wealthCoachButton(onclick) {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = 'ghost nw-coach'; button.textContent = 'Coach';
+  button.onclick = onclick; return button;
+}
+
 function assetRow(asset) {
   const row = document.createElement('div');
   row.className = `row nw-item${asset.includeInNetWorth ? '' : ' nw-excluded'}`;
@@ -412,6 +433,7 @@ function assetRow(asset) {
     ? `<button class="icon-button" data-detail title="${ctx.esc(t('details'))}" aria-label="${ctx.esc(t('details'))}">›</button>`
     : `<button class="icon-button" data-history title="${ctx.esc(t('valueHistory'))}" aria-label="${ctx.esc(t('valueHistory'))}">↗</button>`;
   row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(asset.name)}${asset.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(t(asset.kind || 'other'))}${asset.valuedAt ? ` · ${ctx.esc(dateValue(asset.valuedAt))}` : ''}</div></div><div class="row-side"><span class="amount">${ctx.money(asset.currentValue, asset.currency)}</span>${detailAction}<button class="icon-button" data-toggle title="${ctx.esc(ctx.get(asset.includeInNetWorth ? 'networth.exclude' : 'networth.include'))}">${asset.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button></div>`;
+  row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('asset', asset, asset.name, asset.currentValue)));
   row.querySelector('[data-edit]').onclick = () => openAssetForm(asset.kind || 'other', asset);
   row.querySelector('[data-history]')?.addEventListener('click', () => openValuationHistory(asset));
   row.querySelector('[data-detail]')?.addEventListener('click', () => openRealEstateDetail(ctx, asset, () => renderNetWorth(ctx)));
@@ -429,6 +451,7 @@ function renderLiabilities(liabilities) {
   for (const item of liabilities) {
     const row = document.createElement('div'); row.className = `row nw-item${item.includeInNetWorth ? '' : ' nw-excluded'}`;
     row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name)}${item.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(ctx.get(`networth.liabilityKind_${item.kind || 'other'}`))}</div></div><div class="row-side"><span class="amount">${ctx.money(item.currentBalance, item.currency)}</span><button class="icon-button" data-toggle>${item.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit>✎</button></div>`;
+    row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('liability', item, item.name, item.currentBalance)));
     row.querySelector('[data-edit]').onclick = () => openLiabilityDialog(item);
     row.querySelector('[data-toggle]').onclick = async () => {
       try { await ctx.api(`api/liabilities/${item.id}`, jsonBody({ ...liabilityToWrite(item), includeInNetWorth: !item.includeInNetWorth }, 'PUT')); await renderNetWorth(ctx); }
@@ -447,6 +470,10 @@ function renderInvestments(portfolios, overview) {
   for (const portfolio of active) {
     const row = document.createElement('div'); row.className = 'row';
     row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(portfolio.name)}</div><div class="row-sub">${ctx.esc(t('portfolio'))} · ${ctx.esc(portfolio.currency || overview.currency)}</div></div>`;
+    row.appendChild(wealthCoachButton(() => window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
+      entityType:'portfolio', entityId:portfolio.id, entityLabel:portfolio.name,
+      details:{currency:portfolio.currency||overview.currency||''}
+    }}))));
     list.appendChild(row);
   }
 }
