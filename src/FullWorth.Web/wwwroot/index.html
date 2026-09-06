@@ -3,17 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <script>
-    (() => {
-      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-      if (!standalone) return;
-      document.documentElement.classList.add('pwa-standalone');
-      document.querySelector('meta[name="viewport"]')?.setAttribute(
-        'content',
-        'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover'
-      );
-    })();
-  </script>
+  <script src="/pwa/standalone-init.js"></script>
   <meta name="color-scheme" content="light dark">
   <link rel="icon" type="image/svg+xml" href="/pwa/icon-light.svg" media="(prefers-color-scheme: light)">
   <link rel="icon" type="image/svg+xml" href="/pwa/icon-dark.svg" media="(prefers-color-scheme: dark)">
