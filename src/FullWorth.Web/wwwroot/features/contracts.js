@@ -202,9 +202,9 @@ async function loadCloudBenchmarks() {
       const relation = delta == null
         ? ''
         : delta > 2
-          ? t('${Math.round(delta)} % über Median', '${Math.round(delta)}% above median')
+          ? t(Math.round(delta) + ' % über Median', Math.round(delta) + '% above median')
           : delta < -2
-            ? t('${Math.abs(Math.round(delta))} % unter Median', '${Math.abs(Math.round(delta))}% below median')
+            ? t(Math.abs(Math.round(delta)) + ' % unter Median', Math.abs(Math.round(delta)) + '% below median')
             : t('nahe am Median', 'near median');
 
       return `<div class="fw-row">
