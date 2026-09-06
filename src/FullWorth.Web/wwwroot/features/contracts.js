@@ -579,6 +579,67 @@ async function openDetail(id) {
   dlg.showModal();
 }
 
+async function openCancellationDialog(contract, existing) {
+  let details = existing;
+  if (!details) {
+    try { details = await ctx.api(`api/contract-parity/${contract.id}/cancellation`); }
+    catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  }
+  details ||= {};
+  const dv = value => value ? String(value).slice(0, 10) : '';
+  const statusOptions = ['none', 'planned', 'sent', 'confirmed', 'cancelled']
+    .map(status => `<option value='${status}'${cancellationStatus(details) === status ? ' selected' : ''}>${ctx.esc(cancellationStatusLabel(status))}</option>`).join('');
+  const unitOptions = selected => ['days', 'weeks', 'months']
+    .map(unit => `<option value='${unit}'${selected === unit ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.period_' + unit))}</option>`).join('');
+
+  const dlg = ctx.dialog(`<form class='dialog-card contract-dialog'>
+    <div class='panel-head'><div><h2>${ctx.esc(ctx.get('contracts.manageCancellation'))}</h2><div class='row-sub'>${ctx.esc(contract.name)}</div></div><button type='button' data-close aria-label='${ctx.esc(ctx.get('common.close'))}'>×</button></div>
+    <label>${ctx.esc(ctx.get('contracts.status'))}<select name='status'>${statusOptions}</select></label>
+    <label>${ctx.esc(ctx.get('contracts.minimumTermEnd'))}<input name='minimumTermEnd' type='date' value='${dv(details.minimumTermEnd)}'></label>
+    <div class='rule-grid'>
+      <label>${ctx.esc(ctx.get('contracts.noticePeriod'))}<input name='noticeValue' type='number' min='0' value='${details.noticePeriodValue ?? ''}'></label>
+      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='noticeUnit'>${unitOptions(details.noticePeriodUnit || 'months')}</select></label>
+    </div>
+    <label>${ctx.esc(ctx.get('contracts.cancellationDeadline'))}<input name='deadline' type='date' value='${dv(details.cancellationDeadline)}'></label>
+    <div class='rule-grid'>
+      <label>${ctx.esc(ctx.get('contracts.renewalPeriod'))}<input name='renewalValue' type='number' min='0' value='${details.renewalPeriodValue ?? ''}'></label>
+      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='renewalUnit'>${unitOptions(details.renewalPeriodUnit || 'months')}</select></label>
+    </div>
+    <label class='check'><input name='autoRenews' type='checkbox'${details.autoRenews ? ' checked' : ''}> ${ctx.esc(ctx.get('contracts.autoRenews'))}</label>
+    <label>${ctx.esc(ctx.get('contracts.customerNumber'))}<input name='customerNumber' maxlength='160' value='${ctx.esc(details.customerNumber || '')}'></label>
+    <label>${ctx.esc(ctx.get('contracts.providerContact'))}<textarea name='providerContact' maxlength='500' rows='2'>${ctx.esc(details.providerContact || '')}</textarea></label>
+    ${details.cancellationSentAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.cancelledOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationSentAt))}</div>` : ''}
+    ${details.cancellationConfirmedAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.confirmedOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationConfirmedAt))}</div>` : ''}
+    <div class='dialog-actions'><button type='button' data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type='submit'>${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
+    const numberOrNull = name => fd.get(name) === '' ? null : Number(fd.get(name));
+    const body = {
+      minimumTermEnd: fd.get('minimumTermEnd') || null,
+      noticePeriodValue: numberOrNull('noticeValue'),
+      noticePeriodUnit: fd.get('noticeUnit') || null,
+      renewalPeriodValue: numberOrNull('renewalValue'),
+      renewalPeriodUnit: fd.get('renewalUnit') || null,
+      autoRenews: fd.get('autoRenews') === 'on',
+      cancellationDeadline: fd.get('deadline') || null,
+      cancellationStatus: fd.get('status') || 'none',
+      customerNumber: (fd.get('customerNumber') || '').trim() || null,
+      providerContact: (fd.get('providerContact') || '').trim() || null
+    };
+    try {
+      await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  };
+  dlg.showModal();
+}
+
 // Payment trend as a small SVG polyline (oldest→newest). Masked in privacy mode by hiding the line.
 function sparkline(payments) {
   if (!payments || payments.length < 2) return '';
