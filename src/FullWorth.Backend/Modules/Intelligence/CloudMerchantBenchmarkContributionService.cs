@@ -107,7 +107,7 @@ public sealed class CloudMerchantBenchmarkContributionService(
 
             // Ledger convention: expenses are negative, refunds positive. Negating yields net spend.
             resolvedRows.Add(new MerchantSpendSource(
-                merchant.MerchantKey,
+                CloudBenchmarkEntityKeys.ForMerchant(merchant.MerchantKey),
                 currency,
                 -row.Amount,
                 country));
@@ -116,7 +116,7 @@ public sealed class CloudMerchantBenchmarkContributionService(
         var observedMonth = monthStart.ToString("yyyy-MM");
         var queued = 0;
 
-        foreach (var group in resolvedRows.GroupBy(x => new { x.MerchantKey, x.Currency }))
+        foreach (var group in resolvedRows.GroupBy(x => new { x.EntityKey, x.Currency }))
         {
             var value = Math.Round(group.Sum(x => x.NetSpend), 2);
             if (value is <= 0m or > 1_000_000m)
@@ -132,14 +132,14 @@ public sealed class CloudMerchantBenchmarkContributionService(
             var payload = JsonSerializer.Serialize(new
             {
                 metricKey = MetricKey,
-                entityKey = group.Key.MerchantKey,
+                entityKey = group.Key.EntityKey,
                 value,
                 currency = group.Key.Currency,
                 country,
                 observedMonth
             });
             var idempotencyKey = IdempotencyKey(
-                group.Key.MerchantKey,
+                group.Key.EntityKey,
                 group.Key.Currency,
                 observedMonth,
                 value,
@@ -221,7 +221,7 @@ public sealed class CloudMerchantBenchmarkContributionService(
     }
 
     private sealed record MerchantSpendSource(
-        string MerchantKey,
+        string EntityKey,
         string Currency,
         decimal NetSpend,
         string? Country);
