@@ -56,13 +56,16 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task TransactionIdentity_UsesLocalBrandThenCategoryFallback()
+    public async Task TransactionIdentity_UsesCloudBrandPackThenLocalAndCategoryFallbacks()
     {
         var kit = await GetAsync("/ui/ux-kit.js");
         var transactions = await GetAsync("/features/transactions.js");
 
+        Assert.Contains("api/intelligence/brand-catalog", kit);
+        Assert.Contains("OFFICIAL_BRAND_LOGOS", kit);
+        Assert.Contains("ensureOfficialBrandCatalog", transactions);
         Assert.Contains("brandLogoPath", kit);
-        Assert.Contains("/brands/vodafone.svg", kit);
+        Assert.Contains("/brands/vodafone.svg", kit); // bundled bootstrap fallback when cloud is disabled/not installed
         Assert.Contains("categoryIconKey", kit);
         Assert.Contains("categoryIconKey: x.categoryIconKey", transactions);
         Assert.DoesNotContain("logo.clearbit", kit, StringComparison.OrdinalIgnoreCase);
