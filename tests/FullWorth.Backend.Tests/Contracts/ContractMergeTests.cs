@@ -22,9 +22,9 @@ public sealed class ContractMergeTests
 
         using var merge = await client.SendAsync(Request(
             HttpMethod.Post,
-            $"/api/contracts/{s.Target}/merge?fullWorthSpaceId={s.Space}",
+            $"/api/contract-parity/merge?fullWorthSpaceId={s.Space}",
             s.Owner,
-            new { sourceContractIds = new[] { s.Source } }));
+            new { contractIds = new[] { s.Target, s.Source }, targetContractId = s.Target }));
         Assert.Equal(HttpStatusCode.OK, merge.StatusCode);
 
         using var listResponse = await client.SendAsync(Request(
@@ -56,7 +56,7 @@ public sealed class ContractMergeTests
 
         using var unmerge = await client.SendAsync(Request(
             HttpMethod.Delete,
-            $"/api/contracts/{s.Target}/merge/{s.Source}?fullWorthSpaceId={s.Space}",
+            $"/api/contract-parity/merge/{s.Target}/{s.Source}?fullWorthSpaceId={s.Space}",
             s.Owner));
         Assert.Equal(HttpStatusCode.NoContent, unmerge.StatusCode);
 
