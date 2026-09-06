@@ -77,6 +77,32 @@ public sealed class CloudIntelligenceStateTests
     }
 
     [Fact]
+    public async Task Disable_discards_unsent_outbox_rows()
+    {
+        await using var fixture = await CreateAsync();
+        var service = new CloudIntelligenceStateService(fixture.Db);
+        var userId = Guid.NewGuid();
+        var enabled = await service.EnableAsync(
+            userId,
+            new EnableCloudIntelligenceRequest(CloudIntelligencePolicy.CurrentVersion, "de", "test"),
+            CancellationToken.None);
+
+        fixture.Db.CloudSubmissionOutbox.Add(new CloudSubmissionOutbox
+        {
+            InstanceId = enabled.InstanceId,
+            IdempotencyKey = "test:" + Guid.NewGuid().ToString("N"),
+            EventType = "merchant_mapping",
+            PayloadJson = "{}",
+            Status = CloudSubmissionStatuses.Queued
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        await service.DisableAsync(userId, CancellationToken.None);
+
+        Assert.Empty(await fixture.Db.CloudSubmissionOutbox.ToListAsync());
+    }
+
+    [Fact]
     public async Task Enabled_instance_with_stale_policy_requires_reconsent_and_is_not_upload_eligible()
     {
         await using var fixture = await CreateAsync();
