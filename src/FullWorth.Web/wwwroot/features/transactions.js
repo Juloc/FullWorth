@@ -99,10 +99,14 @@ function txReplaceUrl(params) {
   history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
 }
 
-// Active-filter count badge on the Filter button (§5): direction, flags, date range and category.
+// Active-filter count badge on the Filter button (§5). Search text is intentionally excluded because
+// it already has its own visible field; every other active URL-backed filter counts once.
 function updateFilterBadge(f) {
   const btn = ctx.$('#tx-filter'); if (!btn) return;
-  const n = (f.direction ? 1 : 0) + (f.flags ? 1 : 0) + (f.from || f.to ? 1 : 0) + (f.categoryId ? 1 : 0);
+  const n = [
+    f.direction, f.from || f.to, f.categoryId, f.accountId, f.groupId, f.merchant,
+    f.minAmount || f.maxAmount, f.status, f.transfersOnly, f.ignoredOnly, f.refundOnly, f.hasReceipt
+  ].filter(Boolean).length;
   let badge = btn.querySelector('.tx-filter-count');
   if (n) { if (!badge) { badge = document.createElement('span'); badge.className = 'tx-filter-count'; btn.appendChild(badge); } badge.textContent = String(n); }
   else badge?.remove();
@@ -113,37 +117,75 @@ function updateFilterBadge(f) {
 // through the URL (single source of truth) so filters are restorable and agree with the scope banner.
 async function openFilterSheet() {
   const params = new URLSearchParams(location.search);
-  let catOptions = '';
-  try { catOptions = await ctx.categoryOptions(params.get('categoryId') || undefined); } catch { /* category filter optional */ }
-  const dir = ctx.$('#tx-direction').value, flags = ctx.$('#tx-flags').value;
+  let catOptions = '', accounts = [], groups = [], merchants = [];
+  try {
+    [catOptions, accounts, groups, merchants] = await Promise.all([
+      ctx.categoryOptions(params.get('categoryId') || undefined).catch(() => ''),
+      ctx.api('api/accounts').catch(() => []),
+      ctx.api('api/account-groups').catch(() => []),
+      ctx.api('api/merchants').catch(() => [])
+    ]);
+  } catch { /* every lookup is best-effort */ }
+
+  const accountId = params.get('accountId') || '';
+  const groupId = params.get('groupId') || '';
+  const accountOptions = (accounts || []).filter(a => a.isActive !== false).map(a =>
+    `<option value="${ctx.esc(a.id)}"${a.id === accountId ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
+  const groupOptions = (groups || []).map(g =>
+    `<option value="${ctx.esc(g.id)}"${g.id === groupId ? ' selected' : ''}>${ctx.esc(g.name)}</option>`).join('');
+  const merchantValue = params.get('merchant') || '';
+  const merchantOptions = (merchants || []).map(m =>
+    `<option value="${ctx.esc(m.name)}"${m.name === merchantValue ? ' selected' : ''}>${ctx.esc(m.name)}</option>`).join('');
+
   const dlg = ctx.dialog(`<form class="dialog-card drawer tx-filter-sheet" method="dialog">
     <div class="panel-head"><h2>${ctx.esc(deLabel('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('transactions.type'))}<select name="direction"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="income"${dir === 'income' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.income'))}</option><option value="expense"${dir === 'expense' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.expenses'))}</option></select></label>
+    <label>${ctx.esc(ctx.get('transactions.account'))}<select name="account"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${accountOptions}</select></label>
+    <label>${ctx.esc(deLabel('Kontogruppe', 'Account group'))}<select name="group"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${groupOptions}</select></label>
+    <label>${ctx.esc(ctx.get('transactions.type'))}<select name="direction"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="income"${params.get('direction') === 'income' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.income'))}</option><option value="expense"${params.get('direction') === 'expense' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.expenses'))}</option></select></label>
+    <label>${ctx.esc(deLabel('Status', 'Status'))}<select name="status"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="booked"${params.get('status') === 'booked' ? ' selected' : ''}>${ctx.esc(deLabel('Gebucht', 'Booked'))}</option><option value="pending"${params.get('status') === 'pending' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</option></select></label>
     <div class="tx-filter-range"><label>${ctx.esc(deLabel('Von', 'From'))}<input type="date" name="from" value="${ctx.esc(params.get('from') || '')}"></label><label>${ctx.esc(deLabel('Bis', 'To'))}<input type="date" name="to" value="${ctx.esc(params.get('to') || '')}"></label></div>
     <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${catOptions}</select></label>
-    <label class="check"><input type="checkbox" name="fpending"${flags === 'pending' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</label>
-    <label class="check"><input type="checkbox" name="ftransfers"${flags === 'transfers' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
-    <label class="check"><input type="checkbox" name="fignored"${flags === 'ignored' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
+    <label>${ctx.esc(deLabel('Händler', 'Merchant'))}<select name="merchant"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${merchantOptions}</select></label>
+    <div class="tx-filter-range"><label>${ctx.esc(deLabel('Betrag ab', 'Minimum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="minAmount" value="${ctx.esc(params.get('minAmount') || '')}"></label><label>${ctx.esc(deLabel('Betrag bis', 'Maximum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="maxAmount" value="${ctx.esc(params.get('maxAmount') || '')}"></label></div>
+    <label class="check"><input type="checkbox" name="transfersOnly"${params.get('transfersOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
+    <label class="check"><input type="checkbox" name="ignoredOnly"${params.get('ignoredOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
+    <label class="check"><input type="checkbox" name="refundOnly"${params.get('refundOnly') === 'true' ? ' checked' : ''}>${ctx.esc(deLabel('Nur Erstattungen', 'Refunds only'))}</label>
+    <label class="check"><input type="checkbox" name="hasReceipt"${params.get('hasReceipt') === 'true' ? ' checked' : ''}>${ctx.esc(deLabel('Mit Beleg', 'Receipt linked'))}</label>
     <div class="dialog-actions"><button type="button" data-reset class="ghost">${ctx.esc(deLabel('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   dlg.classList.add('drawer');
-  const cat = () => dlg.querySelector('[name="category"]');
-  if (cat() && params.get('categoryId')) cat().value = params.get('categoryId');
+
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  const accountSelect = dlg.querySelector('[name="account"]');
+  const groupSelect = dlg.querySelector('[name="group"]');
+  accountSelect?.addEventListener('change', () => { if (accountSelect.value && groupSelect) groupSelect.value = ''; });
+  groupSelect?.addEventListener('change', () => { if (groupSelect.value && accountSelect) accountSelect.value = ''; });
+
   dlg.querySelector('[data-reset]').onclick = () => {
+    const p = new URLSearchParams(location.search);
+    ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
     ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
-    const p = new URLSearchParams(location.search); ['from', 'to', 'categoryId', 'includeDescendants'].forEach(k => p.delete(k));
     txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
   };
   dlg.querySelector('[data-apply]').onclick = () => {
     const fd = new FormData(dlg.querySelector('form'));
-    ctx.$('#tx-direction').value = fd.get('direction') || '';
-    ctx.$('#tx-flags').value = fd.get('ftransfers') ? 'transfers' : fd.get('fignored') ? 'ignored' : fd.get('fpending') ? 'pending' : '';
     const p = new URLSearchParams(location.search);
-    const setOrDel = (k, v) => { if (v) p.set(k, v); else p.delete(k); };
+    const setOrDel = (k, v) => { const value = String(v || '').trim(); if (value) p.set(k, value); else p.delete(k); };
+    const account = fd.get('account'), group = fd.get('group');
+    setOrDel('accountId', account); setOrDel('groupId', group);
+    if (account) p.delete('groupId'); if (group) p.delete('accountId');
+    setOrDel('direction', fd.get('direction'));
+    setOrDel('status', fd.get('status'));
     setOrDel('from', fd.get('from')); setOrDel('to', fd.get('to'));
-    const c = fd.get('category');
-    if (c) { p.set('categoryId', c); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
+    const category = fd.get('category');
+    if (category) { p.set('categoryId', category); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
+    setOrDel('merchant', fd.get('merchant'));
+    setOrDel('minAmount', fd.get('minAmount')); setOrDel('maxAmount', fd.get('maxAmount'));
+    for (const key of ['transfersOnly','ignoredOnly','refundOnly','hasReceipt']) {
+      if (fd.get(key)) p.set(key, 'true'); else p.delete(key);
+    }
+    ctx.$('#tx-direction').value = String(fd.get('direction') || '');
+    ctx.$('#tx-flags').value = '';
     txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
   };
   dlg.showModal();
@@ -219,26 +261,38 @@ export async function renderTransactions(context) {
   ctx.$('#tx-query').value = urlQuery;
   const q = new URLSearchParams({ limit: '500' });
   const text = urlQuery;
-  const dir = ctx.$('#tx-direction').value;
-  const flags = ctx.$('#tx-flags').value;
+  const dir = params.get('direction') || '';
+  const status = params.get('status') || '';
+  const merchant = params.get('merchant') || '';
+  const minAmount = params.get('minAmount') || '';
+  const maxAmount = params.get('maxAmount') || '';
+  const transfersOnly = params.get('transfersOnly') === 'true';
+  const ignoredOnly = params.get('ignoredOnly') === 'true';
+  const refundOnly = params.get('refundOnly') === 'true';
+  const hasReceipt = params.get('hasReceipt') === 'true';
+  ctx.$('#tx-direction').value = dir;
+  ctx.$('#tx-flags').value = '';
   if (text) q.set('query', text);
   if (dir) q.set('direction', dir);
-  if (flags === 'transfers') q.set('transfersOnly', 'true');
-  if (flags === 'ignored') q.set('includeIgnored', 'true');
+  if (status) q.set('status', status);
+  if (merchant) q.set('merchant', merchant);
+  if (minAmount) q.set('minAmount', minAmount);
+  if (maxAmount) q.set('maxAmount', maxAmount);
+  if (transfersOnly) q.set('transfersOnly', 'true');
+  if (ignoredOnly) { q.set('ignoredOnly', 'true'); q.set('includeIgnored', 'true'); }
+  if (refundOnly) q.set('refundOnly', 'true');
+  if (hasReceipt) q.set('hasReceipt', 'true');
   if (accountId) q.set('accountId', accountId);
   if (groupId) q.set('accountGroupId', groupId);
   if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
   if (fromDate) q.set('from', fromDate);
   if (toDate) q.set('to', toDate);
-  updateFilterBadge({ direction: dir, flags, from: fromDate, to: toDate, categoryId });
+  updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt });
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
   const data = await ctx.api(`api/transactions?${q}`);
-  let items = data.items || [];
-  // 'pending'/'ignored' refine client-side over the fetched page (list endpoint has no pending filter).
-  if (flags === 'pending') items = items.filter(x => x.status === 'PDNG');
-  if (flags === 'ignored') items = items.filter(x => x.isIgnored);
+  const items = data.items || [];
 
   renderSummary(items);
   currentItemsById = new Map(items.map(item => [String(item.id), item]));
@@ -284,7 +338,7 @@ export async function renderTransactions(context) {
     body.appendChild(tr);
   }
   if (!items.length) {
-    const filtered = !!(text || dir || flags || fromDate || toDate || categoryId || accountId || groupId);
+    const filtered = !!(text || dir || status || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
     body.innerHTML = txEmptyState(filtered);
   }
 }
