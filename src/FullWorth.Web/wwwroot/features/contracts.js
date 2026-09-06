@@ -96,7 +96,26 @@ function groupHead(label, items, cur) {
 
 // bindContracts only stashes ctx now — the view (and every control) is rebuilt by renderContracts, and
 // the page-header primary action button (app.js #primary-action) is what invokes newContract.
-export function bindContracts(context) { ctx = context; }
+export function bindContracts(context) {
+  ctx = context;
+  window.addEventListener('fullworth:open-contract', event => { if (event.detail?.id) openDetail(event.detail.id); });
+}
+function askCoachAboutContract(contract, activity = null) {
+  window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
+    entityType: 'contract',
+    entityId: contract.id,
+    entityLabel: contract.name,
+    details: {
+      amount: String(contract.amount ?? ''),
+      currency: contract.currency || '',
+      kind: contract.kind || '',
+      status: contract.isActive ? 'active' : 'archived',
+      nextDueDate: String(activity?.nextExpected || contract.nextDueDate || '').slice(0, 10),
+      monthlyEquivalent: String(contract.monthlyEquivalent ?? ''),
+      annualized: String(activity?.annualizedAmount ?? '')
+    }
+  }}));
+}
 
 // Used by the page-header primary action.
 export function newContract(context) { if (context) ctx = context; return openContractDialog(); }
@@ -379,9 +398,15 @@ function rowFor(c) {
       <div class="fw-row-sub">${sub}</div>
     </div>
     <div class="fw-row-amt">${ctx.money(c.amount, c.currency)}<small>${ctx.esc(cycle)}</small></div>`;
+  const coach = document.createElement('button');
+  coach.type = 'button'; coach.className = 'icon-button contract-coach'; coach.dataset.coach = '';
+  coach.setAttribute('aria-label', t('Coach fragen','Ask Coach')); coach.title = t('Coach fragen','Ask Coach');
+  coach.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg>';
+  row.appendChild(coach);
+  coach.addEventListener('click', event => { event.stopPropagation(); askCoachAboutContract(c); });
   const open = () => openDetail(c.id);
-  row.addEventListener('click', open);
-  row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
+  row.addEventListener('keydown', e => { if (!e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
   return row;
 }
 
@@ -472,6 +497,10 @@ async function openDetail(id) {
         : `<button type="button" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
     </div>
   </div>`);
+  const coachAction = document.createElement('button');
+  coachAction.type = 'button'; coachAction.className = 'ghost'; coachAction.textContent = t('Coach fragen','Ask Coach');
+  coachAction.addEventListener('click', () => { dlg.close(); askCoachAboutContract(contract, activity); });
+  dlg.querySelector('.dialog-actions')?.prepend(coachAction);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
   dlg.querySelector('[data-cancel-contract]')?.addEventListener('click', async () => {

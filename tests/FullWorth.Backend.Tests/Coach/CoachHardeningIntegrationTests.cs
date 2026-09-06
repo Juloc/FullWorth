@@ -134,7 +134,28 @@ public sealed class CoachHardeningIntegrationTests
                         ["accountId"] = "abc",
                         ["direction"] = "expense",
                         ["notAllowed"] = "ignore-me"
-                    }
+                    },
+                    entityType = "transaction",
+                    entityId = "tx-123",
+                    entityLabel = "REWE 42,17 €",
+                    details = new Dictionary<string, string>
+                    {
+                        ["amount"] = "42.17",
+                        ["currency"] = "EUR",
+                        ["note"] = "must-be-dropped"
+                    },
+                    selectedIds = Enumerable.Range(1, 25).Select(i => $"tx-{i}").ToArray(),
+                    selectedItems = Enumerable.Range(1, 25).Select(i => new
+                    {
+                        id = $"tx-{i}",
+                        label = $"Transaction {i}",
+                        details = new Dictionary<string, string>
+                        {
+                            ["amount"] = i.ToString(),
+                            ["currency"] = "EUR",
+                            ["note"] = "must-be-dropped"
+                        }
+                    }).ToArray()
                 }
             }));
         using var response = await client.SendAsync(ask);
@@ -145,6 +166,17 @@ public sealed class CoachHardeningIntegrationTests
         Assert.Equal("Buchungen", provider.LastRequest.UiContext.Title);
         Assert.Equal("expense", provider.LastRequest.UiContext.Filters!["direction"]);
         Assert.DoesNotContain("notAllowed", provider.LastRequest.UiContext.Filters.Keys);
+        Assert.Equal("transaction", provider.LastRequest.UiContext.EntityType);
+        Assert.Equal("tx-123", provider.LastRequest.UiContext.EntityId);
+        Assert.Equal("REWE 42,17 €", provider.LastRequest.UiContext.EntityLabel);
+        Assert.Equal("42.17", provider.LastRequest.UiContext.Details!["amount"]);
+        Assert.Equal("EUR", provider.LastRequest.UiContext.Details["currency"]);
+        Assert.DoesNotContain("note", provider.LastRequest.UiContext.Details.Keys);
+        Assert.Equal(20, provider.LastRequest.UiContext.SelectedIds!.Count);
+        Assert.Equal(20, provider.LastRequest.UiContext.SelectedItems!.Count);
+        Assert.Equal("tx-1", provider.LastRequest.UiContext.SelectedItems[0].Id);
+        Assert.Equal("1", provider.LastRequest.UiContext.SelectedItems[0].Details!["amount"]);
+        Assert.DoesNotContain("note", provider.LastRequest.UiContext.SelectedItems[0].Details.Keys);
 
         using var reload = Request(HttpMethod.Get, $"/api/coach/conversations/{conversationId}?fullWorthSpaceId={seed.SpaceId}", seed.UserId);
         using var reloaded = await client.SendAsync(reload);

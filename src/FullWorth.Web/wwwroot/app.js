@@ -129,7 +129,7 @@ async function openDeleteAccountDialog(){
 }
 
 async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
-function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));
+function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
@@ -192,6 +192,7 @@ function bind(){
   bindDashboard(ctx);
   $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
   $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
+  $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
   // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
@@ -229,8 +230,9 @@ function syncResponsiveSidebar(){
     if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
     return;
   }
-  const desiredSidebar=Math.max(176,Number(localStorage.getItem('finance.sidebar.width'))||228);
-  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
+  const desiredSidebar=Math.max(176,Number(localStorage.getItem(sidebarWidthKey()))||Number(localStorage.getItem('finance.sidebar.width'))||228);
+  const coachKey=`finance.coach.dockWidth.${layoutWidthMode()}`;
+  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem(coachKey))||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
   const minMain=window.innerWidth<1100?420:520;
   const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
   const changed=document.body.classList.contains('nav-auto-collapsed')!==shouldCollapse;
@@ -240,12 +242,34 @@ function syncResponsiveSidebar(){
 }
 window.fwSyncResponsiveSidebar=syncResponsiveSidebar;
 
+function layoutWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
+function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
+function resetLayout(){
+  ['finance.sidebar.width','finance.sidebar.width.desktop','finance.sidebar.width.tablet','finance.coach.dockWidth','finance.coach.dockWidth.desktop','finance.coach.dockWidth.tablet'].forEach(key=>localStorage.removeItem(key));
+  localStorage.setItem('finance.navCollapsed','0');
+  document.body.classList.remove('nav-collapsed','nav-auto-collapsed');
+  document.documentElement.style.removeProperty('--sidebar-w');
+  document.documentElement.style.removeProperty('--coach-dock-w');
+  window.dispatchEvent(new CustomEvent('fullworth:layout-reset'));
+  window.dispatchEvent(new Event('resize'));
+  syncResponsiveSidebar();
+  toast(state.lang==='de'?'Layout zurückgesetzt':'Layout reset');
+}
+
 function initResizableSidebar(){
   const sidebar=$('.sidebar');
   if(!sidebar)return;
-  const key='finance.sidebar.width';
   const minWidth=176;
+  const defaults={desktop:228,tablet:196};
   const desktopMode=()=>window.matchMedia('(min-width:768px)').matches;
+  const key=()=>sidebarWidthKey();
+  const defaultWidth=()=>defaults[layoutWidthMode()];
+  const savedWidth=()=>{
+    const scoped=Number(localStorage.getItem(key()));
+    if(scoped>0)return scoped;
+    const legacy=Number(localStorage.getItem('finance.sidebar.width'));
+    return legacy>0?legacy:defaultWidth();
+  };
   const maxWidth=()=>{
     const coach=document.body.classList.contains('coach-dock-open')?$('#coach-dock')?.getBoundingClientRect().width||0:0;
     const minMain=window.innerWidth<1100?280:420;
@@ -253,7 +277,7 @@ function initResizableSidebar(){
   };
   const apply=value=>{
     if(!desktopMode())return;
-    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||sidebar.getBoundingClientRect().width||228)));
+    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||savedWidth())));
     document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
     handle.setAttribute('aria-valuemax',String(maxWidth()));
     handle.setAttribute('aria-valuenow',String(width));
@@ -261,6 +285,7 @@ function initResizableSidebar(){
     syncResponsiveSidebar();
     return width;
   };
+  const save=width=>{if(width)localStorage.setItem(key(),String(width))};
   const handle=document.createElement('div');
   handle.className='sidebar-resizer';
   handle.setAttribute('role','separator');
@@ -269,50 +294,35 @@ function initResizableSidebar(){
   handle.setAttribute('aria-valuemin',String(minWidth));
   handle.tabIndex=0;
   sidebar.appendChild(handle);
-
-  const saved=Number(localStorage.getItem(key));
-  if(saved>0)apply(saved);
+  apply(savedWidth());
 
   let pointerId=null;
   handle.addEventListener('pointerdown',event=>{
-    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
-    pointerId=event.pointerId;
-    handle.setPointerCapture(pointerId);
-    handle.classList.add('is-dragging');
-    document.body.classList.add('sidebar-resizing');
-    event.preventDefault();
+    if(!desktopMode()||sidebarEffectivelyCollapsed())return;
+    pointerId=event.pointerId;handle.setPointerCapture(pointerId);
+    handle.classList.add('is-dragging');document.body.classList.add('sidebar-resizing');event.preventDefault();
   });
-  handle.addEventListener('pointermove',event=>{
-    if(pointerId!==event.pointerId)return;
-    apply(event.clientX);
-  });
+  handle.addEventListener('pointermove',event=>{if(pointerId===event.pointerId)apply(event.clientX)});
   const finish=event=>{
     if(pointerId===null||event.pointerId!==pointerId)return;
-    pointerId=null;
-    handle.classList.remove('is-dragging');
-    document.body.classList.remove('sidebar-resizing');
-    const width=apply(sidebar.getBoundingClientRect().width);
-    if(width)localStorage.setItem(key,String(width));
+    pointerId=null;handle.classList.remove('is-dragging');document.body.classList.remove('sidebar-resizing');
+    save(apply(sidebar.getBoundingClientRect().width));
   };
   handle.addEventListener('pointerup',finish);
   handle.addEventListener('pointercancel',finish);
+  handle.addEventListener('dblclick',()=>save(apply(defaultWidth())));
   handle.addEventListener('keydown',event=>{
-    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
-    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    if(!desktopMode()||sidebarEffectivelyCollapsed()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
     event.preventDefault();
     const current=sidebar.getBoundingClientRect().width;
-    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?10:-10);
-    const width=apply(next);
-    if(width)localStorage.setItem(key,String(width));
+    const step=event.shiftKey?40:10;
+    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?step:-step);
+    save(apply(next));
   });
-  window.addEventListener('resize',()=>{
-    if(!desktopMode()){syncResponsiveSidebar();return}
-    const current=Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width;
-    apply(current);
-    syncResponsiveSidebar();
-  });
+  window.addEventListener('resize',()=>{if(!desktopMode()){syncResponsiveSidebar();return}apply(savedWidth());syncResponsiveSidebar()});
   window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
-  window.fwClampSidebarWidth=()=>apply(Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width);
+  window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
+  window.fwClampSidebarWidth=()=>apply(savedWidth());
 }
 async function showView(view,opts={}){
   state.view=view;
@@ -332,7 +342,9 @@ async function showView(view,opts={}){
   $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
   $$('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
   $('#bottom-more').classList.toggle('active',MORE_VIEWS.includes(view));
-  renderPageHeader();await loadCurrent();
+  renderPageHeader();
+  window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
+  await loadCurrent();
 }
 async function loadCurrent(){
   try{
@@ -438,6 +450,7 @@ const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizar
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
+window.fwOpenBudget=id=>openBudgetDetail(id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
 async function loadBudgets(){
@@ -457,7 +470,7 @@ async function loadBudgets(){
     // Status from usage: over (>100), near (>=85), on track (§12.2).
     const status=pct>100?'over':pct>=85?'near':'ontrack';
     const cycleLabel=x.period&&x.period!=='monthly'?`${esc(get('budgets.period_'+x.period)||x.period)} · ${date(x.periodStart)}–${date(x.periodEnd)} · `:'';
-    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
+    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><div class="budget-card-head-actions"><button type="button" class="ghost budget-coach" data-coach>Coach</button><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
   }
   // §18: flag when some spend was in a currency with no conversion rate (excluded from the figures).
   if(status.incomplete)el.insertAdjacentHTML('afterbegin',`<div class="fx-incomplete">${esc(get('common.fxIncomplete'))}</div>`);
@@ -465,9 +478,18 @@ async function loadBudgets(){
   el.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
   // §12: each card opens the budget detail (window, forecast, contributing transactions).
   el.querySelectorAll('.budget-card[data-id]').forEach(card=>{
+    const item=items.find(x=>String(x.budgetId||x.id)===String(card.dataset.id));
     const open=()=>openBudgetDetail(card.dataset.id);
-    card.addEventListener('click',open);
-    card.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open()}});
+    card.querySelector('[data-coach]')?.addEventListener('click',event=>{
+      event.stopPropagation();
+      if(!item)return;
+      window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+        entityType:'budget',entityId:item.budgetId||item.id,entityLabel:item.name,
+        details:{amount:String(item.amount??''),currency,status:item.percent>100?'over':item.percent>=85?'near':'ontrack'}
+      }}));
+    });
+    card.addEventListener('click',event=>{if(!event.target.closest('button'))open()});
+    card.addEventListener('keydown',ev=>{if(!ev.target.closest('button')&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();open()}});
   });
 }
 // §12 budget detail: cycle window, spend vs. budget, cycle-end forecast, and the transactions
@@ -506,6 +528,12 @@ async function openBudgetDetail(id){
     <div class="budget-detail-rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('common.empty'))}</div></div>`}</div>
   </div>`);
   dlg.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  const coach=document.createElement('button');coach.type='button';coach.className='ghost';coach.textContent='Coach';
+  coach.addEventListener('click',()=>{dlg.close();window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+    entityType:'budget',entityId:s.budgetId,entityLabel:s.name,
+    details:{amount:String(s.budgetAmount??''),currency,status:barStatus,count:String((s.contributing||[]).length)}
+  }}))});
+  dlg.querySelector('.panel-head-actions')?.prepend(coach);
   dlg.querySelector('[data-close]').addEventListener('click',()=>dlg.close());
   dlg.querySelector('[data-edit]').addEventListener('click',()=>openBudgetEdit(s.budgetId,()=>dlg.close()));
   dlg.showModal();

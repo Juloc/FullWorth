@@ -232,11 +232,22 @@ public sealed record CoachContext(
 
 public sealed record CreateCoachConversationRequest(string? Title, string? MascotId);
 
+public sealed record CoachUiSelectionItem(
+    string Id,
+    string? Label = null,
+    IReadOnlyDictionary<string, string>? Details = null);
+
 public sealed record CoachUiContext(
     string Page,
     string? Title = null,
     string? Path = null,
-    IReadOnlyDictionary<string, string>? Filters = null);
+    IReadOnlyDictionary<string, string>? Filters = null,
+    string? EntityType = null,
+    string? EntityId = null,
+    string? EntityLabel = null,
+    IReadOnlyDictionary<string, string>? Details = null,
+    IReadOnlyList<string>? SelectedIds = null,
+    IReadOnlyList<CoachUiSelectionItem>? SelectedItems = null);
 
 public sealed record AskCoachRequest(
     string Text,

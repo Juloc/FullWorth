@@ -7,6 +7,66 @@ import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 
 let ctx = null;
+let currentItemsById = new Map();
+const selectedForCoach = new Map();
+
+function coachContextForTransaction(t, label) {
+  return {
+    entityType: 'transaction',
+    entityId: t.id,
+    entityLabel: label || t.merchantDisplayName || t.counterparty || 'Buchung',
+    details: {
+      date: String(t.bookingDate || '').slice(0, 10),
+      amount: String(t.amount ?? ''),
+      currency: t.currency || '',
+      merchant: t.merchantDisplayName || t.counterparty || '',
+      category: t.categoryName || t.category || '',
+      account: t.account || ''
+    }
+  };
+}
+function openCoachWith(detail) {
+  window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail }));
+}
+function updateCoachSelectionBar() {
+  const view = ctx.$('#view-transactions'); if (!view) return;
+  let bar = view.querySelector('#tx-coach-selection');
+  if (!selectedForCoach.size) { bar?.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'tx-coach-selection'; bar.className = 'tx-coach-selection';
+    view.querySelector('.table-panel')?.before(bar);
+  }
+  const items = [...selectedForCoach.values()];
+  const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
+  const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
+  bar.innerHTML = `<span><strong>${selectedForCoach.size}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="ghost" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.querySelector('[data-selection-clear]').onclick = () => {
+    selectedForCoach.clear();
+    document.querySelectorAll('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
+    updateCoachSelectionBar();
+  };
+  bar.querySelector('[data-selection-coach]').onclick = () => {
+    openCoachWith({
+      entityType: 'transactions',
+      entityLabel: `${selectedForCoach.size} ${deLabel('Buchungen','transactions')}`,
+      selectedIds: [...selectedForCoach.keys()],
+      selectedItems: items.slice(0, 20).map(item => ({
+        id: item.id,
+        label: item.merchantDisplayName || item.counterparty || deLabel('Buchung','Transaction'),
+        details: {
+          date: String(item.bookingDate || '').slice(0, 10),
+          amount: String(item.amount ?? ''),
+          currency: item.currency || '',
+          merchant: item.merchantDisplayName || item.counterparty || '',
+          category: item.categoryName || item.category || '',
+          account: item.account || ''
+        }
+      })),
+      details: { count: String(selectedForCoach.size), amount: total == null ? '' : String(total), currency }
+    });
+  };
+}
+
 export function bindTransactions(context) {
   ctx = context;
   ctx.$('#tx-apply').addEventListener('click', applySearch);
@@ -14,6 +74,10 @@ export function bindTransactions(context) {
   ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
   ctx.$('#tx-detect').addEventListener('click', detectTransfers);
   ctx.$('#tx-add').addEventListener('click', openBookingDialog);
+  window.addEventListener('fullworth:open-transaction', event => {
+    const item = currentItemsById.get(String(event.detail?.id || ''));
+    if (item) openDetail(item);
+  });
 }
 
 // The URL is the SINGLE source of truth for the free-text search term, so the search box, the scope
@@ -177,6 +241,9 @@ export async function renderTransactions(context) {
   if (flags === 'ignored') items = items.filter(x => x.isIgnored);
 
   renderSummary(items);
+  currentItemsById = new Map(items.map(item => [String(item.id), item]));
+  selectedForCoach.clear();
+  updateCoachSelectionBar();
   body.innerHTML = '';
   let lastDate = null;
   for (const x of items) {
@@ -198,7 +265,7 @@ export async function renderTransactions(context) {
     tr.dataset.txId = x.id;
     tr.innerHTML =
       `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
-      `<td class="tx-cp"><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       categoryCell(x, cat) +
       accountCell(x) +
       `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
@@ -206,8 +273,14 @@ export async function renderTransactions(context) {
     // The category chip is an inline control: clicking it edits the category in place, without also
     // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
     tr.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
-    tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit]')) openDetail(x); });
-    tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit]')) openDetail(x); });
+    tr.querySelector('[data-tx-select]')?.addEventListener('click', e => e.stopPropagation());
+    tr.querySelector('[data-tx-select]')?.addEventListener('change', e => {
+      if (e.target.checked) selectedForCoach.set(String(x.id), x); else selectedForCoach.delete(String(x.id));
+      tr.classList.toggle('tx-selected', e.target.checked);
+      updateCoachSelectionBar();
+    });
+    tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     body.appendChild(tr);
   }
   if (!items.length) {
@@ -462,9 +535,10 @@ async function openDetail(listItem) {
     ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
     ${receiptPurchase ? `<a class="row settings-link" href="/bff/backend/api/purchases/${receiptPurchase.id}/receipt?fullWorthSpaceId=${encodeURIComponent(spaceId())}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
-    <div class="dialog-actions">${t.isManual ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('transactions.delete'))}</button>` : ''}<button type="button" class="ghost" data-split>${ctx.esc(ctx.get('transactions.split'))}</button><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
+    <div class="dialog-actions">${t.isManual ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('transactions.delete'))}</button>` : ''}<button type="button" class="ghost" data-coach>${ctx.esc(deLabel('Coach fragen','Ask Coach'))}</button><button type="button" class="ghost" data-split>${ctx.esc(ctx.get('transactions.split'))}</button><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   dlg.classList.add('drawer');
+  dlg.querySelector('[data-coach]').addEventListener('click', () => { dlg.close(); openCoachWith(coachContextForTransaction(t, name)); });
   dlg.querySelector('[data-split]').addEventListener('click', () => openSplitDialog(t));
   dlg.querySelector('[data-bank-details]')?.addEventListener('click', async e => {
     const button = e.currentTarget;
