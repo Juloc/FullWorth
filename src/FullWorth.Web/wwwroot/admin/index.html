@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FullWorth Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/pwa/icon-light.svg">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <span class="eyebrow">FullWorth</span>
+        <h1>Admin</h1>
+        <p>Userverwaltung ohne Zugriff auf Finanzdaten.</p>
+      </div>
+      <a href="/" class="back-link">← FullWorth</a>
+    </header>
+
+    <section id="overview" class="metrics" aria-label="Übersicht">
+      <article><span>User</span><strong id="metric-users">–</strong></article>
+      <article><span>Aktiv</span><strong id="metric-active">–</strong></article>
+      <article><span>Gesperrt</span><strong id="metric-disabled">–</strong></article>
+      <article><span>Löschung</span><strong id="metric-deleting">–</strong></article>
+      <article><span>Fehler</span><strong id="metric-failed">–</strong></article>
+      <article><span>Admins</span><strong id="metric-admins">–</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="E-Mail oder User-ID suchen" autocomplete="off">
+        <select id="status">
+          <option value="">Alle</option>
+          <option value="active">Aktiv</option>
+          <option value="disabled">Gesperrt</option>
+          <option value="deleting">Löschung</option>
+          <option value="admins">Admins</option>
+        </select>
+        <button id="refresh" type="button">Aktualisieren</button>
+      </div>
+      <div id="users" class="user-list"></div>
+      <div class="pager">
+        <button id="prev" type="button">Zurück</button>
+        <span id="page-info"></span>
+        <button id="next" type="button">Weiter</button>
+      </div>
+    </section>
+
+    <dialog id="user-dialog">
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <div>
+            <span class="eyebrow">User</span>
+            <h2 id="detail-email">–</h2>
+          </div>
+          <button id="close-detail" type="button" class="icon-button">×</button>
+        </div>
+        <div id="detail-meta" class="detail-grid"></div>
+        <section>
+          <h3>Sessions</h3>
+          <div id="detail-sessions" class="session-list"></div>
+        </section>
+        <section>
+          <h3>Aktionen</h3>
+          <div id="detail-actions" class="actions"></div>
+        </section>
+        <p id="detail-error" class="error" hidden></p>
+      </div>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="/security/browser-fetch.js"></script>
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>
