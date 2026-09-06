@@ -105,8 +105,24 @@ public sealed class ContractDetectionService(
             .Select(entry => (entry.Counterparty, entry.Currency))
             .ToHashSet();
 
+        // Accepted auto-detected candidates must not reappear immediately after the owner
+        // confirms them. Acceptance persists the provider/currency pair on the contract, so use
+        // that stable pair as the suppression key instead of relying on browser-only state.
+        var accepted = (await db.Contracts.AsNoTracking()
+                .Where(contract => contract.FullWorthSpaceId == fullWorthSpaceId &&
+                                   contract.AutoDetected &&
+                                   contract.ProviderName != null &&
+                                   (contract.AccountId == null || db.AccountOwners.Any(owner =>
+                                       owner.AccountId == contract.AccountId.Value &&
+                                       owner.UserId == userId)))
+                .Select(contract => new { contract.ProviderName, contract.Currency })
+                .ToListAsync(ct))
+            .Select(contract => (contract.ProviderName!.Trim(), contract.Currency.Trim().ToUpperInvariant()))
+            .ToHashSet();
+
         return result
             .Where(candidate => !dismissed.Contains((candidate.Counterparty, candidate.Currency)))
+            .Where(candidate => !accepted.Contains((candidate.Counterparty.Trim(), candidate.Currency.Trim().ToUpperInvariant())))
             .OrderByDescending(x => x.Confidence).ThenBy(x => x.NextDueDate).ToList();
 
     }

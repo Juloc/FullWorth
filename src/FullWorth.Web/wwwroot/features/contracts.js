@@ -24,6 +24,25 @@ const view = { kind: '', status: 'active', sort: 'due', order: 'asc' };
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
 function t(de, en) { return lang() ? de : en; }
 
+const CANCELLED_STATES = new Set(['sent', 'confirmed', 'cancelled']);
+function cancellationStatus(c) { return c?.cancellationStatus || 'none'; }
+function lifecycleStatus(c) {
+  if (!c?.isActive) return 'archived';
+  const status = cancellationStatus(c.cancellation);
+  if (CANCELLED_STATES.has(status)) return 'cancelled';
+  if (status === 'planned') return 'planned';
+  return 'active';
+}
+function cancellationStatusLabel(status) {
+  const key = 'contracts.cancelStatus_' + (status || 'none');
+  const label = ctx.get(key);
+  return label === key ? (status || '—') : label;
+}
+function periodLabel(value, unit) {
+  if (value == null || !unit) return '—';
+  return `${value} ${ctx.get('contracts.period_' + unit)}`;
+}
+
 // Monochrome line glyph for the sort bottom-sheet (matches the shared `.more-sheet` icon language).
 function sortIcon(paths) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -128,6 +147,13 @@ export async function renderContracts(context) {
   let rows = [];
   try { rows = (await ctx.api('api/contracts')) || []; }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); rows = []; }
+  try {
+    const cancellationRows = (await ctx.api('api/contract-parity/cancellations')) || [];
+    const cancellationById = new Map(cancellationRows.map(item => [item.contractId, item]));
+    rows.forEach(contract => { contract.cancellation = cancellationById.get(contract.id) || null; });
+  } catch {
+    rows.forEach(contract => { contract.cancellation = null; });
+  }
   contractsById = new Map(rows.map(c => [c.id, c]));
   allContracts = rows;
   // The list DTO only carries category/account ids; resolve their names best-effort for the row context
@@ -176,7 +202,7 @@ function viewHtml() {
   const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
   // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
   const controls = `<div class="contracts-controls">
-    <div class="fw-chips" data-status-chips>${statusChip('active', t('Aktiv', 'Active'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
+    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
     <button type="button" class="fw-chip contracts-detect" data-detect>${esc(ctx.get('contracts.detect'))}</button>
   </div>
   <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
@@ -304,8 +330,10 @@ function categoryLabel(c) { return c.categoryId ? (categoryNames.get(c.categoryI
 function filterContracts(list) {
   return list.filter(c => {
     if (view.kind && (c.kind || '') !== view.kind) return false;
-    if (view.status === 'active' && !c.isActive) return false;
-    if (view.status === 'archived' && c.isActive) return false;
+    const lifecycle = lifecycleStatus(c);
+    if (view.status === 'active' && !['active', 'planned'].includes(lifecycle)) return false;
+    if (view.status === 'cancelled' && lifecycle !== 'cancelled') return false;
+    if (view.status === 'archived' && lifecycle !== 'archived') return false;
     return true;
   });
 }
@@ -379,7 +407,8 @@ async function resolvePriceChange(id, action) {
 // secondary context, amount with its recurrence, and the next due date when it is still meaningful.
 function rowFor(c) {
   const row = document.createElement('div');
-  row.className = 'fw-row contract-row' + (c.isActive ? '' : ' contract-archived');
+  const lifecycle = lifecycleStatus(c);
+  row.className = 'fw-row contract-row' + (lifecycle === 'archived' ? ' contract-archived' : '');
   row.tabIndex = 0;
   row.setAttribute('role', 'button');
   const cycleKey = c.billingCycle || 'monthly';
@@ -390,8 +419,20 @@ function rowFor(c) {
   // For non-monthly cadences show the normalized monthly figure so rows stay comparable at a glance.
   const permo = (cycleKey !== 'monthly' && Number(c.monthlyEquivalent) > 0)
     ? `≈ ${ctx.money(c.monthlyEquivalent, c.currency)} / ${t('Mon.', 'mo.')}` : '';
-  const marker = c.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`;
-  const sub = [(cat || kind), due, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
+  const statusMarker = lifecycle === 'archived'
+    ? ctx.get('contracts.archived')
+    : lifecycle === 'cancelled'
+      ? ctx.get('contracts.status_cancelled')
+      : lifecycle === 'planned'
+        ? ctx.get('contracts.status_planned')
+        : '';
+  const marker = statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : '';
+  const cancellationHint = lifecycle === 'cancelled' && c.cancellation?.cancellationSentAt
+    ? `${ctx.get('contracts.cancelledOn')}: ${ctx.date(c.cancellation.cancellationSentAt)}`
+    : lifecycle === 'planned' && c.cancellation?.cancellationDeadline
+      ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
+      : '';
+  const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
   row.innerHTML = `${identityIcon(c.name, { logoAssetPath: c.logoAssetPath })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
@@ -433,17 +474,23 @@ async function loadDetected(interactive) {
     </div>`).join('');
   box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('contracts.detectedTitle'))}</h3></div>${items}`;
   box.querySelectorAll('.detected-row').forEach(el => {
-    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(candidates[Number(el.dataset.i)]));
+    el.querySelector('[data-accept]').addEventListener('click', () => acceptCandidate(candidates[Number(el.dataset.i)], el));
     el.querySelector('[data-dismiss]').addEventListener('click', () => dismissCandidate(candidates[Number(el.dataset.i)]));
   });
 }
 
-async function acceptCandidate(candidate) {
+async function acceptCandidate(candidate, row) {
+  const buttons = row ? [...row.querySelectorAll('button')] : [];
+  buttons.forEach(button => { button.disabled = true; });
   try {
     await ctx.api('api/contracts/detection/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(candidate) });
+    row?.remove();
     ctx.toast(ctx.get('common.saved'));
     await renderContracts(ctx);
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  } catch (err) {
+    buttons.forEach(button => { button.disabled = false; });
+    ctx.toast(err.message || ctx.get('common.error'));
+  }
 }
 
 // Reject a detected candidate so it stops reappearing in future detection runs.
@@ -456,11 +503,16 @@ async function dismissCandidate(candidate) {
 }
 
 async function openDetail(id) {
-  let contract, activity;
+  let contract, activity, cancellation;
   try {
-    contract = await ctx.api(`api/contracts/${id}`);
-    activity = await ctx.api(`api/contracts/${id}/activity`);
+    [contract, activity, cancellation] = await Promise.all([
+      ctx.api(`api/contracts/${id}`),
+      ctx.api(`api/contracts/${id}/activity`),
+      ctx.api(`api/contract-parity/${id}/cancellation`)
+    ]);
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  contract.cancellation = cancellation;
+  const lifecycle = lifecycleStatus(contract);
 
   const valueMode = ctx.get('contracts.mode_' + (activity?.valueMode || 'manual'));
   const next = activity?.nextExpected ? ctx.date(activity.nextExpected) : '—';
@@ -480,20 +532,31 @@ async function openDetail(id) {
     [ctx.get('contracts.billingCycle'), ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'))],
     [ctx.get('contracts.kind'), ctx.get('contracts.kind_' + (contract.kind || 'contract'))],
     [ctx.get('contracts.startDate'), contract.startDate ? ctx.date(contract.startDate) : '—'],
-    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—']
+    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—'],
+    [ctx.get('contracts.status'), lifecycle === 'archived' ? ctx.get('contracts.archived') : cancellationStatusLabel(cancellation?.cancellationStatus)],
+    [ctx.get('contracts.minimumTermEnd'), cancellation?.minimumTermEnd ? ctx.date(cancellation.minimumTermEnd) : '—'],
+    [ctx.get('contracts.noticePeriod'), periodLabel(cancellation?.noticePeriodValue, cancellation?.noticePeriodUnit)],
+    [ctx.get('contracts.cancellationDeadline'), cancellation?.cancellationDeadline ? ctx.date(cancellation.cancellationDeadline) : '—'],
+    [ctx.get('contracts.renewalPeriod'), periodLabel(cancellation?.renewalPeriodValue, cancellation?.renewalPeriodUnit)],
+    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? t('Ja', 'Yes') : t('Nein', 'No')],
+    [ctx.get('contracts.cancelledOn'), cancellation?.cancellationSentAt ? ctx.dateTime(cancellation.cancellationSentAt) : '—'],
+    [ctx.get('contracts.confirmedOn'), cancellation?.cancellationConfirmedAt ? ctx.dateTime(cancellation.cancellationConfirmedAt) : '—'],
+    [ctx.get('contracts.customerNumber'), cancellation?.customerNumber || '—']
   ].map(([k, v]) => `<div class="detail-item"><span class="detail-k">${ctx.esc(k)}</span><span class="detail-v">${ctx.esc(v)}</span></div>`).join('');
 
+  const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
   const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
-    <div class="panel-head"><h2>${ctx.esc(contract.name)}${contract.isActive ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('contracts.archived'))}</span>`}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="panel-head"><h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     ${contract.providerName ? `<div class="row-sub">${ctx.esc(contract.providerName)}</div>` : ''}
     <div class="detail-grid">${meta}</div>
+    ${cancellation?.providerContact ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.providerContact'))}</h3><div class="row-sub">${ctx.esc(cancellation.providerContact)}</div></div>` : ''}
     ${trend}
     <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
     ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
     <div class="dialog-actions">
       <button type="button" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
       ${contract.isActive
-        ? `<button type="button" class="danger" data-cancel-contract>${ctx.esc(ctx.get('contracts.cancel'))}</button>`
+        ? `<button type="button" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
         : `<button type="button" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
     </div>
   </div>`);
@@ -503,15 +566,82 @@ async function openDetail(id) {
   dlg.querySelector('.dialog-actions')?.prepend(coachAction);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
-  dlg.querySelector('[data-cancel-contract]')?.addEventListener('click', async () => {
-    if (!await ctx.confirm(ctx.get('contracts.cancelConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.cancel') })) return;
-    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.cancelled')); await renderContracts(ctx); }
+  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => { dlg.close(); openCancellationDialog(contract, cancellation); });
+  dlg.querySelector('[data-archive]')?.addEventListener('click', async () => {
+    if (!await ctx.confirm(ctx.get('contracts.archiveConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.archive') })) return;
+    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.archivedToast')); await renderContracts(ctx); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
   dlg.querySelector('[data-reactivate]')?.addEventListener('click', async () => {
     try { await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
+  dlg.showModal();
+}
+
+async function openCancellationDialog(contract, existing) {
+  let details = existing;
+  if (!details) {
+    try { details = await ctx.api(`api/contract-parity/${contract.id}/cancellation`); }
+    catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  }
+  details ||= {};
+  const dv = value => value ? String(value).slice(0, 10) : '';
+  const statusOptions = ['none', 'planned', 'sent', 'confirmed', 'cancelled']
+    .map(status => `<option value='${status}'${cancellationStatus(details) === status ? ' selected' : ''}>${ctx.esc(cancellationStatusLabel(status))}</option>`).join('');
+  const unitOptions = selected => ['days', 'weeks', 'months']
+    .map(unit => `<option value='${unit}'${selected === unit ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.period_' + unit))}</option>`).join('');
+
+  const dlg = ctx.dialog(`<form class='dialog-card contract-dialog'>
+    <div class='panel-head'><div><h2>${ctx.esc(ctx.get('contracts.manageCancellation'))}</h2><div class='row-sub'>${ctx.esc(contract.name)}</div></div><button type='button' data-close aria-label='${ctx.esc(ctx.get('common.close'))}'>×</button></div>
+    <label>${ctx.esc(ctx.get('contracts.status'))}<select name='status'>${statusOptions}</select></label>
+    <label>${ctx.esc(ctx.get('contracts.minimumTermEnd'))}<input name='minimumTermEnd' type='date' value='${dv(details.minimumTermEnd)}'></label>
+    <label>${ctx.esc(ctx.get('contracts.cancelEffectiveDate'))}<input name='effectiveEndDate' type='date' value='${dv(contract.endDate)}'></label>
+    <div class='rule-grid'>
+      <label>${ctx.esc(ctx.get('contracts.noticePeriod'))}<input name='noticeValue' type='number' min='0' value='${details.noticePeriodValue ?? ''}'></label>
+      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='noticeUnit'>${unitOptions(details.noticePeriodUnit || 'months')}</select></label>
+    </div>
+    <label>${ctx.esc(ctx.get('contracts.cancellationDeadline'))}<input name='deadline' type='date' value='${dv(details.cancellationDeadline)}'></label>
+    <div class='rule-grid'>
+      <label>${ctx.esc(ctx.get('contracts.renewalPeriod'))}<input name='renewalValue' type='number' min='0' value='${details.renewalPeriodValue ?? ''}'></label>
+      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='renewalUnit'>${unitOptions(details.renewalPeriodUnit || 'months')}</select></label>
+    </div>
+    <label class='check'><input name='autoRenews' type='checkbox'${details.autoRenews ? ' checked' : ''}> ${ctx.esc(ctx.get('contracts.autoRenews'))}</label>
+    <label>${ctx.esc(ctx.get('contracts.customerNumber'))}<input name='customerNumber' maxlength='160' value='${ctx.esc(details.customerNumber || '')}'></label>
+    <label>${ctx.esc(ctx.get('contracts.providerContact'))}<textarea name='providerContact' maxlength='500' rows='2'>${ctx.esc(details.providerContact || '')}</textarea></label>
+    ${details.cancellationSentAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.cancelledOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationSentAt))}</div>` : ''}
+    ${details.cancellationConfirmedAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.confirmedOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationConfirmedAt))}</div>` : ''}
+    <div class='dialog-actions'><button type='button' data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type='submit'>${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
+    const numberOrNull = name => fd.get(name) === '' ? null : Number(fd.get(name));
+    const effectiveEndDate = fd.get('effectiveEndDate') || null;
+    const body = {
+      minimumTermEnd: fd.get('minimumTermEnd') || null,
+      noticePeriodValue: numberOrNull('noticeValue'),
+      noticePeriodUnit: fd.get('noticeUnit') || null,
+      renewalPeriodValue: numberOrNull('renewalValue'),
+      renewalPeriodUnit: fd.get('renewalUnit') || null,
+      autoRenews: fd.get('autoRenews') === 'on',
+      cancellationDeadline: fd.get('deadline') || null,
+      cancellationStatus: fd.get('status') || 'none',
+      customerNumber: (fd.get('customerNumber') || '').trim() || null,
+      providerContact: (fd.get('providerContact') || '').trim() || null
+    };
+    try {
+      await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
+      if (effectiveEndDate !== (contract.endDate || null)) {
+        await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), endDate: effectiveEndDate }, 'PUT'));
+      }
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  };
   dlg.showModal();
 }
 
