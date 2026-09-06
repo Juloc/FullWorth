@@ -509,7 +509,7 @@ function addPaperlessRule(initial = {}) {
     </select>
     <label class="paperless-rule-not"><input type="checkbox" data-rule-not> NICHT</label>
     <select data-rule-open aria-label="${esc(t('Öffnende Klammern', 'Opening parentheses'))}">
-      <option value="0">(</option><option value="1">( ×1</option><option value="2">( ×2</option><option value="3">( ×3</option>
+      <option value="0">—</option><option value="1">(</option><option value="2">((</option><option value="3">(((</option>
     </select>
     <select data-rule-field aria-label="${esc(t('Filtertyp', 'Filter field'))}">
       <option value="text">${esc(t('Text / Inhalt', 'Text / content'))}</option>
@@ -528,7 +528,7 @@ function addPaperlessRule(initial = {}) {
     </select>
     <div class="paperless-rule-value" data-rule-value-host></div>
     <select data-rule-close aria-label="${esc(t('Schließende Klammern', 'Closing parentheses'))}">
-      <option value="0">)</option><option value="1">) ×1</option><option value="2">) ×2</option><option value="3">) ×3</option>
+      <option value="0">—</option><option value="1">)</option><option value="2">))</option><option value="3">)))</option>
     </select>
     <button type="button" class="icon-button paperless-rule-remove" data-rule-remove aria-label="${esc(t('Filter entfernen', 'Remove filter'))}">×</button>`;
 
