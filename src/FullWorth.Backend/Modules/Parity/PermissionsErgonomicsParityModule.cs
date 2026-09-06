@@ -431,7 +431,9 @@ ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
             return Results.BadRequest(new { error = "Category is invalid." });
         if (request.ContractId.HasValue &&
             !await db.Contracts.AsNoTracking().AnyAsync(contract =>
-                contract.Id == request.ContractId && contract.FullWorthSpaceId == fullWorthSpaceId, ct))
+                contract.Id == request.ContractId &&
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == null, ct))
             return Results.BadRequest(new { error = "Contract is invalid." });
 
         var query = await BuildBulkQueryAsync(db, userId, fullWorthSpaceId, request.Filter, ct);
