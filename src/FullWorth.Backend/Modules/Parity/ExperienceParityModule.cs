@@ -363,6 +363,7 @@ ON CONFLICT ("FullWorthSpaceId","UserId","Capability") DO UPDATE SET
             .ToListAsync(ct);
         var contracts = await db.Contracts.AsNoTracking()
             .Where(contract => contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == null &&
                 (contract.AccountId == null || visibleAccounts.Contains(contract.AccountId.Value)))
             .ToListAsync(ct);
         var accounts = await db.Accounts.AsNoTracking()
