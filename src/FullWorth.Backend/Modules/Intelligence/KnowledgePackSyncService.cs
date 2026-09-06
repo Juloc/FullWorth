@@ -79,13 +79,22 @@ public sealed class KnowledgePackSyncService(
             VerifyPayloadBytes(manifest, payloadBytes);
             var payload = DeserializeAndValidatePayload(manifest, payloadBytes);
 
+            var ontology = ProjectOntology(payload);
+            var redirectMap = ontology.Redirects.ToDictionary(
+                x => x.FromCanonicalKey,
+                x => x.ToCanonicalKey,
+                StringComparer.Ordinal);
             var mappings = payload.Merchants
                 .Where(x => !string.IsNullOrWhiteSpace(x.CategoryKey))
-                .Select(x => ToEntity(manifest, x))
+                .Select(x =>
+                {
+                    var mapping = ToEntity(manifest, x);
+                    mapping.CategoryKey = ResolveRedirectKey(mapping.CategoryKey!, redirectMap);
+                    return mapping;
+                })
                 .GroupBy(x => new { x.AliasKey, x.Direction, x.Country })
                 .Select(g => g.OrderByDescending(x => x.Confidence).First())
                 .ToList();
-            var ontology = ProjectOntology(payload);
 
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
@@ -553,6 +562,21 @@ public sealed class KnowledgePackSyncService(
                separator < version.Length - 1 &&
                long.TryParse(version[(separator + 1)..], out sequence) &&
                sequence > 0;
+    }
+
+    private static string ResolveRedirectKey(
+        string canonicalKey,
+        IReadOnlyDictionary<string, string> redirects)
+    {
+        var current = canonicalKey.Trim().ToLowerInvariant();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var depth = 0; depth < 20 && seen.Add(current); depth++)
+        {
+            if (!redirects.TryGetValue(current, out var next) || string.IsNullOrWhiteSpace(next))
+                return current;
+            current = next;
+        }
+        return current;
     }
 
     private static string? NormalizeOntologyType(string? value) =>
