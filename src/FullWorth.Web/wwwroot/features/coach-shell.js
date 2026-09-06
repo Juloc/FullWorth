@@ -132,8 +132,9 @@ function installShell() {
     if (event.key === pinnedKey) syncPinButton();
   });
   window.addEventListener('fullworth:view-change', () => {
+    currentObjectContext=null;excludedContext.clear();
     if(!dockOpen)return;
-    if(isPinned()){currentObjectContext=null;excludedContext.clear();renderPageContext();renderStarters();}
+    if(isPinned()){renderPageContext();renderStarters();}
     else closeDock();
   });
   window.addEventListener('fullworth:coach-open', event => {
