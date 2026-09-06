@@ -238,45 +238,63 @@ public sealed class AccountPurgeService(
         IReadOnlyCollection<Guid> personalSpaceIds,
         CancellationToken ct)
     {
-        // User-owned AI credentials/settings/runs/feedback are personal and are removed. Rows that only
-        // retain historical actor IDs are deliberately not collapsed into a shared Deleted-user value.
-        var entityTypes = intelligenceDb.Model.GetEntityTypes()
+        // Intelligence uses a separate EF model. Delete user-owned roots and their dependent rows by
+        // following that model's FKs. Historical actor/reviewer references are not ownership roots and
+        // therefore remain distinct GUID tombstones rather than being collapsed into one shared user.
+        var userOwned = intelligenceDb.Model.GetEntityTypes()
             .Where(x => x.GetTableName() is not null)
+            .Select(entity => new
+            {
+                Entity = entity,
+                Depth = FindUserOwnershipDepth(entity, new HashSet<IEntityType>())
+            })
+            .Where(x => x.Depth.HasValue)
+            .Select(x => new PurgeEntityDescriptor(
+                x.Entity,
+                x.Entity.GetTableName()!,
+                x.Entity.GetSchema(),
+                x.Depth,
+                x.Entity.GetProperties().Where(p => OwnershipUserPropertyNames.Contains(p.Name)).ToArray(),
+                Array.Empty<IProperty>(),
+                false,
+                false,
+                false))
+            .ToArray();
+
+        var spaceOwned = intelligenceDb.Model.GetEntityTypes()
+            .Where(x => x.GetTableName() is not null)
+            .Select(entity => new
+            {
+                Entity = entity,
+                Depth = FindGenericSpaceOwnershipDepth(entity, new HashSet<IEntityType>())
+            })
+            .Where(x => x.Depth.HasValue)
+            .Select(x => new PurgeEntityDescriptor(
+                x.Entity,
+                x.Entity.GetTableName()!,
+                x.Entity.GetSchema(),
+                x.Depth,
+                Array.Empty<IProperty>(),
+                Array.Empty<IProperty>(),
+                false,
+                false,
+                false))
             .ToArray();
 
         await using var transaction = await intelligenceDb.Database.BeginTransactionAsync(ct);
 
-        foreach (var entity in OrderEntityTypesForDelete(entityTypes))
+        foreach (var descriptor in OrderForDelete(userOwned))
         {
-            var ownership = entity.GetProperties()
-                .Where(p => OwnershipUserPropertyNames.Contains(p.Name))
-                .ToArray();
-            if (ownership.Length > 0)
-            {
-                var descriptor = new PurgeEntityDescriptor(
-                    entity, entity.GetTableName()!, entity.GetSchema(), null,
-                    ownership, Array.Empty<IProperty>(), false, false, false);
-                var predicate = string.Join(" OR ", ownership.Select(p =>
-                    $"t0.{QuoteColumn(intelligenceDb, entity, p)} = @userId"));
-                await ExecuteDeleteAsync(intelligenceDb, descriptor, $"({predicate})", "userId", userId, ct);
-            }
+            var predicate = BuildUserPredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
+            await ExecuteDeleteAsync(intelligenceDb, descriptor, predicate, "userId", userId, ct);
+        }
 
-            var spaceProperty = entity.FindProperty("FullWorthSpaceId");
-            if (spaceProperty is not null)
+        foreach (var spaceId in personalSpaceIds)
+        {
+            foreach (var descriptor in OrderForDelete(spaceOwned))
             {
-                foreach (var spaceId in personalSpaceIds)
-                {
-                    var descriptor = new PurgeEntityDescriptor(
-                        entity, entity.GetTableName()!, entity.GetSchema(), null,
-                        Array.Empty<IProperty>(), Array.Empty<IProperty>(), false, false, false);
-                    await ExecuteDeleteAsync(
-                        intelligenceDb,
-                        descriptor,
-                        $"t0.{QuoteColumn(intelligenceDb, entity, spaceProperty)} = @spaceId",
-                        "spaceId",
-                        spaceId,
-                        ct);
-                }
+                var predicate = BuildGenericSpacePredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
+                await ExecuteDeleteAsync(intelligenceDb, descriptor, predicate, "spaceId", spaceId, ct);
             }
         }
 
