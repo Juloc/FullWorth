@@ -105,6 +105,15 @@ public sealed record PaperlessConnectionView(
     DateTimeOffset? LastSyncAt,
     DateTimeOffset UpdatedAt);
 
+public sealed record PaperlessFilterOption(int Id, string Name);
+
+public sealed record PaperlessFilterOptionsView(
+    IReadOnlyList<PaperlessFilterOption> Tags,
+    IReadOnlyList<PaperlessFilterOption> DocumentTypes,
+    IReadOnlyList<PaperlessFilterOption> Correspondents,
+    IReadOnlyList<PaperlessFilterOption> StoragePaths,
+    IReadOnlyList<PaperlessFilterOption> CustomFields);
+
 public sealed record PaperlessPreviewRequest(
     string? Query = null,
     int? DocumentTypeId = null,
