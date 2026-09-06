@@ -120,6 +120,7 @@ export async function renderContracts(context) {
   host.innerHTML = viewHtml();
   wireControls(host);
   renderList(host);
+  loadCloudBenchmarks();
   // Contextual alerts: detected subscriptions + price-change suggestions load quietly and surface only
   // when the backend actually has candidates, so they never dominate the header (UX rework §7).
   loadDetected(false);
@@ -167,10 +168,64 @@ function viewHtml() {
 
   return `<div class="contracts-ux">
     ${summary}
+    <div id="contracts-cloud-benchmarks" hidden></div>
     <div id="contracts-price-changes" class="detected-panel" hidden></div>
     <div id="contracts-detected" class="detected-panel" hidden></div>
     ${listCard}
   </div>`;
+}
+
+function benchmarkLabel(metricKey) {
+  return ({
+    'contract.energy.monthly_cost': t('Strom', 'Electricity'),
+    'contract.internet.monthly_cost': t('Internet & Telefon', 'Internet & phone'),
+    'contract.insurance.monthly_cost': t('Versicherung', 'Insurance'),
+    'contract.insurance.health.monthly_cost': t('Krankenversicherung', 'Health insurance'),
+  })[metricKey] || metricKey;
+}
+
+async function loadCloudBenchmarks() {
+  const box = ctx.$('#contracts-cloud-benchmarks');
+  if (!box) return;
+  try {
+    const result = await ctx.api('api/intelligence/benchmarks/contracts');
+    if (!result?.available || !result.items?.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+
+    const rows = result.items.map(item => {
+      const local = Number(item.localMedian);
+      const median = Number(item.median);
+      const delta = median > 0 ? ((local - median) / median) * 100 : null;
+      const relation = delta == null
+        ? ''
+        : delta > 2
+          ? t('${Math.round(delta)} % über Median', '${Math.round(delta)}% above median')
+          : delta < -2
+            ? t('${Math.abs(Math.round(delta))} % unter Median', '${Math.abs(Math.round(delta))}% below median')
+            : t('nahe am Median', 'near median');
+
+      return `<div class="fw-row">
+        <div class="fw-row-main">
+          <div class="fw-row-title">${esc(benchmarkLabel(item.metricKey))}</div>
+          <div class="fw-row-sub">${esc(t('Dein Vertragsmedian', 'Your contract median'))}: ${ctx.money(local, item.currency)} · ${esc(relation)}</div>
+          <div class="fw-row-sub">${esc(t('Cloud-Spanne', 'Cloud range'))}: ${ctx.money(item.p25, item.currency)}–${ctx.money(item.p75, item.currency)} · ${item.distinctInstanceCount} ${esc(t('Instanzen', 'instances'))}</div>
+        </div>
+        <div class="fw-row-amt">${ctx.money(median, item.currency)}<small>${esc(t('Median / Monat', 'median / month'))}</small></div>
+      </div>`;
+    }).join('');
+
+    box.hidden = false;
+    box.innerHTML = sectionCard(
+      t('Vergleich mit FullWorth Cloud', 'Compare with FullWorth Cloud'),
+      `<div class="rows">${rows}</div><div class="row-sub">${esc(t('Nur aggregierte Werte ab mindestens 20 Instanzen.', 'Aggregates only, from at least 20 instances.'))}</div>`,
+      { className: 'contracts-benchmarks' });
+  } catch {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
 }
 
 function wireControls(host) {
