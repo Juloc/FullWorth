@@ -577,6 +577,10 @@
       "register": {
         "title": "Create account",
         "subtitle": "Create your FullWorth account. The setup wizard will guide you through the first steps."
+      },
+      "two-factor": {
+        "title": "Two-factor code",
+        "subtitle": "Enter the 6-digit code from Google Authenticator or your TOTP app."
       }
     },
     "createAccount": "Create account",
@@ -589,7 +593,9 @@
     "privacy": "Privacy",
     "terms": "Terms of use",
     "confirmAdult": "I confirm that I am at least 18 years old.",
-    "imprint": "Imprint"
+    "imprint": "Imprint",
+    "twoFactorCode": "Authenticator code",
+    "invalidTwoFactor": "The code is not valid."
   },
   "passkeys": {
     "title": "Passkeys",
