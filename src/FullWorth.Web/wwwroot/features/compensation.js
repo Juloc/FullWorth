@@ -360,7 +360,7 @@ async function renderComparison(){
     <p><strong>${esc(left.name)}</strong> → <strong>${esc(right.name)}</strong></p>
     <div class="comparison-grid">
       ${comparisonCell('Netto-Differenz / Jahr',signedMoney(result.cashNetDeltaAnnual))}
-      ${comparisonCell('FullWorth-Differenz',signedMoney(result.fullWorthValueDeltaAnnual))}
+      ${comparisonCell('Gesamtwert-Differenz',signedMoney(result.fullWorthValueDeltaAnnual))}
       ${comparisonCell('Arbeitgeberkosten',signedMoney(result.employerCostDeltaAnnual))}
       ${comparisonCell('Wert / Arbeitsstunde',signedMoney(result.effectiveHourlyValueDelta))}
     </div>`;
