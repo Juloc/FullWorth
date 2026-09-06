@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.FullWorthSpaces;
@@ -115,6 +116,53 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
         var connection = await PublicConnections(userId, fullWorthSpaceId)
             .SingleOrDefaultAsync(connection => connection.Id == id, ct);
         return connection is null ? null : Project(connection, DateTimeOffset.UtcNow);
+    }
+
+    public async Task<IReadOnlyList<BankSyncHistoryItem>?> ListSyncHistoryForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid id,
+        int limit,
+        CancellationToken ct)
+    {
+        if (!await PublicConnections(userId, fullWorthSpaceId).AnyAsync(connection => connection.Id == id, ct))
+            return null;
+
+        var take = Math.Clamp(limit, 1, 50);
+        var rows = await db.AuditEvents.AsNoTracking()
+            .Where(x =>
+                x.FullWorthSpaceId == fullWorthSpaceId &&
+                x.EntityType == "BankConnection" &&
+                x.EntityId == id &&
+                x.Action == "bank_sync.attempt")
+            .OrderByDescending(x => x.OccurredAt)
+            .ThenByDescending(x => x.Id)
+            .Take(take)
+            .Select(x => new { x.Id, x.MetadataJson, x.OccurredAt })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(row => ParseSyncHistory(row.Id, row.MetadataJson, row.OccurredAt))
+            .Where(item => item is not null)
+            .Cast<BankSyncHistoryItem>()
+            .ToList();
+    }
+
+    public async Task<bool> RecordSyncHistoryAsync(Guid id, BankSyncHistoryWrite request, CancellationToken ct)
+    {
+        var connection = await db.BankConnections.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (connection is null) return false;
+
+        var completedAt = request.CompletedAt < request.StartedAt ? request.StartedAt : request.CompletedAt;
+        audit.RecordBankSyncAttempt(
+            connection.FullWorthSpaceId,
+            connection.Id,
+            request.StartedAt,
+            completedAt,
+            request.Result,
+            request.ErrorCode);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>
@@ -433,9 +481,46 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
             health.DaysUntilExpiry);
     }
 
+    private static BankSyncHistoryItem? ParseSyncHistory(Guid id, string? metadataJson, DateTimeOffset occurredAt)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson)) return null;
+        try
+        {
+            var metadata = JsonSerializer.Deserialize<BankSyncAuditMetadata>(
+                metadataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (metadata is null) return null;
+            return new BankSyncHistoryItem(
+                id,
+                metadata.StartedAt,
+                metadata.CompletedAt,
+                Math.Max(0, metadata.DurationMs),
+                metadata.Result,
+                metadata.ErrorCode);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private Task<bool> IsMemberAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId, ct);
 }
+
+public sealed record BankSyncHistoryWrite(
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    string Result,
+    string? ErrorCode);
+
+public sealed record BankSyncHistoryItem(
+    Guid Id,
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    long DurationMs,
+    string Result,
+    string? ErrorCode);
 
 public sealed record BankConnectionWrite(
     Guid? Id,
@@ -486,6 +571,19 @@ public static class BankConnectionEndpoints
             return item is null ? Results.NotFound() : Results.Ok(item);
         });
 
+        group.MapGet("/{id:guid}/sync-history", async (
+            Guid id,
+            Guid fullWorthSpaceId,
+            int? limit,
+            CurrentUserContext currentUser,
+            BankConnectionStore store,
+            CancellationToken ct) =>
+        {
+            var items = await store.ListSyncHistoryForUserAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, id, limit ?? 10, ct);
+            return items is null ? Results.NotFound() : Results.Ok(items);
+        });
+
         // No public mutation endpoint here. Disconnect must pass through FullWorth.Banking so the
         // provider session/consent is closed before local data is destroyed.
 
@@ -497,6 +595,15 @@ public static class BankConnectionEndpoints
             try { return Results.Ok(await store.UpsertAsync(request, ct)); }
             catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
         });
+
+        internalGroup.MapPost("/{id:guid}/sync-history", async (
+            Guid id,
+            BankSyncHistoryWrite request,
+            BankConnectionStore store,
+            CancellationToken ct) =>
+            await store.RecordSyncHistoryAsync(id, request, ct)
+                ? Results.NoContent()
+                : Results.NotFound());
         // One-time atomic state consumption (replaces the replayable read-only by-state lookup).
         internalGroup.MapPost("/consume-state", async (ConsumeStateRequest request, BankConnectionStore store, CancellationToken ct) =>
         {

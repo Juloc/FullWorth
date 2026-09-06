@@ -684,36 +684,45 @@ public sealed class BankSyncService(
             if (finTs is not null)
                 return await finTs.SyncConnectionAsync(connection, bypassCadence, ct);
 
-            return await backend.UpsertConnectionAsync(ToWrite(
+            var missingStartedAt = DateTimeOffset.UtcNow;
+            var missing = await backend.UpsertConnectionAsync(ToWrite(
                 connection,
                 consecutiveFailures: connection.ConsecutiveFailures + 1,
                 lastError: "FINTS_NOT_CONFIGURED"), ct);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, missingStartedAt, "error", "FINTS_NOT_CONFIGURED", CancellationToken.None);
+            return missing;
         }
 
         var now = DateTimeOffset.UtcNow;
         if (!bypassCadence && !CanBackgroundSync(connection, now))
             return connection;
 
+        var startedAt = now;
         var nextAllowed = now.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
         connection = await backend.UpsertConnectionAsync(ToWrite(
             connection,
             lastAttemptAt: now,
             nextSyncAllowedAt: nextAllowed), ct);
 
-        var client = await ResolveProviderForConnectionAsync(connection, ct);
         try
         {
+            var client = await ResolveProviderForConnectionAsync(connection, ct);
             var session = await client.GetSessionAsync(connection.ProviderSessionId, ct);
             var status = (GetString(session, "status") ?? connection.Status).ToUpperInvariant();
             if (!string.Equals(status, "AUTHORIZED", StringComparison.Ordinal))
             {
-                return await backend.UpsertConnectionAsync(ToWrite(
+                var errorCode = SessionError(status);
+                var updated = await backend.UpsertConnectionAsync(ToWrite(
                     connection,
                     status: status,
                     nextSyncAllowedAt: IsTerminalSessionStatus(status) ? null : nextAllowed,
                     clearNextSyncAllowedAt: IsTerminalSessionStatus(status),
-                    lastError: SessionError(status),
+                    lastError: errorCode,
                     consecutiveFailures: 0), ct);
+                await RecordSyncHistorySafeAsync(
+                    connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+                return updated;
             }
 
             var accounts = ParseSessionAccounts(connection, session);
@@ -731,7 +740,7 @@ public sealed class BankSyncService(
                 _ => null
             };
 
-            return await backend.UpsertConnectionAsync(ToWrite(
+            var completed = await backend.UpsertConnectionAsync(ToWrite(
                 connection,
                 status: status,
                 // A partial account/history result must not advance the user-visible successful-sync
@@ -740,16 +749,60 @@ public sealed class BankSyncService(
                 nextSyncAllowedAt: nextAllowed,
                 consecutiveFailures: error is null ? 0 : connection.ConsecutiveFailures + 1,
                 lastError: error), ct);
+            await RecordSyncHistorySafeAsync(
+                connection.Id,
+                startedAt,
+                error is null ? "success" : "partial",
+                error,
+                CancellationToken.None);
+            return completed;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None);
+            throw;
         }
         catch (EnableBankingApiException ex)
         {
+            var errorCode = EnableBankingErrorClassifier.Classify(ex).Code;
             await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", errorCode, CancellationToken.None);
             throw;
         }
         catch
         {
             await MarkFailureAsync(connection, "SYNC_FAILED", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", "SYNC_FAILED", CancellationToken.None);
             throw;
+        }
+    }
+
+    private async Task RecordSyncHistorySafeAsync(
+        Guid connectionId,
+        DateTimeOffset startedAt,
+        string result,
+        string? errorCode,
+        CancellationToken ct)
+    {
+        try
+        {
+            await backend.RecordSyncHistoryAsync(
+                connectionId,
+                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode),
+                ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // History is observability metadata. A history-write outage must never turn a completed
+            // bank retrieval into a failed financial sync.
+            logger.LogWarning(ex, "Could not persist sync history for connection {ConnectionId}.", connectionId);
         }
     }
 

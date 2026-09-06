@@ -338,9 +338,11 @@ public sealed class IngestionService(
             foreach (var item in sourceItems)
             {
                 FinanceTransaction entity;
+                var wasExisting = false;
                 if (existing.TryGetValue(item.ExternalKey, out var exact))
                 {
                     entity = exact;
+                    wasExisting = true;
                     updated++;
                 }
                 else if (!string.IsNullOrWhiteSpace(item.EntryReference) &&
@@ -354,6 +356,7 @@ public sealed class IngestionService(
                     // merely happens to share the same entry_reference — otherwise two distinct pending rows
                     // collapse into one.
                     entity = stableMatch;
+                    wasExisting = true;
                     entity.ExternalKey = item.ExternalKey;
                     existing[item.ExternalKey] = entity;
                     updated++;
@@ -370,6 +373,9 @@ public sealed class IngestionService(
                     inserted++;
                 }
 
+                var previousStatus = entity.Status;
+                var observedAt = DateTimeOffset.UtcNow;
+
                 entity.ProviderTransactionId = item.ProviderTransactionId;
                 entity.Status = item.Status;
                 entity.BookingDate = item.BookingDate;
@@ -382,7 +388,24 @@ public sealed class IngestionService(
                 entity.MerchantCategoryCode = item.MerchantCategoryCode;
                 entity.EntryReference = item.EntryReference;
                 entity.RawJson = cipher.Protect(item.RawJson) ?? "{}";
-                entity.UpdatedAt = DateTimeOffset.UtcNow;
+                entity.UpdatedAt = observedAt;
+
+                // Provider status history is observation-based. DateOnly booking/value dates never get
+                // an invented time-of-day; the audit timestamp is when FullWorth actually saw the state.
+                if (!wasExisting && string.Equals(item.Status, "PDNG", StringComparison.OrdinalIgnoreCase))
+                {
+                    audit.RecordTransactionPendingObserved(fullWorthSpaceId, entity.Id, observedAt);
+                }
+                else if (wasExisting && !string.Equals(previousStatus, item.Status, StringComparison.OrdinalIgnoreCase))
+                {
+                    audit.RecordTransactionStatusTransition(
+                        fullWorthSpaceId,
+                        entity.Id,
+                        previousStatus,
+                        item.Status,
+                        observedAt);
+                }
+
                 if (entity.CategorizationSource != "manual")
                     ApplyCategorization(entity, rules, activeCategoryIdsByKey, learnedMappings, cloudMappings);
             }

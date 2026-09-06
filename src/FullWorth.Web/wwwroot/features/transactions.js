@@ -435,11 +435,24 @@ async function openDetail(listItem) {
   const transferInner = counterpart
     ? `${counterpart.id ? `<button type="button" class="tx-vonan" data-open-counterpart><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('Von', 'From'))}</span><span class="tx-vonan-acct">${ctx.esc(vonAcct)}</span></span><span class="tx-vonan-arrow" aria-hidden="true">→</span><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('An', 'To'))}</span><span class="tx-vonan-acct">${ctx.esc(anAcct)}</span></span><span class="tx-vonan-go" aria-hidden="true">›</span></button>` : ''}<button type="button" class="ghost danger tx-transfer-unpair" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>`
     : `<button type="button" class="tx-choose-counter" data-transfer-link>${ctx.esc(deLabel('Gegenbuchung wählen', 'Choose counter-booking'))}</button>`;
+  const statusLabel = status => status === 'PDNG'
+    ? ctx.get('transactions.statusPending')
+    : status === 'BOOK'
+      ? ctx.get('transactions.statusBooked')
+      : status;
+  const statusHistory = Array.isArray(detail.statusHistory) ? detail.statusHistory : [];
+  const statusHistoryHtml = statusHistory.length
+    ? `<div class="tx-provider-details"><div class="row-title">${ctx.esc(ctx.get('transactions.statusHistory'))}</div>${statusHistory.map(item => {
+        const from = item.fromStatus ? `${ctx.esc(statusLabel(item.fromStatus))} → ` : '';
+        return `<div class="row-sub">${from}${ctx.esc(statusLabel(item.status))} · ${ctx.esc(ctx.dateTime(item.observedAt))}</div>`;
+      }).join('')}</div>`
+    : '';
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
     <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="tx-amount amount ${t.amount < 0 ? 'negative' : 'positive'}">${ctx.money(t.amount, t.currency)}</div>
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}
+    ${statusHistoryHtml}
     ${!t.isManual ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>

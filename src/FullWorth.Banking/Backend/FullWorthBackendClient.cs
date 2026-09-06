@@ -70,6 +70,7 @@ public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Gu
 public sealed record DeleteConnectionBody(Guid FullWorthSpaceId);
 public sealed record CloseConnectionBody(Guid FullWorthSpaceId);
 public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
+public sealed record BankSyncHistoryWrite(DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string Result, string? ErrorCode);
 
 public sealed record EnableBankingProfileDto(
     Guid Id,
@@ -178,6 +179,13 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         using var request = Create(HttpMethod.Post, "/internal/banking/connections/", body);
         using var response = await http.SendAsync(request, ct); response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<BankConnectionDto>(cancellationToken: ct))!;
+    }
+
+    public async Task RecordSyncHistoryAsync(Guid connectionId, BankSyncHistoryWrite body, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/sync-history", body);
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<AccountSyncState?> GetAccountSyncStateAsync(Guid connectionId, string identificationHash, CancellationToken ct)
