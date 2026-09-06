@@ -42,12 +42,12 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             await using var command = connection.CreateCommand();
             command.CommandText = """
                 INSERT INTO compensation_history(
-                    id, fullworth_space_id, user_id, effective_date, sequence,
+                    id, fullworth_space_id, user_id, effective_date, sort_order,
                     event_type, title, note, patch)
                 VALUES (
                     @id, @fullworth_space_id, @user_id, @effective_date,
                     COALESCE((
-                        SELECT MAX(sequence) + 1 FROM compensation_history
+                        SELECT MAX(sort_order) + 1 FROM compensation_history
                         WHERE fullworth_space_id = @fullworth_space_id
                           AND user_id = @user_id
                           AND effective_date = @effective_date
@@ -78,11 +78,15 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         await EnsureSchemaAsync(ct);
 
         var all = await LoadRowsAsync(userId, fullWorthSpaceId, null, ct);
-        if (!all.Any(x => x.Id == id)) return null;
+        var currentRow = all.FirstOrDefault(x => x.Id == id);
+        if (currentRow is null) return null;
+
+        var currentEntry = BuildEntries(all, fullWorthSpaceId).First(x => x.Id == id);
+        _ = GermanCompensationCalculator.Calculate(write.Profile);
+        var userEdits = BuildPatch(currentEntry.ResolvedProfile, write.Profile);
+        var patch = MergePatchObjects(currentRow.Patch.AsObject(), userEdits);
 
         var without = all.Where(x => x.Id != id).ToArray();
-        var before = ResolveAtInsertion(without, write.EffectiveDate);
-        var patch = BuildPatch(before, write.Profile);
 
         await WithConnectionAsync(async connection =>
         {
@@ -90,8 +94,8 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             command.CommandText = """
                 UPDATE compensation_history
                 SET effective_date = @effective_date,
-                    sequence = COALESCE((
-                        SELECT MAX(h.sequence) + 1 FROM compensation_history h
+                    sort_order = COALESCE((
+                        SELECT MAX(h.sort_order) + 1 FROM compensation_history h
                         WHERE h.fullworth_space_id = @fullworth_space_id
                           AND h.user_id = @user_id
                           AND h.effective_date = @effective_date
@@ -255,6 +259,19 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
     private static CompensationProfileInput? ResolveAtInsertion(
         IReadOnlyList<RawHistoryRow> rows, DateOnly date) => ResolveAtDate(rows, date);
 
+    private static JsonObject MergePatchObjects(JsonObject original, JsonObject edits)
+    {
+        var result = original.DeepClone().AsObject();
+        foreach (var item in edits)
+        {
+            if (item.Value is JsonObject editObject && result[item.Key] is JsonObject originalObject)
+                result[item.Key] = MergePatchObjects(originalObject, editObject);
+            else
+                result[item.Key] = item.Value?.DeepClone();
+        }
+        return result;
+    }
+
     private static JsonObject BuildPatch(
         CompensationProfileInput? before, CompensationProfileInput after)
     {
@@ -385,21 +402,21 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             await using var command = connection.CreateCommand();
             command.CommandText = through is null
                 ? """
-                    SELECT id, effective_date, sequence, event_type, title, note,
+                    SELECT id, effective_date, sort_order, event_type, title, note,
                            patch::text, created_at, updated_at
                     FROM compensation_history
                     WHERE fullworth_space_id = @fullworth_space_id
                       AND user_id = @user_id
-                    ORDER BY effective_date, sequence, created_at, id;
+                    ORDER BY effective_date, sort_order, created_at, id;
                     """
                 : """
-                    SELECT id, effective_date, sequence, event_type, title, note,
+                    SELECT id, effective_date, sort_order, event_type, title, note,
                            patch::text, created_at, updated_at
                     FROM compensation_history
                     WHERE fullworth_space_id = @fullworth_space_id
                       AND user_id = @user_id
                       AND effective_date <= @through
-                    ORDER BY effective_date, sequence, created_at, id;
+                    ORDER BY effective_date, sort_order, created_at, id;
                     """;
             Add(command, "fullworth_space_id", fullWorthSpaceId);
             Add(command, "user_id", userId);
@@ -435,7 +452,7 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                     fullworth_space_id uuid NOT NULL,
                     user_id uuid NOT NULL,
                     effective_date date NOT NULL,
-                    sequence integer NOT NULL,
+                    sort_order integer NOT NULL,
                     event_type text NOT NULL,
                     title text NOT NULL,
                     note text NULL,
@@ -445,7 +462,7 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                 );
 
                 CREATE INDEX IF NOT EXISTS ix_compensation_history_space_user_date
-                    ON compensation_history(fullworth_space_id, user_id, effective_date, sequence);
+                    ON compensation_history(fullworth_space_id, user_id, effective_date, sort_order);
                 """;
             await command.ExecuteNonQueryAsync(ct);
             return true;
