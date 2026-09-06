@@ -65,6 +65,16 @@ public interface IFullWorthCloudClient
         string? ageBand,
         string? observedMonth,
         CancellationToken ct);
+    Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
+        string instanceCredential,
+        string? currentVersion,
+        string? region,
+        CancellationToken ct);
+    Task<byte[]> DownloadKnowledgePackAsync(
+        string instanceCredential,
+        string packId,
+        string version,
+        CancellationToken ct);
 }
 
 public sealed class FullWorthCloudException(
@@ -222,6 +232,41 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         using var response = await SendAsync(request, ct);
         if (response.StatusCode == HttpStatusCode.NoContent) return null;
         return await DeserializeAsync<FullWorthCloudBenchmark>(response, ct);
+    }
+
+    public async Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
+        string instanceCredential,
+        string? currentVersion,
+        string? region,
+        CancellationToken ct)
+    {
+        var query = new List<string>();
+        AddQuery(query, "currentVersion", currentVersion);
+        AddQuery(query, "region", region);
+        var suffix = query.Count == 0 ? string.Empty : "?" + string.Join('&', query);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "v1/knowledge-packs/latest" + suffix);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await DeserializeAsync<KnowledgePackManifest>(response, ct);
+    }
+
+    public async Task<byte[]> DownloadKnowledgePackAsync(
+        string instanceCredential,
+        string packId,
+        string version,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(packId) || string.IsNullOrWhiteSpace(version))
+            throw new ArgumentException("Knowledge-pack id and version are required.");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/knowledge-packs/{Uri.EscapeDataString(packId.Trim())}/{Uri.EscapeDataString(version.Trim())}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
     internal static Uri ResolveBaseUri(IConfiguration configuration, IHostEnvironment environment)
