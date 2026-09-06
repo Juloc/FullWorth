@@ -42,7 +42,7 @@ function updateCoachSelectionBar() {
   bar.innerHTML = `<span><strong>${selectedForCoach.size}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="ghost" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
   bar.querySelector('[data-selection-clear]').onclick = () => {
     selectedForCoach.clear();
-    ctx.$('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
+    document.querySelectorAll('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
     updateCoachSelectionBar();
   };
   bar.querySelector('[data-selection-coach]').onclick = () => {
