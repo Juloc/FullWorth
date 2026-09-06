@@ -75,6 +75,10 @@ public interface IFullWorthCloudClient
         string packId,
         string version,
         CancellationToken ct);
+    Task<byte[]> DownloadKnowledgePackBrandAssetAsync(
+        string instanceCredential,
+        string contentSha256,
+        CancellationToken ct);
 }
 
 public sealed class FullWorthCloudException(
@@ -102,6 +106,7 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
     public const int MaximumBatchEvents = 500;
     public const int MaximumCompressedBatchBytes = 2 * 1024 * 1024;
     public const int MaximumKnowledgePackBytes = 5 * 1024 * 1024;
+    public const int MaximumBrandAssetBytes = 256 * 1024;
 
     private readonly HttpClient http;
     private readonly IConfiguration configuration;
@@ -281,6 +286,38 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
                 throw new FullWorthCloudException("knowledge_pack_size_invalid", response.StatusCode);
             output.Write(buffer, 0, read);
         }
+        return output.ToArray();
+    }
+
+    public async Task<byte[]> DownloadKnowledgePackBrandAssetAsync(
+        string instanceCredential,
+        string contentSha256,
+        CancellationToken ct)
+    {
+        var hash = contentSha256?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(hash) || hash.Length != 64 || !hash.All(Uri.IsHexDigit))
+            throw new ArgumentException("Brand asset SHA-256 is invalid.", nameof(contentSha256));
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/knowledge-packs/assets/{Uri.EscapeDataString(hash)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        if (response.Content.Headers.ContentLength is > MaximumBrandAssetBytes)
+            throw new FullWorthCloudException("knowledge_pack_brand_asset_size_invalid", response.StatusCode);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var output = new MemoryStream();
+        var buffer = new byte[32 * 1024];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
+            if (read == 0) break;
+            if (output.Length + read > MaximumBrandAssetBytes)
+                throw new FullWorthCloudException("knowledge_pack_brand_asset_size_invalid", response.StatusCode);
+            output.Write(buffer, 0, read);
+        }
+
         return output.ToArray();
     }
 
