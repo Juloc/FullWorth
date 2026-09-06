@@ -1234,3 +1234,11 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
   .detected-row .row-side,.tx-refund .row-side{justify-content:flex-start;flex-wrap:wrap}
   .budget-detail-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Resizable app chrome polish */
+@media(min-width:768px){
+  .shell{transition:grid-template-columns .16s ease}
+  body.sidebar-resizing .shell,body.coach-dock-resizing .shell{transition:none}
+}
+.settings-layout-reset{display:grid;gap:2px;text-align:left;justify-items:start;padding:10px 12px}
+.settings-layout-reset small{color:var(--muted);font-weight:400}
