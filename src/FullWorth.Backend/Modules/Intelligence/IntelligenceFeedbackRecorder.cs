@@ -26,9 +26,11 @@ public sealed class IntelligenceFeedbackRecorder(
         string? publicProductKey = null,
         string? semanticCategoryKey = null)
     {
-        _ = publicProductKey;
         _ = semanticCategoryKey;
-        return TryRecordAsync(new IntelligenceFeedbackEvent
+        var cloudAlias = NormalizeCloudCommercialAlias(normalizedAlias);
+        var cloudEligible = cloudAlias is not null && IsPublicProductIdentifier(publicProductKey);
+
+        var feedback = new IntelligenceFeedbackEvent
         {
             FullWorthSpaceId = fullWorthSpaceId,
             UserId = userId,
@@ -39,9 +41,26 @@ public sealed class IntelligenceFeedbackRecorder(
             OldValueJson = JsonSerializer.Serialize(new { categoryId = oldCategoryId }),
             NewValueJson = JsonSerializer.Serialize(new { categoryId = newCategoryId, productId }),
             Source = "user",
-            CloudEligible = false,
+            CloudEligible = cloudEligible,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        };
+
+        CloudOutboxProjection? projection = null;
+        if (cloudEligible)
+        {
+            projection = new CloudOutboxProjection(
+                "product_alias_observed",
+                JsonSerializer.Serialize(new
+                {
+                    productAlias = cloudAlias,
+                    locale = "und",
+                    canonicalKey = NormalizePublicProductCanonicalKey(publicProductKey),
+                    confidence = 1m,
+                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
+                }));
+        }
+
+        return TryRecordAsync(feedback, ct, projection);
     }
 
     public Task<bool> RecordContractDecisionAsync(
@@ -53,7 +72,14 @@ public sealed class IntelligenceFeedbackRecorder(
         Guid? contractId,
         string? billingCycle,
         int? interval,
-        CancellationToken ct) => TryRecordAsync(new IntelligenceFeedbackEvent
+        CancellationToken ct)
+    {
+        var cloudAlias = accepted && contractId.HasValue
+            ? NormalizeCloudCommercialAlias(counterparty)
+            : null;
+        var cloudEligible = cloudAlias is not null;
+
+        var feedback = new IntelligenceFeedbackEvent
         {
             FullWorthSpaceId = fullWorthSpaceId,
             UserId = userId,
@@ -71,11 +97,26 @@ public sealed class IntelligenceFeedbackRecorder(
                 interval
             }),
             Source = "user",
-            // A predictable counterparty hash is useful for local dedupe, but is not a safe public
-            // cloud identifier. This becomes cloud-eligible only after a canonical provider key exists.
-            CloudEligible = false,
+            CloudEligible = cloudEligible,
             CreatedAt = DateTimeOffset.UtcNow
-        }, ct);
+        };
+
+        CloudOutboxProjection? projection = null;
+        if (cloudEligible)
+        {
+            projection = new CloudOutboxProjection(
+                "provider_alias_observed",
+                JsonSerializer.Serialize(new
+                {
+                    providerAlias = cloudAlias,
+                    locale = "und",
+                    confidence = 1m,
+                    observedMonth = DateTimeOffset.UtcNow.ToString("yyyy-MM")
+                }));
+        }
+
+        return TryRecordAsync(feedback, ct, projection);
+    }
 
     /// <summary>
     /// Records a manual category correction only. It intentionally does not create future merchant
@@ -212,6 +253,62 @@ public sealed class IntelligenceFeedbackRecorder(
 
     private static string Normalize(string? value) =>
         string.Join(' ', (value ?? string.Empty).Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static string? NormalizeCloudCommercialAlias(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Contains('@', StringComparison.Ordinal))
+            return null;
+
+        var normalized = MerchantNormalization.Normalize(value);
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 180)
+            return null;
+
+        var maxDigitRun = 0;
+        var currentDigitRun = 0;
+        var totalDigits = 0;
+        foreach (var ch in normalized)
+        {
+            if (char.IsDigit(ch))
+            {
+                totalDigits++;
+                currentDigitRun++;
+                maxDigitRun = Math.Max(maxDigitRun, currentDigitRun);
+            }
+            else
+            {
+                currentDigitRun = 0;
+            }
+        }
+
+        // Long numeric references are likely customer/order/account identifiers, not brand identity.
+        if (maxDigitRun >= 5 || totalDigits > 8)
+            return null;
+
+        return normalized;
+    }
+
+    private static bool IsPublicProductIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var trimmed = value.Trim();
+
+        if (trimmed.StartsWith("gtin:", StringComparison.OrdinalIgnoreCase))
+            return GtinKey.TryCreateGtinSubjectKey(trimmed[5..], out _);
+
+        return NormalizePublicProductCanonicalKey(trimmed) is not null;
+    }
+
+    private static string? NormalizePublicProductCanonicalKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToLowerInvariant();
+        if (!normalized.StartsWith("product.", StringComparison.Ordinal) ||
+            normalized.Length > 180)
+            return null;
+        return normalized.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-')
+            ? normalized
+            : null;
+    }
 
     private static string NormalizeCurrency(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
 
