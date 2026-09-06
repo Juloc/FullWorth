@@ -30,6 +30,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<CloudConnectionState> CloudConnectionStates => Set<CloudConnectionState>();
     public DbSet<CloudIntelligenceConsent> CloudIntelligenceConsents => Set<CloudIntelligenceConsent>();
     public DbSet<CloudInstanceCredential> CloudInstanceCredentials => Set<CloudInstanceCredential>();
+    public DbSet<CloudSubmissionOutbox> CloudSubmissionOutbox => Set<CloudSubmissionOutbox>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
