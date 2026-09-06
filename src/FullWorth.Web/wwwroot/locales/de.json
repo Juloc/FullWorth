@@ -577,6 +577,10 @@
       "register": {
         "title": "Registrieren",
         "subtitle": "Erstelle deinen FullWorth-Zugang. Danach führt dich der Einrichtungsassistent durch die ersten Schritte."
+      },
+      "two-factor": {
+        "title": "Zwei-Faktor-Code",
+        "subtitle": "Gib den 6-stelligen Code aus Google Authenticator oder deiner TOTP-App ein."
       }
     },
     "createAccount": "Registrieren",
@@ -589,7 +593,9 @@
     "privacy": "Datenschutz",
     "terms": "Nutzungsbedingungen",
     "confirmAdult": "Ich bestätige, dass ich mindestens 18 Jahre alt bin.",
-    "imprint": "Impressum"
+    "imprint": "Impressum",
+    "twoFactorCode": "Authenticator-Code",
+    "invalidTwoFactor": "Der Code ist nicht gültig."
   },
   "passkeys": {
     "title": "Passkeys",
