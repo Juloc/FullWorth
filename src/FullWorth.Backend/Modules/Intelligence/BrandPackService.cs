@@ -151,7 +151,6 @@ public sealed record BrandCatalogAssetView(
     string BrandKey,
     string CanonicalName,
     string LogoKey,
-    string DataUri,
     string ContentSha256,
     string? SourceName,
     string? SourceUrl,
@@ -370,8 +369,10 @@ public sealed class BrandPackService(IntelligenceDbContext db)
     public async Task<(IReadOnlyList<BrandCatalogAssetView> Assets, IReadOnlyList<BrandCatalogAliasView> Aliases)>
         GetEffectiveCatalogAsync(CancellationToken ct)
     {
-        var blobRows = await db.BrandAssetBlobs.AsNoTracking().ToListAsync(ct);
-        var blobs = blobRows.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
+        var blobHashes = (await db.BrandAssetBlobs.AsNoTracking()
+                .Select(x => x.ContentSha256)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
         var officialAssets = await db.OfficialBrandAssets.AsNoTracking().ToListAsync(ct);
         var officialAliases = await db.OfficialBrandAliases.AsNoTracking().ToListAsync(ct);
 
@@ -393,16 +394,16 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         {
             foreach (var asset in customAssets.Where(x => x.PackId == pack.Id))
             {
-                if (assets.ContainsKey(asset.BrandKey) || !blobs.TryGetValue(asset.ContentSha256, out var blob))
+                if (assets.ContainsKey(asset.BrandKey) || !blobHashes.Contains(asset.ContentSha256))
                     continue;
-                assets[asset.BrandKey] = ToView(asset, blob, $"custom:{pack.Name}", pack.Priority);
+                assets[asset.BrandKey] = ToView(asset, $"custom:{pack.Name}", pack.Priority);
             }
         }
         foreach (var asset in officialAssets)
         {
-            if (assets.ContainsKey(asset.BrandKey) || !blobs.TryGetValue(asset.ContentSha256, out var blob))
+            if (assets.ContainsKey(asset.BrandKey) || !blobHashes.Contains(asset.ContentSha256))
                 continue;
-            assets[asset.BrandKey] = ToView(asset, blob, "official", 0);
+            assets[asset.BrandKey] = ToView(asset, "official", 0);
         }
 
         var aliases = new List<BrandCatalogAliasView>();
@@ -432,14 +433,12 @@ public sealed class BrandPackService(IntelligenceDbContext db)
 
     private static BrandCatalogAssetView ToView(
         CustomBrandAsset asset,
-        BrandAssetBlob blob,
         string source,
         int priority) =>
         new(
             asset.BrandKey,
             asset.CanonicalName,
             asset.LogoKey,
-            $"data:{blob.MediaType};base64,{blob.ContentBase64}",
             asset.ContentSha256,
             asset.SourceName,
             asset.SourceUrl,
@@ -449,14 +448,12 @@ public sealed class BrandPackService(IntelligenceDbContext db)
 
     private static BrandCatalogAssetView ToView(
         OfficialBrandAsset asset,
-        BrandAssetBlob blob,
         string source,
         int priority) =>
         new(
             asset.BrandKey,
             asset.CanonicalName,
             asset.LogoKey,
-            $"data:{blob.MediaType};base64,{blob.ContentBase64}",
             asset.ContentSha256,
             asset.SourceName,
             asset.SourceUrl,
