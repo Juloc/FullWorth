@@ -160,10 +160,13 @@ public sealed class ReceiptImportService(
         if (baselineRequired)
         {
             var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+            var baselineFilter = ApplyDefaultQuery(
+                new PaperlessPreviewRequest(Query: query, Limit: settings.MaxBatchItems),
+                connection.DefaultQuery);
             var preview = await paperless.PreviewAsync(
                 connection.BaseUrl,
                 connection.Token,
-                new PaperlessPreviewRequest(Query: query, Limit: settings.MaxBatchItems),
+                baselineFilter,
                 ct);
             lastSeen = preview.Documents.Count == 0 ? 0 : preview.Documents.Max(x => x.Id);
         }
@@ -190,10 +193,13 @@ public sealed class ReceiptImportService(
         try
         {
             var connection = await RequirePaperlessAsync(preset.FullWorthSpaceId, ct);
+            var automaticFilter = ApplyDefaultQuery(
+                new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
+                connection.DefaultQuery);
             var preview = await paperless.PreviewAsync(
                 connection.BaseUrl,
                 connection.Token,
-                new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
+                automaticFilter,
                 ct);
 
             var maxSeen = preview.Documents.Count == 0
