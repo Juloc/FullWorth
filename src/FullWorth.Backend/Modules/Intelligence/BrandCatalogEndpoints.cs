@@ -27,9 +27,55 @@ public static class BrandCatalogEndpoints
             return Results.Ok(new
             {
                 packVersion = installation?.Version,
-                assets = catalog.Assets,
+                assets = catalog.Assets.Select(x => new
+                {
+                    x.BrandKey,
+                    x.CanonicalName,
+                    x.LogoKey,
+                    assetPath = $"/api/intelligence/brand-assets/{x.ContentSha256}",
+                    x.ContentSha256,
+                    x.SourceName,
+                    x.SourceUrl,
+                    x.LicenseNote,
+                    x.Source,
+                    x.Priority
+                }),
                 aliases = catalog.Aliases
             });
+        });
+
+        app.MapGet("/api/intelligence/brand-assets/{contentSha256}", async (
+            string contentSha256,
+            CurrentUserContext currentUser,
+            IntelligenceDbContext db,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            _ = currentUser.RequireUserId();
+            var hash = contentSha256?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(hash) || hash.Length != 64 || !hash.All(Uri.IsHexDigit))
+                return Results.NotFound();
+
+            var blob = await db.BrandAssetBlobs.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.ContentSha256 == hash, ct);
+            if (blob is null) return Results.NotFound();
+
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(blob.ContentBase64); }
+            catch (FormatException) { return Results.NotFound(); }
+
+            try
+            {
+                _ = BrandAssetVerifier.VerifySvg(bytes, blob.MediaType, hash, blob.ByteLength);
+            }
+            catch (KnowledgePackVerificationException)
+            {
+                return Results.NotFound();
+            }
+
+            http.Response.Headers.ETag = $"\"{hash}\"";
+            http.Response.Headers.CacheControl = "private, max-age=31536000, immutable";
+            return Results.Bytes(bytes, blob.MediaType);
         });
 
         var custom = app.MapGroup("/api/intelligence/admin/brand-packs/custom")
