@@ -94,3 +94,6 @@ body.coach-dock-open.nav-collapsed .shell,body.coach-dock-open.nav-auto-collapse
   .coach-dock-chat{padding:var(--s3) var(--s3) max(var(--s3),env(safe-area-inset-bottom))}
   .coach-launcher{right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:50px;height:50px}
 }
+
+.coach-response-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.coach-response-actions button{min-height:30px;padding:4px 9px;font-size:11px}
