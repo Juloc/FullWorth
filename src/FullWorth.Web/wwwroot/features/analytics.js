@@ -254,6 +254,49 @@ function analyticsTxScope(extra = '') {
   return p.toString();
 }
 
+function periodRange(row) {
+  const raw = String(row?.start || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { from: activeWindow?.from || '', to: activeWindow?.to || '' };
+  const start = new Date(raw + 'T12:00:00');
+  const end = new Date(start);
+  const granularity = activeWindow?.granularity || 'month';
+  if (granularity === 'week') end.setDate(end.getDate() + 6);
+  else if (granularity === 'quarter') end.setMonth(end.getMonth() + 3, 0);
+  else if (granularity === 'year') end.setFullYear(end.getFullYear(), 11, 31);
+  else end.setMonth(end.getMonth() + 1, 0);
+  const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  let from = raw, to = iso(end);
+  if (activeWindow?.from && from < activeWindow.from) from = activeWindow.from;
+  if (activeWindow?.to && to > activeWindow.to) to = activeWindow.to;
+  return { from, to };
+}
+
+function bindPeriodDrills(el, rows, defaultDirection = '') {
+  if (!el || !rows?.length) return;
+  el.querySelectorAll('[data-period-index]').forEach(target => {
+    const index = Number(target.dataset.periodIndex);
+    const row = rows[index];
+    if (!row) return;
+    const go = () => {
+      const range = periodRange(row);
+      const direction = target.dataset.direction || defaultDirection;
+      const extra = new URLSearchParams();
+      if (range.from) extra.set('from', range.from);
+      if (range.to) extra.set('to', range.to);
+      if (direction) extra.set('direction', direction);
+      window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(extra.toString()));
+    };
+    target.addEventListener('click', event => { event.stopPropagation(); go(); });
+    target.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        event.stopPropagation();
+        go();
+      }
+    });
+  });
+}
+
 function bindSpendingScrubber(el, rows, currency) {
   const svg = el.querySelector('svg.an-chart');
   const valueEl = el.querySelector('.an-card-foot .an-kpi .k');
@@ -385,6 +428,7 @@ function fillSpending(el, o, oPrev) {
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
     `<div class="an-card-foot">${kpi(ctx.money(o?.expenses || 0, cur), esc(t('Ausgaben gesamt', 'Total spending')))}${trendBadge(trend, false)}</div>`;
   bindSpendingScrubber(el, rows, cur);
+  bindPeriodDrills(el, rows, 'expense');
 }
 
 function spendingLine(rows) {
@@ -395,7 +439,12 @@ function spendingLine(rows) {
   const area = line ? `${line} L${w},${baseY} L0,${baseY} Z` : '';
   const base = `<line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" class="an-zero"></line>`;
   const labels = rows.map((r, i) => `<text x="${((i / (rows.length - 1 || 1)) * w).toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(axisPeriodLabel(r))}</text>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${areaGradient('an-grad-neg', 'an-g-neg')}${base}<path d="${area}" class="an-area" fill="url(#an-grad-neg)"></path><path d="${line}" class="an-line-expense"></path>${labels}</svg>`;
+  const slot = w / Math.max(1, rows.length);
+  const hits = rows.map((r, i) => {
+    const x = i * slot;
+    return `<rect class="an-period-hit" x="${x.toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${h}" data-period-index="${i}" role="button" tabindex="0" aria-label="${esc(t('Buchungen öffnen: ', 'Open transactions: ') + monthLabel(r))}" fill="transparent"></rect>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" class="an-chart" role="img" aria-label="${esc(t('Ausgabenentwicklung', 'Spending development'))}">${areaGradient('an-grad-neg', 'an-g-neg')}${base}<path d="${area}" class="an-area" fill="url(#an-grad-neg)"></path><path d="${line}" class="an-line-expense"></path>${labels}${hits}</svg>`;
 }
 
 // 2) Income vs expenses — grouped bars per period, with income/expense/net numbers and both trends.
@@ -414,6 +463,7 @@ function fillInout(el, o, oPrev) {
     kpi(ctx.money(o?.expenses || 0, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
     `</div>` + kpi(`<span class="${netCls}">${ctx.money(net, cur)}</span>`, esc(ctx.get('analytics.net'))) + `</div>`;
   bindInoutScrubber(el, rows, cur);
+  bindPeriodDrills(el, rows);
 }
 
 function inoutBars(rows) {
@@ -425,8 +475,8 @@ function inoutBars(rows) {
     const cx = pad + slot * i + slot / 2;
     const ih = ((Number(r.income) || 0) / max) * (h - 30);
     const eh = ((Number(r.expenses) || 0) / max) * (h - 30);
-    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${ih.toFixed(1)}" class="bar-income" rx="6"></rect>`;
-    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${eh.toFixed(1)}" class="bar-expense" rx="6"></rect>`;
+    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${(h - 20 - ih).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2, ih).toFixed(1)}" class="bar-income an-period-bar" rx="6" data-period-index="${i}" data-direction="income" role="button" tabindex="0" aria-label="${esc(ctx.get('transactions.income') + ': ' + monthLabel(r))}"></rect>`;
+    bars += `<rect x="${(cx + 1).toFixed(1)}" y="${(h - 20 - eh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2, eh).toFixed(1)}" class="bar-expense an-period-bar" rx="6" data-period-index="${i}" data-direction="expense" role="button" tabindex="0" aria-label="${esc(ctx.get('transactions.expenses') + ': ' + monthLabel(r))}"></rect>`;
     bars += `<text x="${cx.toFixed(1)}" y="${h - 6}" class="an-axis" text-anchor="middle">${esc(axisPeriodLabel(r))}</text>`;
   });
   const baseline = `<line x1="0" y1="${h - 20}" x2="${w}" y2="${h - 20}" class="an-zero"></line>`;
