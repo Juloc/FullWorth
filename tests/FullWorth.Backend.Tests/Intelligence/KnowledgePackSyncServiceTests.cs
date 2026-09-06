@@ -84,7 +84,7 @@ public sealed class KnowledgePackSyncServiceTests
 
         var blob = await fixture.Db.BrandAssetBlobs.SingleAsync();
         Assert.Equal(hash, blob.ContentSha256);
-        Assert.Equal(Convert.ToBase64String(svg), blob.ContentBase64);
+        Assert.Equal(svg, blob.Content);
 
         var alias = await fixture.Db.OfficialBrandAliases.SingleAsync();
         Assert.Equal("VATTENFALL", alias.AliasKey);
@@ -227,7 +227,7 @@ public sealed class KnowledgePackSyncServiceTests
         Assert.Equal("installed", result.Status);
         Assert.Equal(0, result.BrandAssetsDownloaded);
         Assert.Equal(1, result.BrandAssetsReused);
-        Assert.Equal(Convert.ToBase64String(svg), (await fixture.Db.BrandAssetBlobs.SingleAsync()).ContentBase64);
+        Assert.Equal(svg, (await fixture.Db.BrandAssetBlobs.SingleAsync()).Content);
     }
 
     [Fact]
