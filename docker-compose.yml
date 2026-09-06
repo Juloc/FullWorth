@@ -121,6 +121,7 @@ services:
       fullworth-backend:
         condition: service_healthy
     environment:
+      FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
       Backend__BaseUrl: http://fullworth-backend:8080
       Backend__IngestKey: ${FULLWORTH_INGEST_KEY}
       Security__ApiKey: ${FULLWORTH_BANKING_API_KEY}

@@ -889,7 +889,20 @@
     "retryVerification": "Retry verification",
     "tryAgain": "Start again",
     "useManual": "Set up manually",
-    "automaticSecurity": "The private RSA key and Control Panel refresh token are stored encrypted. Short-lived Control Panel access tokens stay in memory only."
+    "automaticSecurity": "The private RSA key and Control Panel refresh token are stored encrypted. Short-lived Control Panel access tokens stay in memory only.",
+    "ingFinTsTitle": "Connect ING",
+    "ingFinTsMode": "Connection method",
+    "ingFinTsFull": "FinTS – current + savings accounts + portfolio",
+    "ingFinTsFullHint": "Default. Reads ING current accounts, Extra accounts and Direkt-Depot.",
+    "ingEnableBankingOnly": "Enable Banking – current account only via PSD2",
+    "ingEnableBankingHint": "Requires a configured Enable Banking application.",
+    "ingUserId": "Access number / username",
+    "ingPin": "Internet banking PIN / password",
+    "ingTan": "TAN",
+    "ingTanHint": "Confirm the sign-in using the method requested by ING.",
+    "ingDecoupledHint": "Approve the request in the ING app, then check the approval.",
+    "ingPoll": "Check approval",
+    "ingConnected": "ING connected"
   },
   "aiAccess": {
     "title": "AI access",

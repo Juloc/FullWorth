@@ -85,6 +85,19 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("connect-src 'self' https://", csp, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Ing_DefaultsToOwnedFinTs_WithoutRequiringEnableBanking()
+    {
+        var app = ReadAsset("app.js");
+        var de = ReadAsset("locales", "de.json");
+
+        Assert.Contains("fullworthProvider:'fints'", app);
+        Assert.Contains("api/banking/fints/ing/connect", app);
+        Assert.Contains("api/banking/fints/connections/", app);
+        Assert.Contains("ingFinTsFull", de);
+        Assert.Contains("ingEnableBankingOnly", de);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);
