@@ -17,11 +17,18 @@ ensureCss();
 function optionList(headers,selected,required=false){return `${required?'':'<option value="">—</option>'}${headers.map(h=>`<option value="${esc(h)}" ${h===selected?'selected':''}>${esc(h)}</option>`).join('')}`}
 function previewTable(rows,headers){const shown=headers.slice(0,9);return `<div class="ii-table-wrap"><table class="ii-table"><thead><tr>${shown.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,10).map(row=>`<tr>${shown.map(h=>`<td>${esc(row[h]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`}
 function headerKey(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
-function findHeader(headers,...names){const wanted=new Set(names.map(headerKey));return (headers||[]).find(h=>wanted.has(headerKey(h)))||null}
+function findHeader(headers,...names){const all=headers||[];for(const name of names){const wanted=headerKey(name);const match=all.find(h=>headerKey(h)===wanted);if(match)return match}return null}
 function isTradeRepublic(data){const h=data?.headers||[];return ['account_type','category','asset_class','type','symbol','shares','transaction_id'].every(name=>findHeader(h,name))}
 function applyBrokerMapping(data){
   const s={...(data?.suggestedMapping||{})};
   if(!isTradeRepublic(data))return s;
+  s.tradeDate=findHeader(data.headers,'date','datetime')||s.tradeDate;
+  s.tradeType=findHeader(data.headers,'type')||s.tradeType;
+  s.price=findHeader(data.headers,'price')||s.price;
+  s.amount=findHeader(data.headers,'amount')||s.amount;
+  s.currency=findHeader(data.headers,'currency')||s.currency;
+  s.fees=findHeader(data.headers,'fee')||s.fees;
+  s.taxes=findHeader(data.headers,'tax')||s.taxes;
   const symbol=findHeader(data.headers,'symbol');
   const values=(data.preview||[]).map(row=>row?.[symbol]).filter(Boolean);
   if(symbol&&values.length&&values.every(v=>/^[A-Za-z]{2}[A-Za-z0-9]{10}$/.test(String(v).trim()))){s.isin=symbol;if(s.ticker===symbol)s.ticker=null}
