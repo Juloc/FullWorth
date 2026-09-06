@@ -320,6 +320,22 @@ public sealed class KnowledgePackSyncService(
             throw new KnowledgePackVerificationException("knowledge_pack_ontology_duplicate_redirect");
 
         ValidateRedirectGraph(redirects);
+
+        var activeEntityKeys = entities
+            .Where(x => x.Status == "active")
+            .Select(x => (x.EntityType, x.CanonicalKey))
+            .ToHashSet();
+        foreach (var redirect in redirects)
+        {
+            var terminal = ResolveRedirectKey(
+                redirect.FromCanonicalKey,
+                redirects
+                    .Where(x => x.EntityType == redirect.EntityType)
+                    .ToDictionary(x => x.FromCanonicalKey, x => x.ToCanonicalKey, StringComparer.Ordinal));
+            if (!activeEntityKeys.Contains((redirect.EntityType, terminal)))
+                throw new KnowledgePackVerificationException("knowledge_pack_ontology_redirect_target_invalid");
+        }
+
         return new ProjectedOntology(entities, aliases, redirects);
     }
 
