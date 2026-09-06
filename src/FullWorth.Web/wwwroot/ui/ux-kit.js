@@ -31,6 +31,7 @@ const BRAND_LOGOS = [
   { aliases: ['VATTENFALL'], path: '/brands/vattenfall.svg' },
   { aliases: ['ENBW'], path: '/brands/enbw.svg' },
   { aliases: ['OBI'], path: '/brands/obi.svg' },
+  { aliases: ['LEBARA'], path: '/brands/lebara.svg' },
   { aliases: ['VODAFONE'], path: '/brands/vodafone.svg' },
   { aliases: ['LIDL'], path: '/brands/lidl.svg' },
   { aliases: ['REWE'], path: '/brands/rewe.svg' },
