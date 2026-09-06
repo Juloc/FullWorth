@@ -521,6 +521,9 @@ function accountRow(x,groups){
   const kind=[x.product||x.accountType,isManual?get('accounts.manual'):null].filter(Boolean).join(' · ');
   const nativeAmt=x.latestBalance?money(x.latestBalance.amount,x.latestBalance.currency):'—';
   const convertedAmt=x.baseValue!=null?`<div class="amount-converted">${converted(x.baseValue,x.baseCurrency)}</div>`:'';
+  const dataAsOf=x.latestBalance?.capturedAt
+    ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(dateTime(x.latestBalance.capturedAt))}`
+    : '';
   const row=document.createElement('div');row.className='row';
   // The "move to group" affordance only appears once at least one group exists (otherwise the dialog
   // would be a dead end offering only "Ungrouped").
@@ -528,7 +531,7 @@ function accountRow(x,groups){
   const renameBtn=`<button type="button" class="icon-button" data-rename-account title="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}" aria-label="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}">${ACCT_EDIT}</button>`;
   const balanceBtn=isManual?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}</div>`;
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
   row.querySelector('[data-edit-balance]')?.addEventListener('click',()=>openBalanceDialog(x));
@@ -587,13 +590,31 @@ async function loadAccountsView(){
     const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
     const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
     const row=document.createElement('div');row.className='row';
-    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+    row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
     row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
     row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
     row.querySelector('[data-disconnect]').addEventListener('click',ev=>disconnectConnection(x,ev.currentTarget));
     conns.appendChild(row);
   }
   if(!(connections||[]).length)empty(conns);
+}
+async function openSyncHistory(connection){
+  let history;
+  try{
+    history=await api(`api/bank-connections/${connection.id}/sync-history?limit=10`);
+  }catch(err){toast(err.message||get('common.error'));return}
+  const locale=state.lang==='de'?'de-DE':'en-US';
+  const rows=(history||[]).map(item=>{
+    const resultKey={success:'accounts.syncResultSuccess',partial:'accounts.syncResultPartial',error:'accounts.syncResultError'}[item.result]||'accounts.syncResultError';
+    const seconds=Math.max(0,Number(item.durationMs)||0)/1000;
+    const duration=new Intl.NumberFormat(locale,{maximumFractionDigits:2}).format(seconds)+' s';
+    const error=item.errorCode?` · ${esc(item.errorCode)}`:'';
+    return `<div class="row"><div class="row-main"><div class="row-title">${esc(get(resultKey))}${error}</div><div class="row-sub">${esc(get('accounts.syncStartedAt'))}: ${esc(dateTime(item.startedAt))} · ${esc(get('accounts.syncFinishedAt'))}: ${esc(dateTime(item.completedAt))}</div></div><div class="row-side"><span class="row-sub">${esc(get('accounts.syncDuration'))}: ${esc(duration)}</span></div></div>`;
+  }).join('');
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('accounts.syncHistoryEmpty'))}</div></div>`}</div></div>`);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.showModal();
 }
 async function syncConnection(id,button){
   if(button)button.disabled=true;
