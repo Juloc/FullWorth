@@ -956,8 +956,8 @@
   "onboarding": {
     "title": "Set up FullWorth",
     "welcome": "Welcome to FullWorth",
-    "intro": "Set up your personal access now so FullWorth can use bank data and AI features.",
-    "optional": "Both steps are optional. You can skip them and add, change, or reconnect them later at any time in Settings.",
+    "intro": "Set up personal access and FullWorth Cloud Intelligence.",
+    "optional": "AI and bank access are optional. Cloud Intelligence is recommended and enabled by default, but can be turned off before finishing and changed later in Settings.",
     "start": "Start setup",
     "aiTitle": "AI access",
     "aiText": "Choose Codex / ChatGPT, your own OpenAI API key, or a custom OpenAI-compatible endpoint.",
@@ -969,6 +969,21 @@
     "continueOrSkip": "Continue / set up later",
     "back": "Back",
     "finish": "Finish setup",
-    "done": "Setup complete. All access settings can still be changed later in Settings."
+    "done": "Setup complete. All access settings can still be changed later in Settings.",
+    "cloudTitle": "FullWorth Cloud Intelligence",
+    "cloudText": "Improves merchant, category, and contract mappings collaboratively and enables anonymous benchmarks."
+  },
+  "cloudIntelligence": {
+    "title": "FullWorth Cloud Intelligence",
+    "manage": "Manage Cloud Intelligence",
+    "loading": "Checking cloud status…",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "explain": "FullWorth uses shared, versioned knowledge for better automatic mappings and aggregate benchmarks.",
+    "shared": "Only required minimized learning and statistical data is shared, such as recognized merchants, category aliases, and coarse comparison buckets. No IBAN, account number, e-mail, user ID, notes, or bank credentials.",
+    "useCloud": "Use FullWorth Cloud Intelligence",
+    "localWins": "Manual decisions and local rules always take precedence over cloud knowledge.",
+    "savedEnabled": "Cloud Intelligence enabled.",
+    "savedDisabled": "Cloud Intelligence disabled."
   }
 }
