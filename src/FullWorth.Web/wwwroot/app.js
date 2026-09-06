@@ -67,7 +67,7 @@ const viewFromPath=router.viewFromPath;
 // in-page add control so there is a single code path.
 const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
-const $=s=>document.querySelector(s);const $=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const toastController=createToast($('#toast'));
 const toast=(text,duration)=>toastController.show(text,duration);
 
