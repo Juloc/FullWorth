@@ -1,21 +1,71 @@
-MIT License
+FullWorth Proprietary License
+Version 1.0 — 2026
 
-Copyright (c) 2026 Juloc
+Copyright (c) 2026 Juloc. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software, including its source code, documentation, assets, and associated
+files (the "Software"), is proprietary to the copyright holder.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Limited personal-use license
+
+Subject to the restrictions below, you are granted a limited, revocable,
+non-exclusive, non-transferable license to:
+
+- view the source code;
+- download, build, and run the Software for your own personal,
+  non-commercial use; and
+- modify the Software for your own personal, non-commercial use.
+
+No other rights are granted.
+
+2. Restrictions
+
+Without prior written permission from the copyright holder, you may not:
+
+- copy or redistribute the Software, in source or binary form, except for
+  copies strictly necessary for your permitted personal use;
+- publish, sublicense, sell, rent, lease, monetize, or otherwise commercially
+  exploit the Software or any substantial portion of it;
+- provide the Software, or a modified version of it, as a hosted service,
+  SaaS product, managed service, or other service for third parties;
+- use the Software or substantial portions of it to create, operate, or
+  distribute a competing financial application, product, or service;
+- distribute modified versions, forks, or derivative works of the Software;
+  or
+- remove or alter copyright, license, trademark, or attribution notices.
+
+3. Commercial and redistribution rights
+
+Commercial use, redistribution, hosted-service use, and other rights not
+expressly granted by this license require a separate written license from the
+copyright holder.
+
+4. Third-party components
+
+Third-party software, libraries, fonts, icons, trademarks, and other materials
+included with or used by the Software remain subject to their respective
+licenses and rights. This license applies only to material for which Juloc is
+the copyright holder or otherwise has authority to license.
+
+5. No trademark license
+
+This license does not grant any right to use the names "FullWorth" or "Juloc",
+or any associated logos, marks, or branding, except as technically necessary
+to run an unmodified permitted copy of the Software.
+
+6. Termination
+
+Any breach of this license automatically terminates the rights granted under
+it. Upon termination, you must stop using and delete all copies made under
+this license, except where applicable law provides otherwise.
+
+7. Disclaimer
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT
+PERMITTED BY LAW, THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY ARISING FROM OR RELATED TO THE SOFTWARE.
+
+For permissions beyond this license, obtain prior written authorization from
+the copyright holder.
