@@ -158,6 +158,77 @@ function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-p
 function toggleSidebar(){const collapsed=!document.body.classList.contains('nav-collapsed');document.body.classList.toggle('nav-collapsed',collapsed);localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');syncNavToggle()}
 // Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
 function syncNavToggle(){const b=$('#nav-collapse');if(!b)return;const collapsed=document.body.classList.contains('nav-collapsed');b.textContent=collapsed?'›':'‹';const label=get(collapsed?'nav.expand':'nav.collapse');b.setAttribute('aria-label',label);b.title=label}
+
+function initResizableSidebar(){
+  const sidebar=$('.sidebar');
+  if(!sidebar)return;
+  const key='finance.sidebar.width';
+  const minWidth=176;
+  const desktopMode=()=>window.matchMedia('(min-width:768px)').matches;
+  const maxWidth=()=>{
+    const coach=document.body.classList.contains('coach-dock-open')?$('#coach-dock')?.getBoundingClientRect().width||0:0;
+    const minMain=window.innerWidth<1100?280:420;
+    return Math.max(minWidth,Math.min(360,window.innerWidth-coach-minMain));
+  };
+  const apply=value=>{
+    if(!desktopMode())return;
+    const width=Math.max(minWidth,Math.min(maxWidth(),Math.round(Number(value)||sidebar.getBoundingClientRect().width||228)));
+    document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
+    handle.setAttribute('aria-valuemax',String(maxWidth()));
+    handle.setAttribute('aria-valuenow',String(width));
+    return width;
+  };
+  const handle=document.createElement('div');
+  handle.className='sidebar-resizer';
+  handle.setAttribute('role','separator');
+  handle.setAttribute('aria-orientation','vertical');
+  handle.setAttribute('aria-label','Navigation width');
+  handle.setAttribute('aria-valuemin',String(minWidth));
+  handle.tabIndex=0;
+  sidebar.appendChild(handle);
+
+  const saved=Number(localStorage.getItem(key));
+  if(saved>0)apply(saved);
+
+  let pointerId=null;
+  handle.addEventListener('pointerdown',event=>{
+    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
+    pointerId=event.pointerId;
+    handle.setPointerCapture(pointerId);
+    handle.classList.add('is-dragging');
+    document.body.classList.add('sidebar-resizing');
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove',event=>{
+    if(pointerId!==event.pointerId)return;
+    apply(event.clientX);
+  });
+  const finish=event=>{
+    if(pointerId===null||event.pointerId!==pointerId)return;
+    pointerId=null;
+    handle.classList.remove('is-dragging');
+    document.body.classList.remove('sidebar-resizing');
+    const width=apply(sidebar.getBoundingClientRect().width);
+    if(width)localStorage.setItem(key,String(width));
+  };
+  handle.addEventListener('pointerup',finish);
+  handle.addEventListener('pointercancel',finish);
+  handle.addEventListener('keydown',event=>{
+    if(!desktopMode()||document.body.classList.contains('nav-collapsed'))return;
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    const current=sidebar.getBoundingClientRect().width;
+    const next=event.key==='Home'?minWidth:event.key==='End'?maxWidth():current+(event.key==='ArrowRight'?10:-10);
+    const width=apply(next);
+    if(width)localStorage.setItem(key,String(width));
+  });
+  window.addEventListener('resize',()=>{
+    if(!desktopMode())return;
+    const current=Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width;
+    apply(current);
+  });
+  window.fwClampSidebarWidth=()=>apply(Number(localStorage.getItem(key))||sidebar.getBoundingClientRect().width);
+}
 async function showView(view,opts={}){
   state.view=view;
   // Keep the URL in sync so a reload/deep-link lands on this screen and Back/Forward work.
@@ -1247,4 +1318,5 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
 }
 
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
+initResizableSidebar();
 boot();
