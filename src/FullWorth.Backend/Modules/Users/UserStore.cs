@@ -58,6 +58,33 @@ public sealed class UserStore(DbContext db)
         return user;
     }
 
+    public async Task<bool> SetActiveAsync(Guid userId, bool active, CancellationToken ct)
+    {
+        var user = await db.Set<FullWorthUser>().SingleOrDefaultAsync(x => x.Id == userId, ct);
+        if (user is null || user.IsTombstone) return false;
+        user.IsActive = active;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> TombstoneAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await db.Set<FullWorthUser>().SingleOrDefaultAsync(x => x.Id == userId, ct);
+        if (user is null) return false;
+        if (user.IsTombstone) return true;
+
+        user.EmailNormalized = $"DELETED-{user.Id:N}@INVALID.FULLWORTH";
+        user.DisplayName = "Deleted user";
+        user.IsActive = false;
+        user.IsTombstone = true;
+        user.OnboardingVersion = 0;
+        user.OnboardingCompletedAt = null;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     private static string NormalizeEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
