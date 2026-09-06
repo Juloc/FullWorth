@@ -73,19 +73,13 @@ public sealed class PaperlessReceiptClient(
         string token,
         CancellationToken ct)
     {
-        var tagsTask = ReadNamedOptionsAsync(baseUrl, token, "api/tags/?page_size=1000&ordering=name", ct);
-        var typesTask = ReadNamedOptionsAsync(baseUrl, token, "api/document_types/?page_size=1000&ordering=name", ct);
-        var correspondentsTask = ReadNamedOptionsAsync(baseUrl, token, "api/correspondents/?page_size=1000&ordering=name", ct);
-        var storagePathsTask = ReadNamedOptionsAsync(baseUrl, token, "api/storage_paths/?page_size=1000&ordering=name", ct);
-        var customFieldsTask = ReadNamedOptionsAsync(baseUrl, token, "api/custom_fields/?page_size=1000&ordering=name", ct);
+        var tags = await ReadNamedOptionsAsync(baseUrl, token, "api/tags/?page_size=1000&ordering=name", ct);
+        var documentTypes = await ReadNamedOptionsAsync(baseUrl, token, "api/document_types/?page_size=1000&ordering=name", ct);
+        var correspondents = await ReadNamedOptionsAsync(baseUrl, token, "api/correspondents/?page_size=1000&ordering=name", ct);
+        var storagePaths = await ReadNamedOptionsAsync(baseUrl, token, "api/storage_paths/?page_size=1000&ordering=name", ct);
+        var customFields = await ReadNamedOptionsAsync(baseUrl, token, "api/custom_fields/?page_size=1000&ordering=name", ct);
 
-        await Task.WhenAll(tagsTask, typesTask, correspondentsTask, storagePathsTask, customFieldsTask);
-        return new PaperlessFilterOptionsView(
-            await tagsTask,
-            await typesTask,
-            await correspondentsTask,
-            await storagePathsTask,
-            await customFieldsTask);
+        return new PaperlessFilterOptionsView(tags, documentTypes, correspondents, storagePaths, customFields);
     }
 
     public async Task<PaperlessDocumentDownload> DownloadAsync(
