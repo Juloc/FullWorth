@@ -49,14 +49,14 @@ a:hover{color:var(--muted)}
 .skip-link:focus{top:8px}
 
 .shell{min-height:100vh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
-body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
+body.nav-collapsed .shell,body.nav-auto-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
 
 /* Sidebar (§3.1) */
 .sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line);min-width:0}
 .sidebar-resizer{position:absolute;top:0;right:-4px;z-index:8;width:8px;height:100%;cursor:col-resize;touch-action:none}
 .sidebar-resizer::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background-color .15s ease}
 .sidebar-resizer:hover::after,.sidebar-resizer.is-dragging::after{background:var(--k4)}
-body.nav-collapsed .sidebar-resizer{display:none}
+body.nav-collapsed .sidebar-resizer,body.nav-auto-collapsed .sidebar-resizer{display:none}
 body.sidebar-resizing{cursor:col-resize;user-select:none}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
@@ -76,12 +76,12 @@ html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.s
    stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
 #nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
 #nav-collapse:hover{border-color:var(--cta)}
-body.nav-collapsed .brand strong{display:none}
-body.nav-collapsed .brand-name{display:none}
+body.nav-collapsed .brand strong,body.nav-auto-collapsed .brand strong{display:none}
+body.nav-collapsed .brand-name,body.nav-auto-collapsed .brand-name{display:none}
 /* Collapsed rail (72px): stack the logo above the toggle, both centred, so the toggle stays a real,
    clickable button that can re-open the sidebar (it used to be hidden, trapping the collapsed state). */
-body.nav-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
-body.nav-collapsed #nav-collapse{margin-left:0}
+body.nav-collapsed .brand,body.nav-auto-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
+body.nav-collapsed #nav-collapse,body.nav-auto-collapsed #nav-collapse{margin-left:0}
 #nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto}
 .sidebar-foot{margin-top:auto;padding-top:var(--s2);border-top:1px solid var(--line)}
 .sidebar button{display:flex;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:8px;color:var(--muted);font-weight:500;cursor:pointer}
@@ -92,8 +92,8 @@ body.nav-collapsed #nav-collapse{margin-left:0}
    reserved for money statements (a colourful nav would immediately devalue that rule). */
 .sidebar button.active{background:var(--surface-2);color:var(--text);font-weight:600}
 .sidebar button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-body.nav-collapsed .sidebar button{justify-content:center;padding:10px 0}
-body.nav-collapsed .sidebar button span{display:none}
+body.nav-collapsed .sidebar button,body.nav-auto-collapsed .sidebar button{justify-content:center;padding:10px 0}
+body.nav-collapsed .sidebar button span,body.nav-auto-collapsed .sidebar button span{display:none}
 /* A divider separates the finance areas from the organization areas (categories/rules/settings). */
 .nav-sep{height:1px;background:var(--line);margin:var(--s2) 10px}
 /* User block + light/dark toggle at the foot of the sidebar (where account things are expected). */
@@ -103,8 +103,9 @@ body.nav-collapsed .sidebar button span{display:none}
 .sidebar-user-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidebar-user-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #theme-toggle{width:32px;height:32px;flex:0 0 auto}
-body.nav-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-right:0}
-body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:none}
+body.nav-collapsed .sidebar-user,body.nav-auto-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-right:0}
+body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle,body.nav-auto-collapsed .sidebar-user-meta,body.nav-auto-collapsed #theme-toggle{display:none}
+body.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
 
 /* Main + top header (§3.1) */
 main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:none}

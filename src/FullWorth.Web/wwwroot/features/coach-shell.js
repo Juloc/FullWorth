@@ -13,6 +13,7 @@ let selectedModel = '';
 let currentConversationSpaceId = null;
 let dockOpen = false;
 const quickAccessKey = 'finance.coach.quickAccess';
+const pageContextKey = 'finance.coach.pageContext';
 
 const reasonLabels = {
   necessary: ['Notwendig', 'Necessary'], good_value: ['Gutes Preis-Leistungs-Verhältnis', 'Good value'], quality_of_life: ['Lebensqualität', 'Quality of life'],
@@ -76,7 +77,7 @@ function installShell() {
       <div class="coach-main">
         <article class="panel coach-hero">
           <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
-          <div class="coach-head-actions"><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span></div>
+          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span></div>
         </article>
         <article class="panel coach-chat-panel">
           <div id="coach-starters" class="coach-starters"></div>
@@ -124,6 +125,8 @@ function installShell() {
   window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
   window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
   window.addEventListener('storage', event => { if (event.key === quickAccessKey) syncQuickAccess(); });
+  document.addEventListener('change', event => { if (dockOpen && event.target.closest('.view.active')) renderPageContext(); });
+  document.addEventListener('input', event => { if (dockOpen && event.target.closest('.view.active') && event.target.id === 'tx-query') renderPageContext(); });
   if (document.readyState === 'complete' && isCoachPath()) activate(false);
   syncQuickAccess();
 }
@@ -172,6 +175,7 @@ function installQuickAccess() {
       </div>
     </header>
     <div class="coach-dock-chat">
+      <div id="coach-dock-context" class="coach-context"></div>
       <div id="coach-dock-starters" class="coach-starters"></div>
       <div id="coach-dock-messages" class="coach-messages" aria-live="polite"></div>
       <form id="coach-dock-form" class="coach-composer">
@@ -207,7 +211,7 @@ function initDockResize() {
   const minWidth = 260;
   const desktopMode = () => window.matchMedia('(min-width:768px)').matches;
   const maxWidth = () => {
-    const sidebar = document.body.classList.contains('nav-collapsed')
+    const sidebar = document.body.classList.contains('nav-collapsed') || document.body.classList.contains('nav-auto-collapsed')
       ? 72
       : document.querySelector('.sidebar')?.getBoundingClientRect().width || 0;
     const minMain = window.innerWidth < 1100 ? 280 : 420;
@@ -221,6 +225,7 @@ function initDockResize() {
     handle.setAttribute('aria-valuemin', String(minWidth));
     handle.setAttribute('aria-valuemax', String(maxWidth()));
     handle.setAttribute('aria-valuenow', String(width));
+    window.dispatchEvent(new CustomEvent('fullworth:coach-resize', { detail: { width } }));
     return width;
   };
 
@@ -266,6 +271,58 @@ function initDockResize() {
   window.fwClampCoachWidth = clamp;
 }
 
+function readFilterValue(id) {
+  const element = document.getElementById(id);
+  if (!element) return null;
+  if (element.type === 'checkbox') return element.checked ? 'true' : null;
+  const value = String(element.value ?? '').trim();
+  return value || null;
+}
+
+function capturePageContext() {
+  const activeView = all('.view.active').find(view => view.id !== 'view-coach');
+  if (!activeView) {
+    try { return JSON.parse(sessionStorage.getItem(pageContextKey) || 'null'); } catch { return null; }
+  }
+
+  const page = activeView.id.replace(/^view-/, '');
+  const filters = {};
+  const queryKeys = new Set(['accountId','groupId','categoryId','merchantId','transactionId','direction','flags','period']);
+  const params = new URLSearchParams(location.search);
+  for (const [key, value] of params) if (queryKeys.has(key) && value) filters[key] = value.slice(0, 160);
+
+  const pageFilters = {
+    transactions: [['tx-query','query'],['tx-direction','direction'],['tx-flags','flags']],
+    contracts: [['contracts-archived','archived']],
+    analytics: [['an-period','period'],['an-measure','measure'],['an-dimension','dimension'],['an-cperiod','comparisonPeriod'],['an-ctype','chartType']],
+    audit: [['audit-action','auditAction'],['audit-entity-type','entityType']]
+  };
+  for (const [id, key] of pageFilters[page] || []) {
+    const value = readFilterValue(id);
+    if (value) filters[key] = value.slice(0, 160);
+  }
+
+  const context = {
+    page: page.slice(0, 40),
+    title: ($('#page-title')?.textContent || page).trim().slice(0, 100),
+    path: (location.pathname + location.search).slice(0, 180),
+    filters
+  };
+  sessionStorage.setItem(pageContextKey, JSON.stringify(context));
+  return context;
+}
+
+function renderPageContext() {
+  const context = capturePageContext();
+  const filterCount = context ? Object.keys(context.filters || {}).length : 0;
+  const label = context
+    ? `${tr('Kontext', 'Context')}: ${context.title || context.page}${filterCount ? ` · ${filterCount} ${tr('Filter', 'filters')}` : ''}`
+    : tr('Kein Seitenkontext', 'No page context');
+  if ($('#coach-page-context')) $('#coach-page-context').textContent = label;
+  if ($('#coach-dock-context')) $('#coach-dock-context').textContent = label;
+  return context;
+}
+
 function setSelectedModel(value) {
   selectedModel = value || '';
   if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
@@ -284,6 +341,7 @@ function syncQuickAccess() {
 
 async function openDock() {
   if (!quickAccessEnabled()) return;
+  capturePageContext();
   dockOpen = true;
   const dock = $('#coach-dock');
   if (dock) dock.hidden = false;
@@ -292,9 +350,11 @@ async function openDock() {
     window.fwClampCoachWidth?.();
     window.fwClampSidebarWidth?.();
     window.fwClampCoachWidth?.();
+    window.fwSyncResponsiveSidebar?.();
   }
   syncQuickAccess();
   setMascotLabel();
+  renderPageContext();
   renderStarters();
   try { await Promise.all([loadConversation(), loadModels()]); } catch (error) { renderError(error); }
   queueMicrotask(() => $('#coach-dock-input')?.focus());
@@ -306,6 +366,7 @@ function closeDock() {
   const dock = $('#coach-dock');
   if (dock) dock.hidden = true;
   window.dispatchEvent(new Event('resize'));
+  window.fwSyncResponsiveSidebar?.();
   syncQuickAccess();
 }
 
@@ -321,6 +382,7 @@ function injectMobileMore() {
 }
 
 function activate(push) {
+  if (!isCoachPath()) capturePageContext();
   if (dockOpen) closeDock();
   active = true;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
@@ -349,6 +411,7 @@ async function loadAll() {
   if (loading) return;
   loading = true;
   setMascotLabel();
+  renderPageContext();
   renderStarters();
   try { await Promise.all([loadConversation(), loadReviews(), loadModels()]); }
   catch (error) { renderError(error); }
@@ -452,8 +515,9 @@ async function ask(text) {
   appendMessage({ role: 'User', text: question, facts: [] });
   try {
     const id = await ensureConversation();
+    const uiContext = renderPageContext();
     const response = await api(`api/coach/conversations/${id}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null, uiContext })
     });
     appendMessage(response.message);
     const modeText = response.message.mode === 'Ai'

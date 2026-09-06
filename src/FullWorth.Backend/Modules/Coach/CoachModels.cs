@@ -231,7 +231,19 @@ public sealed record CoachContext(
 }
 
 public sealed record CreateCoachConversationRequest(string? Title, string? MascotId);
-public sealed record AskCoachRequest(string Text, DateOnly? From = null, DateOnly? To = null, string? Model = null);
+
+public sealed record CoachUiContext(
+    string Page,
+    string? Title = null,
+    string? Path = null,
+    IReadOnlyDictionary<string, string>? Filters = null);
+
+public sealed record AskCoachRequest(
+    string Text,
+    DateOnly? From = null,
+    DateOnly? To = null,
+    string? Model = null,
+    CoachUiContext? UiContext = null);
 
 public sealed record CoachConversationDto(
     Guid Id,
@@ -267,7 +279,8 @@ public sealed record CoachProviderRequest(
     CoachContext Context,
     IReadOnlyList<CoachMessageDto> ConversationTail,
     string? MascotId,
-    string? Model = null);
+    string? Model = null,
+    CoachUiContext? UiContext = null);
 
 public sealed record CoachProviderResult(
     string Text,
