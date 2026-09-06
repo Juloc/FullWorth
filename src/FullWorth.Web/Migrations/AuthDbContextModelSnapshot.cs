@@ -13,7 +13,7 @@ partial class AuthDbContextModelSnapshot : ModelSnapshot
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
-        AuthMigrationModelPasskeys.Build(modelBuilder);
+        AuthMigrationModelAccountDeletion.Build(modelBuilder);
 #pragma warning restore 612, 618
     }
 }
