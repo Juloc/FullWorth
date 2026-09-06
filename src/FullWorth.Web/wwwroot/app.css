@@ -602,6 +602,15 @@ body.locked{overflow:hidden}
 /* Mobile bottom nav (§3.2) — hidden on desktop */
 #bottom-nav{display:none}
 
+@media(min-width:768px) and (max-width:1023px){
+  main{padding:0 var(--s4) var(--s8)}
+  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .content-grid{grid-template-columns:1fr}
+  .span-2{grid-column:auto}
+  .dashboard-grid{grid-template-columns:1fr}
+  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
+}
+
 /* Mobile only: below 768px the desktop sidebars give way to the app-style bottom navigation. */
 @media(max-width:767px){
   .shell{display:block;width:100%;min-width:0}
