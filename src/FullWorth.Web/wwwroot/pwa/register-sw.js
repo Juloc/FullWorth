@@ -10,6 +10,8 @@ if ('serviceWorker' in navigator) {
 // page and is already allowed by the CSP. The Coach modules own their own DOM and degrade safely if
 // they cannot be loaded; they never bypass the existing BFF for finance data.
 function loadCoachExtension() {
+  // The auth page registers the service worker too, but must not load authenticated shell modules.
+  if (document.body?.classList.contains('auth-body')) return;
   if (!document.querySelector('link[data-fullworth-coach]')) {
     const stylesheet = document.createElement('link');
     stylesheet.rel = 'stylesheet';
