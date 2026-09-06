@@ -6,6 +6,7 @@ const preferences = {
 };
 
 const endpoints = Object.freeze({
+  providers: '/auth/providers',
   login: '/auth/login',
   register: '/auth/register',
   passwordResetRequest: '/auth/password-reset/request',
@@ -20,7 +21,12 @@ const state = {
   messages: {},
   view: resolveView(),
   generatedRecoveryCodes: [],
-  pendingLogin: null
+  pendingLogin: null,
+  capabilities: {
+    registrationEnabled: false,
+    google: false,
+    apple: false
+  }
 };
 
 const $ = selector => document.querySelector(selector);
@@ -42,8 +48,10 @@ async function boot() {
   updateThemeButton();
   applyTheme();
   await loadMessages();
+  await loadCapabilities();
   bind();
   showView(state.view);
+  applyCapabilities();
   showSessionStatus();
   prepareResetView();
 }
@@ -59,6 +67,57 @@ async function loadMessages() {
   document.documentElement.lang = preferences.language;
   renderTranslations();
   updateDocumentTitle();
+}
+
+async function loadCapabilities() {
+  try {
+    const response = await fetch(endpoints.providers, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    state.capabilities = {
+      registrationEnabled: payload?.registrationEnabled === true,
+      google: payload?.google === true,
+      apple: payload?.apple === true
+    };
+  } catch {
+    // Email/password and passkeys remain available if provider discovery fails.
+  }
+}
+
+function applyCapabilities() {
+  $('[data-registration-link]').forEach(link => {
+    link.hidden = !state.capabilities.registrationEnabled;
+  });
+
+  const registrationForm = $('#register-form');
+  const registrationDisabled = $('#registration-disabled-state');
+  if (registrationForm && state.view === 'register') {
+    registrationForm.hidden = !state.capabilities.registrationEnabled;
+    if (state.capabilities.registrationEnabled) hideMessage(registrationDisabled);
+    else showMessage(registrationDisabled);
+  }
+
+  for (const context of ['login', 'register']) {
+    const container = document.querySelector(`[data-auth-social="${context}"]`);
+    const divider = document.querySelector(`[data-auth-social-divider="${context}"]`);
+    if (!container) continue;
+
+    let visible = false;
+    container.querySelectorAll('[data-external-provider]').forEach(button => {
+      const provider = button.dataset.externalProvider;
+      const enabled = Boolean(state.capabilities[provider])
+        && (context !== 'register' || state.capabilities.registrationEnabled);
+      button.hidden = !enabled;
+      visible ||= enabled;
+    });
+
+    container.hidden = !visible;
+    if (divider) divider.hidden = !visible;
+  }
 }
 
 function renderTranslations() {
@@ -124,7 +183,20 @@ function bind() {
     form.addEventListener('submit', handleSubmit);
   });
 
-  $$('[data-auth-action="toggle-password"]').forEach(button => {
+  $('[data-external-provider]').forEach(button => {
+    button.addEventListener('click', () => {
+      const provider = button.dataset.externalProvider;
+      const mode = button.dataset.externalMode === 'register' ? 'register' : 'login';
+      if (!provider) return;
+
+      const parameters = new URLSearchParams({ mode });
+      const returnUrl = new URLSearchParams(location.search).get('returnUrl');
+      if (returnUrl) parameters.set('returnUrl', resolveSafeReturnPath(returnUrl));
+      location.assign(`/auth/external/${encodeURIComponent(provider)}?${parameters}`);
+    });
+  });
+
+  $('[data-auth-action="toggle-password"]').forEach(button => {
     button.addEventListener('click', togglePassword);
   });
 
@@ -542,6 +614,18 @@ function showSessionStatus() {
     showMessage(target);
   } else if (status === 'signed-out') {
     target.textContent = get('auth.signedOut');
+    showMessage(target);
+  } else if (status === 'registration-disabled') {
+    target.textContent = get('auth.registrationDisabled');
+    showMessage(target);
+  } else if (status === 'external-account-not-found') {
+    target.textContent = get('auth.externalAccountNotFound');
+    showMessage(target);
+  } else if (status === 'external-registration-failed') {
+    target.textContent = get('auth.externalRegistrationFailed');
+    showMessage(target);
+  } else if (status === 'external-failed') {
+    target.textContent = get('auth.externalFailed');
     showMessage(target);
   }
 }
