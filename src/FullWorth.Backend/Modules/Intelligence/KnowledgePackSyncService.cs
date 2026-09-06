@@ -316,20 +316,36 @@ public sealed class KnowledgePackSyncService(
         string errorCode,
         CancellationToken ct)
     {
+        _ = installation;
+        var instanceId = state.InstanceId;
+
+        // A failed installation may have left Added/Deleted entities in the change tracker even though
+        // its database transaction rolled back. Drop all tracked state before persisting only the error.
+        db.ChangeTracker.Clear();
+
+        var persistedInstallation = await db.KnowledgePackInstallations.SingleOrDefaultAsync(
+            x => x.ScopeKey == KnowledgePackProtocol.InstallationScopeKey, ct);
+        var persistedState = await db.CloudConnectionStates.SingleOrDefaultAsync(
+            x => x.ScopeKey == CloudConnectionState.InstanceScopeKey && x.InstanceId == instanceId, ct);
+
         var now = DateTimeOffset.UtcNow;
-        if (installation is not null)
+        if (persistedInstallation is not null)
         {
-            installation.LastCheckedAt = now;
-            installation.LastErrorCode = Trim(errorCode, 120);
+            persistedInstallation.LastCheckedAt = now;
+            persistedInstallation.LastErrorCode = Trim(errorCode, 120);
         }
-        state.LastKnowledgePackCheckAt = now;
-        state.LastErrorCode = Trim(errorCode, 120);
-        state.UpdatedAt = now;
+        if (persistedState is not null)
+        {
+            persistedState.LastKnowledgePackCheckAt = now;
+            persistedState.LastErrorCode = Trim(errorCode, 120);
+            persistedState.UpdatedAt = now;
+        }
+
         await db.SaveChangesAsync(ct);
         return new(
             "failed",
-            installation?.Version,
-            installation?.MerchantMappingCount ?? 0,
+            persistedInstallation?.Version,
+            persistedInstallation?.MerchantMappingCount ?? 0,
             errorCode);
     }
 
