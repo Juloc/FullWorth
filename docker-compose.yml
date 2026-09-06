@@ -192,6 +192,13 @@ services:
       Passkeys__Origins__1: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
       Passkeys__Origins__2: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
       Passkeys__Origins__3: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
+      Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
+      ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
+      ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
+      ExternalAuth__Apple__ServiceId: ${FULLWORTH_APPLE_SERVICE_ID:-}
+      ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
+      ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
+      ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
       AllowedHosts: ${FULLWORTH_ALLOWED_HOSTS:?FULLWORTH_ALLOWED_HOSTS is required}
       # First-run admin bootstrap (optional). Set both to create the first login on startup;
       # leave empty once a user exists. Remove/rotate after the first successful sign-in.
