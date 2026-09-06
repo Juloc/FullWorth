@@ -34,6 +34,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task CoachShellExposesEvidenceAndDeterministicModeWithoutMandatoryAi()
     {
         var shell = await GetAsync("/features/coach-shell.js");
+        var coachCss = await GetAsync("/features/coach.css");
         Assert.Contains("Deterministisch", shell);
         Assert.Contains("Verwendete Fakten", shell);
         Assert.Contains("FullWorth-Daten im sicheren Kontext", shell);
@@ -61,6 +62,11 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("renderContextActions", shell);
         Assert.Contains("dockWidthMode", shell);
         Assert.Contains("initDockSwipe", shell);
+        Assert.Contains("if (!question || responding) return;", shell);
+        Assert.Contains("setThinking(true)", shell);
+        Assert.Contains("coach-thinking-dots", shell);
+        Assert.Contains("@keyframes coach-thinking-bounce", coachCss);
+        Assert.Contains("prefers-reduced-motion:reduce", coachCss);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ let active = false;
 let currentConversationId = null;
 let reviews = new Map();
 let loading = false;
+let responding = false;
 let modelCatalog = null;
 let selectedModel = '';
 let currentConversationSpaceId = null;
@@ -612,18 +613,21 @@ async function ensureConversation() {
 
 async function ask(text) {
   const question = String(text || '').trim();
-  if (!question) return;
+  if (!question || responding) return;
+  responding = true;
   const inputs = all('#coach-input,#coach-dock-input');
   const sends = all('#coach-send,#coach-dock-send');
   inputs.forEach(input => { input.value = ''; });
   sends.forEach(send => { send.disabled = true; });
   appendMessage({ role: 'User', text: question, facts: [] });
+  setThinking(true);
   try {
     const id = await ensureConversation();
     const uiContext = renderPageContext();
     const response = await api(`api/coach/conversations/${id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null, uiContext })
     });
+    setThinking(false);
     appendMessage(response.message);
     renderContextActions();
     const modeText = response.message.mode === 'Ai'
@@ -632,8 +636,13 @@ async function ask(text) {
     if ($('#coach-mode')) $('#coach-mode').textContent = modeText;
     renderFollowUps(response.followUps || []);
     await loadReviews(false);
-  } catch (error) { appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] }); }
+  } catch (error) {
+    setThinking(false);
+    appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] });
+  }
   finally {
+    setThinking(false);
+    responding = false;
     sends.forEach(send => { send.disabled = false; });
     (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
   }
@@ -653,6 +662,21 @@ async function restartConversation() {
 }
 
 function messageRoots() { return all('#coach-messages,#coach-dock-messages'); }
+
+function setThinking(visible) {
+  messageRoots().forEach(root => {
+    root.querySelector('.coach-thinking')?.remove();
+    if (!visible) return;
+    root.querySelector('.coach-empty')?.remove();
+    const article = document.createElement('article');
+    article.className = 'coach-message assistant coach-thinking';
+    article.setAttribute('role', 'status');
+    article.setAttribute('aria-label', tr('Coach denkt nach', 'Coach is thinking'));
+    article.innerHTML = `<span class="sr-only">${esc(tr('Coach denkt nach', 'Coach is thinking'))}</span><span class="coach-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>`;
+    root.appendChild(article);
+    root.scrollTop = root.scrollHeight;
+  });
+}
 
 function renderMessages(messages) {
   messageRoots().forEach(root => {
