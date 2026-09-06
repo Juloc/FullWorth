@@ -468,7 +468,7 @@ async function loadBudgets(){
     // Status from usage: over (>100), near (>=85), on track (§12.2).
     const status=pct>100?'over':pct>=85?'near':'ontrack';
     const cycleLabel=x.period&&x.period!=='monthly'?`${esc(get('budgets.period_'+x.period)||x.period)} · ${date(x.periodStart)}–${date(x.periodEnd)} · `:'';
-    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
+    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><div class="budget-card-head-actions"><button type="button" class="ghost budget-coach" data-coach>Coach</button><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
   }
   // §18: flag when some spend was in a currency with no conversion rate (excluded from the figures).
   if(status.incomplete)el.insertAdjacentHTML('afterbegin',`<div class="fx-incomplete">${esc(get('common.fxIncomplete'))}</div>`);
@@ -476,8 +476,17 @@ async function loadBudgets(){
   el.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
   // §12: each card opens the budget detail (window, forecast, contributing transactions).
   el.querySelectorAll('.budget-card[data-id]').forEach(card=>{
+    const item=items.find(x=>String(x.budgetId||x.id)===String(card.dataset.id));
     const open=()=>openBudgetDetail(card.dataset.id);
-    card.addEventListener('click',open);
+    card.querySelector('[data-coach]')?.addEventListener('click',event=>{
+      event.stopPropagation();
+      if(!item)return;
+      window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+        entityType:'budget',entityId:item.budgetId||item.id,entityLabel:item.name,
+        details:{amount:String(item.amount??''),currency,status:item.percent>100?'over':item.percent>=85?'near':'ontrack'}
+      }}));
+    });
+    card.addEventListener('click',event=>{if(!event.target.closest('button'))open()});
     card.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open()}});
   });
 }
@@ -517,6 +526,12 @@ async function openBudgetDetail(id){
     <div class="budget-detail-rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('common.empty'))}</div></div>`}</div>
   </div>`);
   dlg.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  const coach=document.createElement('button');coach.type='button';coach.className='ghost';coach.textContent='Coach';
+  coach.addEventListener('click',()=>{dlg.close();window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+    entityType:'budget',entityId:s.budgetId,entityLabel:s.name,
+    details:{amount:String(s.budgetAmount??''),currency,status:barStatus,count:String((s.contributing||[]).length)}
+  }}))});
+  dlg.querySelector('.panel-head-actions')?.prepend(coach);
   dlg.querySelector('[data-close]').addEventListener('click',()=>dlg.close());
   dlg.querySelector('[data-edit]').addEventListener('click',()=>openBudgetEdit(s.budgetId,()=>dlg.close()));
   dlg.showModal();
