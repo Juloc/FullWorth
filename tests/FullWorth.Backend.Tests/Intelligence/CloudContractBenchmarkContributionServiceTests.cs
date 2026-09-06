@@ -116,6 +116,35 @@ public sealed class CloudContractBenchmarkContributionServiceTests
         // Same-day rerun is idempotent and does not create another outbox event.
         Assert.Equal(0, await service.QueueCurrentAsync(now, CancellationToken.None));
         Assert.Equal(1, await intelligenceDb.CloudSubmissionOutbox.CountAsync());
+
+        // Once a reviewed provider identity is available from the signed pack, FullWorth adds exactly
+        // one provider-specific observation while preserving the existing broad benchmark.
+        intelligenceDb.OfficialContractProviders.Add(new OfficialContractProvider
+        {
+            ProviderKey = "provider.a",
+            CanonicalName = "Provider A",
+            Country = "DE",
+            Version = 1
+        });
+        intelligenceDb.OfficialContractSignatures.Add(new OfficialContractSignature
+        {
+            ProviderKey = "provider.a",
+            MerchantFingerprint = "PROVIDER A",
+            Confidence = 0.99m
+        });
+        await intelligenceDb.SaveChangesAsync();
+
+        Assert.Equal(1, await service.QueueCurrentAsync(now, CancellationToken.None));
+        Assert.Equal(2, await intelligenceDb.CloudSubmissionOutbox.CountAsync());
+
+        var providerRow = await intelligenceDb.CloudSubmissionOutbox
+            .SingleAsync(x => x.IdempotencyKey.StartsWith("benchmark-provider:"));
+        using var providerDoc = JsonDocument.Parse(providerRow.PayloadJson);
+        var providerRoot = providerDoc.RootElement;
+        Assert.Equal("provider.a", providerRoot.GetProperty("entityKey").GetString());
+        Assert.Equal(30m, providerRoot.GetProperty("value").GetDecimal());
+        Assert.DoesNotContain("Provider A", providerRow.PayloadJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("Provider B", providerRow.PayloadJson, StringComparison.Ordinal);
     }
 
     [Theory]
