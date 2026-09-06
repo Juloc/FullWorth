@@ -92,8 +92,8 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
         const string csv =
             "datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
             "2026-08-01T10:15:30.123Z,2026-08-01,DEFAULT,TRADE,BUY,FUND,Core MSCI World,IE00B4L5Y983,1,100,-100,0,0,EUR,tr-datetime-buy\r\n" +
-            "2026-08-02T12:00:00+02:00,2026-08-02,DEFAULT,CASH,INTEREST_PAYMENT,,,,,2.5,0,0.5,EUR,tr-datetime-interest\r\n" +
-            "2026-08-03T18:45:01Z,2026-08-03,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,100,0,0,EUR,tr-datetime-deposit\r\n";
+            "2026-08-02T12:00:00+02:00,2026-08-02,DEFAULT,CASH,INTEREST_PAYMENT,,,,,,2.5,0,0.5,EUR,tr-datetime-interest\r\n" +
+            "2026-08-03T18:45:01Z,2026-08-03,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,100,0,0,EUR,tr-datetime-deposit\r\n";
 
         using var request = UserRequest(HttpMethod.Post,
             $"/api/investment-import/upload?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
