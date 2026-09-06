@@ -27,6 +27,11 @@ public sealed record FinanzguruImportResult(
 
 public sealed class FinanzguruImportConflictException(string message) : Exception(message);
 
+public sealed record FinanzguruExplicitLinkRequest(
+    Guid TargetAccountId,
+    decimal? CurrentBalance,
+    string? CurrentBalanceCurrency);
+
 public sealed class FinanzguruImportService(
     FullWorthDbContext db,
     FinanzguruWorkbookReader reader,
@@ -130,6 +135,7 @@ public sealed class FinanzguruImportService(
                     EntryReference = row.EntryReference,
                     IsTransfer = row.IsTransfer,
                     IsIgnored = false,
+                    UseForBalanceHistory = false,
                     CategorizationSource = categoryId.HasValue || children.Count > 0 ? "finanzguru" : "none",
                     RawJson = cipher.Protect(JsonSerializer.Serialize(new
                     {
@@ -424,6 +430,37 @@ public static class FinanzguruImportEndpoints
 
     public static IEndpointRouteBuilder MapFinanzguruImportEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapPost("/api/import/finanzguru/accounts/{importAccountId:guid}/link", async (
+            Guid importAccountId,
+            Guid fullWorthSpaceId,
+            FinanzguruExplicitLinkRequest request,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var userId = currentUser.RequireUserId();
+                var result = await reconciliation.LinkExplicitAsync(
+                    userId,
+                    fullWorthSpaceId,
+                    importAccountId,
+                    request.TargetAccountId,
+                    request.CurrentBalance,
+                    request.CurrentBalanceCurrency,
+                    ct);
+                if (result is null) return Results.NotFound();
+
+                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
         app.MapPost("/api/import/finanzguru", async (
             Guid fullWorthSpaceId,
             HttpRequest request,
