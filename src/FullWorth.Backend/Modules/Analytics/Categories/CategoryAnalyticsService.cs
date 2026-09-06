@@ -18,7 +18,7 @@ public sealed record CategoryAnalyticsItem(
     decimal TrendPercent,
     bool HasItemBreakdown);
 
-public sealed record CategoryAnalyticsResult(int Year, int Month, string Currency, List<CategoryAnalyticsItem> Categories, bool Incomplete);
+public sealed record CategoryAnalyticsResult(int Year, int Month, string Currency, List<CategoryAnalyticsItem> Categories, bool Incomplete, DateOnly? From = null, DateOnly? To = null, string Granularity = "month");
 
 /// <summary>
 /// Category spend analytics for a month: current vs previous period, trailing 3/6/12-month averages,
@@ -112,6 +112,145 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
         return new CategoryAnalyticsResult(year, month, currency, items, incomplete);
     }
 
+    /// <summary>
+    /// Arbitrary-window category analytics used by the consumer analysis cycles. The comparison is the
+    /// immediately preceding window with exactly the same number of days. Account/group scope is applied
+    /// inside the authorization query so chart totals reconcile with transaction drill-downs.
+    /// </summary>
+    public async Task<CategoryAnalyticsResult?> CategorySpendForRangeForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly from,
+        DateOnly to,
+        string granularity,
+        string currency,
+        Guid? accountId,
+        Guid? accountGroupId,
+        CancellationToken ct)
+    {
+        if (!await db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(
+                member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId, ct))
+            return null;
+
+        if (to < from) (from, to) = (to, from);
+        currency = NormalizeCurrency(currency);
+        granularity = NormalizeGranularity(granularity);
+
+        var periodDays = Math.Max(1, to.DayNumber - from.DayNumber + 1);
+        var previousFrom = from.AddDays(-periodDays);
+        var previousTo = from.AddDays(-1);
+
+        var rows = await db.Transactions.AsNoTracking()
+            .Where(transaction =>
+                transaction.Amount < 0 &&
+                !transaction.IsIgnored &&
+                !transaction.IsTransfer &&
+                transaction.Status != "PDNG" &&
+                transaction.BookingDate != null &&
+                transaction.BookingDate >= previousFrom &&
+                transaction.BookingDate <= to &&
+                db.Accounts.Any(account =>
+                    account.Id == transaction.AccountId &&
+                    account.FullWorthSpaceId == fullWorthSpaceId &&
+                    (!accountId.HasValue || account.Id == accountId.Value) &&
+                    (!accountGroupId.HasValue || account.GroupId == accountGroupId.Value) &&
+                    account.Owners.Any(owner => owner.UserId == userId)))
+            .Select(transaction => new
+            {
+                transaction.Id,
+                Date = transaction.BookingDate!.Value,
+                transaction.Amount,
+                transaction.Currency,
+                transaction.CategoryId
+            })
+            .ToListAsync(ct);
+
+        var dateByTransaction = rows.ToDictionary(row => row.Id, row => row.Date);
+        var (allocations, incomplete) = await new ExpenseAllocationBuilder(db).BuildAsync(
+            fullWorthSpaceId,
+            rows.Select(row => new ExpenseTx(row.Id, row.Amount, row.CategoryId, row.Currency, row.Date)).ToList(),
+            fx, currency, ct);
+
+        var current = new Dictionary<Guid, decimal>();
+        var previous = new Dictionary<Guid, decimal>();
+        var itemBreakdownCurrent = new HashSet<Guid>();
+        foreach (var allocation in allocations)
+        {
+            if (!dateByTransaction.TryGetValue(allocation.TransactionId, out var date)) continue;
+            var key = allocation.CategoryId ?? Uncategorized;
+            var target = date >= from && date <= to ? current
+                : date >= previousFrom && date <= previousTo ? previous
+                : null;
+            if (target is null) continue;
+            target[key] = target.GetValueOrDefault(key) + allocation.Amount;
+            if (ReferenceEquals(target, current) && allocation.FromPurchaseItem)
+                itemBreakdownCurrent.Add(key);
+        }
+
+        var categories = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .Select(category => new { category.Id, category.ParentId, category.Name })
+            .ToListAsync(ct);
+        var parentById = categories.ToDictionary(category => category.Id, category => category.ParentId);
+        var childrenByParent = categories
+            .Where(category => category.ParentId.HasValue)
+            .GroupBy(category => category.ParentId!.Value)
+            .ToDictionary(group => group.Key, group => group.Select(category => category.Id).ToList());
+
+        decimal Rollup(IReadOnlyCollection<Guid> subtree, Dictionary<Guid, decimal> source) =>
+            subtree.Sum(categoryId => source.GetValueOrDefault(categoryId));
+
+        var items = new List<CategoryAnalyticsItem>();
+        foreach (var category in categories)
+        {
+            var subtree = Subtree(category.Id, childrenByParent);
+            var currentSpend = Rollup(subtree, current);
+            var previousSpend = Rollup(subtree, previous);
+            if (currentSpend == 0m && previousSpend == 0m) continue;
+            var trend = currentSpend - previousSpend;
+            var trendPercent = previousSpend == 0m
+                ? (currentSpend == 0m ? 0m : 100m)
+                : trend / previousSpend * 100m;
+            items.Add(new CategoryAnalyticsItem(
+                category.Id,
+                category.Name,
+                parentById[category.Id],
+                Round(currentSpend),
+                Round(previousSpend),
+                0m,
+                0m,
+                0m,
+                Round(trend),
+                Round(trendPercent),
+                subtree.Any(itemBreakdownCurrent.Contains)));
+        }
+
+        var uncategorizedCurrent = current.GetValueOrDefault(Uncategorized);
+        var uncategorizedPrevious = previous.GetValueOrDefault(Uncategorized);
+        if (uncategorizedCurrent != 0m || uncategorizedPrevious != 0m)
+        {
+            var trend = uncategorizedCurrent - uncategorizedPrevious;
+            var trendPercent = uncategorizedPrevious == 0m
+                ? (uncategorizedCurrent == 0m ? 0m : 100m)
+                : trend / uncategorizedPrevious * 100m;
+            items.Add(new CategoryAnalyticsItem(
+                null, "Uncategorized", null,
+                Round(uncategorizedCurrent), Round(uncategorizedPrevious),
+                0m, 0m, 0m,
+                Round(trend), Round(trendPercent),
+                itemBreakdownCurrent.Contains(Uncategorized)));
+        }
+
+        items = items.OrderByDescending(item => item.Current).ThenBy(item => item.Name).ToList();
+        return new CategoryAnalyticsResult(from.Year, from.Month, currency, items, incomplete, from, to, granularity);
+    }
+
+    private static string NormalizeGranularity(string? granularity)
+    {
+        var normalized = (granularity ?? "month").Trim().ToLowerInvariant();
+        return normalized is "week" or "month" or "quarter" or "year" ? normalized : "month";
+    }
+
     private static CategoryAnalyticsItem? BuildItem(
         Guid? categoryId, string name, Guid? parentId, IReadOnlyCollection<Guid> subtree,
         Dictionary<Guid, Dictionary<int, decimal>> monthly, HashSet<Guid> itemBreakdownCurrent, int currentKey)
@@ -182,12 +321,34 @@ public static class CategoryAnalyticsEndpoints
     public static IEndpointRouteBuilder MapCategoryAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/analytics/categories", async (
-            Guid fullWorthSpaceId, int? year, int? month, string? currency,
-            CurrentUserContext currentUser, CategoryAnalyticsService service, CancellationToken ct) =>
+            Guid fullWorthSpaceId,
+            int? year,
+            int? month,
+            DateOnly? from,
+            DateOnly? to,
+            string? granularity,
+            string? currency,
+            Guid? accountId,
+            Guid? accountGroupId,
+            CurrentUserContext currentUser,
+            CategoryAnalyticsService service,
+            CancellationToken ct) =>
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var result = await service.CategorySpendForUserAsync(
-                currentUser.RequireUserId(), fullWorthSpaceId, year ?? today.Year, month ?? today.Month, currency ?? "EUR", ct);
+            CategoryAnalyticsResult? result;
+            if (from.HasValue || to.HasValue)
+            {
+                var resolvedTo = to ?? today;
+                var resolvedFrom = from ?? resolvedTo.AddMonths(-1).AddDays(1);
+                result = await service.CategorySpendForRangeForUserAsync(
+                    currentUser.RequireUserId(), fullWorthSpaceId, resolvedFrom, resolvedTo,
+                    granularity ?? "month", currency ?? "EUR", accountId, accountGroupId, ct);
+            }
+            else
+            {
+                result = await service.CategorySpendForUserAsync(
+                    currentUser.RequireUserId(), fullWorthSpaceId, year ?? today.Year, month ?? today.Month, currency ?? "EUR", ct);
+            }
             return result is null ? Results.NotFound() : Results.Ok(result);
         }).WithTags("Analytics");
 
