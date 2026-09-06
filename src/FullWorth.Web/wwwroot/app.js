@@ -200,7 +200,7 @@ function renderPageHeader(){
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
   if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
-function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;updateThemeToggle()}
+function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',actual==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
 function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
 async function loadSpaces(){
   const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
