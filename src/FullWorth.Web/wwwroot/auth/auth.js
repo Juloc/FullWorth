@@ -627,6 +627,9 @@ function showSessionStatus() {
   } else if (status === 'external-failed') {
     target.textContent = get('auth.externalFailed');
     showMessage(target);
+  } else if (status === 'external-two-factor-required') {
+    target.textContent = get('auth.externalTwoFactorRequired');
+    showMessage(target);
   }
 }
 
