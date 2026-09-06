@@ -32,6 +32,31 @@ function ensureHeader(dlg, card, closeLabel) {
   });
 }
 
+function installMobileSwipe(dlg, card) {
+  const head = card?.querySelector('.fw-dialog-head,.panel-head');
+  if (!head) return;
+  let pointerId = null, startY = 0, lastY = 0;
+  head.addEventListener('pointerdown', event => {
+    if (!matchMedia('(max-width:767px)').matches || event.target.closest('button,a,input,select,textarea')) return;
+    if (!dlg.classList.contains('drawer') && !dlg.classList.contains('fw-dialog--sheet') && !card.classList.contains('tx-detail')) return;
+    pointerId = event.pointerId; startY = lastY = event.clientY;
+    head.setPointerCapture?.(pointerId); card.classList.add('fw-dialog-swiping');
+  });
+  head.addEventListener('pointermove', event => {
+    if (event.pointerId !== pointerId) return;
+    lastY = event.clientY;
+    card.style.transform = `translateY(${Math.max(0, lastY - startY)}px)`;
+  });
+  const finish = event => {
+    if (event.pointerId !== pointerId) return;
+    const delta = Math.max(0, lastY - startY);
+    pointerId = null; card.classList.remove('fw-dialog-swiping'); card.style.transform = '';
+    if (delta > 90 && dlg.open) dlg.close('cancel');
+  };
+  head.addEventListener('pointerup', finish);
+  head.addEventListener('pointercancel', finish);
+}
+
 export function createDialog(html, options = {}) {
   const dlg = document.createElement('dialog');
   dlg.className = 'fw-dialog';
@@ -44,6 +69,7 @@ export function createDialog(html, options = {}) {
   if (card) {
     card.classList.add('fw-dialog-card');
     ensureHeader(dlg, card, options.closeLabel);
+    installMobileSwipe(dlg, card);
   }
 
   dlg.addEventListener('close', () => dlg.remove(), { once: true });
