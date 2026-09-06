@@ -25,7 +25,7 @@ function error(kind,err){console.error(err);status(kind,`${t.error} ${err?.messa
 function currentFile(kind){const input=$(kind==='tx'?'tx-file':'inv-file');return input.files?.[0]||null}
 function formWithFile(file){const body=new FormData();body.append('file',file,file.name);return body}
 function normHeader(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')}
-function findHeader(headers,...aliases){const wanted=new Set(aliases.map(normHeader));return (headers||[]).find(header=>wanted.has(normHeader(header)))||null}
+function findHeader(headers,...aliases){const all=headers||[];for(const alias of aliases){const wanted=normHeader(alias);const match=all.find(header=>normHeader(header)===wanted);if(match)return match}return null}
 function headerValues(data,header){return (data?.preview||[]).map(row=>row?.[header]).filter(value=>String(value??'').trim().length>0)}
 function isTradeRepublicExport(data){const required=['account_type','category','asset_class','type','symbol','shares','transaction_id'];return required.every(name=>findHeader(data?.headers,name))}
 function importProviderName(){const preset=$('inv-preset')?.value;return preset==='traderepublic'?'Trade Republic':preset==='parqet'?'Parqet':preset==='finanzfluss'?'Finanzfluss':null}
