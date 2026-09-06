@@ -151,6 +151,20 @@ public static class ReceiptImportEndpoints
             catch (ReceiptImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
         });
 
+        group.MapGet("/paperless/options", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            try { return Results.Ok(await service.GetPaperlessFilterOptionsAsync(fullWorthSpaceId, ct)); }
+            catch (Exception ex) when (ex is ReceiptImportException or InvalidOperationException or HttpRequestException)
+            { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
         group.MapPost("/paperless/preview", async (
             Guid fullWorthSpaceId,
             PaperlessPreviewRequest request,
