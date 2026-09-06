@@ -9,10 +9,12 @@ on:
       - 'v*'
     branches:
       - 'release-build/1.2.0-rc.3'
+    paths-ignore:
+      - 'ops/release-build-1.2.0-rc.3.complete'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -73,3 +75,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=fullworth-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}
+
+  publish-marker:
+    name: Confirm published images
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark 1.2.0-rc.3 as published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          payload="$(printf 'FullWorth 1.2.0-rc.3 images published successfully.\nSource: %s\nRun: %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" | base64 -w0)"
+          curl --fail-with-body --silent --show-error \
+            --request PUT \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/ops/release-build-1.2.0-rc.3.complete" \
+            --data "{\"message\":\"build: mark 1.2.0-rc.3 images published\",\"content\":\"$payload\",\"branch\":\"$GITHUB_REF_NAME\"}"
