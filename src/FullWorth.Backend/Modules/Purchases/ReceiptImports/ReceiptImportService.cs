@@ -110,6 +110,12 @@ public sealed class ReceiptImportService(
         return await paperless.TestAsync(connection.BaseUrl, connection.Token, ct);
     }
 
+    public async Task<PaperlessFilterOptionsView> GetPaperlessFilterOptionsAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+        return await paperless.GetFilterOptionsAsync(connection.BaseUrl, connection.Token, ct);
+    }
+
     public async Task<PaperlessPreviewResult> PreviewPaperlessAsync(Guid fullWorthSpaceId, PaperlessPreviewRequest request, CancellationToken ct)
     {
         var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
