@@ -20,6 +20,11 @@ and byte length of an SVG. The instance keeps a shared `BrandAssetBlobs` cache k
 A normal knowledge-pack update therefore transfers no logo bytes when the referenced logos are unchanged.
 Legacy schema-v1 packs with embedded SVG bytes are still accepted and migrated into the same cache.
 
+The browser receives only brand metadata/aliases from the catalog endpoint. SVG bytes are requested lazily
+from the authenticated local `/api/intelligence/brand-assets/{sha256}` route when an icon is actually rendered.
+Those local responses use a private one-year immutable cache, so a large installed pack is not serialized into
+every page-load response.
+
 Unreferenced blobs are retained for 30 days before garbage collection so temporary pack changes do not
 immediately force a later re-download.
 
