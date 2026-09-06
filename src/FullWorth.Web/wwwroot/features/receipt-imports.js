@@ -206,6 +206,17 @@ function bindPaperless() {
   dialog.querySelector('[data-paperless-import]').onclick = importPaperless;
   dialog.querySelector('[data-paperless-add-filter]').onclick = () => addPaperlessRule();
   dialog.querySelector('[data-paperless-raw]').addEventListener('input', updatePaperlessQueryPreview);
+  dialog.querySelector('[data-paperless-match]').addEventListener('change', () => {
+    const join = dialog.querySelector('[data-paperless-match]').value === 'OR' ? 'OR' : 'AND';
+    if (!dialog.querySelector('[data-paperless-advanced-toggle]').checked) {
+      dialog.querySelectorAll('[data-rule-join]').forEach(x => { x.value = join; });
+    }
+    updatePaperlessQueryPreview();
+  });
+  dialog.querySelector('[data-paperless-advanced-toggle]').addEventListener('change', applyPaperlessEditorMode);
+  dialog.querySelector('[data-paperless-preset]').addEventListener('change', event => selectPaperlessPreset(event.target.value));
+  dialog.querySelector('[data-paperless-preset-save]').onclick = savePaperlessPreset;
+  dialog.querySelector('[data-paperless-preset-delete]').onclick = deletePaperlessPreset;
 }
 
 async function refreshPaperlessConnection() {
@@ -227,6 +238,7 @@ async function refreshPaperlessConnection() {
     state.textContent = `${t('Verbunden', 'Connected')} · ${connection.baseUrl}`;
     setPaperlessConnectionUi(true);
     await loadPaperlessOptions();
+    await loadPaperlessPresets();
   } catch (error) {
     state.textContent = error.message;
     setPaperlessConnectionUi(false);
@@ -284,6 +296,8 @@ async function deletePaperlessConnection() {
     dialog.querySelector('[data-paperless-rules]').innerHTML = '';
     dialog.querySelector('[data-paperless-preview-result]').innerHTML = '';
     paperlessOptions = { tags: [], documentTypes: [], correspondents: [], storagePaths: [], customFields: [] };
+    paperlessPresets = [];
+    activePaperlessPresetId = null;
     setPaperlessConnectionUi(false);
   } catch (error) {
     setBox('[data-paperless-connection-result]', error.message, 'error');
@@ -323,6 +337,164 @@ async function loadPaperlessOptions() {
   if (!dialog.querySelector('[data-paperless-rule]')) addPaperlessRule();
   else dialog.querySelectorAll('[data-paperless-rule]').forEach(renderPaperlessRuleValue);
   updatePaperlessQueryPreview();
+}
+
+async function loadPaperlessPresets(selectId = activePaperlessPresetId) {
+  try {
+    paperlessPresets = await api('api/purchases/receipt-imports/paperless/presets') || [];
+  } catch {
+    paperlessPresets = [];
+  }
+
+  const select = dialog.querySelector('[data-paperless-preset]');
+  select.innerHTML = `<option value="">${esc(t('Neue Vorlage', 'New preset'))}</option>${paperlessPresets.map(preset => `<option value="${preset.id}">${esc(preset.name)}${preset.autoImport ? ' · Auto' : ''}</option>`).join('')}`;
+
+  if (selectId && paperlessPresets.some(x => x.id === selectId)) {
+    select.value = selectId;
+    selectPaperlessPreset(selectId);
+  } else {
+    activePaperlessPresetId = null;
+    select.value = '';
+    updatePaperlessPresetStatus(null);
+  }
+}
+
+function selectPaperlessPreset(id) {
+  activePaperlessPresetId = id || null;
+  const preset = paperlessPresets.find(x => x.id === id);
+  dialog.querySelector('[data-paperless-preset-delete]').hidden = !preset;
+
+  if (!preset) {
+    dialog.querySelector('[data-paperless-preset-name]').value = '';
+    dialog.querySelector('[data-paperless-preset-auto]').checked = false;
+    updatePaperlessPresetStatus(null);
+    return;
+  }
+
+  dialog.querySelector('[data-paperless-preset-name]').value = preset.name || '';
+  dialog.querySelector('[data-paperless-preset-auto]').checked = Boolean(preset.autoImport);
+  dialog.querySelector('[data-paperless-auto]').checked = preset.analyzeAutomatically !== false;
+  applyPaperlessPresetEditor(preset);
+  updatePaperlessPresetStatus(preset);
+}
+
+function applyPaperlessPresetEditor(preset) {
+  let editor = null;
+  try { editor = preset.editorJson ? JSON.parse(preset.editorJson) : null; } catch {}
+
+  const host = dialog.querySelector('[data-paperless-rules]');
+  host.innerHTML = '';
+  dialog.querySelector('[data-paperless-match]').value = editor?.match === 'OR' ? 'OR' : 'AND';
+  dialog.querySelector('[data-paperless-advanced-toggle]').checked = Boolean(editor?.advanced);
+  dialog.querySelector('[data-paperless-raw]').value = editor?.raw ?? (!editor ? (preset.query || '') : '');
+
+  const rules = Array.isArray(editor?.rules) ? editor.rules : [];
+  if (rules.length) rules.forEach(rule => addPaperlessRule(rule));
+  else addPaperlessRule();
+
+  applyPaperlessEditorMode();
+  updatePaperlessQueryPreview();
+  dialog.querySelector('[data-paperless-preview-result]').innerHTML = '';
+}
+
+function serializePaperlessEditor() {
+  const rules = [...dialog.querySelectorAll('[data-paperless-rule]')].map(row => ({
+    join: row.querySelector('[data-rule-join]')?.value || 'AND',
+    not: Boolean(row.querySelector('[data-rule-not]')?.checked),
+    open: Number(row.querySelector('[data-rule-open]')?.value || 0),
+    field: row.querySelector('[data-rule-field]')?.value || 'text',
+    value: row.querySelector('[data-rule-value]')?.value?.trim() || '',
+    close: Number(row.querySelector('[data-rule-close]')?.value || 0)
+  }));
+  return JSON.stringify({
+    version: 1,
+    match: dialog.querySelector('[data-paperless-match]').value === 'OR' ? 'OR' : 'AND',
+    advanced: Boolean(dialog.querySelector('[data-paperless-advanced-toggle]').checked),
+    raw: dialog.querySelector('[data-paperless-raw]').value.trim(),
+    rules
+  });
+}
+
+function applyPaperlessEditorMode() {
+  const advanced = Boolean(dialog.querySelector('[data-paperless-advanced-toggle]').checked);
+  const editor = dialog.querySelector('[data-paperless-editor]');
+  editor.classList.toggle('advanced', advanced);
+
+  if (!advanced) {
+    const join = dialog.querySelector('[data-paperless-match]').value === 'OR' ? 'OR' : 'AND';
+    dialog.querySelectorAll('[data-rule-join]').forEach(x => { x.value = join; });
+    dialog.querySelectorAll('[data-rule-open],[data-rule-close]').forEach(x => { x.value = '0'; });
+  }
+  updatePaperlessRuleJoins();
+  updatePaperlessQueryPreview();
+}
+
+async function savePaperlessPreset() {
+  const name = dialog.querySelector('[data-paperless-preset-name]').value.trim();
+  if (!name) return setBox('[data-paperless-preview-result]', t('Bitte einen Namen für die Vorlage eingeben.', 'Enter a preset name.'), 'error');
+
+  let query;
+  try { query = buildPaperlessQuery(); }
+  catch (error) { return setBox('[data-paperless-preview-result]', error.message, 'error'); }
+
+  const body = {
+    name,
+    query,
+    editorJson: serializePaperlessEditor(),
+    autoImport: dialog.querySelector('[data-paperless-preset-auto]').checked,
+    analyzeAutomatically: dialog.querySelector('[data-paperless-auto]').checked,
+    currency: currentCurrency()
+  };
+
+  setBusy('[data-paperless-preset-save]', true);
+  try {
+    const path = activePaperlessPresetId
+      ? `api/purchases/receipt-imports/paperless/presets/${activePaperlessPresetId}`
+      : 'api/purchases/receipt-imports/paperless/presets';
+    const preset = await api(path, {
+      method: activePaperlessPresetId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    activePaperlessPresetId = preset.id;
+    await loadPaperlessPresets(preset.id);
+    setBox('[data-paperless-preview-result]',
+      body.autoImport
+        ? t('Vorlage gespeichert. Autoimport prüft höchstens einmal pro Stunde und importiert nur neue Belege ab jetzt.', 'Preset saved. Auto-import checks at most hourly and imports only new receipts from now on.')
+        : t('Vorlage gespeichert.', 'Preset saved.'),
+      'ok');
+  } catch (error) {
+    setBox('[data-paperless-preview-result]', error.message, 'error');
+  } finally {
+    setBusy('[data-paperless-preset-save]', false);
+  }
+}
+
+async function deletePaperlessPreset() {
+  if (!activePaperlessPresetId) return;
+  if (!confirm(t('Diese Vorlage löschen?', 'Delete this preset?'))) return;
+  try {
+    await api(`api/purchases/receipt-imports/paperless/presets/${activePaperlessPresetId}`, { method: 'DELETE' });
+    activePaperlessPresetId = null;
+    await loadPaperlessPresets();
+    dialog.querySelector('[data-paperless-preset-name]').value = '';
+    dialog.querySelector('[data-paperless-preset-auto]').checked = false;
+    dialog.querySelector('[data-paperless-preset-delete]').hidden = true;
+  } catch (error) {
+    setBox('[data-paperless-preview-result]', error.message, 'error');
+  }
+}
+
+function updatePaperlessPresetStatus(preset) {
+  const el = dialog.querySelector('[data-paperless-preset-status]');
+  if (!preset) { el.textContent = ''; return; }
+  const bits = [];
+  if (preset.autoImport) bits.push(t('Autoimport aktiv', 'Auto-import active'));
+  if (preset.lastCheckedAt) bits.push(`${t('geprüft', 'checked')} ${formatDate(preset.lastCheckedAt)}`);
+  else if (preset.autoImport) bits.push(t('erste Prüfung innerhalb einer Stunde', 'first check within one hour'));
+  if (preset.lastImportedAt) bits.push(`${t('letzter Import', 'last import')} ${formatDate(preset.lastImportedAt)}`);
+  if (preset.lastError) bits.push(`${t('Fehler', 'error')}: ${preset.lastError}`);
+  el.textContent = bits.join(' · ');
 }
 
 function addPaperlessRule(initial = {}) {
