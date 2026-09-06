@@ -275,7 +275,7 @@ public sealed class KnowledgePackSyncService(
 
         // Compatibility with packs produced before 2026-09-06 where AliasKey could contain the internal
         // alias+direction+country composite representation.
-        const char separator = '';
+        const char separator = '\u001f';
         if (aliasKey.Contains(separator))
         {
             var parts = aliasKey.Split(separator);
