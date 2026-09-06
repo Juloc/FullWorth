@@ -84,8 +84,16 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         var currentEntry = BuildEntries(all, fullWorthSpaceId).First(x => x.Id == id);
         _ = GermanCompensationCalculator.Calculate(write.Profile);
         var userEdits = BuildPatch(currentEntry.ResolvedProfile, write.Profile);
-        var patch = MergePatchObjects(currentRow.Patch.AsObject(), userEdits);
+        var withoutCurrent = all.Where(x => x.Id != id).ToArray();
+        var insertionState = ResolveAtInsertion(withoutCurrent, write.EffectiveDate);
+        var patch = insertionState is null
+            ? BuildPatch(null, write.Profile)
+            : MergePatchObjects(currentRow.Patch.AsObject(), userEdits);
 
+        var validationNode = insertionState is null
+            ? ApplyPatch(null, patch)
+            : ApplyPatch(JsonSerializer.SerializeToNode(insertionState, JsonOptions), patch);
+        _ = DeserializeProfile(validationNode);
 
         await WithConnectionAsync(async connection =>
         {
@@ -130,17 +138,68 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         await EnsureSchemaAsync(ct);
+
+        var all = await LoadRowsAsync(userId, fullWorthSpaceId, null, ct);
+        var ordered = all.OrderBy(x => x.EffectiveDate).ThenBy(x => x.Sequence).ThenBy(x => x.CreatedAt).ToArray();
+        var index = Array.FindIndex(ordered, x => x.Id == id);
+        if (index < 0) return false;
+
+        string? promotedPatch = null;
+        Guid? promotedId = null;
+        if (index == 0 && ordered.Length > 1)
+        {
+            var entries = BuildEntries(ordered, fullWorthSpaceId);
+            var next = entries[1];
+            promotedId = next.Id;
+            promotedPatch = BuildPatch(null, next.ResolvedProfile).ToJsonString(JsonOptions);
+        }
+
         return await WithConnectionAsync(async connection =>
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                DELETE FROM compensation_history
-                WHERE id = @id AND fullworth_space_id = @fullworth_space_id AND user_id = @user_id;
-                """;
-            Add(command, "id", id);
-            Add(command, "fullworth_space_id", fullWorthSpaceId);
-            Add(command, "user_id", userId);
-            return await command.ExecuteNonQueryAsync(ct) > 0;
+            await using var transaction = await connection.BeginTransactionAsync(ct);
+            try
+            {
+                await using (var delete = connection.CreateCommand())
+                {
+                    delete.Transaction = transaction;
+                    delete.CommandText = """
+                        DELETE FROM compensation_history
+                        WHERE id = @id AND fullworth_space_id = @fullworth_space_id AND user_id = @user_id;
+                        """;
+                    Add(delete, "id", id);
+                    Add(delete, "fullworth_space_id", fullWorthSpaceId);
+                    Add(delete, "user_id", userId);
+                    if (await delete.ExecuteNonQueryAsync(ct) <= 0)
+                    {
+                        await transaction.RollbackAsync(ct);
+                        return false;
+                    }
+                }
+
+                if (promotedId is not null && promotedPatch is not null)
+                {
+                    await using var promote = connection.CreateCommand();
+                    promote.Transaction = transaction;
+                    promote.CommandText = """
+                        UPDATE compensation_history
+                        SET patch = CAST(@patch AS jsonb), updated_at = now()
+                        WHERE id = @id AND fullworth_space_id = @fullworth_space_id AND user_id = @user_id;
+                        """;
+                    Add(promote, "patch", promotedPatch);
+                    Add(promote, "id", promotedId.Value);
+                    Add(promote, "fullworth_space_id", fullWorthSpaceId);
+                    Add(promote, "user_id", userId);
+                    await promote.ExecuteNonQueryAsync(ct);
+                }
+
+                await transaction.CommitAsync(ct);
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
         }, ct);
     }
 
