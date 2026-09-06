@@ -315,7 +315,8 @@
     "mergedSourcesHint": "Diese Einträge gehören zu diesem Vertrag und bleiben für Konto- und Zahlungshistorie erhalten.",
     "unmerge": "Verbindung lösen",
     "mergedToast": "Verträge zusammengeführt.",
-    "unmergedToast": "Verbindung gelöst."
+    "unmergedToast": "Verbindung gelöst.",
+    "mergedSourcesNone": "Noch keine weiteren Einträge verbunden."
   },
   "budgets": {
     "title": "Budgets",
