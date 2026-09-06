@@ -108,7 +108,7 @@ function actionSummary(data,targetId,successText){
   const line=node('div','import-link-success',successText);
   const details=node('div','row-sub',
     `${data.transactionsMoved??0} ${text.moved} · ${data.transactionsMerged??0} ${text.merged} · ${data.transactionsTrustedForHistory??0} ${text.trusted}`);
-  const add=node('a','secondary-action',text.addMissing);
+  const add=node('a','ghost import-add-missing',text.addMissing);
   add.href=`/transactions?accountId=${encodeURIComponent(targetId)}`;
   linkStatus.append(line,details,add);
 }
