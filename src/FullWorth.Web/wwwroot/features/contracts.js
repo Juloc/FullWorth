@@ -5,7 +5,7 @@
 // subscriptions" section surfaces recurring-payment candidates with one-click accept. All money and
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
-import { identityIcon, sectionCard, esc } from '../ui/ux-kit.js';
+import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -103,6 +103,7 @@ export function newContract(context) { if (context) ctx = context; return openCo
 
 export async function renderContracts(context) {
   ctx = context;
+  await ensureOfficialBrandCatalog(ctx.api);
   injectCss();
   const host = ctx.$('#view-contracts');
   let rows = [];
