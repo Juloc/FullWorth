@@ -1,3 +1,5 @@
+import { api as sharedApi, jsonBody } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const text={
   de:{
@@ -5,7 +7,7 @@ const text={
     hint:'Wähle den Finanzguru-Export „Alle Buchungen“ im .xlsx-Format.',space:'FullWorth Space',
     safetyTitle:'Sicherer Import',
     safety:'Importierte Buchungen bleiben zunächst reine Historie. Erst nach einer eindeutigen Kontozuordnung werden sie für die Vermögenshistorie verwendet.',
-    file:'Finanzguru .xlsx Export',submit:'Importieren',working:'Import läuft …',confirm:'Diese Datei jetzt importieren?',
+    file:'Finanzguru .xlsx Export',submit:'Importieren',cancel:'Abbrechen',working:'Import läuft …',confirm:'Diese Datei jetzt importieren?',
     done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Quellzeilen',imported:'Neue Buchungen',
     existing:'Bereits importiert',matched:'Mit bestehenden Buchungen abgeglichen',accounts:'Konten zugeordnet',
     createdAccounts:'Historienkonten erstellt',splits:'Split-Buchungen',
@@ -25,7 +27,7 @@ const text={
     hint:'Select the Finanzguru “Alle Buchungen” export in .xlsx format.',space:'FullWorth Space',
     safetyTitle:'Safe import',
     safety:'Imported transactions initially remain history only. They are used for wealth history only after a clear account mapping is confirmed.',
-    file:'Finanzguru .xlsx export',submit:'Import',working:'Importing …',confirm:'Import this file now?',
+    file:'Finanzguru .xlsx export',submit:'Import',cancel:'Cancel',working:'Importing …',confirm:'Import this file now?',
     done:'Import completed.',error:'Import failed.',rows:'Source rows',imported:'New transactions',
     existing:'Already imported',matched:'Matched existing transactions',accounts:'Accounts matched',
     createdAccounts:'History accounts created',splits:'Split transactions',
@@ -78,12 +80,6 @@ function formatPeriod(first,last){
   if(first===last)return formatDate(first);
   return `${formatDate(first)} – ${formatDate(last)}`;
 }
-async function jsonResponse(response){
-  if(response.ok)return response.status===204?null:response.json();
-  let message=String(response.status);
-  try{const data=await response.json();message=data.error||data.title||message}catch{}
-  throw new Error(message);
-}
 function targetLabel(target){
   const parts=[target.institutionName,target.displayName].filter(Boolean);
   let label=[...new Set(parts)].join(' · ')||target.id;
@@ -118,8 +114,7 @@ async function renderLinkOptions(){
   linkStatus.textContent=text.loadingLinks;
   linkList.replaceChildren();
   try{
-    const response=await fetch(`/bff/backend/api/import/finanzguru/accounts?fullWorthSpaceId=${encodeURIComponent(space.id)}`);
-    linkOptions=await jsonResponse(response)||{importAccounts:[],targetAccounts:[],attachedHistory:[]};
+    linkOptions=await sharedApi(`api/import/finanzguru/accounts?fullWorthSpaceId=${encodeURIComponent(space.id)}`)||{importAccounts:[],targetAccounts:[],attachedHistory:[]};
     linkStatus.textContent='';
     const imports=linkOptions.importAccounts||[];
     const attached=linkOptions.attachedHistory||[];
@@ -195,15 +190,14 @@ function buildImportLinkCard(item){
     if(!target.hasCurrentBalance&&raw===''){linkStatus.textContent=text.requiredBalance;balance.focus();return;}
     button.disabled=true;select.disabled=true;balance.disabled=true;linkStatus.textContent=text.linking;
     try{
-      const response=await fetch(
-        `/bff/backend/api/import/finanzguru/accounts/${encodeURIComponent(item.id)}/link?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      const data=await sharedApi(
+        `api/import/finanzguru/accounts/${encodeURIComponent(item.id)}/link?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
+        jsonBody({
           targetAccountId:target.id,
           currentBalance:raw===''?null:Number(raw),
           currentBalanceCurrency:target.currency
-        })}
+        })
       );
-      const data=await jsonResponse(response);
       actionSummary(data,target.id,text.linked);
       await renderLinkOptions();
       actionSummary(data,target.id,text.linked);
@@ -241,14 +235,13 @@ function buildAttachedHistoryCard(item){
     if(!item.hasCurrentBalance&&raw===''){linkStatus.textContent=text.requiredBalance;balance.focus();return;}
     button.disabled=true;balance.disabled=true;linkStatus.textContent=text.confirming;
     try{
-      const response=await fetch(
-        `/bff/backend/api/import/finanzguru/accounts/${encodeURIComponent(item.targetAccountId)}/confirm-history?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      const data=await sharedApi(
+        `api/import/finanzguru/accounts/${encodeURIComponent(item.targetAccountId)}/confirm-history?fullWorthSpaceId=${encodeURIComponent(space.id)}`,
+        jsonBody({
           currentBalance:raw===''?null:Number(raw),
           currentBalanceCurrency:item.currency
-        })}
+        })
       );
-      const data=await jsonResponse(response);
       actionSummary(data,item.targetAccountId,text.confirmed);
       await renderLinkOptions();
       actionSummary(data,item.targetAccountId,text.confirmed);
@@ -262,8 +255,7 @@ function buildAttachedHistoryCard(item){
 }
 
 try{
-  const response=await fetch('/bff/backend/api/fullworth-spaces');
-  const spaces=await jsonResponse(response);
+  const spaces=await sharedApi('api/fullworth-spaces');
   const saved=localStorage.getItem('finance.space');
   space=spaces.find(item=>item.id===saved)||spaces[0]||null;
   document.getElementById('import-space').textContent=space?.name||'—';
@@ -278,13 +270,12 @@ form.addEventListener('submit',async event=>{
   event.preventDefault();
   const file=fileInput.files?.[0];
   if(!file||!space)return;
-  if(!window.confirm(text.confirm))return;
+  if(!await confirmMessage({message:text.confirm,title:text.heading,confirmLabel:text.submit,cancelLabel:text.cancel}))return;
   submit.disabled=true;fileInput.disabled=true;status.textContent=text.working;result.hidden=true;result.innerHTML='';
   try{
     const uploadFile=window.financeFileUpload?.snapshot?await window.financeFileUpload.snapshot(file):file;
     const body=new FormData();body.append('file',uploadFile,uploadFile.name);
-    const response=await fetch(`/bff/backend/api/import/finanzguru?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
-    const data=await jsonResponse(response);
+    const data=await sharedApi(`api/import/finanzguru?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
     const rows=[
       [text.rows,data.sourceRows],[text.imported,data.transactionsImported],[text.existing,data.alreadyImported],
       [text.matched,data.matchedExistingTransactions],[text.accounts,data.accountsMatched],[text.createdAccounts,data.accountsCreated],[text.splits,data.splitTransactions]
