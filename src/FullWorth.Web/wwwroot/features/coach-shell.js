@@ -305,6 +305,7 @@ function closeDock() {
   document.body.classList.remove('coach-dock-open');
   const dock = $('#coach-dock');
   if (dock) dock.hidden = true;
+  window.dispatchEvent(new Event('resize'));
   syncQuickAccess();
 }
 
