@@ -1045,5 +1045,18 @@
     "localWins": "Manuelle Entscheidungen und lokale Regeln haben immer Vorrang vor Cloud-Wissen.",
     "savedEnabled": "Cloud Intelligence aktiviert.",
     "savedDisabled": "Cloud Intelligence deaktiviert."
+  },
+  "twoFactor": {
+    "title": "Zwei-Faktor-Authentifizierung",
+    "hint": "6-stelliger Code aus Google Authenticator oder einer anderen TOTP-App",
+    "enabled": "2FA ist aktiv. Zum Deaktivieren gib einen aktuellen Code aus deiner Authenticator-App ein.",
+    "setupHelp": "Öffne Google Authenticator → + → Einrichtungsschlüssel und trage den folgenden Schlüssel ein. Gib danach den erzeugten 6-stelligen Code ein.",
+    "sharedKey": "Einrichtungsschlüssel",
+    "code": "6-stelliger Code",
+    "enable": "2FA aktivieren",
+    "disable": "2FA deaktivieren",
+    "disabled": "2FA deaktiviert",
+    "enabledToast": "2FA aktiviert",
+    "invalidCode": "Der Code ist nicht gültig."
   }
 }
