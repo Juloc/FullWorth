@@ -5,7 +5,7 @@
 // a collapsed "Erweitert / Eigene Analyse" section. All money is privacy-masked via ctx.money(); SVG
 // bar widths are set from JS (no source inline style) to keep the CSP audit at one.
 
-import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, esc } from '../ui/ux-kit.js';
+import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 
 let ctx = null;
@@ -44,19 +44,26 @@ export async function renderAnalytics(context) {
   const cmp = '&comparison=previous-period';
 
   // All card queries share the selected window. overviewPrev backs the income/spending trend badges.
-  const [overview, overviewPrev, history, categories, merchants, forecast] = await Promise.all([
+  const [overview, overviewPrev, history, categories, merchants, forecast, catList] = await Promise.all([
     ctx.api(`api/analytics/overview?from=${from}&to=${to}`).catch(() => null),
     ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
     ctx.api(`api/analytics/categories?from=${from}&to=${to}&granularity=${gran}${cmp}`).catch(() => null),
     ctx.api(`api/analytics/merchants?from=${from}&to=${to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
     ctx.api('api/analytics/forecast?months=12').catch(() => null),
+    ctx.api('api/categories').catch(() => []),
   ]);
+  // Map categoryId -> icon key (user emoji Icon, else semantic Key) so the category list can show the
+  // same icon it uses elsewhere. Flatten in case the endpoint nests children under parents.
+  const catIcon = new Map();
+  // Prefer a real emoji Icon; ignore the "cat-N" colour placeholder some categories store in Icon and
+  // fall back to the semantic Key (which resolves to a line-art glyph).
+  (function walk(list) { (list || []).forEach(c => { if (c && c.id) catIcon.set(c.id, (c.icon && !/^cat-\d/.test(c.icon)) ? c.icon : c.key); if (c && c.children) walk(c.children); }); })(catList);
 
   const cur = overview?.currency || history?.[0]?.currency || 'EUR';
   fillSpending(ctx.$('#an-spending'), overview, overviewPrev);
   fillInout(ctx.$('#an-inout'), overview, overviewPrev);
-  fillCategory(ctx.$('#an-category'), categories);
+  fillCategory(ctx.$('#an-category'), categories, catIcon);
   fillMerchant(ctx.$('#an-merchant'), merchants);
   fillNetWorth(ctx.$('#an-networth'), history, cur);
   fillForecast(ctx.$('#an-forecast'), forecast);
@@ -325,7 +332,7 @@ function inoutBars(rows) {
 }
 
 // 3) Spend by category — top categories as share-of-largest bars with a per-row trend badge + total.
-function fillCategory(el, result) {
+function fillCategory(el, result, catIcon) {
   if (!el) return;
   const cats = result?.categories || [];
   const rows = cats.slice(0, 6);
@@ -342,7 +349,7 @@ function fillCategory(el, result) {
     const pctW = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
     const cat = categoryColorIndex(r.categoryId || r.name);
     const drill = r.categoryId ? ` data-cat-id="${esc(r.categoryId)}" role="button" tabindex="0"` : '';
-    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="cat-dot" data-cat="${cat}"></span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
+    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="tx-cat-ic" data-cat="${cat}">${categoryIconInner(catIcon?.get(r.categoryId)) || ''}</span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
       <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
   }).join('');
   // Screenshot parity: a soft category donut sits above the list, sharing its per-category palette; the

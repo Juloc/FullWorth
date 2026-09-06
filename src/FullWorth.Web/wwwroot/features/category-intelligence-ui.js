@@ -156,6 +156,10 @@ function reasonLabel(item) {
 function confidenceHtml(item) {
   if (!item) return '';
   const pct = Math.round(Number(item.confidence || 0) * 100);
+  // Only surface the confidence chip when it is actionable — i.e. an uncertain partial guess worth a
+  // second look. A confident/manual classification (100%) and a bare "0% · Nicht erkannt" repeated on
+  // every row are both noise; the empty category chip already signals "uncategorized".
+  if (item.reasonCode === 'manual' || pct >= 100 || pct <= 0) return '';
   return `<span class="ci-confidence ci-confidence-${esc(item.reasonCode)}" title="${esc(reasonLabel(item))}">${pct}% · ${esc(t(item.reasonCode || 'unclassified'))}</span>`;
 }
 
@@ -298,10 +302,16 @@ async function decorateTransactionRows(force=false) {
       const categoryCell = row.children[2];
       categoryCell.querySelectorAll('.ci-auto-added').forEach(el => el.remove());
       const color = intel?.categoryColor || (tx.categoryId ? categoryColor(tx.categoryId) : '#94A3B8');
-      const meta = document.createElement('div');
-      meta.className = 'ci-category-meta ci-auto-added';
-      meta.innerHTML = `<span class="ci-category-dot" style="--ci-category:${esc(color)}"></span>${confidenceHtml(intel)}${intel?.needsReview ? `<span class="ci-review-pill">${esc(t('needsReview'))}</span>` : ''}`;
-      categoryCell.appendChild(meta);
+      const confHtml = confidenceHtml(intel);
+      const reviewHtml = intel?.needsReview ? `<span class="ci-review-pill">${esc(t('needsReview'))}</span>` : '';
+      // Only render the meta line when it carries something actionable (a low-confidence chip or a
+      // review flag); otherwise the category cell stays clean with just its tinted category chip.
+      if (confHtml || reviewHtml) {
+        const meta = document.createElement('div');
+        meta.className = 'ci-category-meta ci-auto-added';
+        meta.innerHTML = `<span class="ci-category-dot" style="--ci-category:${esc(color)}"></span>${confHtml}${reviewHtml}`;
+        categoryCell.appendChild(meta);
+      }
       if (intel?.tags?.length) {
         const tagBox = document.createElement('div');
         tagBox.className = 'ci-tags ci-auto-added';

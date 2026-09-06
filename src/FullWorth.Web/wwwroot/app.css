@@ -191,9 +191,9 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 /* Dashboard widget grid (§6.2): 12-col on desktop, single column list on mobile (§6.3). */
 .dashboard-editbar{display:flex;gap:var(--s2);justify-content:flex-end;margin-bottom:var(--s3)}
 .dashboard-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s4);align-items:start}
-.widget{grid-column:span 12}
+.widget{grid-column:span 12;min-width:0}
 .widget.span-4{grid-column:span 4}.widget.span-6{grid-column:span 6}.widget.span-8{grid-column:span 8}.widget.span-12{grid-column:span 12}
-.widget .widget-body{display:grid}
+.widget .widget-body{display:grid;min-width:0}
 .widget-metric strong{font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
 .widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:13px;margin-top:6px;flex-wrap:wrap}
 .widget-split.big{gap:var(--s6)}.widget-split.big strong{font-size:20px}
@@ -750,8 +750,8 @@ button.danger{border:0;color:var(--negative);background:transparent}
    ============================================================================ */
 
 /* --- Übersicht (Overview): calmer summary tiles + grouped account cards --- */
-.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1)}
-.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em}
+.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
+.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em;overflow-wrap:anywhere}
 .widget-split.dash-metric-split{margin-top:var(--s2)}
 .dash-accounts{display:grid;gap:var(--s5)}
 .dash-group{display:grid}

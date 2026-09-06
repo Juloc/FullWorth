@@ -39,8 +39,9 @@ export function maskIdentifier(value) {
   const text = String(value).trim();
   if (!text) return '';
 
-  // No bank/card/provider suffix available: this is the stable local account code.
-  if (text.startsWith('#')) return `ID ${text}`;
+  // No bank/card/provider suffix available (manual accounts): the stable local #code is a meaningless
+  // disambiguator to the user on its own — show nothing rather than a bogus "ID #6F8390".
+  if (text.startsWith('#')) return '';
 
   const separator = ' · #';
   const marker = text.indexOf(separator);

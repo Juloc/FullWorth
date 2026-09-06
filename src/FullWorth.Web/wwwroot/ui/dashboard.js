@@ -2,7 +2,7 @@
 // user + FullWorth Space via /api/preferences (§22); the desktop uses a responsive grid, mobile a
 // single ordered full-width list (§6.3). Edit mode adds/removes/reorders with an accessible
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
-import { money, converted } from './money.js';
+import { money, converted, maskIdentifier } from './money.js';
 import { isPrivate } from './privacy.js';
 import { identityIcon } from './ux-kit.js';
 import { bindChartScrubber } from './chart-scrubber.js';
@@ -255,7 +255,7 @@ function renderWidget(type, ctx, body, data, cfg) {
     // endpoint always reports EUR and would drop non-EUR base accounts from the sum and mislabel it.
     const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
     const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
-    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${ctx.esc(x.institutionName || '')}${x.ibanLast4 ? ' · ' + (isPrivate() ? '••••' : '•••• ' + ctx.esc(x.ibanLast4)) : ''}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
+    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
     const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
     // Each group is its own calm block: a header row (folder monogram · name · subtotal · drill chevron)
     // over its account rows, blocks spaced by whitespace rather than heavy rules (reference overview §3).

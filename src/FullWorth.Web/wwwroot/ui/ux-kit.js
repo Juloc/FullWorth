@@ -19,6 +19,23 @@ const CATEGORY_ICONS = {
   health: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21Z', shopping: 'M6 6h12v14l-3-2-3 2-3-2-3 2Z', leisure: 'M4 5h16v11H4zM8 20h8M12 16v4',
   savings: 'M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8ZM8 11h.01', insurance: 'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z', travel: 'M2 16l20-7-7 20-3-8-8-3Z',
 };
+// German category-key aliases → reuse the same line-art glyphs so localized keys (wohnen, strom, …)
+// resolve just like the English ones. No new colours/fonts.
+Object.assign(CATEGORY_ICONS, {
+  wohnen: CATEGORY_ICONS.housing, miete: CATEGORY_ICONS.rent, hausgeld: CATEGORY_ICONS.housing, immobilien: CATEGORY_ICONS.housing,
+  supermarkt: CATEGORY_ICONS.groceries, lebensmittel: CATEGORY_ICONS.groceries, einkauf: CATEGORY_ICONS.groceries,
+  restaurants: CATEGORY_ICONS.restaurants, essen: CATEGORY_ICONS.food, gastronomie: CATEGORY_ICONS.restaurants,
+  strom: CATEGORY_ICONS.electricity, energie: CATEGORY_ICONS.electricity, nebenkosten: CATEGORY_ICONS.utilities,
+  tanken: CATEGORY_ICONS.fuel, auto: CATEGORY_ICONS.car, 'mobilität': CATEGORY_ICONS.transport, mobilitaet: CATEGORY_ICONS.transport, fahrzeug: CATEGORY_ICONS.car, verkehr: CATEGORY_ICONS.transport, mobilfunk: CATEGORY_ICONS.internet, telefon: CATEGORY_ICONS.internet,
+  reisen: CATEGORY_ICONS.travel, urlaub: CATEGORY_ICONS.travel,
+  freizeit: CATEGORY_ICONS.leisure, hobby: CATEGORY_ICONS.leisure, unterhaltung: CATEGORY_ICONS.leisure,
+  gesundheit: CATEGORY_ICONS.health, arzt: CATEGORY_ICONS.health, apotheke: CATEGORY_ICONS.health,
+  versicherung: CATEGORY_ICONS.insurance, versicherungen: CATEGORY_ICONS.insurance,
+  sparen: CATEGORY_ICONS.savings, ersparnisse: CATEGORY_ICONS.savings,
+  einkommen: CATEGORY_ICONS.income, gehalt: CATEGORY_ICONS.salary, lohn: CATEGORY_ICONS.salary,
+  shopping: CATEGORY_ICONS.shopping, lifestyle: CATEGORY_ICONS.shopping, kleidung: CATEGORY_ICONS.shopping,
+  finanzen: CATEGORY_ICONS.income, bank: CATEGORY_ICONS.savings, kredit: CATEGORY_ICONS.savings,
+});
 function categoryGlyph(iconKey) {
   if (!iconKey) return null;
   const key = String(iconKey).trim();
