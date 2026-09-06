@@ -548,7 +548,7 @@
     "displayName": "Name",
     "register": "Konto erstellen",
     "registering": "Konto wird erstellt…",
-    "acceptTerms": "Ich akzeptiere die Datenschutzbestimmungen und Nutzungsbedingungen.",
+    "acceptTerms": "Ich akzeptiere die Nutzungsbedingungen und habe die Datenschutzhinweise zur Kenntnis genommen.",
     "registrationUnavailable": "Die Registrierung konnte nicht abgeschlossen werden. Falls bereits ein Konto existiert, melde dich an.",
     "registrationDisabled": "Die öffentliche Registrierung ist auf dieser FullWorth-Instanz deaktiviert.",
     "privacy": "Datenschutz",
