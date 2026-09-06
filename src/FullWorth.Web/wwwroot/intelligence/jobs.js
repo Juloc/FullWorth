@@ -1,4 +1,4 @@
-const apiBase = '/bff/backend/api/intelligence/admin';
+import { api as sharedApi, jsonBody } from '../core/services.js';
 const list = document.getElementById('job-list');
 const refresh = document.getElementById('refresh-jobs');
 
@@ -44,12 +44,9 @@ function render(jobs) {
 async function loadJobs() {
   refresh.disabled = true;
   try {
-    const response = await fetch(`${apiBase}/jobs?limit=50`, { headers: { Accept: 'application/json' } });
-    if (response.status === 401) return;
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    render(await response.json());
-  } catch {
-    list.textContent = 'Jobstatus konnte nicht geladen werden.';
+    render(await sharedApi('api/intelligence/admin/jobs?limit=50', { headers: { Accept: 'application/json' } }));
+  } catch (error) {
+    if (error?.status !== 401) list.textContent = 'Jobstatus konnte nicht geladen werden.';
   } finally {
     refresh.disabled = false;
   }
@@ -58,12 +55,9 @@ async function loadJobs() {
 async function enqueue(type, button) {
   button.disabled = true;
   try {
-    const response = await fetch(`${apiBase}/jobs/${encodeURIComponent(type)}/enqueue`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() })
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    await sharedApi(
+      `api/intelligence/admin/jobs/${encodeURIComponent(type)}/enqueue`,
+      { ...jsonBody({ idempotencyKey: crypto.randomUUID() }), headers: { Accept: 'application/json', 'Content-Type': 'application/json' } });
     await loadJobs();
   } catch {
     list.textContent = 'Job konnte nicht eingereiht werden.';
