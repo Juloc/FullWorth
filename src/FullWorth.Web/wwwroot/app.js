@@ -176,6 +176,7 @@ function initResizableSidebar(){
     document.documentElement.style.setProperty('--sidebar-w',`${width}px`);
     handle.setAttribute('aria-valuemax',String(maxWidth()));
     handle.setAttribute('aria-valuenow',String(width));
+    window.dispatchEvent(new CustomEvent('fullworth:sidebar-resize',{detail:{width}}));
     return width;
   };
   const handle=document.createElement('div');
