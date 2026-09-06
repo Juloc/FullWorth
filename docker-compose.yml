@@ -92,6 +92,10 @@ services:
       # Shared bootstrap token used only to enroll this instance with the official FullWorth Cloud.
       # The cloud issues a separate rotatable instance credential after registration.
       FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
+      # Pinned public verification key for signed knowledge packs. Public, not a secret.
+      FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
+      FullWorthCloud__KnowledgePackId: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_ID:-fullworth-official}
+      FullWorthCloud__KnowledgePackRegion: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_REGION:-GLOBAL}
     volumes:
       - fullworth-purchases-data:/data/purchases
     healthcheck:
