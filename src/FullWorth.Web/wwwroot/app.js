@@ -16,6 +16,7 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
+import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
 import { createDialog } from './ui/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
@@ -65,7 +66,7 @@ const pathForView=router.pathForView;
 const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const toastController=createToast($('#toast'));
@@ -488,7 +489,7 @@ async function runSearch(query,results,dlg){
 
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
-const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
+const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,empty,skeleton,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
@@ -496,7 +497,7 @@ const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
   .register('transactions',()=>renderTransactions(ctx))
   .register('accounts',()=>loadAccountsView())
-  .register('budgets',()=>loadBudgets())
+  .register('budgets',()=>renderBudgets(ctx))
   .register('contracts',()=>renderContracts(ctx))
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
   .register('analytics',()=>renderAnalytics(ctx))
@@ -510,94 +511,9 @@ const featureRegistry=createFeatureRegistry()
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
-window.fwOpenBudget=id=>openBudgetDetail(id);
+window.fwOpenBudget=id=>openBudgetDetail(ctx,id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
-async function loadBudgets(){
-  const currency=state.space?.baseCurrency||'EUR';
-  const status=await api('api/analytics/budget-status');
-  const items=status.items||[];
-  const totalBudgeted=items.reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalSpent=items.reduce((s,x)=>s+Number(x.spent||0),0);
-  $('#budget-total').textContent=money(totalBudgeted,currency);
-  $('#budget-spent').textContent=money(totalSpent,currency);
-  $('#budget-remaining').textContent=money(totalBudgeted-totalSpent,currency);
-  const el=$('#budgets-list');el.innerHTML='';
-  if(!items.length){empty(el);return}
-  for(const x of items){
-    const pct=Math.max(0,Number(x.percent||0));
-    const clamped=Math.min(100,pct);
-    // Status from usage: over (>100), near (>=85), on track (§12.2).
-    const status=pct>100?'over':pct>=85?'near':'ontrack';
-    const cycleLabel=x.period&&x.period!=='monthly'?`${esc(get('budgets.period_'+x.period)||x.period)} · ${date(x.periodStart)}–${date(x.periodEnd)} · `:'';
-    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><div class="budget-card-head-actions"><button type="button" class="ghost budget-coach" data-coach>Coach</button><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
-  }
-  // §18: flag when some spend was in a currency with no conversion rate (excluded from the figures).
-  if(status.incomplete)el.insertAdjacentHTML('afterbegin',`<div class="fx-incomplete">${esc(get('common.fxIncomplete'))}</div>`);
-  // Set bar widths via JS (avoids a source inline style; keeps the CSP inline-style budget at one).
-  el.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
-  // §12: each card opens the budget detail (window, forecast, contributing transactions).
-  el.querySelectorAll('.budget-card[data-id]').forEach(card=>{
-    const item=items.find(x=>String(x.budgetId||x.id)===String(card.dataset.id));
-    const open=()=>openBudgetDetail(card.dataset.id);
-    card.querySelector('[data-coach]')?.addEventListener('click',event=>{
-      event.stopPropagation();
-      if(!item)return;
-      window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
-        entityType:'budget',entityId:item.budgetId||item.id,entityLabel:item.name,
-        details:{amount:String(item.amount??''),currency,status:item.percent>100?'over':item.percent>=85?'near':'ontrack'}
-      }}));
-    });
-    card.addEventListener('click',event=>{if(!event.target.closest('button'))open()});
-    card.addEventListener('keydown',ev=>{if(!ev.target.closest('button')&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();open()}});
-  });
-}
-// §12 budget detail: cycle window, spend vs. budget, cycle-end forecast, and the transactions
-// contributing to this cycle. Reuses the shared api()/money()/dialog() path.
-async function openBudgetDetail(id){
-  let s;
-  try{s=await api(`api/budgets/${id}/status`)}catch(err){toast(err.message||get('common.error'));return}
-  if(!s){toast(get('common.error'));return}
-  const currency=s.currency||state.space?.baseCurrency||'EUR';
-  const pct=Math.max(0,Number(s.percentUsed||0));
-  const clamped=Math.min(100,pct);
-  const barStatus=pct>100?'over':pct>=85?'near':'ontrack';
-  // Hatched forecast segment = projected end-of-cycle spend beyond what's already spent (capped at 100%).
-  const projectedPct=Number(s.budgetAmount)>0?(Number(s.projectedEndSpend||0)/Number(s.budgetAmount))*100:0;
-  const forecastPct=Math.max(0,Math.min(100,projectedPct)-clamped);
-  const trend=(s.trend||'NoData');
-  const trendKey='budgets.trend_'+trend.toLowerCase();
-  const projOverUnder=Number(s.projectedOverUnder||0);
-  // Colour is reserved for money statements (design rule): the forecast figures carry sentiment,
-  // the trend text stays neutral (the % pill already signals status at a glance).
-  const forecastLine=trend==='NoData'?'':`<div class="budget-detail-forecast"><div class="kv"><span>${esc(get('budgets.projectedEnd'))}</span><strong class="amount">${money(s.projectedEndSpend,currency)}</strong></div><div class="kv"><span>${esc(get(projOverUnder>0?'budgets.projectedOver':'budgets.projectedUnder'))}</span><strong class="amount ${projOverUnder>0?'negative':'positive'}">${money(Math.abs(projOverUnder),currency)}</strong></div></div>`;
-  const rows=(s.contributing||[]).map(t=>`<div class="row"><div class="row-main"><div class="row-title">${esc(t.counterparty||'—')}</div><div class="row-sub">${t.bookingDate?date(t.bookingDate):''}${t.category?` · ${esc(t.category)}`:''}</div></div><div class="amount negative">${money(-Math.abs(Number(t.amount||0)),t.currency||currency)}</div></div>`).join('');
-  const cycleLabel=s.period&&s.period!=='monthly'?`${esc(get('budgets.period_'+s.period)||s.period)} · `:'';
-  const dlg=dialog(`<div class="dialog-card budget-detail">
-    <div class="panel-head"><h2>${esc(s.name)}</h2><div class="panel-head-actions"><button type="button" class="ghost" data-edit>${esc(get('common.edit'))}</button><button data-close aria-label="${esc(get('common.close'))}">×</button></div></div>
-    <div class="row-sub">${cycleLabel}${date(s.periodStart)}–${date(s.periodEnd)}</div>
-    <div class="budget-detail-stats">
-      <div class="kv"><span>${esc(get('budgets.spent'))}</span><strong class="amount">${money(s.spent,currency)}</strong></div>
-      <div class="kv"><span>${esc(get('budgets.budget'))}</span><strong class="amount">${money(s.budgetAmount,currency)}</strong></div>
-      <div class="kv"><span>${esc(get('budgets.remaining'))}</span><strong class="amount${Number(s.remaining)<0?' negative':''}">${money(s.remaining,currency)}</strong></div>
-    </div>
-    <div class="progress ${barStatus}"><span data-w="${clamped}"></span><span class="forecast" data-w="${forecastPct}"></span></div>
-    <div class="budget-detail-trend"><span class="budget-status ${barStatus}">${esc(Math.round(pct))}%</span><span>${esc(get(trendKey))}</span></div>
-    ${forecastLine}
-    <div class="row-group">${esc(get('budgets.contributing'))}</div>
-    <div class="budget-detail-rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('common.empty'))}</div></div>`}</div>
-  </div>`);
-  dlg.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
-  const coach=document.createElement('button');coach.type='button';coach.className='ghost';coach.textContent='Coach';
-  coach.addEventListener('click',()=>{dlg.close();window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
-    entityType:'budget',entityId:s.budgetId,entityLabel:s.name,
-    details:{amount:String(s.budgetAmount??''),currency,status:barStatus,count:String((s.contributing||[]).length)}
-  }}))});
-  dlg.querySelector('.panel-head-actions')?.prepend(coach);
-  dlg.querySelector('[data-close]').addEventListener('click',()=>dlg.close());
-  dlg.querySelector('[data-edit]').addEventListener('click',()=>openBudgetEdit(s.budgetId,()=>dlg.close()));
-  dlg.showModal();
-}
 function renderRows(el,rows,map){el.innerHTML='';for(const x of rows||[]){const [title,sub,value]=map(x);el.insertAdjacentHTML('beforeend',`<div class="row"><div class="row-main"><div class="row-title">${esc(title)}</div><div class="row-sub">${esc(sub)}</div></div><div class="amount">${esc(value)}</div></div>`)}if(!(rows||[]).length)empty(el)}
 
 
@@ -840,28 +756,6 @@ function openBalanceDialog(account){
 
 // Create OR edit a budget: pass the existing budget object to pre-fill + switch to PUT, with a delete
 // action. Called with no argument for the "+ new budget" flow.
-async function openBudgetDialog(existing){
-  const currency=existing?.currency||state.space?.baseCurrency||'EUR';
-  let options;try{options=await categoryOptions(existing?.categoryId||undefined)}catch(err){toast(err.message||get('common.error'));return}
-  const periods=['monthly','weekly','biweekly','paycycle'].map(p=>`<option value="${p}"${existing?.period===p?' selected':''}>${esc(get(`budgets.period_${p}`))}</option>`).join('');
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get(existing?'budgets.edit':'budgets.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><label>${esc(get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${existing?esc(String(existing.amount)):''}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('budgets.period'))}<select name="period">${periods}</select></label><label>${esc(get('transactions.category'))}<select name="category"><option value="">${esc(get('common.all'))}</option>${options}</select></label><label class="check"><input name="carryOver" type="checkbox"${existing?.carryOver?' checked':''}>${esc(get('budgets.carryOver'))}</label><div class="dialog-actions">${existing?`<button type="button" class="ghost danger" data-delete>${esc(get('common.delete'))}</button>`:''}<button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
-  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
-  dlg.querySelector('[data-delete]')?.addEventListener('click',async()=>{
-    if(!await ctx.confirm(get('budgets.deleteConfirm').replace('{name}',()=>existing.name),{destructive:true,confirmLabel:get('common.delete')}))return;
-    try{await api(`api/budgets/${existing.id}`,{method:'DELETE'});dlg.close();toast(get('common.deleted'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
-  });
-  dlg.querySelector('form').onsubmit=async e=>{
-    e.preventDefault();const fd=new FormData(e.currentTarget);
-    const body=jsonBody({name:fd.get('name'),categoryId:fd.get('category')||null,amount:Number(fd.get('amount')),currency:fd.get('currency'),period:fd.get('period'),carryOver:fd.get('carryOver')==='on',isActive:true,startDate:null,endDate:null});
-    try{await api(existing?`api/budgets/${existing.id}`:'api/budgets',existing?{...body,method:'PUT'}:body);dlg.close();toast(get('common.saved'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
-  };
-  dlg.showModal();
-}
-async function openBudgetEdit(id,closeDrawer){
-  let budget;try{budget=await api(`api/budgets/${id}`)}catch(err){toast(err.message||get('common.error'));return}
-  closeDrawer?.();
-  openBudgetDialog(budget);
-}
 async function openCategoryDialog(){
   let options;try{options=await categoryOptions()}catch(err){toast(err.message||get('common.error'));return}
   const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('categories.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120"></label><label>${esc(get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label><label>${esc(get('categories.parent'))}<select name="parent"><option value="">${esc(get('categories.topLevel'))}</option>${options}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
