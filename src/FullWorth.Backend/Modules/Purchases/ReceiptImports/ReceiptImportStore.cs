@@ -182,6 +182,142 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
             """, ct);
     }
 
+    public async Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
+            SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
+                   "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+            FROM "PaperlessImportPresets"
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
+            ORDER BY lower("Name"), "CreatedAt"
+            """).ToListAsync(ct);
+        return rows.Select(ToPresetView).ToList();
+    }
+
+    public async Task<PaperlessImportPresetView?> GetPaperlessPresetAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid presetId,
+        CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
+            SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
+                   "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+            FROM "PaperlessImportPresets"
+            WHERE "Id" = {presetId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
+            LIMIT 1
+            """).ToListAsync(ct);
+        return rows.Count == 0 ? null : ToPresetView(rows[0]);
+    }
+
+    public async Task<PaperlessImportPresetView> SavePaperlessPresetAsync(
+        Guid id,
+        Guid userId,
+        Guid fullWorthSpaceId,
+        string name,
+        string? query,
+        string? editorJson,
+        bool autoImport,
+        bool analyzeAutomatically,
+        string currency,
+        int? lastSeenDocumentId,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var safeCurrency = NormalizeCurrency(currency);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "PaperlessImportPresets"
+                ("Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
+                 "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "CreatedAt", "UpdatedAt")
+            VALUES
+                ({id}, {fullWorthSpaceId}, {userId}, {Cap(name.Trim(), 100)}, {CapNullable(query, 4000)},
+                 {editorJson}, {autoImport}, {analyzeAutomatically}, {safeCurrency}, {lastSeenDocumentId}, {now}, {now})
+            ON CONFLICT ("Id") DO UPDATE SET
+                "Name" = EXCLUDED."Name",
+                "Query" = EXCLUDED."Query",
+                "EditorJson" = EXCLUDED."EditorJson",
+                "AutoImport" = EXCLUDED."AutoImport",
+                "AnalyzeAutomatically" = EXCLUDED."AnalyzeAutomatically",
+                "Currency" = EXCLUDED."Currency",
+                "LastSeenDocumentId" = EXCLUDED."LastSeenDocumentId",
+                "LastError" = NULL,
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
+            """, ct);
+
+        return await GetPaperlessPresetAsync(userId, fullWorthSpaceId, id, ct)
+            ?? throw new InvalidOperationException("Paperless import preset could not be saved.");
+    }
+
+    public async Task DeletePaperlessPresetAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid presetId,
+        CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "PaperlessImportPresets"
+            WHERE "Id" = {presetId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
+            """, ct);
+    }
+
+    public async Task<IReadOnlyList<PaperlessAutoImportTarget>> ListAutoImportPresetsAsync(CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<PaperlessPresetProjection>($"""
+            SELECT "Id", "FullWorthSpaceId", "UserId", "Name", "Query", "EditorJson", "AutoImport",
+                   "AnalyzeAutomatically", "Currency", "LastSeenDocumentId", "LastCheckedAt",
+                   "LastImportedAt", "LastError", "CreatedAt", "UpdatedAt"
+            FROM "PaperlessImportPresets"
+            WHERE "AutoImport" = true
+            ORDER BY "FullWorthSpaceId", "CreatedAt"
+            """).ToListAsync(ct);
+        return rows.Select(x => new PaperlessAutoImportTarget(
+            x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId)).ToList();
+    }
+
+    public async Task UpdatePaperlessPresetCheckAsync(
+        Guid presetId,
+        int? lastSeenDocumentId,
+        bool imported,
+        string? error,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "PaperlessImportPresets"
+            SET "LastCheckedAt" = {now},
+                "LastImportedAt" = CASE WHEN {imported} THEN {now} ELSE "LastImportedAt" END,
+                "LastSeenDocumentId" = COALESCE({lastSeenDocumentId}, "LastSeenDocumentId"),
+                "LastError" = {CapNullable(error, 1000)},
+                "UpdatedAt" = {now}
+            WHERE "Id" = {presetId}
+            """, ct);
+    }
+
+    public async Task<HashSet<int>> GetImportedPaperlessDocumentIdsAsync(
+        Guid fullWorthSpaceId,
+        IReadOnlyCollection<int> documentIds,
+        CancellationToken ct)
+    {
+        if (documentIds.Count == 0) return [];
+        var references = documentIds.Distinct().Select(id => $"paperless:{id}").ToArray();
+        var rows = await db.Database.SqlQuery<PaperlessImportedDocumentProjection>($"""
+            SELECT DISTINCT CAST(substring(i."SourceReference" from 11) AS integer) AS "DocumentId"
+            FROM "ReceiptImportItems" i
+            LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
+            WHERE i."FullWorthSpaceId" = {fullWorthSpaceId}
+              AND i."SourceType" = {ReceiptImportSourceTypes.Paperless}
+              AND i."SourceReference" = ANY ({references})
+              AND i."ReceiptScanJobId" IS NOT NULL
+              AND COALESCE(j."Status", '') <> {ReceiptScanJobStatuses.Error}
+            """).ToListAsync(ct);
+        return rows.Select(x => x.DocumentId).ToHashSet();
+    }
+
     private async Task<ReceiptImportBatchRow?> GetBatchRowAsync(Guid userId, Guid fullWorthSpaceId, Guid batchId, CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportBatchProjection>($"""
@@ -295,6 +431,11 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         return item with { Status = effective };
     }
 
+    private static PaperlessImportPresetView ToPresetView(PaperlessPresetProjection x) =>
+        new(x.Id, x.FullWorthSpaceId, x.UserId, x.Name, x.Query, x.EditorJson, x.AutoImport,
+            x.AnalyzeAutomatically, x.Currency, x.LastSeenDocumentId, x.LastCheckedAt, x.LastImportedAt,
+            x.LastError, x.CreatedAt, x.UpdatedAt);
+
     private static ReceiptImportBatchRow ToRow(ReceiptImportBatchProjection x) =>
         new(x.Id, x.FullWorthSpaceId, x.UserId, x.SourceType, x.SourceName, x.Currency, x.Status, x.AutoStart, x.CreatedAt, x.UpdatedAt, x.CompletedAt);
 
@@ -346,6 +487,30 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         public DateTimeOffset UpdatedAt { get; set; }
         public string? JobStatus { get; set; }
         public string? ReviewState { get; set; }
+    }
+
+    private sealed class PaperlessPresetProjection
+    {
+        public Guid Id { get; set; }
+        public Guid FullWorthSpaceId { get; set; }
+        public Guid UserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Query { get; set; }
+        public string? EditorJson { get; set; }
+        public bool AutoImport { get; set; }
+        public bool AnalyzeAutomatically { get; set; }
+        public string Currency { get; set; } = "EUR";
+        public int? LastSeenDocumentId { get; set; }
+        public DateTimeOffset? LastCheckedAt { get; set; }
+        public DateTimeOffset? LastImportedAt { get; set; }
+        public string? LastError { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class PaperlessImportedDocumentProjection
+    {
+        public int DocumentId { get; set; }
     }
 
     private sealed class PaperlessConnectionProjection
