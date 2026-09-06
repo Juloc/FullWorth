@@ -24,7 +24,7 @@ public sealed class BrandPackServiceTests
             ContentSha256 = officialHash,
             MediaType = "image/svg+xml",
             ByteLength = officialSvg.Length,
-            ContentBase64 = Convert.ToBase64String(officialSvg)
+            Content = officialSvg
         });
         db.OfficialBrandAssets.Add(new OfficialBrandAsset
         {
