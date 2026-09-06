@@ -10,6 +10,7 @@ public sealed class PendingDeletionAccessMiddleware(RequestDelegate next)
         new("/account/deletion"),
         new("/account-deletion"),
         new("/auth/account-deletion"),
+        new("/auth/antiforgery"),
         new("/auth/logout"),
         new("/health"),
         new("/favicon.ico")
