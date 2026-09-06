@@ -182,7 +182,9 @@ WHERE l."Id"=@id
             };
 
         await transaction.CommitAsync(ct);
-        return Results.Ok(new { targetId = target.Id, merged = sourceIds });
+        // Keep the legacy "archived" response field for existing clients. The IDs are now hidden
+        // merge aliases rather than destructively archived rows.
+        return Results.Ok(new { targetId = target.Id, archived = sourceIds, merged = sourceIds });
     }
 
     private static async Task<IResult> UnmergeContracts(
