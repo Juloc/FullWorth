@@ -23,6 +23,7 @@ import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
 import { createToast } from './ui/toast.js';
+import { openGlobalSearch } from './ui/global-search.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -242,7 +243,7 @@ function bind(){
   $('#two-factor-settings')?.addEventListener('click',openTwoFactorDialog);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
-  $('#global-search').addEventListener('click',openSearch);
+  $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
   $$('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewJump)));
   $('#refresh').addEventListener('click',loadCurrent);
   bindTransactions(ctx);
@@ -454,39 +455,6 @@ function openMoreSheet(){
 }
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
-async function openSearch(){
-  const dlg=dialog(`<form method="dialog" class="dialog-card search-dialog"><div class="panel-head"><h2>${esc(get('search.title'))}</h2><button value="cancel" data-close>×</button></div><input id="search-input" type="search" autocomplete="off" data-i18n-placeholder="search.placeholder" placeholder="${esc(get('search.placeholder'))}"><div id="search-results" class="rows"></div></form>`);
-  const input=dlg.querySelector('#search-input');const results=dlg.querySelector('#search-results');
-  let timer;
-  input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>runSearch(input.value.trim(),results,dlg),220)});
-  dlg.addEventListener('close',()=>{});dlg.showModal();input.focus();
-}
-async function runSearch(query,results,dlg){
-  if(query.length<2){results.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(get('search.hint'))}</div></div>`;return}
-  skeleton(results,3);
-  try{
-    const [tx,accounts,categories,contracts,purchases,assets]=await Promise.all([
-      api(`api/transactions?limit=8&query=${encodeURIComponent(query)}`).catch(()=>({items:[]})),
-      api('api/accounts').catch(()=>[]),
-      api('api/categories').catch(()=>[]),
-      api('api/contracts').catch(()=>[]),
-      api('api/purchases').catch(()=>[]),
-      api('api/assets').catch(()=>[])]);
-    const q=query.toLowerCase();
-    const groups=[
-      [get('search.transactions'),(tx.items||[]).map(x=>({title:x.counterparty||'—',sub:`${date(x.bookingDate)} · ${money(x.amount,x.currency)}`,go:'transactions'}))],
-      [get('search.accounts'),(accounts||[]).filter(x=>(x.displayName||x.institutionName||'').toLowerCase().includes(q)).map(x=>({title:x.displayName||x.institutionName,sub:x.institutionName,go:'accounts'}))],
-      [get('nav.categories'),(categories||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:'',go:'categories'}))],
-      [get('nav.contracts'),(contracts||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.amount,x.currency),go:'contracts'}))],
-      [get('nav.purchases'),(purchases||[]).filter(x=>(x.merchant||x.externalOrderId||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.merchant||x.externalOrderId||'—',sub:`${date(x.purchaseDate)} · ${money(x.totalAmount,x.currency)}`,go:'purchases'}))],
-      [get('portfolio.assets'),(assets||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.currentValue,x.currency),go:'networth'}))],
-    ].filter(([,items])=>items.length);
-    if(!groups.length){empty(results,get('search.none'));return}
-    results.innerHTML=groups.map(([label,items])=>`<div class="search-group">${esc(label)}</div>`+items.map(i=>`<button type="button" class="row search-hit" data-go="${i.go}"><div class="row-main"><div class="row-title">${esc(i.title)}</div>${i.sub?`<div class="row-sub">${esc(i.sub)}</div>`:''}</div></button>`).join('')).join('');
-    results.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
-  }catch(err){empty(results,err.message||get('common.error'))}
-}
-
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
 const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,empty,skeleton,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
