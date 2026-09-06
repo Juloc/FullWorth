@@ -88,6 +88,30 @@ public sealed class CoachHardeningIntegrationTests
     }
 
     [Fact]
+    public async Task StartingNewConversationLeavesOnlyOneActiveChat()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var seed = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        var firstId = await CreateConversation(client, seed.UserId, seed.SpaceId);
+        var secondId = await CreateConversation(client, seed.UserId, seed.SpaceId);
+        Assert.NotEqual(firstId, secondId);
+
+        using var oldRequest = Request(HttpMethod.Get, $"/api/coach/conversations/{firstId}?fullWorthSpaceId={seed.SpaceId}", seed.UserId);
+        using var oldResponse = await client.SendAsync(oldRequest);
+        Assert.Equal(HttpStatusCode.NotFound, oldResponse.StatusCode);
+
+        using var listRequest = Request(HttpMethod.Get, $"/api/coach/conversations?fullWorthSpaceId={seed.SpaceId}&limit=20", seed.UserId);
+        using var listResponse = await client.SendAsync(listRequest);
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        using var json = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
+        var conversations = json.RootElement.EnumerateArray().ToArray();
+        Assert.Single(conversations);
+        Assert.Equal(secondId, conversations[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
     public async Task ProviderFailureFallsBackToDeterministicAnswer()
     {
         var provider = new CapturingProvider { Throw = true };
