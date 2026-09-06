@@ -54,6 +54,37 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("capturePageContext", shell);
         Assert.Contains("uiContext", shell);
         Assert.Contains("Kontext", shell);
+        Assert.Contains("finance.coach.pinned", shell);
+        Assert.Contains("fullworth:coach-open", shell);
+        Assert.Contains("coach-context-chip", shell);
+        Assert.Contains("starterQuestions", shell);
+        Assert.Contains("renderContextActions", shell);
+        Assert.Contains("dockWidthMode", shell);
+        Assert.Contains("initDockSwipe", shell);
+    }
+
+    [Fact]
+    public async Task CoachUxIntegratesWithFinanceObjectsAndResponsiveLayout()
+    {
+        var app = await GetAsync("/app.js");
+        var html = await GetAsync("/");
+        var transactions = await GetAsync("/features/transactions.js");
+        var contracts = await GetAsync("/features/contracts.js");
+        var networth = await GetAsync("/features/networth.js");
+        var accounts = await GetAsync("/features/accounts-ux.js");
+        var dialogs = await GetAsync("/ui/dialog.js");
+
+        Assert.Contains("id=\"layout-reset\"", html);
+        Assert.Contains("finance.sidebar.width.", app);
+        Assert.Contains("fullworth:view-change", app);
+        Assert.Contains("window.fwOpenBudget", app);
+        Assert.Contains("selectedForCoach", transactions);
+        Assert.Contains("data-tx-select", transactions);
+        Assert.Contains("fullworth:coach-open", transactions);
+        Assert.Contains("fullworth:coach-open", contracts);
+        Assert.Contains("fullworth:coach-open", networth);
+        Assert.Contains("fullworth:coach-open", accounts);
+        Assert.Contains("installMobileSwipe", dialogs);
     }
 
     private async Task<string> GetAsync(string path)
