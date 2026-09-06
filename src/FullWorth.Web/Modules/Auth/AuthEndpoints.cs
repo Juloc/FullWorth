@@ -140,6 +140,12 @@ public static class AuthEndpoints
                     : "/auth/register?status=external-registration-failed");
         }
 
+        if (await userManager.GetTwoFactorEnabledAsync(user))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Results.Redirect("/auth/login?status=external-two-factor-required");
+        }
+
         if (!await sessions.SignInUserAsync(user, context, ct))
         {
             await context.SignOutAsync(IdentityConstants.ExternalScheme);
