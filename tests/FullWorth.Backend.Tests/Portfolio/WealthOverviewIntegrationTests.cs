@@ -6,6 +6,7 @@ using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Loans;
 using FullWorth.Backend.Modules.Portfolio;
+using FullWorth.Backend.Modules.Preferences;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,56 @@ public sealed class WealthOverviewIntegrationTests
         // The investment portfolio is linked to the second account whose bank balance is 500 EUR.
         // If that linked account were counted as both bank cash and portfolio value, net worth would be 3,600 EUR.
         Assert.NotEqual(3_600m, root.GetProperty("netWorth").GetDecimal());
+    }
+
+    [Fact]
+    public async Task OverviewExposesConfiguredEmergencyFundProgressForSelectedGroup()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        var groupId = Guid.NewGuid();
+
+        await factory.SeedAsync(async db =>
+        {
+            db.AccountGroups.Add(new AccountGroup
+            {
+                Id = groupId,
+                FullWorthSpaceId = scenario.Space,
+                Name = "Emergency cash",
+                SortOrder = 0
+            });
+            var cash = await db.Accounts.SingleAsync(account => account.Id == scenario.CashAccount);
+            cash.GroupId = groupId;
+            db.UserPreferences.Add(new UserPreference
+            {
+                FinanceUserId = scenario.Owner,
+                FullWorthSpaceId = scenario.Space,
+                Key = "wealth.emergencyFund",
+                ValueJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    enabled = true,
+                    targetAmount = 2_000m,
+                    accountId = (Guid?)null,
+                    accountGroupId = groupId
+                })
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(UserRequest(
+            $"/api/wealth/overview?fullWorthSpaceId={scenario.Space}&currency=EUR",
+            scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var fund = json.RootElement.GetProperty("emergencyFund");
+        Assert.True(fund.GetProperty("enabled").GetBoolean());
+        Assert.Equal(2_000m, fund.GetProperty("targetAmount").GetDecimal());
+        Assert.Equal(1_000m, fund.GetProperty("currentAmount").GetDecimal());
+        Assert.Equal("EUR", fund.GetProperty("currency").GetString());
+        Assert.Equal(groupId, fund.GetProperty("accountGroupId").GetGuid());
+        Assert.True(fund.GetProperty("isComplete").GetBoolean());
     }
 
     [Fact]
