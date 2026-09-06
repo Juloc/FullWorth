@@ -9,7 +9,8 @@ namespace FullWorth.Backend.Modules.Intelligence;
 
 /// <summary>
 /// Creates privacy-safe, instance-level contract benchmark observations from structured local contracts.
-/// No contract/provider/account/user identifier or free text is included in the cloud payload.
+/// Provider-specific rows may include only a reviewed canonical provider key from the signed knowledge
+/// pack; no local contract/account/user identifier or raw provider free text is included in the payload.
 /// </summary>
 public sealed class CloudContractBenchmarkContributionService(
     FullWorthDbContext financeDb,
