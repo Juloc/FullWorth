@@ -37,7 +37,22 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
         Assert.Contains("contracts-toolbar", css);
         Assert.Contains("flex-wrap:nowrap;overflow-x:auto", css);
         Assert.Contains("contracts-more-suggestions", css);
-        Assert.Contains("detected-actions [data-accept]", css);
+        Assert.Contains(".btn-primary", css);
+        Assert.Contains(".btn-secondary", css);
+        Assert.Contains(".btn-danger", css);
+        Assert.Contains("detected-actions .btn", css);
+    }
+
+    [Fact]
+    public async Task ContractsActions_UseOnlySharedButtonVariants()
+    {
+        var js = await GetAsync("/features/contracts.js");
+
+        Assert.Contains("btn btn-primary", js);
+        Assert.Contains("btn btn-secondary", js);
+        Assert.Contains("btn btn-danger", js);
+        Assert.DoesNotContain("class=\"ghost\"", js);
+        Assert.DoesNotContain("class=\"danger\"", js);
     }
 
     private async Task<string> GetAsync(string path)
