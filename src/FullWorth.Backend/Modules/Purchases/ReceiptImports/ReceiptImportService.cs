@@ -124,7 +124,7 @@ public sealed class ReceiptImportService(
         var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
         var effective = ApplyDefaultQuery(request, connection.DefaultQuery);
         var preview = await paperless.PreviewAsync(connection.BaseUrl, connection.Token, effective, ct);
-        return await MarkImportedAsync(fullWorthSpaceId, preview, ct);
+        return await MarkImportedAsync(fullWorthSpaceId, connection.BaseUrl, preview, ct);
     }
 
     public Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
@@ -221,6 +221,7 @@ public sealed class ReceiptImportService(
             {
                 var imported = await store.GetImportedPaperlessDocumentIdsAsync(
                     preset.FullWorthSpaceId,
+                    PaperlessSourcePrefix(connection.BaseUrl),
                     newDocuments.Select(x => x.Id).ToArray(),
                     ct);
                 newDocuments = newDocuments.Where(x => !imported.Contains(x.Id)).ToList();
@@ -257,12 +258,14 @@ public sealed class ReceiptImportService(
 
     private async Task<PaperlessPreviewResult> MarkImportedAsync(
         Guid fullWorthSpaceId,
+        string baseUrl,
         PaperlessPreviewResult preview,
         CancellationToken ct)
     {
         if (preview.Documents.Count == 0) return preview;
         var imported = await store.GetImportedPaperlessDocumentIdsAsync(
             fullWorthSpaceId,
+            PaperlessSourcePrefix(baseUrl),
             preview.Documents.Select(x => x.Id).ToArray(),
             ct);
         if (imported.Count == 0) return preview;
@@ -297,7 +300,7 @@ public sealed class ReceiptImportService(
         var autoStart = request.AutoStart ?? settings.AutoStart;
         var currency = NormalizeCurrency(request.Currency);
         var batch = await store.CreateBatchAsync(userId, fullWorthSpaceId, ReceiptImportSourceTypes.Paperless, "Paperless-ngx", currency, autoStart, null, ct);
-        var sourcePrefix = PaperlessReceiptClient.NormalizeBaseUri(connection.BaseUrl).GetLeftPart(UriPartial.Authority).ToLowerInvariant();
+        var sourcePrefix = PaperlessSourcePrefix(connection.BaseUrl);
 
         foreach (var document in documents)
         {
@@ -687,6 +690,9 @@ public sealed class ReceiptImportService(
         if (!Directory.Exists(root)) return null;
         return root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
+
+    private static string PaperlessSourcePrefix(string baseUrl) =>
+        PaperlessReceiptClient.NormalizeBaseUri(baseUrl).GetLeftPart(UriPartial.Authority).ToLowerInvariant();
 
     private static PaperlessPreviewRequest ApplyDefaultQuery(PaperlessPreviewRequest request, string? defaultQuery) =>
         string.IsNullOrWhiteSpace(request.Query) && !string.IsNullOrWhiteSpace(defaultQuery)
