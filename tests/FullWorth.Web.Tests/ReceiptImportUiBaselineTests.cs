@@ -31,8 +31,15 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("data-tab=\"files\"", importer);
         Assert.Contains("data-tab=\"paperless\"", importer);
         Assert.Contains("data-tab=\"folder\"", importer);
+        Assert.Contains("receipt-imports/paperless/options", importer);
         Assert.Contains("receipt-imports/paperless/preview", importer);
         Assert.Contains("receipt-imports/paperless/import", importer);
+        Assert.Contains("data-paperless-add-filter", importer);
+        Assert.Contains("data-rule-join", importer);
+        Assert.Contains("data-rule-not", importer);
+        Assert.Contains("data-rule-open", importer);
+        Assert.Contains("data-rule-close", importer);
+        Assert.Contains("buildPaperlessQuery", importer);
         Assert.Contains("receipt-imports/folder/status", importer);
         Assert.Contains("receipt-imports/folder/preview", importer);
         Assert.Contains("receipt-imports/folder/import", importer);
