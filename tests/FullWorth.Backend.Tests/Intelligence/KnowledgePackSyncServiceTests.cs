@@ -113,6 +113,39 @@ public sealed class KnowledgePackSyncServiceTests
     }
 
     [Fact]
+    public async Task Active_svg_content_in_brand_pack_is_rejected()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var svg = Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>");
+        var hash = Convert.ToHexString(SHA256.HashData(svg)).ToLowerInvariant();
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-13",
+            "TEST",
+            "other",
+            brandAssets:
+            [
+                new KnowledgePackBrandAssetPayload(
+                    "test", "Test", "test", "image/svg+xml",
+                    Convert.ToBase64String(svg), hash,
+                    null, null, null)
+            ],
+            brandAliases:
+            [
+                new KnowledgePackBrandAliasPayload("TEST", "test", null)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_brand_svg_unsafe", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialBrandAssets.ToListAsync());
+    }
+
+    [Fact]
     public async Task Signed_pack_installs_ontology_and_applies_category_redirect()
     {
         await using var fixture = await Fixture.CreateAsync();
