@@ -90,7 +90,11 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
     public Task<List<RecurringContract>> ListAsync(CancellationToken ct) => ListForSpaceAsync(FullWorthSpaceDefaults.LegacyId, ct);
 
     public Task<List<RecurringContract>> ListForSpaceAsync(Guid fullWorthSpaceId, CancellationToken ct) =>
-        db.Contracts.AsNoTracking().Where(x => x.FullWorthSpaceId == fullWorthSpaceId).OrderBy(x => x.NextDueDate).ThenBy(x => x.Name).ToListAsync(ct);
+        db.Contracts.AsNoTracking()
+            .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.MergedIntoContractId == null)
+            .OrderBy(x => x.NextDueDate)
+            .ThenBy(x => x.Name)
+            .ToListAsync(ct);
 
     public Task<RecurringContract> UpsertAsync(Guid? id, ContractWrite request, CancellationToken ct) =>
         UpsertForSpaceAsync(FullWorthSpaceDefaults.LegacyId, id, request, ct);
@@ -130,7 +134,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
 
     public async Task<ContractAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
     {
-        var contract = await VisibleContractRecords(userId, fullWorthSpaceId)
+        var contract = await VisibleContracts(userId, fullWorthSpaceId)
             .Where(x => x.Id == contractId)
             .Select(x => new { x.Id, x.AccountId })
             .SingleOrDefaultAsync(ct);
@@ -307,7 +311,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             contract.MergedIntoContractId == targetContractId, ct);
         if (source is null) return ContractMutationResult.NotFound;
 
-        var sourceAccess = await GetAccessAsync(userId, fullWorthSpaceId, sourceContractId, ct);
+        var sourceAccess = await GetRecordAccessAsync(userId, fullWorthSpaceId, sourceContractId, ct);
         if (sourceAccess == ContractAccessLevel.None) return ContractMutationResult.NotFound;
         if (sourceAccess != ContractAccessLevel.Write) return ContractMutationResult.Forbidden;
 
@@ -406,6 +410,21 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
 
     private static DateOnly? WithinEnd(RecurringContract contract, DateOnly candidate) =>
         contract.EndDate is { } end && candidate > end ? null : candidate;
+
+    private async Task<ContractAccessLevel> GetRecordAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
+    {
+        var contract = await VisibleContractRecords(userId, fullWorthSpaceId)
+            .Where(x => x.Id == contractId)
+            .Select(x => new { x.Id, x.AccountId })
+            .SingleOrDefaultAsync(ct);
+        if (contract is null) return ContractAccessLevel.None;
+        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+            return ContractAccessLevel.Read;
+        if (!contract.AccountId.HasValue) return ContractAccessLevel.Write;
+        var canWriteAccount = await db.AccountOwners.AsNoTracking().AnyAsync(owner =>
+            owner.AccountId == contract.AccountId.Value && owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner, ct);
+        return canWriteAccount ? ContractAccessLevel.Write : ContractAccessLevel.Read;
+    }
 
     private IQueryable<RecurringContract> VisibleContracts(Guid userId, Guid fullWorthSpaceId) =>
         VisibleContractRecords(userId, fullWorthSpaceId)
