@@ -60,9 +60,7 @@ public static class BrandCatalogEndpoints
                 .SingleOrDefaultAsync(x => x.ContentSha256 == hash, ct);
             if (blob is null) return Results.NotFound();
 
-            byte[] bytes;
-            try { bytes = Convert.FromBase64String(blob.ContentBase64); }
-            catch (FormatException) { return Results.NotFound(); }
+            var bytes = blob.Content;
 
             try
             {
