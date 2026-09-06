@@ -266,4 +266,14 @@ public sealed class AuthServiceTests(AuthPostgresFixture fixture) : IClassFixtur
     };
 
     private static string Email(string prefix) => $"{prefix}-{Guid.NewGuid():N}@example.com";
+
+    [Fact]
+    public void LegalDocumentVersions_AreExplicitAndDated()
+    {
+        Assert.Equal("2026-09-06", LegalDocumentVersions.Terms);
+        Assert.Equal("2026-09-06", LegalDocumentVersions.Privacy);
+        Assert.NotEqual(LegalDocumentVersions.TermsVersionClaim, LegalDocumentVersions.TermsAcceptedAtClaim);
+        Assert.NotEqual(LegalDocumentVersions.PrivacyVersionClaim, LegalDocumentVersions.PrivacyAcknowledgedAtClaim);
+    }
+
 }
