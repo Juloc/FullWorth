@@ -64,7 +64,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("hasVisualOverride", js);
         Assert.Contains("restoreDefault", js);
         Assert.Contains("delete S.prefs.accounts[a.id]", js);
-        Assert.Contains("[data-acct],.row", js);
+        Assert.Contains("root.querySelectorAll('[data-acct]')", js);
         Assert.Contains("identity(a.bankConnectionId?", js);
     }
 
