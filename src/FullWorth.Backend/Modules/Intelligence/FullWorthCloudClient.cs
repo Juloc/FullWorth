@@ -32,6 +32,7 @@ public sealed record FullWorthCloudSubmissionEvent(
 
 public sealed record FullWorthCloudBenchmark(
     string MetricKey,
+    string? EntityKey,
     string? Currency,
     string? Country,
     string? RegionBucket,
@@ -80,6 +81,20 @@ public interface IFullWorthCloudClient
         string? ageBand,
         string? observedMonth,
         CancellationToken ct);
+    Task<FullWorthCloudBenchmark?> GetEntityBenchmarkAsync(
+        string instanceCredential,
+        string metricKey,
+        string entityKey,
+        string? currency,
+        string? country,
+        string? regionBucket,
+        string? householdSizeBand,
+        string? incomeBand,
+        string? ageBand,
+        string? observedMonth,
+        CancellationToken ct) =>
+        Task.FromException<FullWorthCloudBenchmark?>(
+            new NotSupportedException("This cloud client does not support entity-specific benchmarks."));
     Task<FullWorthCloudPrice?> GetPriceAsync(
         string instanceCredential,
         string productKey,
@@ -251,6 +266,44 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
             throw new ArgumentException("Benchmark metric key is required.", nameof(metricKey));
 
         var query = new List<string> { $"metricKey={Uri.EscapeDataString(metricKey.Trim())}" };
+        AddQuery(query, "currency", currency);
+        AddQuery(query, "country", country);
+        AddQuery(query, "regionBucket", regionBucket);
+        AddQuery(query, "householdSizeBand", householdSizeBand);
+        AddQuery(query, "incomeBand", incomeBand);
+        AddQuery(query, "ageBand", ageBand);
+        AddQuery(query, "observedMonth", observedMonth);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"v1/benchmarks?{string.Join('&', query)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await DeserializeAsync<FullWorthCloudBenchmark>(response, ct);
+    }
+
+    public async Task<FullWorthCloudBenchmark?> GetEntityBenchmarkAsync(
+        string instanceCredential,
+        string metricKey,
+        string entityKey,
+        string? currency,
+        string? country,
+        string? regionBucket,
+        string? householdSizeBand,
+        string? incomeBand,
+        string? ageBand,
+        string? observedMonth,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(metricKey))
+            throw new ArgumentException("Benchmark metric key is required.", nameof(metricKey));
+        if (string.IsNullOrWhiteSpace(entityKey))
+            throw new ArgumentException("Benchmark entity key is required.", nameof(entityKey));
+
+        var query = new List<string>
+        {
+            $"metricKey={Uri.EscapeDataString(metricKey.Trim())}",
+            $"entityKey={Uri.EscapeDataString(entityKey.Trim().ToLowerInvariant())}"
+        };
         AddQuery(query, "currency", currency);
         AddQuery(query, "country", country);
         AddQuery(query, "regionBucket", regionBucket);
