@@ -112,7 +112,7 @@ public sealed class CloudContractBenchmarkContributionService(
         return queued;
     }
 
-    internal static string? MetricForCategory(string? categoryKey)
+    public static string? MetricForCategory(string? categoryKey)
     {
         var key = categoryKey?.Trim().ToLowerInvariant();
         return key switch
