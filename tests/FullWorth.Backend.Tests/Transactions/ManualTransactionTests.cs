@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Categories;
@@ -43,6 +44,38 @@ public sealed class ManualTransactionTests
         var income = await db.Transactions.AsNoTracking().SingleAsync(x => x.Id == incomeId);
         Assert.Equal(100m, income.Amount);                     // income is positive
         Assert.Equal("none", income.CategorizationSource);     // no category chosen
+    }
+
+    [Fact]
+    public async Task Transaction_queries_expose_category_name_and_icon_key()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        var s = await SeedAsync(database);
+        await using var db = database.CreateContext();
+
+        var category = await db.Categories.SingleAsync(x => x.Id == s.Category);
+        category.Icon = "🛒";
+        var transaction = await db.Transactions.SingleAsync(x => x.Id == s.ImportedTx);
+        transaction.CategoryId = s.Category;
+        await db.SaveChangesAsync();
+
+        var store = new TransactionStore(db);
+        var query = new TransactionQuery(null, null, null, null, null, null, null, null, null, null, null, 20);
+
+        var listJson = JsonSerializer.Serialize(
+            await store.SearchForUserAsync(s.Owner, Space, query, CancellationToken.None),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var listDoc = JsonDocument.Parse(listJson);
+        var item = listDoc.RootElement.GetProperty("items")[0];
+        Assert.Equal("Lebensmittel", item.GetProperty("categoryName").GetString());
+        Assert.Equal("🛒", item.GetProperty("categoryIconKey").GetString());
+
+        var detailJson = JsonSerializer.Serialize(
+            await store.GetForUserAsync(s.Owner, Space, s.ImportedTx, CancellationToken.None),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var detailDoc = JsonDocument.Parse(detailJson);
+        Assert.Equal("Lebensmittel", detailDoc.RootElement.GetProperty("categoryName").GetString());
+        Assert.Equal("🛒", detailDoc.RootElement.GetProperty("categoryIconKey").GetString());
     }
 
     [Fact]

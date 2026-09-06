@@ -56,6 +56,20 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task TransactionIdentity_UsesLocalBrandThenCategoryFallback()
+    {
+        var kit = await GetAsync("/ui/ux-kit.js");
+        var transactions = await GetAsync("/features/transactions.js");
+
+        Assert.Contains("brandLogoPath", kit);
+        Assert.Contains("/brands/vodafone.svg", kit);
+        Assert.Contains("categoryIconKey", kit);
+        Assert.Contains("categoryIconKey: x.categoryIconKey", transactions);
+        Assert.DoesNotContain("logo.clearbit", kit, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("google.com/s2/favicons", kit, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PublicResponses_DoNotExposeConfiguredSecretsOrInternalUrls()
     {
         foreach (var path in new[] { "/", "/app.js", "/app.css", "/dialogs.css", "/locales/de.json", "/locales/en.json", "/health" })

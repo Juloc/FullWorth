@@ -126,6 +126,14 @@ public sealed class TransactionStore(FullWorthDbContext db)
                 .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
                 .Select(c => c.Name)
                 .FirstOrDefault(),
+            CategoryName = db.Categories
+                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
+                .Select(c => c.Name)
+                .FirstOrDefault(),
+            CategoryIconKey = db.Categories
+                .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
+                .Select(c => c.Icon != null && c.Icon != "" ? c.Icon : c.Key)
+                .FirstOrDefault(),
             x.UserNote,
             x.IsIgnored,
             x.IsTransfer,
@@ -166,6 +174,14 @@ public sealed class TransactionStore(FullWorthDbContext db)
                 Category = db.Categories
                     .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
                     .Select(c => c.Name)
+                    .FirstOrDefault(),
+                CategoryName = db.Categories
+                    .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
+                    .Select(c => c.Name)
+                    .FirstOrDefault(),
+                CategoryIconKey = db.Categories
+                    .Where(c => c.Id == x.CategoryId && db.Accounts.Any(a => a.Id == x.AccountId && a.FullWorthSpaceId == c.FullWorthSpaceId))
+                    .Select(c => c.Icon != null && c.Icon != "" ? c.Icon : c.Key)
                     .FirstOrDefault(),
                 x.UserNote,
                 x.IsIgnored,

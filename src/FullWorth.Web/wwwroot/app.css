@@ -314,6 +314,7 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
 .fw-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
 .fw-ident-logo{width:100%;height:100%;object-fit:cover}
+.fw-ident-brand-logo{box-sizing:border-box;object-fit:contain;padding:7px;background:#fff}
 .fw-ident.fw-ident-failed{background:var(--surface-2)}
 .fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:18px}
 .fw-ident-cat svg{width:20px;height:20px}

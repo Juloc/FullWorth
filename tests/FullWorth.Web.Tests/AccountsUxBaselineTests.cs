@@ -56,6 +56,19 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task ConnectedAccounts_DefaultToBankLogo_AndVisualOverrideCanBeReset()
+    {
+        var js = await GetAsync("/features/accounts-ux.js");
+
+        Assert.Contains("bankForAccount", js);
+        Assert.Contains("hasVisualOverride", js);
+        Assert.Contains("restoreDefault", js);
+        Assert.Contains("delete S.prefs.accounts[a.id]", js);
+        Assert.Contains("root.querySelectorAll('[data-acct]')", js);
+        Assert.Contains("bankDefault=!!a.bankConnectionId||!!lg", js);
+    }
+
+    [Fact]
     public async Task AccountsUx_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
     {
         var css = await GetAsync("/features/accounts-ux.css");
