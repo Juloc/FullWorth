@@ -129,7 +129,7 @@ async function openDeleteAccountDialog(){
 }
 
 async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
-function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));
+function renderTranslations(){$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
@@ -230,8 +230,9 @@ function syncResponsiveSidebar(){
     if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
     return;
   }
-  const desiredSidebar=Math.max(176,Number(localStorage.getItem('finance.sidebar.width'))||228);
-  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
+  const desiredSidebar=Math.max(176,Number(localStorage.getItem(sidebarWidthKey()))||Number(localStorage.getItem('finance.sidebar.width'))||228);
+  const coachKey=`finance.coach.dockWidth.${layoutWidthMode()}`;
+  const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem(coachKey))||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
   const minMain=window.innerWidth<1100?420:520;
   const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
   const changed=document.body.classList.contains('nav-auto-collapsed')!==shouldCollapse;
