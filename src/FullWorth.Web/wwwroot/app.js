@@ -17,11 +17,10 @@ import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
 import { createDialog } from './ui/dialog.js';
-import { createApiClient, jsonBody } from './core/api.js';
+import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
-import { createI18n } from './core/i18n.js';
 import { createToast } from './ui/toast.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
@@ -51,10 +50,6 @@ import { createToast } from './ui/toast.js';
     return p.then(r=>r.clone());
   };
 })();
-const apiClient=createApiClient({getSpaceId:()=>state.space?.id||''});
-const api=(path,options)=>apiClient.backend(path,options);
-const bankApi=(path,options)=>apiClient.banking(path,options);
-const i18n=createI18n({state});
 const get=path=>i18n.get(path);
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
