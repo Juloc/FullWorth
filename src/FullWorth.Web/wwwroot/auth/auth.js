@@ -301,7 +301,8 @@ async function submitRegister(form) {
         displayName: String(body.get('displayName') || ''),
         email: String(body.get('email') || ''),
         password,
-        acceptTerms: body.get('acceptTerms') === 'on'
+        acceptTerms: body.get('acceptTerms') === 'on',
+        confirmAdult: body.get('confirmAdult') === 'on'
       })
     });
 
