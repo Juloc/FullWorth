@@ -41,30 +41,18 @@ public sealed class AuthSessionCoordinator(
             await users.ResetAccessFailedCountAsync(user);
         }
 
-        var securityStamp = await users.GetSecurityStampAsync(user);
-        var session = await sessions.CreateSessionAsync(
-            user.Id,
-            securityStamp,
-            context.Request.Headers.UserAgent.ToString(),
-            context.Connection.RemoteIpAddress?.ToString(),
-            ct);
-
-        try
-        {
-            await signInManager.SignInWithClaimsAsync(
-                user,
-                // Persistent so the login survives a browser restart and app redeploy (the cookie's
-                // absolute ceiling is still the DB session's AbsoluteLifetime; see SessionOptions).
-                isPersistent: true,
-                [SessionClaims.CreateSessionIdClaim(session.Id)]);
-        }
-        catch
-        {
-            await sessions.RevokeSessionAsync(user.Id, session.Id, ct);
-            throw;
-        }
+        if (!await SignInUserAsync(user, context, ct))
+            return LoginResultDto.InvalidCredentials();
 
         return result;
+    }
+
+    public async Task<bool> SignInUserAsync(AuthUser user, HttpContext context, CancellationToken ct)
+    {
+        if (user.IsDisabled || await users.IsLockedOutAsync(user))
+            return false;
+
+        return await SignInUserAsync(user, context, ct);
     }
 
     /// <summary>
