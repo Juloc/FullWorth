@@ -89,6 +89,7 @@ builder.Services.AddIdentityCore<AuthUser>(configuredAuth.Apply)
 
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 builder.Services.Configure<RegistrationOptions>(builder.Configuration.GetSection(RegistrationOptions.SectionName));
+builder.Services.Configure<AccountDeletionOptions>(builder.Configuration.GetSection(AccountDeletionOptions.SectionName));
 builder.Services.Configure<FinanceSessionOptions>(builder.Configuration.GetSection("Sessions"));
 builder.Services.Configure<RecoveryOptions>(builder.Configuration.GetSection("Recovery"));
 builder.Services.AddSingleton(services => BackendContextOptions.Load(
@@ -103,6 +104,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthSessionCoordinator>();
 builder.Services.AddScoped<RegistrationService>();
+builder.Services.AddScoped<AccountDeletionService>();
+builder.Services.AddHostedService<AccountDeletionPurgeWorker>();
 builder.Services.AddScoped<InviteClaimService>();
 builder.Services.AddScoped<ISessionPersistence, AuthSessionPersistence>();
 builder.Services.AddScoped<SessionStore>();
@@ -208,6 +211,7 @@ if (app.Environment.IsProduction())
 app.UseRouting();
 app.UseAuthentication();
 app.UseRateLimiter();
+app.UseMiddleware<PendingDeletionAccessMiddleware>();
 
 app.Use(async (context, next) =>
 {
@@ -248,6 +252,13 @@ foreach (var route in new[]
         await context.Response.SendFileAsync(authShellPath, ct);
     }).AllowAnonymous();
 }
+
+var accountDeletionShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "account-deletion", "index.html");
+app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct) =>
+{
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(accountDeletionShellPath, ct);
+}).RequireAuthorization();
 
 var passkeyShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "passkeys", "index.html");
 app.MapGet("/settings/security/passkeys", async (HttpContext context, CancellationToken ct) =>
