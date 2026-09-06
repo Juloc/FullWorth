@@ -191,16 +191,13 @@ public sealed class ContractDetectionService(
 
         var existing = eligibleExisting.FirstOrDefault(contract =>
             CandidateProviderKey(contract.ProviderName ?? contract.Name) == providerKey);
-
-        if (existing is null)
+        var existingWasFound = existing is not null;
+        existing ??= new RecurringContract
         {
-            existing = new RecurringContract
-            {
-                FullWorthSpaceId = fullWorthSpaceId,
-                AutoDetected = true
-            };
-            db.Contracts.Add(existing);
-        }
+            FullWorthSpaceId = fullWorthSpaceId,
+            AutoDetected = true
+        };
+        if (!existingWasFound) db.Contracts.Add(existing);
 
         existing.Name = candidate.Counterparty.Trim();
         existing.ProviderName = candidate.Counterparty.Trim();
@@ -216,7 +213,7 @@ public sealed class ContractDetectionService(
         {
             existing.AccountId = null;
         }
-        else if (!existing.AccountId.HasValue && existing.Id != Guid.Empty && eligibleExisting.Contains(existing))
+        else if (!existing.AccountId.HasValue && existingWasFound)
         {
             // Preserve an already-unbound contract instead of binding it again to only the newest account.
         }
