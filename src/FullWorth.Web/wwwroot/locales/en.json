@@ -548,7 +548,7 @@
     "displayName": "Name",
     "register": "Create account",
     "registering": "Creating account…",
-    "acceptTerms": "I accept the privacy policy and terms of use.",
+    "acceptTerms": "I accept the terms of use and acknowledge the privacy notice.",
     "registrationUnavailable": "Registration could not be completed. If an account already exists, sign in instead.",
     "registrationDisabled": "Public registration is disabled on this FullWorth instance.",
     "privacy": "Privacy",
