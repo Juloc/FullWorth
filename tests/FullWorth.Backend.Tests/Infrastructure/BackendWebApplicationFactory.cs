@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 
 namespace FullWorth.Backend.Tests.Infrastructure;
 
@@ -132,16 +133,81 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
         await db.SaveChangesAsync();
     });
 
+    // Migrating the full schema (~114 EF migrations) into a fresh database for each of the 100+ test
+    // classes dominated the suite runtime. Instead we apply the migrations ONCE into a template database
+    // and clone it per class with `CREATE DATABASE ... TEMPLATE` (a fast file-level copy). The app's
+    // start-up MigrateAsync then finds every migration already applied and no-ops.
+    private const string TemplateDatabaseName = "fullworth_test_template_backend";
+    private static readonly Lazy<string> TemplateDatabase = new(BuildTemplateDatabase);
+
     private static string CreateConnectionString()
     {
         var server = Environment.GetEnvironmentVariable("FULLWORTH_TEST_POSTGRES");
         if (string.IsNullOrWhiteSpace(server))
             throw new InvalidOperationException("FULLWORTH_TEST_POSTGRES must point to the isolated PostgreSQL test server.");
 
+        var baseConnection = server.TrimEnd(';');
+        var database = $"fullworth_test_{Guid.NewGuid():N}";
+        // Escape hatch (A/B benchmarking / fallback): FULLWORTH_TEST_NO_TEMPLATE=1 keeps the original
+        // behaviour where each class's database is created and migrated from scratch by the app start-up.
+        if (Environment.GetEnvironmentVariable("FULLWORTH_TEST_NO_TEMPLATE") != "1")
+            CloneDatabase(baseConnection, TemplateDatabase.Value, database);
+
         // Each test class gets its own database and connection pool. With the full suite that is
         // hundreds of pools; a large pool size plus the default 300s idle lifetime lets connections
         // accumulate past the server's max_connections ("too many clients already"). Keep pools small
         // and prune idle connections quickly so the whole suite stays well within the connection budget.
-        return $"{server.TrimEnd(';')};Database=fullworth_test_{Guid.NewGuid():N};Maximum Pool Size=10;Minimum Pool Size=0;Connection Idle Lifetime=5;Connection Pruning Interval=2";
+        return $"{baseConnection};Database={database};Maximum Pool Size=10;Minimum Pool Size=0;Connection Idle Lifetime=5;Connection Pruning Interval=2";
+    }
+
+    private static string BuildTemplateDatabase()
+    {
+        var baseConnection = Environment.GetEnvironmentVariable("FULLWORTH_TEST_POSTGRES")!.TrimEnd(';');
+        // Fixed name, rebuilt from scratch each run so a crashed previous run cannot leave a stale schema.
+        ExecuteMaintenance(baseConnection, $"DROP DATABASE IF EXISTS \"{TemplateDatabaseName}\" WITH (FORCE)");
+        ExecuteMaintenance(baseConnection, $"CREATE DATABASE \"{TemplateDatabaseName}\"");
+
+        // Start a real backend against the template so its schema, migration history and seed data are
+        // exactly what a freshly started backend produces — clones are then indistinguishable from a
+        // database this factory would previously have migrated in place.
+        using (var factory = new BackendWebApplicationFactory($"{baseConnection};Database={TemplateDatabaseName}"))
+        using (factory.CreateClient())
+        {
+        }
+
+        // A TEMPLATE source must have zero live sessions. Release the pool the start-up host used and
+        // terminate any stragglers before the first clone runs.
+        NpgsqlConnection.ClearAllPools();
+        ExecuteMaintenance(baseConnection,
+            $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{TemplateDatabaseName}' AND pid <> pg_backend_pid()");
+        return TemplateDatabaseName;
+    }
+
+    private static void CloneDatabase(string baseConnection, string template, string database)
+    {
+        // Concurrent clones from the same template are fine (no session connects to the template), but a
+        // just-released pooled connection can momentarily linger; retry briefly on the transient
+        // "source database is being accessed by other users".
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                ExecuteMaintenance(baseConnection, $"CREATE DATABASE \"{database}\" TEMPLATE \"{template}\"");
+                return;
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ObjectInUse && attempt < 5)
+            {
+                Thread.Sleep(200);
+            }
+        }
+    }
+
+    private static void ExecuteMaintenance(string baseConnection, string sql)
+    {
+        using var connection = new NpgsqlConnection($"{baseConnection};Database=fullworth_test;Pooling=false");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
     }
 }
