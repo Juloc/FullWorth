@@ -1307,3 +1307,22 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 @media(max-width:767px){
   .contracts-list{padding-bottom:56px}
 }
+
+
+/* Finance UX gap-closure accessibility: chart drill targets are keyboard visible and mobile controls
+   keep a 44px touch target without changing the visual hierarchy. */
+.an-period-hit,.an-period-bar{cursor:pointer}
+.an-period-hit:focus-visible,.an-period-bar:focus-visible{
+  outline:none;
+  stroke:var(--cta);
+  stroke-width:4;
+}
+@media(max-width:767px){
+  .fw-cycle button,
+  .fw-chip,
+  .contracts-sortbar,
+  .tx-filter-btn,
+  .contracts-filter-open{
+    min-height:44px;
+  }
+}
