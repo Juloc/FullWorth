@@ -288,6 +288,7 @@
     "archiveConfirm": "Vertrag „{name}\" archivieren? Er bleibt in der Historie.",
     "archivedToast": "Vertrag archiviert.",
     "minimumTermEnd": "Mindestlaufzeit bis",
+    "cancelEffectiveDate": "Vertragsende / gekündigt zum",
     "noticePeriod": "Kündigungsfrist",
     "cancellationDeadline": "Kündigen bis",
     "renewalPeriod": "Verlängerung um",
