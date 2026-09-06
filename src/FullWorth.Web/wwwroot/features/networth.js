@@ -13,15 +13,18 @@ let ctx = null;
 let lastOverview = null;
 
 // Trend window options for card 1's segmented control. `m` = months back from today.
+// m=0 means all available history; m=-1 is reserved for the custom date range.
 const WINDOWS = [
   { m: 6, sde: '6 M', sen: '6M', lde: 'Letzte 6 Monate', len: 'Last 6 months' },
   { m: 12, sde: '1 J', sen: '1Y', lde: 'Letzte 12 Monate', len: 'Last 12 months' },
   { m: 24, sde: '2 J', sen: '2Y', lde: 'Letzte 2 Jahre', len: 'Last 2 years' },
-  { m: 60, sde: '5 J', sen: '5Y', lde: 'Letzte 5 Jahre', len: 'Last 5 years' }
+  { m: 60, sde: '5 J', sen: '5Y', lde: 'Letzte 5 Jahre', len: 'Last 5 years' },
+  { m: 120, sde: '10 J', sen: '10Y', lde: 'Letzte 10 Jahre', len: 'Last 10 years' },
+  { m: 0, sde: 'Max', sen: 'Max', lde: 'Gesamter verfügbarer Zeitraum', len: 'All available history' }
 ];
 
 // View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
-const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], portfolios: [], currency: 'EUR', windowMonths: 12 };
+const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], portfolios: [], currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -45,7 +48,8 @@ const COPY = {
     manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
     trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
-    window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.'
+    window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.',
+    customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.'
   },
   en: {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
@@ -60,7 +64,8 @@ const COPY = {
     manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
     trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
-    window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.'
+    window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.',
+    customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.'
   }
 };
 
@@ -96,11 +101,21 @@ export function newAsset(context) {
   return openAssetWizard();
 }
 
-async function loadHistory(months) {
-  const end = new Date();
-  const start = new Date();
-  start.setMonth(end.getMonth() - months);
-  try { return await ctx.api(`api/wealth/history?from=${localDate(start)}&to=${localDate(end)}`) || []; }
+async function loadHistory(months, customFrom = nw.customFrom, customTo = nw.customTo) {
+  const params = new URLSearchParams();
+  if (months === -1) {
+    if (customFrom) params.set('from', customFrom);
+    if (customTo) params.set('to', customTo);
+  } else {
+    const end = new Date();
+    params.set('to', localDate(end));
+    if (months > 0) {
+      const start = new Date(end);
+      start.setMonth(end.getMonth() - months);
+      params.set('from', localDate(start));
+    }
+  }
+  try { return await ctx.api(`api/wealth/history?${params.toString()}`) || []; }
   catch { return []; }
 }
 
@@ -108,7 +123,13 @@ export async function renderNetWorth(context) {
   ctx = context;
   ensureStyles();
   ensureUxStyles();
-  if (!nw.windowMonths) nw.windowMonths = 12;
+  if (!Number.isFinite(nw.windowMonths)) nw.windowMonths = 12;
+  if (!nw.customTo) nw.customTo = localDate(new Date());
+  if (!nw.customFrom) {
+    const start = new Date();
+    start.setFullYear(start.getFullYear() - 10);
+    nw.customFrom = localDate(start);
+  }
 
   let overview;
   try { overview = await ctx.api('api/wealth/overview'); }
@@ -173,13 +194,19 @@ function trendStats(history) {
   return { hasData: true, pct, delta };
 }
 
+function currentRangeLabel() {
+  if (nw.windowMonths === -1)
+    return `${ctx.date(nw.customFrom)} – ${ctx.date(nw.customTo)}`;
+  const win = WINDOWS.find(w => w.m === nw.windowMonths) || WINDOWS[1];
+  return isDe() ? win.lde : win.len;
+}
+
 function heroTrendInner() {
   const stats = trendStats(nw.history);
   if (!stats.hasData) return `<span class="fw-trend">—</span>`;
-  const win = WINDOWS.find(w => w.m === nw.windowMonths) || WINDOWS[1];
   const sign = (!ctx.isPrivate() && stats.delta > 0) ? '+' : '';
   const cls = stats.delta > 0 ? 'positive' : stats.delta < 0 ? 'negative' : '';
-  return `${trendBadge(stats.pct, true)}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(isDe() ? win.lde : win.len)}</span></div>`;
+  return `${trendBadge(stats.pct, true)}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(currentRangeLabel())}</span></div>`;
 }
 
 // Smooth net-worth area chart: a Catmull-Rom-through-points curve emitted as a cubic-bezier <path>
@@ -246,12 +273,21 @@ function buildHeroCard() {
   const currency = nw.currency;
   const seg = `<div class="fw-cycle nw-windows" role="tablist" aria-label="${ctx.esc(t('window'))}">${WINDOWS.map(w =>
     `<button type="button" role="tab" data-window="${w.m}"${w.m === nw.windowMonths ? ' class="active" aria-selected="true"' : ' aria-selected="false"'}>${ctx.esc(isDe() ? w.sde : w.sen)}</button>`).join('')}</div>`;
+  const custom = `<details class="nw-custom-range"${nw.windowMonths === -1 ? ' open' : ''}><summary>${ctx.esc(t('customRange'))}</summary><div class="nw-custom-range-fields"><label>${ctx.esc(t('from'))}<input type="date" data-range-from value="${ctx.esc(nw.customFrom)}"></label><label>${ctx.esc(t('to'))}<input type="date" data-range-to value="${ctx.esc(nw.customTo)}"></label><button type="button" class="secondary" data-range-apply>${ctx.esc(t('applyRange'))}</button><span class="nw-range-error" data-range-error hidden></span></div></details>`;
   const grossAssets = num(overview.totalAssets) + num(overview.accounts?.amount);
   const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
   const missing = (overview.missingCurrencies || []).join(', ');
   const fx = overview.isComplete ? '' : `<p class="nw-fx">${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}</p>`;
-  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${metrics}${fx}`;
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${metrics}${fx}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
+}
+
+function repaintHeroTrend(hero) {
+  const trendEl = hero.querySelector('.nw-hero-trend');
+  if (trendEl) trendEl.innerHTML = heroTrendInner();
+  const chartEl = hero.querySelector('.nw-chart');
+  if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
+  bindNetWorthScrubber(hero);
 }
 
 function wireHero(hero) {
@@ -267,12 +303,31 @@ function wireHero(hero) {
         other.setAttribute('aria-selected', String(on));
       });
       nw.history = await loadHistory(months);
-      const trendEl = hero.querySelector('.nw-hero-trend');
-      if (trendEl) trendEl.innerHTML = heroTrendInner();
-      const chartEl = hero.querySelector('.nw-chart');
-      if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
-      bindNetWorthScrubber(hero);
+      repaintHeroTrend(hero);
     });
+  });
+
+  hero.querySelector('[data-range-apply]')?.addEventListener('click', async () => {
+    const from = hero.querySelector('[data-range-from]')?.value || '';
+    const to = hero.querySelector('[data-range-to]')?.value || '';
+    const error = hero.querySelector('[data-range-error]');
+    if (!from || !to || from > to) {
+      if (error) {
+        error.textContent = t('invalidRange');
+        error.hidden = false;
+      }
+      return;
+    }
+    if (error) error.hidden = true;
+    nw.customFrom = from;
+    nw.customTo = to;
+    nw.windowMonths = -1;
+    hero.querySelectorAll('[data-window]').forEach(other => {
+      other.classList.remove('active');
+      other.setAttribute('aria-selected', 'false');
+    });
+    nw.history = await loadHistory(-1, from, to);
+    repaintHeroTrend(hero);
   });
 }
 
