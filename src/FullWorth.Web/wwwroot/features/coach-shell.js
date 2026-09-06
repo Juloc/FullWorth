@@ -320,7 +320,7 @@ function initDockSwipe(){
   header.addEventListener('pointerup',end);header.addEventListener('pointercancel',end);
 }
 
-function readFilterValue(id) {function readFilterValue(id) {
+function readFilterValue(id) {
   const element = document.getElementById(id);
   if (!element) return null;
   if (element.type === 'checkbox') return element.checked ? 'true' : null;
@@ -397,7 +397,7 @@ function renderPageContext() {
   return context;
 }
 
-function setSelectedModel(value) {function setSelectedModel(value) {
+function setSelectedModel(value) {
   selectedModel = value || '';
   if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
   else localStorage.removeItem('finance.coach.model');
@@ -574,7 +574,7 @@ function renderStarters() {
   });
 }
 
-async function loadConversation() {async function loadConversation() {
+async function loadConversation() {
   const sid = spaceId();
   if (currentConversationSpaceId !== sid) {
     currentConversationId = null;
