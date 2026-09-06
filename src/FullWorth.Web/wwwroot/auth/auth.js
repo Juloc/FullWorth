@@ -119,7 +119,7 @@ function bind() {
     if (preferences.theme === 'system') applyTheme();
   });
 
-  $('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
+  $$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
     form.addEventListener('submit', handleSubmit);
   });
 
