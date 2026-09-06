@@ -3,8 +3,14 @@
    generic presentation, so new features inherit Cute automatically without feature-local branches. */
 
 html[data-visual-theme="cute"] {
-  --radius-card: 20px;
+  /* Cute stays a pure override layer. Clean keeps app.css/design-depth.css unchanged. */
+  --radius-card: 22px;
   --radius-input: 14px;
+  --cute-radius-row: 16px;
+  --cute-pastel-lavender: #f1ecfb;
+  --cute-pastel-mint: #edf7ef;
+  --cute-pastel-peach: #fff0e6;
+  --cute-pastel-pink: #fcecf3;
   --shadow: 0 8px 24px rgba(34, 25, 36, .08);
   --shadow-menu: 0 12px 30px rgba(34, 25, 36, .16);
   --shadow-float: 0 10px 28px rgba(34, 25, 36, .16);
@@ -25,6 +31,20 @@ html[data-theme="light"][data-visual-theme="cute"] {
   --cta-text: #ffffff;
   --accent: #7b6cc4;
   --accent-soft: #efe9fb;
+  --positive: #55a16c;
+  --positive-soft: #edf7ef;
+  --negative: #d66f78;
+  --negative-soft: #fcebef;
+  --warning: #d99b4f;
+  --warning-soft: #fff1e4;
+  --cat-1: #8878cf;
+  --cat-2: #7ea2d5;
+  --cat-3: #77b597;
+  --cat-4: #e5a15c;
+  --cat-5: #d88da8;
+  --cat-6: #d7bd59;
+  --cat-7: #82ad6f;
+  --cat-8: #9d96aa;
 }
 
 html[data-theme="dark"][data-visual-theme="cute"] {
@@ -39,6 +59,20 @@ html[data-theme="dark"][data-visual-theme="cute"] {
   --cta-text: #241c33;
   --accent: #cdbef0;
   --accent-soft: #2b2440;
+  --positive: #84c597;
+  --positive-soft: #203729;
+  --negative: #ef9298;
+  --negative-soft: #3a2329;
+  --warning: #e6b271;
+  --warning-soft: #3a2d20;
+  --cat-1: #a99ae5;
+  --cat-2: #9bb9e3;
+  --cat-3: #8bc7aa;
+  --cat-4: #ebb477;
+  --cat-5: #e5a8bf;
+  --cat-6: #e1cf79;
+  --cat-7: #9bc989;
+  --cat-8: #b8b1c3;
   --shadow: 0 8px 24px rgba(0, 0, 0, .22);
   --shadow-menu: 0 12px 30px rgba(0, 0, 0, .32);
   --shadow-float: 0 10px 28px rgba(0, 0, 0, .34);
@@ -68,6 +102,130 @@ html[data-theme="dark"][data-visual-theme="cute"] body {
     radial-gradient(900px 520px at -8% 108%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 55%);
   background-attachment: fixed;
   background-repeat: no-repeat;
+}
+
+/* Mockup-aligned Cute polish. All selectors are explicitly scoped to Cute, so Clean cannot inherit
+   these colors, radii, typography, chart treatment or component surfaces. */
+html[data-theme="light"][data-visual-theme="cute"] .topbar {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--bg) 97%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 90%, transparent) 74%,
+    transparent 100%
+  );
+}
+
+html[data-theme="light"][data-visual-theme="cute"] .topbar-title h1 {
+  color: var(--text);
+  text-shadow: none;
+}
+
+html[data-theme="light"][data-visual-theme="cute"] .sidebar {
+  border-right-color: var(--line);
+  box-shadow: 8px 0 28px rgba(67, 46, 73, .035);
+}
+
+html[data-theme="light"][data-visual-theme="cute"] .metric,
+html[data-theme="light"][data-visual-theme="cute"] .panel,
+html[data-theme="light"][data-visual-theme="cute"] .detected-panel,
+html[data-theme="light"][data-visual-theme="cute"] .reconcile,
+html[data-theme="light"][data-visual-theme="cute"] .rule-preview {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 8%, var(--line));
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="light"][data-visual-theme="cute"] .panel:hover,
+html[data-theme="light"][data-visual-theme="cute"] .metric:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--line));
+  box-shadow: 0 10px 28px rgba(67, 46, 73, .10);
+}
+
+html[data-theme="light"][data-visual-theme="cute"] .panel::after,
+html[data-theme="light"][data-visual-theme="cute"] .metric::after {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--cute-pastel-lavender) 45%, transparent), transparent 34%);
+  opacity: .55;
+}
+
+/* The mockup uses a softer display face for headings and money while normal text stays compact.
+   Fredoka is already bundled by FullWorth; this adds no new download or external dependency. */
+html[data-visual-theme="cute"] .topbar-title h1,
+html[data-visual-theme="cute"] .panel h2,
+html[data-visual-theme="cute"] .panel-head h2,
+html[data-visual-theme="cute"] .panel-head h3,
+html[data-visual-theme="cute"] .metric strong,
+html[data-visual-theme="cute"] .widget-metric strong,
+html[data-visual-theme="cute"] .budget-card .row-title,
+html[data-visual-theme="cute"] .budget-card .amount {
+  font-family: var(--font-fredoka);
+  letter-spacing: -.012em;
+}
+
+html[data-visual-theme="cute"] .metric span,
+html[data-visual-theme="cute"] label,
+html[data-visual-theme="cute"] .row-group,
+html[data-visual-theme="cute"] .search-group {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Progress bars keep the same semantic contract: normal/on-track is lavender; warnings remain
+   amber/red. Shape matches the rounded mockup bars and forecast hatching continues to work. */
+html[data-theme="light"][data-visual-theme="cute"] .progress,
+html[data-theme="dark"][data-visual-theme="cute"] .progress {
+  height: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+html[data-visual-theme="cute"] .progress>span,
+html[data-visual-theme="cute"] .progress.ontrack>span {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 82%, white), var(--accent));
+}
+
+html[data-visual-theme="cute"] .progress.near>span {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 82%, white), var(--warning));
+}
+
+html[data-visual-theme="cute"] .progress.over>span {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--negative) 82%, white), var(--negative));
+}
+
+/* Budget rows become soft cards only in Cute. The data structure and click behavior stay identical. */
+html[data-visual-theme="cute"] .budget-card {
+  padding: 12px 13px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--cute-radius-row);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-2));
+}
+
+html[data-visual-theme="cute"] .budget-card:last-child {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+html[data-visual-theme="cute"] .budget-status {
+  box-shadow: none;
+}
+
+/* Mockup charts are flat, pastel and softly rounded rather than glossy. */
+html[data-visual-theme="cute"] .bar-fill,
+html[data-visual-theme="cute"] .bar-income,
+html[data-visual-theme="cute"] .bar-expense,
+html[data-visual-theme="cute"] .donut-seg,
+html[data-visual-theme="cute"] .widget-chart rect,
+html[data-visual-theme="cute"] .chart-empty svg rect {
+  filter: none;
+}
+
+html[data-visual-theme="cute"] .widget-chart rect,
+html[data-visual-theme="cute"] .chart-empty svg rect,
+html[data-visual-theme="cute"] .bar-income,
+html[data-visual-theme="cute"] .bar-expense {
+  rx: 6px;
+  ry: 6px;
 }
 
 html[data-visual-theme="cute"] body,
