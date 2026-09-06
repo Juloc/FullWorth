@@ -31,6 +31,9 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<CloudIntelligenceConsent> CloudIntelligenceConsents => Set<CloudIntelligenceConsent>();
     public DbSet<CloudInstanceCredential> CloudInstanceCredentials => Set<CloudInstanceCredential>();
     public DbSet<CloudSubmissionOutbox> CloudSubmissionOutbox => Set<CloudSubmissionOutbox>();
+    public DbSet<KnowledgePackInstallation> KnowledgePackInstallations => Set<KnowledgePackInstallation>();
+    public DbSet<KnowledgePackArchive> KnowledgePackArchives => Set<KnowledgePackArchive>();
+    public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -42,6 +45,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
         IntelligenceAuditModelConfiguration.ConfigureAudit(modelBuilder);
         LearnedMerchantMappingModelConfiguration.Configure(modelBuilder);
         CloudIntelligenceModelConfiguration.Configure(modelBuilder);
+        KnowledgePackModelConfiguration.Configure(modelBuilder);
         IntelligenceDigestModelConfiguration.Configure(modelBuilder);
 
         // The fast unit-style Intelligence tests run this model on in-memory SQLite, which cannot
