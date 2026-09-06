@@ -40,15 +40,17 @@ export function createApiClient(options = {}) {
 
   async function errorFrom(response) {
     let message = String(response.status);
+    let detail = null;
     try {
-      const body = await response.clone().json();
-      message = body?.message || body?.error || body?.title || message;
-      if (body?.detail?.conflict) message += ` (${body.detail.conflict})`;
+      detail = await response.clone().json();
+      message = detail?.message || detail?.error || detail?.title || message;
+      if (detail?.detail?.conflict) message += ` (${detail.detail.conflict})`;
     } catch {
       // Keep HTTP status when the body is not JSON.
     }
     const error = new Error(message);
     error.status = response.status;
+    error.detail = detail;
     return error;
   }
 
