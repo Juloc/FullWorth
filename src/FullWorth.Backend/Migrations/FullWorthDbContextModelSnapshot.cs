@@ -27,6 +27,15 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         {
             entity.Property<bool>("CarryOverOverspend").HasColumnType("boolean");
         });
+        modelBuilder.Entity("FullWorth.Backend.Modules.Contracts.RecurringContract", entity =>
+        {
+            entity.Property<Guid?>("MergedIntoContractId").HasColumnType("uuid");
+            entity.HasIndex("MergedIntoContractId");
+            entity.HasOne("FullWorth.Backend.Modules.Contracts.RecurringContract", null)
+                .WithMany()
+                .HasForeignKey("MergedIntoContractId")
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 #pragma warning restore 612, 618
     }
 }
