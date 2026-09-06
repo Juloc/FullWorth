@@ -94,7 +94,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/category-intelligence-ui.js",
             "features/category-merge-ui.js",
             "features/category-order-ui.js",
-            "features/coach-shell.js",
             "features/compensation-extended.js",
             "features/compensation-history.js",
             "features/compensation.js",
