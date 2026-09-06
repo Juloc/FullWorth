@@ -31,10 +31,10 @@ public sealed class AuthMigrationTests
         Assert.False(await TableExistsAsync(database.ConnectionString, "PasskeyCredentials"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "PasskeyChallenges"));
 
-        var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
+        var legacyUserId = Guid.NewGuid();
+        var legacyFinanceUserId = Guid.NewGuid();
         var email = $"wave-c-{Guid.NewGuid():N}@example.com";
-        var created = await auth.CreateUserAsync(new CreateAuthUserRequest(Guid.NewGuid(), email, "correct horse battery staple"));
-        Assert.True(created.Succeeded);
+        await InsertLegacyUserAsync(database.ConnectionString, legacyUserId, legacyFinanceUserId, email);
 
         await migrator.MigrateAsync(PasskeyMigration);
         Assert.True(await TableExistsAsync(database.ConnectionString, "PasskeyCredentials"));
@@ -45,7 +45,10 @@ public sealed class AuthMigrationTests
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionRequestedAt"));
-        Assert.True((await auth.ValidatePasswordAsync(email, "correct horse battery staple")).Succeeded);
+        db.ChangeTracker.Clear();
+        var preserved = await db.Users.AsNoTracking().SingleAsync(x => x.Id == legacyUserId);
+        Assert.Equal(legacyFinanceUserId, preserved.FinanceUserId);
+        Assert.Equal(email, preserved.Email);
         Assert.False(db.Database.HasPendingModelChanges());
     }
 
@@ -179,6 +182,38 @@ public sealed class AuthMigrationTests
         DisplayName = displayName,
         CreatedAt = DateTimeOffset.UtcNow
     };
+
+    private static async Task InsertLegacyUserAsync(
+        string connectionString,
+        Guid id,
+        Guid financeUserId,
+        string email)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO auth."AspNetUsers"
+            ("Id","FinanceUserId","CreatedAt","UpdatedAt","UserName","NormalizedUserName","Email","NormalizedEmail",
+             "EmailConfirmed","PasswordHash","SecurityStamp","ConcurrencyStamp","PhoneNumber","PhoneNumberConfirmed",
+             "TwoFactorEnabled","LockoutEnd","LockoutEnabled","AccessFailedCount","IsDisabled")
+            VALUES
+            (@id,@financeUserId,@createdAt,@updatedAt,@userName,@normalizedUserName,@email,@normalizedEmail,
+             false,NULL,@securityStamp,@concurrencyStamp,NULL,false,false,NULL,true,0,false);
+            """;
+        var now = DateTimeOffset.UtcNow;
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("financeUserId", financeUserId);
+        command.Parameters.AddWithValue("createdAt", now);
+        command.Parameters.AddWithValue("updatedAt", now);
+        command.Parameters.AddWithValue("userName", email);
+        command.Parameters.AddWithValue("normalizedUserName", email.ToUpperInvariant());
+        command.Parameters.AddWithValue("email", email);
+        command.Parameters.AddWithValue("normalizedEmail", email.ToUpperInvariant());
+        command.Parameters.AddWithValue("securityStamp", Guid.NewGuid().ToString("N"));
+        command.Parameters.AddWithValue("concurrencyStamp", Guid.NewGuid().ToString("N"));
+        await command.ExecuteNonQueryAsync();
+    }
 
     private static async Task<int> CountIdentityTablesAsync(string connectionString)
     {
