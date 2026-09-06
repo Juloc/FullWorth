@@ -37,6 +37,7 @@ public sealed class ReceiptImportOptions
     public int MaxParallelImports { get; set; } = 2;
     public int PaperlessPageSize { get; set; } = 100;
     public int PaperlessTimeoutSeconds { get; set; } = 60;
+    public int PaperlessAutoImportIntervalMinutes { get; set; } = 60;
     public string? InboxPath { get; set; }
     public bool FolderEnabled { get; set; }
     public bool FolderRecursive { get; set; } = true;
@@ -114,6 +115,41 @@ public sealed record PaperlessFilterOptionsView(
     IReadOnlyList<PaperlessFilterOption> StoragePaths,
     IReadOnlyList<PaperlessFilterOption> CustomFields);
 
+public sealed record PaperlessImportPresetWrite(
+    string Name,
+    string? Query = null,
+    string? EditorJson = null,
+    bool AutoImport = false,
+    bool AnalyzeAutomatically = true,
+    string? Currency = null);
+
+public sealed record PaperlessImportPresetView(
+    Guid Id,
+    Guid FullWorthSpaceId,
+    Guid UserId,
+    string Name,
+    string? Query,
+    string? EditorJson,
+    bool AutoImport,
+    bool AnalyzeAutomatically,
+    string Currency,
+    int? LastSeenDocumentId,
+    DateTimeOffset? LastCheckedAt,
+    DateTimeOffset? LastImportedAt,
+    string? LastError,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record PaperlessAutoImportTarget(
+    Guid Id,
+    Guid FullWorthSpaceId,
+    Guid UserId,
+    string Name,
+    string? Query,
+    bool AnalyzeAutomatically,
+    string Currency,
+    int? LastSeenDocumentId);
+
 public sealed record PaperlessPreviewRequest(
     string? Query = null,
     int? DocumentTypeId = null,
@@ -136,7 +172,8 @@ public sealed record PaperlessDocumentSummary(
     int? DocumentType,
     int? Correspondent,
     IReadOnlyList<int> Tags,
-    string? OriginalFileName = null);
+    string? OriginalFileName = null,
+    bool Imported = false);
 
 public sealed record PaperlessPreviewResult(
     int Count,
