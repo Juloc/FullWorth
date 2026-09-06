@@ -295,6 +295,7 @@ public sealed class BrandPackService(IntelligenceDbContext db)
         {
             db.CustomBrandAliases.RemoveRange(await db.CustomBrandAliases.Where(x => x.PackId == pack.Id).ToListAsync(ct));
             db.CustomBrandAssets.RemoveRange(await db.CustomBrandAssets.Where(x => x.PackId == pack.Id).ToListAsync(ct));
+            await db.SaveChangesAsync(ct);
         }
 
         pack.Version = version;
