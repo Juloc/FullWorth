@@ -18,9 +18,33 @@ let contractsById = new Map();
 // can re-render the list without refetching (UX rework §7: small datasets filter/sort client-side).
 let allContracts = [];
 let categoryNames = new Map();
+let categoryIcons = new Map();
 let accountNames = new Map();
-// Filter/sort state persisted across renders so it survives an edit / cancel / detect round-trip.
-const view = { kind: '', status: 'active', sort: 'due', order: 'asc' };
+// Filter/sort state is URL-backed so the contracts view is restorable and shareable.
+const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'due', order: 'asc' };
+
+function loadViewState() {
+  const p = new URLSearchParams(location.search);
+  view.kind = p.get('kind') || '';
+  view.status = p.get('status') || 'active';
+  view.account = p.get('accountId') || '';
+  view.category = p.get('categoryId') || '';
+  view.cycle = p.get('cycle') || '';
+  view.sort = p.get('sort') || 'due';
+  view.order = p.get('order') === 'desc' ? 'desc' : 'asc';
+}
+function syncViewState() {
+  const p = new URLSearchParams();
+  if (view.kind) p.set('kind', view.kind);
+  if (view.status && view.status !== 'active') p.set('status', view.status);
+  if (view.account) p.set('accountId', view.account);
+  if (view.category) p.set('categoryId', view.category);
+  if (view.cycle) p.set('cycle', view.cycle);
+  if (view.sort && view.sort !== 'due') p.set('sort', view.sort);
+  if (view.order === 'desc') p.set('order', 'desc');
+  const qs = p.toString();
+  history.replaceState({ view: 'contracts' }, '', qs ? '/contracts?' + qs : '/contracts');
+}
 
 // A few labels the rework introduces have no existing i18n key, so fall back to inline DE/EN.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
@@ -58,6 +82,7 @@ function sortOptions() {
     { key: 'annual', label: ctx.get('contracts.annualized'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
     { key: 'account', label: ctx.get('contracts.account'), icon: sortIcon('<path d="M3 10 12 4l9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9"/><path d="M3 20h18"/>') },
     { key: 'category', label: t('Kategorie', 'Category'), icon: sortIcon('<path d="M4 4h7l9 9-7 7-9-9V4Z"/><path d="M8.5 8.5h.01"/>') },
+    { key: 'type', label: t('Art', 'Type'), icon: sortIcon('<path d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z"/>') },
     { key: 'name', label: ctx.get('common.name'), icon: sortIcon('<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M13 6h7M13 11h5M13 16h3"/>') },
   ];
 }
@@ -85,6 +110,7 @@ function openSortSheet(host) {
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelectorAll('[data-sort-opt]').forEach(b => b.addEventListener('click', () => {
     view.sort = b.dataset.sortOpt;
+    syncViewState();
     const cur = host.querySelector('[data-sort-current]'); if (cur) cur.textContent = sortLabel();
     renderList(host);
     dlg.close();
@@ -92,6 +118,7 @@ function openSortSheet(host) {
   dlg.querySelector('[data-order-seg]')?.addEventListener('click', e => {
     const b = e.target.closest('[data-order-val]'); if (!b) return;
     view.order = b.dataset.orderVal;
+    syncViewState();
     dlg.querySelectorAll('[data-order-val]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on); });
     renderList(host);
   });
@@ -100,11 +127,13 @@ function openSortSheet(host) {
 
 // Grouping (matches the reference's per-account sections): only the account/category dimensions group —
 // the others stay a flat, globally-sorted list. Returns the key/label bucket for one contract.
-function groupKeyFor() { return (view.sort === 'account' || view.sort === 'category') ? view.sort : null; }
+function groupKeyFor() { return ['account', 'category', 'type'].includes(view.sort) ? view.sort : null; }
 function groupBucket(c) {
-  return view.sort === 'account'
-    ? { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account') }
-    : { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category') };
+  if (view.sort === 'account')
+    return { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account') };
+  if (view.sort === 'type')
+    return { key: c.kind || 'contract', label: ctx.get('contracts.kind_' + (c.kind || 'contract')) };
+  return { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category') };
 }
 function groupMonthly(items) { return items.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0); }
 function groupHead(label, items, cur) {
@@ -143,6 +172,7 @@ export function newContract(context) { if (context) ctx = context; return openCo
 
 export async function renderContracts(context) {
   ctx = context;
+  loadViewState();
   detectedVisibleCount = DETECTED_BATCH_SIZE;
   await ensureOfficialBrandCatalog(ctx.api);
   injectCss();
@@ -161,10 +191,16 @@ export async function renderContracts(context) {
   allContracts = rows;
   // The list DTO only carries category/account ids; resolve their names best-effort for the row context
   // line and for account/category sorting. A failed lookup just omits that label — never blocks render.
-  [categoryNames, accountNames] = await Promise.all([
-    ctx.api('api/categories').then(cs => new Map((cs || []).map(c => [c.id, c.name]))).catch(() => new Map()),
-    ctx.api('api/accounts').then(as => new Map((as || []).map(a => [a.id, a.displayName || a.institutionName]))).catch(() => new Map()),
+  const [categoryRows, accountRows] = await Promise.all([
+    ctx.api('api/categories').catch(() => []),
+    ctx.api('api/accounts').catch(() => []),
   ]);
+  categoryNames = new Map((categoryRows || []).map(category => [category.id, category.name]));
+  categoryIcons = new Map((categoryRows || []).map(category => [
+    category.id,
+    (category.icon && !/^cat-\d/.test(category.icon)) ? category.icon : category.key
+  ]));
+  accountNames = new Map((accountRows || []).map(account => [account.id, account.displayName || account.institutionName]));
 
   host.innerHTML = viewHtml();
   wireControls(host);
@@ -178,6 +214,42 @@ export async function renderContracts(context) {
 
 // Whole-view markup: top summary card (sum of monthlyEquivalent / annualizedAmount over active
 // contracts, computed server-side), the detected/price-change alert slots, then the filter + list card.
+function contractFilterCount() {
+  return [view.account, view.category, view.cycle].filter(Boolean).length;
+}
+
+function openContractFilterSheet(host) {
+  const accountOptions = [...accountNames.entries()].map(([id, label]) =>
+    `<option value="${esc(id)}"${view.account === id ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const categoryOptions = [...categoryNames.entries()].map(([id, label]) =>
+    `<option value="${esc(id)}"${view.category === id ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const cycleOptions = CYCLES.map(value =>
+    `<option value="${value}"${view.cycle === value ? ' selected' : ''}>${esc(ctx.get('contracts.cycle_' + value))}</option>`).join('');
+  const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet" method="dialog">
+    <div class="panel-head"><h2>${esc(t('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <label>${esc(ctx.get('contracts.account'))}<select name="account"><option value="">${esc(ctx.get('common.all'))}</option>${accountOptions}</select></label>
+    <label>${esc(t('Kategorie', 'Category'))}<select name="category"><option value="">${esc(ctx.get('common.all'))}</option>${categoryOptions}</select></label>
+    <label>${esc(t('Turnus', 'Billing cycle'))}<select name="cycle"><option value="">${esc(ctx.get('common.all'))}</option>${cycleOptions}</select></label>
+    <div class="dialog-actions"><button type="button" class="ghost" data-reset>${esc(t('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.classList.add('contracts-sortsheet-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-reset]').onclick = () => {
+    view.account = ''; view.category = ''; view.cycle = '';
+    syncViewState(); dlg.close();
+    host.innerHTML = viewHtml(); wireControls(host); renderList(host);
+  };
+  dlg.querySelector('[data-apply]').onclick = () => {
+    const fd = new FormData(dlg.querySelector('form'));
+    view.account = String(fd.get('account') || '');
+    view.category = String(fd.get('category') || '');
+    view.cycle = String(fd.get('cycle') || '');
+    syncViewState(); dlg.close();
+    host.innerHTML = viewHtml(); wireControls(host); renderList(host);
+  };
+  dlg.showModal();
+}
+
 function viewHtml() {
   const active = allContracts.filter(c => c.isActive);
   const sumMonthly = active.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0);
@@ -204,14 +276,16 @@ function viewHtml() {
   const typeChips = `<div class="fw-chips" data-type-chips>${kindChip('', ctx.get('common.all'))}${KINDS.map(k => kindChip(k, ctx.get('contracts.kind_' + k))).join('')}</div>`;
   const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
   // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
+  const filterCount = contractFilterCount();
   const controls = `<div class="contracts-controls">
-    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}</div>
+    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
   </div>
   <div class="contracts-toolbar">
     <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
       <strong data-sort-current>${esc(sortLabel())}</strong>
       <span class="contracts-sortbar-caret" aria-hidden="true">⇅</span>
     </button>
+    <button type="button" class="fw-chip contracts-filter-open" data-filter-open>${esc(t('Filter', 'Filters'))}${filterCount ? ` <strong>${filterCount}</strong>` : ''}</button>
   </div>`;
 
   const listCard = sectionCard('', `${typeChips}${controls}<div class="contracts-list" data-list></div>`, { className: 'contracts-listcard' });
@@ -281,13 +355,14 @@ async function loadCloudBenchmarks() {
 function wireControls(host) {
   host.querySelector('[data-type-chips]')?.addEventListener('click', e => {
     const btn = e.target.closest('[data-kind]'); if (!btn) return;
-    view.kind = btn.dataset.kind; setActive(host, '[data-type-chips] .fw-chip', btn); renderList(host);
+    view.kind = btn.dataset.kind; syncViewState(); setActive(host, '[data-type-chips] .fw-chip', btn); renderList(host);
   });
   host.querySelector('[data-status-chips]')?.addEventListener('click', e => {
     const btn = e.target.closest('[data-status]'); if (!btn) return;
-    view.status = btn.dataset.status; setActive(host, '[data-status-chips] .fw-chip', btn); renderList(host);
+    view.status = btn.dataset.status; syncViewState(); setActive(host, '[data-status-chips] .fw-chip', btn); renderList(host);
   });
   host.querySelector('[data-sort-open]')?.addEventListener('click', () => openSortSheet(host));
+  host.querySelector('[data-filter-open]')?.addEventListener('click', () => openContractFilterSheet(host));
 }
 
 function setActive(host, selector, activeEl) {
@@ -328,10 +403,14 @@ function renderList(host) {
 
 function accountLabel(c) { return c.accountId ? (accountNames.get(c.accountId) || '') : ''; }
 function categoryLabel(c) { return c.categoryId ? (categoryNames.get(c.categoryId) || '') : ''; }
+function categoryIconKey(c) { return c.categoryId ? (categoryIcons.get(c.categoryId) || c.kind || '') : (c.kind || ''); }
 
 function filterContracts(list) {
   return list.filter(c => {
     if (view.kind && (c.kind || '') !== view.kind) return false;
+    if (view.account && String(c.accountId || '') !== view.account) return false;
+    if (view.category && String(c.categoryId || '') !== view.category) return false;
+    if (view.cycle && String(c.billingCycle || '') !== view.cycle) return false;
     const lifecycle = lifecycleStatus(c);
     if (view.status === 'active' && !['active', 'planned'].includes(lifecycle)) return false;
     if (view.status === 'cancelled' && lifecycle !== 'cancelled') return false;
@@ -350,6 +429,7 @@ function sortContracts(list) {
     annual: (a, b) => (Number(a.annualizedAmount) || 0) - (Number(b.annualizedAmount) || 0),
     account: (a, b) => accountLabel(a).localeCompare(accountLabel(b)),
     category: (a, b) => categoryLabel(a).localeCompare(categoryLabel(b)),
+    type: (a, b) => String(a.kind || '').localeCompare(String(b.kind || '')),
     name: byName,
   }[view.sort] || (() => 0);
   return list.slice().sort((a, b) => dir * cmp(a, b) || byName(a, b));
@@ -435,7 +515,7 @@ function rowFor(c) {
       ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
       : '';
   const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
-  row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath })}
+  row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath, categoryIconKey: categoryIconKey(c) })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
       <div class="fw-row-sub">${sub}</div>
