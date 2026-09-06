@@ -2,13 +2,23 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <script src="/pwa/standalone-init.js"></script>
   <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f6f7">
+  <link rel="manifest" href="/manifest.json?v=4">
   <title>FullWorth</title>
-  <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="/pwa/icon-light.svg?v=4" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/svg+xml" href="/pwa/icon-dark.svg?v=4" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=4">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="FullWorth">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/auth/auth.css">
+  <script src="/pwa/register-sw.js"></script>
 </head>
 <body class="auth-body">
   <div class="auth-shell">
