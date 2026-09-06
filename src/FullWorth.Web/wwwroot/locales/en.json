@@ -308,7 +308,7 @@
     "cancelStatus_cancelled": "Cancelled",
     "merge": "Link another contract",
     "mergeTitle": "Link contracts",
-    "mergeHint": "Select entries that represent the same contract. Accounts and previous payment names remain in history.",
+    "mergeHint": "This contract remains the primary contract. Select the entries that belong to it. Accounts and payment names remain in history.",
     "mergeConfirm": "Merge",
     "mergeNone": "No other contracts are available to link.",
     "mergedSources": "Linked entries",
