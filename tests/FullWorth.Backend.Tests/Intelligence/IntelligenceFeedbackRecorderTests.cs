@@ -110,6 +110,92 @@ public sealed class IntelligenceFeedbackRecorderTests
     }
 
     [Fact]
+    public async Task Eligible_manual_category_correction_queues_minimized_cloud_event_with_current_consent()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
+        await using var db = new IntelligenceDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var state = new CloudConnectionState
+        {
+            ScopeKey = CloudConnectionState.InstanceScopeKey,
+            Mode = CloudIntelligenceModes.Enabled,
+            SetupDecisionAt = DateTimeOffset.UtcNow
+        };
+        db.CloudConnectionStates.Add(state);
+        db.CloudIntelligenceConsents.Add(new CloudIntelligenceConsent
+        {
+            InstanceId = state.InstanceId,
+            AcceptedByUserId = Guid.NewGuid(),
+            PolicyVersion = CloudIntelligencePolicy.CurrentVersion,
+            Locale = "de",
+            ClientVersion = "test"
+        });
+        await db.SaveChangesAsync();
+
+        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
+        var spaceId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+
+        var recorded = await recorder.RecordCategoryDecisionAsync(
+            spaceId,
+            userId,
+            transactionId,
+            "REWE MARKT",
+            "expense",
+            null,
+            categoryId,
+            "category_changed",
+            CancellationToken.None,
+            cloudMerchantAlias: "REWE MARKT",
+            categoryKey: "food.groceries",
+            categoryName: "Lebensmittel",
+            categoryIsCustom: false,
+            categoryLocale: "de-DE");
+
+        Assert.True(recorded);
+        var feedback = await db.IntelligenceFeedbackEvents.SingleAsync();
+        Assert.True(feedback.CloudEligible);
+
+        var outbox = await db.CloudSubmissionOutbox.SingleAsync();
+        Assert.Equal("merchant_mapping", outbox.EventType);
+        Assert.Equal(state.InstanceId, outbox.InstanceId);
+        Assert.Contains("REWE MARKT", outbox.PayloadJson, StringComparison.Ordinal);
+        Assert.Contains("food.groceries", outbox.PayloadJson, StringComparison.Ordinal);
+        Assert.Contains("Lebensmittel", outbox.PayloadJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(userId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(transactionId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(spaceId.ToString(), outbox.PayloadJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Eligible_feedback_does_not_queue_when_cloud_has_no_current_consent()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<IntelligenceDbContext>().UseSqlite(connection).Options;
+        await using var db = new IntelligenceDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var recorder = new IntelligenceFeedbackRecorder(db, NullLogger<IntelligenceFeedbackRecorder>.Instance);
+        var recorded = await recorder.RecordCategoryDecisionAsync(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "REWE", "expense",
+            null, Guid.NewGuid(), "category_changed", CancellationToken.None,
+            cloudMerchantAlias: "REWE",
+            categoryKey: "food.groceries",
+            categoryName: "Lebensmittel",
+            categoryLocale: "de");
+
+        Assert.True(recorded);
+        Assert.True((await db.IntelligenceFeedbackEvents.SingleAsync()).CloudEligible);
+        Assert.Empty(await db.CloudSubmissionOutbox.ToListAsync());
+    }
+
+    [Fact]
     public async Task Category_feedback_is_local_with_no_ai_settings_credentials_or_cloud_identity()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
