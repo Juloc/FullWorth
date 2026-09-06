@@ -2,7 +2,7 @@ namespace FullWorth.Web.Modules.Auth;
 
 public sealed record LoginRequest(string Email, string Password);
 
-public sealed record RegisterRequest(string Email, string Password, string DisplayName, bool AcceptTerms);
+public sealed record RegisterRequest(string Email, string Password, string DisplayName, bool AcceptTerms, bool ConfirmAdult);
 
 public sealed record RegisterResultDto(
     bool Succeeded,
