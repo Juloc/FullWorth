@@ -163,16 +163,19 @@ public static class IntelligenceAdminEndpoints
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,
             CloudContractBenchmarkContributionService contractBenchmarks,
+            CloudSavingsBenchmarkContributionService savingsBenchmarks,
             CloudLearningOutboxUploader uploader,
             KnowledgePackSyncService knowledgePacks,
             CancellationToken ct) =>
         {
             if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null)
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var benchmarkQueued = await contractBenchmarks.QueueCurrentAsync(DateTimeOffset.UtcNow, ct);
+            var now = DateTimeOffset.UtcNow;
+            var contractBenchmarksQueued = await contractBenchmarks.QueueCurrentAsync(now, ct);
+            var savingsBenchmarksQueued = await savingsBenchmarks.QueueCurrentAsync(now, ct);
             var sent = await uploader.UploadOnceAsync(ct);
             var pack = await knowledgePacks.SyncOnceAsync(ct);
-            return Results.Ok(new { benchmarkQueued, sent, pack });
+            return Results.Ok(new { contractBenchmarksQueued, savingsBenchmarksQueued, sent, pack });
         });
 
         group.MapGet("/providers", async (
