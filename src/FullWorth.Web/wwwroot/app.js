@@ -489,7 +489,7 @@ async function loadBudgets(){
       }}));
     });
     card.addEventListener('click',event=>{if(!event.target.closest('button'))open()});
-    card.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open()}});
+    card.addEventListener('keydown',ev=>{if(!ev.target.closest('button')&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();open()}});
   });
 }
 // §12 budget detail: cycle window, spend vs. budget, cycle-end forecast, and the transactions
