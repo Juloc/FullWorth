@@ -182,6 +182,15 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
             """, ct);
     }
 
+    public async Task DisablePaperlessAutoImportAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "PaperlessImportPresets"
+            SET "AutoImport" = false, "LastError" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "AutoImport" = true
+            """, ct);
+    }
+
     public async Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
         Guid userId,
         Guid fullWorthSpaceId,
