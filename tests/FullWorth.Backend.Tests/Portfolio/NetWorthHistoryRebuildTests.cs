@@ -198,6 +198,172 @@ public sealed class NetWorthHistoryRebuildTests
         Assert.Equal(600m, history[1].NetWorth);
     }
 
+
+    [Fact]
+    public async Task RebuildDoesNotFabricateOldBalanceFromFinanzguruOnlyHistory()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var accountId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var oldDay = today.AddYears(-5);
+
+        db.Users.Add(new FullWorthUser
+        {
+            Id = userId,
+            EmailNormalized = "IMPORT-HISTORY@EXAMPLE.COM",
+            DisplayName = "Import History Test"
+        });
+        db.FullWorthSpaces.Add(new FullWorthSpace { Id = spaceId, Name = "Import History", BaseCurrency = "EUR" });
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+        {
+            FullWorthSpaceId = spaceId,
+            UserId = userId,
+            Role = FullWorthSpaceRoles.Owner
+        });
+        db.Accounts.Add(new FinanceAccount
+        {
+            Id = accountId,
+            FullWorthSpaceId = spaceId,
+            Provider = "live-bank",
+            IdentificationHash = "import-history-account",
+            ProviderAccountId = "import-history-account",
+            InstitutionName = "Test Bank",
+            DisplayName = "Checking",
+            Currency = "EUR",
+            IsActive = true,
+            IncludeInNetWorth = true,
+            Owners =
+            [
+                new AccountOwner
+                {
+                    AccountId = accountId,
+                    UserId = userId,
+                    OwnershipType = AccountOwnershipTypes.Owner
+                }
+            ]
+        });
+        db.BalanceSnapshots.Add(new BalanceSnapshot
+        {
+            AccountId = accountId,
+            Amount = 1688.77m,
+            Currency = "EUR",
+            BalanceType = "closingBooked",
+            ReferenceDate = today,
+            CapturedAt = DateTimeOffset.UtcNow
+        });
+        db.Transactions.Add(new FinanceTransaction
+        {
+            AccountId = accountId,
+            ExternalKey = "finanzguru:historical-only",
+            Status = "BOOK",
+            BookingDate = oldDay,
+            ValueDate = oldDay,
+            Amount = -50000m,
+            Currency = "EUR"
+        });
+        db.NetWorthSnapshots.Add(new NetWorthSnapshot
+        {
+            FullWorthSpaceId = spaceId,
+            UserId = userId,
+            Date = oldDay,
+            Currency = "EUR",
+            Accounts = 51688.77m,
+            NetWorth = 51688.77m,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.RebuildHistoryForUserAsync(spaceId, userId, null, CancellationToken.None);
+
+        var history = await db.NetWorthSnapshots.AsNoTracking()
+            .Where(snapshot => snapshot.FullWorthSpaceId == spaceId && snapshot.UserId == userId && snapshot.Currency == "EUR")
+            .OrderBy(snapshot => snapshot.Date)
+            .ToListAsync();
+
+        var point = Assert.Single(history);
+        Assert.Equal(today, point.Date);
+        Assert.Equal(1688.77m, point.Accounts);
+        Assert.Equal(1688.77m, point.NetWorth);
+    }
+
+    [Fact]
+    public async Task RebuildDoesNotBackcastAccountWithoutBalanceAnchor()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var accountId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var oldDay = today.AddYears(-5);
+
+        db.Users.Add(new FullWorthUser
+        {
+            Id = userId,
+            EmailNormalized = "NO-BALANCE@EXAMPLE.COM",
+            DisplayName = "No Balance Test"
+        });
+        db.FullWorthSpaces.Add(new FullWorthSpace { Id = spaceId, Name = "No Balance", BaseCurrency = "EUR" });
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+        {
+            FullWorthSpaceId = spaceId,
+            UserId = userId,
+            Role = FullWorthSpaceRoles.Owner
+        });
+        db.Accounts.Add(new FinanceAccount
+        {
+            Id = accountId,
+            FullWorthSpaceId = spaceId,
+            Provider = "live-bank",
+            IdentificationHash = "no-balance-account",
+            ProviderAccountId = "no-balance-account",
+            InstitutionName = "Test Bank",
+            DisplayName = "Unknown balance",
+            Currency = "EUR",
+            IsActive = true,
+            IncludeInNetWorth = true,
+            Owners =
+            [
+                new AccountOwner
+                {
+                    AccountId = accountId,
+                    UserId = userId,
+                    OwnershipType = AccountOwnershipTypes.Owner
+                }
+            ]
+        });
+        db.Transactions.Add(new FinanceTransaction
+        {
+            AccountId = accountId,
+            ExternalKey = "provider:old-transaction",
+            Status = "BOOK",
+            BookingDate = oldDay,
+            ValueDate = oldDay,
+            Amount = -50000m,
+            Currency = "EUR"
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.RebuildHistoryForUserAsync(spaceId, userId, null, CancellationToken.None);
+
+        var history = await db.NetWorthSnapshots.AsNoTracking()
+            .Where(snapshot => snapshot.FullWorthSpaceId == spaceId && snapshot.UserId == userId && snapshot.Currency == "EUR")
+            .OrderBy(snapshot => snapshot.Date)
+            .ToListAsync();
+
+        var point = Assert.Single(history);
+        Assert.Equal(today, point.Date);
+        Assert.Equal(0m, point.Accounts);
+        Assert.Equal(0m, point.NetWorth);
+    }
+
     private static NetWorthSnapshotService CreateService(FullWorthDbContext db)
     {
         var converter = new CurrencyConverter(db);
