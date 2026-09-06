@@ -9,6 +9,10 @@ let currentConversationId = null;
 let reviews = new Map();
 let loading = false;
 let responding = false;
+let activeRequestController = null;
+let stopRequested = false;
+let thinkingTimer = null;
+let thinkingStatusIndex = 0;
 let modelCatalog = null;
 let selectedModel = '';
 let currentConversationSpaceId = null;
@@ -16,6 +20,7 @@ let dockOpen = false;
 const quickAccessKey = 'finance.coach.quickAccess';
 const pageContextKey = 'finance.coach.pageContext';
 const pinnedKey = 'finance.coach.pinned';
+const draftKey = 'finance.coach.draft';
 let currentObjectContext = null;
 const excludedContext = new Set();
 
@@ -111,7 +116,7 @@ function installShell() {
 
   installQuickAccess();
   installSettingsToggle();
-  $('#coach-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-input').value); });
+  $('#coach-form')?.addEventListener('submit', event => handleComposerSubmit(event, $('#coach-input')));
   installComposerKeyboard($('#coach-input'));
   $('#coach-new-chat')?.addEventListener('click', restartConversation);
   $('#coach-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
@@ -153,14 +158,53 @@ function installShell() {
 
 function quickAccessEnabled() { return localStorage.getItem(quickAccessKey) !== '0'; }
 
+function handleComposerSubmit(event, input) {
+  event.preventDefault();
+  if (responding) { stopCoachResponse(); return; }
+  ask(input?.value);
+}
+
+function composerInputs() { return all('#coach-input,#coach-dock-input'); }
+
+function resizeComposer(input) {
+  if (!input) return;
+  input.style.height = 'auto';
+  const maxHeight = 160;
+  const height = Math.min(maxHeight, Math.max(52, input.scrollHeight));
+  input.style.height = `${height}px`;
+  input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+
+function setComposerValue(value, source = null, persist = true) {
+  const text = String(value ?? '');
+  composerInputs().forEach(input => {
+    if (input !== source && input.value !== text) input.value = text;
+    resizeComposer(input);
+  });
+  if (persist) {
+    if (text) localStorage.setItem(draftKey, text);
+    else localStorage.removeItem(draftKey);
+  }
+}
+
+function focusComposer() {
+  const input = dockOpen ? $('#coach-dock-input') : $('#coach-input');
+  input?.focus();
+  if (input) input.setSelectionRange(input.value.length, input.value.length);
+}
+
 function installComposerKeyboard(input) {
   if (!input || input.dataset.coachKeyboard === '1') return;
   input.dataset.coachKeyboard = '1';
+  if (!input.value) input.value = localStorage.getItem(draftKey) || '';
+  resizeComposer(input);
+
+  input.addEventListener('input', () => setComposerValue(input.value, input));
   input.addEventListener('keydown', event => {
     if (event.key !== 'Enter' || event.isComposing) return;
     if (!event.shiftKey) {
       event.preventDefault();
-      input.closest('form')?.requestSubmit();
+      if (!responding) input.closest('form')?.requestSubmit();
       return;
     }
 
@@ -168,17 +212,23 @@ function installComposerKeyboard(input) {
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
     const before = input.value.slice(0, start);
-    const after = input.value.slice(end);
     const lineStart = before.lastIndexOf('\n') + 1;
     const currentLine = before.slice(lineStart);
     const numbered = currentLine.match(/^(\s*)(\d+)([.)])\s*/);
     const bullet = currentLine.match(/^(\s*)([-*+])\s+/);
+    const marker = numbered || bullet;
+
+    if (marker && currentLine.slice(marker[0].length).trim() === '') {
+      input.setRangeText('', lineStart, end, 'end');
+      setComposerValue(input.value, input);
+      return;
+    }
+
     const continuation = numbered
       ? `${numbered[1]}${Number(numbered[2]) + 1}${numbered[3]} `
       : bullet ? `${bullet[1]}${bullet[2]} ` : '';
-    const insertion = `\n${continuation}`;
-    input.setRangeText(insertion, start, end, 'end');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.setRangeText(`\n${continuation}`, start, end, 'end');
+    setComposerValue(input.value, input);
   });
 }
 
@@ -252,7 +302,7 @@ function installQuickAccess() {
   });
   $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); activate(true); });
   $('#coach-dock-new')?.addEventListener('click', restartConversation);
-  $('#coach-dock-form')?.addEventListener('submit', event => { event.preventDefault(); ask($('#coach-dock-input').value); });
+  $('#coach-dock-form')?.addEventListener('submit', event => handleComposerSubmit(event, $('#coach-dock-input')));
   installComposerKeyboard($('#coach-dock-input'));
   $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   initDockResize();
@@ -469,7 +519,8 @@ async function openDock() {
   renderPageContext();
   renderStarters();
   try { await Promise.all([loadConversation(), loadModels()]); } catch (error) { renderError(error); }
-  queueMicrotask(() => $('#coach-dock-input')?.focus());
+  setComposerValue(localStorage.getItem(draftKey) || '', null, false);
+  queueMicrotask(() => focusComposer());
 }
 
 function closeDock() {
@@ -631,10 +682,10 @@ async function loadConversation() {
   renderMessages(detail.messages || []);
 }
 
-async function ensureConversation() {
+async function ensureConversation(signal = null) {
   if (currentConversationId) return currentConversationId;
   const created = await api('api/coach/conversations', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
     body: JSON.stringify({ title: null, mascotId: localStorage.getItem('finance.mascot') || null })
   });
   currentConversationId = created.id;
@@ -646,17 +697,20 @@ async function ask(text) {
   const question = String(text || '').trim();
   if (!question || responding) return;
   responding = true;
-  const inputs = all('#coach-input,#coach-dock-input');
-  const sends = all('#coach-send,#coach-dock-send');
-  inputs.forEach(input => { input.value = ''; });
-  sends.forEach(send => { send.disabled = true; });
+  stopRequested = false;
+  activeRequestController = new AbortController();
+  setComposerValue('');
+  updateSendButtons();
   appendMessage({ role: 'User', text: question, facts: [] });
   setThinking(true);
   try {
-    const id = await ensureConversation();
+    const id = await ensureConversation(activeRequestController.signal);
     const uiContext = renderPageContext();
     const response = await api(`api/coach/conversations/${id}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: question, model: selectedModel || null, uiContext })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: activeRequestController.signal,
+      body: JSON.stringify({ text: question, model: selectedModel || null, uiContext })
     });
     setThinking(false);
     appendMessage(response.message);
@@ -669,14 +723,38 @@ async function ask(text) {
     await loadReviews(false);
   } catch (error) {
     setThinking(false);
-    appendMessage({ role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [] });
+    const aborted = stopRequested || error?.name === 'AbortError';
+    appendMessage(aborted
+      ? { role: 'Assistant', text: tr('Antwort gestoppt.', 'Response stopped.'), facts: [], stopped: true, retryText: question }
+      : { role: 'Assistant', text: `${tr('Fehler', 'Error')}: ${error.message}`, facts: [], localError: true, retryText: question });
   }
   finally {
     setThinking(false);
     responding = false;
-    sends.forEach(send => { send.disabled = false; });
-    (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
+    activeRequestController = null;
+    stopRequested = false;
+    updateSendButtons();
+    focusComposer();
   }
+}
+
+function stopCoachResponse() {
+  if (!responding) return;
+  stopRequested = true;
+  setThinking(false);
+  activeRequestController?.abort();
+}
+
+function updateSendButtons() {
+  all('#coach-send,#coach-dock-send').forEach(button => {
+    button.classList.toggle('is-stop', responding);
+    const label = responding ? tr('Antwort stoppen', 'Stop response') : tr('Senden', 'Send');
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.innerHTML = responding
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>';
+  });
 }
 
 async function restartConversation() {
@@ -687,6 +765,7 @@ async function restartConversation() {
   }
   currentConversationId = null;
   currentConversationSpaceId = spaceId();
+  setComposerValue('');
   renderMessages([]);
   renderStarters();
   (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
@@ -694,19 +773,50 @@ async function restartConversation() {
 
 function messageRoots() { return all('#coach-messages,#coach-dock-messages'); }
 
-function setThinking(visible) {
+function isNearBottom(root) {
+  return root.scrollHeight - root.scrollTop - root.clientHeight < 72;
+}
+
+function thinkingStatuses() {
+  const context = capturePageContext();
+  const middle = ['transaction', 'transactions', 'contract', 'account', 'budget', 'asset', 'liability', 'portfolio'].includes(context?.entityType)
+    ? tr('Analysiert den ausgewählten Kontext …', 'Analyzing selected context …')
+    : tr('Prüft FullWorth-Daten …', 'Checking FullWorth data …');
+  return [tr('Denkt nach …', 'Thinking …'), middle, tr('Erstellt Antwort …', 'Writing answer …')];
+}
+
+function renderThinkingStatus() {
+  const statuses = thinkingStatuses();
+  const label = statuses[thinkingStatusIndex % statuses.length];
   messageRoots().forEach(root => {
-    root.querySelector('.coach-thinking')?.remove();
-    if (!visible) return;
+    const stick = isNearBottom(root);
     root.querySelector('.coach-empty')?.remove();
-    const article = document.createElement('article');
-    article.className = 'coach-message assistant coach-thinking';
-    article.setAttribute('role', 'status');
-    article.setAttribute('aria-label', tr('Coach denkt nach', 'Coach is thinking'));
-    article.innerHTML = `<span class="sr-only">${esc(tr('Coach denkt nach', 'Coach is thinking'))}</span><span class="coach-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>`;
-    root.appendChild(article);
-    root.scrollTop = root.scrollHeight;
+    let article = root.querySelector('.coach-thinking');
+    if (!article) {
+      article = document.createElement('article');
+      article.className = 'coach-message assistant coach-thinking';
+      article.setAttribute('role', 'status');
+      article.innerHTML = '<span class="coach-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="coach-thinking-label"></span>';
+      root.appendChild(article);
+    }
+    article.setAttribute('aria-label', label);
+    article.querySelector('.coach-thinking-label').textContent = label;
+    if (stick) root.scrollTop = root.scrollHeight;
   });
+}
+
+function setThinking(visible) {
+  if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null; }
+  if (!visible) {
+    messageRoots().forEach(root => root.querySelector('.coach-thinking')?.remove());
+    return;
+  }
+  thinkingStatusIndex = 0;
+  renderThinkingStatus();
+  thinkingTimer = setInterval(() => {
+    thinkingStatusIndex += 1;
+    renderThinkingStatus();
+  }, 1700);
 }
 
 function renderMessages(messages) {
@@ -717,27 +827,108 @@ function renderMessages(messages) {
   messages.forEach(appendMessage);
 }
 
+function messageTool(label, handler, title = label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost';
+  button.textContent = label;
+  button.title = title;
+  button.addEventListener('click', handler);
+  return button;
+}
+
+async function copyMessageText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = button.textContent;
+    button.textContent = tr('Kopiert', 'Copied');
+    setTimeout(() => { button.textContent = original; }, 1200);
+  } catch {
+    const helper = document.createElement('textarea');
+    helper.value = text;
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.appendChild(helper);
+    helper.select();
+    document.execCommand('copy');
+    helper.remove();
+  }
+}
+
+function previousUserText(article) {
+  let current = article.previousElementSibling;
+  while (current) {
+    if (current.classList.contains('user')) return current.dataset.messageText || current.querySelector('.coach-message-text')?.textContent || '';
+    current = current.previousElementSibling;
+  }
+  return '';
+}
+
+function editAndResend(text) {
+  if (responding) return;
+  setComposerValue(text);
+  focusComposer();
+}
+
 function appendMessage(message) {
+  const role = String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant';
+  const messageText = String(message.text || '');
   messageRoots().forEach(root => {
+    const stick = role === 'user' || isNearBottom(root);
     root.querySelector('.coach-empty')?.remove();
     const article = document.createElement('article');
-    article.className = `coach-message ${String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant'}`;
-    const text = document.createElement('div'); text.className = 'coach-message-text'; text.textContent = message.text || '';
+    article.className = `coach-message ${role}`;
+    if (message.localError) article.classList.add('is-error');
+    if (message.stopped) article.classList.add('is-stopped');
+    article.dataset.messageText = messageText;
+
+    const text = document.createElement('div');
+    text.className = 'coach-message-text';
+    text.textContent = messageText;
     article.appendChild(text);
-    if (String(message.role).toLowerCase() !== 'user' && (message.model || message.provider)) {
+
+    if (role !== 'user' && (message.model || message.provider)) {
       const meta = document.createElement('div');
       meta.className = 'coach-message-meta';
       meta.textContent = [message.provider, message.model].filter(Boolean).join(' · ');
       article.appendChild(meta);
     }
+
     if (message.facts?.length) {
-      const details = document.createElement('details'); details.className = 'coach-evidence';
-      const summary = document.createElement('summary'); summary.textContent = tr('Verwendete Fakten', 'Evidence'); details.appendChild(summary);
-      const facts = document.createElement('div'); facts.className = 'coach-facts';
-      message.facts.forEach(fact => { const chip = document.createElement('span'); chip.className = 'coach-fact'; chip.textContent = `${fact.label}: ${fact.value}`; facts.appendChild(chip); });
-      details.appendChild(facts); article.appendChild(details);
+      const details = document.createElement('details');
+      details.className = 'coach-evidence';
+      const summary = document.createElement('summary');
+      summary.textContent = tr('Verwendete Fakten', 'Evidence');
+      details.appendChild(summary);
+      const facts = document.createElement('div');
+      facts.className = 'coach-facts';
+      message.facts.forEach(fact => {
+        const chip = document.createElement('span');
+        chip.className = 'coach-fact';
+        chip.textContent = `${fact.label}: ${fact.value}`;
+        facts.appendChild(chip);
+      });
+      details.appendChild(facts);
+      article.appendChild(details);
     }
-    root.appendChild(article); root.scrollTop = root.scrollHeight;
+
+    const tools = document.createElement('div');
+    tools.className = 'coach-message-tools';
+    if (role === 'user') {
+      tools.appendChild(messageTool(tr('Bearbeiten', 'Edit'), () => editAndResend(messageText), tr('Bearbeiten und erneut senden', 'Edit and resend')));
+    } else if (message.localError || message.stopped) {
+      const retryText = message.retryText || previousUserText(article);
+      if (retryText) tools.appendChild(messageTool(tr('Erneut versuchen', 'Retry'), () => ask(retryText)));
+    } else {
+      const copy = messageTool(tr('Kopieren', 'Copy'), () => copyMessageText(messageText, copy));
+      tools.appendChild(copy);
+      const retryText = previousUserText(article);
+      if (retryText) tools.appendChild(messageTool(tr('Neu generieren', 'Regenerate'), () => ask(retryText)));
+    }
+    if (tools.childElementCount) article.appendChild(tools);
+
+    root.appendChild(article);
+    if (stick) root.scrollTop = root.scrollHeight;
   });
 }
 

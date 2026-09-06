@@ -68,7 +68,19 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("installComposerKeyboard", shell);
         Assert.Contains("input.closest('form')?.requestSubmit()", shell);
         Assert.Contains("Number(numbered[2]) + 1", shell);
+        Assert.Contains("currentLine.slice(marker[0].length).trim() === ''", shell);
         Assert.Contains("event.shiftKey", shell);
+        Assert.Contains("resizeComposer", shell);
+        Assert.Contains("finance.coach.draft", shell);
+        Assert.Contains("AbortController", shell);
+        Assert.Contains("stopCoachResponse", shell);
+        Assert.Contains("Antwort stoppen", shell);
+        Assert.Contains("Analysiert den ausgewählten Kontext", shell);
+        Assert.Contains("navigator.clipboard.writeText", shell);
+        Assert.Contains("Neu generieren", shell);
+        Assert.Contains("Bearbeiten und erneut senden", shell);
+        Assert.Contains("Erneut versuchen", shell);
+        Assert.Contains("isNearBottom", shell);
         Assert.Contains("@keyframes coach-thinking-bounce", coachCss);
         Assert.Contains("prefers-reduced-motion:reduce", coachCss);
     }
