@@ -14,7 +14,6 @@ export function bindPurchases(context) {
   ctx.$('#scan-receipt').addEventListener('click', () => ctx.$('#receipt-file').click());
   ctx.$('#receipt-file').addEventListener('change', scanReceipt);
   ctx.$('#amazon-import').addEventListener('click', openAmazonConnection);
-  refreshAmazonButton().catch(() => {});
   bindGptReceiptTest(ctx, () => renderPurchases(ctx));
 }
 
