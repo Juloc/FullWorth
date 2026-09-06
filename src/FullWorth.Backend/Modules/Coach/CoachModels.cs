@@ -236,7 +236,12 @@ public sealed record CoachUiContext(
     string Page,
     string? Title = null,
     string? Path = null,
-    IReadOnlyDictionary<string, string>? Filters = null);
+    IReadOnlyDictionary<string, string>? Filters = null,
+    string? EntityType = null,
+    string? EntityId = null,
+    string? EntityLabel = null,
+    IReadOnlyDictionary<string, string>? Details = null,
+    IReadOnlyList<string>? SelectedIds = null);
 
 public sealed record AskCoachRequest(
     string Text,
