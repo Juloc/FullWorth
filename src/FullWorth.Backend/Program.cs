@@ -82,6 +82,10 @@ builder.Services.AddScoped<IntelligenceManualJobService>();
 builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
 builder.Services.AddScoped<CloudIntelligenceStateService>();
 builder.Services.AddScoped<CloudInstanceCredentialStore>();
+builder.Services.AddScoped<CloudLearningOutboxUploader>();
+builder.Services.AddHostedService<CloudLearningOutboxWorker>();
+builder.Services.AddScoped<KnowledgePackSyncService>();
+builder.Services.AddHostedService<KnowledgePackSyncWorker>();
 builder.Services.AddScoped<AiBudgetGuard>();
 builder.Services.AddScoped<AiCostEstimator>();
 builder.Services.AddScoped<IntelligenceJobLeaseService>();
@@ -339,6 +343,7 @@ app.MapFinTsInvestmentSnapshotEndpoints();
 app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
+app.MapCloudBenchmarkEndpoints();
 app.MapAiUserAccessEndpoints();
 app.MapIntelligenceSuggestionEndpoints();
 
