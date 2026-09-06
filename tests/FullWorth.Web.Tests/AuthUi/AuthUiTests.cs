@@ -143,8 +143,8 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/auth/auth.js");
 
-        Assert.Contains("$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
-        AssertNotContains(js, "$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach");
+        Assert.Contains("  $$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
+        AssertNotContains(js, "  $('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach");
     }
 
     [Fact]
