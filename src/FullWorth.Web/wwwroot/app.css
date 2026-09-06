@@ -685,6 +685,9 @@ button.danger{border:0;color:var(--negative);background:transparent}
 .detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2,var(--surface))}
 .detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .detected-row:last-of-type{border-bottom:0}
+.detected-main{display:flex;align-items:center;gap:var(--s3);min-width:0}
+.detected-copy{min-width:0}
+.detected-copy .row-title,.detected-copy .row-sub{overflow:hidden;text-overflow:ellipsis}
 .detected-side{gap:var(--s2)}
 .detected-actions{display:flex;align-items:center;gap:4px}
 .detected-actions [data-dismiss]{border:0;background:transparent;color:var(--muted);padding:7px 6px}
