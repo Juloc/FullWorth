@@ -1,6 +1,6 @@
 # FullWorth – Gehalt & Benefits / Compensation Analyzer
 
-Status: implemented on `feature/compensation-analyzer`; static review complete, repository CI/build validation still required before merge.
+Status: implemented and extended on `feature/compensation-history-timeline`; repository CI/build validation still requires the repository's manual `workflow_dispatch`.
 
 ## Goal
 
@@ -11,9 +11,15 @@ Calculated payroll values are explicitly estimates. Imported payslip values are 
 ## Implemented product scope
 
 ### 1. Net salary planning calculator
-- Annual gross and annual bonus.
+- Monthly or annual gross input.
+- 12, 13 or 14 salary payments per year.
+- Annual bonus separated from regular salary payments.
 - German 2026 income-tax tariff.
 - Tax classes I–VI affect the estimated wage-tax result.
+- Tax class IV factor procedure input.
+- Optional ELStAM annual allowance and child-allowance units.
+- Age-aware childless long-term-care surcharge.
+- Optional pension/unemployment-insurance exemptions for supported planning cases.
 - Class II single-parent relief in the planning model.
 - Class III splitting-style wage-tax calculation.
 - Class V/VI BMF-PAP threshold/difference method.
@@ -27,7 +33,7 @@ Calculated payroll values are explicitly estimates. Imported payslip values are 
 - Marginal net value of the next EUR 100 gross.
 - Effective FullWorth value per working hour.
 
-The wage-tax path follows the 2026 BMF PAP structure for ordinary statutory-insurance employment and is entirely local. It is not presented as a complete payroll engine for every PAP input. Private insurance, individual allowances, pension/versorgungsbezuege, the class-IV factor procedure and special-payment payroll paths need additional inputs before cent-exact payroll parity can be claimed.
+The wage-tax path follows the 2026 BMF PAP structure for ordinary statutory-insurance employment and is entirely local. It is not presented as a complete payroll engine for every PAP input. Private insurance, Midijob/transition-zone rules, pension/versorgungsbezuege and exact special-payment payroll paths still need dedicated inputs before cent-exact payroll parity can be claimed.
 
 ### 2. Company car
 - 1.0%, 0.5% and 0.25% valuation factors.
@@ -109,6 +115,44 @@ Implemented in the first release:
 - Latest two months can be compared with component-level explanations for net changes.
 - Saved observations form the first salary/payslip history.
 
+### 10. Effective-dated compensation history
+
+Compensation changes are stored as dated events rather than overwriting the past.
+
+Supported event categories include:
+- salary,
+- tax,
+- marriage / family / child,
+- working time,
+- benefits,
+- company car,
+- occupational pension,
+- insurance,
+- job change,
+- combined / other.
+
+Each event stores only the fields changed at that point in time as a JSON merge-style patch. This means a change remains effective until that same field is changed again. Historical entries can be edited, moved to another effective date or deleted; unrelated later changes remain intact.
+
+The timeline API resolves the effective profile for each date and calculates:
+- contractual gross,
+- estimated net,
+- employer cost,
+- personal benefits / total compensation value,
+- taxes and social insurance,
+- effective hourly value,
+- marginal net from the next EUR 100 gross,
+- company-car cash impact,
+- purchasing-power-maintenance gross,
+- nominal, inflation and real salary change.
+
+The UI provides:
+- a dedicated `Verlauf` tab,
+- graph lines for gross, net, purchasing-power maintenance and total compensation value,
+- event markers,
+- 1/3/5-year and full-history filters,
+- per-event financial deltas,
+- annual comparison table.
+
 ## Backend architecture
 
 Namespace: `FullWorth.Backend.Modules.Compensation`
@@ -135,6 +179,11 @@ Planning / analysis:
 - `POST /negotiation`
 - `POST /insights`
 - `GET /inflation`
+- `GET /history?fullWorthSpaceId=...`
+- `POST /history?fullWorthSpaceId=...`
+- `PUT /history/{id}?fullWorthSpaceId=...`
+- `DELETE /history/{id}?fullWorthSpaceId=...`
+- `GET /timeline?fullWorthSpaceId=...&from=...&to=...`
 
 Profile / scenarios:
 - `GET /profile?fullWorthSpaceId=...`
@@ -226,6 +275,7 @@ Tabs:
 - Szenarien
 - Optimierer
 - Lohnabrechnungen
+- Verlauf
 
 The normal FullWorth sidebar contains `Gehalt & Benefits`; mobile receives the same entry in the More sheet. The page uses the existing authenticated BFF and shared browser antiforgery wrapper. If a BFF call returns 401 on the compensation page, the browser is redirected to login with a return URL.
 
@@ -273,6 +323,11 @@ Implemented:
 - [x] desktop/mobile entry point
 - [x] deterministic backend tests
 - [x] static self-review and regression fixes
+- [x] monthly/annual gross with 12/13/14 payments
+- [x] tax class IV factor
+- [x] effective-dated salary/tax/family/benefit history
+- [x] inflation-aware salary timeline
+- [x] annual compensation comparison and per-event deltas
 
 Remaining before merge:
 - [ ] run repository `CI` workflow (`workflow_dispatch`) on this branch

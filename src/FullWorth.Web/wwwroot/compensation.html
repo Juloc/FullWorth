@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/design-depth.css">
   <link rel="stylesheet" href="/compensation.css">
+  <link rel="stylesheet" href="/compensation-history.css">
 </head>
 <body class="comp-body">
   <header class="comp-topbar">
@@ -46,33 +47,75 @@
           <article class="panel comp-card">
             <div class="panel-head"><div><span class="step">1</span><h2>Gehalt</h2></div></div>
             <div class="form-grid">
-              <label>Name<input id="profile-name" value="Aktuelles Gehalt"></label>
-              <label>Jahresbrutto<input id="annual-gross" type="number" min="0" step="100" value="60000"></label>
-              <label>Bonus pro Jahr<input id="annual-bonus" type="number" min="0" step="100" value="0"></label>
-              <label>Steuerklasse<select id="tax-class"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+              <label>Brutto eingeben als
+                <select id="gross-period"><option value="monthly">Monatsbrutto</option><option value="annual">Jahresbrutto</option></select>
+                <small class="field-help">Nimm die Angabe aus deinem Arbeitsvertrag.</small>
+              </label>
+              <label><span id="gross-amount-title">Monatsbrutto</span>
+                <input id="gross-input" type="number" min="0" step="50" value="5000">
+                <small id="gross-annual-preview" class="field-help">= 60.000 € Jahresbrutto</small>
+              </label>
+              <label id="salary-payments-field">Gehälter pro Jahr
+                <select id="salary-payments"><option value="12">12 Gehälter</option><option value="13">13 Gehälter</option><option value="14">14 Gehälter</option></select>
+                <small class="field-help">13./14. Gehalt wird im Planungsrechner ins Jahresbrutto eingerechnet.</small>
+              </label>
+              <label>Bonus pro Jahr<input id="annual-bonus" type="number" min="0" step="100" value="0"><small class="field-help">Zusätzlicher Bonus außerhalb der gewählten Gehälter.</small></label>
+              <label>Steuerklasse
+                <select id="tax-class"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+                <small class="field-help">Steht in deinen ELStAM bzw. auf der Lohnabrechnung.</small>
+              </label>
+              <label id="tax-factor-field" hidden>Faktor bei Steuerklasse IV
+                <input id="tax-class4-factor" type="number" min="0.001" max="1" step="0.001" value="1.000" placeholder="z. B. 0,873">
+                <small class="field-help">Nur bei IV mit Faktor. Den Wert legt das Finanzamt fest.</small>
+              </label>
               <label>Bundesland<select id="state-code">
                 <option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option>
               </select></label>
-              <label>GKV Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"></label>
               <label>Kinder unter 25<input id="children" type="number" min="0" max="10" step="1" value="0"></label>
-              <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"></label>
-              <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"></label>
             </div>
             <div class="check-row">
               <label><input id="church-tax" type="checkbox"> Kirchensteuer</label>
-              <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
             </div>
+            <details class="comp-advanced">
+              <summary>Weitere Angaben</summary>
+              <div class="form-grid">
+                <label>Bezeichnung<input id="profile-name" value="Aktuelles Gehalt"></label>
+                <label>GKV-Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"><small class="field-help">Nur ändern, wenn du den Zusatzbeitrag deiner Krankenkasse kennst.</small></label>
+                <label>Jährlicher ELStAM-Freibetrag<input id="annual-tax-allowance" type="number" min="0" step="100" value="0"><small class="field-help">Nur eintragen, wenn ein Freibetrag in deinen ELStAM hinterlegt ist.</small></label>
+                <label>Kinderfreibetrag laut ELStAM<input id="child-allowance-units" type="number" min="0" max="10" step="0.5" placeholder="automatisch"><small class="field-help">Leer lassen = aus Kinderzahl und Steuerklasse ableiten.</small></label>
+                <label>Alter<input id="employee-age" type="number" min="0" max="120" step="1" placeholder="optional"><small class="field-help">Relevant für den Pflegeversicherungs-Zuschlag.</small></label>
+                <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
+                <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
+              </div>
+              <div class="check-row">
+                <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
+                <label><input id="pension-insurance" type="checkbox" checked> Rentenversicherung</label>
+                <label><input id="unemployment-insurance" type="checkbox" checked> Arbeitslosenversicherung</label>
+              </div>
+            </details>
           </article>
 
           <article class="panel comp-card">
             <div class="panel-head"><div><span class="step">2</span><h2>Firmenwagen</h2></div><label class="switch-row"><input id="car-enabled" type="checkbox"> aktiv</label></div>
             <div id="car-fields" class="form-grid muted-fields">
+              <label>Fahrzeugart
+                <select id="car-vehicle-type"><option value="combustion">Verbrenner</option><option value="electric">Elektroauto</option><option value="hybrid">Plug-in-Hybrid</option><option value="manual">Regel manuell wählen</option></select>
+                <small class="field-help">FullWorth bestimmt daraus automatisch die passende Listenpreis-Regel.</small>
+              </label>
               <label>Bruttolistenpreis<input id="car-list-price" type="number" min="0" step="500" value="50000"></label>
-              <label>Bewertungsfaktor<select id="car-factor"><option value="1">1,0 % Regel</option><option value="0.5">0,5 % Regel</option><option value="0.25">0,25 % Regel</option></select></label>
+              <label>Anschaffungs-/Überlassungsdatum<input id="car-acquisition-date" type="date" value="2026-01-01"></label>
+              <label id="car-factor-field" hidden>Bewertungsregel<select id="car-factor"><option value="1">1,0 %</option><option value="0.5">0,5 %</option><option value="0.25">0,25 %</option></select></label>
+              <label id="car-range-field" hidden>Elektrische Reichweite km<input id="car-electric-range" type="number" min="0" step="1" value="80"></label>
+              <label id="car-co2-field" hidden>CO₂ g/km<input id="car-co2" type="number" min="0" step="1" value="50"></label>
+              <div id="car-rule-summary" class="field-summary">Regel: 1,0 % vom Bruttolistenpreis.</div>
               <label>Einfacher Arbeitsweg km<input id="car-commute" type="number" min="0" step="1" value="0"></label>
+              <label>Arbeitsweg abrechnen
+                <select id="car-commute-method"><option value="monthly">Pauschal 0,03 % / Monat</option><option value="daily">Einzeltage 0,002 % / Tag</option></select>
+              </label>
+              <label id="car-commute-days-field" hidden>Fahrten zur Arbeit / Monat<input id="car-commute-days" type="number" min="0" max="31" step="1" value="10"></label>
               <label>Eigenanteil / Monat<input id="car-contribution" type="number" min="0" step="10" value="0"></label>
-              <label>Arbeitgeberkosten / Monat<input id="car-employer-cost" type="number" min="0" step="10" value="0"></label>
-              <label>Privates Auto alternativ / Monat<input id="car-private-cost" type="number" min="0" step="10" value="0"></label>
+              <label>Arbeitgeberkosten / Monat<input id="car-employer-cost" type="number" min="0" step="10" value="0"><small class="field-help">Optional, für Arbeitgeberkosten und Angebotsvergleich.</small></label>
+              <label>Privates Auto alternativ / Monat<input id="car-private-cost" type="number" min="0" step="10" value="0"><small class="field-help">Optional, für deinen persönlichen FullWorth-Wert.</small></label>
             </div>
           </article>
 
@@ -91,13 +134,13 @@
 
         <aside class="comp-results" aria-live="polite">
           <article class="panel comp-result-primary">
-            <span>Geschätztes Netto</span>
+            <span id="result-net-label">Geschätztes Netto / Monat</span>
             <strong id="result-net-month">—</strong>
             <small id="result-net-year">—</small>
           </article>
           <div class="metric-grid comp-metrics">
             <article class="metric"><span>Arbeitgeberkosten</span><strong id="result-employer">—</strong></article>
-            <article class="metric"><span>FullWorth-Wert</span><strong id="result-fullworth">—</strong></article>
+            <article class="metric"><span>Gesamtwert für dich</span><strong id="result-fullworth">—</strong><small class="field-help">Netto + persönlicher Wert von Firmenwagen, bAV und Benefits.</small></article>
             <article class="metric"><span>Nächste 100 € brutto</span><strong id="result-marginal">—</strong></article>
             <article class="metric"><span>Wert pro Arbeitsstunde</span><strong id="result-hourly">—</strong></article>
           </div>
@@ -170,5 +213,6 @@
   <script src="/security/browser-fetch.js"></script>
   <script type="module" src="/features/compensation.js"></script>
   <script type="module" src="/features/compensation-extended.js"></script>
+  <script type="module" src="/features/compensation-history.js"></script>
 </body>
 </html>

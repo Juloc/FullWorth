@@ -20,12 +20,19 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         var html = await GetAsync("/compensation.html");
         var baseJs = await GetAsync("/features/compensation.js");
         var extendedJs = await GetAsync("/features/compensation-extended.js");
+        var historyJs = await GetAsync("/features/compensation-history.js");
+        var historyCss = await GetAsync("/compensation-history.css");
 
         Assert.Contains("/features/compensation.js", html);
         Assert.Contains("/features/compensation-extended.js", html);
+        Assert.Contains("/features/compensation-history.js", html);
+        Assert.Contains("/compensation-history.css", html);
         Assert.Contains("api/compensation/calculate", baseJs);
         Assert.Contains("api/compensation/insights", extendedJs);
         Assert.Contains("api/compensation/payslips/extract", extendedJs);
+        Assert.Contains("api/compensation/history", historyJs);
+        Assert.Contains("api/compensation/timeline", historyJs);
+        Assert.Contains("history-chart", historyCss);
     }
 
     [Fact]

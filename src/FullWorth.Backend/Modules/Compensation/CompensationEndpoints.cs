@@ -107,6 +107,7 @@ public static class CompensationEndpoints
             };
         });
 
+        app.MapCompensationHistoryEndpoints();
         app.MapCompensationPayslipEndpoints();
         return app;
     }

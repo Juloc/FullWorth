@@ -48,6 +48,74 @@ public sealed class CompensationCalculatorTests
     }
 
     [Fact]
+    public void TaxClass4Factor_ReducesClass4WageTax()
+    {
+        var normal = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with
+        {
+            TaxClass = 4,
+            TaxClass4Factor = 1m
+        });
+        var factored = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with
+        {
+            TaxClass = 4,
+            TaxClass4Factor = 0.8m
+        });
+
+        Assert.Equal(Math.Round(normal.EstimatedIncomeTaxAnnual * 0.8m, 2, MidpointRounding.AwayFromZero), factored.EstimatedIncomeTaxAnnual);
+        Assert.True(factored.EstimatedIncomeTaxAnnual < normal.EstimatedIncomeTaxAnnual);
+    }
+
+    [Fact]
+    public void CompanyCar_AutomaticallyChoosesQuarterRuleForQualifyingElectricCar()
+    {
+        var input = new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 80_000m,
+            VehicleType: "electric",
+            AcquisitionDate: new DateOnly(2026, 1, 1));
+
+        Assert.Equal(0.25m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(input));
+    }
+
+    [Fact]
+    public void CompanyCar_2026HybridNeeds80KmOrLowCo2ForHalfRule()
+    {
+        var qualifying = new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            VehicleType: "hybrid",
+            AcquisitionDate: new DateOnly(2026, 1, 1),
+            ElectricRangeKm: 80m,
+            Co2GramsPerKm: 60m);
+        var notQualifying = qualifying with { ElectricRangeKm = 70m };
+
+        Assert.Equal(0.5m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(qualifying));
+        Assert.Equal(1m, GermanCompensationCalculator.DetermineCompanyCarListPriceFactor(notQualifying));
+    }
+
+    [Fact]
+    public void CompanyCar_DailyCommuteMethodUsesActualDays()
+    {
+        var monthly = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            TaxableListPriceFactor: 1m,
+            VehicleType: "manual",
+            OneWayCommuteKm: 30m,
+            CommuteMethod: "monthly"));
+        var daily = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
+            Enabled: true,
+            ListPrice: 50_000m,
+            TaxableListPriceFactor: 1m,
+            VehicleType: "manual",
+            OneWayCommuteKm: 30m,
+            CommuteMethod: "daily",
+            CommuteDaysPerMonth: 5));
+
+        Assert.True(daily < monthly);
+    }
+
+    [Fact]
     public void CompanyCar_UsesOnePercentAndCommuteMethod()
     {
         var annual = GermanCompensationCalculator.CompanyCarTaxableBenefitAnnual(new CompanyCarInput(
@@ -87,6 +155,49 @@ public sealed class CompensationCalculatorTests
 
         var fullWorthDelta = withCar.FullWorthCompensationValueAnnual - withoutCar.FullWorthCompensationValueAnnual;
         Assert.Equal(withCar.CompanyCar.EstimatedEffectivePersonalValueAnnual, fullWorthDelta);
+    }
+
+    [Fact]
+    public void AnnualTaxAllowance_ReducesEstimatedWageTax()
+    {
+        var normal = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m));
+        var withAllowance = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with { AnnualTaxAllowance = 2_000m });
+
+        Assert.True(withAllowance.EstimatedIncomeTaxAnnual < normal.EstimatedIncomeTaxAnnual);
+    }
+
+    [Fact]
+    public void ChildlessCareSurcharge_DoesNotApplyBelowAge23()
+    {
+        var under23 = GermanCompensationCalculator.Calculate(BasicProfile(50_000m) with
+        {
+            ChildrenUnder25 = 0,
+            Age = 22,
+            ChildlessCareSurcharge = true
+        });
+        var age23 = GermanCompensationCalculator.Calculate(BasicProfile(50_000m) with
+        {
+            ChildrenUnder25 = 0,
+            Age = 23,
+            ChildlessCareSurcharge = true
+        });
+
+        Assert.True(age23.SocialInsurance.CareAnnual > under23.SocialInsurance.CareAnnual);
+    }
+
+    [Fact]
+    public void InsuranceExemptions_RemoveConfiguredRvAndAvContributions()
+    {
+        var exempt = GermanCompensationCalculator.Calculate(BasicProfile(60_000m) with
+        {
+            PensionInsuranceEnabled = false,
+            UnemploymentInsuranceEnabled = false
+        });
+
+        Assert.Equal(0m, exempt.SocialInsurance.PensionAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.UnemploymentAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.EmployerPensionAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.EmployerUnemploymentAnnual);
     }
 
     [Fact]
