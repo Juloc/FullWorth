@@ -29,6 +29,10 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.Property(x => x.NormalizedUserName).IsRequired().HasMaxLength(256);
             entity.Property(x => x.FinanceUserId).IsRequired();
             entity.Property(x => x.IsDisabled).IsRequired();
+            entity.Property(x => x.DeletionRequestedAt);
+            entity.Property(x => x.DeletionScheduledFor);
+            entity.Property(x => x.DeletionLeaseUntil);
+            entity.Property(x => x.DeletionLastError).HasMaxLength(120);
             entity.Property(x => x.CreatedAt).IsRequired();
             entity.Property(x => x.UpdatedAt).IsRequired();
 
@@ -39,6 +43,9 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.HasIndex(x => x.FinanceUserId)
                 .IsUnique()
                 .HasDatabaseName("FinanceUserIdIndex");
+
+            entity.HasIndex(x => x.DeletionScheduledFor)
+                .HasDatabaseName("DeletionScheduledForIndex");
         });
 
         builder.Entity<UserSession>(entity =>
