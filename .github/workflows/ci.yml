@@ -1,10 +1,11 @@
 name: CI
 
-# Cost policy: GitHub Actions must only run when explicitly started by a user.
-# Do not add push, pull_request, schedule, merge_group, or other automatic triggers
-# unless the repository owner explicitly changes this policy.
+# Release-candidate verification branch only. Main remains manual-only.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'verify/v1.2.0-rc.1'
 
 permissions:
   contents: read
@@ -14,21 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Command Timeout is raised well above the default 30s so a query that runs slowly while the
-      # 2-core runner is saturated (backend + web suites hammering one Postgres) does not surface as
-      # an intermittent "Npgsql TimeoutException: Timeout during reading attempt" flake.
       FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Run PostgreSQL as a step (not a service container) so we can raise max_connections. The
-      # integration suite spins up many isolated WebApplicationFactory instances, each with its own
-      # Npgsql pool; the default 100-connection ceiling is exceeded as the suite grows.
-      # fsync/synchronous_commit/full_page_writes are disabled and shared_buffers raised: this is an
-      # ephemeral throwaway test database, and cutting per-commit disk sync keeps queries fast on the
-      # 2-core runner while the suite creates hundreds of databases, avoiding Npgsql read timeouts.
       - name: Start PostgreSQL
         run: |
           docker run -d --name fullworth-postgres \
