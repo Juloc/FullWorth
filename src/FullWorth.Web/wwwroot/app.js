@@ -17,6 +17,7 @@ import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
+import { downloadWealthBackup } from './features/wealth-portability.js';
 import { createDialog } from './ui/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
@@ -261,7 +262,7 @@ function bind(){
   bindMerchants(ctx);
   bindAudit(ctx);
   bindSharing(ctx);
-  $('#export-data')?.addEventListener('click',downloadExport);
+  $('#export-data')?.addEventListener('click',event=>downloadWealthBackup(ctx,event.currentTarget));
   bindDashboard(ctx);
   $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
   $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
@@ -725,20 +726,6 @@ function openBalanceDialog(account){
 // Create OR edit a budget: pass the existing budget object to pre-fill + switch to PUT, with a delete
 // action. Called with no argument for the "+ new budget" flow.
 async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
-// Export the space's full data snapshot (§ data portability). Use the shared API client but keep
-// the raw response because downloads must not be JSON-decoded.
-async function downloadExport(){
-  const btn=$('#export-data');if(btn)btn.disabled=true;
-  try{
-    const r=await apiClient.backendResponse('api/export/snapshot');
-    const blob=await r.blob();const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=`finance-export-${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-    toast(get('export.done'));
-  }catch(err){toast(err.message||get('common.error'))}
-  finally{if(btn)btn.disabled=false}
-}
-
 const ENABLE_BANKING_SIGN_IN='https://enablebanking.com/sign-in/';
 const ENABLE_BANKING_APPS='https://enablebanking.com/cp/applications';
 const ENABLE_BANKING_LINKED='https://enablebanking.com/docs/api/linked-accounts';
