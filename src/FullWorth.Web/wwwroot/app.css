@@ -1,5 +1,5 @@
 /* Finance/FullWorth app shell + component styles (UI_UX_SPEC §4 tokens, §3 shell, §5 privacy, §24 states).
-   Tokens follow the canonical "FullWorth Design System": Barlow Condensed only with tabular numerals,
+   Tokens follow the canonical "FullWorth Design System": Barlow Condensed by default with Fredoka as an optional preview font,
    monochrome and line-driven (no accent hue), a single dark-grey CTA colour, and colour ONLY where it
    carries meaning — green income, amber "getting close", red overage. Persistent navigation shows its
    active state as a plain grey fill (never the CTA colour) so colour stays reserved for money statements.
@@ -7,8 +7,11 @@
 @font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:swap;src:url("fonts/BarlowCondensed-400.woff2") format("woff2")}
 @font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/BarlowCondensed-500.woff2") format("woff2")}
 @font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url("fonts/BarlowCondensed-600.woff2") format("woff2")}
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:300 700;font-stretch:75% 125%;font-display:swap;src:url("/fonts/Fredoka-Variable.ttf") format("truetype")}
 :root{
-  --font:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-default:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-fredoka:'Fredoka',ui-rounded,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font:var(--font-default);
   color-scheme:light;
   /* spacing scale (§4.1) */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
@@ -27,6 +30,7 @@
   /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
   --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
 }
+html[data-font="fredoka"]{--font:var(--font-fredoka)}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0f0f0f;--surface:#0f0f0f;--surface-2:#1f1f1f;--surface-3:#303030;--text:#f1f1f1;--muted:#a6a6a6;--line:#2e2e2e;
