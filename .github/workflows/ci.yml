@@ -51,3 +51,9 @@ jobs:
 
       - name: Test
         run: dotnet test FullWorth.slnx --configuration Release --no-build
+
+      - name: Validate Compose
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build deployment images
+        run: docker compose --env-file .env.example build fullworth-backend fullworth-banking fullworth-web fullworth-codex
