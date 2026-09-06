@@ -297,7 +297,7 @@ public static class CloudBenchmarkEndpoints
                     local.ObservedMonth,
                     ct);
                 if (aggregate is not null)
-                    peerFilter = incomeBand is null ? "country" : "country_income";
+                    peerFilter = SavingsPeerFilter(aggregate);
                 else if (local.Country is not null)
                 {
                     aggregate = await cloud.GetBenchmarkAsync(
@@ -311,7 +311,7 @@ public static class CloudBenchmarkEndpoints
                         null,
                         local.ObservedMonth,
                         ct);
-                    if (aggregate is not null) peerFilter = "country";
+                    if (aggregate is not null) peerFilter = SavingsPeerFilter(aggregate);
                 }
                 if (aggregate is null)
                 {
@@ -326,7 +326,7 @@ public static class CloudBenchmarkEndpoints
                         null,
                         local.ObservedMonth,
                         ct);
-                    peerFilter = "all";
+                    if (aggregate is not null) peerFilter = SavingsPeerFilter(aggregate);
                 }
             }
             catch (FullWorthCloudException)
@@ -358,6 +358,18 @@ public static class CloudBenchmarkEndpoints
         });
 
         return app;
+    }
+
+    private static string SavingsPeerFilter(FullWorthCloudBenchmark aggregate)
+    {
+        if (!string.IsNullOrWhiteSpace(aggregate.Country) &&
+            !string.IsNullOrWhiteSpace(aggregate.IncomeBand))
+            return "country_income";
+        if (!string.IsNullOrWhiteSpace(aggregate.IncomeBand))
+            return "income";
+        if (!string.IsNullOrWhiteSpace(aggregate.Country))
+            return "country";
+        return "all";
     }
 
     private static string? NormalizeCurrency(string? value)
