@@ -1,34 +1,27 @@
-const apiBase = '/bff/backend/api/intelligence/admin';
+import { api as sharedApi } from '../core/services.js';
 const $ = id => document.getElementById(id);
 
 let cloudState = null;
 let saving = false;
 
 async function api(path, init = {}) {
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init.headers || {})
+  try {
+    return await sharedApi(`api/intelligence/admin${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers || {})
+      }
+    });
+  } catch (error) {
+    if (error?.status === 401) {
+      location.href = `/auth/login?returnUrl=${encodeURIComponent(location.pathname)}`;
+      throw new Error('unauthorized');
     }
-  });
-
-  if (response.status === 401) {
-    location.href = `/auth/login?returnUrl=${encodeURIComponent(location.pathname)}`;
-    throw new Error('unauthorized');
-  }
-  if (response.status === 403) throw Object.assign(new Error('forbidden'), { status: 403 });
-  if (!response.ok) {
-    let detail = null;
-    try { detail = await response.json(); } catch { }
-    const error = new Error(detail?.message || detail?.error || `HTTP ${response.status}`);
-    error.status = response.status;
-    error.detail = detail;
+    if (error?.status === 403) throw Object.assign(new Error('forbidden'), { status: 403, detail: error.detail });
     throw error;
   }
-  if (response.status === 204) return null;
-  return response.json();
 }
 
 function formatDate(value) {
