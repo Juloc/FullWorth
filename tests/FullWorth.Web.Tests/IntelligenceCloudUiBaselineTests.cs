@@ -56,6 +56,22 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     }
 
     [Fact]
+    public void Intelligence_page_exposes_local_custom_brand_pack_management()
+    {
+        var html = Read("intelligence", "index.html");
+        var script = Read("intelligence", "brand-packs.js");
+
+        Assert.Contains("Eigene Brand-Packs", html);
+        Assert.Contains("brand-pack-file", html);
+        Assert.Contains("brand-pack-import", html);
+        Assert.Contains("contentBase64", html);
+        Assert.Contains("/api/intelligence/admin/brand-packs/custom", script);
+        Assert.Contains("/enabled", script);
+        Assert.Contains("method: 'DELETE'", script);
+        Assert.Contains("20 * 1024 * 1024", script);
+    }
+
+    [Fact]
     public void Cloud_setup_uses_dedicated_responsive_styles()
     {
         var html = Read("intelligence", "index.html");

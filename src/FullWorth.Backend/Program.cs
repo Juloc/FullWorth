@@ -91,6 +91,7 @@ builder.Services.AddScoped<CloudProductPriceContributionService>();
 builder.Services.AddHostedService<CloudProductPriceContributionWorker>();
 builder.Services.AddHostedService<CloudLearningOutboxWorker>();
 builder.Services.AddScoped<KnowledgePackSyncService>();
+builder.Services.AddScoped<BrandPackService>();
 builder.Services.AddScoped<CloudOntologyResolver>();
 builder.Services.AddHostedService<KnowledgePackSyncWorker>();
 builder.Services.AddScoped<AiBudgetGuard>();

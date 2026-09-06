@@ -446,6 +446,20 @@ static async Task ProxyAsync(HttpContext context, HttpClient client, Uri target,
     context.Response.StatusCode = (int)response.StatusCode;
     if (response.Headers.Location is not null)
         context.Response.Headers["Location"] = response.Headers.Location.ToString();
+
+    // Brand assets are immutable, non-financial bytes addressed by SHA-256. Forward cache validators only
+    // for this narrow route; never allow a backend cache header to make arbitrary finance API responses
+    // browser-cacheable through the BFF.
+    if (target.AbsolutePath.StartsWith("/api/intelligence/brand-assets/", StringComparison.OrdinalIgnoreCase))
+    {
+        if (response.Headers.ETag is not null)
+            context.Response.Headers.ETag = response.Headers.ETag.ToString();
+        if (response.Headers.CacheControl is not null)
+            context.Response.Headers.CacheControl = response.Headers.CacheControl.ToString();
+        if (response.Content.Headers.LastModified is not null)
+            context.Response.Headers.LastModified = response.Content.Headers.LastModified.Value.ToString("R");
+    }
+
     if (response.Content.Headers.ContentType is not null)
         context.Response.ContentType = response.Content.Headers.ContentType.ToString();
     await response.Content.CopyToAsync(context.Response.Body, ct);
