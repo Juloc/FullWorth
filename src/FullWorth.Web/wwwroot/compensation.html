@@ -46,7 +46,6 @@
           <article class="panel comp-card">
             <div class="panel-head"><div><span class="step">1</span><h2>Gehalt</h2></div></div>
             <div class="form-grid">
-              <label>Name<input id="profile-name" value="Aktuelles Gehalt"></label>
               <label>Brutto eingeben als
                 <select id="gross-period"><option value="monthly">Monatsbrutto</option><option value="annual">Jahresbrutto</option></select>
                 <small class="field-help">Nimm die Angabe aus deinem Arbeitsvertrag.</small>
@@ -71,15 +70,23 @@
               <label>Bundesland<select id="state-code">
                 <option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option>
               </select></label>
-              <label>GKV Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"></label>
               <label>Kinder unter 25<input id="children" type="number" min="0" max="10" step="1" value="0"></label>
-              <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"></label>
-              <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"></label>
             </div>
             <div class="check-row">
               <label><input id="church-tax" type="checkbox"> Kirchensteuer</label>
-              <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
             </div>
+            <details class="comp-advanced">
+              <summary>Weitere Angaben</summary>
+              <div class="form-grid">
+                <label>Bezeichnung<input id="profile-name" value="Aktuelles Gehalt"></label>
+                <label>GKV-Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"><small class="field-help">Nur ändern, wenn du den Zusatzbeitrag deiner Krankenkasse kennst.</small></label>
+                <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
+                <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
+              </div>
+              <div class="check-row">
+                <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
+              </div>
+            </details>
           </article>
 
           <article class="panel comp-card">
