@@ -11,7 +11,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     [
         "appDescription", "language", "theme", "email", "password", "showPassword", "hidePassword",
         "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms", "confirmAdult", "imprint",
-        "forgotPassword", "continue", "backToSignIn", "invalidCredentials",
+        "forgotPassword", "continue", "backToSignIn", "invalidCredentials", "twoFactorCode", "invalidTwoFactor",
         "forgotConfirmation", "newPassword", "confirmPassword", "resetPassword", "passwordChanged",
         "passkey", "recoveryCode", "recoveryCodesShownOnce", "recoveryCodesStoreSecurely", "genericError"
     ];
@@ -31,6 +31,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         var html = await GetAsync("/auth/index.html");
 
         Assert.Contains("data-auth-view=\"login\"", html);
+        Assert.Contains("data-auth-view=\"two-factor\"", html);
         Assert.Contains("data-auth-view=\"register\"", html);
         Assert.Contains("data-auth-view=\"forgot-password\"", html);
         Assert.Contains("data-auth-view=\"reset-password\"", html);
@@ -117,7 +118,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
             Assert.False(string.IsNullOrWhiteSpace(value.GetString()), $"Empty auth.{key} in {locale}.json");
         }
 
-        foreach (var page in new[] { "login", "register", "forgot-password", "reset-password", "recovery-code", "recovery-codes" })
+        foreach (var page in new[] { "login", "two-factor", "register", "forgot-password", "reset-password", "recovery-code", "recovery-codes" })
         {
             Assert.False(string.IsNullOrWhiteSpace(pages.GetProperty(page).GetProperty("title").GetString()));
             Assert.False(string.IsNullOrWhiteSpace(pages.GetProperty(page).GetProperty("subtitle").GetString()));
@@ -143,8 +144,8 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/auth/auth.js");
 
-        Assert.Contains("  $$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
-        AssertNotContains(js, "  $('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach");
+        Assert.Contains("  $('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
+        AssertNotContains(js, "localStorage.setItem('pendingLogin");
     }
 
     [Fact]
