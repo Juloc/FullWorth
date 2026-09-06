@@ -81,7 +81,13 @@ public sealed record KnowledgePackPayload(
     IReadOnlyList<KnowledgePackOntologyAliasPayload>? OntologyAliases = null,
     IReadOnlyList<KnowledgePackOntologyRedirectPayload>? OntologyRedirects = null,
     IReadOnlyList<KnowledgePackBrandAssetPayload>? BrandAssets = null,
-    IReadOnlyList<KnowledgePackBrandAliasPayload>? BrandAliases = null);
+    IReadOnlyList<KnowledgePackBrandAliasPayload>? BrandAliases = null,
+    IReadOnlyList<KnowledgePackOntologyEntityPayload>? ProviderOntologyEntities = null,
+    IReadOnlyList<KnowledgePackOntologyAliasPayload>? ProviderOntologyAliases = null,
+    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProviderOntologyRedirects = null,
+    IReadOnlyList<KnowledgePackOntologyEntityPayload>? ProductOntologyEntities = null,
+    IReadOnlyList<KnowledgePackOntologyAliasPayload>? ProductOntologyAliases = null,
+    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProductOntologyRedirects = null);
 
 public sealed class KnowledgePackInstallation
 {
