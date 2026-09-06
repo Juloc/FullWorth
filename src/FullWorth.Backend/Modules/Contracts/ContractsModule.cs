@@ -254,6 +254,8 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
                 contract.MergedIntoContractId == null)
             .ToListAsync(ct);
         if (sources.Count != sourceIds.Length) return new(ContractMutationResult.NotFound);
+        if (sources.Any(source => !string.Equals(source.Currency, target.Currency, StringComparison.OrdinalIgnoreCase)))
+            return new(ContractMutationResult.Invalid, Error: "Contracts with different currencies cannot be merged.");
 
         foreach (var source in sources)
         {
@@ -650,12 +652,6 @@ public static class ContractEndpoints
             var sources = await store.ListMergedSourcesForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return sources is null ? Results.NotFound() : Results.Ok(sources);
         });
-
-        group.MapPost("/{id:guid}/merge", async (Guid id, Guid fullWorthSpaceId, ContractMergeRequest request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
-            ToResult(await store.MergeForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct)));
-
-        group.MapDelete("/{id:guid}/merge/{sourceId:guid}", async (Guid id, Guid sourceId, Guid fullWorthSpaceId, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
-            ToResult(await store.UnmergeForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, sourceId, ct)));
 
         group.MapPost("/", async (Guid fullWorthSpaceId, ContractWrite request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
             ToResult(await store.CreateForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
