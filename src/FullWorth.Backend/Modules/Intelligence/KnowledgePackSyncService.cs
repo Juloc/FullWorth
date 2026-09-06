@@ -121,7 +121,7 @@ public sealed class KnowledgePackSyncService(
                 {
                     cached.MediaType = resolved.MediaType;
                     cached.ByteLength = resolved.ByteLength;
-                    cached.ContentBase64 = resolved.ContentBase64;
+                    cached.Content = resolved.Content;
                     cached.LastUsedAt = nowForBlobs;
                 }
                 else
@@ -131,7 +131,7 @@ public sealed class KnowledgePackSyncService(
                         ContentSha256 = resolved.ContentSha256,
                         MediaType = resolved.MediaType,
                         ByteLength = resolved.ByteLength,
-                        ContentBase64 = resolved.ContentBase64,
+                        Content = resolved.Content,
                         CreatedAt = nowForBlobs,
                         LastUsedAt = nowForBlobs
                     };
@@ -479,7 +479,7 @@ public sealed class KnowledgePackSyncService(
                     cachedBlob.ContentSha256,
                     cachedBlob.MediaType,
                     cachedBlob.ByteLength,
-                    cachedBlob.ContentBase64);
+                    cachedBlob.Content);
                 reused++;
                 continue;
             }
