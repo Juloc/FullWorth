@@ -1,6 +1,6 @@
 namespace FullWorth.Web.Modules.Auth;
 
-public sealed record LoginRequest(string Email, string Password);
+public sealed record LoginRequest(string Email, string Password, string? Code = null);
 
 public sealed record RegisterRequest(string Email, string Password, string DisplayName, bool AcceptTerms, bool ConfirmAdult);
 
@@ -17,11 +17,13 @@ public sealed record RegisterResultDto(
     public static RegisterResultDto Failed() => new(false, "registration_failed", null, Array.Empty<string>());
 }
 
-public sealed record LoginResultDto(bool Succeeded, string? Error, AuthUserDto? User)
+public sealed record LoginResultDto(bool Succeeded, string? Error, AuthUserDto? User, bool RequiresTwoFactor = false)
 {
     public static LoginResultDto Success(AuthUserDto user) => new(true, null, user);
 
     public static LoginResultDto InvalidCredentials() => new(false, "Invalid credentials.", null);
+    public static LoginResultDto TwoFactorRequired() => new(false, "two_factor_required", null, true);
+    public static LoginResultDto InvalidTwoFactor() => new(false, "invalid_two_factor", null, true);
 }
 
 public sealed record CreateAuthUserRequest(Guid FinanceUserId, string Email, string Password);
