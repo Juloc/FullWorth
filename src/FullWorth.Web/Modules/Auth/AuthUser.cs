@@ -8,6 +8,8 @@ public sealed class AuthUser : IdentityUser<Guid>
 
     public bool IsDisabled { get; set; }
 
+    public bool IsAdmin { get; set; }
+
     public DateTimeOffset? DeletionRequestedAt { get; set; }
 
     public DateTimeOffset? DeletionScheduledFor { get; set; }
