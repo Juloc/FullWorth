@@ -21,6 +21,8 @@ import { createApiClient, jsonBody } from './core/api.js';
 import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
+import { createI18n } from './core/i18n.js';
+import { createToast } from './ui/toast.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -52,6 +54,8 @@ import { createFeatureRegistry } from './core/feature-registry.js';
 const apiClient=createApiClient({getSpaceId:()=>state.space?.id||''});
 const api=(path,options)=>apiClient.backend(path,options);
 const bankApi=(path,options)=>apiClient.banking(path,options);
+const i18n=createI18n({state});
+const get=path=>i18n.get(path);
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
@@ -68,7 +72,9 @@ const viewFromPath=router.viewFromPath;
 // in-page add control so there is a single code path.
 const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
-const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s);const $=s=>[...document.querySelectorAll(s)];
+const toastController=createToast($('#toast'));
+const toast=(text,duration)=>toastController.show(text,duration);
 
 async function boot(){
   setMoneyLocale(state.lang);
@@ -102,7 +108,6 @@ function handleConnectRedirect(){
   toast(get(known[error]||'accounts.connectFailed'),8000);
   return'accounts';
 }
-function get(path){return path.split('.').reduce((o,k)=>o?.[k],state.messages)||path}
 async function openDeleteAccountDialog(){
   const dlg=createDialog(`
     <form class="dialog-card" id="delete-account-form">
@@ -196,8 +201,8 @@ async function openTwoFactorDialog(){
   dlg.showModal();
 }
 
-async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
-function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
+async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
+function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
@@ -429,7 +434,6 @@ function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class
 function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar"></div><div class="skel-bar short"></div></div>`).join('')}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function acctId(last4){return last4?` · ${maskIdentifier(last4)}`:''}
-function toast(text,duration){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),duration||3200)}
 function dialog(html,options={}){return createDialog(html,{closeLabel:get('common.close'),...options})}
 // §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
 // category under multiple parents with the same name is still distinguishable at a glance.
