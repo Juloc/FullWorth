@@ -205,28 +205,27 @@ public sealed class AccountPurgeService(
 
     private async Task PurgeUserOwnedRowsAsync(Guid userId, CancellationToken ct)
     {
-        var all = db.Model.GetEntityTypes()
-            .Where(x => x.GetTableName() is not null && x.ClrType != typeof(FullWorthUser))
+        // In the finance model, only DIRECT user-owned roots are deleted here. Their configured DB
+        // cascades may remove private children (e.g. TaxProfile -> candidates, CoachConversation ->
+        // messages). We deliberately do not infer ownership through arbitrary FKs: a user's BYO bank
+        // profile can be referenced by a bank connection in a shared space, and that must never make
+        // the shared accounts/transactions "owned" by the deleting user.
+        var direct = db.Model.GetEntityTypes()
+            .Where(entity => entity.GetTableName() is not null && entity.ClrType != typeof(FullWorthUser))
             .Select(entity => new
             {
                 Entity = entity,
-                DirectOwnership = entity.GetProperties().Where(p => OwnershipUserPropertyNames.Contains(p.Name)).ToArray(),
-                SpaceOwned = PersonalDataPurgeManifest.Describe(entity).IsSpaceOwned
+                Ownership = entity.GetProperties()
+                    .Where(property => OwnershipUserPropertyNames.Contains(property.Name))
+                    .ToArray()
             })
-            .Where(x => x.DirectOwnership.Length > 0 || !x.SpaceOwned)
-            .Select(x => new
-            {
-                x.Entity,
-                x.DirectOwnership,
-                Depth = FindUserOwnershipDepth(x.Entity, new HashSet<IEntityType>())
-            })
-            .Where(x => x.Depth.HasValue)
+            .Where(x => x.Ownership.Length > 0)
             .Select(x => new PurgeEntityDescriptor(
                 x.Entity,
                 x.Entity.GetTableName()!,
                 x.Entity.GetSchema(),
-                x.Depth,
-                x.DirectOwnership,
+                null,
+                x.Ownership,
                 Array.Empty<IProperty>(),
                 false,
                 false,
@@ -234,13 +233,12 @@ public sealed class AccountPurgeService(
             .ToArray();
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        foreach (var descriptor in OrderForDelete(all))
+        foreach (var descriptor in OrderForDelete(direct))
         {
-            // Bank connections in shared spaces are retained as historical finance data; their user
-            // authorization secrets were stripped explicitly above.
-            if (descriptor.EntityType.ClrType == typeof(BankConnection)) continue;
-
-            var predicate = BuildUserPredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
+            // BankConnection.AuthorizationUserId is intentionally NOT one of the direct-ownership
+            // property names. Shared banking authorization is stripped explicitly before this stage.
+            var predicate = "(" + string.Join(" OR ", descriptor.OwnershipUserProperties.Select(property =>
+                $"t0.{QuoteColumnStatic(descriptor.EntityType, property)} = @userId")) + ")";
             await ExecuteDeleteAsync(db, descriptor, predicate, "userId", userId, ct);
         }
         await transaction.CommitAsync(ct);
