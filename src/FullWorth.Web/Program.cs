@@ -215,6 +215,14 @@ app.UseMiddleware<PendingDeletionAccessMiddleware>();
 
 app.Use(async (context, next) =>
 {
+    if (HttpMethods.IsGet(context.Request.Method)
+        && context.User.Identity?.IsAuthenticated == true
+        && IsAuthEntryPath(context.Request.Path))
+    {
+        context.Response.Redirect("/");
+        return;
+    }
+
     if ((context.Request.Path.Equals("/index.html") || context.Request.Path.Equals("/passkeys/index.html"))
         && context.User.Identity?.IsAuthenticated != true)
     {
@@ -417,6 +425,15 @@ static Task RedirectToLoginAsync(RedirectContext<CookieAuthenticationOptions> co
 
     context.Response.Redirect($"/auth/login?{query}");
     return Task.CompletedTask;
+}
+
+static bool IsAuthEntryPath(PathString path)
+{
+    var normalized = (path.Value ?? string.Empty).TrimEnd('/');
+    return normalized.Equals("/auth", StringComparison.OrdinalIgnoreCase)
+        || normalized.Equals("/auth/login", StringComparison.OrdinalIgnoreCase)
+        || normalized.Equals("/auth/register", StringComparison.OrdinalIgnoreCase)
+        || normalized.Equals("/auth/index.html", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsApiRequest(PathString path) =>
