@@ -155,11 +155,19 @@ public sealed class IngFinTsService(
     public async Task<BankConnectionDto> SyncConnectionAsync(BankConnectionDto connection, bool bypassCadence, CancellationToken ct)
     {
         if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase)) return connection;
-        var secret = ReadSecret(connection);
-        if (secret is null) return await FailAsync(connection, "FINTS_SECRET_MISSING", ct);
 
         var now = DateTimeOffset.UtcNow;
         if (!bypassCadence && connection.NextSyncAllowedAt is { } next && next > now) return connection;
+        var startedAt = now;
+
+        var secret = ReadSecret(connection);
+        if (secret is null)
+        {
+            var failed = await FailAsync(connection, "FINTS_SECRET_MISSING", ct);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SECRET_MISSING", CancellationToken.None);
+            return failed;
+        }
+
         var nextAllowed = now.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
         connection = await backend.UpsertConnectionAsync(ToWrite(connection, lastAttemptAt: now, nextSyncAllowedAt: nextAllowed), ct);
 
@@ -171,9 +179,11 @@ public sealed class IngFinTsService(
             if (!opened.IsOpen)
             {
                 secret = secret with { Parameters = opened.Session.Parameters, Session = opened.Session, Challenge = opened.Challenge };
-                return await backend.UpsertConnectionAsync(ToWrite(connection,
+                var pendingTan = await backend.UpsertConnectionAsync(ToWrite(connection,
                     authorizationId: JsonSerializer.Serialize(secret, Json), status: "TAN_REQUIRED", lastError: "FINTS_TAN_REQUIRED",
                     nextSyncAllowedAt: null, clearNextSyncAllowedAt: true), ct);
+                await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None);
+                return pendingTan;
             }
 
             var session = opened.Session;
@@ -197,32 +207,70 @@ public sealed class IngFinTsService(
             await finTs.EndAsync(bank, credentials, session, ct);
             secret = secret with { Parameters = session.Parameters, Session = null, Challenge = null };
             logger.LogInformation("FinTS sync finished for ING: {CashAccounts} cash accounts, {Depots} depots.", cashAccounts, depots);
-            return await backend.UpsertConnectionAsync(ToWrite(connection,
+            var completed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "AUTHORIZED",
                 lastSyncedAt: DateTimeOffset.UtcNow, nextSyncAllowedAt: nextAllowed, consecutiveFailures: 0, lastError: null), ct);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "success", null, CancellationToken.None);
+            return completed;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None);
+            throw;
         }
         catch (FinTsInteractiveRequiredException interactive)
         {
             secret = secret with { Parameters = interactive.Session.Parameters, Session = interactive.Session, Challenge = interactive.Challenge };
-            return await backend.UpsertConnectionAsync(ToWrite(connection,
+            var pendingTan = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "TAN_REQUIRED",
                 clearNextSyncAllowedAt: true, consecutiveFailures: 0, lastError: "FINTS_TAN_REQUIRED"), ct);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_TAN_REQUIRED", CancellationToken.None);
+            return pendingTan;
         }
         catch (FinTsException ex)
         {
             var terminal = ex.Code is "pin_wrong" or "access_locked";
+            var errorCode = "FINTS_" + (ex.Code ?? "BANK_ERROR").ToUpperInvariant();
             logger.LogWarning("FinTS sync failed for ING ({Code}).", ex.Code ?? "bank_error");
-            return await backend.UpsertConnectionAsync(ToWrite(connection,
+            var failed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 status: terminal ? "INVALID" : connection.Status,
                 nextSyncAllowedAt: terminal ? null : nextAllowed,
                 clearNextSyncAllowedAt: terminal,
                 consecutiveFailures: connection.ConsecutiveFailures + 1,
-                lastError: "FINTS_" + (ex.Code ?? "BANK_ERROR").ToUpperInvariant()), ct);
+                lastError: errorCode), ct);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+            return failed;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             logger.LogError(ex, "FinTS sync failed for ING.");
-            return await FailAsync(connection, "FINTS_SYNC_FAILED", ct);
+            var failed = await FailAsync(connection, "FINTS_SYNC_FAILED", ct);
+            await RecordSyncHistorySafeAsync(connection.Id, startedAt, "error", "FINTS_SYNC_FAILED", CancellationToken.None);
+            return failed;
+        }
+    }
+
+    private async Task RecordSyncHistorySafeAsync(
+        Guid connectionId,
+        DateTimeOffset startedAt,
+        string result,
+        string? errorCode,
+        CancellationToken ct)
+    {
+        try
+        {
+            await backend.RecordSyncHistoryAsync(
+                connectionId,
+                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode),
+                ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not persist FinTS sync history for connection {ConnectionId}.", connectionId);
         }
     }
 
