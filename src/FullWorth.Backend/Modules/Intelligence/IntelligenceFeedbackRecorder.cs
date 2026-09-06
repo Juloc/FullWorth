@@ -256,7 +256,7 @@ public sealed class IntelligenceFeedbackRecorder(
 
     private static string? NormalizeCloudCommercialAlias(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Contains('@', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(value) || value.Contains('@'))
             return null;
 
         var normalized = MerchantNormalization.Normalize(value);
