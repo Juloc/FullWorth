@@ -1045,5 +1045,18 @@
     "localWins": "Manual decisions and local rules always take precedence over cloud knowledge.",
     "savedEnabled": "Cloud Intelligence enabled.",
     "savedDisabled": "Cloud Intelligence disabled."
+  },
+  "twoFactor": {
+    "title": "Two-factor authentication",
+    "hint": "6-digit code from Google Authenticator or another TOTP app",
+    "enabled": "2FA is enabled. Enter a current authenticator code to disable it.",
+    "setupHelp": "Open Google Authenticator → + → Enter a setup key, add the key below, then enter the generated 6-digit code.",
+    "sharedKey": "Setup key",
+    "code": "6-digit code",
+    "enable": "Enable 2FA",
+    "disable": "Disable 2FA",
+    "disabled": "2FA disabled",
+    "enabledToast": "2FA enabled",
+    "invalidCode": "The code is not valid."
   }
 }
