@@ -27,7 +27,7 @@ public sealed class AuthIntegrationTests
         await using var factory = new FullWorthWebFactory();
         using var client = CreateClient(factory);
 
-        foreach (var publicPath in new[] { "/auth/login", "/auth/register", "/auth/forgot-password", "/health" })
+        foreach (var publicPath in new[] { "/auth/login", "/auth/two-factor", "/auth/register", "/auth/forgot-password", "/health" })
         {
             using var response = await client.GetAsync(publicPath);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
