@@ -359,7 +359,12 @@ public sealed class KnowledgePackSyncService(
             lowered.Contains("javascript:", StringComparison.Ordinal) ||
             lowered.Contains("onload=", StringComparison.Ordinal) ||
             lowered.Contains("onerror=", StringComparison.Ordinal) ||
+            lowered.Contains("<iframe", StringComparison.Ordinal) ||
+            lowered.Contains("<object", StringComparison.Ordinal) ||
+            lowered.Contains("<embed", StringComparison.Ordinal) ||
             lowered.Contains("href=\"http", StringComparison.Ordinal) ||
+            lowered.Contains("href='http", StringComparison.Ordinal) ||
+            lowered.Contains("url(http", StringComparison.Ordinal) ||
             lowered.Contains("xlink:href=", StringComparison.Ordinal))
             throw new KnowledgePackVerificationException("knowledge_pack_brand_svg_unsafe");
 
