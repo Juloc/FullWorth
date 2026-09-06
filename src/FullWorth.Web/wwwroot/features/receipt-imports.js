@@ -6,6 +6,8 @@ let dialog = null;
 let pollTimer = 0;
 let paperlessConnected = false;
 let paperlessOptions = { tags: [], documentTypes: [], correspondents: [], storagePaths: [], customFields: [] };
+let paperlessPresets = [];
+let activePaperlessPresetId = null;
 
 install();
 
@@ -109,24 +111,47 @@ function paperlessPane() {
     </div>
   </div>
   <div class="receipt-import-card receipt-import-step" data-paperless-selection hidden>
-    <div class="receipt-import-step-title"><span>2</span><h3>${esc(t('Dokumente auswählen', 'Select documents'))}</h3></div>
-    <p class="row-sub">${esc(t('Filter aus Paperless auswählen und mit UND, ODER, NICHT sowie Klammern kombinieren.', 'Choose Paperless filters and combine them with AND, OR, NOT and parentheses.'))}</p>
-    <div class="paperless-filter-builder">
-      <div data-paperless-rules></div>
-      <div class="paperless-filter-toolbar">
+    <div class="receipt-import-step-title"><span>2</span><h3>${esc(t('Welche Belege?', 'Which receipts?'))}</h3></div>
+
+    <div class="paperless-preset-bar">
+      <label><span>${esc(t('Vorlage', 'Preset'))}</span><select data-paperless-preset><option value="">${esc(t('Neue Vorlage', 'New preset'))}</option></select></label>
+      <label><span>${esc(t('Name', 'Name'))}</span><input data-paperless-preset-name type="text" maxlength="100" placeholder="${esc(t('z. B. Kassenbons', 'e.g. Receipts'))}"></label>
+      <button type="button" class="ghost" data-paperless-preset-save>${esc(t('Vorlage speichern', 'Save preset'))}</button>
+      <button type="button" class="danger ghost" data-paperless-preset-delete hidden>${esc(t('Löschen', 'Delete'))}</button>
+    </div>
+
+    <div class="paperless-auto-row">
+      <label class="check inline"><input data-paperless-preset-auto type="checkbox"> ${esc(t('Autoimport stündlich – nur neue Belege ab jetzt', 'Hourly auto-import – only new receipts from now on'))}</label>
+      <span class="row-sub" data-paperless-preset-status></span>
+    </div>
+
+    <div class="paperless-filter-builder" data-paperless-editor>
+      <div class="paperless-simple-toolbar">
+        <label><span>${esc(t('Bedingungen', 'Conditions'))}</span>
+          <select data-paperless-match>
+            <option value="AND">${esc(t('Alle müssen passen (UND)', 'All must match (AND)'))}</option>
+            <option value="OR">${esc(t('Eine reicht (ODER)', 'Any may match (OR)'))}</option>
+          </select>
+        </label>
         <button type="button" class="ghost" data-paperless-add-filter>+ ${esc(t('Filter', 'Filter'))}</button>
+        <label class="check inline paperless-advanced-toggle"><input data-paperless-advanced-toggle type="checkbox"> ${esc(t('Erweitert', 'Advanced'))}</label>
         <span class="row-sub" data-paperless-options-state></span>
       </div>
+
+      <div data-paperless-rules></div>
+
       <details class="paperless-advanced-query">
-        <summary>${esc(t('Erweiterte Paperless-Suche', 'Advanced Paperless query'))}</summary>
+        <summary>${esc(t('Freie Paperless-Abfrage', 'Raw Paperless query'))}</summary>
         <label><span>${esc(t('Zusätzliche Suchabfrage', 'Additional query'))}</span><textarea data-paperless-raw rows="2" placeholder='z. B. invoice AND NOT draft'></textarea></label>
       </details>
+
       <div class="paperless-query-preview"><span>${esc(t('Abfrage', 'Query'))}</span><code data-paperless-query-preview>—</code></div>
     </div>
+
     <div class="receipt-import-actions">
       <button type="button" class="ghost" data-paperless-preview>${esc(t('Vorschau', 'Preview'))}</button>
       <label class="check inline"><input data-paperless-auto type="checkbox" checked> ${esc(t('Direkt analysieren', 'Analyze immediately'))}</label>
-      <button type="button" data-paperless-import>${esc(t('Auswahl importieren', 'Import selection'))}</button>
+      <button type="button" data-paperless-import>${esc(t('Neue importieren', 'Import new'))}</button>
     </div>
     <div data-paperless-preview-result class="receipt-import-preview"></div>
   </div>`;
