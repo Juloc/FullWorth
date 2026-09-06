@@ -222,6 +222,7 @@ public sealed class AccountPurgeService(
                 false))
             .ToArray();
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         foreach (var descriptor in OrderForDelete(all))
         {
             // Bank connections in shared spaces are retained as historical finance data; their user
@@ -231,6 +232,7 @@ public sealed class AccountPurgeService(
             var predicate = BuildUserPredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
             await ExecuteDeleteAsync(db, descriptor, predicate, "userId", userId, ct);
         }
+        await transaction.CommitAsync(ct);
     }
 
     private async Task PurgeIntelligenceUserDataAsync(
