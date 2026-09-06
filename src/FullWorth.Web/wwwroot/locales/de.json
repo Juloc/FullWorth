@@ -958,8 +958,8 @@
   "onboarding": {
     "title": "FullWorth einrichten",
     "welcome": "Willkommen bei FullWorth",
-    "intro": "Richte jetzt deine persönlichen Zugänge ein, damit FullWorth Bankdaten und KI-Funktionen verwenden kann.",
-    "optional": "Beide Schritte sind optional. Du kannst sie überspringen und später jederzeit in den Einstellungen hinzufügen, ändern oder neu verbinden.",
+    "intro": "Richte persönliche Zugänge und FullWorth Cloud Intelligence ein.",
+    "optional": "KI- und Bankzugang sind optional. Cloud Intelligence ist empfohlen und standardmäßig aktiviert, kann aber vor Abschluss abgewählt und später in den Einstellungen geändert werden.",
     "start": "Einrichtung starten",
     "aiTitle": "KI-Zugang",
     "aiText": "Wähle Codex / ChatGPT, einen eigenen OpenAI API-Key oder einen eigenen OpenAI-kompatiblen Endpoint.",
@@ -971,6 +971,21 @@
     "continueOrSkip": "Weiter / später einrichten",
     "back": "Zurück",
     "finish": "Einrichtung abschließen",
-    "done": "Einrichtung abgeschlossen. Alle Zugänge bleiben später in den Einstellungen änderbar."
+    "done": "Einrichtung abgeschlossen. Alle Zugänge bleiben später in den Einstellungen änderbar.",
+    "cloudTitle": "FullWorth Cloud Intelligence",
+    "cloudText": "Verbessert Händler-, Kategorie- und Vertragszuordnungen gemeinsam und ermöglicht anonyme Vergleichswerte."
+  },
+  "cloudIntelligence": {
+    "title": "FullWorth Cloud Intelligence",
+    "manage": "Cloud Intelligence verwalten",
+    "loading": "Cloud-Status wird geprüft…",
+    "enabled": "Aktiv",
+    "disabled": "Deaktiviert",
+    "explain": "FullWorth nutzt gemeinsames, versioniertes Wissen für bessere automatische Zuordnungen und Vergleichswerte.",
+    "shared": "Geteilt werden nur benötigte, minimierte Lern- und Statistikdaten wie erkannte Händler, Kategorien/Aliase und grobe Vergleichs-Buckets. Keine IBAN, Kontonummer, E-Mail, Benutzer-ID, Notizen oder Bankzugangsdaten.",
+    "useCloud": "FullWorth Cloud Intelligence verwenden",
+    "localWins": "Manuelle Entscheidungen und lokale Regeln haben immer Vorrang vor Cloud-Wissen.",
+    "savedEnabled": "Cloud Intelligence aktiviert.",
+    "savedDisabled": "Cloud Intelligence deaktiviert."
   }
 }
