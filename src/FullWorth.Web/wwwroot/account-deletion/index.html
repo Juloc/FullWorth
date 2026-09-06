@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FullWorth — Kontolöschung</title>
+  <link rel="icon" type="image/svg+xml" href="/pwa/icon.svg">
+  <link rel="stylesheet" href="/account-deletion/deletion.css">
+</head>
+<body>
+  <main class="deletion-shell">
+    <section class="deletion-card" aria-live="polite">
+      <div class="brand"><strong>FullWorth</strong><span>Beta</span></div>
+      <p class="eyebrow">Kontolöschung</p>
+      <h1 id="title">Konto zur Löschung vorgemerkt</h1>
+      <p id="message">Dein FullWorth-Konto ist gesperrt. Während der Wiederherstellungsfrist werden keine Finanzdaten gelöscht.</p>
+
+      <div class="deadline">
+        <span>Endgültige Löschung geplant für</span>
+        <strong id="deadline">–</strong>
+      </div>
+
+      <p id="error" class="error" hidden></p>
+
+      <div class="actions">
+        <button id="reactivate" type="button">Konto reaktivieren</button>
+        <button id="logout" type="button" class="secondary">Abmelden</button>
+      </div>
+
+      <p class="hint">Nach Ablauf der Frist beginnt die irreversible Bereinigung. Sobald sie begonnen hat, ist eine Reaktivierung nicht mehr möglich.</p>
+    </section>
+  </main>
+  <script type="module" src="/account-deletion/deletion.js"></script>
+</body>
+</html>
