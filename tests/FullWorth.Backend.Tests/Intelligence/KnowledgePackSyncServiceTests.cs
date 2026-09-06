@@ -186,6 +186,77 @@ public sealed class KnowledgePackSyncServiceTests
     }
 
     [Fact]
+    public async Task Signed_pack_installs_provider_product_ontology_without_cross_type_category_redirects()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-14",
+            "REWE",
+            "food.groceries",
+            providerOntologyEntities:
+            [
+                new KnowledgePackOntologyEntityPayload(
+                    "provider", "food.groceries", "Legacy provider key collision", null, "merged", 2),
+                new KnowledgePackOntologyEntityPayload(
+                    "provider", "provider.telekom", "Deutsche Telekom", null, "active", 3)
+            ],
+            providerOntologyAliases:
+            [
+                new KnowledgePackOntologyAliasPayload(
+                    "provider", "provider.telekom", "Telekom", "TELEKOM", "de", "DE", 0.99m, 25, 2)
+            ],
+            providerOntologyRedirects:
+            [
+                new KnowledgePackOntologyRedirectPayload(
+                    "provider", "food.groceries", "provider.telekom", 2)
+            ],
+            productOntologyEntities:
+            [
+                new KnowledgePackOntologyEntityPayload(
+                    "product", "product.coca-cola-zero", "Coca-Cola Zero", null, "active", 2)
+            ],
+            productOntologyAliases:
+            [
+                new KnowledgePackOntologyAliasPayload(
+                    "product", "product.coca-cola-zero", "Coca Cola Zero", "COCA COLA ZERO", "de", "DE", 0.98m, 20, 2)
+            ],
+            productOntologyRedirects: []);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("installed", result.Status);
+
+        // Provider redirects are scoped by EntityType and can never rewrite merchant category keys.
+        Assert.Equal(
+            "food.groceries",
+            (await fixture.Db.OfficialMerchantMappings.SingleAsync()).CategoryKey);
+
+        var entities = await fixture.Db.OfficialOntologyEntities.AsNoTracking().ToListAsync();
+        Assert.Equal(3, entities.Count);
+        Assert.Equal(2, entities.Count(x => x.EntityType == "provider"));
+        Assert.Single(entities.Where(x => x.EntityType == "product"));
+
+        var aliases = await fixture.Db.OfficialOntologyAliases.AsNoTracking().ToListAsync();
+        Assert.Contains(aliases, x =>
+            x.EntityType == "provider" &&
+            x.CanonicalKey == "provider.telekom" &&
+            x.NormalizedAlias == "TELEKOM");
+        Assert.Contains(aliases, x =>
+            x.EntityType == "product" &&
+            x.CanonicalKey == "product.coca-cola-zero" &&
+            x.NormalizedAlias == "COCA COLA ZERO");
+
+        var redirect = await fixture.Db.OfficialOntologyRedirects.SingleAsync();
+        Assert.Equal("provider", redirect.EntityType);
+        Assert.Equal("provider.telekom", redirect.ToCanonicalKey);
+    }
+
+    [Fact]
     public async Task Signed_pack_with_redirect_cycle_is_rejected()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -309,7 +380,13 @@ public sealed class KnowledgePackSyncServiceTests
         IReadOnlyList<KnowledgePackOntologyAliasPayload>? ontologyAliases = null,
         IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ontologyRedirects = null,
         IReadOnlyList<KnowledgePackBrandAssetPayload>? brandAssets = null,
-        IReadOnlyList<KnowledgePackBrandAliasPayload>? brandAliases = null)
+        IReadOnlyList<KnowledgePackBrandAliasPayload>? brandAliases = null,
+        IReadOnlyList<KnowledgePackOntologyEntityPayload>? providerOntologyEntities = null,
+        IReadOnlyList<KnowledgePackOntologyAliasPayload>? providerOntologyAliases = null,
+        IReadOnlyList<KnowledgePackOntologyRedirectPayload>? providerOntologyRedirects = null,
+        IReadOnlyList<KnowledgePackOntologyEntityPayload>? productOntologyEntities = null,
+        IReadOnlyList<KnowledgePackOntologyAliasPayload>? productOntologyAliases = null,
+        IReadOnlyList<KnowledgePackOntologyRedirectPayload>? productOntologyRedirects = null)
     {
         var payload = new KnowledgePackPayload(
             "fullworth-official",
@@ -332,7 +409,13 @@ public sealed class KnowledgePackSyncServiceTests
             ontologyAliases,
             ontologyRedirects,
             brandAssets,
-            brandAliases);
+            brandAliases,
+            providerOntologyEntities,
+            providerOntologyAliases,
+            providerOntologyRedirects,
+            productOntologyEntities,
+            productOntologyAliases,
+            productOntologyRedirects);
 
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions
         {

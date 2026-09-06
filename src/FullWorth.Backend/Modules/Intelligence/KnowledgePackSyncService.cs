@@ -81,10 +81,12 @@ public sealed class KnowledgePackSyncService(
 
             var ontology = ProjectOntology(payload);
             var brands = ProjectBrands(payload);
-            var redirectMap = ontology.Redirects.ToDictionary(
-                x => x.FromCanonicalKey,
-                x => x.ToCanonicalKey,
-                StringComparer.Ordinal);
+            var redirectMap = ontology.Redirects
+                .Where(x => x.EntityType == "category")
+                .ToDictionary(
+                    x => x.FromCanonicalKey,
+                    x => x.ToCanonicalKey,
+                    StringComparer.Ordinal);
             var mappings = payload.Merchants
                 .Where(x => !string.IsNullOrWhiteSpace(x.CategoryKey))
                 .Select(x =>
@@ -294,7 +296,13 @@ public sealed class KnowledgePackSyncService(
             (payload.OntologyAliases?.Count ?? 0) > 100_000 ||
             (payload.OntologyRedirects?.Count ?? 0) > 50_000 ||
             (payload.BrandAssets?.Count ?? 0) > 5_000 ||
-            (payload.BrandAliases?.Count ?? 0) > 100_000)
+            (payload.BrandAliases?.Count ?? 0) > 100_000 ||
+            (payload.ProviderOntologyEntities?.Count ?? 0) > 50_000 ||
+            (payload.ProviderOntologyAliases?.Count ?? 0) > 100_000 ||
+            (payload.ProviderOntologyRedirects?.Count ?? 0) > 50_000 ||
+            (payload.ProductOntologyEntities?.Count ?? 0) > 50_000 ||
+            (payload.ProductOntologyAliases?.Count ?? 0) > 100_000 ||
+            (payload.ProductOntologyRedirects?.Count ?? 0) > 50_000)
             throw new KnowledgePackVerificationException("knowledge_pack_payload_invalid");
 
         return payload;
@@ -406,6 +414,8 @@ public sealed class KnowledgePackSyncService(
     private static ProjectedOntology ProjectOntology(KnowledgePackPayload payload)
     {
         var entities = (payload.OntologyEntities ?? [])
+            .Concat(payload.ProviderOntologyEntities ?? [])
+            .Concat(payload.ProductOntologyEntities ?? [])
             .Select(ToOntologyEntity)
             .ToList();
         if (entities.Count != entities
@@ -419,12 +429,16 @@ public sealed class KnowledgePackSyncService(
             .ToHashSet();
 
         var aliases = (payload.OntologyAliases ?? [])
+            .Concat(payload.ProviderOntologyAliases ?? [])
+            .Concat(payload.ProductOntologyAliases ?? [])
             .Select(ToOntologyAlias)
             .ToList();
         if (aliases.Any(x => !entityKeys.Contains((x.EntityType, x.CanonicalKey))))
             throw new KnowledgePackVerificationException("knowledge_pack_ontology_orphan_alias");
 
         var redirects = (payload.OntologyRedirects ?? [])
+            .Concat(payload.ProviderOntologyRedirects ?? [])
+            .Concat(payload.ProductOntologyRedirects ?? [])
             .Select(ToOntologyRedirect)
             .ToList();
         if (redirects.Count != redirects
@@ -730,8 +744,13 @@ public sealed class KnowledgePackSyncService(
             : null;
     }
 
-    private static string? NormalizeOntologyType(string? value) =>
-        value?.Trim().ToLowerInvariant() == "category" ? "category" : null;
+    private static string? NormalizeOntologyType(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        return normalized is "category" or "provider" or "product"
+            ? normalized
+            : null;
+    }
 
     private static string? NormalizeCanonicalKey(string? value)
     {
