@@ -1,3 +1,4 @@
+import { api as sharedApi, jsonBody } from '../core/services.js';
 // Web Push subscription helper (Wave K2). Call enablePush() from a user gesture (e.g. a
 // "Enable notifications" toggle). No-ops gracefully when push is unsupported or the server has no
 // VAPID key configured. The subscription is stored server-side via the BFF.
@@ -6,9 +7,12 @@ export async function enablePush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     return { ok: false, reason: 'unsupported' };
   }
-  const keyResponse = await fetch('/bff/backend/api/push/vapid-public-key');
-  if (!keyResponse.ok) return { ok: false, reason: 'no-key' };
-  const { publicKey } = await keyResponse.json();
+  let publicKey;
+  try {
+    ({ publicKey } = await sharedApi('api/push/vapid-public-key'));
+  } catch {
+    return { ok: false, reason: 'no-key' };
+  }
   if (!publicKey) return { ok: false, reason: 'not-configured' };
 
   const permission = await Notification.requestPermission();
@@ -20,17 +24,17 @@ export async function enablePush() {
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
   const keys = subscription.toJSON().keys || {};
-  const response = await fetch('/bff/backend/api/push/subscriptions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  try {
+    await sharedApi('api/push/subscriptions', jsonBody({
       endpoint: subscription.endpoint,
       p256dh: keys.p256dh,
       auth: keys.auth,
       deviceLabel: navigator.userAgent.slice(0, 100),
-    }),
-  });
-  return { ok: response.ok };
+    }));
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function disablePush() {
@@ -43,9 +47,9 @@ export async function disablePush() {
   const endpoint = subscription.endpoint;
   await subscription.unsubscribe();
   try {
-    const devices = await fetch('/bff/backend/api/push/subscriptions').then(r => (r.ok ? r.json() : []));
+    const devices = await sharedApi('api/push/subscriptions').catch(() => []);
     const match = (devices || []).find(d => d.endpoint === endpoint);
-    if (match) await fetch(`/bff/backend/api/push/subscriptions/${match.id}`, { method: 'DELETE' });
+    if (match) await sharedApi(`api/push/subscriptions/${match.id}`, { method: 'DELETE' });
   } catch { /* browser is already unsubscribed; a stale server row is harmless, so don't fail the toggle */ }
   return { ok: true };
 }
