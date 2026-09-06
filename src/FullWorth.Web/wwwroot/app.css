@@ -12,7 +12,7 @@
   color-scheme:light;
   /* spacing scale (§4.1) */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
-  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--content-max:1600px;--sidebar-w:228px;--sidebar-w-collapsed:72px;
+  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:228px;--sidebar-w-collapsed:72px;
   /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
   --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
@@ -62,8 +62,8 @@ html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.s
 #theme-toggle[data-theme-pref="light"] [data-theme-icon="light"],
 #theme-toggle[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 .brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
-.brand-name{display:grid;gap:0;line-height:1}
-.beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.brand-name{display:inline-flex;align-items:center;gap:7px;min-width:0;line-height:1}
+.beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}\n.brand-beta{display:inline-flex;align-items:center;padding:2px 6px;border:1px solid var(--line);border-radius:var(--radius-pill);font-size:8px;font-weight:700;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 /* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
    stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
 #nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
@@ -99,7 +99,7 @@ body.nav-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-r
 body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle{display:none}
 
 /* Main + top header (§3.1) */
-main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max)}
+main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:none}
 main:focus{outline:none}
 .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
 .topbar-title{min-width:0;flex:1 1 auto}
