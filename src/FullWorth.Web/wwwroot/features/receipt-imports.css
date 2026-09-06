@@ -26,6 +26,8 @@
 .receipt-import-doc:last-child{border-bottom:0}
 .receipt-import-doc span{display:grid;gap:2px;min-width:0;word-break:break-word}
 .receipt-import-doc small{color:var(--text-muted,#707782)}
+.receipt-import-doc.imported{opacity:.58}
+.receipt-import-doc em{margin-left:auto;font-size:.72rem;font-style:normal;color:var(--text-muted,#707782);white-space:nowrap}
 .receipt-import-message{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--surface-subtle,#f4f6f8);font-size:.9rem}
 .receipt-import-message.error{background:color-mix(in srgb,#c62828 9%,var(--surface,#fff));color:#a51f1f}
 .receipt-import-message.ok{background:color-mix(in srgb,#16844b 9%,var(--surface,#fff));color:#126b3d}
@@ -58,8 +60,17 @@
 .receipt-import-item-open{white-space:nowrap;text-decoration:none}
 .receipt-import-step-title{display:flex;align-items:center;gap:9px}
 .receipt-import-step-title>span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;background:var(--surface-subtle,#f2f4f7);font-size:.75rem;font-weight:700;color:var(--text-muted,#707782);flex:0 0 auto}
+.paperless-preset-bar{display:grid;grid-template-columns:minmax(150px,1fr) minmax(170px,1fr) auto auto;gap:8px;align-items:end;margin-top:14px}
+.paperless-preset-bar label,.paperless-simple-toolbar label{display:grid;gap:4px;font-size:.78rem;color:var(--text-muted,#707782)}
+.paperless-preset-bar select,.paperless-preset-bar input,.paperless-simple-toolbar select{width:100%;box-sizing:border-box}
+.paperless-auto-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;padding:9px 10px;border-radius:10px;background:var(--surface-subtle,#f4f6f8)}
 .paperless-filter-builder{display:grid;gap:10px;margin-top:12px}
-.paperless-filter-rule{display:grid;grid-template-columns:88px 82px 70px minmax(150px,190px) minmax(180px,1fr) 70px 38px;gap:7px;align-items:center;padding:9px;border:1px solid var(--border,#e4e7eb);border-radius:10px;background:var(--surface-subtle,#f7f8fa)}
+.paperless-simple-toolbar{display:grid;grid-template-columns:minmax(190px,280px) auto auto minmax(0,1fr);gap:8px;align-items:end}
+.paperless-advanced-toggle{align-self:center}
+.paperless-filter-rule{display:grid;grid-template-columns:82px minmax(150px,190px) minmax(180px,1fr) 38px;gap:7px;align-items:center;padding:9px;border:1px solid var(--border,#e4e7eb);border-radius:10px;background:var(--surface-subtle,#f7f8fa)}
+.paperless-filter-rule>[data-rule-join],.paperless-filter-rule>[data-rule-open],.paperless-filter-rule>[data-rule-close]{display:none}
+.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(150px,190px) minmax(180px,1fr) 70px 38px}
+.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-join],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-open],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-close]{display:block}
 .paperless-filter-rule select,.paperless-filter-rule input{width:100%;min-width:0;box-sizing:border-box}
 .paperless-filter-rule [data-rule-join].is-first{opacity:.35}
 .paperless-rule-not{display:flex;align-items:center;gap:5px;font-size:.78rem;white-space:nowrap}
@@ -75,5 +86,5 @@
 .paperless-query-preview>span{color:var(--text-muted,#707782)}
 .paperless-query-preview code{white-space:pre-wrap;overflow-wrap:anywhere}
 .paperless-query-preview code.error{color:#a51f1f}
-@media(max-width:900px){.paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(140px,1fr) minmax(160px,1.4fr) 70px 38px}}
-@media(max-width:700px){.receipt-import-dialog,.receipt-import-batch-dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}.receipt-import-shell,.receipt-import-batch-dialog-shell{height:100%}.receipt-import-head{padding:16px}.receipt-import-tabs{padding:8px 16px}.receipt-import-body{padding:14px 16px 24px}.receipt-import-batch-dialog-head{padding:14px 16px 10px}.receipt-import-batch-dialog-body{padding:14px 16px 20px}.receipt-import-grid{grid-template-columns:1fr}.receipt-import-grid .wide{grid-column:auto}.receipt-import-actions{justify-content:stretch}.receipt-import-actions>button{flex:1}.receipt-import-batch-main{display:grid}.receipt-import-batch-filters{grid-template-columns:1fr 1fr}.receipt-import-batch-filters>[data-import-item-count]{grid-column:1/-1;justify-self:start;padding-bottom:0}.receipt-import-batch-item{grid-template-columns:1fr}.receipt-import-batch-item-actions{justify-content:flex-start}.paperless-filter-rule{grid-template-columns:1fr 1fr}.paperless-filter-rule [data-rule-field],.paperless-rule-value{grid-column:1/-1}.paperless-rule-remove{justify-self:end}.paperless-query-preview{grid-template-columns:1fr}}
+@media(max-width:900px){.paperless-preset-bar{grid-template-columns:1fr 1fr}.paperless-simple-toolbar{grid-template-columns:1fr auto auto}.paperless-simple-toolbar>[data-paperless-options-state]{grid-column:1/-1}.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(140px,1fr) minmax(160px,1.4fr) 70px 38px}}
+@media(max-width:700px){.receipt-import-dialog,.receipt-import-batch-dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}.receipt-import-shell,.receipt-import-batch-dialog-shell{height:100%}.receipt-import-head{padding:16px}.receipt-import-tabs{padding:8px 16px}.receipt-import-body{padding:14px 16px 24px}.receipt-import-batch-dialog-head{padding:14px 16px 10px}.receipt-import-batch-dialog-body{padding:14px 16px 20px}.receipt-import-grid{grid-template-columns:1fr}.receipt-import-grid .wide{grid-column:auto}.receipt-import-actions{justify-content:stretch}.receipt-import-actions>button{flex:1}.receipt-import-batch-main{display:grid}.receipt-import-batch-filters{grid-template-columns:1fr 1fr}.receipt-import-batch-filters>[data-import-item-count]{grid-column:1/-1;justify-self:start;padding-bottom:0}.receipt-import-batch-item{grid-template-columns:1fr}.receipt-import-batch-item-actions{justify-content:flex-start}.paperless-preset-bar,.paperless-simple-toolbar{grid-template-columns:1fr}.paperless-filter-rule,.paperless-filter-builder.advanced .paperless-filter-rule{grid-template-columns:1fr 1fr}.paperless-filter-rule [data-rule-field],.paperless-rule-value{grid-column:1/-1}.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-join],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-open],.paperless-filter-builder.advanced .paperless-filter-rule>[data-rule-close]{display:block}.paperless-rule-remove{justify-self:end}.paperless-query-preview{grid-template-columns:1fr}}
