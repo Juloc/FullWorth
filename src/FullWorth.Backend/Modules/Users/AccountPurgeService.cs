@@ -446,6 +446,70 @@ public sealed class AccountPurgeService(
         }
     }
 
+    private static int? FindGenericSpaceOwnershipDepth(IEntityType entity, HashSet<IEntityType> visiting)
+    {
+        if (entity.FindProperty("FullWorthSpaceId") is not null) return 1;
+        if (!visiting.Add(entity)) return null;
+        try
+        {
+            int? best = null;
+            foreach (var fk in entity.GetForeignKeys())
+            {
+                if (fk.PrincipalEntityType == entity) continue;
+                var depth = FindGenericSpaceOwnershipDepth(fk.PrincipalEntityType, visiting);
+                if (!depth.HasValue) continue;
+                var candidate = depth.Value + 1;
+                if (!best.HasValue || candidate < best.Value) best = candidate;
+            }
+            return best;
+        }
+        finally
+        {
+            visiting.Remove(entity);
+        }
+    }
+
+    private static string BuildGenericSpacePredicate(
+        IEntityType entity,
+        string alias,
+        int depth,
+        HashSet<IEntityType> visiting)
+    {
+        if (entity.FindProperty("FullWorthSpaceId") is { } direct)
+            return $"{alias}.{QuoteColumnStatic(entity, direct)} = @spaceId";
+
+        if (!visiting.Add(entity))
+            throw new InvalidOperationException($"Cycle while resolving generic space ownership for {entity.Name}.");
+
+        try
+        {
+            var chosen = entity.GetForeignKeys()
+                .Where(fk => fk.PrincipalEntityType != entity)
+                .Select(fk => new
+                {
+                    ForeignKey = fk,
+                    Depth = FindGenericSpaceOwnershipDepth(fk.PrincipalEntityType, new HashSet<IEntityType>())
+                })
+                .Where(x => x.Depth.HasValue)
+                .OrderBy(x => x.Depth)
+                .FirstOrDefault()
+                ?? throw new InvalidOperationException($"No FullWorthSpaceId ownership path for {entity.Name}.");
+
+            var principal = chosen.ForeignKey.PrincipalEntityType;
+            var principalAlias = $"s{depth + 1}";
+            var joins = chosen.ForeignKey.Properties
+                .Zip(chosen.ForeignKey.PrincipalKey.Properties)
+                .Select(pair =>
+                    $"{principalAlias}.{QuoteColumnStatic(principal, pair.Second)} = {alias}.{QuoteColumnStatic(entity, pair.First)}");
+            var principalPredicate = BuildGenericSpacePredicate(principal, principalAlias, depth + 1, visiting);
+            return $"EXISTS (SELECT 1 FROM {DelimitTableStatic(principal)} AS {principalAlias} WHERE {string.Join(" AND ", joins)} AND {principalPredicate})";
+        }
+        finally
+        {
+            visiting.Remove(entity);
+        }
+    }
+
     private static int? FindUserOwnershipDepth(IEntityType entity, HashSet<IEntityType> visiting)
     {
         if (entity.ClrType == typeof(FullWorthUser)) return null;
