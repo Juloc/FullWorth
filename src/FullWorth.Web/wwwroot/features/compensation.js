@@ -59,8 +59,14 @@ function renderSpaces(){
 
 async function loadProfile(){
   if(!state.space)return;
-  const saved=await api(`api/compensation/profile?fullWorthSpaceId=${state.space.id}`,{},true);
-  if(saved?.profile)fillProfile(saved.profile);
+  const [saved,history]=await Promise.all([
+    api(`api/compensation/profile?fullWorthSpaceId=${state.space.id}`,{},true),
+    api(`api/compensation/history?fullWorthSpaceId=${state.space.id}`,{},true)
+  ]);
+  const today=localIsoDate(new Date());
+  const current=(history||[]).filter(entry=>entry.effectiveDate<=today).at(-1);
+  if(current?.resolvedProfile)fillProfile(current.resolvedProfile);
+  else if(saved?.profile)fillProfile(saved.profile);
 }
 
 async function saveProfile(){
@@ -424,6 +430,7 @@ function donut(netF,taxF,socialF,centerPct){
 function value(id){return $(`#${id}`).value}
 function number(id){return Number(value(id))||0}
 function set(id,v){const el=$(`#${id}`);if(el)el.value=v??''}
+function localIsoDate(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
 function date(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE').format(new Date(`${String(v).slice(0,10)}T12:00:00`))}
 function json(method,body){return{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}}
 async function api(path,options={},allow404=false){
