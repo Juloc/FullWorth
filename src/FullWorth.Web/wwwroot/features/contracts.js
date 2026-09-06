@@ -230,7 +230,7 @@ function openContractFilterSheet(host) {
     <label>${esc(ctx.get('contracts.account'))}<select name="account"><option value="">${esc(ctx.get('common.all'))}</option>${accountOptions}</select></label>
     <label>${esc(t('Kategorie', 'Category'))}<select name="category"><option value="">${esc(ctx.get('common.all'))}</option>${categoryOptions}</select></label>
     <label>${esc(t('Turnus', 'Billing cycle'))}<select name="cycle"><option value="">${esc(ctx.get('common.all'))}</option>${cycleOptions}</select></label>
-    <div class="dialog-actions"><button type="button" class="ghost" data-reset>${esc(t('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${esc(ctx.get('common.apply'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-reset>${esc(t('Zurücksetzen', 'Reset'))}</button><button type="button" class="btn btn-primary" data-apply>${esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   dlg.classList.add('contracts-sortsheet-dlg');
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -463,7 +463,7 @@ async function loadPriceChanges(detect) {
           <div class="row-title">${ctx.esc(c ? c.name : ctx.get('priceChanges.title'))}</div>
           <div class="row-sub">${ctx.money(s.oldAmount, c?.currency)} → ${ctx.money(s.newAmount, c?.currency)} · ${ctx.esc(pct)} · ${ctx.esc(ctx.date(s.detectedOn))}</div>
         </div>
-        <div class="row-side"><button type="button" class="ghost danger" data-ignore>${ctx.esc(ctx.get('priceChanges.ignore'))}</button><button type="button" class="ghost" data-confirm>${ctx.esc(ctx.get('priceChanges.confirm'))}</button></div>
+        <div class="row-side"><button type="button" class="btn btn-secondary" data-ignore>${ctx.esc(ctx.get('priceChanges.ignore'))}</button><button type="button" class="btn btn-primary" data-confirm>${ctx.esc(ctx.get('priceChanges.confirm'))}</button></div>
       </div>`;
     }).join('');
     box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('priceChanges.title'))}</h3></div>${items}`;
@@ -555,15 +555,15 @@ async function loadDetected(interactive) {
       <div class="row-side detected-side">
         <span class="amount">${ctx.money(cand.typicalAmount, cand.currency)}</span>
         <div class="detected-actions">
-          <button type="button" class="ghost" data-dismiss>${ctx.esc(ctx.get('contracts.dismiss'))}</button>
-          <button type="button" class="ghost" data-accept>${ctx.esc(ctx.get('contracts.accept'))}</button>
+          <button type="button" class="btn btn-secondary" data-dismiss>${ctx.esc(ctx.get('contracts.dismiss'))}</button>
+          <button type="button" class="btn btn-primary" data-accept>${ctx.esc(ctx.get('contracts.accept'))}</button>
         </div>
       </div>
     </div>`;
   }).join('');
   const remaining = Math.max(0, candidates.length - visible.length);
   const more = remaining
-    ? `<button type="button" class="contracts-more-suggestions" data-detected-more>${ctx.esc(t(`Weitere ${remaining} anzeigen`, `Show ${remaining} more`))}</button>`
+    ? `<button type="button" class="btn btn-secondary contracts-more-suggestions" data-detected-more>${ctx.esc(t(`Weitere ${remaining} anzeigen`, `Show ${remaining} more`))}</button>`
     : '';
   box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(ctx.get('contracts.detectedTitle'))}</h3></div>${items}${more}`;
   box.querySelectorAll('.detected-row').forEach(el => {
@@ -682,10 +682,10 @@ async function openDetail(id) {
     <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
     ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
     <div class="dialog-actions">
-      <button type="button" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
+      <button type="button" class="btn btn-secondary" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
       ${contract.isActive
-        ? `<button type="button" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
-        : `<button type="button" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
+        ? `<button type="button" class="btn btn-secondary" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="btn btn-danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
+        : `<button type="button" class="btn btn-primary" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
     </div>
   </div>`);
   const coachAction = document.createElement('button');
@@ -739,7 +739,7 @@ async function openCancellationDialog(contract, existing) {
     <label>${ctx.esc(ctx.get('contracts.providerContact'))}<textarea name='providerContact' maxlength='500' rows='2'>${ctx.esc(details.providerContact || '')}</textarea></label>
     ${details.cancellationSentAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.cancelledOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationSentAt))}</div>` : ''}
     ${details.cancellationConfirmedAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.confirmedOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationConfirmedAt))}</div>` : ''}
-    <div class='dialog-actions'><button type='button' data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type='submit'>${ctx.esc(ctx.get('common.apply'))}</button></div>
+    <div class='dialog-actions'><button type='button' class='btn btn-secondary' data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type='submit' class='btn btn-primary'>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -833,7 +833,7 @@ async function openContractDialog(existing) {
     <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${categories}</select></label>
     <label>${ctx.esc(ctx.get('contracts.account'))}<select name="account"><option value="">—</option>${accountOpts}</select></label>
     <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="2">${ctx.esc(c.notes || '')}</textarea></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
