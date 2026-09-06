@@ -23,6 +23,7 @@ public static class AuthEndpoints
         group.MapGet("/providers", ProvidersAsync).AllowAnonymous();
         group.MapGet("/external/{provider}", StartExternalAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapGet("/external/callback", ExternalCallbackAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
+        group.MapPost("/external/two-factor", ExternalTwoFactorAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
@@ -141,10 +142,7 @@ public static class AuthEndpoints
         }
 
         if (await userManager.GetTwoFactorEnabledAsync(user))
-        {
-            await context.SignOutAsync(IdentityConstants.ExternalScheme);
-            return Results.Redirect("/auth/login?status=external-two-factor-required");
-        }
+            return Results.Redirect("/auth/two-factor?external=1");
 
         if (!await sessions.SignInUserAsync(user, context, ct))
         {
@@ -157,6 +155,59 @@ public static class AuthEndpoints
             return Results.Redirect("/account/deletion");
 
         return Results.Redirect(returnUrl);
+    }
+
+    private static async Task<IResult> ExternalTwoFactorAsync(
+        HttpContext context,
+        TwoFactorCodeRequest request,
+        SignInManager<AuthUser> signInManager,
+        UserManager<AuthUser> userManager,
+        AuthSessionCoordinator sessions,
+        AccountDeletionService deletion,
+        CancellationToken ct)
+    {
+        var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
+        var info = await signInManager.GetExternalLoginInfoAsync();
+        if (!external.Succeeded || external.Properties is null || info is null)
+            return Results.Unauthorized();
+
+        var user = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+        if (user is null || !await userManager.GetTwoFactorEnabledAsync(user))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Results.Unauthorized();
+        }
+
+        var code = (request.Code ?? string.Empty)
+            .Replace(" ", string.Empty)
+            .Replace("-", string.Empty)
+            .Trim();
+        var valid = await userManager.VerifyTwoFactorTokenAsync(
+            user,
+            TokenOptions.DefaultAuthenticatorProvider,
+            code);
+        if (!valid)
+        {
+            await userManager.AccessFailedAsync(user);
+            return Results.Unauthorized();
+        }
+
+        await userManager.ResetAccessFailedCountAsync(user);
+        if (!await sessions.SignInUserAsync(user, context, ct))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Results.Unauthorized();
+        }
+
+        var returnUrl = external.Properties.Items.TryGetValue(ExternalReturnUrlItem, out var storedReturnUrl)
+            ? GetSafeReturnUrl(context, storedReturnUrl)
+            : "/";
+
+        await context.SignOutAsync(IdentityConstants.ExternalScheme);
+        if (await deletion.IsPendingAsync(user.Id, ct))
+            return Results.Ok(new { returnUrl = "/account/deletion" });
+
+        return Results.Ok(new { returnUrl });
     }
 
     private static async Task<IResult> LoginAsync(
