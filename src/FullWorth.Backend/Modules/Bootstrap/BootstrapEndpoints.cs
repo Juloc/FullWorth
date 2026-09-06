@@ -8,6 +8,7 @@ namespace FullWorth.Backend.Modules.Bootstrap;
 
 public sealed record BootstrapAdminRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
 public sealed record BootstrapRegistrationRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
+public sealed record BootstrapUserLifecycleRequest(Guid FinanceUserId);
 public sealed record BootstrapAdminResponse(Guid FinanceUserId, Guid FullWorthSpaceId);
 
 public static class BootstrapEndpoints
@@ -77,6 +78,43 @@ public static class BootstrapEndpoints
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
+        }).WithTags("Bootstrap");
+
+        app.MapPost($"{BasePath}/deactivate-user", async (
+            BootstrapUserLifecycleRequest request,
+            UserStore users,
+            CancellationToken ct) =>
+        {
+            if (request.FinanceUserId == Guid.Empty) return Results.BadRequest();
+            return await users.SetActiveAsync(request.FinanceUserId, false, ct)
+                ? Results.NoContent()
+                : Results.NotFound();
+        }).WithTags("Bootstrap");
+
+        app.MapPost($"{BasePath}/reactivate-user", async (
+            BootstrapUserLifecycleRequest request,
+            UserStore users,
+            CancellationToken ct) =>
+        {
+            if (request.FinanceUserId == Guid.Empty) return Results.BadRequest();
+            return await users.SetActiveAsync(request.FinanceUserId, true, ct)
+                ? Results.NoContent()
+                : Results.NotFound();
+        }).WithTags("Bootstrap");
+
+        app.MapPost($"{BasePath}/purge-user", async (
+            BootstrapUserLifecycleRequest request,
+            AccountPurgeService purge,
+            CancellationToken ct) =>
+        {
+            if (request.FinanceUserId == Guid.Empty) return Results.BadRequest();
+            var result = await purge.PurgeAsync(request.FinanceUserId, ct);
+            return result.Succeeded
+                ? Results.Ok(result)
+                : Results.Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Account purge could not complete safely.",
+                    extensions: new Dictionary<string, object?> { ["error"] = result.Error });
         }).WithTags("Bootstrap");
 
         // Claim an owner-issued invite (multi-user sharing). Lives under /api/bootstrap so it runs on the
