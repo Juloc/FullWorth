@@ -32,6 +32,22 @@ public sealed class TransferDetectionTests
     }
 
     [Fact]
+    public void AutomaticPairsRequireOwnedAccountIdentifierMatch()
+    {
+        var acctA = Guid.NewGuid();
+        var acctB = Guid.NewGuid();
+        var a = new TransferCandidate(Guid.NewGuid(), acctA, -50m, "EUR", Day, "iban-a", "iban-b");
+        var b = new TransferCandidate(Guid.NewGuid(), acctB, 50m, "EUR", Day.AddDays(1), "iban-b", "iban-a");
+
+        Assert.Single(TransferDetectionService.FindAutomaticPairs([a, b], 3));
+
+        var amountOnlyA = a with { CounterpartyAccountLookup = null };
+        var amountOnlyB = b with { CounterpartyAccountLookup = null };
+        Assert.Empty(TransferDetectionService.FindAutomaticPairs([amountOnlyA, amountOnlyB], 3));
+        Assert.Single(TransferDetectionService.FindMutualUniquePairs([amountOnlyA, amountOnlyB], 3));
+    }
+
+    [Fact]
     public void AmbiguousAndInvalidCandidatesAreLeftUnpaired()
     {
         var acctA = Guid.NewGuid();
@@ -122,11 +138,11 @@ public sealed class TransferDetectionTests
             db.Set<FullWorthSpaceMember>().Add(new FullWorthSpaceMember { FullWorthSpaceId = s.Space, UserId = s.Member, Role = FullWorthSpaceRoles.Member, JoinedAt = now });
 
             db.Set<BankConnection>().Add(new BankConnection { Id = connectionId, FullWorthSpaceId = s.Space, InstitutionName = "Bank" });
-            db.Set<FinanceAccount>().Add(new FinanceAccount { Id = acctA, FullWorthSpaceId = s.Space, BankConnectionId = connectionId, IdentificationHash = "hA", ProviderAccountId = "pA", InstitutionName = "Bank", DisplayName = "A" });
-            db.Set<FinanceAccount>().Add(new FinanceAccount { Id = acctB, FullWorthSpaceId = s.Space, BankConnectionId = connectionId, IdentificationHash = "hB", ProviderAccountId = "pB", InstitutionName = "Bank", DisplayName = "B" });
+            db.Set<FinanceAccount>().Add(new FinanceAccount { Id = acctA, FullWorthSpaceId = s.Space, BankConnectionId = connectionId, IdentificationHash = "hA", ProviderAccountId = "pA", InstitutionName = "Bank", DisplayName = "A", IbanLookup = "iban-a" });
+            db.Set<FinanceAccount>().Add(new FinanceAccount { Id = acctB, FullWorthSpaceId = s.Space, BankConnectionId = connectionId, IdentificationHash = "hB", ProviderAccountId = "pB", InstitutionName = "Bank", DisplayName = "B", IbanLookup = "iban-b" });
 
-            db.Set<FinanceTransaction>().Add(new FinanceTransaction { Id = s.TxOut, AccountId = acctA, ExternalKey = "out", Amount = -200m, Currency = "EUR", BookingDate = Day });
-            db.Set<FinanceTransaction>().Add(new FinanceTransaction { Id = s.TxIn, AccountId = acctB, ExternalKey = "in", Amount = 200m, Currency = "EUR", BookingDate = Day.AddDays(1) });
+            db.Set<FinanceTransaction>().Add(new FinanceTransaction { Id = s.TxOut, AccountId = acctA, ExternalKey = "out", Amount = -200m, Currency = "EUR", BookingDate = Day, CounterpartyAccountLookup = "iban-b" });
+            db.Set<FinanceTransaction>().Add(new FinanceTransaction { Id = s.TxIn, AccountId = acctB, ExternalKey = "in", Amount = 200m, Currency = "EUR", BookingDate = Day.AddDays(1), CounterpartyAccountLookup = "iban-a" });
             db.Set<FinanceTransaction>().Add(new FinanceTransaction { Id = s.TxUnrelated, AccountId = acctA, ExternalKey = "u", Amount = -13.37m, Currency = "EUR", BookingDate = Day });
             await db.SaveChangesAsync();
         });
