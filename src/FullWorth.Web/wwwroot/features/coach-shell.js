@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const $ = selector => [...document.querySelectorAll(selector)];
+const all = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const lang = () => (localStorage.getItem('finance.language') || (navigator.language || 'de')).startsWith('de') ? 'de' : 'en';
 const spaceId = () => localStorage.getItem('finance.space');
@@ -201,7 +201,7 @@ function setSelectedModel(value) {
   selectedModel = value || '';
   if (selectedModel) localStorage.setItem('finance.coach.model', selectedModel);
   else localStorage.removeItem('finance.coach.model');
-  $('#coach-model,#coach-dock-model').forEach(select => { if (select.value !== selectedModel) select.value = selectedModel; });
+  all('#coach-model,#coach-dock-model').forEach(select => { if (select.value !== selectedModel) select.value = selectedModel; });
 }
 
 function syncQuickAccess() {
@@ -288,7 +288,7 @@ function setMascotLabel() {
 }
 
 async function loadModels() {
-  const selects = $('#coach-model,#coach-dock-model');
+  const selects = all('#coach-model,#coach-dock-model');
   if (!selects.length) return;
   try {
     modelCatalog = await api('api/coach/models');
@@ -334,7 +334,7 @@ function renderStarters() {
   const starters = lang() === 'de'
     ? ['Wo ist mein Geld hin?', 'Was habe ich bereut?', 'Was war es wert?', 'Was könnte ich reduzieren?', 'Wann erreiche ich 100.000 €?']
     : ['Where did my money go?', 'What did I regret?', 'What was worth it?', 'What could I reduce?', 'When could I reach €100,000?'];
-  $('#coach-starters,#coach-dock-starters').forEach(root => {
+  all('#coach-starters,#coach-dock-starters').forEach(root => {
     root.innerHTML = '';
     starters.forEach(text => {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'coach-chip'; button.textContent = text;
@@ -370,8 +370,8 @@ async function ensureConversation() {
 async function ask(text) {
   const question = String(text || '').trim();
   if (!question) return;
-  const inputs = $('#coach-input,#coach-dock-input');
-  const sends = $('#coach-send,#coach-dock-send');
+  const inputs = all('#coach-input,#coach-dock-input');
+  const sends = all('#coach-send,#coach-dock-send');
   inputs.forEach(input => { input.value = ''; });
   sends.forEach(send => { send.disabled = true; });
   appendMessage({ role: 'User', text: question, facts: [] });
@@ -407,7 +407,7 @@ async function restartConversation() {
   (dockOpen ? $('#coach-dock-input') : $('#coach-input'))?.focus();
 }
 
-function messageRoots() { return $('#coach-messages,#coach-dock-messages'); }
+function messageRoots() { return all('#coach-messages,#coach-dock-messages'); }
 
 function renderMessages(messages) {
   messageRoots().forEach(root => {
@@ -442,7 +442,7 @@ function appendMessage(message) {
 }
 
 function renderFollowUps(items) {
-  $('#coach-starters,#coach-dock-starters').forEach(root => {
+  all('#coach-starters,#coach-dock-starters').forEach(root => {
     root.innerHTML = '';
     items.slice(0, 3).forEach(text => { const b = document.createElement('button'); b.type = 'button'; b.className = 'coach-chip'; b.textContent = text; b.addEventListener('click', () => ask(text)); root.appendChild(b); });
   });
