@@ -38,6 +38,23 @@ public sealed class ContractActivityTests
     }
 
     [Fact]
+    public async Task ListExposesNormalizedMonthlyAndAnnualCosts()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(Request(HttpMethod.Get,
+            $"/api/contracts?fullWorthSpaceId={s.Space}", s.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var contract = Assert.Single(json.RootElement.EnumerateArray().ToList());
+
+        Assert.Equal(9.99m, contract.GetProperty("monthlyEquivalent").GetDecimal());
+        Assert.Equal(119.88m, contract.GetProperty("annualizedAmount").GetDecimal());
+    }
+
+    [Fact]
     public async Task Activity_NonMemberGetsNotFound()
     {
         using var factory = new BackendWebApplicationFactory();
