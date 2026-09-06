@@ -123,11 +123,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/wealth-portability.js",
             "features/wealth-specialized-assets-extra.js",
             "features/wealth-specialized-assets.js",
-            "intelligence/brand-packs.js",
-            "intelligence/cloud.js",
-            "intelligence/intelligence.js",
-            "intelligence/jobs.js",
-            "push/push.js"
         };
 
         AssertNoNewViolations(
