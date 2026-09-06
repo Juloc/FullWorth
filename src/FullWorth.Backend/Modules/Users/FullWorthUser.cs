@@ -12,6 +12,7 @@ public sealed class FullWorthUser
     public string Email => EmailNormalized;
     public string DisplayName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public bool IsTombstone { get; set; }
     public int OnboardingVersion { get; set; }
     public DateTimeOffset? OnboardingCompletedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -26,5 +27,6 @@ public sealed class FullWorthUserConfiguration : IEntityTypeConfiguration<FullWo
         entity.HasIndex(x => x.EmailNormalized).IsUnique();
         entity.Property(x => x.EmailNormalized).HasMaxLength(320).IsRequired();
         entity.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+        entity.Property(x => x.IsTombstone).IsRequired();
     }
 }
