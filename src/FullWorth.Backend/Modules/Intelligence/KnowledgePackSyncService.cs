@@ -84,6 +84,7 @@ public sealed class KnowledgePackSyncService(
 
             var ontology = ProjectOntology(payload);
             var brands = ProjectBrands(payload);
+            var registries = ProjectOperationalRegistries(payload, ontology);
             var blobResolution = await ResolveBrandBlobsAsync(secret, brands, ct);
             var redirectMap = ontology.Redirects
                 .Where(x => x.EntityType == "category")
@@ -146,6 +147,11 @@ public sealed class KnowledgePackSyncService(
             db.OfficialOntologyAliases.RemoveRange(await db.OfficialOntologyAliases.ToListAsync(ct));
             db.OfficialOntologyRedirects.RemoveRange(await db.OfficialOntologyRedirects.ToListAsync(ct));
             db.OfficialOntologyEntities.RemoveRange(await db.OfficialOntologyEntities.ToListAsync(ct));
+            db.OfficialContractSignatures.RemoveRange(await db.OfficialContractSignatures.ToListAsync(ct));
+            db.OfficialContractProviders.RemoveRange(await db.OfficialContractProviders.ToListAsync(ct));
+            db.OfficialProductAliases.RemoveRange(await db.OfficialProductAliases.ToListAsync(ct));
+            db.OfficialProductGtins.RemoveRange(await db.OfficialProductGtins.ToListAsync(ct));
+            db.OfficialProducts.RemoveRange(await db.OfficialProducts.ToListAsync(ct));
 
             db.OfficialMerchantMappings.AddRange(mappings);
             db.OfficialBrandAssets.AddRange(brands.Assets);
@@ -153,6 +159,11 @@ public sealed class KnowledgePackSyncService(
             db.OfficialOntologyEntities.AddRange(ontology.Entities);
             db.OfficialOntologyAliases.AddRange(ontology.Aliases);
             db.OfficialOntologyRedirects.AddRange(ontology.Redirects);
+            db.OfficialContractProviders.AddRange(registries.ContractProviders);
+            db.OfficialContractSignatures.AddRange(registries.ContractSignatures);
+            db.OfficialProducts.AddRange(registries.Products);
+            db.OfficialProductGtins.AddRange(registries.ProductGtins);
+            db.OfficialProductAliases.AddRange(registries.ProductAliases);
 
             installation ??= new KnowledgePackInstallation
             {
@@ -344,7 +355,12 @@ public sealed class KnowledgePackSyncService(
             (payload.ProviderOntologyRedirects?.Count ?? 0) > 50_000 ||
             (payload.ProductOntologyEntities?.Count ?? 0) > 50_000 ||
             (payload.ProductOntologyAliases?.Count ?? 0) > 100_000 ||
-            (payload.ProductOntologyRedirects?.Count ?? 0) > 50_000)
+            (payload.ProductOntologyRedirects?.Count ?? 0) > 50_000 ||
+            (payload.ContractProviders?.Count ?? 0) > 50_000 ||
+            (payload.ContractSignatures?.Count ?? 0) > 100_000 ||
+            (payload.Products?.Count ?? 0) > 100_000 ||
+            (payload.ProductGtins?.Count ?? 0) > 200_000 ||
+            (payload.ProductAliases?.Count ?? 0) > 200_000)
             throw new KnowledgePackVerificationException("knowledge_pack_payload_invalid");
 
         return payload;
@@ -517,6 +533,168 @@ public sealed class KnowledgePackSyncService(
             AliasKey = alias,
             BrandKey = brandKey,
             Country = BrandAssetVerifier.NormalizeCountry(source.Country)
+        };
+    }
+
+    private static ProjectedOperationalRegistries ProjectOperationalRegistries(
+        KnowledgePackPayload payload,
+        ProjectedOntology ontology)
+    {
+        var categoryRedirects = ontology.Redirects
+            .Where(x => x.EntityType == "category")
+            .ToDictionary(x => x.FromCanonicalKey, x => x.ToCanonicalKey, StringComparer.Ordinal);
+
+        var providers = (payload.ContractProviders ?? [])
+            .Select(ToContractProvider)
+            .ToList();
+        if (providers.Count != providers.Select(x => x.ProviderKey).Distinct(StringComparer.Ordinal).Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_contract_provider_duplicate");
+        var providerKeys = providers.Select(x => x.ProviderKey).ToHashSet(StringComparer.Ordinal);
+
+        var signatures = (payload.ContractSignatures ?? [])
+            .Select(ToContractSignature)
+            .ToList();
+        if (signatures.Any(x => !providerKeys.Contains(x.ProviderKey)))
+            throw new KnowledgePackVerificationException("knowledge_pack_contract_signature_orphan");
+        if (signatures.Count != signatures
+                .Select(x => (x.ProviderKey, x.MerchantFingerprint))
+                .Distinct()
+                .Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_contract_signature_duplicate");
+
+        var products = (payload.Products ?? [])
+            .Select(x =>
+            {
+                var item = ToProduct(x);
+                if (item.CategoryKey is not null)
+                    item.CategoryKey = ResolveRedirectKey(item.CategoryKey, categoryRedirects);
+                return item;
+            })
+            .ToList();
+        if (products.Count != products.Select(x => x.ProductKey).Distinct(StringComparer.Ordinal).Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_product_duplicate");
+        var productKeys = products.Select(x => x.ProductKey).ToHashSet(StringComparer.Ordinal);
+
+        var gtins = (payload.ProductGtins ?? [])
+            .Select(ToProductGtin)
+            .ToList();
+        if (gtins.Any(x => !productKeys.Contains(x.ProductKey)))
+            throw new KnowledgePackVerificationException("knowledge_pack_product_gtin_orphan");
+        if (gtins.Count != gtins.Select(x => x.Gtin).Distinct(StringComparer.Ordinal).Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_product_gtin_duplicate");
+
+        var aliases = (payload.ProductAliases ?? [])
+            .Select(ToProductAlias)
+            .ToList();
+        if (aliases.Any(x => !productKeys.Contains(x.ProductKey)))
+            throw new KnowledgePackVerificationException("knowledge_pack_product_alias_orphan");
+        if (aliases.Count != aliases
+                .Select(x => (x.ProductKey, x.AliasKey, x.MerchantContext))
+                .Distinct()
+                .Count())
+            throw new KnowledgePackVerificationException("knowledge_pack_product_alias_duplicate");
+
+        return new ProjectedOperationalRegistries(providers, signatures, products, gtins, aliases);
+    }
+
+    private static OfficialContractProvider ToContractProvider(KnowledgePackContractProviderPayload source)
+    {
+        var providerKey = NormalizeCanonicalKey(source.ProviderKey);
+        var name = Trim(source.CanonicalName, 240);
+        var domain = Trim(source.Domain, 255);
+        var providerCategory = NormalizeOptionalCanonicalKey(source.ProviderCategory);
+        var brandKey = string.IsNullOrWhiteSpace(source.BrandKey)
+            ? null
+            : BrandAssetVerifier.NormalizeBrandKey(source.BrandKey);
+        if (providerKey is null || name is null || source.Version < 1)
+            throw new KnowledgePackVerificationException("knowledge_pack_contract_provider_invalid");
+
+        return new OfficialContractProvider
+        {
+            ProviderKey = providerKey,
+            CanonicalName = name,
+            Domain = domain,
+            ProviderCategory = providerCategory,
+            Country = NormalizeCountry(source.Country),
+            BrandKey = brandKey,
+            Version = source.Version
+        };
+    }
+
+    private static OfficialContractSignature ToContractSignature(KnowledgePackContractSignaturePayload source)
+    {
+        var providerKey = NormalizeCanonicalKey(source.ProviderKey);
+        var fingerprint = MerchantNormalization.Normalize(source.MerchantFingerprint);
+        var recurrence = Trim(source.ExpectedRecurrence, 80);
+        if (providerKey is null || fingerprint is null || source.Confidence is < 0m or > 1m)
+            throw new KnowledgePackVerificationException("knowledge_pack_contract_signature_invalid");
+
+        return new OfficialContractSignature
+        {
+            ProviderKey = providerKey,
+            MerchantFingerprint = fingerprint,
+            ExpectedRecurrence = recurrence,
+            Confidence = source.Confidence
+        };
+    }
+
+    private static OfficialProduct ToProduct(KnowledgePackProductPayload source)
+    {
+        var productKey = NormalizeCanonicalKey(source.ProductKey);
+        var name = Trim(source.CanonicalName, 240);
+        var brandKey = string.IsNullOrWhiteSpace(source.BrandKey)
+            ? null
+            : BrandAssetVerifier.NormalizeBrandKey(source.BrandKey);
+        var categoryKey = NormalizeOptionalCanonicalKey(source.CategoryKey);
+        var packageQuantity = Trim(source.PackageQuantity, 80);
+        var packageUnit = Trim(source.PackageUnit, 40);
+        if (productKey is null || name is null || source.Version < 1)
+            throw new KnowledgePackVerificationException("knowledge_pack_product_invalid");
+
+        return new OfficialProduct
+        {
+            ProductKey = productKey,
+            CanonicalName = name,
+            BrandKey = brandKey,
+            CategoryKey = categoryKey,
+            PackageQuantity = packageQuantity,
+            PackageUnit = packageUnit,
+            Country = NormalizeCountry(source.Country),
+            Version = source.Version
+        };
+    }
+
+    private static OfficialProductGtin ToProductGtin(KnowledgePackProductGtinPayload source)
+    {
+        var productKey = NormalizeCanonicalKey(source.ProductKey);
+        if (productKey is null ||
+            !GtinKey.TryCreateGtinSubjectKey(source.Gtin, out var subjectKey) ||
+            string.IsNullOrWhiteSpace(subjectKey))
+            throw new KnowledgePackVerificationException("knowledge_pack_product_gtin_invalid");
+
+        return new OfficialProductGtin
+        {
+            ProductKey = productKey,
+            Gtin = subjectKey["gtin:".Length..]
+        };
+    }
+
+    private static OfficialProductAlias ToProductAlias(KnowledgePackProductAliasPayload source)
+    {
+        var productKey = NormalizeCanonicalKey(source.ProductKey);
+        var alias = MerchantNormalization.Normalize(source.AliasKey);
+        var merchantContext = string.IsNullOrWhiteSpace(source.MerchantContext)
+            ? null
+            : MerchantNormalization.Normalize(source.MerchantContext);
+        if (productKey is null || alias is null || source.Confidence is < 0m or > 1m)
+            throw new KnowledgePackVerificationException("knowledge_pack_product_alias_invalid");
+
+        return new OfficialProductAlias
+        {
+            ProductKey = productKey,
+            AliasKey = alias,
+            MerchantContext = merchantContext,
+            Confidence = source.Confidence
         };
     }
 
@@ -915,6 +1093,13 @@ internal sealed record ProjectedOntology(
     IReadOnlyList<OfficialOntologyEntity> Entities,
     IReadOnlyList<OfficialOntologyAlias> Aliases,
     IReadOnlyList<OfficialOntologyRedirect> Redirects);
+
+internal sealed record ProjectedOperationalRegistries(
+    IReadOnlyList<OfficialContractProvider> ContractProviders,
+    IReadOnlyList<OfficialContractSignature> ContractSignatures,
+    IReadOnlyList<OfficialProduct> Products,
+    IReadOnlyList<OfficialProductGtin> ProductGtins,
+    IReadOnlyList<OfficialProductAlias> ProductAliases);
 
 public sealed class KnowledgePackVerificationException(string errorCode) : Exception(errorCode)
 {

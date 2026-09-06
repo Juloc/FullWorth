@@ -342,6 +342,116 @@ public sealed class KnowledgePackSyncServiceTests
     }
 
     [Fact]
+    public async Task Signed_pack_installs_reviewed_contract_and_product_registries()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-30",
+            "REWE",
+            "food.groceries",
+            contractProviders:
+            [
+                new KnowledgePackContractProviderPayload(
+                    "provider.telekom",
+                    "Deutsche Telekom",
+                    "telekom.de",
+                    "telecom",
+                    "DE",
+                    null,
+                    3)
+            ],
+            contractSignatures:
+            [
+                new KnowledgePackContractSignaturePayload(
+                    "provider.telekom",
+                    "DEUTSCHE TELEKOM",
+                    "monthly",
+                    0.98m)
+            ],
+            products:
+            [
+                new KnowledgePackProductPayload(
+                    "product.coca-cola-zero",
+                    "Coca-Cola Zero",
+                    null,
+                    "food.groceries",
+                    "1",
+                    "l",
+                    "DE",
+                    2)
+            ],
+            productGtins:
+            [
+                new KnowledgePackProductGtinPayload(
+                    "product.coca-cola-zero",
+                    "4006381333931")
+            ],
+            productAliases:
+            [
+                new KnowledgePackProductAliasPayload(
+                    "product.coca-cola-zero",
+                    "COCA COLA ZERO 1L",
+                    "REWE",
+                    0.96m)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("installed", result.Status);
+
+        var provider = await fixture.Db.OfficialContractProviders.SingleAsync();
+        Assert.Equal("provider.telekom", provider.ProviderKey);
+        Assert.Equal("Deutsche Telekom", provider.CanonicalName);
+
+        var signature = await fixture.Db.OfficialContractSignatures.SingleAsync();
+        Assert.Equal("DEUTSCHE TELEKOM", signature.MerchantFingerprint);
+        Assert.Equal("provider.telekom", signature.ProviderKey);
+
+        var product = await fixture.Db.OfficialProducts.SingleAsync();
+        Assert.Equal("product.coca-cola-zero", product.ProductKey);
+        Assert.Equal("food.groceries", product.CategoryKey);
+
+        Assert.Equal("4006381333931", (await fixture.Db.OfficialProductGtins.SingleAsync()).Gtin);
+        Assert.Equal("COCA COLA ZERO 1L", (await fixture.Db.OfficialProductAliases.SingleAsync()).AliasKey);
+    }
+
+    [Fact]
+    public async Task Signed_pack_with_orphan_contract_signature_is_rejected_atomically()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+
+        var pack = BuildPack(
+            rsa,
+            "2026.09.06-31",
+            "REWE",
+            "food.groceries",
+            contractSignatures:
+            [
+                new KnowledgePackContractSignaturePayload(
+                    "provider.missing",
+                    "MISSING PROVIDER",
+                    "monthly",
+                    0.90m)
+            ]);
+
+        var result = await fixture.CreateService(
+                new FakeCloudClient(pack.Manifest, pack.Payload), rsa)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_contract_signature_orphan", result.ErrorCode);
+        Assert.Empty(await fixture.Db.OfficialContractProviders.ToListAsync());
+        Assert.Empty(await fixture.Db.OfficialContractSignatures.ToListAsync());
+        Assert.Empty(await fixture.Db.OfficialProducts.ToListAsync());
+    }
+
+    [Fact]
     public async Task Signed_pack_with_redirect_cycle_is_rejected()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -472,6 +582,11 @@ public sealed class KnowledgePackSyncServiceTests
         IReadOnlyList<KnowledgePackOntologyEntityPayload>? productOntologyEntities = null,
         IReadOnlyList<KnowledgePackOntologyAliasPayload>? productOntologyAliases = null,
         IReadOnlyList<KnowledgePackOntologyRedirectPayload>? productOntologyRedirects = null,
+        IReadOnlyList<KnowledgePackContractProviderPayload>? contractProviders = null,
+        IReadOnlyList<KnowledgePackContractSignaturePayload>? contractSignatures = null,
+        IReadOnlyList<KnowledgePackProductPayload>? products = null,
+        IReadOnlyList<KnowledgePackProductGtinPayload>? productGtins = null,
+        IReadOnlyList<KnowledgePackProductAliasPayload>? productAliases = null,
         string? schemaVersion = null)
     {
         var payload = new KnowledgePackPayload(
@@ -501,7 +616,12 @@ public sealed class KnowledgePackSyncServiceTests
             providerOntologyRedirects,
             productOntologyEntities,
             productOntologyAliases,
-            productOntologyRedirects);
+            productOntologyRedirects,
+            contractProviders,
+            contractSignatures,
+            products,
+            productGtins,
+            productAliases);
 
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions
         {

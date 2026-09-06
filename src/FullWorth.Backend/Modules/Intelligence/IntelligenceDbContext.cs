@@ -43,6 +43,11 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<OfficialOntologyEntity> OfficialOntologyEntities => Set<OfficialOntologyEntity>();
     public DbSet<OfficialOntologyAlias> OfficialOntologyAliases => Set<OfficialOntologyAlias>();
     public DbSet<OfficialOntologyRedirect> OfficialOntologyRedirects => Set<OfficialOntologyRedirect>();
+    public DbSet<OfficialContractProvider> OfficialContractProviders => Set<OfficialContractProvider>();
+    public DbSet<OfficialContractSignature> OfficialContractSignatures => Set<OfficialContractSignature>();
+    public DbSet<OfficialProduct> OfficialProducts => Set<OfficialProduct>();
+    public DbSet<OfficialProductGtin> OfficialProductGtins => Set<OfficialProductGtin>();
+    public DbSet<OfficialProductAlias> OfficialProductAliases => Set<OfficialProductAlias>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -55,6 +60,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
         LearnedMerchantMappingModelConfiguration.Configure(modelBuilder);
         CloudIntelligenceModelConfiguration.Configure(modelBuilder);
         KnowledgePackModelConfiguration.Configure(modelBuilder);
+        OperationalRegistryModelConfiguration.Configure(modelBuilder);
         IntelligenceDigestModelConfiguration.Configure(modelBuilder);
 
         // The fast unit-style Intelligence tests run this model on in-memory SQLite, which cannot
