@@ -101,6 +101,7 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
     public const string OfficialBaseUrl = "https://api.fullworth.de/";
     public const int MaximumBatchEvents = 500;
     public const int MaximumCompressedBatchBytes = 2 * 1024 * 1024;
+    public const int MaximumKnowledgePackBytes = 5 * 1024 * 1024;
 
     private readonly HttpClient http;
     private readonly IConfiguration configuration;
@@ -266,7 +267,21 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
             $"v1/knowledge-packs/{Uri.EscapeDataString(packId.Trim())}/{Uri.EscapeDataString(version.Trim())}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
         using var response = await SendAsync(request, ct);
-        return await response.Content.ReadAsByteArrayAsync(ct);
+        if (response.Content.Headers.ContentLength is > MaximumKnowledgePackBytes)
+            throw new FullWorthCloudException("knowledge_pack_size_invalid", response.StatusCode);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var output = new MemoryStream();
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
+            if (read == 0) break;
+            if (output.Length + read > MaximumKnowledgePackBytes)
+                throw new FullWorthCloudException("knowledge_pack_size_invalid", response.StatusCode);
+            output.Write(buffer, 0, read);
+        }
+        return output.ToArray();
     }
 
     internal static Uri ResolveBaseUri(IConfiguration configuration, IHostEnvironment environment)
