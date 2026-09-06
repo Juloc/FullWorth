@@ -154,7 +154,26 @@ FROM "ContractCancellationDetails" WHERE "ContractId"=@id
 
     private static async Task<IResult> PutCancellation(Guid contractId,Guid fullWorthSpaceId,CancellationWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);if(request.NoticePeriodValue<0||request.RenewalPeriodValue<0||request.CancellationStatus is not("none" or "planned" or "sent" or "confirmed" or "cancelled"))return Results.BadRequest(new{error="Invalid cancellation metadata."});var deadline=request.CancellationDeadline??CalculateDeadline(request.MinimumTermEnd,request.NoticePeriodValue,request.NoticePeriodUnit);var now=DateTimeOffset.UtcNow;var sent=request.CancellationStatus is "sent" or "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var confirmed=request.CancellationStatus is "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
 INSERT INTO "ContractCancellationDetails" ("ContractId","MinimumTermEnd","NoticePeriodValue","NoticePeriodUnit","RenewalPeriodValue","RenewalPeriodUnit","AutoRenews","CancellationDeadline","CancellationStatus","CancellationSentAt","CancellationConfirmedAt","CustomerNumber","ProviderContact","UpdatedAt") VALUES (@id,@term,@npv,@npu,@rpv,@rpu,@renews,@deadline,@status,@sent,@confirmed,@customer,@contact,@now)
-ON CONFLICT ("ContractId") DO UPDATE SET "MinimumTermEnd"=EXCLUDED."MinimumTermEnd","NoticePeriodValue"=EXCLUDED."NoticePeriodValue","NoticePeriodUnit"=EXCLUDED."NoticePeriodUnit","RenewalPeriodValue"=EXCLUDED."RenewalPeriodValue","RenewalPeriodUnit"=EXCLUDED."RenewalPeriodUnit","AutoRenews"=EXCLUDED."AutoRenews","CancellationDeadline"=EXCLUDED."CancellationDeadline","CancellationStatus"=EXCLUDED."CancellationStatus","CancellationSentAt"=COALESCE(EXCLUDED."CancellationSentAt","ContractCancellationDetails"."CancellationSentAt"),"CancellationConfirmedAt"=COALESCE(EXCLUDED."CancellationConfirmedAt","ContractCancellationDetails"."CancellationConfirmedAt"),"CustomerNumber"=EXCLUDED."CustomerNumber","ProviderContact"=EXCLUDED."ProviderContact","UpdatedAt"=EXCLUDED."UpdatedAt"
+ON CONFLICT ("ContractId") DO UPDATE SET
+"MinimumTermEnd"=EXCLUDED."MinimumTermEnd",
+"NoticePeriodValue"=EXCLUDED."NoticePeriodValue",
+"NoticePeriodUnit"=EXCLUDED."NoticePeriodUnit",
+"RenewalPeriodValue"=EXCLUDED."RenewalPeriodValue",
+"RenewalPeriodUnit"=EXCLUDED."RenewalPeriodUnit",
+"AutoRenews"=EXCLUDED."AutoRenews",
+"CancellationDeadline"=EXCLUDED."CancellationDeadline",
+"CancellationStatus"=EXCLUDED."CancellationStatus",
+"CancellationSentAt"=CASE
+  WHEN EXCLUDED."CancellationStatus" IN ('none','planned') THEN NULL
+  ELSE COALESCE("ContractCancellationDetails"."CancellationSentAt",EXCLUDED."CancellationSentAt")
+END,
+"CancellationConfirmedAt"=CASE
+  WHEN EXCLUDED."CancellationStatus" IN ('none','planned','sent') THEN NULL
+  ELSE COALESCE("ContractCancellationDetails"."CancellationConfirmedAt",EXCLUDED."CancellationConfirmedAt")
+END,
+"CustomerNumber"=EXCLUDED."CustomerNumber",
+"ProviderContact"=EXCLUDED."ProviderContact",
+"UpdatedAt"=EXCLUDED."UpdatedAt"
 """,("@id",contractId),("@term",request.MinimumTermEnd),("@npv",request.NoticePeriodValue),("@npu",NormalizeUnit(request.NoticePeriodUnit)),("@rpv",request.RenewalPeriodValue),("@rpu",NormalizeUnit(request.RenewalPeriodUnit)),("@renews",request.AutoRenews),("@deadline",deadline),("@status",request.CancellationStatus),("@sent",sent),("@confirmed",confirmed),("@customer",request.CustomerNumber?.Trim()),("@contact",request.ProviderContact?.Trim()),("@now",now));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"contract.cancellation.updated","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.Ok(new{deadline,status=request.CancellationStatus});}
 
     private static async Task<IResult> CancellationLetter(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var contract=await db.Contracts.AsNoTracking().SingleAsync(x=>x.Id==contractId,ct);var details=await ReadCancellation(db,contractId,ct);var sb=new StringBuilder();sb.AppendLine("Kündigung meines Vertrags").AppendLine().AppendLine($"Anbieter: {contract.ProviderName??contract.Name}");if(!string.IsNullOrWhiteSpace(details.CustomerNumber))sb.AppendLine($"Kunden-/Vertragsnummer: {details.CustomerNumber}");sb.AppendLine().Append("Hiermit kündige ich den oben genannten Vertrag fristgerecht ");sb.AppendLine(details.Deadline.HasValue?$"zum nächstmöglichen Zeitpunkt unter Berücksichtigung der Kündigungsfrist (aktuelle Frist: {details.Deadline:dd.MM.yyyy}).":"zum nächstmöglichen Zeitpunkt.");sb.AppendLine("Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich.");return Results.Text(sb.ToString(),"text/plain; charset=utf-8");}
