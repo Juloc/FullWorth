@@ -60,8 +60,9 @@ public sealed class NetWorthSnapshotService(
 
     /// <summary>
     /// Rebuilds materialized net-worth history from source data. The latest bank balance is the anchor;
-    /// booked transactions are then walked backwards, so an imported transaction from two years ago
-    /// creates a real historical balance point instead of only changing today's analytics.
+    /// trusted booked bank-provider transactions are then walked backwards. Import-only Finanzguru rows
+    /// are deliberately excluded from this reconstruction: they are useful for analytics, but without a
+    /// matching provider transaction or historical balance they cannot prove what the account balance was.
     ///
     /// Asset/liability history cannot be reconstructed from a single current value. Existing historical
     /// snapshot components are therefore preserved and carried forward across gaps; dates before the first
@@ -99,12 +100,28 @@ public sealed class NetWorthSnapshotService(
         var accountIds = accounts.Select(account => account.Id).ToArray();
         var accountCurrency = accounts.ToDictionary(account => account.Id, account => account.Currency, EqualityComparer<Guid>.Default);
 
-        // An empty accountIds array is translated to a false predicate by EF, so no special empty-list
-        // branch is needed. Keeping one query shape also avoids target-typing problems with anonymous rows.
+        var balanceRows = await db.BalanceSnapshots.AsNoTracking()
+            .Where(balance => accountIds.Contains(balance.AccountId))
+            .ToListAsync(ct);
+        var latestBalances = balanceRows
+            .GroupBy(balance => balance.AccountId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(balance => balance.CapturedAt)
+                    .ThenBy(balance => BalanceRank(balance.BalanceType))
+                    .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
+                    .First());
+        var anchoredAccountIds = latestBalances.Keys.ToArray();
+
+        // Back-casting requires a real balance anchor. Finanzguru-only rows that were moved onto a live
+        // account remain tagged with their stable finanzguru:* external key until a provider row exists;
+        // excluding them prevents incomplete imported history from fabricating old account balances.
         var transactionRows = await db.Transactions.AsNoTracking()
             .Where(transaction =>
-                accountIds.Contains(transaction.AccountId) &&
+                anchoredAccountIds.Contains(transaction.AccountId) &&
                 transaction.Status != "PDNG" &&
+                !transaction.ExternalKey.StartsWith("finanzguru:") &&
                 (transaction.BookingDate != null || transaction.ValueDate != null))
             .Select(transaction => new
             {
@@ -129,30 +146,29 @@ public sealed class NetWorthSnapshotService(
         if (from.HasValue) existingQuery = existingQuery.Where(snapshot => snapshot.Date >= from.Value);
         var existing = await existingQuery.OrderBy(snapshot => snapshot.Date).ToListAsync(ct);
 
+        var observedExisting = existing.Where(IsObservedSnapshot).ToList();
         var start = from;
         if (!start.HasValue)
         {
             var earliestTransaction = transactions.Count == 0 ? (DateOnly?)null : transactions.Min(row => row.Date);
-            var earliestExisting = existing.Count == 0 ? (DateOnly?)null : existing.Min(snapshot => snapshot.Date);
-            start = Min(earliestTransaction, earliestExisting) ?? today;
+            var earliestObserved = observedExisting.Count == 0 ? (DateOnly?)null : observedExisting.Min(snapshot => snapshot.Date);
+            start = Min(earliestTransaction, earliestObserved) ?? today;
+
+            // Older rows created long after their represented date were materialized by an earlier
+            // reconstruction pass. If no trusted source still reaches that far back, remove them instead
+            // of keeping a stale synthetic 2021/2022-style wealth point forever.
+            var obsoleteHistory = existing.Where(snapshot => snapshot.Date < start.Value).ToList();
+            if (obsoleteHistory.Count > 0)
+            {
+                db.NetWorthSnapshots.RemoveRange(obsoleteHistory);
+                existing = existing.Where(snapshot => snapshot.Date >= start.Value).ToList();
+                observedExisting = observedExisting.Where(snapshot => snapshot.Date >= start.Value).ToList();
+            }
         }
         if (start.Value > today) start = today;
 
         // If a bounded refresh was requested, rows before the bound are not needed for the backward walk.
         transactions = transactions.Where(row => row.Date >= start.Value).ToList();
-
-        var balanceRows = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => accountIds.Contains(balance.AccountId))
-            .ToListAsync(ct);
-        var latestBalances = balanceRows
-            .GroupBy(balance => balance.AccountId)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderByDescending(balance => balance.CapturedAt)
-                    .ThenBy(balance => BalanceRank(balance.BalanceType))
-                    .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
-                    .First());
 
         var assetRows = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
@@ -210,7 +226,7 @@ public sealed class NetWorthSnapshotService(
                 .GroupBy(transaction => transaction.Date)
                 .ToDictionary(group => group.Key, group => group.Sum(transaction => transaction.Amount));
 
-            var components = BuildPortfolioComponents(existing, normalizedCurrency, start.Value, today);
+            var components = BuildPortfolioComponents(observedExisting, normalizedCurrency, start.Value, today);
             components[today] = (
                 currentAssets.GetValueOrDefault(normalizedCurrency),
                 currentLiabilities.GetValueOrDefault(normalizedCurrency));
@@ -270,6 +286,13 @@ public sealed class NetWorthSnapshotService(
             if (day == today) break;
         }
         return result;
+    }
+
+    private static bool IsObservedSnapshot(NetWorthSnapshot snapshot)
+    {
+        var createdDate = DateOnly.FromDateTime(snapshot.CreatedAt.UtcDateTime);
+        // Allow one day of UTC/local-date skew. Multi-month/year gaps mean the row was reconstructed later.
+        return snapshot.Date >= createdDate.AddDays(-1);
     }
 
     private static int BalanceRank(string? type) => type switch
