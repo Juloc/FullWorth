@@ -33,10 +33,11 @@
 html[data-font="fredoka"]{--font:var(--font-fredoka)}
 html[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0f0f0f;--surface:#0f0f0f;--surface-2:#1f1f1f;--surface-3:#303030;--text:#f1f1f1;--muted:#a6a6a6;--line:#2e2e2e;
-  --k1:#f1f1f1;--k2:#c9c9c9;--k3:#a0a0a0;--k4:#777777;--k5:#4e4e4e;
-  --cta:#f1f1f1;--cta-text:#0f0f0f;--accent:#f1f1f1;--accent-soft:#1f1f1f;
-  --positive:#4ce089;--positive-soft:#102f1e;--negative:#ff6b5e;--negative-soft:#2e1716;--warning:#ffb256;--warning-soft:#312312;
+  /* Neutral dark surfaces use visible elevation instead of near-black-on-near-black. */
+  --bg:#121416;--surface:#191b1e;--surface-2:#22252a;--surface-3:#2d3137;--text:#f3f4f5;--muted:#aeb3ba;--line:#30343a;
+  --k1:#f3f4f5;--k2:#d2d5d9;--k3:#aeb3ba;--k4:#7e858d;--k5:#50565e;
+  --cta:#dfe2e5;--cta-text:#151719;--accent:#dfe2e5;--accent-soft:#25282d;
+  --positive:#55df8e;--positive-soft:#163523;--negative:#ff756a;--negative-soft:#351d1d;--warning:#ffb866;--warning-soft:#372716;
   --shadow:none;
 }
 *{box-sizing:border-box}
