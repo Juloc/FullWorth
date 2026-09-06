@@ -111,9 +111,10 @@ public sealed class KnowledgePackSyncService(
 
             var nowForBlobs = DateTimeOffset.UtcNow;
             var resolvedHashes = blobResolution.Blobs.Keys.ToArray();
-            var cachedBlobs = await db.BrandAssetBlobs
+            var cachedBlobRows = await db.BrandAssetBlobs
                 .Where(x => resolvedHashes.Contains(x.ContentSha256))
-                .ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+                .ToListAsync(ct);
+            var cachedBlobs = cachedBlobRows.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
             foreach (var resolved in blobResolution.Blobs.Values)
             {
                 if (cachedBlobs.TryGetValue(resolved.ContentSha256, out var cached))
@@ -456,9 +457,10 @@ public sealed class KnowledgePackSyncService(
             return new BrandBlobResolution(new Dictionary<string, VerifiedBrandBlob>(StringComparer.Ordinal), 0, 0);
 
         var hashes = brands.Assets.Select(x => x.ContentSha256).Distinct(StringComparer.Ordinal).ToArray();
-        var cached = await db.BrandAssetBlobs.AsNoTracking()
+        var cachedRows = await db.BrandAssetBlobs.AsNoTracking()
             .Where(x => hashes.Contains(x.ContentSha256))
-            .ToDictionaryAsync(x => x.ContentSha256, StringComparer.Ordinal, ct);
+            .ToListAsync(ct);
+        var cached = cachedRows.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
         var embedded = brands.EmbeddedBlobs.ToDictionary(x => x.ContentSha256, StringComparer.Ordinal);
         var resolved = new Dictionary<string, VerifiedBrandBlob>(StringComparer.Ordinal);
         var downloaded = 0;
