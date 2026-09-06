@@ -288,6 +288,7 @@
     "archiveConfirm": "Archive contract “{name}”? It will remain in history.",
     "archivedToast": "Contract archived.",
     "minimumTermEnd": "Minimum term ends",
+    "cancelEffectiveDate": "Contract ends / cancellation effective",
     "noticePeriod": "Notice period",
     "cancellationDeadline": "Cancel by",
     "renewalPeriod": "Renewal period",
