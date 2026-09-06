@@ -141,7 +141,7 @@ function installShell() {
     setObjectContext(event.detail||null);
     if(!dockOpen)openDock();else {renderPageContext();renderStarters();$('#coach-dock-input')?.focus();}
   });
-  window.addEventListener('fullworth:layout-reset',()=>{localStorage.removeItem(pinnedKey);syncPinButton()});
+  window.addEventListener('fullworth:layout-reset',()=>{localStorage.removeItem(pinnedKey);currentObjectContext=null;excludedContext.clear();if(dockOpen)closeDock();syncPinButton()});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&dockOpen&&!document.querySelector('dialog[open]')){event.preventDefault();closeDock()}});
   document.addEventListener('change', event => { if (dockOpen && event.target.closest('.view.active')) renderPageContext(); });
   document.addEventListener('input', event => { if (dockOpen && event.target.closest('.view.active') && event.target.id === 'tx-query') renderPageContext(); });
