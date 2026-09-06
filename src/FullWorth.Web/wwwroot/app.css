@@ -4,9 +4,9 @@
    carries meaning — green income, amber "getting close", red overage. Persistent navigation shows its
    active state as a plain grey fill (never the CTA colour) so colour stays reserved for money statements.
    Components consume semantic tokens only, so themes restyle without touching markup/logic. */
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:swap;src:url("fonts/BarlowCondensed-400.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/BarlowCondensed-500.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url("fonts/BarlowCondensed-600.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:optional;src:url("fonts/BarlowCondensed-400.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:optional;src:url("fonts/BarlowCondensed-500.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:optional;src:url("fonts/BarlowCondensed-600.woff2") format("woff2")}
 @font-face{font-family:'Fredoka';font-style:normal;font-weight:300 700;font-stretch:75% 125%;font-display:swap;src:url("/fonts/Fredoka-Variable.ttf") format("truetype")}
 :root{
   --font-default:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -16,6 +16,9 @@
   /* spacing scale (§4.1) */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
   --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
+  /* Upper bound for the main content column so ultrawide/1440p screens keep a readable measure
+     instead of stretching cards and tables across the whole width; centered inside the shell column. */
+  --content-max:1520px;
   /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
   --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
@@ -113,7 +116,7 @@ body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle,body.nav-
 body.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
 
 /* Main + top header (§3.1) */
-main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:none}
+main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max);margin-inline:auto}
 main:focus{outline:none}
 .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-width:0;padding:var(--s6) 0 var(--s4);background:linear-gradient(var(--bg) 70%,transparent)}
 .topbar-title{min-width:0;flex:1 1 auto}
@@ -324,8 +327,10 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .group-toggle{border:0;background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:default;padding:4px 2px;display:inline-flex;align-items:center;gap:8px;min-width:0}
 .group-toggle.is-drillable{cursor:pointer}
 .group-toggle.is-drillable:hover{text-decoration:underline}
-/* Mobile: the desktop transaction table becomes identity cards, never a compressed table (UX rework §4) */
-@media(max-width:767px){
+/* Mobile and tablet: the desktop transaction table becomes identity cards, never a compressed table (UX rework §4).
+   Below 1024px the content column (~530px next to the sidebar) cannot fit the 760px table, so the card
+   layout applies there too instead of forcing a horizontal scroll inside the panel. */
+@media(max-width:1023px){
   #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
   #view-transactions table{min-width:0;width:100%}
   #view-transactions thead{display:none}

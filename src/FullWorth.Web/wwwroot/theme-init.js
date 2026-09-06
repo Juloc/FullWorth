@@ -22,20 +22,9 @@ try {
   applyThemeChrome(actualTheme);
 }
 
-// Inject the appearance stylesheets independently of localStorage access: reading storage can throw
-// when site data is blocked (sandboxed/lockdown contexts), and the core feature CSS must still load.
-try {
-  const appearance = document.createElement('link');
-  appearance.rel = 'stylesheet';
-  appearance.href = '/appearance.css';
-  document.head.appendChild(appearance);
-
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/parity-completion.css';
-  document.head.appendChild(link);
-} catch {
-}
+// appearance.css and parity-completion.css are loaded as render-blocking <link>s in index.html so the
+// page paints once in its final style (no post-load restyle flash). They are intentionally not injected
+// here anymore.
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
