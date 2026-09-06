@@ -180,8 +180,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
     {
         var liveAccounts = candidateLiveAccounts
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId
-                              && account.Provider != ImportProvider
-                              && !string.IsNullOrWhiteSpace(account.IbanLast4))
+                              && account.Provider != ImportProvider)
             .GroupBy(account => account.Id)
             .Select(group => group.First())
             .ToList();
@@ -213,7 +212,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             importedAccount.IncludeInNetWorth = false;
             importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
 
-            if (string.IsNullOrWhiteSpace(importedAccount.IbanLast4)) continue;
+            if (importedAccount.ImportLinkedAccountId is null && string.IsNullOrWhiteSpace(importedAccount.IbanLast4)) continue;
             var importedOwners = importedAccount.Owners
                 .Where(owner => owner.OwnershipType == AccountOwnershipTypes.Owner)
                 .Select(owner => owner.UserId)
