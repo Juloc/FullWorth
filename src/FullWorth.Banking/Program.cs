@@ -302,6 +302,23 @@ app.MapPost("/api/banking/provider-status/connect/start", async (
     }
 });
 
+app.MapPost("/api/banking/provider-status/connect/complete", async (
+    HttpContext http,
+    EnableBankingProviderStatusConnectCompleteRequest request,
+    EnableBankingControlPanelStatusService statusService,
+    CancellationToken ct) =>
+{
+    if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
+    try
+    {
+        return Results.Ok(await statusService.CompleteConnectionManuallyAsync(userId, request, ct));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = "invalid_status_connection", message = ex.Message });
+    }
+});
+
 app.MapPost("/api/banking/fints/ing/connect", async (
     HttpContext http,
     ConnectIngFinTsRequest request,
