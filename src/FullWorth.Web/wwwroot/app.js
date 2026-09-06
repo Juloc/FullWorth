@@ -17,6 +17,7 @@ import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
 import { createDialog } from './ui/dialog.js';
+import { createApiClient, jsonBody } from './core/api.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -46,6 +47,9 @@ import { createDialog } from './ui/dialog.js';
   };
 })();
 const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null,capabilities:{admin:false,twoFactorEnabled:false}};
+const apiClient=createApiClient({getSpaceId:()=>state.space?.id||''});
+const api=(path,options)=>apiClient.backend(path,options);
+const bankApi=(path,options)=>apiClient.banking(path,options);
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
@@ -432,18 +436,6 @@ async function loadCurrent(){
     }
   }catch(e){console.error(e);toast(get('common.error'))}
 }
-async function fail(r){let message=`${r.status}`;try{const body=await r.json();message=body.message||body.error||body.title||message}catch{}throw new Error(message)}
-function withSpace(path){
-  if(!state.space)return path;
-  const [base,query='']=path.split('?');
-  const params=new URLSearchParams(query);
-  if(params.has('fullWorthSpaceId'))return path;
-  params.set('fullWorthSpaceId',state.space.id);
-  return `${base}?${params}`;
-}
-async function api(path,options){const r=await fetch(`/bff/backend/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
-async function bankApi(path,options){const r=await fetch(`/bff/banking/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
-const jsonBody=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
 function dateTime(value){if(!value)return'—';const raw=String(value);if(!/[T ]\d{2}:\d{2}/.test(raw))return date(value);const parsed=new Date(raw);if(Number.isNaN(parsed.getTime()))return date(value);return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US',{dateStyle:'medium',timeStyle:'medium'}).format(parsed)}
 function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(message||get('common.empty'))}</div></div>`}
@@ -510,7 +502,7 @@ async function runSearch(query,results,dlg){
 
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
-const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`,
+const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
@@ -883,14 +875,12 @@ async function openCategoryDialog(){
 
 
 async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
-// Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
-// fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
-// which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
+// Export the space's full data snapshot (§ data portability). Use the shared API client but keep
+// the raw response because downloads must not be JSON-decoded.
 async function downloadExport(){
   const btn=$('#export-data');if(btn)btn.disabled=true;
   try{
-    const r=await fetch(`/bff/backend/${withSpace('api/export/snapshot')}`);
-    if(!r.ok)await fail(r);
+    const r=await apiClient.backendResponse('api/export/snapshot');
     const blob=await r.blob();const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=`finance-export-${new Date().toISOString().slice(0,10)}.json`;
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
