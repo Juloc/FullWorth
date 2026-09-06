@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
-const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
+const state={spaces:[],space:null,result:null,regularMonthResult:null,scenarios:[],selected:[]};
 const money=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
 const money2=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:2})} %`;
@@ -67,16 +67,27 @@ async function saveProfile(){
   if(!state.space)throw new Error('Kein Finanzbereich ausgewählt.');
   const profile=readProfile();
   await api(`api/compensation/profile?fullWorthSpaceId=${state.space.id}`,json('PUT',profile));
-  state.result=await api('api/compensation/calculate',json('POST',profile));
-  renderResult(state.result);
+  await calculate();
   notify('Profil gespeichert.');
 }
 
 async function calculate(){
   const profile=readProfile();
-  state.result=await api('api/compensation/calculate',json('POST',profile));
-  renderResult(state.result);
-  return state.result;
+  const regularProfile=regularMonthProfile(profile);
+  const [result,regular]=await Promise.all([
+    api('api/compensation/calculate',json('POST',profile)),
+    regularProfile?api('api/compensation/calculate',json('POST',regularProfile)):Promise.resolve(null)
+  ]);
+  state.result=result;state.regularMonthResult=regular;
+  renderResult(result);
+  return result;
+}
+
+function regularMonthProfile(profile){
+  if(profile.grossInputMode!=='monthly')return null;
+  const monthlyGross=number('gross-input');
+  if(profile.salaryPaymentsPerYear===12&&profile.annualBonus<=0)return null;
+  return{...profile,annualGross:monthlyGross*12,annualBonus:0,salaryPaymentsPerYear:12};
 }
 
 function readProfile(){
@@ -240,8 +251,10 @@ function readBenefits(){
 }
 
 function renderResult(result){
-  $('#result-net-month').textContent=money2.format(result.estimatedCashNetMonthly);
-  $('#result-net-year').innerHTML=`<span class="comp-hero-sub">${esc(money.format(result.estimatedCashNetAnnual))} netto pro Jahr</span><span class="fw-trend positive comp-hero-badge">${esc(pct(result.estimatedNetRatioPercent))} vom Cash-Brutto</span>`;
+  const regular=state.regularMonthResult;
+  $('#result-net-label').textContent=regular?'Netto normaler Monat':'Geschätztes Netto / Monat';
+  $('#result-net-month').textContent=money2.format(regular?.estimatedCashNetMonthly??result.estimatedCashNetMonthly);
+  $('#result-net-year').innerHTML=`<span class="comp-hero-sub">${esc(money.format(result.estimatedCashNetAnnual))} geschätztes Netto pro Jahr</span><span class="fw-trend positive comp-hero-badge">${esc(pct(result.estimatedNetRatioPercent))} vom Cash-Brutto</span>`;
   $('#result-employer').textContent=money.format(result.employerTotalCostAnnual);
   $('#result-fullworth').textContent=money.format(result.fullWorthCompensationValueAnnual);
   $('#result-marginal').textContent=money2.format(result.marginalNetFromNext100Gross);
