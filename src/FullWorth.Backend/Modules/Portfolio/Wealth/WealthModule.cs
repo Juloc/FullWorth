@@ -17,6 +17,15 @@ public sealed record WealthComponentView(
     bool IsComplete,
     IReadOnlyList<WealthNativeAmount> OriginalAmounts);
 
+public sealed record EmergencyFundView(
+    bool Enabled,
+    decimal TargetAmount,
+    decimal CurrentAmount,
+    string Currency,
+    Guid? AccountId,
+    Guid? AccountGroupId,
+    bool IsComplete);
+
 public sealed record WealthOverviewView(
     DateOnly Date,
     string Currency,
@@ -30,7 +39,8 @@ public sealed record WealthOverviewView(
     decimal NetWorth,
     bool IsComplete,
     bool InvestmentDataIncomplete,
-    IReadOnlyList<string> MissingCurrencies);
+    IReadOnlyList<string> MissingCurrencies,
+    EmergencyFundView? EmergencyFund = null);
 
 public sealed record WealthHistoryPoint(
     DateOnly Date,
@@ -97,7 +107,7 @@ public sealed class WealthOverviewService(
                 account.IncludeInNetWorth &&
                 account.Owners.Any(owner => owner.UserId == userId) &&
                 !excludedInvestmentAccounts.Contains(account.Id))
-            .Select(account => new { account.Id, account.Currency })
+            .Select(account => new { account.Id, account.Currency, account.GroupId })
             .ToListAsync(ct);
         var accountIds = accounts.Select(account => account.Id).ToArray();
         var balanceRows = await db.BalanceSnapshots.AsNoTracking()
@@ -111,15 +121,17 @@ public sealed class WealthOverviewService(
                 balance.CapturedAt
             })
             .ToListAsync(ct);
-        var latestBalances = balanceRows
+        var latestBalanceByAccount = balanceRows
             .GroupBy(balance => balance.AccountId)
             .Select(group => group
                 .OrderByDescending(balance => balance.CapturedAt)
                 .ThenBy(balance => BalanceRank(balance.BalanceType))
                 .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
                 .First())
-            .Select(balance => new NativeValue(balance.Amount, balance.Currency))
-            .ToList();
+            .ToDictionary(
+                balance => balance.AccountId,
+                balance => new NativeValue(balance.Amount, balance.Currency));
+        var latestBalances = latestBalanceByAccount.Values.ToList();
 
         var manualAssets = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
@@ -142,6 +154,36 @@ public sealed class WealthOverviewService(
         var manualAssetsView = ConvertComponent(manualAssets, targetCurrency, today, fx, missingCurrencies);
         var loansView = ConvertComponent(loanRows, targetCurrency, today, fx, missingCurrencies);
         var otherLiabilitiesView = ConvertComponent(otherLiabilities, targetCurrency, today, fx, missingCurrencies);
+
+        EmergencyFundView? emergencyFund = null;
+        var emergencyJson = await db.UserPreferences.AsNoTracking()
+            .Where(preference =>
+                preference.FinanceUserId == userId &&
+                preference.FullWorthSpaceId == fullWorthSpaceId &&
+                preference.Key == "wealth.emergencyFund")
+            .Select(preference => preference.ValueJson)
+            .SingleOrDefaultAsync(ct);
+        var emergencyPreference = ParseEmergencyFundPreference(emergencyJson);
+        if (emergencyPreference is { Enabled: true, TargetAmount: > 0m })
+        {
+            var selectedAccounts = accounts.Where(account =>
+                (!emergencyPreference.AccountId.HasValue || account.Id == emergencyPreference.AccountId.Value) &&
+                (!emergencyPreference.AccountGroupId.HasValue || account.GroupId == emergencyPreference.AccountGroupId.Value));
+            var selectedBalances = selectedAccounts
+                .Where(account => latestBalanceByAccount.ContainsKey(account.Id))
+                .Select(account => latestBalanceByAccount[account.Id])
+                .ToList();
+            var emergencyMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var emergencyComponent = ConvertComponent(selectedBalances, targetCurrency, today, fx, emergencyMissing);
+            emergencyFund = new EmergencyFundView(
+                true,
+                emergencyPreference.TargetAmount,
+                emergencyComponent.Amount,
+                targetCurrency,
+                emergencyPreference.AccountId,
+                emergencyPreference.AccountGroupId,
+                emergencyComponent.IsComplete);
+        }
 
         var convertedInvestment = fx.ToBaseOn(investment.Amount, investment.BaseCurrency, today);
         var investmentConversionComplete = convertedInvestment.HasValue;
@@ -177,7 +219,8 @@ public sealed class WealthOverviewService(
                 netWorth,
                 complete,
                 investment.Incomplete,
-                missingCurrencies.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray()));
+                missingCurrencies.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray(),
+                emergencyFund));
     }
 
     public async Task<WealthHistoryOutcome> GetHistoryForUserAsync(
@@ -491,6 +534,27 @@ public sealed class WealthOverviewService(
         catch (JsonException)
         {
             return [];
+        }
+    }
+
+    private sealed record EmergencyFundPreference(
+        bool Enabled,
+        decimal TargetAmount,
+        Guid? AccountId,
+        Guid? AccountGroupId);
+
+    private static EmergencyFundPreference? ParseEmergencyFundPreference(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<EmergencyFundPreference>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
