@@ -29,6 +29,9 @@ public sealed class FinanceTransaction
     public string? UserNote { get; set; }
     public bool IsIgnored { get; set; }
     public bool IsTransfer { get; set; }
+    // True only when this booking is trusted for reconstructing historical account balances.
+    // Provider and user-entered bookings are trusted; raw imports stay false until explicitly linked.
+    public bool UseForBalanceHistory { get; set; } = true;
     public Guid? TransferGroupId { get; set; }
     public string? TransferPurpose { get; set; }
     public Guid? RefundOfTransactionId { get; set; }
@@ -675,7 +678,10 @@ public sealed class TransactionStore(FullWorthDbContext db)
         if (account is null) return (TransactionCreateResult.NotFound, Guid.Empty);
         var isOwner = await db.Set<AccountOwner>().AsNoTracking().AnyAsync(x => x.AccountId == request.AccountId && x.UserId == userId && x.OwnershipType == AccountOwnershipTypes.Owner, ct);
         if (!isOwner) return (TransactionCreateResult.Forbidden, Guid.Empty);
-        if (account.Provider != "manual" || account.BankConnectionId is not null) return (TransactionCreateResult.NotManual, Guid.Empty);
+        // User corrections may be added to synced accounts as well. They use a manual:* key, so a
+        // later provider sync cannot overwrite them. Import archive containers must be linked first.
+        if (account.Provider == FullWorth.Backend.Modules.Import.FinanzguruAccountReconciliationService.ImportProvider)
+            return (TransactionCreateResult.NotManual, Guid.Empty);
         if (request.CategoryId.HasValue && !await db.Categories.AsNoTracking().AnyAsync(c => c.Id == request.CategoryId.Value && c.FullWorthSpaceId == fullWorthSpaceId, ct))
             return (TransactionCreateResult.InvalidCategory, Guid.Empty);
 
@@ -817,7 +823,7 @@ public static class TransactionEndpoints
                 {
                     TransactionCreateResult.Created => Results.Created($"/api/transactions/{id}?fullWorthSpaceId={fullWorthSpaceId}", new { id }),
                     TransactionCreateResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
-                    TransactionCreateResult.NotManual => Results.Conflict(new { error = "Only manual accounts accept hand-booked transactions." }),
+                    TransactionCreateResult.NotManual => Results.Conflict(new { error = "Archived import accounts must be linked to a real account before adding manual corrections." }),
                     TransactionCreateResult.InvalidCategory => Results.BadRequest(new { error = "Category must belong to the FullWorth Space." }),
                     _ => Results.NotFound()
                 };
