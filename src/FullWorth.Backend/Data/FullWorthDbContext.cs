@@ -142,6 +142,8 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.Property(x => x.CreditLimitCurrency).HasMaxLength(3);
             e.Property(x => x.IdentificationHashesJson).HasColumnType("jsonb");
             e.Property(x => x.IbanLast4).HasMaxLength(4);
+            e.Property(x => x.IbanLookup).HasMaxLength(128);
+            e.HasIndex(x => new { x.FullWorthSpaceId, x.IbanLookup });
             e.HasIndex(x => x.GroupId);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<BankConnection>().WithMany().HasForeignKey(x => x.BankConnectionId).OnDelete(DeleteBehavior.Restrict);
@@ -171,9 +173,11 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => x.CategoryId);
             e.HasIndex(x => x.NormalizedCounterparty);
             e.HasIndex(x => x.TransferGroupId);
+            e.HasIndex(x => x.CounterpartyAccountLookup);
             e.Property(x => x.Amount).HasPrecision(20, 8);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.RawJson).HasColumnType("text");
+            e.Property(x => x.CounterpartyAccountLookup).HasMaxLength(128);
             e.Property(x => x.UserNote).HasMaxLength(2000);
             e.Property(x => x.TransferPurpose).HasMaxLength(80);
             e.HasIndex(x => x.RefundOfTransactionId);
