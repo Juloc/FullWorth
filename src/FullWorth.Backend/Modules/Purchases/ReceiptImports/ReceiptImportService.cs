@@ -120,7 +120,143 @@ public sealed class ReceiptImportService(
     {
         var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
         var effective = ApplyDefaultQuery(request, connection.DefaultQuery);
-        return await paperless.PreviewAsync(connection.BaseUrl, connection.Token, effective, ct);
+        var preview = await paperless.PreviewAsync(connection.BaseUrl, connection.Token, effective, ct);
+        return await MarkImportedAsync(fullWorthSpaceId, preview, ct);
+    }
+
+    public Task<IReadOnlyList<PaperlessImportPresetView>> ListPaperlessPresetsAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct) =>
+        store.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct);
+
+    public async Task<PaperlessImportPresetView> SavePaperlessPresetAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid? presetId,
+        PaperlessImportPresetWrite request,
+        CancellationToken ct)
+    {
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) throw new ReceiptImportException("Preset name is required.");
+        if (name.Length > 100) throw new ReceiptImportException("Preset name is too long.");
+
+        var id = presetId is { } value && value != Guid.Empty ? value : Guid.NewGuid();
+        var existing = presetId is { } existingId
+            ? await store.GetPaperlessPresetAsync(userId, fullWorthSpaceId, existingId, ct)
+            : null;
+        if (presetId.HasValue && existing is null) throw new ReceiptImportException("Paperless preset was not found.");
+
+        var query = string.IsNullOrWhiteSpace(request.Query) ? null : request.Query.Trim();
+        if (query?.Length > 4000) throw new ReceiptImportException("Paperless query is too long.");
+        var editorJson = string.IsNullOrWhiteSpace(request.EditorJson) ? null : request.EditorJson;
+        if (editorJson?.Length > 32000) throw new ReceiptImportException("Paperless preset editor data is too large.");
+
+        var currency = NormalizeCurrency(request.Currency);
+        var lastSeen = existing?.LastSeenDocumentId;
+        var baselineRequired = request.AutoImport &&
+            (existing is null || !existing.AutoImport || !string.Equals(existing.Query, query, StringComparison.Ordinal));
+
+        if (baselineRequired)
+        {
+            var connection = await RequirePaperlessAsync(fullWorthSpaceId, ct);
+            var preview = await paperless.PreviewAsync(
+                connection.BaseUrl,
+                connection.Token,
+                new PaperlessPreviewRequest(Query: query, Limit: settings.MaxBatchItems),
+                ct);
+            lastSeen = preview.Documents.Count == 0 ? 0 : preview.Documents.Max(x => x.Id);
+        }
+
+        return await store.SavePaperlessPresetAsync(
+            id,
+            userId,
+            fullWorthSpaceId,
+            name,
+            query,
+            editorJson,
+            request.AutoImport,
+            request.AnalyzeAutomatically,
+            currency,
+            lastSeen,
+            ct);
+    }
+
+    public Task DeletePaperlessPresetAsync(Guid userId, Guid fullWorthSpaceId, Guid presetId, CancellationToken ct) =>
+        store.DeletePaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct);
+
+    public async Task RunPaperlessAutoImportPresetAsync(PaperlessAutoImportTarget preset, CancellationToken ct)
+    {
+        try
+        {
+            var connection = await RequirePaperlessAsync(preset.FullWorthSpaceId, ct);
+            var preview = await paperless.PreviewAsync(
+                connection.BaseUrl,
+                connection.Token,
+                new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
+                ct);
+
+            var maxSeen = preview.Documents.Count == 0
+                ? preset.LastSeenDocumentId
+                : Math.Max(preset.LastSeenDocumentId ?? 0, preview.Documents.Max(x => x.Id));
+
+            var newDocuments = preview.Documents
+                .Where(x => x.Id > (preset.LastSeenDocumentId ?? 0))
+                .ToList();
+
+            if (newDocuments.Count > 0)
+            {
+                var imported = await store.GetImportedPaperlessDocumentIdsAsync(
+                    preset.FullWorthSpaceId,
+                    newDocuments.Select(x => x.Id).ToArray(),
+                    ct);
+                newDocuments = newDocuments.Where(x => !imported.Contains(x.Id)).ToList();
+            }
+
+            if (newDocuments.Count == 0)
+            {
+                await store.UpdatePaperlessPresetCheckAsync(preset.Id, maxSeen, false, null, ct);
+                return;
+            }
+
+            var batch = await ImportPaperlessAsync(
+                preset.UserId,
+                preset.FullWorthSpaceId,
+                new PaperlessImportRequest(
+                    new PaperlessPreviewRequest(Query: preset.Query, Limit: settings.MaxBatchItems),
+                    newDocuments.Select(x => x.Id).ToArray(),
+                    preset.Currency,
+                    preset.AnalyzeAutomatically),
+                ct);
+
+            await store.UpdatePaperlessPresetCheckAsync(
+                preset.Id,
+                batch.Failed == 0 ? maxSeen : null,
+                batch.Completed > 0 || batch.Queued > 0 || batch.Processing > 0 || batch.NeedsReview > 0,
+                batch.Failed > 0 ? $"{batch.Failed} receipt(s) failed during automatic import." : null,
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await store.UpdatePaperlessPresetCheckAsync(preset.Id, null, false, SafeError(ex), ct);
+        }
+    }
+
+    private async Task<PaperlessPreviewResult> MarkImportedAsync(
+        Guid fullWorthSpaceId,
+        PaperlessPreviewResult preview,
+        CancellationToken ct)
+    {
+        if (preview.Documents.Count == 0) return preview;
+        var imported = await store.GetImportedPaperlessDocumentIdsAsync(
+            fullWorthSpaceId,
+            preview.Documents.Select(x => x.Id).ToArray(),
+            ct);
+        if (imported.Count == 0) return preview;
+        return preview with
+        {
+            Documents = preview.Documents.Select(x => x with { Imported = imported.Contains(x.Id) }).ToList()
+        };
     }
 
     public async Task<ReceiptImportBatchView> ImportPaperlessAsync(
@@ -144,6 +280,13 @@ public sealed class ReceiptImportService(
             documents = preview.Documents;
         }
         if (documents.Count == 0) throw new ReceiptImportException("Paperless filter returned no importable documents.");
+
+        var importedIds = await store.GetImportedPaperlessDocumentIdsAsync(
+            fullWorthSpaceId,
+            documents.Select(x => x.Id).ToArray(),
+            ct);
+        documents = documents.Where(x => !importedIds.Contains(x.Id)).ToList();
+        if (documents.Count == 0) throw new ReceiptImportException("No new Paperless documents to import.");
 
         var autoStart = request.AutoStart ?? settings.AutoStart;
         var currency = NormalizeCurrency(request.Currency);
