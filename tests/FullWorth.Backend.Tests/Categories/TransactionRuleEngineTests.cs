@@ -1,4 +1,5 @@
 using FullWorth.Backend.Modules.Categories;
+using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Transactions;
 using Xunit;
 
@@ -69,5 +70,74 @@ public sealed class TransactionRuleEngineTests
         var result = TransactionRuleEngine.Evaluate(Tx(), new[] { first, second });
         Assert.Equal("rule", result.Source);
         Assert.Equal(first.CategoryId, result.CategoryId);
+    }
+
+
+    [Fact]
+    public void Explicit_rule_has_precedence_over_cloud_mapping()
+    {
+        var rule = Rule(pattern: "REWE");
+        var cloudCategoryId = Guid.NewGuid();
+        var tx = Tx(counterparty: "REWE");
+        tx.NormalizedCounterparty = "REWE";
+
+        var result = TransactionRuleEngine.EvaluateWithGermanyCatalog(
+            tx,
+            [rule],
+            new Dictionary<string, Guid>
+            {
+                ["food.groceries"] = cloudCategoryId
+            },
+            [],
+            [new OfficialMerchantCategoryMapping("REWE", "expense", "food.groceries", 0.99m)]);
+
+        Assert.Equal("rule", result.Source);
+        Assert.Equal(rule.CategoryId, result.CategoryId);
+    }
+
+    [Fact]
+    public void Verified_cloud_mapping_is_used_before_builtin_catalog()
+    {
+        var cloudCategoryId = Guid.NewGuid();
+        var catalogCategoryId = Guid.NewGuid();
+        var tx = Tx(counterparty: "REWE");
+        tx.NormalizedCounterparty = "REWE";
+
+        var result = TransactionRuleEngine.EvaluateWithGermanyCatalog(
+            tx,
+            [],
+            new Dictionary<string, Guid>
+            {
+                ["food.groceries"] = catalogCategoryId,
+                ["shopping.general"] = cloudCategoryId
+            },
+            [],
+            [new OfficialMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.95m)]);
+
+        Assert.Equal("cloud", result.Source);
+        Assert.Equal(cloudCategoryId, result.CategoryId);
+    }
+
+    [Fact]
+    public void Low_confidence_cloud_mapping_is_ignored()
+    {
+        var groceryId = Guid.NewGuid();
+        var wrongId = Guid.NewGuid();
+        var tx = Tx(counterparty: "REWE");
+        tx.NormalizedCounterparty = "REWE";
+
+        var result = TransactionRuleEngine.EvaluateWithGermanyCatalog(
+            tx,
+            [],
+            new Dictionary<string, Guid>
+            {
+                ["food.groceries"] = groceryId,
+                ["shopping.general"] = wrongId
+            },
+            [],
+            [new OfficialMerchantCategoryMapping("REWE", "expense", "shopping.general", 0.50m)]);
+
+        Assert.Equal("catalog", result.Source);
+        Assert.Equal(groceryId, result.CategoryId);
     }
 }
