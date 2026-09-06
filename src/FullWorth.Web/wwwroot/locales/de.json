@@ -552,7 +552,9 @@
     "registrationUnavailable": "Die Registrierung konnte nicht abgeschlossen werden. Falls bereits ein Konto existiert, melde dich an.",
     "registrationDisabled": "Die öffentliche Registrierung ist auf dieser FullWorth-Instanz deaktiviert.",
     "privacy": "Datenschutz",
-    "terms": "Nutzungsbedingungen"
+    "terms": "Nutzungsbedingungen",
+    "confirmAdult": "Ich bestätige, dass ich mindestens 18 Jahre alt bin.",
+    "imprint": "Impressum"
   },
   "passkeys": {
     "title": "Passkeys",
