@@ -72,6 +72,28 @@ public sealed class KnowledgePackSyncServiceTests
         Assert.DoesNotContain(mappings, x => x.AliasKey == "ALDI");
     }
 
+    [Fact]
+    public async Task Older_validly_signed_pack_is_rejected_as_downgrade()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var current = BuildPack(rsa, "2026.09.06-2", "REWE", "food.groceries");
+        var cloud = new FakeCloudClient(current.Manifest, current.Payload);
+        var service = fixture.CreateService(cloud, rsa);
+
+        Assert.Equal("installed", (await service.SyncOnceAsync(CancellationToken.None)).Status);
+
+        var older = BuildPack(rsa, "2026.09.06-1", "ALDI", "food.groceries");
+        cloud.SetPack(older.Manifest, older.Payload);
+
+        var failed = await service.SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", failed.Status);
+        Assert.Equal("knowledge_pack_downgrade_rejected", failed.ErrorCode);
+        Assert.Equal(current.Manifest.Version, (await fixture.Db.KnowledgePackInstallations.SingleAsync()).Version);
+        Assert.Equal("REWE", (await fixture.Db.OfficialMerchantMappings.SingleAsync()).AliasKey);
+    }
+
     private static PackData BuildPack(
         RSA rsa,
         string version,
