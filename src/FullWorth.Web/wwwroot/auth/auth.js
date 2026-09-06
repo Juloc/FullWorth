@@ -15,11 +15,12 @@ const endpoints = Object.freeze({
 });
 
 const media = matchMedia('(prefers-color-scheme: dark)');
-const supportedViews = new Set(['login', 'register', 'forgot-password', 'reset-password', 'recovery-code', 'recovery-codes', 'claim']);
+const supportedViews = new Set(['login', 'two-factor', 'register', 'forgot-password', 'reset-password', 'recovery-code', 'recovery-codes', 'claim']);
 const state = {
   messages: {},
   view: resolveView(),
-  generatedRecoveryCodes: []
+  generatedRecoveryCodes: [],
+  pendingLogin: null
 };
 
 const $ = selector => document.querySelector(selector);
@@ -119,7 +120,7 @@ function bind() {
     if (preferences.theme === 'system') applyTheme();
   });
 
-  $$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
+  $('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
     form.addEventListener('submit', handleSubmit);
   });
 
@@ -153,6 +154,9 @@ async function handleSubmit(event) {
   switch (event.currentTarget.id) {
     case 'login-form':
       await submitLogin(event.currentTarget);
+      break;
+    case 'two-factor-form':
+      await submitTwoFactor(event.currentTarget);
       break;
     case 'register-form':
       await submitRegister(event.currentTarget);
@@ -253,9 +257,20 @@ async function submitLogin(form) {
       })
     });
 
+    const payload = await readJson(response);
     if (response.ok) {
-      const payload = await readJson(response);
+      state.pendingLogin = null;
       location.assign(resolveSafeReturnPath(payload?.returnUrl));
+      return;
+    }
+
+    if (payload?.requiresTwoFactor) {
+      state.pendingLogin = {
+        email: String(body.get('email') || ''),
+        password: String(body.get('password') || '')
+      };
+      showView('two-factor');
+      $('#two-factor-code')?.focus();
       return;
     }
 
@@ -266,6 +281,45 @@ async function submitLogin(form) {
     }
   } catch {
     showMessage($('#login-unavailable'));
+  } finally {
+    setSubmitting(button, false);
+  }
+}
+
+async function submitTwoFactor(form) {
+  hideMessage($('#two-factor-error'));
+  if (!form.reportValidity() || !state.pendingLogin) {
+    showView('login');
+    return;
+  }
+
+  const button = form.querySelector('button[type="submit"]');
+  setSubmitting(button, true);
+
+  try {
+    const body = new FormData(form);
+    const response = await fetch(endpoints.login, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        email: state.pendingLogin.email,
+        password: state.pendingLogin.password,
+        code: String(body.get('code') || '')
+      })
+    });
+    const payload = await readJson(response);
+
+    if (response.ok) {
+      state.pendingLogin = null;
+      location.assign(resolveSafeReturnPath(payload?.returnUrl));
+      return;
+    }
+
+    showMessage($('#two-factor-error'));
+    $('#two-factor-code')?.select();
+  } catch {
+    showMessage($('#two-factor-error'));
   } finally {
     setSubmitting(button, false);
   }
