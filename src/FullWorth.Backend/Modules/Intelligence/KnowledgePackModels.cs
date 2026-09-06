@@ -4,9 +4,13 @@ namespace FullWorth.Backend.Modules.Intelligence;
 
 public static class KnowledgePackProtocol
 {
-    public const string SchemaVersion = "1";
+    public const string SchemaVersion = "2";
+    public const string LegacySchemaVersion = "1";
     public const string SignatureAlgorithm = "RSA-PSS-SHA256";
     public const string InstallationScopeKey = "instance";
+
+    public static bool IsSupportedSchemaVersion(string? value) =>
+        value is LegacySchemaVersion or SchemaVersion;
 }
 
 public sealed record KnowledgePackManifest(
@@ -60,8 +64,9 @@ public sealed record KnowledgePackBrandAssetPayload(
     string CanonicalName,
     string LogoKey,
     string MediaType,
-    string ContentBase64,
+    string? ContentBase64,
     string ContentSha256,
+    int ByteLength,
     string? SourceName,
     string? SourceUrl,
     string? LicenseNote);
@@ -143,11 +148,57 @@ public sealed class OfficialBrandAsset
     public string CanonicalName { get; set; } = string.Empty;
     public string LogoKey { get; set; } = string.Empty;
     public string MediaType { get; set; } = "image/svg+xml";
-    public string ContentBase64 { get; set; } = string.Empty;
     public string ContentSha256 { get; set; } = string.Empty;
+    public int ByteLength { get; set; }
     public string? SourceName { get; set; }
     public string? SourceUrl { get; set; }
     public string? LicenseNote { get; set; }
+}
+
+public sealed class BrandAssetBlob
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ContentSha256 { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image/svg+xml";
+    public int ByteLength { get; set; }
+    public string ContentBase64 { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset LastUsedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class CustomBrandPack
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = string.Empty;
+    public string Version { get; set; } = "1";
+    public int Priority { get; set; } = 1000;
+    public bool Enabled { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class CustomBrandAsset
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PackId { get; set; }
+    public string BrandKey { get; set; } = string.Empty;
+    public string CanonicalName { get; set; } = string.Empty;
+    public string LogoKey { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "image/svg+xml";
+    public string ContentSha256 { get; set; } = string.Empty;
+    public int ByteLength { get; set; }
+    public string? SourceName { get; set; }
+    public string? SourceUrl { get; set; }
+    public string? LicenseNote { get; set; }
+}
+
+public sealed class CustomBrandAlias
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PackId { get; set; }
+    public string AliasKey { get; set; } = string.Empty;
+    public string BrandKey { get; set; } = string.Empty;
+    public string Country { get; set; } = "GLOBAL";
 }
 
 public sealed class OfficialBrandAlias
@@ -253,15 +304,53 @@ public static class KnowledgePackModelConfiguration
         {
             entity.HasIndex(x => x.BrandKey).IsUnique();
             entity.HasIndex(x => x.LogoKey).IsUnique();
+            entity.HasIndex(x => x.ContentSha256);
             entity.Property(x => x.BrandKey).HasMaxLength(120);
             entity.Property(x => x.CanonicalName).HasMaxLength(200);
             entity.Property(x => x.LogoKey).HasMaxLength(120);
             entity.Property(x => x.MediaType).HasMaxLength(80);
-            entity.Property(x => x.ContentBase64).HasColumnType("text");
             entity.Property(x => x.ContentSha256).HasMaxLength(64);
             entity.Property(x => x.SourceName).HasMaxLength(200);
             entity.Property(x => x.SourceUrl).HasMaxLength(1000);
             entity.Property(x => x.LicenseNote).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<BrandAssetBlob>(entity =>
+        {
+            entity.HasIndex(x => x.ContentSha256).IsUnique();
+            entity.Property(x => x.ContentSha256).HasMaxLength(64);
+            entity.Property(x => x.MediaType).HasMaxLength(80);
+            entity.Property(x => x.ContentBase64).HasColumnType("text");
+        });
+
+        modelBuilder.Entity<CustomBrandPack>(entity =>
+        {
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.Property(x => x.Name).HasMaxLength(120);
+            entity.Property(x => x.Version).HasMaxLength(80);
+        });
+
+        modelBuilder.Entity<CustomBrandAsset>(entity =>
+        {
+            entity.HasIndex(x => new { x.PackId, x.BrandKey }).IsUnique();
+            entity.HasIndex(x => x.ContentSha256);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.CanonicalName).HasMaxLength(200);
+            entity.Property(x => x.LogoKey).HasMaxLength(120);
+            entity.Property(x => x.MediaType).HasMaxLength(80);
+            entity.Property(x => x.ContentSha256).HasMaxLength(64);
+            entity.Property(x => x.SourceName).HasMaxLength(200);
+            entity.Property(x => x.SourceUrl).HasMaxLength(1000);
+            entity.Property(x => x.LicenseNote).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<CustomBrandAlias>(entity =>
+        {
+            entity.HasIndex(x => new { x.PackId, x.AliasKey, x.Country }).IsUnique();
+            entity.HasIndex(x => new { x.PackId, x.BrandKey });
+            entity.Property(x => x.AliasKey).HasMaxLength(300);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.Country).HasMaxLength(8);
         });
 
         modelBuilder.Entity<OfficialBrandAlias>(entity =>
