@@ -9,6 +9,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Fido2" Version="4.0.1" />
+    <PackageReference Include="Indice.AspNetCore.Authentication.Apple" Version="8.55.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <PrivateAssets>all</PrivateAssets>
