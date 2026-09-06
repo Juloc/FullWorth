@@ -5,7 +5,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Analytics;
 
-public sealed record UpcomingContractItem(Guid Id, string Name, decimal Amount, string Currency, DateOnly? NextDueDate, Guid? AccountId);
+public sealed record UpcomingContractItem(
+    Guid Id,
+    string Name,
+    string? ProviderName,
+    decimal Amount,
+    string Currency,
+    DateOnly? NextDueDate,
+    Guid? AccountId,
+    Guid? CategoryId,
+    string? CategoryIconKey);
 public sealed record DashboardResult(string Currency, decimal Accounts, decimal Assets, decimal Liabilities, decimal NetWorth, decimal Income, decimal Expenses, bool Incomplete, List<UpcomingContractItem> Upcoming);
 public sealed record BudgetStatusItem(Guid Id, string Name, Guid? CategoryId, string Period, DateOnly PeriodStart, DateOnly PeriodEnd, decimal Amount, decimal Spent, decimal Remaining, decimal Percent);
 public sealed record ForecastPoint(DateOnly Date, decimal EstimatedNetWorth, decimal AverageHistoricalNet, decimal RecurringMonthly);
@@ -267,7 +276,19 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
             .Where(contract => contract.IsActive && contract.Currency == currency && contract.NextDueDate >= today && contract.NextDueDate <= today.AddDays(30))
             .OrderBy(contract => contract.NextDueDate)
             .Take(20)
-            .Select(contract => new UpcomingContractItem(contract.Id, contract.Name, contract.Amount, contract.Currency, contract.NextDueDate, contract.AccountId))
+            .Select(contract => new UpcomingContractItem(
+                contract.Id,
+                contract.Name,
+                contract.ProviderName,
+                contract.Amount,
+                contract.Currency,
+                contract.NextDueDate,
+                contract.AccountId,
+                contract.CategoryId,
+                db.Categories
+                    .Where(category => category.Id == contract.CategoryId && category.FullWorthSpaceId == fullWorthSpaceId)
+                    .Select(category => category.Icon != null && category.Icon != "" ? category.Icon : category.Key)
+                    .FirstOrDefault()))
             .ToListAsync(ct);
         return new(currency, accounts, assets, liabilities, accounts + assets - liabilities, income, expenses, incomplete, upcoming);
     }

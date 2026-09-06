@@ -296,7 +296,7 @@ function renderWidget(type, ctx, body, data, cfg) {
   if (type === 'upcoming') {
     // Contracts due soon, with the shared brand/category identity (UX rework §4/Phase B).
     const items = d?.upcoming || [];
-    body.innerHTML = items.length ? items.slice(0, cfg?.limit || 6).map(x => `<div class="fw-row fw-row-plain"><span class="tx-ident-slot">${identityIcon(x.name, { logoAssetPath: x.logoAssetPath })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.name)}</div><div class="fw-row-sub">${ctx.date(x.nextDueDate)}</div></div><div class="fw-row-amt amount negative">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx, 'dashboard.noUpcoming');
+    body.innerHTML = items.length ? items.slice(0, cfg?.limit || 6).map(x => `<div class="fw-row fw-row-plain"><span class="tx-ident-slot">${identityIcon(x.providerName || x.name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.name)}</div><div class="fw-row-sub">${ctx.date(x.nextDueDate)}</div></div><div class="fw-row-amt amount negative">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx, 'dashboard.noUpcoming');
     return;
   }
   if (type === 'recent-tx') {
