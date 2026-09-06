@@ -363,8 +363,21 @@ public sealed class KnowledgePackSyncService(
     {
         var pem = configuration["FullWorthCloud:KnowledgePackPublicKeyPem"];
         if (!string.IsNullOrWhiteSpace(pem))
-            return pem.Replace("\\n", "
-", StringComparison.Ordinal);
+            return pem.Replace("\\n", Environment.NewLine, StringComparison.Ordinal);
+
+        var path = configuration["FullWorthCloud:KnowledgePackPublicKeyPath"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            try
+            {
+                if (File.Exists(path))
+                    return File.ReadAllText(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
 
         var encoded = configuration["FullWorthCloud:KnowledgePackPublicKeyBase64"];
         if (string.IsNullOrWhiteSpace(encoded)) return null;
