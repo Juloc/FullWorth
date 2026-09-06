@@ -308,7 +308,7 @@
     "cancelStatus_cancelled": "Gekündigt",
     "merge": "Mit anderem Vertrag verbinden",
     "mergeTitle": "Verträge verbinden",
-    "mergeHint": "Wähle Einträge, die derselbe Vertrag sind. Konten und bisherige Zahlungsnamen bleiben als Historie erhalten.",
+    "mergeHint": "Dieser Vertrag bleibt als Hauptvertrag bestehen. Wähle die Einträge, die dazu gehören. Konten und Zahlungsnamen bleiben als Historie erhalten.",
     "mergeConfirm": "Zusammenführen",
     "mergeNone": "Keine weiteren Verträge zum Verbinden vorhanden.",
     "mergedSources": "Verbundene Einträge",
