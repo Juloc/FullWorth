@@ -141,21 +141,7 @@ public sealed class ContractDetectionService(
 
     }
 
-    private static string CandidateProviderKey(string value)
-    {
-        var normalized = new string((value ?? string.Empty)
-            .Trim()
-            .ToUpperInvariant()
-            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
-            .ToArray());
-        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-        var legalSuffixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "AG", "GMBH", "KG", "OHG", "SE", "SA", "SAS", "BV", "NV", "INC", "LTD", "LLC", "PLC", "AB"
-        };
-        while (tokens.Count > 1 && legalSuffixes.Contains(tokens[^1])) tokens.RemoveAt(tokens.Count - 1);
-        return string.Join(' ', tokens);
-    }
+    private static string CandidateProviderKey(string value) => ContractIdentity.Normalize(value);
 
     public async Task<ContractMutationOutcome> AcceptForUserAsync(Guid userId, Guid fullWorthSpaceId, ContractCandidate candidate, CancellationToken ct)
     {
@@ -190,17 +176,21 @@ public sealed class ContractDetectionService(
             if (ownership != AccountOwnershipTypes.Owner) return new(ContractMutationResult.NotFound);
         }
 
-        var existing = await db.Contracts
+        var providerKey = CandidateProviderKey(candidate.Counterparty);
+        var eligibleExisting = await db.Contracts
             .Where(contract => contract.FullWorthSpaceId == fullWorthSpaceId &&
                                contract.AutoDetected &&
-                               contract.ProviderName == candidate.Counterparty &&
+                               contract.MergedIntoContractId == null &&
                                contract.Currency == currency)
             .Where(contract => contract.AccountId == null || db.AccountOwners.Any(owner =>
                 owner.AccountId == contract.AccountId.Value &&
                 owner.UserId == userId &&
                 owner.OwnershipType == AccountOwnershipTypes.Owner))
             .OrderBy(contract => contract.CreatedAt)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+
+        var existing = eligibleExisting.FirstOrDefault(contract =>
+            CandidateProviderKey(contract.ProviderName ?? contract.Name) == providerKey);
 
         if (existing is null)
         {
@@ -216,7 +206,24 @@ public sealed class ContractDetectionService(
         existing.ProviderName = candidate.Counterparty.Trim();
         existing.Kind = "contract";
         existing.CategoryId = candidate.CategoryId;
-        existing.AccountId = candidate.AccountId;
+
+        // A recurring contract can move between accounts without becoming a second contract. Once two
+        // different source accounts have been observed, keep the logical contract account-agnostic so
+        // its payment history remains visible across both accounts.
+        if (existing.AccountId.HasValue &&
+            candidate.AccountId.HasValue &&
+            existing.AccountId.Value != candidate.AccountId.Value)
+        {
+            existing.AccountId = null;
+        }
+        else if (!existing.AccountId.HasValue && existing.Id != Guid.Empty && eligibleExisting.Contains(existing))
+        {
+            // Preserve an already-unbound contract instead of binding it again to only the newest account.
+        }
+        else
+        {
+            existing.AccountId = candidate.AccountId;
+        }
         existing.Amount = candidate.TypicalAmount;
         existing.Currency = currency;
         existing.BillingCycle = candidate.BillingCycle.Trim().ToLowerInvariant();
