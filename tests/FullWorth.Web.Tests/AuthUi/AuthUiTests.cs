@@ -139,6 +139,15 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task AuthJavaScript_BindsEveryAuthFormSubmitHandler()
+    {
+        var js = await GetAsync("/auth/auth.js");
+
+        Assert.Contains("$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
+        AssertNotContains(js, "$('#login-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach");
+    }
+
+    [Fact]
     public async Task AuthJavaScript_OnlyPersistsNonSensitivePreferences()
     {
         var js = await GetAsync("/auth/auth.js");
