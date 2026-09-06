@@ -73,6 +73,16 @@ public sealed record WealthHistoryOutcome(
     IReadOnlyList<WealthHistoryPoint>? History = null,
     string? Error = null);
 
+public sealed record WealthBookingActivityPoint(
+    DateOnly Month,
+    int Count,
+    int ImportedCount);
+
+public sealed record WealthBookingActivityOutcome(
+    WealthRequestStatus Status,
+    IReadOnlyList<WealthBookingActivityPoint>? Activity = null,
+    string? Error = null);
+
 public sealed class WealthOverviewService(
     FullWorthDbContext db,
     CurrencyConverter currencyConverter,
@@ -275,6 +285,56 @@ public sealed class WealthOverviewService(
         return new(
             WealthRequestStatus.Success,
             points.OrderBy(point => point.Date).ToArray());
+    }
+
+    public async Task<WealthBookingActivityOutcome> GetBookingActivityForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct)
+    {
+        var isMember = await db.FullWorthSpaceMembers.AsNoTracking()
+            .AnyAsync(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId, ct);
+        if (!isMember) return new(WealthRequestStatus.NotFound);
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+            return new(WealthRequestStatus.Invalid, Error: "From date cannot be after to date.");
+
+        var accountIds = await db.Accounts.AsNoTracking()
+            .Where(account =>
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.Owners.Any(owner => owner.UserId == userId))
+            .Select(account => account.Id)
+            .ToListAsync(ct);
+
+        var query = db.Transactions.AsNoTracking()
+            .Where(transaction =>
+                accountIds.Contains(transaction.AccountId) &&
+                transaction.Status != "PDNG" &&
+                (transaction.BookingDate != null || transaction.ValueDate != null));
+        if (from.HasValue)
+            query = query.Where(transaction => (transaction.BookingDate ?? transaction.ValueDate) >= from.Value);
+        if (to.HasValue)
+            query = query.Where(transaction => (transaction.BookingDate ?? transaction.ValueDate) <= to.Value);
+
+        var rows = await query
+            .Select(transaction => new
+            {
+                Date = transaction.BookingDate ?? transaction.ValueDate!.Value,
+                Imported = transaction.ExternalKey.StartsWith("finanzguru:")
+            })
+            .ToListAsync(ct);
+
+        var activity = rows
+            .GroupBy(row => new DateOnly(row.Date.Year, row.Date.Month, 1))
+            .OrderBy(group => group.Key)
+            .Select(group => new WealthBookingActivityPoint(
+                group.Key,
+                group.Count(),
+                group.Count(row => row.Imported)))
+            .ToArray();
+
+        return new(WealthRequestStatus.Success, activity);
     }
 
     /// <summary>
@@ -632,6 +692,16 @@ public static class WealthEndpoints
             ToResult(await service.GetHistoryForUserAsync(
                 currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency, ct)));
 
+        group.MapGet("/booking-activity", async (
+            Guid fullWorthSpaceId,
+            DateOnly? from,
+            DateOnly? to,
+            CurrentUserContext currentUser,
+            WealthOverviewService service,
+            CancellationToken ct) =>
+            ToResult(await service.GetBookingActivityForUserAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, from, to, ct)));
+
         return app;
     }
 
@@ -648,6 +718,14 @@ public static class WealthEndpoints
         WealthRequestStatus.Success => Results.Ok(outcome.History),
         WealthRequestStatus.NotFound => Results.NotFound(),
         WealthRequestStatus.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid wealth history request." }),
+        _ => Results.StatusCode(StatusCodes.Status409Conflict)
+    };
+
+    private static IResult ToResult(WealthBookingActivityOutcome outcome) => outcome.Status switch
+    {
+        WealthRequestStatus.Success => Results.Ok(outcome.Activity),
+        WealthRequestStatus.NotFound => Results.NotFound(),
+        WealthRequestStatus.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid wealth booking-activity request." }),
         _ => Results.StatusCode(StatusCodes.Status409Conflict)
     };
 }

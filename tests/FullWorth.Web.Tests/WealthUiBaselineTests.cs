@@ -37,6 +37,20 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task WealthTrendShowsImportedBookingCoverageWithoutTreatingItAsNetWorth()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+        Assert.Contains("api/wealth/booking-activity", js);
+        Assert.Contains("bookingActivityMarkup", js);
+        Assert.Contains("parseChartDate(point.date)", js);
+        Assert.Contains("nw-chart-activity", js);
+        Assert.Contains("bookingHistoryHint", js);
+        Assert.Contains(".nw-chart-activity", css);
+        Assert.Contains(".nw-booking-history-hint", css);
+    }
+
+    [Fact]
     public async Task AssetWizardUsesCanonicalTaxonomyAndValuationHistory()
     {
         var js = await GetAsync("/features/networth.js");

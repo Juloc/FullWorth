@@ -24,7 +24,7 @@ const WINDOWS = [
 ];
 
 // View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
-const nw = { overview: null, history: [], assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
+const nw = { overview: null, history: [], bookingActivity: [], assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -50,6 +50,7 @@ const COPY = {
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
     window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.',
     customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.',
+    bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne historischen Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
     emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.'
   },
   en: {
@@ -67,6 +68,7 @@ const COPY = {
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
     window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.',
     customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
+    bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a historical balance they are shown as booking activity, not as net worth.',
     emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.'
   }
 };
@@ -103,7 +105,7 @@ export function newAsset(context) {
   return openAssetWizard();
 }
 
-async function loadHistory(months, customFrom = nw.customFrom, customTo = nw.customTo) {
+function rangeParams(months, customFrom = nw.customFrom, customTo = nw.customTo) {
   const params = new URLSearchParams();
   if (months === -1) {
     if (customFrom) params.set('from', customFrom);
@@ -117,7 +119,16 @@ async function loadHistory(months, customFrom = nw.customFrom, customTo = nw.cus
       params.set('from', localDate(start));
     }
   }
-  try { return await ctx.api(`api/wealth/history?${params.toString()}`) || []; }
+  return params;
+}
+
+async function loadHistory(months, customFrom = nw.customFrom, customTo = nw.customTo) {
+  try { return await ctx.api(`api/wealth/history?${rangeParams(months, customFrom, customTo).toString()}`) || []; }
+  catch { return []; }
+}
+
+async function loadBookingActivity(months, customFrom = nw.customFrom, customTo = nw.customTo) {
+  try { return await ctx.api(`api/wealth/booking-activity?${rangeParams(months, customFrom, customTo).toString()}`) || []; }
   catch { return []; }
 }
 
@@ -141,8 +152,9 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
+  const [history, bookingActivity, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
     loadHistory(nw.windowMonths),
+    loadBookingActivity(nw.windowMonths),
     ctx.api('api/assets').catch(() => []),
     ctx.api('api/liabilities').catch(() => []),
     ctx.api('api/accounts').catch(() => []),
@@ -155,6 +167,7 @@ export async function renderNetWorth(context) {
   const linkedInvestmentAccounts = new Set((portfolios || []).map(item => item.accountId).filter(Boolean));
   nw.overview = overview;
   nw.history = history || [];
+  nw.bookingActivity = bookingActivity || [];
   nw.assets = assets || [];
   nw.liabilities = liabilities || [];
   nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id));
@@ -234,33 +247,99 @@ function smoothLinePath(pts) {
   return d;
 }
 
-function trendChartGeometry(history) {
-  const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
-  if (!usable.length) return null;
+function parseChartDate(value) {
+  const time = Date.parse(`${String(value || '').slice(0, 10)}T00:00:00Z`);
+  return Number.isFinite(time) ? time : null;
+}
+
+function selectedChartDomain(history, activity) {
+  const end = parseChartDate(nw.windowMonths === -1 ? nw.customTo : localDate(new Date()));
+  let start = null;
+  if (nw.windowMonths === -1) {
+    start = parseChartDate(nw.customFrom);
+  } else if (nw.windowMonths > 0) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - nw.windowMonths);
+    start = parseChartDate(localDate(date));
+  } else {
+    const dates = [
+      ...(history || []).map(point => parseChartDate(point.date)),
+      ...(activity || []).map(point => parseChartDate(point.month))
+    ].filter(Number.isFinite);
+    start = dates.length ? Math.min(...dates) : end;
+  }
+  const safeEnd = Number.isFinite(end) ? end : Date.now();
+  const safeStart = Number.isFinite(start) ? start : safeEnd;
+  return { start: Math.min(safeStart, safeEnd), end: Math.max(safeStart, safeEnd) };
+}
+
+function trendChartGeometry(history, activity = nw.bookingActivity) {
+  const usable = (history || []).filter(point => point?.netWorth !== null && point?.netWorth !== undefined && Number.isFinite(Number(point.netWorth)));
+  const activityUsable = (activity || []).filter(point => Number.isFinite(parseChartDate(point.month)) && Number(point.count) > 0);
+  if (!usable.length && !activityUsable.length) return null;
   const values = usable.map(point => Number(point.netWorth));
-  const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1;
-  const width = 900; const height = 200; const pad = 14;
-  const pts = values.map((value, index) => ({
-    x: (index / (values.length - 1 || 1)) * width,
-    y: height - ((value - min) / span) * (height - pad * 2) - pad
+  const min = values.length ? Math.min(...values) : 0;
+  const max = values.length ? Math.max(...values) : 1;
+  const span = max - min || 1;
+  const width = 900; const height = 200; const pad = 14; const activityBand = 24;
+  const plotHeight = height - activityBand;
+  const domain = selectedChartDomain(usable, activityUsable);
+  const timeSpan = domain.end - domain.start || 1;
+  const xForDate = value => {
+    const time = parseChartDate(value);
+    return Number.isFinite(time) ? Math.max(0, Math.min(width, ((time - domain.start) / timeSpan) * width)) : 0;
+  };
+  const pts = usable.map((point, index) => ({
+    x: xForDate(point.date),
+    y: plotHeight - ((values[index] - min) / span) * (plotHeight - pad * 2) - pad
   }));
-  return { usable, values, width, height, pts };
+  return { usable, activityUsable, values, width, height, plotHeight, pts, xForDate };
+}
+
+function bookingActivityMarkup(geometry) {
+  if (!geometry?.activityUsable?.length) return '';
+  const maxCount = Math.max(...geometry.activityUsable.map(point => Number(point.count) || 0), 1);
+  return geometry.activityUsable.map(point => {
+    const count = Number(point.count) || 0;
+    const imported = Number(point.importedCount) || 0;
+    const barHeight = 4 + Math.round((count / maxCount) * 14);
+    const x = geometry.xForDate(point.month);
+    const y = geometry.height - barHeight - 2;
+    const title = `${ctx.date(point.month)}: ${count} ${t('bookingActivity')}${imported ? ` (${imported} Import)` : ''}`;
+    return `<rect class="nw-chart-activity${imported ? ' imported' : ''}" x="${Math.max(0, x - 1.5).toFixed(2)}" y="${y}" width="3" height="${barHeight}" rx="1.5"><title>${ctx.esc(title)}</title></rect>`;
+  }).join('');
+}
+
+function bookingHistoryHint() {
+  if (!nw.bookingActivity?.length || !nw.history?.length) return '';
+  const firstActivity = Math.min(...nw.bookingActivity.map(point => parseChartDate(point.month)).filter(Number.isFinite));
+  const firstHistory = Math.min(...nw.history.map(point => parseChartDate(point.date)).filter(Number.isFinite));
+  if (!Number.isFinite(firstActivity) || !Number.isFinite(firstHistory) || firstActivity >= firstHistory) return '';
+  return `<div class="nw-booking-history-hint"><span class="nw-booking-history-dot"></span><span>${ctx.esc(t('bookingHistoryHint'))}</span></div>`;
 }
 
 function trendChartSvg(history) {
-  const geometry = trendChartGeometry(history);
+  const geometry = trendChartGeometry(history, nw.bookingActivity);
   if (!geometry) return `<div class="row-sub nw-chart-empty">${ctx.esc(t('noTrend'))}</div>`;
-  const { width, height, pts } = geometry;
-  const line = smoothLinePath(pts);
-  const area = `${line} L${width.toFixed(2)},${height} L0,${height} Z`;
-  const grid = [0.25, 0.5, 0.75].map(f => `<line class="nw-chart-grid" x1="0" y1="${(height * f).toFixed(1)}" x2="${width}" y2="${(height * f).toFixed(1)}" vector-effect="non-scaling-stroke"/>`).join('');
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
+  const { width, height, plotHeight, pts } = geometry;
+  const grid = [0.25, 0.5, 0.75].map(f => `<line class="nw-chart-grid" x1="0" y1="${(plotHeight * f).toFixed(1)}" x2="${width}" y2="${(plotHeight * f).toFixed(1)}" vector-effect="non-scaling-stroke"/>`).join('');
+  const activity = bookingActivityMarkup(geometry);
+  let wealth = '';
+  if (pts.length) {
+    const line = smoothLinePath(pts);
+    const firstX = pts[0].x.toFixed(2);
+    const lastX = pts.at(-1).x.toFixed(2);
+    const area = `${line} L${lastX},${plotHeight} L${firstX},${plotHeight} Z`;
+    wealth = `<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/>`;
+  }
+  const empty = pts.length ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(t('noTrend'))}</text>`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${empty}</svg>${bookingHistoryHint()}`;
 }
 
 function bindNetWorthScrubber(hero) {
   const svg = hero.querySelector('.nw-chart svg');
   const valueEl = hero.querySelector('.nw-hero-value .fw-summary-value');
-  const geometry = trendChartGeometry(nw.history);
+  const geometry = trendChartGeometry(nw.history, nw.bookingActivity);
   if (!svg || !valueEl || !geometry) return;
   const points = geometry.usable.map((point, index) => ({
     x: geometry.pts[index].x,
@@ -310,7 +389,10 @@ function wireHero(hero) {
         other.classList.toggle('active', on);
         other.setAttribute('aria-selected', String(on));
       });
-      nw.history = await loadHistory(months);
+      [nw.history, nw.bookingActivity] = await Promise.all([
+        loadHistory(months),
+        loadBookingActivity(months)
+      ]);
       repaintHeroTrend(hero);
     });
   });
@@ -334,7 +416,10 @@ function wireHero(hero) {
       other.classList.remove('active');
       other.setAttribute('aria-selected', 'false');
     });
-    nw.history = await loadHistory(-1, from, to);
+    [nw.history, nw.bookingActivity] = await Promise.all([
+      loadHistory(-1, from, to),
+      loadBookingActivity(-1, from, to)
+    ]);
     repaintHeroTrend(hero);
   });
 }
