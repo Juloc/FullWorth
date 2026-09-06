@@ -92,9 +92,9 @@ async function loadOptimizer(){
 function renderOptions(selector,options,ranked=false){
   const root=$(selector);
   root.innerHTML=(options||[]).map((option,index)=>`<article class="panel optimizer-card ${ranked&&index===0?'best':''}">
-    ${ranked&&index===0?'<span class="optimizer-badge">höchster FullWorth-Wert</span>':''}
+    ${ranked&&index===0?'<span class="optimizer-badge">höchster Gesamtwert</span>':''}
     <h3>${esc(option.title)}</h3><p>${esc(option.description)}</p>
-    <div class="optimizer-value">${signedEuro(option.fullWorthDeltaAnnual)}</div><small>FullWorth / Jahr</small>
+    <div class="optimizer-value">${signedEuro(option.fullWorthDeltaAnnual)}</div><small>Gesamtwert / Jahr</small>
     <div class="optimizer-details">
       <span>Netto <strong>${signedEuro(option.cashNetDeltaAnnual)}</strong></span>
       <span>AG-Kosten <strong>${signedEuro(option.employerCostDeltaAnnual)}</strong></span>
