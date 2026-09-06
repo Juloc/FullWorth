@@ -30,6 +30,40 @@ public sealed class AuthService(
         return new CreateAuthUserResultDto(true, ToDto(user), Array.Empty<string>());
     }
 
+    public async Task<CreateAuthUserResultDto> CreateExternalUserAsync(
+        Guid financeUserId,
+        string email,
+        UserLoginInfo login)
+    {
+        if (financeUserId == Guid.Empty)
+            return new CreateAuthUserResultDto(false, null, ["FinanceUserId is required."]);
+
+        var normalizedEmail = email.Trim();
+        if (normalizedEmail.Length == 0)
+            return new CreateAuthUserResultDto(false, null, ["Email is required."]);
+
+        var user = new AuthUser
+        {
+            Id = Guid.NewGuid(),
+            FinanceUserId = financeUserId,
+            Email = normalizedEmail,
+            UserName = normalizedEmail
+        };
+
+        var create = await userManager.CreateAsync(user);
+        if (!create.Succeeded)
+            return new CreateAuthUserResultDto(false, null, create.Errors.Select(x => x.Description).ToArray());
+
+        var addLogin = await userManager.AddLoginAsync(user, login);
+        if (!addLogin.Succeeded)
+        {
+            await userManager.DeleteAsync(user);
+            return new CreateAuthUserResultDto(false, null, addLogin.Errors.Select(x => x.Description).ToArray());
+        }
+
+        return new CreateAuthUserResultDto(true, ToDto(user), Array.Empty<string>());
+    }
+
     public async Task<LoginResultDto> ValidatePasswordAsync(string email, string password)
     {
         var (user, result) = await CheckPasswordAsync(email, password);
