@@ -576,14 +576,23 @@ body.locked{overflow:hidden}
 .bank-options button:hover{background:var(--surface-2)}
 .bank-option{display:flex;align-items:center;gap:10px;width:100%}
 .bank-option-logo{width:32px;height:32px;object-fit:contain;border-radius:7px;flex:0 0 32px}
-.bank-option-text{display:flex;flex-direction:column;min-width:0}
+.bank-option-text{display:flex;flex-direction:column;min-width:0;flex:1}
 .bank-option-status-possible{box-shadow:inset 3px 0 0 var(--warning)}
 .bank-option-status-major{box-shadow:inset 3px 0 0 var(--negative)}
+.bank-status-chip{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;border:1px solid var(--line);border-radius:var(--radius-pill);padding:4px 8px;font-size:11px;font-weight:600;white-space:nowrap}
+.bank-status-chip.possible{border-color:var(--warning);background:var(--warning-soft)}
+.bank-status-chip.major{border-color:var(--negative);background:var(--negative-soft)}
+.bank-status-dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.bank-status-chip.possible .bank-status-dot{color:var(--warning)}
+.bank-status-chip.major .bank-status-dot{color:var(--negative)}
 .bank-status-link{margin:0}
-.bank-status-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.bank-status-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:7px 9px;border:1px solid transparent;border-radius:var(--radius-input)}
+.bank-status-tools.status-attention{border-color:var(--warning);background:var(--warning-soft);color:var(--text)}
+.bank-status-tools.status-active{color:var(--muted)}
 .bank-status-tools a{white-space:nowrap}
 .bank-status-tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font:inherit}
 .bank-status-tools button:hover{background:var(--surface-2)}
+@media(max-width:560px){.bank-status-chip{padding:3px 7px;font-size:10px}}
 .bank-status-warning{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12px}
 .bank-status-warning.possible strong{color:var(--warning)}
 .bank-status-warning.major strong{color:var(--negative)}
