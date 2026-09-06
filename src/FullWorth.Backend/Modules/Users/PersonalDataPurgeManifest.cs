@@ -1,6 +1,7 @@
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Modules.Tax;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FullWorth.Backend.Modules.Users;
