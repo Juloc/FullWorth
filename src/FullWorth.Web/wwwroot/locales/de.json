@@ -592,6 +592,7 @@
     "externalAccountNotFound": "Für dieses Google- oder Apple-Konto gibt es noch keinen FullWorth-Zugang. Du kannst ihn hier erstellen.",
     "externalRegistrationFailed": "Die Registrierung mit Google oder Apple konnte nicht abgeschlossen werden.",
     "externalFailed": "Die Anmeldung mit Google oder Apple konnte nicht abgeschlossen werden.",
+    "externalTwoFactorRequired": "Für dieses Konto ist Zwei-Faktor-Anmeldung aktiv. Melde dich mit E-Mail, Passwort und Authenticator-Code an.",
     "createAccount": "Registrieren",
     "displayName": "Name",
     "register": "Konto erstellen",
