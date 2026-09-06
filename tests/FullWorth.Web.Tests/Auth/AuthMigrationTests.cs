@@ -15,10 +15,11 @@ public sealed class AuthMigrationTests
     private const string IntegrationMigration = "20260812202000_SessionsAndRecoveryCodes";
     private const string PasskeyMigration = "20260812235500_Passkeys";
     private const string AccountDeletionMigration = "20260906100000_AccountDeletion";
-    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration];
+    private const string AdminUserManagementMigration = "20260906201500_AdminUserManagement";
+    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration];
 
     [Fact]
-    public async Task ExistingAuthDatabase_UpgradesThroughPasskeysAndAccountDeletionAndPreservesExistingUser()
+    public async Task ExistingAuthDatabase_UpgradesThroughAdminUserManagementAndPreservesExistingUser()
     {
         await using var database = await PostgresAuthDatabase.CreateAsync();
         await using var services = AuthTestServices.Build(database.ConnectionString);
@@ -41,10 +42,15 @@ public sealed class AuthMigrationTests
         Assert.True(await TableExistsAsync(database.ConnectionString, "PasskeyChallenges"));
 
         await migrator.MigrateAsync(AccountDeletionMigration);
+        await migrator.MigrateAsync(AdminUserManagementMigration);
 
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
+        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionRequestedAt"));
+        Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
+        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
         db.ChangeTracker.Clear();
         var preserved = await db.Users.AsNoTracking().SingleAsync(x => x.Id == legacyUserId);
         Assert.Equal(legacyFinanceUserId, preserved.FinanceUserId);
