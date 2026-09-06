@@ -882,6 +882,11 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .nw-trend-grad-bottom{stop-color:var(--cta);stop-opacity:0}
 .nw-chart-line{stroke-linecap:round;stroke-linejoin:round}
 .nw-chart-grid{stroke:var(--line);stroke-width:1;opacity:.55}
+.nw-chart-activity{fill:var(--muted);opacity:.22}
+.nw-chart-activity.imported{opacity:.38}
+.nw-chart-no-wealth{fill:var(--muted);font-size:12px}
+.nw-booking-history-hint{display:flex;align-items:flex-start;gap:7px;margin-top:6px;color:var(--muted);font-size:11px;line-height:1.35}
+.nw-booking-history-dot{width:8px;height:8px;border-radius:2px;background:var(--muted);opacity:.38;flex:0 0 auto;margin-top:3px}
 .nw-allocation .nw-alloc-chart{position:relative;width:min(260px,72%);margin:var(--s4) auto var(--s3);aspect-ratio:1/1}
 .nw-allocation .nw-donut{display:block;width:100%;height:auto;overflow:visible}
 .nw-allocation .nw-donut-track{fill:none;stroke:var(--surface-2);stroke-width:20}
