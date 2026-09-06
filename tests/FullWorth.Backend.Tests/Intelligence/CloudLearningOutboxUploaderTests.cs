@@ -112,5 +112,17 @@ public sealed class CloudLearningOutboxUploaderTests
             string? ageBand,
             string? observedMonth,
             CancellationToken ct) => Task.FromResult<FullWorthCloudBenchmark?>(null);
+
+        public Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
+            string instanceCredential,
+            string? currentVersion,
+            string? region,
+            CancellationToken ct) => Task.FromResult<KnowledgePackManifest?>(null);
+
+        public Task<byte[]> DownloadKnowledgePackAsync(
+            string instanceCredential,
+            string packId,
+            string version,
+            CancellationToken ct) => Task.FromResult(Array.Empty<byte>());
     }
 }
