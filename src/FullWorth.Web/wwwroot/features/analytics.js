@@ -67,6 +67,68 @@ export async function renderAnalytics(context) {
   fillMerchant(ctx.$('#an-merchant'), merchants);
   fillNetWorth(ctx.$('#an-networth'), history, cur);
   fillForecast(ctx.$('#an-forecast'), forecast);
+  loadSavingsBenchmark();
+}
+
+function savingsPct(value) {
+  return new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-US', {
+    style: 'percent',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(Number(value) || 0);
+}
+
+function savingsMonthLabel(value) {
+  if (!/^\d{4}-\d{2}$/.test(String(value || ''))) return String(value || '');
+  const [year, month] = String(value).split('-').map(Number);
+  return new Intl.DateTimeFormat(isDe() ? 'de-DE' : 'en-US', {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(year, month - 1, 1));
+}
+
+async function loadSavingsBenchmark() {
+  const box = ctx.$('#an-cloud-savings');
+  if (!box) return;
+  try {
+    const result = await ctx.api('api/intelligence/benchmarks/savings');
+    if (!result?.available) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+
+    const local = Number(result.localSavingsRate) || 0;
+    const median = Number(result.median) || 0;
+    const points = (local - median) * 100;
+    const relation = Math.abs(points) < 0.1
+      ? t('nahe am Median', 'near median')
+      : points > 0
+        ? t(Math.abs(points).toFixed(1) + ' Prozentpunkte über Median', Math.abs(points).toFixed(1) + ' pp above median')
+        : t(Math.abs(points).toFixed(1) + ' Prozentpunkte unter Median', Math.abs(points).toFixed(1) + ' pp below median');
+
+    const filter = result.peerFilter === 'country_income'
+      ? t('Land + Einkommensbereich', 'country + income band')
+      : result.peerFilter === 'country'
+        ? t('Land', 'country')
+        : t('alle verfügbaren', 'all available');
+
+    const body = `<div class="an-card-foot">
+      ${kpi(savingsPct(local), esc(t('Deine Sparquote', 'Your savings rate')))}
+      ${kpi(savingsPct(median), esc(t('Cloud-Median', 'Cloud median')))}
+      ${kpi(savingsPct(result.p25) + '–' + savingsPct(result.p75), esc(t('mittlere 50 %', 'middle 50%')))}
+    </div>
+    <div class="row-sub">${esc(relation)} · ${result.distinctInstanceCount} ${esc(t('Instanzen', 'instances'))} · ${esc(filter)}</div>`;
+
+    box.hidden = false;
+    box.innerHTML = sectionCard(
+      t('Sparquote im FullWorth-Cloud-Vergleich', 'Savings rate compared with FullWorth Cloud'),
+      body,
+      { sub: savingsMonthLabel(result.observedMonth) + ' · ' + t('nur aggregierte Werte ab 20 Instanzen', 'aggregates only from 20+ instances') });
+  } catch {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
 }
 
 // ---- View shell -----------------------------------------------------------------------------------
@@ -98,7 +160,7 @@ function shellHtml(win) {
     ${card('an-forecast', ctx.get('analytics.forecast'), t('Geschätzte Entwicklung', 'Estimated trajectory'))}
   </div>`;
 
-  return cyclebar + cards + advancedHtml();
+  return cyclebar + cards + '<div id="an-cloud-savings" hidden></div>' + advancedHtml();
 }
 
 // Advanced / custom builder (UX rework §6): demoted into a collapsed <details> so it is neither the

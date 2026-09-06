@@ -53,6 +53,15 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
         var current = active.FirstOrDefault(x => x.PolicyVersion == CloudIntelligencePolicy.CurrentVersion);
         if (current is null)
         {
+            // A new consent version must not retroactively authorize payloads queued under an older
+            // disclosure. Drop every unsent row; current workers will regenerate eligible minimized
+            // observations after this consent is stored.
+            db.CloudSubmissionOutbox.RemoveRange(await db.CloudSubmissionOutbox
+                .Where(x => x.InstanceId == state.InstanceId &&
+                            x.Status != CloudSubmissionStatuses.Sent &&
+                            x.Status != CloudSubmissionStatuses.DeadLetter)
+                .ToListAsync(ct));
+
             current = new CloudIntelligenceConsent
             {
                 InstanceId = state.InstanceId,
