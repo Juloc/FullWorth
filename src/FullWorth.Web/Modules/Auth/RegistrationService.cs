@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Net;
 using System.Net.Http.Json;
 using FullWorth.Web.Modules.Bootstrap;
@@ -26,7 +27,7 @@ public sealed class RegistrationService(
 
         var email = (request.Email ?? string.Empty).Trim();
         var displayName = (request.DisplayName ?? string.Empty).Trim();
-        if (email.Length == 0 || displayName.Length == 0 || displayName.Length > 200 || !request.AcceptTerms)
+        if (email.Length == 0 || displayName.Length == 0 || displayName.Length > 200 || !request.AcceptTerms || !request.ConfirmAdult)
             return RegisterResultDto.Invalid();
 
         if (await userManager.FindByEmailAsync(email) is not null)
@@ -67,6 +68,22 @@ public sealed class RegistrationService(
             new CreateAuthUserRequest(created.FinanceUserId, email, request.Password));
         if (!authResult.Succeeded)
             return new RegisterResultDto(false, "registration_failed", null, authResult.Errors);
+
+        var authUser = await userManager.FindByEmailAsync(email);
+        if (authUser is null)
+            return RegisterResultDto.Failed();
+
+        var acceptedAt = DateTimeOffset.UtcNow.ToString("O");
+        var agreement = await userManager.AddClaimsAsync(authUser,
+        [
+            new Claim(LegalDocumentVersions.TermsVersionClaim, LegalDocumentVersions.Terms),
+            new Claim(LegalDocumentVersions.TermsAcceptedAtClaim, acceptedAt),
+            new Claim(LegalDocumentVersions.PrivacyVersionClaim, LegalDocumentVersions.Privacy),
+            new Claim(LegalDocumentVersions.PrivacyAcknowledgedAtClaim, acceptedAt),
+            new Claim(LegalDocumentVersions.AdultConfirmedAtClaim, acceptedAt)
+        ]);
+        if (!agreement.Succeeded)
+            return new RegisterResultDto(false, "registration_failed", null, agreement.Errors.Select(error => error.Description).ToArray());
 
         var login = await sessions.LoginAsync(new LoginRequest(email, request.Password), context, ct);
         return login.Succeeded && login.User is not null
