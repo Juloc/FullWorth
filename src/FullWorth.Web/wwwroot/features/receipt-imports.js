@@ -621,9 +621,9 @@ function buildPaperlessQuery() {
     const term = paperlessQueryTerm(field, rawValue);
 
     if (parts.length) parts.push(join);
+    if (negated) parts.push('NOT');
     if (open) parts.push('('.repeat(open));
     balance += open;
-    if (negated) parts.push('NOT');
     parts.push(term);
     if (close) {
       balance -= close;
