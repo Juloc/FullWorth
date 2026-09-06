@@ -83,6 +83,8 @@ builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
 builder.Services.AddScoped<CloudIntelligenceStateService>();
 builder.Services.AddScoped<CloudInstanceCredentialStore>();
 builder.Services.AddScoped<CloudLearningOutboxUploader>();
+builder.Services.AddScoped<CloudContractBenchmarkContributionService>();
+builder.Services.AddHostedService<CloudContractBenchmarkContributionWorker>();
 builder.Services.AddHostedService<CloudLearningOutboxWorker>();
 builder.Services.AddScoped<KnowledgePackSyncService>();
 builder.Services.AddScoped<CloudOntologyResolver>();
