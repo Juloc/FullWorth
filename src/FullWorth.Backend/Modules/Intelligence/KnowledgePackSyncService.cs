@@ -574,6 +574,10 @@ public sealed class KnowledgePackSyncService(
 
         var normalizedAlias = MerchantNormalization.Normalize(aliasKey)
             ?? throw new KnowledgePackVerificationException("knowledge_pack_merchant_invalid");
+        var logoKey = string.IsNullOrWhiteSpace(source.LogoKey)
+            ? null
+            : NormalizeBrandKey(source.LogoKey)
+              ?? throw new KnowledgePackVerificationException("knowledge_pack_merchant_invalid");
         if (string.IsNullOrWhiteSpace(source.CanonicalMerchantKey) ||
             string.IsNullOrWhiteSpace(source.CanonicalName) ||
             string.IsNullOrWhiteSpace(source.CategoryKey) ||
@@ -592,7 +596,7 @@ public sealed class KnowledgePackSyncService(
             Country = country,
             Confidence = source.Confidence,
             Domain = Trim(source.Domain, 255),
-            LogoKey = Trim(source.LogoKey, 180)
+            LogoKey = logoKey
         };
     }
 
