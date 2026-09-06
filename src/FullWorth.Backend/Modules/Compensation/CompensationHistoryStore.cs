@@ -372,18 +372,27 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         {
             var result = new List<RawHistoryRow>();
             await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT id, effective_date, sequence, event_type, title, note,
-                       patch::text, created_at, updated_at
-                FROM compensation_history
-                WHERE fullworth_space_id = @fullworth_space_id
-                  AND user_id = @user_id
-                  AND (@through IS NULL OR effective_date <= @through)
-                ORDER BY effective_date, sequence, created_at, id;
-                """;
+            command.CommandText = through is null
+                ? """
+                    SELECT id, effective_date, sequence, event_type, title, note,
+                           patch::text, created_at, updated_at
+                    FROM compensation_history
+                    WHERE fullworth_space_id = @fullworth_space_id
+                      AND user_id = @user_id
+                    ORDER BY effective_date, sequence, created_at, id;
+                    """
+                : """
+                    SELECT id, effective_date, sequence, event_type, title, note,
+                           patch::text, created_at, updated_at
+                    FROM compensation_history
+                    WHERE fullworth_space_id = @fullworth_space_id
+                      AND user_id = @user_id
+                      AND effective_date <= @through
+                    ORDER BY effective_date, sequence, created_at, id;
+                    """;
             Add(command, "fullworth_space_id", fullWorthSpaceId);
             Add(command, "user_id", userId);
-            AddNullable(command, "through", through);
+            if (through is not null) Add(command, "through", through.Value);
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
@@ -391,7 +400,7 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                     ?? throw new InvalidOperationException("Invalid compensation history patch.");
                 result.Add(new RawHistoryRow(
                     reader.GetGuid(0),
-                    DateOnly.FromDateTime(reader.GetDateTime(1)),
+                    DateValue(reader.GetValue(1)),
                     reader.GetInt32(2),
                     reader.GetString(3),
                     reader.GetString(4),
@@ -472,6 +481,14 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         try { return await action(connection); }
         finally { if (shouldClose) await connection.CloseAsync(); }
     }
+
+    private static DateOnly DateValue(object? value) => value switch
+    {
+        DateOnly date => date,
+        DateTime dateTime => DateOnly.FromDateTime(dateTime),
+        _ => DateOnly.Parse(value?.ToString() ?? throw new InvalidOperationException("Missing history date."),
+            System.Globalization.CultureInfo.InvariantCulture)
+    };
 
     private static DateTimeOffset Timestamp(object? value) => value switch
     {
