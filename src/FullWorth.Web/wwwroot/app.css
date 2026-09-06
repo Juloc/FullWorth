@@ -12,7 +12,7 @@
   color-scheme:light;
   /* spacing scale (§4.1) */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
-  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:228px;--sidebar-w-collapsed:72px;
+  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
   /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
   --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
@@ -50,7 +50,12 @@ a:hover{color:var(--muted)}
 body.nav-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
 
 /* Sidebar (§3.1) */
-.sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line)}
+.sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line);min-width:0}
+.sidebar-resizer{position:absolute;top:0;right:-4px;z-index:8;width:8px;height:100%;cursor:col-resize;touch-action:none}
+.sidebar-resizer::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background-color .15s ease}
+.sidebar-resizer:hover::after,.sidebar-resizer.is-dragging::after{background:var(--k4)}
+body.nav-collapsed .sidebar-resizer{display:none}
+body.sidebar-resizing{cursor:col-resize;user-select:none}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
 .brand-logo{height:24px;width:auto;flex:0 0 auto;display:block}
@@ -597,8 +602,8 @@ body.locked{overflow:hidden}
 /* Mobile bottom nav (§3.2) — hidden on desktop */
 #bottom-nav{display:none}
 
-/* Tablet + mobile < 1024px: desktop sidebar gives way to the fixed bottom nav (§3.3/§3.2) */
-@media(max-width:1023px){
+/* Mobile only: below 768px the desktop sidebars give way to the app-style bottom navigation. */
+@media(max-width:767px){
   .shell{display:block;width:100%;min-width:0}
   .sidebar{display:none}
   main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom));max-width:none}
