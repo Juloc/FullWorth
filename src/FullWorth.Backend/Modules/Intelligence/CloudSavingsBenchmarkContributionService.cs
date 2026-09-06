@@ -133,11 +133,13 @@ public sealed class CloudSavingsBenchmarkContributionService(
         // instance observation first so an instance with many spaces cannot carry more weight.
         var rate = Math.Round(Median(snapshots.Select(x => x.SavingsRate)), 4);
         var observedMonth = snapshots.Select(x => x.ObservedMonth).Distinct().Single();
-        var country = snapshots.Select(x => x.Country)
+        var countries = snapshots.Select(x => x.Country)
             .Where(x => x is not null)
+            .Cast<string>()
             .Distinct(StringComparer.Ordinal)
             .Take(2)
-            .ToList() is { Count: 1 } countries ? countries[0] : null;
+            .ToList();
+        var country = countries.Count == 1 ? countries[0] : null;
         var incomeBand = CombinedIncomeBand(snapshots);
         var revisionDate = now.ToString("yyyy-MM-dd");
         var idempotencyKey = $"benchmark:savings.rate:{observedMonth}:{revisionDate}";
