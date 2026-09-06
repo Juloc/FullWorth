@@ -341,6 +341,7 @@ app.MapFinTsInvestmentSnapshotEndpoints();
 app.MapFinanzguruImportEndpoints();
 app.MapBankingSyncStateEndpoints();
 app.MapIntelligenceAdminEndpoints();
+app.MapCloudBenchmarkEndpoints();
 app.MapAiUserAccessEndpoints();
 app.MapIntelligenceSuggestionEndpoints();
 
