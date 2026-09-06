@@ -1,5 +1,7 @@
+using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +52,11 @@ public sealed class TransactionAllocation
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+public sealed record TransactionStatusHistoryItem(
+    string Status,
+    string? FromStatus,
+    DateTimeOffset ObservedAt);
 
 public enum TransactionClassificationResult { Updated, NotFound, InvalidCategory }
 public enum AllocationResult { Updated, NotFound, InvalidCategory, InvalidPurchaseItem, Unbalanced }
@@ -215,7 +222,50 @@ public sealed class TransactionStore(FullWorthDbContext db)
             .OrderBy(x => x.PurchaseDate)
             .ThenBy(x => x.CreatedAt)
             .ToListAsync(ct);
-        return new { transaction = tx, transferCounterpart = counterpart, purchases };
+
+        var rawStatusHistory = await db.AuditEvents.AsNoTracking()
+            .Where(x =>
+                x.FullWorthSpaceId == fullWorthSpaceId &&
+                x.EntityType == "Transaction" &&
+                x.EntityId == id &&
+                (x.Action == "transaction.pending_observed" || x.Action == "transaction.status_changed"))
+            .OrderByDescending(x => x.OccurredAt)
+            .ThenByDescending(x => x.Id)
+            .Take(20)
+            .Select(x => new { x.Action, x.MetadataJson, x.OccurredAt })
+            .ToListAsync(ct);
+        var statusHistory = rawStatusHistory
+            .Select(ParseStatusHistory)
+            .Where(x => x is not null)
+            .Cast<TransactionStatusHistoryItem>()
+            .OrderBy(x => x.ObservedAt)
+            .ToList();
+
+        return new { transaction = tx, transferCounterpart = counterpart, purchases, statusHistory };
+    }
+
+    private static TransactionStatusHistoryItem? ParseStatusHistory(dynamic row)
+    {
+        if (string.Equals((string)row.Action, "transaction.pending_observed", StringComparison.Ordinal))
+            return new TransactionStatusHistoryItem("PDNG", null, (DateTimeOffset)row.OccurredAt);
+
+        if (!string.Equals((string)row.Action, "transaction.status_changed", StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace((string?)row.MetadataJson))
+            return null;
+
+        try
+        {
+            var metadata = JsonSerializer.Deserialize<TransactionStatusAuditMetadata>(
+                (string)row.MetadataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return metadata is null
+                ? null
+                : new TransactionStatusHistoryItem(metadata.ToStatus, metadata.FromStatus, (DateTimeOffset)row.OccurredAt);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public Task<string?> GetOwnershipForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid transactionId, CancellationToken ct) =>
