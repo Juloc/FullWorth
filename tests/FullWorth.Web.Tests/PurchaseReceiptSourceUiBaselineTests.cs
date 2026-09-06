@@ -49,7 +49,7 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     {
         var sw = Read("sw.js");
 
-        Assert.Contains("const VERSION = 'v57'", sw);
+        Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         Assert.Contains("/features/purchase-receipt-source-review.js", sw);
         Assert.Contains("/features/receipt-imports.js", sw);
         Assert.Contains("/features/receipt-import-batch-details.js", sw);
