@@ -315,7 +315,8 @@
     "mergedSourcesHint": "These entries belong to this contract and are kept for account and payment history.",
     "unmerge": "Unlink",
     "mergedToast": "Contracts merged.",
-    "unmergedToast": "Contract link removed."
+    "unmergedToast": "Contract link removed.",
+    "mergedSourcesNone": "No other entries linked yet."
   },
   "budgets": {
     "title": "Budgets",
