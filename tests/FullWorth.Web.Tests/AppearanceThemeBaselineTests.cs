@@ -37,6 +37,27 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     }
 
     [Fact]
+    public async Task CuteTheme_MockupPolish_IsScopedAndCleanBaseStaysCanonical()
+    {
+        var app = await GetAsync("/app.css");
+        var css = await GetAsync("/appearance.css");
+
+        Assert.Contains("--font-default:'Barlow Condensed'", app);
+        Assert.Contains("--radius-card:12px", app);
+
+        Assert.Contains("--radius-card: 22px", css);
+        Assert.Contains("--cute-pastel-lavender", css);
+        Assert.Contains("--cat-1: #8878cf", css);
+        Assert.Contains("font-family: var(--font-fredoka)", css);
+        Assert.Contains("html[data-theme=\"light\"][data-visual-theme=\"cute\"] .topbar", css);
+        Assert.Contains("html[data-visual-theme=\"cute\"] .progress.ontrack>span", css);
+        Assert.Contains("html[data-visual-theme=\"cute\"] .budget-card", css);
+        Assert.Contains("rx: 6px", css);
+        Assert.Contains("text-transform: none", css);
+        Assert.DoesNotContain("data-visual-theme=\"clean\"", css);
+    }
+
+    [Fact]
     public async Task AppearanceSettings_KeepColorModeAndVisualStyleIndependent()
     {
         var app = await GetAsync("/app.js");
