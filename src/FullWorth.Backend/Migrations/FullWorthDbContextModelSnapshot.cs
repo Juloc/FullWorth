@@ -20,6 +20,7 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         EnableBankingAccountIdentificationHashesSnapshot.Apply(modelBuilder);
         EnableBankingAccountMetadataSnapshot.Apply(modelBuilder);
         UserOnboardingSnapshot.Apply(modelBuilder);
+        AccountDeletionSnapshot.Apply(modelBuilder);
 #pragma warning restore 612, 618
     }
 }
