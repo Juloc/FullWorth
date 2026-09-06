@@ -565,6 +565,12 @@ function starterQuestions(){
   if(type==='asset'||type==='liability')return lang()==='de'
     ? ['Wie wirkt sich das auf mein Vermögen aus?','Was sollte ich dabei beobachten?','Wie hat sich der Wert entwickelt?']
     : ['How does this affect my net worth?','What should I watch here?','How has the value developed?'];
+  if(type==='budget')return lang()==='de'
+    ? ['Bin ich bei diesem Budget auf Kurs?','Welche Ausgaben treiben dieses Budget?','Wie kann ich das Budget besser einhalten?']
+    : ['Am I on track with this budget?','Which expenses drive this budget?','How can I stay within this budget?'];
+  if(type==='portfolio')return lang()==='de'
+    ? ['Wie passt dieses Depot zu meinem Gesamtvermögen?','Was sollte ich bei diesem Depot beobachten?','Wie beeinflusst es meine Vermögensentwicklung?']
+    : ['How does this portfolio fit my overall net worth?','What should I watch in this portfolio?','How does it affect my wealth trend?'];
   return lang()==='de'
     ? ['Wo ist mein Geld hin?','Was habe ich bereut?','Was war es wert?','Was könnte ich reduzieren?','Wann erreiche ich 100.000 €?']
     : ['Where did my money go?','What did I regret?','What was worth it?','What could I reduce?','When could I reach €100,000?'];
