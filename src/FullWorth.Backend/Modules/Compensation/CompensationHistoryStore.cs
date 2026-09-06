@@ -189,6 +189,13 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                 point.Calc.ContractualGrossAnnual,
                 point.Calc.EstimatedCashNetAnnual,
                 point.Calc.FullWorthCompensationValueAnnual,
+                point.Calc.EmployerTotalCostAnnual,
+                point.Calc.EffectiveNetValuePerWorkingHour,
+                point.Calc.MarginalNetFromNext100Gross,
+                TotalTaxes(point.Calc),
+                point.Calc.SocialInsurance.TotalAnnual,
+                point.Calc.PersonalBenefitsValueAnnual,
+                point.Calc.CompanyCar.EstimatedNetCashImpactAnnual,
                 maintenance,
                 RoundPercent(nominal),
                 RoundPercent(inflation),
@@ -218,14 +225,18 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
     {
         var result = new List<CompensationHistoryEntry>();
         JsonNode? state = null;
+        CompensationCalculationResult? previous = null;
         foreach (var row in rows.OrderBy(x => x.EffectiveDate).ThenBy(x => x.Sequence).ThenBy(x => x.CreatedAt))
         {
             state = ApplyPatch(state, row.Patch);
             var profile = DeserializeProfile(state);
+            var calculation = GermanCompensationCalculator.Calculate(profile);
+            var delta = previous is null ? null : HistoryDelta(previous, calculation);
             result.Add(new CompensationHistoryEntry(
                 row.Id, fullWorthSpaceId, row.EffectiveDate, row.Sequence,
                 row.EventType, row.Title, row.Note, ChangedFields(row.Patch),
-                profile, row.CreatedAt, row.UpdatedAt));
+                profile, calculation, delta, row.CreatedAt, row.UpdatedAt));
+            previous = calculation;
         }
         return result;
     }
@@ -465,6 +476,24 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
 
     private static string? CleanNote(string? note) =>
         string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+    private static CompensationHistoryDelta HistoryDelta(
+        CompensationCalculationResult before, CompensationCalculationResult after) => new(
+        RoundMoney(after.ContractualGrossAnnual - before.ContractualGrossAnnual),
+        RoundMoney(after.EstimatedCashNetAnnual - before.EstimatedCashNetAnnual),
+        RoundMoney(after.EmployerTotalCostAnnual - before.EmployerTotalCostAnnual),
+        RoundMoney(after.FullWorthCompensationValueAnnual - before.FullWorthCompensationValueAnnual),
+        RoundMoney(after.EffectiveNetValuePerWorkingHour - before.EffectiveNetValuePerWorkingHour),
+        RoundMoney(TotalTaxes(after) - TotalTaxes(before)),
+        RoundMoney(after.SocialInsurance.TotalAnnual - before.SocialInsurance.TotalAnnual));
+
+    private static decimal TotalTaxes(CompensationCalculationResult result) =>
+        result.Taxes.EstimatedIncomeTaxAnnual
+        + result.Taxes.EstimatedSolidaritySurchargeAnnual
+        + result.Taxes.EstimatedChurchTaxAnnual;
+
+    private static decimal RoundMoney(decimal value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private static decimal PercentChange(decimal from, decimal to) =>
         from <= 0m ? 0m : (to / from - 1m) * 100m;
