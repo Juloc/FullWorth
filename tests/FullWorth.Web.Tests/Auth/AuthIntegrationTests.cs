@@ -330,6 +330,78 @@ public sealed class AuthIntegrationTests
         Assert.False(string.IsNullOrWhiteSpace(newLogin.Cookie));
     }
 
+
+    [Fact]
+    public async Task AccountDeletion_HasSevenDayRecoveryWindow_BlocksFinance_AndCanReactivate()
+    {
+        await using var factory = new FullWorthWebFactory();
+        var user = await CreateUserAsync(factory);
+        using var client = CreateClient(factory);
+        var login = await LoginAsync(client, user.Email, Password);
+
+        using (var wrong = await SendJsonAsync(
+                   client,
+                   HttpMethod.Post,
+                   "/auth/account-deletion/request",
+                   login.Cookie,
+                   new { currentPassword = "wrong-password" }))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+        }
+
+        var before = DateTimeOffset.UtcNow;
+        using var request = await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            "/auth/account-deletion/request",
+            login.Cookie,
+            new { currentPassword = Password });
+        var after = DateTimeOffset.UtcNow;
+
+        Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+        using (var payload = JsonDocument.Parse(await request.Content.ReadAsStringAsync()))
+        {
+            Assert.True(payload.RootElement.GetProperty("pending").GetBoolean());
+            var scheduled = payload.RootElement.GetProperty("scheduledFor").GetDateTimeOffset();
+            Assert.InRange(
+                scheduled,
+                before.AddDays(7).AddSeconds(-2),
+                after.AddDays(7).AddSeconds(2));
+        }
+
+        using (var finance = await SendAsync(client, HttpMethod.Get, "/", login.Cookie))
+        {
+            Assert.Equal(HttpStatusCode.Redirect, finance.StatusCode);
+            Assert.Equal("/account/deletion", finance.Headers.Location?.OriginalString);
+        }
+
+        using (var bff = await SendAsync(client, HttpMethod.Get, "/bff/backend/api/accounts", login.Cookie))
+            Assert.Equal((HttpStatusCode)423, bff.StatusCode);
+
+        using (var logout = await SendAsync(client, HttpMethod.Post, "/auth/logout", login.Cookie))
+            Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        var recoveryLogin = await LoginAsync(client, user.Email, Password);
+        Assert.Equal("/account/deletion", recoveryLogin.ReturnUrl);
+
+        using var cancel = await SendAsync(
+            client,
+            HttpMethod.Post,
+            "/auth/account-deletion/cancel",
+            recoveryLogin.Cookie);
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+
+        using var restored = await SendAsync(client, HttpMethod.Get, "/", recoveryLogin.Cookie);
+        Assert.Equal(HttpStatusCode.OK, restored.StatusCode);
+
+        Assert.Contains(factory.BackendRequests, request =>
+            request.Method == "POST" &&
+            request.Uri?.AbsolutePath.EndsWith("/api/bootstrap/deactivate-user", StringComparison.Ordinal) == true);
+        Assert.Contains(factory.BackendRequests, request =>
+            request.Method == "POST" &&
+            request.Uri?.AbsolutePath.EndsWith("/api/bootstrap/reactivate-user", StringComparison.Ordinal) == true);
+    }
+
     [Fact]
     public async Task ProductionCookieIsAlwaysSecure()
     {
