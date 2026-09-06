@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v64';
+const VERSION = 'v65';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -65,6 +65,9 @@ const APP_SHELL = [
   '/pwa/standalone-init.js',
   '/manifest.json',
   '/pwa/icon.svg',
+  '/pwa/icon-192.png',
+  '/pwa/icon-512.png',
+  '/pwa/apple-touch-icon-180.png',
   '/fonts/BarlowCondensed-400.woff2',
   '/fonts/BarlowCondensed-500.woff2',
   '/fonts/BarlowCondensed-600.woff2',
