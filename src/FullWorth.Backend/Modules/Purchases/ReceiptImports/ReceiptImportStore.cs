@@ -309,18 +309,19 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
 
     public async Task<HashSet<int>> GetImportedPaperlessDocumentIdsAsync(
         Guid fullWorthSpaceId,
+        string sourcePrefix,
         IReadOnlyCollection<int> documentIds,
         CancellationToken ct)
     {
         if (documentIds.Count == 0) return [];
-        var references = documentIds.Distinct().Select(id => $"paperless:{id}").ToArray();
+        var keys = documentIds.Distinct().Select(id => $"{sourcePrefix}:{id}").ToArray();
         var rows = await db.Database.SqlQuery<PaperlessImportedDocumentProjection>($"""
-            SELECT DISTINCT CAST(substring(i."SourceReference" from 11) AS integer) AS "DocumentId"
+            SELECT DISTINCT CAST(split_part(i."ExternalKey", ':', array_length(string_to_array(i."ExternalKey", ':'), 1)) AS integer) AS "DocumentId"
             FROM "ReceiptImportItems" i
             LEFT JOIN "ReceiptScanJobs" j ON j."Id" = i."ReceiptScanJobId"
             WHERE i."FullWorthSpaceId" = {fullWorthSpaceId}
               AND i."SourceType" = {ReceiptImportSourceTypes.Paperless}
-              AND i."SourceReference" = ANY ({references})
+              AND i."ExternalKey" = ANY ({keys})
               AND i."ReceiptScanJobId" IS NOT NULL
               AND COALESCE(j."Status", '') <> {ReceiptScanJobStatuses.Error}
             """).ToListAsync(ct);
