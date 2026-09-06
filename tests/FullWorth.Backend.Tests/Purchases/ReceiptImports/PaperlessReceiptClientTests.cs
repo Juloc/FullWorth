@@ -135,6 +135,7 @@ public sealed class PaperlessReceiptClientTests
         Assert.False(options.FolderEnabled);
         Assert.Equal(500, options.MaxBatchItems);
         Assert.Equal(512L * 1024 * 1024, options.MaxUploadBytes);
+        Assert.Equal(60, options.PaperlessAutoImportIntervalMinutes);
         Assert.True(options.AutoStart);
         Assert.Equal("EUR", options.DefaultCurrency);
     }
