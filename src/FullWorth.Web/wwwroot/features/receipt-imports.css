@@ -56,4 +56,24 @@
 .receipt-import-item-error{font-size:.78rem;color:#a51f1f;overflow-wrap:anywhere}
 .receipt-import-batch-item-actions{display:flex;align-items:center;gap:7px}
 .receipt-import-item-open{white-space:nowrap;text-decoration:none}
-@media(max-width:700px){.receipt-import-dialog,.receipt-import-batch-dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}.receipt-import-shell,.receipt-import-batch-dialog-shell{height:100%}.receipt-import-head{padding:16px}.receipt-import-tabs{padding:8px 16px}.receipt-import-body{padding:14px 16px 24px}.receipt-import-batch-dialog-head{padding:14px 16px 10px}.receipt-import-batch-dialog-body{padding:14px 16px 20px}.receipt-import-grid{grid-template-columns:1fr}.receipt-import-grid .wide{grid-column:auto}.receipt-import-actions{justify-content:stretch}.receipt-import-actions>button{flex:1}.receipt-import-batch-main{display:grid}.receipt-import-batch-filters{grid-template-columns:1fr 1fr}.receipt-import-batch-filters>[data-import-item-count]{grid-column:1/-1;justify-self:start;padding-bottom:0}.receipt-import-batch-item{grid-template-columns:1fr}.receipt-import-batch-item-actions{justify-content:flex-start}}
+.receipt-import-step-title{display:flex;align-items:center;gap:9px}
+.receipt-import-step-title>span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;background:var(--surface-subtle,#f2f4f7);font-size:.75rem;font-weight:700;color:var(--text-muted,#707782);flex:0 0 auto}
+.paperless-filter-builder{display:grid;gap:10px;margin-top:12px}
+.paperless-filter-rule{display:grid;grid-template-columns:88px 82px 70px minmax(150px,190px) minmax(180px,1fr) 70px 38px;gap:7px;align-items:center;padding:9px;border:1px solid var(--border,#e4e7eb);border-radius:10px;background:var(--surface-subtle,#f7f8fa)}
+.paperless-filter-rule select,.paperless-filter-rule input{width:100%;min-width:0;box-sizing:border-box}
+.paperless-filter-rule [data-rule-join].is-first{opacity:.35}
+.paperless-rule-not{display:flex;align-items:center;gap:5px;font-size:.78rem;white-space:nowrap}
+.paperless-rule-not input{width:auto}
+.paperless-rule-value{min-width:0}
+.paperless-rule-remove{width:34px;height:34px}
+.paperless-filter-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.paperless-advanced-query{border-top:1px solid var(--border,#e4e7eb);padding-top:8px}
+.paperless-advanced-query summary{cursor:pointer;font-size:.84rem;color:var(--text-muted,#707782)}
+.paperless-advanced-query label{display:grid;gap:5px;margin-top:9px;font-size:.8rem;color:var(--text-muted,#707782)}
+.paperless-advanced-query textarea{width:100%;box-sizing:border-box;resize:vertical}
+.paperless-query-preview{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start;padding:9px 10px;border-radius:10px;background:var(--surface-subtle,#f4f6f8);font-size:.78rem}
+.paperless-query-preview>span{color:var(--text-muted,#707782)}
+.paperless-query-preview code{white-space:pre-wrap;overflow-wrap:anywhere}
+.paperless-query-preview code.error{color:#a51f1f}
+@media(max-width:900px){.paperless-filter-rule{grid-template-columns:88px 82px 70px minmax(140px,1fr) minmax(160px,1.4fr) 70px 38px}}
+@media(max-width:700px){.receipt-import-dialog,.receipt-import-batch-dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}.receipt-import-shell,.receipt-import-batch-dialog-shell{height:100%}.receipt-import-head{padding:16px}.receipt-import-tabs{padding:8px 16px}.receipt-import-body{padding:14px 16px 24px}.receipt-import-batch-dialog-head{padding:14px 16px 10px}.receipt-import-batch-dialog-body{padding:14px 16px 20px}.receipt-import-grid{grid-template-columns:1fr}.receipt-import-grid .wide{grid-column:auto}.receipt-import-actions{justify-content:stretch}.receipt-import-actions>button{flex:1}.receipt-import-batch-main{display:grid}.receipt-import-batch-filters{grid-template-columns:1fr 1fr}.receipt-import-batch-filters>[data-import-item-count]{grid-column:1/-1;justify-self:start;padding-bottom:0}.receipt-import-batch-item{grid-template-columns:1fr}.receipt-import-batch-item-actions{justify-content:flex-start}.paperless-filter-rule{grid-template-columns:1fr 1fr}.paperless-filter-rule [data-rule-field],.paperless-rule-value{grid-column:1/-1}.paperless-rule-remove{justify-self:end}.paperless-query-preview{grid-template-columns:1fr}}
