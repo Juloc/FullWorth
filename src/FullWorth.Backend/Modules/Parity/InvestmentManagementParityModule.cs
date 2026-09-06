@@ -19,7 +19,7 @@ public sealed record InvestmentWatchlistItemManageWrite(Guid SecurityId, decimal
 public static class InvestmentManagementParityEndpoints
 {
     private static readonly HashSet<string> AssetTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "stock", "etf", "fund", "bond", "crypto", "commodity", "cash", "other" };
+    { "stock", "etf", "fund", "bond", "crypto", "commodity", "derivative", "cash", "other" };
 
     private static readonly HashSet<string> TradeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
