@@ -719,7 +719,15 @@
     "passkeysHint": "Manage passkeys and sessions",
     "lockHint": "Set a PIN for the inactivity lock",
     "toggleTheme": "Toggle light/dark",
-    "data": "Data & management"
+    "data": "Data & management",
+    "account": "Account",
+    "deleteAccount": "Delete account",
+    "deleteAccountHint": "Lock the account and permanently delete it after 7 days",
+    "deleteAccountExplain": "Your account is locked for normal use immediately. You can fully reactivate it for seven days. After that, irreversible deletion of your personal data begins.",
+    "deleteAccountConfirm": "I understand that deletion cannot be undone after the seven-day recovery period.",
+    "deleteAccountAction": "Schedule account deletion",
+    "deleteAccountPasswordInvalid": "The current password is incorrect.",
+    "deleteAccountFailed": "Account deletion could not be scheduled safely."
   },
   "merchants": {
     "title": "Merchants",
