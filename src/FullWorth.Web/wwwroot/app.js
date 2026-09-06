@@ -4,7 +4,7 @@ import { confirmDialog } from './ui/confirm.js';
 import { initLock, openPinDialog } from './ui/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
-import { renderCategories, bindCategories } from './features/categories.js';
+import { renderCategories, bindCategories, newCategory } from './features/categories.js';
 import { renderRules, bindRules, newRule } from './features/rules.js';
 import { renderContracts, bindContracts, newContract } from './features/contracts.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './features/networth.js';
@@ -67,7 +67,7 @@ const pathForView=router.pathForView;
 const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const toastController=createToast($('#toast'));
@@ -724,19 +724,6 @@ function openBalanceDialog(account){
 
 // Create OR edit a budget: pass the existing budget object to pre-fill + switch to PUT, with a delete
 // action. Called with no argument for the "+ new budget" flow.
-async function openCategoryDialog(){
-  let options;try{options=await categoryOptions()}catch(err){toast(err.message||get('common.error'));return}
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('categories.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120"></label><label>${esc(get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label><label>${esc(get('categories.parent'))}<select name="parent"><option value="">${esc(get('categories.topLevel'))}</option>${options}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
-  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
-  dlg.querySelector('form').onsubmit=async e=>{
-    e.preventDefault();const fd=new FormData(e.currentTarget);
-    const name=fd.get('name').trim();const key=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||`cat-${Date.now()}`;
-    try{await api('api/categories',jsonBody({key,name,parentId:fd.get('parent')||null,icon:fd.get('icon')||null,sortOrder:null}));dlg.close();toast(get('common.saved'));await loadCategories()}catch(err){toast(err.message||get('common.error'))}
-  };
-  dlg.showModal();
-}
-
-
 async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
 // Export the space's full data snapshot (§ data portability). Use the shared API client but keep
 // the raw response because downloads must not be JSON-decoded.
