@@ -272,9 +272,12 @@ public sealed class FinancialReconciliationService(FullWorthDbContext db, Curren
         var amounts = new Dictionary<Guid, decimal>();
         var connection = await ParitySql.OpenAsync(db, ct);
         await using var command = ParitySql.Command(connection, """
-SELECT "TransactionId","ContractId","Amount"
-FROM "ContractTransactionLinks"
-WHERE "TransactionId"=ANY(@ids)
+SELECT l."TransactionId",
+       COALESCE(source_contract."MergedIntoContractId",l."ContractId") AS "ContractId",
+       l."Amount"
+FROM "ContractTransactionLinks" l
+JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
+WHERE l."TransactionId"=ANY(@ids)
 """, ("@ids", transactionIds));
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
