@@ -18,7 +18,7 @@
 .import-balance-hint{font-size:11px}
 .required-balance input{border-color:var(--warning)}
 .import-link-success{font-weight:600;color:var(--positive)}
-.import-link-status .secondary-action{display:inline-flex;margin-top:8px;text-decoration:none}
+.import-add-missing{display:inline-flex;margin-top:8px;text-decoration:none}
 .import-link-footer{margin:14px 0 0}
 .import-link-empty{padding:8px 0}
 .attached-history{border-style:dashed}
