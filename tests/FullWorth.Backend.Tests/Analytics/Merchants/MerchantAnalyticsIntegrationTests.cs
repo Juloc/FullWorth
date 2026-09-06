@@ -46,6 +46,25 @@ public sealed class MerchantAnalyticsIntegrationTests
     }
 
     [Fact]
+    public async Task ArbitraryRangeIncludesAllMonthsInSelectedWindow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/merchants?fullWorthSpaceId={scenario.Space}&from=2026-07-01&to=2026-08-31&granularity=month", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var rewe = json.RootElement.GetProperty("merchants").EnumerateArray()
+            .Single(item => item.GetProperty("merchant").GetString() == "REWE");
+        Assert.Equal(210m, rewe.GetProperty("currentSpend").GetDecimal());
+        Assert.Equal(3, rewe.GetProperty("currentCount").GetInt32());
+        Assert.Equal("month", json.RootElement.GetProperty("granularity").GetString());
+    }
+
+    [Fact]
     public async Task TopParameterLimitsResults()
     {
         using var factory = new BackendWebApplicationFactory();

@@ -49,6 +49,28 @@ public sealed class CategoryAnalyticsIntegrationTests
     }
 
     [Fact]
+    public async Task ArbitraryRangeUsesWholeSelectedWindowAndEqualPreviousWindow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/categories?fullWorthSpaceId={scenario.Space}&from=2026-07-01&to=2026-08-31&granularity=month", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("2026-07-01", json.RootElement.GetProperty("from").GetString());
+        Assert.Equal("2026-08-31", json.RootElement.GetProperty("to").GetString());
+        Assert.Equal("month", json.RootElement.GetProperty("granularity").GetString());
+
+        var food = json.RootElement.GetProperty("categories").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "Food");
+        Assert.Equal(200m, food.GetProperty("current").GetDecimal());
+        Assert.Equal(60m, food.GetProperty("previous").GetDecimal());
+    }
+
+    [Fact]
     public async Task SpaceMemberWithoutAccountOwnership_SeesNoSpend()
     {
         using var factory = new BackendWebApplicationFactory();
