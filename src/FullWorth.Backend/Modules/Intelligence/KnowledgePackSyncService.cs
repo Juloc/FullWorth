@@ -418,11 +418,18 @@ public sealed class KnowledgePackSyncWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            var delay = TimeSpan.FromHours(6);
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<KnowledgePackSyncService>()
+                var result = await scope.ServiceProvider.GetRequiredService<KnowledgePackSyncService>()
                     .SyncOnceAsync(stoppingToken);
+                delay = result.Status switch
+                {
+                    "failed" => TimeSpan.FromMinutes(5),
+                    "disabled" => TimeSpan.FromMinutes(30),
+                    _ => TimeSpan.FromHours(6)
+                };
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -431,11 +438,12 @@ public sealed class KnowledgePackSyncWorker(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "FullWorth knowledge-pack sync worker iteration failed.");
+                delay = TimeSpan.FromMinutes(5);
             }
 
             try
             {
-                await Task.Delay(TimeSpan.FromHours(6), stoppingToken);
+                await Task.Delay(delay, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
