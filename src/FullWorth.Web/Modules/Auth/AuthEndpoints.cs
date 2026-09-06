@@ -53,7 +53,7 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterAsync(
         HttpContext context,
         RegisterRequest request,
-        RegistrationService registration,
+        [FromServices] RegistrationService registration,
         CancellationToken ct)
     {
         var result = await registration.RegisterAsync(request, context, ct);
