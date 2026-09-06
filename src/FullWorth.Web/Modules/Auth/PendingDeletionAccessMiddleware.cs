@@ -13,6 +13,7 @@ public sealed class PendingDeletionAccessMiddleware(RequestDelegate next)
         new("/auth/antiforgery"),
         new("/auth/logout"),
         new("/health"),
+        new("/pwa"),
         new("/favicon.ico")
     ];
 
