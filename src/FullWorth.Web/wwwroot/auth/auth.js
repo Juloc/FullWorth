@@ -89,7 +89,7 @@ async function loadCapabilities() {
 }
 
 function applyCapabilities() {
-  $('[data-registration-link]').forEach(link => {
+  $$('[data-registration-link]').forEach(link => {
     link.hidden = !state.capabilities.registrationEnabled;
   });
 
@@ -179,11 +179,11 @@ function bind() {
     if (preferences.theme === 'system') applyTheme();
   });
 
-  $('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
+  $$('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach(form => {
     form.addEventListener('submit', handleSubmit);
   });
 
-  $('[data-external-provider]').forEach(button => {
+  $$('[data-external-provider]').forEach(button => {
     button.addEventListener('click', () => {
       const provider = button.dataset.externalProvider;
       const mode = button.dataset.externalMode === 'register' ? 'register' : 'login';
@@ -196,7 +196,7 @@ function bind() {
     });
   });
 
-  $('[data-auth-action="toggle-password"]').forEach(button => {
+  $$('[data-auth-action="toggle-password"]').forEach(button => {
     button.addEventListener('click', togglePassword);
   });
 
