@@ -144,6 +144,7 @@ public static class CloudBenchmarkEndpoints
             var rows = await financeDb.Contracts.AsNoTracking()
                 .Where(x => x.FullWorthSpaceId == fullWorthSpaceId &&
                             x.IsActive &&
+                            x.MergedIntoContractId == null &&
                             x.CategoryId != null &&
                             x.Amount != 0m &&
                             (x.AccountId == null || financeDb.AccountOwners.Any(owner =>
@@ -247,6 +248,7 @@ public static class CloudBenchmarkEndpoints
                 .Where(x =>
                     x.Id == contractId &&
                     x.FullWorthSpaceId == fullWorthSpaceId &&
+                    x.MergedIntoContractId == null &&
                     (x.AccountId == null || financeDb.AccountOwners.Any(owner =>
                         owner.AccountId == x.AccountId && owner.UserId == userId)))
                 .Select(x => new

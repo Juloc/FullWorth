@@ -38,6 +38,7 @@ public static class ContractParityEndpoints
         group.MapGet("/transaction/{transactionId:guid}/links",GetTransactionLinks);
         group.MapPost("/{contractId:guid}/split",SplitContract);
         group.MapPost("/merge",MergeContracts);
+        group.MapDelete("/merge/{targetContractId:guid}/{sourceContractId:guid}",UnmergeContracts);
         group.MapGet("/cancellations",ListCancellations);
         group.MapGet("/{contractId:guid}/cancellation",GetCancellation);
         group.MapPut("/{contractId:guid}/cancellation",PutCancellation);
@@ -50,16 +51,29 @@ public static class ContractParityEndpoints
     {
         var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
 SELECT l."Id",l."TransactionId",l."Amount",l."LinkSource",l."Confidence",l."CreatedAt",t."BookingDate",t."ValueDate",t."Counterparty",t."Amount" AS "TransactionAmount",t."Currency",t."AccountId"
-FROM "ContractTransactionLinks" l JOIN "Transactions" t ON t."Id"=l."TransactionId" WHERE l."ContractId"=@id AND l."FullWorthSpaceId"=@space ORDER BY COALESCE(t."BookingDate",t."ValueDate") DESC
+FROM "ContractTransactionLinks" l
+JOIN "Transactions" t ON t."Id"=l."TransactionId"
+JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
+WHERE (l."ContractId"=@id OR source_contract."MergedIntoContractId"=@id)
+  AND l."FullWorthSpaceId"=@space
+ORDER BY COALESCE(t."BookingDate",t."ValueDate") DESC
 """,("@id",contractId),("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var account=ParitySql.Guid(r,"AccountId");if(!visible.Contains(account))continue;rows.Add(new{id=ParitySql.Guid(r,"Id"),transactionId=ParitySql.Guid(r,"TransactionId"),amount=ParitySql.Decimal(r,"Amount"),linkSource=ParitySql.String(r,"LinkSource"),confidence=ParitySql.NullableDecimal(r,"Confidence"),date=ParitySql.NullableDate(r,"BookingDate")??ParitySql.NullableDate(r,"ValueDate"),counterparty=ParitySql.NullableString(r,"Counterparty"),transactionAmount=ParitySql.Decimal(r,"TransactionAmount"),currency=ParitySql.String(r,"Currency")});}return Results.Ok(rows);
     }
 
     private static async Task<IResult> GetTransactionLinks(Guid transactionId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
     {
         var uid=currentUser.RequireUserId();var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var tx=await db.Transactions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==transactionId&&visible.Contains(x.AccountId),ct);if(tx is null)return Results.NotFound();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
-SELECT l."Id",l."ContractId",l."Amount",l."LinkSource",c."Name",c."Currency",c."AccountId"
-FROM "ContractTransactionLinks" l JOIN "Contracts" c ON c."Id"=l."ContractId"
-WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space ORDER BY c."Name"
+SELECT l."Id",
+       COALESCE(c."MergedIntoContractId",l."ContractId") AS "ContractId",
+       l."Amount",l."LinkSource",
+       COALESCE(target."Name",c."Name") AS "Name",
+       COALESCE(target."Currency",c."Currency") AS "Currency",
+       COALESCE(target."AccountId",c."AccountId") AS "AccountId"
+FROM "ContractTransactionLinks" l
+JOIN "Contracts" c ON c."Id"=l."ContractId"
+LEFT JOIN "Contracts" target ON target."Id"=c."MergedIntoContractId"
+WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space
+ORDER BY COALESCE(target."Name",c."Name")
 """,("@tx",transactionId),("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var accountId=ParitySql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;rows.Add(new{id=ParitySql.Guid(r,"Id"),contractId=ParitySql.Guid(r,"ContractId"),amount=ParitySql.Decimal(r,"Amount"),linkSource=ParitySql.String(r,"LinkSource"),name=ParitySql.String(r,"Name"),currency=ParitySql.String(r,"Currency")});}return Results.Ok(rows);
     }
 
@@ -72,7 +86,14 @@ WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space ORDER BY c."Name"
 
     private static async Task<IResult> DeleteContractLink(Guid contractId,Guid linkId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct)||!await CanWriteContractLinkAsync(db,uid,fullWorthSpaceId,contractId,linkId,ct))return Results.StatusCode(403);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"DELETE FROM \"ContractTransactionLinks\" WHERE \"Id\"=@id AND \"ContractId\"=@contract AND \"FullWorthSpaceId\"=@space",("@id",linkId),("@contract",contractId),("@space",fullWorthSpaceId));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"contract.transaction_unlinked","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.NoContent();
+        var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct)||!await CanWriteContractLinkAsync(db,uid,fullWorthSpaceId,contractId,linkId,ct))return Results.StatusCode(403);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
+DELETE FROM "ContractTransactionLinks" l
+USING "Contracts" source_contract
+WHERE l."Id"=@id
+  AND l."ContractId"=source_contract."Id"
+  AND l."FullWorthSpaceId"=@space
+  AND (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
+""",("@id",linkId),("@contract",contractId),("@space",fullWorthSpaceId));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"contract.transaction_unlinked","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.NoContent();
     }
 
     private static async Task<IResult> SplitContract(Guid contractId,Guid fullWorthSpaceId,ContractSplitWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
@@ -86,17 +107,109 @@ WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space ORDER BY c."Name"
         parent.IsActive=false;parent.UpdatedAt=now;audit.Record(fullWorthSpaceId,uid,"contract.split","RecurringContract",contractId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.Ok(new{bundleId,archivedContractId=contractId,contracts=children.Select(x=>new{x.Contract.Id,x.Contract.Name,x.Contract.Amount})});
     }
 
-    private static async Task<IResult> MergeContracts(Guid fullWorthSpaceId,ContractMergeWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> MergeContracts(
+        Guid fullWorthSpaceId,
+        ContractMergeWrite request,
+        CurrentUserContext currentUser,
+        FullWorthDbContext db,
+        ContractStore store,
+        CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db,uid,fullWorthSpaceId,"contracts.manage",ct))return Results.StatusCode(403);var ids=(request.ContractIds??[]).Distinct().ToArray();if(ids.Length<2)return Results.BadRequest(new{error="Select at least two contracts."});var contracts=await db.Contracts.Where(x=>x.FullWorthSpaceId==fullWorthSpaceId&&ids.Contains(x.Id)).ToListAsync(ct);if(contracts.Count!=ids.Length)return Results.NotFound();foreach(var contract in contracts)if(!await CanWriteContract(db,uid,fullWorthSpaceId,contract.Id,ct))return Results.NotFound();if(contracts.Select(x=>x.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count()>1)return Results.BadRequest(new{error="Contracts with different currencies cannot be merged."});var target=request.TargetContractId.HasValue?contracts.SingleOrDefault(x=>x.Id==request.TargetContractId):contracts[0];if(target is null)return Results.BadRequest(new{error="Target contract must be part of the selection."});
-        if(request.TargetCategoryId.HasValue&&!await db.Categories.AsNoTracking().AnyAsync(x=>x.Id==request.TargetCategoryId.Value&&x.FullWorthSpaceId==fullWorthSpaceId,ct))return Results.BadRequest(new{error="Target category is invalid."});if(request.TargetAccountId.HasValue){var writable=await ParitySql.WritableAccountIdsAsync(db,uid,fullWorthSpaceId,ct);if(!writable.Contains(request.TargetAccountId.Value))return Results.BadRequest(new{error="Target account is inaccessible."});}
-        target.Name=string.IsNullOrWhiteSpace(request.TargetName)?target.Name:request.TargetName.Trim();if(request.TargetCategoryId.HasValue)target.CategoryId=request.TargetCategoryId;if(request.TargetAccountId.HasValue)target.AccountId=request.TargetAccountId;target.UpdatedAt=DateTimeOffset.UtcNow;await using var transaction=await db.Database.BeginTransactionAsync(ct);var c=await ParitySql.OpenAsync(db,ct);
-        foreach(var source in contracts.Where(x=>x.Id!=target.Id)){await using(var move=ParitySql.Command(c,"""
-INSERT INTO "ContractTransactionLinks" ("Id","FullWorthSpaceId","ContractId","TransactionId","Amount","LinkSource","Confidence","CreatedAt")
-SELECT gen_random_uuid(),"FullWorthSpaceId",@target,"TransactionId","Amount","LinkSource","Confidence","CreatedAt" FROM "ContractTransactionLinks" WHERE "ContractId"=@source
-ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"="ContractTransactionLinks"."Amount"+EXCLUDED."Amount"
-""",("@target",target.Id),("@source",source.Id)))await move.ExecuteNonQueryAsync(ct);source.IsActive=false;source.UpdatedAt=DateTimeOffset.UtcNow;}
-        audit.Record(fullWorthSpaceId,uid,"contract.merged","RecurringContract",target.Id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{targetId=target.Id,archived=contracts.Where(x=>x.Id!=target.Id).Select(x=>x.Id)});
+        var userId = currentUser.RequireUserId();
+        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+            return Results.StatusCode(403);
+
+        var ids = (request.ContractIds ?? Array.Empty<Guid>())
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        if (ids.Length < 2) return Results.BadRequest(new { error = "Select at least two contracts." });
+
+        var contracts = await db.Contracts
+            .Where(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == null &&
+                ids.Contains(contract.Id))
+            .ToListAsync(ct);
+        if (contracts.Count != ids.Length) return Results.NotFound();
+
+        foreach (var contract in contracts)
+            if (!await CanWriteContract(db, userId, fullWorthSpaceId, contract.Id, ct))
+                return Results.NotFound();
+
+        if (contracts.Select(contract => contract.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            return Results.BadRequest(new { error = "Contracts with different currencies cannot be merged." });
+
+        var target = request.TargetContractId.HasValue
+            ? contracts.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)
+            : contracts[0];
+        if (target is null) return Results.BadRequest(new { error = "Target contract must be part of the selection." });
+
+        if (request.TargetCategoryId.HasValue &&
+            !await db.Categories.AsNoTracking().AnyAsync(category =>
+                category.Id == request.TargetCategoryId.Value &&
+                category.FullWorthSpaceId == fullWorthSpaceId, ct))
+            return Results.BadRequest(new { error = "Target category is invalid." });
+
+        if (request.TargetAccountId.HasValue)
+        {
+            var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            if (!writable.Contains(request.TargetAccountId.Value))
+                return Results.BadRequest(new { error = "Target account is inaccessible." });
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!string.IsNullOrWhiteSpace(request.TargetName)) target.Name = request.TargetName.Trim();
+        if (request.TargetCategoryId.HasValue) target.CategoryId = request.TargetCategoryId;
+        if (request.TargetAccountId.HasValue) target.AccountId = request.TargetAccountId;
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var sourceIds = ids.Where(id => id != target.Id).ToArray();
+        var outcome = await store.MergeForUserAsync(
+            userId,
+            fullWorthSpaceId,
+            target.Id,
+            new ContractMergeRequest(sourceIds),
+            ct);
+
+        if (outcome.Result != ContractMutationResult.Success)
+            return outcome.Result switch
+            {
+                ContractMutationResult.NotFound => Results.NotFound(),
+                ContractMutationResult.Forbidden => Results.StatusCode(403),
+                ContractMutationResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge." }),
+                _ => Results.StatusCode(409)
+            };
+
+        await transaction.CommitAsync(ct);
+        // Keep the legacy "archived" response field for existing clients. The IDs are now hidden
+        // merge aliases rather than destructively archived rows.
+        return Results.Ok(new { targetId = target.Id, archived = sourceIds, merged = sourceIds });
+    }
+
+    private static async Task<IResult> UnmergeContracts(
+        Guid targetContractId,
+        Guid sourceContractId,
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        ContractStore store,
+        CancellationToken ct)
+    {
+        var result = await store.UnmergeForUserAsync(
+            currentUser.RequireUserId(),
+            fullWorthSpaceId,
+            targetContractId,
+            sourceContractId,
+            ct);
+
+        return result switch
+        {
+            ContractMutationResult.Success => Results.NoContent(),
+            ContractMutationResult.NotFound => Results.NotFound(),
+            ContractMutationResult.Forbidden => Results.StatusCode(403),
+            ContractMutationResult.Invalid => Results.BadRequest(),
+            _ => Results.StatusCode(409)
+        };
     }
 
     private static async Task<IResult> ListCancellations(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
@@ -107,7 +220,7 @@ ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"="ContractTrans
 SELECT c."Id" AS "ContractId",c."AccountId",d."MinimumTermEnd",d."CancellationDeadline",d."CancellationStatus",d."AutoRenews",d."CancellationSentAt",d."CancellationConfirmedAt"
 FROM "Contracts" c
 JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id"
-WHERE c."FullWorthSpaceId"=@space
+WHERE c."FullWorthSpaceId"=@space AND c."MergedIntoContractId" IS NULL
 ORDER BY c."Name"
 """,("@space",fullWorthSpaceId));
         await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
@@ -178,7 +291,7 @@ END,
 
     private static async Task<IResult> CancellationLetter(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var contract=await db.Contracts.AsNoTracking().SingleAsync(x=>x.Id==contractId,ct);var details=await ReadCancellation(db,contractId,ct);var sb=new StringBuilder();sb.AppendLine("Kündigung meines Vertrags").AppendLine().AppendLine($"Anbieter: {contract.ProviderName??contract.Name}");if(!string.IsNullOrWhiteSpace(details.CustomerNumber))sb.AppendLine($"Kunden-/Vertragsnummer: {details.CustomerNumber}");sb.AppendLine().Append("Hiermit kündige ich den oben genannten Vertrag fristgerecht ");sb.AppendLine(details.Deadline.HasValue?$"zum nächstmöglichen Zeitpunkt unter Berücksichtigung der Kündigungsfrist (aktuelle Frist: {details.Deadline:dd.MM.yyyy}).":"zum nächstmöglichen Zeitpunkt.");sb.AppendLine("Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich.");return Results.Text(sb.ToString(),"text/plain; charset=utf-8");}
     private static async Task<IResult> CancellationDeadlines(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var today=DateOnly.FromDateTime(DateTime.UtcNow);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
-SELECT c."Id",c."Name",c."AccountId",d."CancellationDeadline",d."CancellationStatus" FROM "Contracts" c JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id" WHERE c."FullWorthSpaceId"=@space AND c."IsActive"=true AND d."CancellationDeadline" IS NOT NULL AND d."CancellationStatus" IN ('none','planned') ORDER BY d."CancellationDeadline"
+SELECT c."Id",c."Name",c."AccountId",d."CancellationDeadline",d."CancellationStatus" FROM "Contracts" c JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id" WHERE c."FullWorthSpaceId"=@space AND c."MergedIntoContractId" IS NULL AND c."IsActive"=true AND d."CancellationDeadline" IS NOT NULL AND d."CancellationStatus" IN ('none','planned') ORDER BY d."CancellationDeadline"
 """,("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var accountId=ParitySql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;var d=ParitySql.NullableDate(r,"CancellationDeadline")!.Value;rows.Add(new{id=ParitySql.Guid(r,"Id"),name=ParitySql.String(r,"Name"),deadline=d,days=d.DayNumber-today.DayNumber,status=ParitySql.String(r,"CancellationStatus")});}return Results.Ok(rows);}
 
     private sealed record CancellationRow(DateOnly? Deadline,string? CustomerNumber);
@@ -186,14 +299,23 @@ SELECT c."Id",c."Name",c."AccountId",d."CancellationDeadline",d."CancellationSta
     private static DateOnly? CalculateDeadline(DateOnly? term,int? value,string? unit){if(!term.HasValue||!value.HasValue)return null;return unit?.ToLowerInvariant() switch{"days"=>term.Value.AddDays(-value.Value),"weeks"=>term.Value.AddDays(-7*value.Value),"months"=>term.Value.AddMonths(-value.Value),_=>null};}
     private static string? NormalizeUnit(string? value)=>value?.Trim().ToLowerInvariant() switch{"days"=>"days","weeks"=>"weeks","months"=>"months",_=>null};
     private static string NormalizeSource(string? value)=>value?.Trim().ToLowerInvariant() switch{"detection"=>"detection","import"=>"import",_=>"manual"};
-    private static async Task<bool> CanReadContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await ParitySql.IsMemberAsync(db,uid,space,ct))return false;var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&(c.AccountId==null||visible.Contains(c.AccountId.Value)),ct);}
-    private static async Task<bool> CanWriteContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db,uid,space,"contracts.manage",ct))return false;var writable=await ParitySql.WritableAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&(c.AccountId==null||writable.Contains(c.AccountId.Value)),ct);}
+    private static async Task<bool> CanReadContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await ParitySql.IsMemberAsync(db,uid,space,ct))return false;var visible=await ParitySql.VisibleAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&c.MergedIntoContractId==null&&(c.AccountId==null||visible.Contains(c.AccountId.Value)),ct);}
+    private static async Task<bool> CanWriteContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db,uid,space,"contracts.manage",ct))return false;var writable=await ParitySql.WritableAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&c.MergedIntoContractId==null&&(c.AccountId==null||writable.Contains(c.AccountId.Value)),ct);}
     private static async Task<bool> CanWriteContractLinkAsync(FullWorthDbContext db,Guid uid,Guid space,Guid contractId,Guid linkId,CancellationToken ct){var writable=await ParitySql.WritableAccountIdsAsync(db,uid,space,ct);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
-SELECT t."AccountId" FROM "ContractTransactionLinks" l JOIN "Transactions" t ON t."Id"=l."TransactionId"
-WHERE l."Id"=@link AND l."ContractId"=@contract AND l."FullWorthSpaceId"=@space
+SELECT t."AccountId"
+FROM "ContractTransactionLinks" l
+JOIN "Transactions" t ON t."Id"=l."TransactionId"
+JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
+WHERE l."Id"=@link
+  AND (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
+  AND l."FullWorthSpaceId"=@space
 """,("@link",linkId),("@contract",contractId),("@space",space));var value=await cmd.ExecuteScalarAsync(ct);return value is Guid accountId&&writable.Contains(accountId);}
     private static async Task<bool> AllContractLinksWritableAsync(FullWorthDbContext db,Guid uid,Guid space,Guid contractId,CancellationToken ct){var writable=await ParitySql.WritableAccountIdsAsync(db,uid,space,ct);var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"""
-SELECT t."AccountId" FROM "ContractTransactionLinks" l JOIN "Transactions" t ON t."Id"=l."TransactionId"
-WHERE l."ContractId"=@contract AND l."FullWorthSpaceId"=@space
+SELECT t."AccountId"
+FROM "ContractTransactionLinks" l
+JOIN "Transactions" t ON t."Id"=l."TransactionId"
+JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
+WHERE (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
+  AND l."FullWorthSpaceId"=@space
 """,("@contract",contractId),("@space",space));await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))if(!writable.Contains(ParitySql.Guid(r,"AccountId")))return false;return true;}
 }

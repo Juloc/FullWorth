@@ -228,7 +228,11 @@ public sealed class FinancialReconciliationReportService(
         var alreadyLinkedContracts = futureContributions?.Items.SelectMany(item => item.ContractIds).ToHashSet() ?? [];
 
         var contracts = await db.Contracts.AsNoTracking().Where(c =>
-            c.FullWorthSpaceId == fullWorthSpaceId && c.IsActive && c.NextDueDate >= day && c.NextDueDate <= horizon &&
+            c.FullWorthSpaceId == fullWorthSpaceId &&
+            c.IsActive &&
+            c.MergedIntoContractId == null &&
+            c.NextDueDate >= day &&
+            c.NextDueDate <= horizon &&
             (c.AccountId == null || visible.Contains(c.AccountId.Value))).ToListAsync(ct);
         decimal fixedCosts = 0m;
         foreach (var contract in contracts)

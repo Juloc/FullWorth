@@ -141,7 +141,10 @@ public static class AdvancedTransactionBulkParityEndpoints
             if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var contract = await db.Contracts.AsNoTracking().SingleOrDefaultAsync(row =>
-                row.Id == request.ContractId.Value && row.FullWorthSpaceId == fullWorthSpaceId && row.IsActive, ct);
+                row.Id == request.ContractId.Value &&
+                row.FullWorthSpaceId == fullWorthSpaceId &&
+                row.MergedIntoContractId == null &&
+                row.IsActive, ct);
             if (contract is null) return Results.BadRequest(new { error = "Contract is unavailable." });
             if (contract.AccountId.HasValue)
             {

@@ -224,7 +224,7 @@ ON CONFLICT ("FullWorthSpaceId") DO UPDATE SET "HorizonMode"=EXCLUDED."HorizonMo
         var lines=new List<CashflowLine>(); decimal income=0;
         foreach(var schedule in schedules.Where(x=>x.NextDate>=day&&x.NextDate<=horizon&&x.Amount.HasValue)) {var converted=fx.ToBaseOn(schedule.Amount!.Value,schedule.Currency,schedule.NextDate!.Value); if(converted.HasValue)income+=converted.Value;else incomplete=true; lines.Add(new("income",schedule.Name,schedule.NextDate,schedule.Amount.Value,schedule.Currency,converted));}
 
-        var contracts=await db.Contracts.AsNoTracking().Where(c=>c.FullWorthSpaceId==fullWorthSpaceId&&c.IsActive&&c.NextDueDate>=day&&c.NextDueDate<=horizon&&(c.AccountId==null||visible.Contains(c.AccountId.Value))).ToListAsync(ct); decimal fixedCosts=0;
+        var contracts=await db.Contracts.AsNoTracking().Where(c=>c.FullWorthSpaceId==fullWorthSpaceId&&c.IsActive&&c.MergedIntoContractId==null&&c.NextDueDate>=day&&c.NextDueDate<=horizon&&(c.AccountId==null||visible.Contains(c.AccountId.Value))).ToListAsync(ct); decimal fixedCosts=0;
         foreach(var c in contracts){var converted=fx.ToBaseOn(c.Amount,c.Currency,c.NextDueDate!.Value); if(converted.HasValue)fixedCosts+=converted.Value;else incomplete=true; lines.Add(new("fixed",c.Name,c.NextDueDate,c.Amount,c.Currency,converted));}
 
         var historyFrom=day.AddDays(-30); var expenseQuery=db.Transactions.AsNoTracking().Where(t=>visible.Contains(t.AccountId)&&t.Amount<0&&!t.IsIgnored&&!t.IsTransfer&&(t.BookingDate??t.ValueDate)>=historyFrom&&(t.BookingDate??t.ValueDate)<day);

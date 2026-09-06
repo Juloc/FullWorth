@@ -453,6 +453,13 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .contracts-order{min-width:32px;text-align:center;line-height:1}
 .contract-row.contract-archived{opacity:.6}
 .contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
+.contract-merge-options{display:grid;gap:8px;max-height:min(50vh,420px);overflow:auto;margin:var(--s3) 0}
+.contract-merge-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer}
+.contract-merge-option input{margin-top:3px;flex:0 0 auto}
+.contract-merge-option>span{display:grid;gap:2px;min-width:0}
+.contract-merged-source{align-items:center;gap:var(--s3)}
+.contract-merged-source>div{min-width:0;flex:1}
+.contract-merge-add{margin-top:var(--s3)}
 .nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
 .nw-hero .fw-summary-value{font-size:34px}
 .nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}

@@ -22,7 +22,7 @@ public sealed record ExportBalance(Guid AccountId, decimal Amount, string Curren
 public sealed record ExportTransaction(Guid Id, Guid AccountId, Guid? CategoryId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? UserNote, bool IsIgnored, bool IsTransfer, string CategorizationSource, DateTimeOffset UpdatedAt);
 public sealed record ExportCategory(Guid Id, string Key, string Name, Guid? ParentId, string? Icon, bool IsSystem, int SortOrder);
 public sealed record ExportRule(Guid Id, string Name, bool IsEnabled, int Priority, string Target, string MatchField, string MatchMode, string Pattern, string Direction, decimal? MinAmount, decimal? MaxAmount, string? MerchantCategoryCode, Guid CategoryId, bool MarkAsTransfer, bool StopProcessing);
-public sealed record ExportContract(Guid Id, string Name, string? ProviderName, string Kind, Guid? CategoryId, Guid? AccountId, decimal Amount, string Currency, string BillingCycle, int Interval, DateOnly? StartDate, DateOnly? EndDate, DateOnly? NextDueDate, bool AutoDetected, bool IsActive, string? Notes);
+public sealed record ExportContract(Guid Id, string Name, string? ProviderName, string Kind, Guid? CategoryId, Guid? AccountId, Guid? MergedIntoContractId, decimal Amount, string Currency, string BillingCycle, int Interval, DateOnly? StartDate, DateOnly? EndDate, DateOnly? NextDueDate, bool AutoDetected, bool IsActive, string? Notes);
 public sealed record ExportBudget(Guid Id, string Name, Guid? CategoryId, decimal Amount, string Currency, string Period, bool CarryOver, bool IsActive, DateOnly? StartDate, DateOnly? EndDate);
 public sealed record ExportAsset(Guid Id, string Name, string Kind, decimal CurrentValue, string Currency, DateOnly? ValuedAt, decimal? AnnualGrowthRate, bool IncludeInNetWorth, string? Notes);
 public sealed record ExportLiability(Guid Id, string Name, string Kind, decimal CurrentBalance, string Currency, decimal? InterestRate, decimal? RegularPayment, string PaymentCycle, DateOnly? NextDueDate, DateOnly? EndDate, bool IncludeInNetWorth, string? Notes);
@@ -157,6 +157,7 @@ public sealed class ExportService(FullWorthDbContext db)
                 contract.Kind,
                 contract.CategoryId,
                 contract.AccountId,
+                contract.MergedIntoContractId,
                 contract.Amount,
                 contract.Currency,
                 contract.BillingCycle,

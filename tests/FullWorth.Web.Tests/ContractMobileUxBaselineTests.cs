@@ -55,6 +55,19 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
         Assert.DoesNotContain("class=\"danger\"", js);
     }
 
+    [Fact]
+    public async Task ContractsMerge_IsAvailableFromDetailAndSupportsUndo()
+    {
+        var js = await GetAsync("/features/contracts.js");
+
+        Assert.Contains("data-merge", js);
+        Assert.Contains("merged-sources", js);
+        Assert.Contains("sourceContractIds", js);
+        Assert.Contains("data-unmerge", js);
+        Assert.Contains("btn btn-primary", js);
+        Assert.Contains("btn btn-secondary", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await client.GetAsync(path);

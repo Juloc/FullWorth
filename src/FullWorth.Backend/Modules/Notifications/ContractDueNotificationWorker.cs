@@ -15,6 +15,7 @@ public sealed class ContractDueNotificationService(FullWorthDbContext db, Notifi
         var horizon = today.AddDays(horizonDays);
         var due = await db.Contracts.AsNoTracking()
             .Where(c => c.IsActive
+                && c.MergedIntoContractId == null
                 && c.NextDueDate != null
                 && c.NextDueDate >= today
                 && c.NextDueDate <= horizon

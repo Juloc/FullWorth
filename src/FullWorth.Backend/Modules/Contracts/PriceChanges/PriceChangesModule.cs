@@ -180,7 +180,10 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
         var suggestion = await db.PriceChangeSuggestions
             .Include(item => item.Contract)
             .Include(item => item.EvidenceTransaction)
-            .SingleOrDefaultAsync(item => item.Id == suggestionId && item.Contract.FullWorthSpaceId == fullWorthSpaceId, ct);
+            .SingleOrDefaultAsync(item =>
+                item.Id == suggestionId &&
+                item.Contract.FullWorthSpaceId == fullWorthSpaceId &&
+                item.Contract.MergedIntoContractId == null, ct);
         if (suggestion is null) return new(PriceChangeMutationResult.NotFound);
         if (role != FullWorthSpaceRoles.Owner) return new(PriceChangeMutationResult.Forbidden);
         if (!await OwnsContractAccountAsync(userId, suggestion.Contract, ct)) return new(PriceChangeMutationResult.NotFound);
@@ -200,6 +203,7 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
     private IQueryable<RecurringContract> OwnerScopedContracts(Guid userId, Guid fullWorthSpaceId) =>
         db.Contracts.Where(contract =>
             contract.FullWorthSpaceId == fullWorthSpaceId &&
+            contract.MergedIntoContractId == null &&
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId && member.Role == FullWorthSpaceRoles.Owner) &&
             contract.AccountId != null &&
             db.AccountOwners.Any(owner => owner.AccountId == contract.AccountId.Value && owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner));
@@ -207,6 +211,7 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
     private IQueryable<PriceChangeSuggestion> OwnerScopedSuggestions(Guid userId, Guid fullWorthSpaceId) =>
         db.PriceChangeSuggestions.AsNoTracking().Where(suggestion =>
             suggestion.Contract.FullWorthSpaceId == fullWorthSpaceId &&
+            suggestion.Contract.MergedIntoContractId == null &&
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId && member.Role == FullWorthSpaceRoles.Owner) &&
             suggestion.Contract.AccountId != null &&
             db.AccountOwners.Any(owner => owner.AccountId == suggestion.Contract.AccountId.Value && owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner));

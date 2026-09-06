@@ -600,13 +600,14 @@ async function dismissCandidate(candidate) {
 }
 
 async function openDetail(id) {
-  let contract, activity, cancellation, cloudBenchmark;
+  let contract, activity, cancellation, cloudBenchmark, mergedSources;
   try {
-    [contract, activity, cancellation, cloudBenchmark] = await Promise.all([
+    [contract, activity, cancellation, cloudBenchmark, mergedSources] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
       ctx.api(`api/contract-parity/${id}/cancellation`),
-      ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null)
+      ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
+      ctx.api(`api/contracts/${id}/merged-sources`).catch(() => [])
     ]);
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   contract.cancellation = cancellation;
@@ -671,12 +672,27 @@ async function openDetail(id) {
       })()
     : '';
 
+  const mergedSourceRows = (mergedSources || []).map(source => {
+    const account = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
+    return `<div class="preview-row contract-merged-source">
+      <div><strong>${ctx.esc(source.name)}</strong><div class="row-sub">${ctx.esc(account)} · ${ctx.money(source.amount, source.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (source.billingCycle || 'monthly')))}</div></div>
+      <button type="button" class="btn btn-secondary" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button>
+    </div>`;
+  }).join('');
+  const mergedSourcesSection = `<div class="detail-section">
+    <h3>${ctx.esc(ctx.get('contracts.mergedSources'))}</h3>
+    <div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesHint'))}</div>
+    ${mergedSourceRows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesNone'))}</div>`}
+    <button type="button" class="btn btn-secondary contract-merge-add" data-merge>${ctx.esc(ctx.get('contracts.merge'))}</button>
+  </div>`;
+
   const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
   const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
     <div class="panel-head"><h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     ${contract.providerName ? `<div class="row-sub">${ctx.esc(contract.providerName)}</div>` : ''}
     <div class="detail-grid">${meta}</div>
     ${benchmarkSection}
+    ${mergedSourcesSection}
     ${cancellation?.providerContact ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.providerContact'))}</h3><div class="row-sub">${ctx.esc(cancellation.providerContact)}</div></div>` : ''}
     ${trend}
     <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
@@ -694,6 +710,20 @@ async function openDetail(id) {
   dlg.querySelector('.dialog-actions')?.prepend(coachAction);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
+  dlg.querySelector('[data-merge]')?.addEventListener('click', () => { dlg.close(); openMergeDialog(contract); });
+  dlg.querySelectorAll('[data-unmerge]').forEach(button => button.addEventListener('click', async () => {
+    const sourceId = button.dataset.unmerge;
+    button.disabled = true;
+    try {
+      await ctx.api(`api/contract-parity/merge/${id}/${sourceId}`, { method: 'DELETE' });
+      dlg.close();
+      ctx.toast(ctx.get('contracts.unmergedToast'));
+      await renderContracts(ctx);
+    } catch (err) {
+      button.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
+  }));
   dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => { dlg.close(); openCancellationDialog(contract, cancellation); });
   dlg.querySelector('[data-archive]')?.addEventListener('click', async () => {
     if (!await ctx.confirm(ctx.get('contracts.archiveConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.archive') })) return;
@@ -704,6 +734,71 @@ async function openDetail(id) {
     try { await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
+  dlg.showModal();
+}
+
+function mergeCandidateScore(primary, candidate) {
+  let score = 0;
+  if ((primary.currency || '') === (candidate.currency || '')) score += 4;
+  if (Math.abs(Number(primary.amount || 0) - Number(candidate.amount || 0)) < 0.01) score += 6;
+  if ((primary.billingCycle || 'monthly') === (candidate.billingCycle || 'monthly')) score += 3;
+  if (primary.accountId && candidate.accountId && primary.accountId !== candidate.accountId) score += 1;
+  return score;
+}
+
+async function openMergeDialog(contract) {
+  const candidates = allContracts
+    .filter(candidate => candidate.id !== contract.id && (candidate.currency || '') === (contract.currency || ''))
+    .slice()
+    .sort((a, b) => {
+      const score = mergeCandidateScore(contract, b) - mergeCandidateScore(contract, a);
+      return score || String(a.name || '').localeCompare(String(b.name || ''));
+    });
+
+  if (!candidates.length) {
+    ctx.toast(ctx.get('contracts.mergeNone'));
+    return;
+  }
+
+  const rows = candidates.map(candidate => {
+    const account = candidate.accountId ? (accountNames.get(candidate.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
+    const archived = candidate.isActive === false ? ` · ${ctx.get('contracts.archived')}` : '';
+    return `<label class="check contract-merge-option">
+      <input type="checkbox" name="sourceContractId" value="${candidate.id}">
+      <span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${ctx.esc(account)} · ${ctx.money(candidate.amount, candidate.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (candidate.billingCycle || 'monthly')))}${ctx.esc(archived)}</span></span>
+    </label>`;
+  }).join('');
+
+  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(ctx.get('contracts.mergeTitle'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="row-sub">${ctx.esc(ctx.get('contracts.mergeHint'))}</div>
+    <div class="contract-merge-options">${rows}</div>
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary" data-merge-submit disabled>${ctx.esc(ctx.get('contracts.mergeConfirm'))}</button></div>
+  </form>`);
+
+  const submit = dlg.querySelector('[data-merge-submit]');
+  const updateSubmit = () => { submit.disabled = !dlg.querySelector('input[name="sourceContractId"]:checked'); };
+  dlg.querySelectorAll('input[name="sourceContractId"]').forEach(input => input.addEventListener('change', updateSubmit));
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const sourceContractIds = [...dlg.querySelectorAll('input[name="sourceContractId"]:checked')].map(input => input.value);
+    if (!sourceContractIds.length) return;
+    submit.disabled = true;
+    try {
+      await ctx.api('api/contract-parity/merge', jsonBody({
+        contractIds: [contract.id, ...sourceContractIds],
+        targetContractId: contract.id
+      }, 'POST'));
+      dlg.close();
+      ctx.toast(ctx.get('contracts.mergedToast'));
+      await renderContracts(ctx);
+    } catch (err) {
+      submit.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
+  };
   dlg.showModal();
 }
 
