@@ -32,6 +32,8 @@ public sealed class AccountDeletionService(
 
         if (!await users.CheckPasswordAsync(user, currentPassword ?? string.Empty))
             return (null, "invalid_password");
+        if (user.IsAdmin && !await HasOtherOperationalAdminAsync(user.Id, ct))
+            return (null, "last_admin");
 
         var now = timeProvider.GetUtcNow();
         if (user.DeletionRequestedAt.HasValue)
@@ -113,6 +115,8 @@ public sealed class AccountDeletionService(
         var user = await users.FindByIdAsync(authUserId.ToString());
         if (user is null) return (null, "invalid_user");
         if (user.IsDisabled) return (null, "user_disabled");
+        if (user.IsAdmin && !await HasOtherOperationalAdminAsync(user.Id, ct))
+            return (null, "last_admin");
 
         var now = timeProvider.GetUtcNow();
         if (user.DeletionRequestedAt.HasValue)
@@ -176,6 +180,13 @@ public sealed class AccountDeletionService(
         return await db.Users.AsNoTracking()
             .AnyAsync(x => x.Id == authUserId && x.DeletionRequestedAt != null, ct);
     }
+
+    private Task<bool> HasOtherOperationalAdminAsync(Guid excludedId, CancellationToken ct) =>
+        db.Users.AsNoTracking().AnyAsync(x =>
+            x.Id != excludedId &&
+            x.IsAdmin &&
+            !x.IsDisabled &&
+            x.DeletionRequestedAt == null, ct);
 
     private async Task<AuthUser?> GetCurrentUserAsync(ClaimsPrincipal principal)
     {
