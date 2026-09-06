@@ -78,7 +78,8 @@ public interface IFullWorthCloudClient
     Task<byte[]> DownloadKnowledgePackBrandAssetAsync(
         string instanceCredential,
         string contentSha256,
-        CancellationToken ct);
+        CancellationToken ct) =>
+        throw new NotSupportedException("This cloud client does not provide brand-asset downloads.");
 }
 
 public sealed class FullWorthCloudException(
