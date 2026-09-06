@@ -11,6 +11,8 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     [
         "appDescription", "language", "theme", "email", "password", "showPassword", "hidePassword",
         "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms", "confirmAdult", "imprint",
+        "continueGoogle", "continueApple", "registerGoogle", "registerApple", "orWithEmail", "socialRegisterLegal",
+        "externalAccountNotFound", "externalRegistrationFailed", "externalFailed",
         "forgotPassword", "continue", "backToSignIn", "invalidCredentials", "twoFactorCode", "invalidTwoFactor",
         "forgotConfirmation", "newPassword", "confirmPassword", "resetPassword", "passwordChanged",
         "passkey", "recoveryCode", "recoveryCodesShownOnce", "recoveryCodesStoreSecurely", "genericError"
@@ -86,6 +88,10 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("register: '/auth/register'", js);
         Assert.Contains("acceptTerms", js);
         Assert.Contains("confirmAdult", js);
+        Assert.Contains("data-external-provider=\"google\"", html);
+        Assert.Contains("data-external-provider=\"apple\"", html);
+        Assert.Contains("data-registration-link", html);
+        Assert.Contains("providers: '/auth/providers'", js);
     }
 
     [Fact]
@@ -144,7 +150,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/auth/auth.js");
 
-        Assert.Contains("  $('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
+        Assert.Contains("  $$('#login-form, #two-factor-form, #register-form, #forgot-form, #reset-form, #recovery-code-form, #claim-form').forEach", js);
         AssertNotContains(js, "localStorage.setItem('pendingLogin");
     }
 
@@ -173,6 +179,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/auth/auth.js");
 
+        Assert.Contains("providers: '/auth/providers'", js);
         Assert.Contains("login: '/auth/login'", js);
         Assert.Contains("register: '/auth/register'", js);
         Assert.Contains("passwordResetRequest: '/auth/password-reset/request'", js);
