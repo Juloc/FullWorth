@@ -3,6 +3,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
 
+public sealed record CloudMerchantIdentity(
+    string MerchantKey,
+    string CanonicalName,
+    string? CategoryKey,
+    string Country,
+    string? BrandKey,
+    decimal Confidence);
+
 public sealed record CloudContractProviderIdentity(
     string ProviderKey,
     string CanonicalName,
@@ -25,6 +33,57 @@ public sealed record CloudProductIdentity(
 /// </summary>
 public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
 {
+    public async Task<CloudMerchantIdentity?> ResolveMerchantAsync(
+        string? alias,
+        string? country,
+        string direction,
+        CancellationToken ct)
+    {
+        var normalizedAlias = MerchantNormalization.Normalize(alias);
+        if (normalizedAlias is null) return null;
+
+        var normalizedCountry = NormalizeCountry(country);
+        var normalizedDirection = direction.Trim().ToLowerInvariant() switch
+        {
+            "income" => "income",
+            "expense" => "expense",
+            _ => "any"
+        };
+
+        var candidates = await db.OfficialMerchantMappings.AsNoTracking()
+            .Where(x =>
+                x.AliasKey == normalizedAlias &&
+                x.Confidence >= 0.80m &&
+                (x.Direction == "any" || x.Direction == normalizedDirection) &&
+                (x.Country == "GLOBAL" || normalizedCountry == "GLOBAL" || x.Country == normalizedCountry))
+            .ToListAsync(ct);
+
+        var ranked = candidates
+            .OrderByDescending(x => x.Country == normalizedCountry)
+            .ThenByDescending(x => x.Direction == normalizedDirection)
+            .ThenByDescending(x => x.Confidence)
+            .ToList();
+        if (ranked.Count == 0) return null;
+
+        var best = ranked[0];
+        var bestCountryRank = best.Country == normalizedCountry;
+        var bestDirectionRank = best.Direction == normalizedDirection;
+        var ambiguous = ranked.Skip(1).Any(x =>
+            (x.Country == normalizedCountry) == bestCountryRank &&
+            (x.Direction == normalizedDirection) == bestDirectionRank &&
+            x.Confidence == best.Confidence &&
+            !string.Equals(x.CanonicalMerchantKey, best.CanonicalMerchantKey, StringComparison.Ordinal));
+        if (ambiguous) return null;
+
+        return new CloudMerchantIdentity(
+            best.CanonicalMerchantKey,
+            best.CanonicalName,
+            best.CategoryKey,
+            best.Country,
+            best.LogoKey,
+            best.Confidence);
+    }
+
     public async Task<CloudContractProviderIdentity?> ResolveProviderAsync(
         string? providerOrCounterparty,
         string? country,
