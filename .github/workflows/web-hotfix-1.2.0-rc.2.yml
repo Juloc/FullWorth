@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/web-hotfix-1.2.0-rc.2.yml'
+      - 'src/FullWorth.Web/**'
 
 permissions:
   contents: read
