@@ -69,6 +69,17 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public void BankPicker_UsesOnlyNativeAppLogoRenderer()
+    {
+        var app = ReadAsset("app.js");
+        var ux = ReadAsset("features", "accounts-ux.js");
+
+        Assert.Contains("logo.className='bank-option-logo'", app);
+        Assert.DoesNotContain("decorateBankPicker", ux);
+        Assert.DoesNotContain("className='bank-logo'", ux);
+    }
+
+    [Fact]
     public async Task AccountsUx_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
     {
         var css = await GetAsync("/features/accounts-ux.css");
