@@ -159,7 +159,10 @@ async function openDetail(id) {
   if (amazon) reconciliation = amazonReconciliation(purchase, reconciliation, amazon);
   const items = (purchase.items || []).map((i, index) => {
     const asin = i.asin ? `<span class="row-sub">ASIN ${ctx.esc(i.asin)}</span>` : '';
-    return `<div class="purchase-item" data-index="${index}"><div><input class="item-name" value="${ctx.esc(i.name)}">${asin}</div><input class="item-qty" type="number" step="0.001" value="${i.quantity}"><input class="item-total" type="number" step="0.01" value="${i.totalPrice}"><select class="item-category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></div>`;
+    const priceCompare = i.id && i.barcode
+      ? `<div class="row-sub purchase-price-compare" data-cloud-price-index="${index}"></div>`
+      : '';
+    return `<div class="purchase-item" data-index="${index}"><div><input class="item-name" value="${ctx.esc(i.name)}">${asin}${priceCompare}</div><input class="item-qty" type="number" step="0.001" value="${i.quantity}"><input class="item-total" type="number" step="0.01" value="${i.totalPrice}"><select class="item-category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></div>`;
   }).join('');
 
   const amazonBlock = amazon ? amazonDetailsHtml(purchase, amazon) : '';
@@ -177,6 +180,7 @@ async function openDetail(id) {
 
   renderReconcile(dlg.querySelector('[data-reconcile]'), purchase, reconciliation, dlg);
   if (amazon) bindAmazonDetails(dlg, purchase, amazon);
+  loadCloudPriceComparisons(dlg, purchase).catch(() => {});
 
   dlg.querySelector('[data-view-receipt]')?.addEventListener('click', () => window.open(ctx.bffUrl(`api/purchases/${id}/receipt`), '_blank', 'noopener'));
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -194,13 +198,88 @@ async function openDetail(id) {
         unitPrice: original.unitPrice ?? null,
         totalPrice: Number(r.querySelector('.item-total').value || 0),
         currency: original.currency || purchase.currency,
-        notes: original.notes ?? null
+        notes: original.notes ?? null,
+        productId: original.productId ?? null,
+        rawName: original.rawName ?? original.name ?? null,
+        barcode: original.barcode ?? null,
+        quantityUnit: original.quantityUnit ?? null,
+        packageQuantity: original.packageQuantity ?? null,
+        packageUnit: original.packageUnit ?? null,
+        packageCount: original.packageCount ?? null,
+        baseUnitPrice: original.baseUnitPrice ?? null,
+        discountAmount: original.discountAmount ?? null,
+        depositAmount: original.depositAmount ?? null,
+        taxRate: original.taxRate ?? null,
+        taxAmount: original.taxAmount ?? null,
+        lineType: original.lineType ?? null,
+        extractionConfidence: original.extractionConfidence ?? null,
+        isManuallyCorrected: original.isManuallyCorrected ?? false,
+        totalPriceOverridden: original.totalPriceOverridden ?? false,
+        sortOrder: original.sortOrder ?? Number(r.dataset.index),
+        returnDeadline: original.returnDeadline ?? null,
+        warrantyEnd: original.warrantyEnd ?? null,
+        serialNumber: original.serialNumber ?? null,
+        originalUnitPrice: original.originalUnitPrice ?? null,
+        discountLabel: original.discountLabel ?? null
       };
     });
     try { await ctx.api(`api/purchases/${id}/items`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); dlg.close(); await renderPurchases(ctx); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   dlg.showModal();
+}
+
+async function loadCloudPriceComparisons(dlg, purchase) {
+  const items = (purchase.items || [])
+    .map((item, index) => ({ item, index }))
+    .filter(x => x.item?.id && x.item?.barcode)
+    .slice(0, 20);
+
+  await Promise.all(items.map(async ({ item, index }) => {
+    const target = dlg.querySelector(`[data-cloud-price-index="${index}"]`);
+    if (!target) return;
+
+    try {
+      const result = await ctx.api(
+        `api/intelligence/prices/purchase-items/${encodeURIComponent(item.id)}`);
+      if (!result) return;
+
+      const parts = [];
+      const local = result.local || {};
+      if (Number(local.count || 0) > 0 && local.median != null) {
+        parts.push(
+          `${t('Eigene Historie', 'Your history')}: ` +
+          `${t('Median', 'median')} ${ctx.money(Number(local.median), result.currency || item.currency || purchase.currency)} ` +
+          `· ${Number(local.count)} ${t('Käufe', 'purchases')}`);
+      }
+
+      if (result.available && result.cloud) {
+        const cloud = result.cloud;
+        const typical = cloud.p25 != null && cloud.p75 != null
+          ? ` · ${t('typisch', 'typical')} ${ctx.money(Number(cloud.p25), result.currency)}–${ctx.money(Number(cloud.p75), result.currency)}`
+          : '';
+        const scope = cloud.scope === 'country'
+          ? t('Land', 'country')
+          : cloud.scope === 'merchant'
+            ? t('Händler', 'merchant')
+            : t('global', 'global');
+        parts.push(
+          `FullWorth Cloud: ${t('Median', 'median')} ${ctx.money(Number(cloud.median), result.currency)}` +
+          typical +
+          ` · ${Number(cloud.distinctInstanceCount || 0)} ${t('Quellen', 'sources')} · ${scope}`);
+      }
+
+      if (parts.length) {
+        target.innerHTML =
+          `<span>${parts.map(x => ctx.esc(x)).join('<br>')}</span>` +
+          (result.available
+            ? `<br><span>${ctx.esc(t('Beobachtungsdaten, kein garantiertes Marktangebot.', 'Observational data, not a guaranteed market offer.'))}</span>`
+            : '');
+      }
+    } catch {
+      // Price comparison is optional and must never make purchase details fail.
+    }
+  }));
 }
 
 function amazonReconciliation(purchase, rec, amazon) {

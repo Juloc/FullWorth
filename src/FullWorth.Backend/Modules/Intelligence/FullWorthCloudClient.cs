@@ -48,6 +48,21 @@ public sealed record FullWorthCloudBenchmark(
     decimal Min,
     decimal Max);
 
+public sealed record FullWorthCloudPrice(
+    string ProductKey,
+    string? MerchantKey,
+    string? Country,
+    string Currency,
+    string Bucket,
+    int ObservationCount,
+    int DistinctInstanceCount,
+    decimal Median,
+    decimal Mean,
+    decimal P25,
+    decimal P75,
+    decimal Min,
+    decimal Max);
+
 public interface IFullWorthCloudClient
 {
     Uri BaseUri { get; }
@@ -65,6 +80,16 @@ public interface IFullWorthCloudClient
         string? ageBand,
         string? observedMonth,
         CancellationToken ct);
+    Task<FullWorthCloudPrice?> GetPriceAsync(
+        string instanceCredential,
+        string productKey,
+        string currency,
+        string? country,
+        string? merchantKey,
+        string bucket,
+        CancellationToken ct) =>
+        Task.FromResult<FullWorthCloudPrice?>(null);
+
     Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
         string instanceCredential,
         string? currentVersion,
@@ -233,6 +258,40 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         using var response = await SendAsync(request, ct);
         if (response.StatusCode == HttpStatusCode.NoContent) return null;
         return await DeserializeAsync<FullWorthCloudBenchmark>(response, ct);
+    }
+
+    public async Task<FullWorthCloudPrice?> GetPriceAsync(
+        string instanceCredential,
+        string productKey,
+        string currency,
+        string? country,
+        string? merchantKey,
+        string bucket,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(productKey))
+            throw new ArgumentException("Product key is required.", nameof(productKey));
+        if (string.IsNullOrWhiteSpace(currency))
+            throw new ArgumentException("Currency is required.", nameof(currency));
+        if (string.IsNullOrWhiteSpace(bucket))
+            throw new ArgumentException("Price bucket is required.", nameof(bucket));
+
+        var query = new List<string>
+        {
+            $"productKey={Uri.EscapeDataString(productKey.Trim())}",
+            $"currency={Uri.EscapeDataString(currency.Trim().ToUpperInvariant())}",
+            $"bucket={Uri.EscapeDataString(bucket.Trim())}"
+        };
+        AddQuery(query, "country", country);
+        AddQuery(query, "merchantKey", merchantKey);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/prices?{string.Join('&', query)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await DeserializeAsync<FullWorthCloudPrice>(response, ct);
     }
 
     public async Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(

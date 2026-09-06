@@ -1008,7 +1008,7 @@
     "enabled": "Aktiv",
     "disabled": "Deaktiviert",
     "explain": "FullWorth nutzt gemeinsames, versioniertes Wissen für bessere automatische Zuordnungen und Vergleichswerte.",
-    "shared": "Geteilt werden nur benötigte, minimierte Lern- und Statistikdaten wie erkannte Händler, Kategorien/Aliase, bestätigte Provider-/Produkt-Aliase, aggregierte Vertragskosten und Sparquote sowie grobe Vergleichs-Buckets. Keine einzelnen Buchungen, Einkommenbeträge, IBAN, Kontonummer, E-Mail, Benutzer-ID, Notizen oder Bankzugangsdaten.",
+    "shared": "Geteilt werden nur benötigte, minimierte Lern- und Statistikdaten wie erkannte Händler, Kategorien/Aliase, bestätigte Provider-/Produkt-Aliase, anonymisierte Produktpreise, aggregierte Vertragskosten und Sparquote sowie grobe Vergleichs-Buckets. Keine einzelnen Buchungen, vollständigen Warenkörbe, Einkommenbeträge, IBAN, Kontonummer, E-Mail, Benutzer-ID, Notizen oder Bankzugangsdaten.",
     "useCloud": "FullWorth Cloud Intelligence verwenden",
     "localWins": "Manuelle Entscheidungen und lokale Regeln haben immer Vorrang vor Cloud-Wissen.",
     "savedEnabled": "Cloud Intelligence aktiviert.",
