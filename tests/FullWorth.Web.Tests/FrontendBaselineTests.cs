@@ -65,6 +65,8 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("OFFICIAL_BRAND_LOGOS", kit);
         Assert.Contains("priority: Number(x.priority) || 0", kit);
         Assert.Contains("b.priority - a.priority", kit);
+        Assert.Contains("x?.assetPath || x?.dataUri", kit);
+        Assert.Contains("/bff/backend", kit);
         Assert.Contains("ensureOfficialBrandCatalog", transactions);
         Assert.Contains("brandLogoPath", kit);
         Assert.DoesNotContain("/brands/", kit, StringComparison.OrdinalIgnoreCase);
