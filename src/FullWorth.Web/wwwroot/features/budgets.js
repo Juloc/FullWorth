@@ -150,6 +150,10 @@ export async function openBudgetDetail(context, id) {
   const cycleLabel = budgetStatus.period && budgetStatus.period !== 'monthly'
     ? `${ctx.esc(ctx.get('budgets.period_' + budgetStatus.period) || budgetStatus.period)} · `
     : '';
+  const carryIn = Number(budgetStatus.carryIn || 0);
+  const rolloverLine = Math.abs(carryIn) > 0.004
+    ? `<div class="row-sub budget-rollover-summary">${ctx.esc(ctx.get('budgets.baseAmount'))}: ${ctx.money(budgetStatus.baseBudgetAmount ?? budgetStatus.budgetAmount, currency)} · ${ctx.esc(ctx.get('budgets.carryIn'))}: ${carryIn > 0 ? '+' : ''}${ctx.money(carryIn, currency)}</div>`
+    : '';
 
   const dlg = ctx.dialog(`<div class="dialog-card budget-detail">
     <div class="panel-head">
@@ -159,6 +163,7 @@ export async function openBudgetDetail(context, id) {
       </div>
     </div>
     <div class="row-sub">${cycleLabel}${ctx.date(budgetStatus.periodStart)}–${ctx.date(budgetStatus.periodEnd)}</div>
+    ${rolloverLine}
     <div class="budget-detail-stats">
       <div class="kv"><span>${ctx.esc(ctx.get('budgets.spent'))}</span><strong class="amount">${ctx.money(budgetStatus.spent, currency)}</strong></div>
       <div class="kv"><span>${ctx.esc(ctx.get('budgets.budget'))}</span><strong class="amount">${ctx.money(budgetStatus.budgetAmount, currency)}</strong></div>
@@ -222,24 +227,126 @@ async function openBudgetDialog(existing) {
     return;
   }
 
-  const periods = ['monthly', 'weekly', 'biweekly', 'paycycle']
-    .map(period => `<option value="${period}"${existing?.period === period ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.period_' + period))}</option>`)
+  const selectedPeriod = existing?.period || 'monthly';
+  const periods = ['daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom']
+    .map(period => `<option value="${period}"${selectedPeriod === period ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.period_' + period))}</option>`)
     .join('');
 
-  const dlg = ctx.dialog(`<form class="dialog-card">
+  const rollover = !existing?.carryOver
+    ? 'reset'
+    : existing?.carryOverOverspend === false
+      ? 'positive'
+      : 'full';
+  const rolloverOptions = ['reset','positive','full']
+    .map(mode => `<option value="${mode}"${rollover === mode ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.rollover_' + mode))}</option>`)
+    .join('');
+
+  const presets = !existing ? `
+    <div class="budget-wizard-presets">
+      <div class="row-sub">${ctx.esc(ctx.get('budgets.quickStart'))}</div>
+      <div class="budget-preset-row">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="weekly-groceries">${ctx.esc(ctx.get('budgets.preset_weeklyGroceries'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="monthly">${ctx.esc(ctx.get('budgets.preset_monthly'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="paycycle">${ctx.esc(ctx.get('budgets.preset_paycycle'))}</button>
+      </div>
+    </div>` : '';
+
+  const dlg = ctx.dialog(`<form class="dialog-card budget-wizard">
     <h2>${ctx.esc(ctx.get(existing ? 'budgets.edit' : 'budgets.new'))}</h2>
-    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(existing?.name || '')}"></label>
-    <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${existing ? ctx.esc(String(existing.amount)) : ''}"></label>
-    <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-    <label>${ctx.esc(ctx.get('budgets.period'))}<select name="period">${periods}</select></label>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}</select></label>
-    <label class="check"><input name="carryOver" type="checkbox"${existing?.carryOver ? ' checked' : ''}>${ctx.esc(ctx.get('budgets.carryOver'))}</label>
+    ${presets}
+    <div class="budget-wizard-section">
+      <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(existing?.name || '')}"></label>
+      <div class="form-grid">
+        <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required value="${existing ? ctx.esc(String(existing.amount)) : ''}"></label>
+        <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
+      </div>
+      <label>${ctx.esc(ctx.get('budgets.period'))}<select name="period">${periods}</select></label>
+      <div class="form-grid budget-cycle-fields">
+        <label data-budget-start>${ctx.esc(ctx.get('budgets.anchorDate'))}<input name="startDate" type="date" value="${ctx.esc(existing?.startDate || '')}"><small class="row-sub" data-budget-anchor-hint></small></label>
+        <label data-budget-end>${ctx.esc(ctx.get('budgets.endDate'))}<input name="endDate" type="date" value="${ctx.esc(existing?.endDate || '')}"></label>
+      </div>
+    </div>
+    <div class="budget-wizard-section">
+      <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}</select></label>
+      <label>${ctx.esc(ctx.get('budgets.rollover'))}<select name="rollover">${rolloverOptions}</select><small class="row-sub" data-rollover-hint></small></label>
+    </div>
     <div class="dialog-actions">
       ${existing ? `<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete>${ctx.esc(ctx.get('common.delete'))}</button>` : ''}
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
       <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get(existing ? 'common.save' : 'common.create'))}</button>
     </div>
   </form>`);
+
+  const form = dlg.querySelector('form');
+  const periodSelect = form.querySelector('[name="period"]');
+  const rolloverSelect = form.querySelector('[name="rollover"]');
+  const startWrap = form.querySelector('[data-budget-start]');
+  const endWrap = form.querySelector('[data-budget-end]');
+  const startInput = form.querySelector('[name="startDate"]');
+  const endInput = form.querySelector('[name="endDate"]');
+  const anchorHint = form.querySelector('[data-budget-anchor-hint]');
+  const rolloverHint = form.querySelector('[data-rollover-hint]');
+
+  const localIso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const mondayIso = () => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return localIso(date);
+  };
+
+  const syncCycleFields = () => {
+    const period = periodSelect.value;
+    const needsAnchor = ['weekly','biweekly','paycycle','custom'].includes(period);
+    startWrap.hidden = !needsAnchor;
+    endWrap.hidden = period !== 'custom';
+    startInput.required = period === 'custom';
+    endInput.required = period === 'custom';
+    anchorHint.textContent = ctx.get(
+      period === 'paycycle'
+        ? 'budgets.anchorHint_paycycle'
+        : period === 'custom'
+          ? 'budgets.anchorHint_custom'
+          : 'budgets.anchorHint_week');
+    if (period === 'paycycle' && !startInput.value) startInput.value = localIso(new Date());
+  };
+
+  const syncRolloverHint = () => {
+    rolloverHint.textContent = ctx.get('budgets.rolloverHint_' + rolloverSelect.value);
+  };
+
+  periodSelect.addEventListener('change', syncCycleFields);
+  rolloverSelect.addEventListener('change', syncRolloverHint);
+
+  form.querySelectorAll('[data-budget-preset]').forEach(button => {
+    button.addEventListener('click', () => {
+      const preset = button.dataset.budgetPreset;
+      const name = form.querySelector('[name="name"]');
+
+      if (preset === 'weekly-groceries') {
+        if (!name.value) name.value = ctx.get('budgets.presetName_weeklyGroceries');
+        periodSelect.value = 'weekly';
+        rolloverSelect.value = 'positive';
+        startInput.value = mondayIso();
+      } else if (preset === 'paycycle') {
+        if (!name.value) name.value = ctx.get('budgets.presetName_paycycle');
+        periodSelect.value = 'paycycle';
+        rolloverSelect.value = 'full';
+        startInput.value = localIso(new Date());
+      } else {
+        if (!name.value) name.value = ctx.get('budgets.presetName_monthly');
+        periodSelect.value = 'monthly';
+        rolloverSelect.value = 'reset';
+      }
+
+      syncCycleFields();
+      syncRolloverHint();
+      form.querySelector('[name="amount"]').focus();
+    });
+  });
+
+  syncCycleFields();
+  syncRolloverHint();
 
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
 
@@ -258,19 +365,23 @@ async function openBudgetDialog(existing) {
     }
   });
 
-  dlg.querySelector('form').onsubmit = async event => {
+  form.onsubmit = async event => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const values = new FormData(event.currentTarget);
+    const period = String(values.get('period') || 'monthly');
+    const rolloverMode = String(values.get('rollover') || 'reset');
+    const usesAnchor = ['weekly','biweekly','paycycle','custom'].includes(period);
     const body = ctx.jsonBody({
-      name: form.get('name'),
-      categoryId: form.get('category') || null,
-      amount: Number(form.get('amount')),
-      currency: form.get('currency'),
-      period: form.get('period'),
-      carryOver: form.get('carryOver') === 'on',
+      name: values.get('name'),
+      categoryId: values.get('category') || null,
+      amount: Number(values.get('amount')),
+      currency: values.get('currency'),
+      period,
+      carryOver: rolloverMode !== 'reset',
+      carryOverOverspend: rolloverMode === 'full',
       isActive: true,
-      startDate: null,
-      endDate: null
+      startDate: usesAnchor ? (values.get('startDate') || null) : null,
+      endDate: period === 'custom' ? (values.get('endDate') || null) : null
     });
 
     try {
