@@ -324,9 +324,9 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
         var items = new List<BudgetStatusItem>();
         var incomplete = false;
 
-        var allocationsByWindow = new Dictionary<(DateOnly Start, DateOnly End), List<ExpenseAllocation>>();
+        var allocationsByWindow = new Dictionary<(DateOnly Start, DateOnly End), (List<ExpenseAllocation> Allocations, Dictionary<Guid, DateOnly> Dates)>();
 
-        async Task<List<ExpenseAllocation>> AllocationsForAsync(DateOnly start, DateOnly end)
+        async Task<(List<ExpenseAllocation> Allocations, Dictionary<Guid, DateOnly> Dates)> AllocationsForAsync(DateOnly start, DateOnly end)
         {
             var key = (start, end);
             if (allocationsByWindow.TryGetValue(key, out var cached))
@@ -350,6 +350,9 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
                 })
                 .ToListAsync(ct);
 
+            var dates = rows.ToDictionary(
+                transaction => transaction.Id,
+                transaction => transaction.BookingDate ?? transaction.ValueDate ?? reference);
             var (built, windowIncomplete) = await BuildExpenseAllocationsAsync(
                 fullWorthSpaceId,
                 rows.Select(transaction => new ExpenseTx(
@@ -357,20 +360,21 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
                     transaction.Amount,
                     transaction.CategoryId,
                     transaction.Currency,
-                    transaction.BookingDate ?? transaction.ValueDate ?? reference)).ToList(),
+                    dates[transaction.Id])).ToList(),
                 currency,
                 ct);
             if (windowIncomplete) incomplete = true;
-            allocationsByWindow[key] = built;
-            return built;
+            var result = (built, dates);
+            allocationsByWindow[key] = result;
+            return result;
         }
 
         foreach (var budget in budgets)
         {
             var cycle = BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
             var period = BudgetCycleCalculator.CurrentPeriod(cycle, reference);
-            var currentAllocations = await AllocationsForAsync(period.Start, period.End);
-            var spent = currentAllocations
+            var currentWindow = await AllocationsForAsync(period.Start, period.End);
+            var spent = currentWindow.Allocations
                 .Where(allocation => !budget.CategoryId.HasValue || allocation.CategoryId == budget.CategoryId)
                 .Sum(allocation => allocation.Amount);
 
@@ -383,16 +387,19 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
             {
                 var activeFrom = budget.StartDate ?? DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
                 var priorPeriods = PriorBudgetPeriods(cycle, activeFrom, period);
-                var priorSpends = new List<decimal>(priorPeriods.Count);
-                foreach (var previous in priorPeriods)
+                if (priorPeriods.Count > 0)
                 {
-                    var from = activeFrom > previous.Start ? activeFrom : previous.Start;
-                    var allocations = await AllocationsForAsync(from, previous.End);
-                    priorSpends.Add(allocations
+                    var historyFrom = activeFrom > priorPeriods[0].Start ? activeFrom : priorPeriods[0].Start;
+                    var history = await AllocationsForAsync(historyFrom, period.Start.AddDays(-1));
+                    var spentByPeriod = history.Allocations
                         .Where(allocation => !budget.CategoryId.HasValue || allocation.CategoryId == budget.CategoryId)
-                        .Sum(allocation => allocation.Amount));
+                        .GroupBy(allocation => BudgetCycleCalculator.CurrentPeriod(cycle, history.Dates[allocation.TransactionId]).Start)
+                        .ToDictionary(group => group.Key, group => group.Sum(allocation => allocation.Amount));
+                    var priorSpends = priorPeriods
+                        .Select(previous => spentByPeriod.GetValueOrDefault(previous.Start))
+                        .ToList();
+                    carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
                 }
-                carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
             }
 
             var effectiveAmount = budget.Amount + carryIn;
