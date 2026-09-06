@@ -1,3 +1,4 @@
+using FullWorth.Web.Modules.Bootstrap;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
@@ -65,6 +66,8 @@ public class FullWorthWebFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient("backend")
+                .ConfigurePrimaryHttpMessageHandler(() => new StubHandler("backend", recordedRequests));
+            services.AddHttpClient(FirstRunBootstrapper.BackendClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => new StubHandler("backend", recordedRequests));
             services.AddHttpClient("banking")
                 .ConfigurePrimaryHttpMessageHandler(() => new StubHandler("banking", recordedRequests));
