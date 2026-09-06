@@ -78,7 +78,7 @@ public sealed class KnowledgePackSyncService(
 
             var mappings = payload.Merchants
                 .Where(x => !string.IsNullOrWhiteSpace(x.CategoryKey))
-                .Select(ToEntity)
+                .Select(x => ToEntity(manifest, x))
                 .GroupBy(x => new { x.AliasKey, x.Direction, x.Country })
                 .Select(g => g.OrderByDescending(x => x.Confidence).First())
                 .ToList();
@@ -267,11 +267,11 @@ public sealed class KnowledgePackSyncService(
         return payload;
     }
 
-    private static OfficialMerchantMapping ToEntity(KnowledgePackMerchantPayload source)
+    private static OfficialMerchantMapping ToEntity(KnowledgePackManifest manifest, KnowledgePackMerchantPayload source)
     {
         var aliasKey = source.AliasKey;
         var direction = NormalizeDirection(source.Direction);
-        var country = string.IsNullOrWhiteSpace(source.Country) ? null : source.Country.Trim().ToUpperInvariant();
+        var country = string.IsNullOrWhiteSpace(source.Country) ? "GLOBAL" : source.Country.Trim().ToUpperInvariant();
 
         // Compatibility with packs produced before 2026-09-06 where AliasKey could contain the internal
         // alias+direction+country composite representation.
@@ -296,8 +296,8 @@ public sealed class KnowledgePackSyncService(
 
         return new OfficialMerchantMapping
         {
-            PackId = string.Empty,
-            PackVersion = string.Empty,
+            PackId = manifest.PackId,
+            PackVersion = manifest.Version,
             AliasKey = normalizedAlias,
             Direction = direction,
             CanonicalMerchantKey = source.CanonicalMerchantKey.Trim(),
