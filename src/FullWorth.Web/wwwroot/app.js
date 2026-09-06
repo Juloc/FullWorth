@@ -102,6 +102,7 @@ async function openDeleteAccountDialog(){
       </div>
     </form>`,{closeLabel:get('common.close')});
   const form=dlg.querySelector('#delete-account-form');
+  dlg.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>{if(dlg.open)dlg.close('cancel')}));
   form.addEventListener('submit',async e=>{
     e.preventDefault();
     const password=dlg.querySelector('#delete-account-password').value;
