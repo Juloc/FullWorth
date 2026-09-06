@@ -12,7 +12,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         "appDescription", "language", "theme", "email", "password", "showPassword", "hidePassword",
         "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms", "confirmAdult", "imprint",
         "continueGoogle", "continueApple", "registerGoogle", "registerApple", "orWithEmail", "socialRegisterLegal",
-        "externalAccountNotFound", "externalRegistrationFailed", "externalFailed",
+        "externalAccountNotFound", "externalRegistrationFailed", "externalFailed", "externalTwoFactorRequired",
         "forgotPassword", "continue", "backToSignIn", "invalidCredentials", "twoFactorCode", "invalidTwoFactor",
         "forgotConfirmation", "newPassword", "confirmPassword", "resetPassword", "passwordChanged",
         "passkey", "recoveryCode", "recoveryCodesShownOnce", "recoveryCodesStoreSecurely", "genericError"
