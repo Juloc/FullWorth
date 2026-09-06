@@ -133,9 +133,10 @@ public static class GermanCompensationCalculator
 
     /// <summary>
     /// Tax-class-aware 2026 wage-tax planning calculation derived from the BMF PAP structure.
-    /// It covers ordinary statutory-insurance employment and the six tax classes. It is intentionally
-    /// not presented as a full payroll engine for every PAP input (private insurance, allowances,
-    /// pension payments, factor procedure and special payments can require additional inputs).
+    /// It covers ordinary statutory-insurance employment, the six tax classes, class-IV factor,
+    /// ELStAM allowances and common statutory-insurance exceptions. It is intentionally not presented
+    /// as a full payroll engine for every PAP input (private insurance, Midijob transition rules,
+    /// pension payments and exact special-payment payroll require additional paths).
     /// </summary>
     public static TaxBreakdown WageTax2026(decimal annualTaxableGross, CompensationProfileInput input)
     {
