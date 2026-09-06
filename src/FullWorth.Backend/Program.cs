@@ -181,6 +181,7 @@ builder.Services.AddScoped<ReceiptImportStore>();
 builder.Services.AddScoped<ReceiptImportService>();
 builder.Services.AddScoped<PaperlessReceiptClient>();
 builder.Services.AddHttpClient("PaperlessReceipts");
+builder.Services.AddHostedService<PaperlessAutoImportWorker>();
 
 builder.Services.Configure<AmazonIntegrationOptions>(builder.Configuration.GetSection(AmazonIntegrationOptions.SectionName));
 builder.Services.AddSingleton<AmazonBrowserAutomation>();
