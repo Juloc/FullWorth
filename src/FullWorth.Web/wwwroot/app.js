@@ -449,6 +449,7 @@ const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizar
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
+window.fwOpenBudget=id=>openBudgetDetail(id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
 async function loadBudgets(){
