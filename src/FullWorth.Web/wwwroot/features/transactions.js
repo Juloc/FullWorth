@@ -4,7 +4,7 @@
 // and links to a receipt when a purchase is attached.
 
 import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
-import { identityIcon, categoryIconInner, monogramHue } from '../ui/ux-kit.js';
+import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 
 let ctx = null;
 export function bindTransactions(context) {
@@ -137,6 +137,7 @@ async function openBookingDialog() {
 
 export async function renderTransactions(context) {
   ctx = context;
+  await ensureOfficialBrandCatalog(ctx.api);
   const body = ctx.$('#transactions-body');
   // URL scope (UX rework §3): ?accountId= one account, ?groupId= every account in that group. The
   // group is resolved to accessible accounts server-side (backend param accountGroupId) — the browser
