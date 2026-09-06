@@ -18,6 +18,9 @@ import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
 import { createDialog } from './ui/dialog.js';
 import { createApiClient, jsonBody } from './core/api.js';
+import { state } from './core/state.js';
+import { createRouter } from './core/router.js';
+import { createFeatureRegistry } from './core/feature-registry.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -46,7 +49,6 @@ import { createApiClient, jsonBody } from './core/api.js';
     return p.then(r=>r.clone());
   };
 })();
-const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null,capabilities:{admin:false,twoFactorEnabled:false}};
 const apiClient=createApiClient({getSpaceId:()=>state.space?.id||''});
 const api=(path,options)=>apiClient.backend(path,options);
 const bankApi=(path,options)=>apiClient.banking(path,options);
@@ -59,9 +61,9 @@ const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
 // any of these paths and the app resolves the view from location.pathname on boot.
-const VIEW_PATH={dashboard:'/'};ALL_VIEWS.forEach(v=>{if(v!=='dashboard')VIEW_PATH[v]='/'+v});
-const pathForView=v=>VIEW_PATH[v]||'/';
-function viewFromPath(p){const seg=(p||'/').replace(/^\/+|\/+$/g,'').split('/')[0];return seg&&ALL_VIEWS.includes(seg)?seg:'dashboard'}
+const router=createRouter({views:ALL_VIEWS,defaultView:'dashboard'});
+const pathForView=router.pathForView;
+const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
 const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
@@ -418,22 +420,7 @@ async function showView(view,opts={}){
 async function loadCurrent(){
   try{
     if(!state.space){await loadSpaces();if(!state.space){toast(get('common.error'));return}}
-    switch(state.view){
-      case'dashboard':return await loadDashboard();
-      case'transactions':return await renderTransactions(ctx);
-      case'accounts':return await loadAccountsView();
-      case'budgets':return await loadBudgets();
-      case'contracts':return await renderContracts(ctx);
-      case'networth':await renderNetWorth(ctx);return await renderLoans(ctx);
-      case'analytics':return await renderAnalytics(ctx);
-      case'purchases':return await renderPurchases(ctx);
-      case'categories':return await renderCategories(ctx);
-      case'rules':return await renderRules(ctx);
-      case'notifications':return await renderNotifications(ctx);
-      case'merchants':return await renderMerchants(ctx);
-      case'audit':return await renderAudit(ctx);
-      case'settings':return loadSettings();
-    }
+    await featureRegistry.refresh(state.view,ctx);
   }catch(e){console.error(e);toast(get('common.error'))}
 }
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
@@ -506,6 +493,21 @@ const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,ca
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
+const featureRegistry=createFeatureRegistry()
+  .register('dashboard',()=>loadDashboard())
+  .register('transactions',()=>renderTransactions(ctx))
+  .register('accounts',()=>loadAccountsView())
+  .register('budgets',()=>loadBudgets())
+  .register('contracts',()=>renderContracts(ctx))
+  .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
+  .register('analytics',()=>renderAnalytics(ctx))
+  .register('purchases',()=>renderPurchases(ctx))
+  .register('categories',()=>renderCategories(ctx))
+  .register('rules',()=>renderRules(ctx))
+  .register('notifications',()=>renderNotifications(ctx))
+  .register('merchants',()=>renderMerchants(ctx))
+  .register('audit',()=>renderAudit(ctx))
+  .register('settings',()=>loadSettings());
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
