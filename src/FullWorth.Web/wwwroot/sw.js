@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v57';
+const VERSION = 'v58';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -64,6 +64,17 @@ const APP_SHELL = [
   '/theme-init.js',
   '/manifest.json',
   '/pwa/icon.svg',
+  '/brands/vodafone.svg',
+  '/brands/lidl.svg',
+  '/brands/rewe.svg',
+  '/brands/edeka.svg',
+  '/brands/netflix.svg',
+  '/brands/spotify.svg',
+  '/brands/deutschebahn.svg',
+  '/brands/shell.svg',
+  '/brands/aral.svg',
+  '/brands/ikea.svg',
+  '/brands/rossmann.svg',
   '/fonts/BarlowCondensed-400.woff2',
   '/fonts/BarlowCondensed-500.woff2',
   '/fonts/BarlowCondensed-600.woff2',
