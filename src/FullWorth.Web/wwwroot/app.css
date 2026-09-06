@@ -63,7 +63,8 @@ html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.s
 #theme-toggle[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 .brand strong{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand-name{display:inline-flex;align-items:center;gap:7px;min-width:0;line-height:1}
-.beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}\n.brand-beta{display:inline-flex;align-items:center;padding:2px 6px;border:1px solid var(--line);border-radius:var(--radius-pill);font-size:8px;font-weight:700;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.brand-beta{display:inline-flex;align-items:center;padding:2px 6px;border:1px solid var(--line);border-radius:var(--radius-pill);font-size:8px;font-weight:700;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 /* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
    stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
 #nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
