@@ -855,8 +855,8 @@ async function copyMessageText(text, button) {
   }
 }
 
-function previousUserText(article) {
-  let current = article.previousElementSibling;
+function latestUserText(root) {
+  let current = root.lastElementChild;
   while (current) {
     if (current.classList.contains('user')) return current.dataset.messageText || current.querySelector('.coach-message-text')?.textContent || '';
     current = current.previousElementSibling;
@@ -917,12 +917,12 @@ function appendMessage(message) {
     if (role === 'user') {
       tools.appendChild(messageTool(tr('Bearbeiten', 'Edit'), () => editAndResend(messageText), tr('Bearbeiten und erneut senden', 'Edit and resend')));
     } else if (message.localError || message.stopped) {
-      const retryText = message.retryText || previousUserText(article);
+      const retryText = message.retryText || latestUserText(root);
       if (retryText) tools.appendChild(messageTool(tr('Erneut versuchen', 'Retry'), () => ask(retryText)));
     } else {
       const copy = messageTool(tr('Kopieren', 'Copy'), () => copyMessageText(messageText, copy));
       tools.appendChild(copy);
-      const retryText = previousUserText(article);
+      const retryText = latestUserText(root);
       if (retryText) tools.appendChild(messageTool(tr('Neu generieren', 'Regenerate'), () => ask(retryText)));
     }
     if (tools.childElementCount) article.appendChild(tools);
