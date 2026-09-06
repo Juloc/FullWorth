@@ -86,7 +86,6 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         var userEdits = BuildPatch(currentEntry.ResolvedProfile, write.Profile);
         var patch = MergePatchObjects(currentRow.Patch.AsObject(), userEdits);
 
-        var without = all.Where(x => x.Id != id).ToArray();
 
         await WithConnectionAsync(async connection =>
         {
