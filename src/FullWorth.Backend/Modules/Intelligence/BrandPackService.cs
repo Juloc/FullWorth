@@ -9,7 +9,7 @@ public sealed record VerifiedBrandBlob(
     string ContentSha256,
     string MediaType,
     int ByteLength,
-    string ContentBase64);
+    byte[] Content);
 
 public static class BrandAssetVerifier
 {
@@ -69,7 +69,7 @@ public static class BrandAssetVerifier
             actualHash,
             normalizedMediaType,
             bytes.Length,
-            Convert.ToBase64String(bytes));
+            bytes);
     }
 
     public static string NormalizeBrandKey(string? value)
@@ -320,7 +320,7 @@ public sealed class BrandPackService(IntelligenceDbContext db)
                     ContentSha256 = prepared.Blob.ContentSha256,
                     MediaType = prepared.Blob.MediaType,
                     ByteLength = prepared.Blob.ByteLength,
-                    ContentBase64 = prepared.Blob.ContentBase64,
+                    Content = prepared.Blob.Content,
                     CreatedAt = now,
                     LastUsedAt = now
                 };
