@@ -158,6 +158,49 @@ public sealed class CompensationCalculatorTests
     }
 
     [Fact]
+    public void AnnualTaxAllowance_ReducesEstimatedWageTax()
+    {
+        var normal = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m));
+        var withAllowance = GermanCompensationCalculator.WageTax2026(60_000m, BasicProfile(60_000m) with { AnnualTaxAllowance = 2_000m });
+
+        Assert.True(withAllowance.EstimatedIncomeTaxAnnual < normal.EstimatedIncomeTaxAnnual);
+    }
+
+    [Fact]
+    public void ChildlessCareSurcharge_DoesNotApplyBelowAge23()
+    {
+        var under23 = GermanCompensationCalculator.Calculate(BasicProfile(50_000m) with
+        {
+            ChildrenUnder25 = 0,
+            Age = 22,
+            ChildlessCareSurcharge = true
+        });
+        var age23 = GermanCompensationCalculator.Calculate(BasicProfile(50_000m) with
+        {
+            ChildrenUnder25 = 0,
+            Age = 23,
+            ChildlessCareSurcharge = true
+        });
+
+        Assert.True(age23.SocialInsurance.CareAnnual > under23.SocialInsurance.CareAnnual);
+    }
+
+    [Fact]
+    public void InsuranceExemptions_RemoveConfiguredRvAndAvContributions()
+    {
+        var exempt = GermanCompensationCalculator.Calculate(BasicProfile(60_000m) with
+        {
+            PensionInsuranceEnabled = false,
+            UnemploymentInsuranceEnabled = false
+        });
+
+        Assert.Equal(0m, exempt.SocialInsurance.PensionAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.UnemploymentAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.EmployerPensionAnnual);
+        Assert.Equal(0m, exempt.SocialInsurance.EmployerUnemploymentAnnual);
+    }
+
+    [Fact]
     public void BavLimits_AreDerivedFrom2026PensionCeiling()
     {
         Assert.Equal(8_112m, GermanCompensationCalculator.BavTaxFreeLimit2026);
