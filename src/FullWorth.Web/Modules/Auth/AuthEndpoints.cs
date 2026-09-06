@@ -75,7 +75,8 @@ public static class AuthEndpoints
         properties.Items[ExternalModeItem] = mode;
         properties.Items[ExternalReturnUrlItem] = GetSafeReturnUrl(context);
 
-        return Results.Challenge(properties, [scheme]);
+        await context.ChallengeAsync(scheme, properties);
+        return Results.Empty;
     }
 
     private static async Task<IResult> ExternalCallbackAsync(
