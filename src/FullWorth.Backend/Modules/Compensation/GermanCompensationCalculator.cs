@@ -150,15 +150,17 @@ public static class GermanCompensationCalculator
         };
         var singleParent = input.TaxClass == 2 ? SingleParentRelief : 0m;
         var provisionAllowance = WageTaxProvisionAllowance2026(gross, input);
-        var taxableIncome = Math.Max(0m, gross - employeeLump - specialExpense - singleParent - provisionAllowance);
+        var taxableIncome = Math.Max(0m, gross - employeeLump - specialExpense - singleParent - provisionAllowance - Math.Max(0m, input.AnnualTaxAllowance));
 
         var incomeTax = ApplyTaxClass4Factor(WageTaxForClass2026(taxableIncome, input.TaxClass), input);
-        var childAllowance = input.TaxClass switch
-        {
-            3 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceFull2026,
-            1 or 2 or 4 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceHalf2026,
-            _ => 0m
-        };
+        var childAllowance = input.ChildAllowanceUnits is >= 0m
+            ? input.ChildAllowanceUnits.Value * ChildAllowanceFull2026
+            : input.TaxClass switch
+            {
+                3 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceFull2026,
+                1 or 2 or 4 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceHalf2026,
+                _ => 0m
+            };
         var soliTaxableIncome = Math.Max(0m, taxableIncome - childAllowance);
         var soliAssessmentTax = ApplyTaxClass4Factor(WageTaxForClass2026(soliTaxableIncome, input.TaxClass), input);
         var soliLimit = input.TaxClass == 3 ? 40_700m : 20_350m;
@@ -307,7 +309,7 @@ public static class GermanCompensationCalculator
     private static decimal WageTaxProvisionAllowance2026(decimal annualGross, CompensationProfileInput input)
     {
         var pensionBase = Math.Min(Math.Max(0m, annualGross), PensionUnemploymentContributionCeiling2026);
-        var pension = pensionBase * 0.093m;
+        var pension = input.PensionInsuranceEnabled == false ? 0m : pensionBase * 0.093m;
         var healthCareBase = Math.Min(Math.Max(0m, annualGross), HealthCareContributionCeiling2026);
         // §39b PAP Vorsorgepauschale uses the reduced 7.0% statutory-health employee rate,
         // plus half of the fund-specific additional contribution.
@@ -322,14 +324,14 @@ public static class GermanCompensationCalculator
         var kvPvBase = Math.Min(Math.Max(0m, annualBase), HealthCareContributionCeiling2026);
         var additionalRate = Math.Clamp(input.HealthInsuranceAdditionalRatePercent, 0m, 10m) / 100m;
 
-        var pension = rvAvBase * 0.093m;
-        var unemployment = rvAvBase * 0.013m;
+        var pension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * 0.093m;
+        var unemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * 0.013m;
         var health = kvPvBase * (0.073m + additionalRate / 2m);
         var care = kvPvBase * CareEmployeeRate(input);
 
         var saxony = input.StateCode.Trim().Equals("SN", StringComparison.OrdinalIgnoreCase);
-        var employerPension = rvAvBase * 0.093m;
-        var employerUnemployment = rvAvBase * 0.013m;
+        var employerPension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * 0.093m;
+        var employerUnemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * 0.013m;
         var employerHealth = kvPvBase * (0.073m + additionalRate / 2m);
         var employerCare = kvPvBase * (saxony ? 0.013m : 0.018m);
 
@@ -350,7 +352,8 @@ public static class GermanCompensationCalculator
     {
         var saxony = input.StateCode.Trim().Equals("SN", StringComparison.OrdinalIgnoreCase);
         var rate = saxony ? 0.023m : 0.018m;
-        if (input.ChildrenUnder25 <= 0 && input.ChildlessCareSurcharge)
+        var age = input.Age ?? 23;
+        if (age >= 23 && input.ChildrenUnder25 <= 0 && input.ChildlessCareSurcharge)
             rate += 0.006m;
         else if (input.ChildrenUnder25 > 1)
             rate = Math.Max(0m, rate - 0.0025m * (Math.Min(5, input.ChildrenUnder25) - 1));
@@ -398,6 +401,9 @@ public static class GermanCompensationCalculator
             && !string.Equals(input.GrossInputMode, "annual", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(input.GrossInputMode, "monthly", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("GrossInputMode must be annual or monthly.", nameof(input.GrossInputMode));
+        if (input.AnnualTaxAllowance < 0m) throw new ArgumentOutOfRangeException(nameof(input.AnnualTaxAllowance));
+        if (input.ChildAllowanceUnits is < 0m) throw new ArgumentOutOfRangeException(nameof(input.ChildAllowanceUnits));
+        if (input.Age is < 0 or > 120) throw new ArgumentOutOfRangeException(nameof(input.Age));
         if (input.ChildrenUnder25 < 0) throw new ArgumentOutOfRangeException(nameof(input.ChildrenUnder25));
         if (input.WeeklyHours <= 0m) throw new ArgumentOutOfRangeException(nameof(input.WeeklyHours));
         if (input.CompanyCar is { } car && (car.ListPrice < 0m || car.OneWayCommuteKm < 0m || car.EmployeeContributionMonthly < 0m
