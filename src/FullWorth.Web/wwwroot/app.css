@@ -1242,3 +1242,23 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 }
 .settings-layout-reset{display:grid;gap:2px;text-align:left;justify-items:start;padding:10px 12px}
 .settings-layout-reset small{color:var(--muted);font-weight:400}
+
+/* Coach-integrated finance object controls */
+.tx-select-wrap{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:24px;height:24px;margin-right:4px}
+.tx-select-wrap input{width:16px;height:16px;min-height:0;margin:0;accent-color:currentColor}
+.tx-row.tx-selected{background:var(--surface-2)}
+.tx-coach-selection{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:10px 12px;margin:0 0 var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.tx-coach-selection>div{display:flex;align-items:center;gap:var(--s2)}
+.budget-card-head-actions{display:flex;align-items:center;gap:var(--s2)}
+.budget-coach,.nw-coach,.account-coach-button{min-height:30px;padding:4px 9px;font-size:11px}
+.contract-coach{width:32px;height:32px;flex:0 0 auto}
+.contract-coach svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.fw-dialog-card{transition:transform .16s ease}
+.fw-dialog-card.fw-dialog-swiping{transition:none}
+@media(max-width:767px){
+  .tx-coach-selection{position:sticky;top:0;z-index:8;margin-inline:-4px;border-radius:10px}
+  .tx-coach-selection>div{gap:6px}
+  .tx-coach-selection button{min-height:38px}
+  .tx-select-wrap{width:28px;height:28px;margin-right:2px}
+  .account-coach-button,.nw-coach{min-height:34px}
+}
