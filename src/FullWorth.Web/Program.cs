@@ -446,6 +446,12 @@ static async Task ProxyAsync(HttpContext context, HttpClient client, Uri target,
     context.Response.StatusCode = (int)response.StatusCode;
     if (response.Headers.Location is not null)
         context.Response.Headers["Location"] = response.Headers.Location.ToString();
+    if (response.Headers.ETag is not null)
+        context.Response.Headers.ETag = response.Headers.ETag.ToString();
+    if (response.Headers.CacheControl is not null)
+        context.Response.Headers.CacheControl = response.Headers.CacheControl.ToString();
+    if (response.Content.Headers.LastModified is not null)
+        context.Response.Headers.LastModified = response.Content.Headers.LastModified.Value.ToString("R");
     if (response.Content.Headers.ContentType is not null)
         context.Response.ContentType = response.Content.Headers.ContentType.ToString();
     await response.Content.CopyToAsync(context.Response.Body, ct);
