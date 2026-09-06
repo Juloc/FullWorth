@@ -65,6 +65,75 @@ public sealed class PaperlessReceiptImportIntegrationTests
     }
 
     [Fact]
+    public async Task PaperlessPresetBaselinesNowAndPreviewMarksImportedIds()
+    {
+        var paperless = new PaperlessHttpClientFactory();
+        using var factory = CreateFactory(paperless);
+        using var client = factory.CreateClient();
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        await SeedMemberAsync(factory, userId, spaceId);
+        await ConnectAsync(client, spaceId, userId, "preset-token");
+
+        using (var createPreset = Request(
+                   HttpMethod.Post,
+                   $"/api/purchases/receipt-imports/paperless/presets?fullWorthSpaceId={spaceId:D}",
+                   userId,
+                   JsonContent.Create(new
+                   {
+                       name = "Kassenbons",
+                       query = (string?)null,
+                       editorJson = """{"version":1,"rules":[]}""",
+                       autoImport = true,
+                       analyzeAutomatically = true,
+                       currency = "EUR"
+                   })))
+        using (var response = await client.SendAsync(createPreset))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.True(json.RootElement.GetProperty("autoImport").GetBoolean());
+            Assert.Equal(42, json.RootElement.GetProperty("lastSeenDocumentId").GetInt32());
+        }
+
+        using (var import = PaperlessImportRequest(spaceId, userId))
+        using (var response = await client.SendAsync(import))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using (var preview = Request(
+                   HttpMethod.Post,
+                   $"/api/purchases/receipt-imports/paperless/preview?fullWorthSpaceId={spaceId:D}",
+                   userId,
+                   JsonContent.Create(new { limit = 500 })))
+        using (var response = await client.SendAsync(preview))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var document = Assert.Single(json.RootElement.GetProperty("documents").EnumerateArray());
+            Assert.True(document.GetProperty("imported").GetBoolean());
+        }
+
+        using (var disconnect = Request(
+                   HttpMethod.Delete,
+                   $"/api/purchases/receipt-imports/paperless/connection?fullWorthSpaceId={spaceId:D}",
+                   userId))
+        using (var response = await client.SendAsync(disconnect))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        using (var list = Request(
+                   HttpMethod.Get,
+                   $"/api/purchases/receipt-imports/paperless/presets?fullWorthSpaceId={spaceId:D}",
+                   userId))
+        using (var response = await client.SendAsync(list))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var preset = Assert.Single(json.RootElement.EnumerateArray());
+            Assert.False(preset.GetProperty("autoImport").GetBoolean());
+        }
+    }
+
+    [Fact]
     public async Task FailedPaperlessDownloadCanBeRetriedFromTheOriginalSource()
     {
         var paperless = new PaperlessHttpClientFactory(failDownloads: 1);
