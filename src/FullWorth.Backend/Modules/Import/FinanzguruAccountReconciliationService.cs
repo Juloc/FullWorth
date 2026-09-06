@@ -25,7 +25,8 @@ public sealed record FinanzguruImportAccountLinkView(
     int TransactionCount,
     DateOnly? FirstBookingDate,
     DateOnly? LastBookingDate,
-    Guid? SuggestedTargetAccountId);
+    Guid? SuggestedTargetAccountId,
+    Guid? LinkedTargetAccountId);
 
 public sealed record FinanzguruTargetAccountLinkView(
     Guid Id,
@@ -37,9 +38,20 @@ public sealed record FinanzguruTargetAccountLinkView(
     bool IsActive,
     bool IncludeInNetWorth);
 
+public sealed record FinanzguruAttachedHistoryView(
+    Guid TargetAccountId,
+    string DisplayName,
+    string InstitutionName,
+    string Currency,
+    int TransactionCount,
+    DateOnly? FirstBookingDate,
+    DateOnly? LastBookingDate,
+    bool HasCurrentBalance);
+
 public sealed record FinanzguruLinkOptionsView(
     IReadOnlyList<FinanzguruImportAccountLinkView> ImportAccounts,
-    IReadOnlyList<FinanzguruTargetAccountLinkView> TargetAccounts);
+    IReadOnlyList<FinanzguruTargetAccountLinkView> TargetAccounts,
+    IReadOnlyList<FinanzguruAttachedHistoryView> AttachedHistory);
 
 /// <summary>
 /// Reattaches historical Finanzguru imports to a real bank account once that account is connected.
@@ -77,13 +89,20 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             .ThenBy(account => account.DisplayName)
             .ToListAsync(ct);
 
+        var targetIds = targets.Select(account => account.Id).ToArray();
+        var targetBalanceIds = (await db.BalanceSnapshots.AsNoTracking()
+                .Where(balance => targetIds.Contains(balance.AccountId))
+                .Select(balance => balance.AccountId)
+                .Distinct()
+                .ToListAsync(ct))
+            .ToHashSet();
         var targetViews = targets.Select(account => new FinanzguruTargetAccountLinkView(
             account.Id,
             account.DisplayName,
             account.InstitutionName,
             account.Currency,
             account.IbanLast4,
-            db.BalanceSnapshots.AsNoTracking().Any(balance => balance.AccountId == account.Id),
+            targetBalanceIds.Contains(account.Id),
             account.IsActive,
             account.IncludeInNetWorth)).ToArray();
 
@@ -97,13 +116,15 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             var knownDates = dates.Where(date => date.HasValue).Select(date => date!.Value).ToArray();
             if (dates.Count == 0) continue;
 
-            var suggested = targets
+            var matchingTargets = targets
                 .Where(target =>
                     string.Equals(target.Currency, account.Currency, StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(account.IbanLast4) &&
                     string.Equals(target.IbanLast4, account.IbanLast4, StringComparison.OrdinalIgnoreCase))
-                .Select(target => (Guid?)target.Id)
-                .SingleOrDefault();
+                .Select(target => target.Id)
+                .ToList();
+            var suggested = account.ImportLinkedAccountId
+                ?? (matchingTargets.Count == 1 ? matchingTargets[0] : (Guid?)null);
 
             importViews.Add(new FinanzguruImportAccountLinkView(
                 account.Id,
@@ -113,10 +134,43 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
                 dates.Count,
                 knownDates.Length == 0 ? null : knownDates.Min(),
                 knownDates.Length == 0 ? null : knownDates.Max(),
-                suggested));
+                suggested,
+                account.ImportLinkedAccountId));
         }
 
-        return new FinanzguruLinkOptionsView(importViews, targetViews);
+        var pendingDirectRows = await db.Transactions.AsNoTracking()
+            .Where(transaction =>
+                targetIds.Contains(transaction.AccountId) &&
+                transaction.ExternalKey.StartsWith("finanzguru:") &&
+                !transaction.UseForBalanceHistory)
+            .Select(transaction => new
+            {
+                transaction.AccountId,
+                Date = transaction.BookingDate ?? transaction.ValueDate
+            })
+            .ToListAsync(ct);
+        var targetsById = targets.ToDictionary(account => account.Id);
+        var attached = pendingDirectRows
+            .GroupBy(row => row.AccountId)
+            .Select(group =>
+            {
+                var account = targetsById[group.Key];
+                var dates = group.Where(row => row.Date.HasValue).Select(row => row.Date!.Value).ToArray();
+                return new FinanzguruAttachedHistoryView(
+                    account.Id,
+                    account.DisplayName,
+                    account.InstitutionName,
+                    account.Currency,
+                    group.Count(),
+                    dates.Length == 0 ? null : dates.Min(),
+                    dates.Length == 0 ? null : dates.Max(),
+                    targetBalanceIds.Contains(account.Id));
+            })
+            .OrderBy(item => item.InstitutionName)
+            .ThenBy(item => item.DisplayName)
+            .ToArray();
+
+        return new FinanzguruLinkOptionsView(importViews, targetViews, attached);
     }
 
     public async Task<FinanzguruReconciliationResult> ReconcileAsync(
@@ -166,12 +220,18 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
                 .ToHashSet();
             if (importedOwners.Count == 0) continue;
 
-            var matches = liveAccounts.Where(live =>
-                    string.Equals(live.IbanLast4, importedAccount.IbanLast4, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(live.Currency, importedAccount.Currency, StringComparison.OrdinalIgnoreCase)
-                    && liveOwners.TryGetValue(live.Id, out var owners)
-                    && owners.Overlaps(importedOwners))
-                .ToList();
+            var matches = importedAccount.ImportLinkedAccountId is { } linkedId
+                ? liveAccounts.Where(live =>
+                        live.Id == linkedId &&
+                        liveOwners.TryGetValue(live.Id, out var owners) &&
+                        owners.Overlaps(importedOwners))
+                    .ToList()
+                : liveAccounts.Where(live =>
+                        string.Equals(live.IbanLast4, importedAccount.IbanLast4, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(live.Currency, importedAccount.Currency, StringComparison.OrdinalIgnoreCase)
+                        && liveOwners.TryGetValue(live.Id, out var owners)
+                        && owners.Overlaps(importedOwners))
+                    .ToList();
             if (matches.Count != 1) continue;
 
             var result = await ReconcileAccountAsync(importedAccount, matches[0], trustMovedHistory: false, ct);
@@ -215,30 +275,8 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         if (!string.Equals(importedAccount.Currency, targetAccount.Currency, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Import and target account must use the same currency.");
 
-        var hasCurrentBalance = await db.BalanceSnapshots.AsNoTracking()
-            .AnyAsync(balance => balance.AccountId == targetAccount.Id, ct);
-        if (!hasCurrentBalance && !currentBalance.HasValue)
-            throw new ArgumentException("The target account has no balance. Enter the current balance to anchor the imported history.");
-
-        if (currentBalance.HasValue)
-        {
-            if (Math.Abs(currentBalance.Value) >= 1_000_000_000_000m)
-                throw new ArgumentException("Current balance must be less than 1,000,000,000,000.");
-            var currency = NormalizeCurrency(currentBalanceCurrency ?? targetAccount.Currency);
-            if (!string.Equals(currency, targetAccount.Currency, StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("Current balance currency must match the target account currency.");
-
-            var now = DateTimeOffset.UtcNow;
-            db.BalanceSnapshots.Add(new BalanceSnapshot
-            {
-                AccountId = targetAccount.Id,
-                Amount = currentBalance.Value,
-                Currency = currency,
-                BalanceType = "manualCurrent",
-                ReferenceDate = DateOnly.FromDateTime(now.UtcDateTime),
-                CapturedAt = now
-            });
-        }
+        var balanceAdded = await EnsureCurrentBalanceAsync(
+            targetAccount, currentBalance, currentBalanceCurrency, ct);
 
         var result = await ReconcileAccountAsync(importedAccount, targetAccount, trustMovedHistory: true, ct);
 
@@ -257,6 +295,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
 
         importedAccount.IsActive = false;
         importedAccount.IncludeInNetWorth = false;
+        importedAccount.ImportLinkedAccountId = targetAccount.Id;
         importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
         targetAccount.IncludeInNetWorth = true;
         targetAccount.UpdatedAt = DateTimeOffset.UtcNow;
@@ -270,7 +309,83 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             result.Moved,
             result.Merged,
             importedRowsOnTarget.Count,
-            currentBalance.HasValue);
+            balanceAdded);
+    }
+
+    public async Task<FinanzguruExplicitLinkResult?> ConfirmAttachedHistoryAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid targetAccountId,
+        decimal? currentBalance,
+        string? currentBalanceCurrency,
+        CancellationToken ct)
+    {
+        var targetAccount = await db.Accounts
+            .Where(account =>
+                account.Id == targetAccountId &&
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.Provider != ImportProvider &&
+                account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
+            .SingleOrDefaultAsync(ct);
+        if (targetAccount is null) return null;
+
+        var balanceAdded = await EnsureCurrentBalanceAsync(targetAccount, currentBalance, currentBalanceCurrency, ct);
+        var rows = await db.Transactions
+            .Where(transaction =>
+                transaction.AccountId == targetAccount.Id &&
+                transaction.ExternalKey.StartsWith("finanzguru:") &&
+                !transaction.UseForBalanceHistory)
+            .ToListAsync(ct);
+        foreach (var row in rows)
+        {
+            row.UseForBalanceHistory = true;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        targetAccount.IncludeInNetWorth = true;
+        targetAccount.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Record(fullWorthSpaceId, userId, "finanzguru.history.confirmed", "FinanceAccount", targetAccount.Id);
+        await db.SaveChangesAsync(ct);
+
+        return new FinanzguruExplicitLinkResult(
+            Guid.Empty,
+            targetAccount.Id,
+            0,
+            0,
+            rows.Count,
+            balanceAdded);
+    }
+
+    private async Task<bool> EnsureCurrentBalanceAsync(
+        FinanceAccount targetAccount,
+        decimal? currentBalance,
+        string? currentBalanceCurrency,
+        CancellationToken ct)
+    {
+        var hasCurrentBalance = await db.BalanceSnapshots.AsNoTracking()
+            .AnyAsync(balance => balance.AccountId == targetAccount.Id, ct);
+        if (!hasCurrentBalance && !currentBalance.HasValue)
+            throw new ArgumentException("The target account has no balance. Enter the current balance to anchor the imported history.");
+
+        if (!currentBalance.HasValue) return false;
+        if (Math.Abs(currentBalance.Value) >= 1_000_000_000_000m)
+            throw new ArgumentException("Current balance must be less than 1,000,000,000,000.");
+
+        var currency = NormalizeCurrency(currentBalanceCurrency ?? targetAccount.Currency);
+        if (!string.Equals(currency, targetAccount.Currency, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Current balance currency must match the target account currency.");
+
+        var now = DateTimeOffset.UtcNow;
+        db.BalanceSnapshots.Add(new BalanceSnapshot
+        {
+            AccountId = targetAccount.Id,
+            Amount = currentBalance.Value,
+            Currency = currency,
+            BalanceType = "manualCurrent",
+            ReferenceDate = DateOnly.FromDateTime(now.UtcDateTime),
+            CapturedAt = now
+        });
+        return true;
     }
 
     private async Task<(int Moved, int Merged)> ReconcileAccountAsync(
