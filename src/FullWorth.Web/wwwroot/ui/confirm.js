@@ -1,30 +1,57 @@
 import { ButtonRole, buttonClass } from './buttons.js';
-// Themed confirmation dialog (§26/§30) replacing native window.confirm(), which renders as an
-// unstyled browser prompt and cannot be skinned for the app's light/dark theme. Destructive actions
-// render the confirm button as plain red text with no border/fill (Design System §06 "zerstörend:
-// nur als Text, nie als Fläche" — never a filled surface, not even an outline).
+import { createDialog } from './dialog.js';
 
-export function confirmDialog(ctx, message, opts = {}) {
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[char]));
+}
+
+export function confirmMessage({
+  message,
+  title = 'Confirm',
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false,
+  create = html => createDialog(html)
+} = {}) {
   return new Promise(resolve => {
-    const title = opts.title || ctx.get('common.confirmTitle');
-    const confirmLabel = opts.confirmLabel || ctx.get('common.confirm');
-    const cancelLabel = opts.cancelLabel || ctx.get('common.cancel');
-    const dlg = ctx.dialog(`<div class="dialog-card confirm-dialog">
-      <h2>${ctx.esc(title)}</h2>
-      <p class="row-sub">${ctx.esc(message)}</p>
-      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(cancelLabel)}</button><button type="button" class="${buttonClass(opts.destructive ? ButtonRole.Danger : ButtonRole.Primary)}" data-confirm>${ctx.esc(confirmLabel)}</button></div>
+    const dlg = create(`<div class="dialog-card confirm-dialog">
+      <h2>${escapeHtml(title)}</h2>
+      <p class="row-sub">${escapeHtml(message)}</p>
+      <div class="dialog-actions">
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${escapeHtml(cancelLabel)}</button>
+        <button type="button" class="${buttonClass(destructive ? ButtonRole.Danger : ButtonRole.Primary)}" data-confirm>${escapeHtml(confirmLabel)}</button>
+      </div>
     </div>`);
+
     let settled = false;
     const finish = value => {
       if (settled) return;
       settled = true;
       resolve(value);
-      dlg.close();
+      if (dlg.open) dlg.close();
     };
+
     dlg.querySelector('[data-cancel]').addEventListener('click', () => finish(false));
     dlg.querySelector('[data-confirm]').addEventListener('click', () => finish(true));
-    // Dismissing via Esc (the native <dialog> cancel event) resolves to false, not a silent no-op.
     dlg.addEventListener('close', () => finish(false));
     dlg.showModal();
+  });
+}
+
+// App-context adapter used by normal feature modules.
+export function confirmDialog(ctx, message, opts = {}) {
+  return confirmMessage({
+    message,
+    title: opts.title || ctx.get('common.confirmTitle'),
+    confirmLabel: opts.confirmLabel || ctx.get('common.confirm'),
+    cancelLabel: opts.cancelLabel || ctx.get('common.cancel'),
+    destructive: opts.destructive === true,
+    create: html => ctx.dialog(html)
   });
 }
