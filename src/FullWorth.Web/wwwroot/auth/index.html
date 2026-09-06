@@ -70,6 +70,27 @@
         </section>
 
 
+        <section data-auth-view="two-factor" hidden>
+          <div class="auth-heading">
+            <h1 data-auth-page-title data-i18n="auth.pages.two-factor.title"></h1>
+            <p data-i18n="auth.pages.two-factor.subtitle"></p>
+          </div>
+
+          <form id="two-factor-form" class="auth-form" method="post" action="/auth/login" novalidate>
+            <label for="two-factor-code">
+              <span data-i18n="auth.twoFactorCode"></span>
+              <input id="two-factor-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+            </label>
+            <div id="two-factor-error" class="auth-message auth-message-error" role="alert" hidden data-i18n="auth.invalidTwoFactor"></div>
+            <button class="auth-primary" type="submit" data-i18n="auth.continue" data-loading-i18n="auth.signingIn"></button>
+          </form>
+
+          <div class="auth-links">
+            <a href="/auth/login" data-i18n="auth.backToSignIn"></a>
+            <a href="/auth/recovery-code" data-i18n="auth.useRecoveryCode"></a>
+          </div>
+        </section>
+
         <section data-auth-view="register" hidden>
           <div class="auth-heading">
             <h1 data-auth-page-title data-i18n="auth.pages.register.title"></h1>
