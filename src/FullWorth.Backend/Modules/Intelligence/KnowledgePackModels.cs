@@ -76,6 +76,41 @@ public sealed record KnowledgePackBrandAliasPayload(
     string BrandKey,
     string? Country);
 
+public sealed record KnowledgePackContractProviderPayload(
+    string ProviderKey,
+    string CanonicalName,
+    string? Domain,
+    string? ProviderCategory,
+    string? Country,
+    string? BrandKey,
+    int Version);
+
+public sealed record KnowledgePackContractSignaturePayload(
+    string ProviderKey,
+    string MerchantFingerprint,
+    string? ExpectedRecurrence,
+    decimal Confidence);
+
+public sealed record KnowledgePackProductPayload(
+    string ProductKey,
+    string CanonicalName,
+    string? BrandKey,
+    string? CategoryKey,
+    string? PackageQuantity,
+    string? PackageUnit,
+    string? Country,
+    int Version);
+
+public sealed record KnowledgePackProductGtinPayload(
+    string ProductKey,
+    string Gtin);
+
+public sealed record KnowledgePackProductAliasPayload(
+    string ProductKey,
+    string AliasKey,
+    string? MerchantContext,
+    decimal Confidence);
+
 public sealed record KnowledgePackPayload(
     string PackId,
     string Version,
@@ -92,7 +127,12 @@ public sealed record KnowledgePackPayload(
     IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProviderOntologyRedirects = null,
     IReadOnlyList<KnowledgePackOntologyEntityPayload>? ProductOntologyEntities = null,
     IReadOnlyList<KnowledgePackOntologyAliasPayload>? ProductOntologyAliases = null,
-    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProductOntologyRedirects = null);
+    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? ProductOntologyRedirects = null,
+    IReadOnlyList<KnowledgePackContractProviderPayload>? ContractProviders = null,
+    IReadOnlyList<KnowledgePackContractSignaturePayload>? ContractSignatures = null,
+    IReadOnlyList<KnowledgePackProductPayload>? Products = null,
+    IReadOnlyList<KnowledgePackProductGtinPayload>? ProductGtins = null,
+    IReadOnlyList<KnowledgePackProductAliasPayload>? ProductAliases = null);
 
 public sealed class KnowledgePackInstallation
 {
@@ -140,6 +180,56 @@ public sealed class OfficialMerchantMapping
     public string? LogoKey { get; set; }
 }
 
+
+public sealed class OfficialContractProvider
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProviderKey { get; set; } = string.Empty;
+    public string CanonicalName { get; set; } = string.Empty;
+    public string? Domain { get; set; }
+    public string? ProviderCategory { get; set; }
+    public string Country { get; set; } = "GLOBAL";
+    public string? BrandKey { get; set; }
+    public int Version { get; set; }
+}
+
+public sealed class OfficialContractSignature
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProviderKey { get; set; } = string.Empty;
+    public string MerchantFingerprint { get; set; } = string.Empty;
+    public string? ExpectedRecurrence { get; set; }
+    public decimal Confidence { get; set; }
+}
+
+public sealed class OfficialProductIdentity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProductKey { get; set; } = string.Empty;
+    public string CanonicalName { get; set; } = string.Empty;
+    public string? BrandKey { get; set; }
+    public string? CategoryKey { get; set; }
+    public string? PackageQuantity { get; set; }
+    public string? PackageUnit { get; set; }
+    public string Country { get; set; } = "GLOBAL";
+    public int Version { get; set; }
+}
+
+public sealed class OfficialProductGtin
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProductKey { get; set; } = string.Empty;
+    public string Gtin { get; set; } = string.Empty;
+}
+
+public sealed class OfficialProductAlias
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProductKey { get; set; } = string.Empty;
+    public string AliasKey { get; set; } = string.Empty;
+    public string MerchantContext { get; set; } = "GLOBAL";
+    public decimal Confidence { get; set; }
+}
 
 public sealed class OfficialBrandAsset
 {
@@ -298,6 +388,57 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.Confidence).HasPrecision(6, 5);
             entity.Property(x => x.Domain).HasMaxLength(255);
             entity.Property(x => x.LogoKey).HasMaxLength(180);
+        });
+
+        modelBuilder.Entity<OfficialContractProvider>(entity =>
+        {
+            entity.HasIndex(x => x.ProviderKey).IsUnique();
+            entity.Property(x => x.ProviderKey).HasMaxLength(180);
+            entity.Property(x => x.CanonicalName).HasMaxLength(240);
+            entity.Property(x => x.Domain).HasMaxLength(255);
+            entity.Property(x => x.ProviderCategory).HasMaxLength(40);
+            entity.Property(x => x.Country).HasMaxLength(8);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+        });
+
+        modelBuilder.Entity<OfficialContractSignature>(entity =>
+        {
+            entity.HasIndex(x => x.MerchantFingerprint).IsUnique();
+            entity.HasIndex(x => x.ProviderKey);
+            entity.Property(x => x.ProviderKey).HasMaxLength(180);
+            entity.Property(x => x.MerchantFingerprint).HasMaxLength(240);
+            entity.Property(x => x.ExpectedRecurrence).HasMaxLength(40);
+            entity.Property(x => x.Confidence).HasPrecision(6, 5);
+        });
+
+        modelBuilder.Entity<OfficialProductIdentity>(entity =>
+        {
+            entity.HasIndex(x => x.ProductKey).IsUnique();
+            entity.Property(x => x.ProductKey).HasMaxLength(200);
+            entity.Property(x => x.CanonicalName).HasMaxLength(240);
+            entity.Property(x => x.BrandKey).HasMaxLength(120);
+            entity.Property(x => x.CategoryKey).HasMaxLength(180);
+            entity.Property(x => x.PackageQuantity).HasMaxLength(40);
+            entity.Property(x => x.PackageUnit).HasMaxLength(40);
+            entity.Property(x => x.Country).HasMaxLength(8);
+        });
+
+        modelBuilder.Entity<OfficialProductGtin>(entity =>
+        {
+            entity.HasIndex(x => x.Gtin).IsUnique();
+            entity.HasIndex(x => x.ProductKey);
+            entity.Property(x => x.ProductKey).HasMaxLength(200);
+            entity.Property(x => x.Gtin).HasMaxLength(14);
+        });
+
+        modelBuilder.Entity<OfficialProductAlias>(entity =>
+        {
+            entity.HasIndex(x => new { x.AliasKey, x.MerchantContext }).IsUnique();
+            entity.HasIndex(x => x.ProductKey);
+            entity.Property(x => x.ProductKey).HasMaxLength(200);
+            entity.Property(x => x.AliasKey).HasMaxLength(300);
+            entity.Property(x => x.MerchantContext).HasMaxLength(120);
+            entity.Property(x => x.Confidence).HasPrecision(6, 5);
         });
 
         modelBuilder.Entity<OfficialBrandAsset>(entity =>
