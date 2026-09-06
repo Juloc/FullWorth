@@ -1,5 +1,7 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Budgets.CarryOver;
+using FullWorth.Backend.Modules.Budgets.Cycles;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +18,13 @@ public sealed record UpcomingContractItem(
     Guid? CategoryId,
     string? CategoryIconKey);
 public sealed record DashboardResult(string Currency, decimal Accounts, decimal Assets, decimal Liabilities, decimal NetWorth, decimal Income, decimal Expenses, bool Incomplete, List<UpcomingContractItem> Upcoming);
-public sealed record BudgetStatusItem(Guid Id, string Name, Guid? CategoryId, string Period, DateOnly PeriodStart, DateOnly PeriodEnd, decimal Amount, decimal Spent, decimal Remaining, decimal Percent);
+public sealed record BudgetStatusItem(Guid Id, string Name, Guid? CategoryId, string Period, DateOnly PeriodStart, DateOnly PeriodEnd, decimal Amount, decimal Spent, decimal Remaining, decimal Percent)
+{
+    public decimal BaseAmount { get; init; }
+    public decimal CarryIn { get; init; }
+    public bool CarryOver { get; init; }
+    public bool CarryOverOverspend { get; init; }
+}
 public sealed record ForecastPoint(DateOnly Date, decimal EstimatedNetWorth, decimal AverageHistoricalNet, decimal RecurringMonthly);
 public sealed record ExpenseAllocation(Guid TransactionId, Guid? CategoryId, decimal Amount, bool FromPurchaseItem);
 // Guided chart builder (§15.2). A bounded measure×dimension query over the same FX-aware aggregation.
@@ -313,55 +321,123 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var reference = year == today.Year && month == today.Month ? today : new DateOnly(year, month, 1);
-
-        // Resolve each budget's current window once, then prepare one FX snapshot spanning all of them.
-        // Budgets are filtered to the base `currency`, but a budget's SPEND may include foreign
-        // transactions — those are converted INTO the budget currency at each transaction's value date.
-        var windowByBudget = new Dictionary<Guid, (DateOnly Start, DateOnly End)>();
-        foreach (var budget in budgets)
-        {
-            var cycle = Budgets.Cycles.BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
-            var period = Budgets.Cycles.BudgetCycleCalculator.CurrentPeriod(cycle, reference);
-            windowByBudget[budget.Id] = (period.Start, period.End);
-        }
         var items = new List<BudgetStatusItem>();
         var incomplete = false;
-        // Budgets sharing a window (e.g. several monthly budgets) share one transaction scan. Spend in a
-        // foreign currency is converted INTO the budget currency at each transaction's value-date rate.
+
         var allocationsByWindow = new Dictionary<(DateOnly Start, DateOnly End), List<ExpenseAllocation>>();
+
+        async Task<List<ExpenseAllocation>> AllocationsForAsync(DateOnly start, DateOnly end)
+        {
+            var key = (start, end);
+            if (allocationsByWindow.TryGetValue(key, out var cached))
+                return cached;
+
+            var rows = await AccessibleTransactions(userId, fullWorthSpaceId)
+                .Where(transaction =>
+                    !transaction.IsIgnored &&
+                    !transaction.IsTransfer &&
+                    transaction.Amount < 0 &&
+                    transaction.BookingDate >= start &&
+                    transaction.BookingDate <= end)
+                .Select(transaction => new
+                {
+                    transaction.Id,
+                    transaction.BookingDate,
+                    transaction.ValueDate,
+                    transaction.Amount,
+                    transaction.Currency,
+                    transaction.CategoryId
+                })
+                .ToListAsync(ct);
+
+            var (built, windowIncomplete) = await BuildExpenseAllocationsAsync(
+                fullWorthSpaceId,
+                rows.Select(transaction => new ExpenseTx(
+                    transaction.Id,
+                    transaction.Amount,
+                    transaction.CategoryId,
+                    transaction.Currency,
+                    transaction.BookingDate ?? transaction.ValueDate ?? reference)).ToList(),
+                currency,
+                ct);
+            if (windowIncomplete) incomplete = true;
+            allocationsByWindow[key] = built;
+            return built;
+        }
+
         foreach (var budget in budgets)
         {
-            var window = windowByBudget[budget.Id];
-            var key = (window.Start, window.End);
-            if (!allocationsByWindow.TryGetValue(key, out var allocations))
+            var cycle = BudgetCycleResolver.Resolve(budget.Period, budget.StartDate, budget.EndDate);
+            var period = BudgetCycleCalculator.CurrentPeriod(cycle, reference);
+            var currentAllocations = await AllocationsForAsync(period.Start, period.End);
+            var spent = currentAllocations
+                .Where(allocation => !budget.CategoryId.HasValue || allocation.CategoryId == budget.CategoryId)
+                .Sum(allocation => allocation.Amount);
+
+            var carryIn = 0m;
+            var carryMode = !budget.CarryOver
+                ? CarryOverMode.Disabled
+                : budget.CarryOverOverspend ? CarryOverMode.Enabled : CarryOverMode.PositiveOnly;
+
+            if (carryMode != CarryOverMode.Disabled)
             {
-                var rows = await AccessibleTransactions(userId, fullWorthSpaceId)
-                    .Where(transaction => !transaction.IsIgnored && !transaction.IsTransfer && transaction.Amount < 0 && transaction.BookingDate >= key.Start && transaction.BookingDate <= key.End)
-                    .Select(transaction => new { transaction.Id, transaction.BookingDate, transaction.ValueDate, transaction.Amount, transaction.Currency, transaction.CategoryId })
-                    .ToListAsync(ct);
-                var (built, windowIncomplete) = await BuildExpenseAllocationsAsync(
-                    fullWorthSpaceId,
-                    rows.Select(t => new ExpenseTx(t.Id, t.Amount, t.CategoryId, t.Currency, t.BookingDate ?? t.ValueDate ?? reference)).ToList(),
-                    currency, ct);
-                if (windowIncomplete) incomplete = true;
-                allocations = built;
-                allocationsByWindow[key] = allocations;
+                var activeFrom = budget.StartDate ?? DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+                var priorPeriods = PriorBudgetPeriods(cycle, activeFrom, period);
+                var priorSpends = new List<decimal>(priorPeriods.Count);
+                foreach (var previous in priorPeriods)
+                {
+                    var from = activeFrom > previous.Start ? activeFrom : previous.Start;
+                    var allocations = await AllocationsForAsync(from, previous.End);
+                    priorSpends.Add(allocations
+                        .Where(allocation => !budget.CategoryId.HasValue || allocation.CategoryId == budget.CategoryId)
+                        .Sum(allocation => allocation.Amount));
+                }
+                carryIn = BudgetCarryOverCalculator.CarriedIn(carryMode, budget.Amount, priorSpends);
             }
 
-            var spent = allocations.Where(allocation => !budget.CategoryId.HasValue || allocation.CategoryId == budget.CategoryId).Sum(allocation => allocation.Amount);
+            var effectiveAmount = budget.Amount + carryIn;
+            var percent = effectiveAmount > 0m
+                ? spent / effectiveAmount * 100m
+                : spent > 0m || effectiveAmount < 0m ? 101m : 0m;
+
             items.Add(new BudgetStatusItem(
                 budget.Id,
                 budget.Name,
                 budget.CategoryId,
                 budget.Period,
-                window.Start,
-                window.End,
-                budget.Amount,
+                period.Start,
+                period.End,
+                effectiveAmount,
                 spent,
-                budget.Amount - spent,
-                budget.Amount == 0 ? 0 : spent / budget.Amount * 100m));
+                effectiveAmount - spent,
+                percent)
+            {
+                BaseAmount = budget.Amount,
+                CarryIn = carryIn,
+                CarryOver = budget.CarryOver,
+                CarryOverOverspend = budget.CarryOverOverspend
+            });
         }
+
         return new { year, month, currency, items, incomplete };
+    }
+
+    private static List<BudgetCyclePeriod> PriorBudgetPeriods(
+        BudgetCycleDefinition cycle,
+        DateOnly activeFrom,
+        BudgetCyclePeriod current)
+    {
+        if (activeFrom >= current.Start) return [];
+
+        var periods = new List<BudgetCyclePeriod>();
+        var cursor = BudgetCycleCalculator.CurrentPeriod(cycle, activeFrom);
+        var guard = 0;
+        while (cursor.Start < current.Start && guard++ < 20000)
+        {
+            periods.Add(cursor);
+            cursor = BudgetCycleCalculator.CurrentPeriod(cycle, cursor.EndExclusive);
+        }
+        return periods;
     }
 
     public async Task<object?> ForecastForUserAsync(Guid userId, Guid fullWorthSpaceId, int months, string currency, CancellationToken ct)
