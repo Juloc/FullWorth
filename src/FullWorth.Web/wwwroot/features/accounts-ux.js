@@ -27,7 +27,7 @@ async function bundle(force=false){reset();if(!S.space)return{accounts:[],connec
   catch(e){console.error(e);S.bundleAt=Date.now();return S.bundle=(S.bundle||{accounts:[],connections:[],groups:[]})}}
 function bankKey(v){return(v||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/\b(ag|se|gmbh|bank|deutschland|germany)\b/g,'').replace(/[^a-z0-9]/g,'')}
 async function banks(){if(S.banks)return S.banks;try{S.banks=arr(await req('api/banking/institutions?country=DE',{},'banking'),'aspsps')}catch{S.banks=[]}return S.banks}
-function matchBank(name,bs){const k=bankKey(name);return bs.find(x=>bankKey(x.name)===k)||bs.find(x=>{const y=bankKey(x.name);return y.length>2&&(y.includes(k)||k.includes(y))})||null}
+function matchBank(name,bs){const k=bankKey(name);if(!k)return null;return bs.find(x=>bankKey(x.name)===k)||bs.find(x=>{const y=bankKey(x.name);return y.length>2&&(y.includes(k)||k.includes(y))})||null}
 function logo(b){const raw=b?.logo||b?.logoUrl||b?.logo_url||'';try{const u=new URL(raw,location.origin);return u.origin===location.origin||(u.protocol==='https:'&&(u.hostname==='enablebanking.com'||u.hostname.endsWith('.enablebanking.com')))?u.href:''}catch{return''}}
 function hasVisualOverride(kind,id){return!!S.prefs?.[kind]&&Object.prototype.hasOwnProperty.call(S.prefs[kind],id)}
 function vis(kind,id,fallback){const v=S.prefs?.[kind]?.[id]||{};return{icon:v.icon||fallback,color:v.color||'#334155',background:v.background||'#eef2f7'}}
