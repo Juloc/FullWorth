@@ -129,7 +129,7 @@ async function openDeleteAccountDialog(){
 }
 
 async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
-function renderTranslations(){$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
+function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
@@ -340,7 +340,7 @@ async function showView(view,opts={}){
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
   $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
-  $('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  $$('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
   $('#bottom-more').classList.toggle('active',MORE_VIEWS.includes(view));
   renderPageHeader();
   window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
