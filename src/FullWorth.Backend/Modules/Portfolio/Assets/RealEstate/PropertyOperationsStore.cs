@@ -129,7 +129,12 @@ ON CONFLICT ("AssetId","RecurringContractId") DO UPDATE SET "Role"=EXCLUDED."Rol
         var access = await WriteAccessAsync(userId, fullWorthSpaceId, assetId, ct);
         if (access != RealEstateMutationResult.Success) return access;
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
-DELETE FROM "AssetRecurringContractLinks" WHERE "FullWorthSpaceId"={fullWorthSpaceId} AND "AssetId"={assetId} AND "RecurringContractId"={contractId};
+DELETE FROM "AssetRecurringContractLinks" l
+USING "Contracts" source_contract
+WHERE l."RecurringContractId"=source_contract."Id"
+  AND l."FullWorthSpaceId"={fullWorthSpaceId}
+  AND l."AssetId"={assetId}
+  AND (l."RecurringContractId"={contractId} OR source_contract."MergedIntoContractId"={contractId});
 """, ct);
         if (affected == 0) return RealEstateMutationResult.NotFound;
         audit.Record(fullWorthSpaceId, userId, "property.contract_link.deleted", "RecurringContract", contractId);
@@ -175,11 +180,24 @@ FROM "PropertyImprovements" i WHERE i."AssetId"=@asset ORDER BY COALESCE(i."Comp
         {
             await using var command = connection.CreateCommand();
             command.CommandText = """
-SELECT l."AssetId",l."RecurringContractId",l."Role",c."Name",c."Amount",c."Currency",c."BillingCycle",c."IsActive",c."NextDueDate",l."CreatedAt"
-FROM "AssetRecurringContractLinks" l JOIN "Contracts" c ON c."Id"=l."RecurringContractId"
+SELECT l."AssetId",
+       COALESCE(c."MergedIntoContractId",l."RecurringContractId") AS "RecurringContractId",
+       l."Role",
+       COALESCE(target."Name",c."Name") AS "Name",
+       COALESCE(target."Amount",c."Amount") AS "Amount",
+       COALESCE(target."Currency",c."Currency") AS "Currency",
+       COALESCE(target."BillingCycle",c."BillingCycle") AS "BillingCycle",
+       COALESCE(target."IsActive",c."IsActive") AS "IsActive",
+       COALESCE(target."NextDueDate",c."NextDueDate") AS "NextDueDate",
+       l."CreatedAt"
+FROM "AssetRecurringContractLinks" l
+JOIN "Contracts" c ON c."Id"=l."RecurringContractId"
+LEFT JOIN "Contracts" target ON target."Id"=c."MergedIntoContractId"
 WHERE l."FullWorthSpaceId"=@space AND l."AssetId"=@asset
-  AND (c."AccountId" IS NULL OR EXISTS (SELECT 1 FROM "AccountOwners" o WHERE o."AccountId"=c."AccountId" AND o."UserId"=@user))
-ORDER BY l."Role",c."Name";
+  AND (COALESCE(target."AccountId",c."AccountId") IS NULL OR EXISTS (
+      SELECT 1 FROM "AccountOwners" o
+      WHERE o."AccountId"=COALESCE(target."AccountId",c."AccountId") AND o."UserId"=@user))
+ORDER BY l."Role",COALESCE(target."Name",c."Name");
 """;
             AddParameter(command,"@space",fullWorthSpaceId); AddParameter(command,"@asset",assetId); AddParameter(command,"@user",userId);
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -203,7 +221,7 @@ ORDER BY l."Role",c."Name";
     private Task<bool> CashflowCanLinkAsync(Guid fullWorthSpaceId, Guid assetId, Guid cashflowId, CancellationToken ct) => ScalarExistsAsync("SELECT 1 FROM \"AssetCashflowEntries\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"AssetId\"=@asset AND \"IsPlanned\"=false AND \"Direction\"='expense';",ct,("@id",cashflowId),("@space",fullWorthSpaceId),("@asset",assetId));
 
     private async Task<bool> AccessibleContractExistsAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
-        await db.Contracts.AsNoTracking().AnyAsync(contract=>contract.Id==contractId&&contract.FullWorthSpaceId==fullWorthSpaceId&&db.FullWorthSpaceMembers.Any(member=>member.FullWorthSpaceId==fullWorthSpaceId&&member.UserId==userId)&&(!contract.AccountId.HasValue||db.AccountOwners.Any(owner=>owner.AccountId==contract.AccountId.Value&&owner.UserId==userId)),ct);
+        await db.Contracts.AsNoTracking().AnyAsync(contract=>contract.Id==contractId&&contract.FullWorthSpaceId==fullWorthSpaceId&&contract.MergedIntoContractId==null&&db.FullWorthSpaceMembers.Any(member=>member.FullWorthSpaceId==fullWorthSpaceId&&member.UserId==userId)&&(!contract.AccountId.HasValue||db.AccountOwners.Any(owner=>owner.AccountId==contract.AccountId.Value&&owner.UserId==userId)),ct);
 
     private static string? ValidateImprovement(PropertyImprovementWrite request)
     {
