@@ -89,6 +89,7 @@ public sealed class FinanzguruReconciliationTests
                     AccountId = importAccountId,
                     CategoryId = categoryId,
                     ExternalKey = "finanzguru:duplicate",
+                    UseForBalanceHistory = false,
                     ProviderTransactionId = "duplicate",
                     BookingDate = new DateOnly(2026, 8, 20),
                     ValueDate = new DateOnly(2026, 8, 20),
@@ -106,6 +107,7 @@ public sealed class FinanzguruReconciliationTests
                     Id = importedHistoricalId,
                     AccountId = importAccountId,
                     ExternalKey = "finanzguru:old-only",
+                    UseForBalanceHistory = false,
                     ProviderTransactionId = "old-only",
                     BookingDate = new DateOnly(2024, 1, 5),
                     ValueDate = new DateOnly(2024, 1, 5),
@@ -162,7 +164,8 @@ public sealed class FinanzguruReconciliationTests
                 .OrderBy(transaction => transaction.BookingDate)
                 .ToListAsync();
             Assert.Equal(2, liveTransactions.Count);
-            Assert.Contains(liveTransactions, transaction => transaction.ExternalKey == "finanzguru:old-only");
+            var movedHistory = Assert.Single(liveTransactions, transaction => transaction.ExternalKey == "finanzguru:old-only");
+            Assert.False(movedHistory.UseForBalanceHistory);
 
             var providerDuplicate = liveTransactions.Single(transaction => transaction.Id == liveDuplicateId);
             Assert.Equal(categoryId, providerDuplicate.CategoryId);
