@@ -86,6 +86,47 @@ function handleConnectRedirect(){
   return'accounts';
 }
 function get(path){return path.split('.').reduce((o,k)=>o?.[k],state.messages)||path}
+async function openDeleteAccountDialog(){
+  const dlg=createDialog(`
+    <form class="dialog-card" id="delete-account-form">
+      <div class="panel-head"><h2>${get('settings.deleteAccount')}</h2></div>
+      <p class="row-sub">${get('settings.deleteAccountExplain')}</p>
+      <div class="form-grid">
+        <label><span>${get('auth.password')}</span><input id="delete-account-password" type="password" autocomplete="current-password" required></label>
+        <label class="check"><input id="delete-account-confirm" type="checkbox" required><span>${get('settings.deleteAccountConfirm')}</span></label>
+      </div>
+      <p id="delete-account-error" class="row-sub" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" data-close>${get('common.cancel')}</button>
+        <button type="submit" class="danger">${get('settings.deleteAccountAction')}</button>
+      </div>
+    </form>`,{closeLabel:get('common.close')});
+  const form=dlg.querySelector('#delete-account-form');
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const password=dlg.querySelector('#delete-account-password').value;
+    const confirmed=dlg.querySelector('#delete-account-confirm').checked;
+    const error=dlg.querySelector('#delete-account-error');
+    if(!password||!confirmed)return;
+    const submit=form.querySelector('button[type="submit"]');
+    submit.disabled=true;error.hidden=true;
+    try{
+      const response=await fetch('/auth/account-deletion/request',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({currentPassword:password})
+      });
+      if(response.ok){location.assign('/account/deletion');return}
+      const payload=await response.json().catch(()=>({}));
+      error.textContent=payload.error==='invalid_password'?get('settings.deleteAccountPasswordInvalid'):get('settings.deleteAccountFailed');
+      error.hidden=false;
+    }catch{
+      error.textContent=get('settings.deleteAccountFailed');error.hidden=false;
+    }finally{submit.disabled=false}
+  });
+  dlg.showModal();
+}
+
 async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
 function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
@@ -125,6 +166,7 @@ function bind(){
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
+  $('#delete-account')?.addEventListener('click',openDeleteAccountDialog);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',openSearch);
