@@ -80,11 +80,16 @@
               <div class="form-grid">
                 <label>Bezeichnung<input id="profile-name" value="Aktuelles Gehalt"></label>
                 <label>GKV-Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"><small class="field-help">Nur ändern, wenn du den Zusatzbeitrag deiner Krankenkasse kennst.</small></label>
+                <label>Jährlicher ELStAM-Freibetrag<input id="annual-tax-allowance" type="number" min="0" step="100" value="0"><small class="field-help">Nur eintragen, wenn ein Freibetrag in deinen ELStAM hinterlegt ist.</small></label>
+                <label>Kinderfreibetrag laut ELStAM<input id="child-allowance-units" type="number" min="0" max="10" step="0.5" placeholder="automatisch"><small class="field-help">Leer lassen = aus Kinderzahl und Steuerklasse ableiten.</small></label>
+                <label>Alter<input id="employee-age" type="number" min="0" max="120" step="1" placeholder="optional"><small class="field-help">Relevant für den Pflegeversicherungs-Zuschlag.</small></label>
                 <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
                 <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
               </div>
               <div class="check-row">
                 <label><input id="childless-surcharge" type="checkbox" checked> Pflege-Zuschlag kinderlos</label>
+                <label><input id="pension-insurance" type="checkbox" checked> Rentenversicherung</label>
+                <label><input id="unemployment-insurance" type="checkbox" checked> Arbeitslosenversicherung</label>
               </div>
             </details>
           </article>
