@@ -45,8 +45,8 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("Was habe ich bereut?", shell);
         Assert.Contains("Was war es wert?", shell);
         Assert.Contains("Wann erreiche ich 100.000 €?", shell);
-        Assert.Contains("id=\"coach-launcher\"", shell);
-        Assert.Contains("id=\"coach-dock\"", shell);
+        Assert.Contains("launcher.id = 'coach-launcher'", shell);
+        Assert.Contains("dock.id = 'coach-dock'", shell);
         Assert.Contains("finance.coach.quickAccess", shell);
         Assert.Contains("restartConversation", shell);
         Assert.Contains("api/coach/conversations?limit=1", shell);
@@ -67,7 +67,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task CoachUxIntegratesWithFinanceObjectsAndResponsiveLayout()
     {
         var app = await GetAsync("/app.js");
-        var html = await GetAsync("/");
+        var html = ReadSource("index.html");
         var transactions = await GetAsync("/features/transactions.js");
         var contracts = await GetAsync("/features/contracts.js");
         var networth = await GetAsync("/features/networth.js");
@@ -93,5 +93,14 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         using var response = await client.GetAsync(path);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
+    }
+
+    private static string ReadSource(string relativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FullWorth.slnx")))
+            directory = directory.Parent;
+        Assert.NotNull(directory);
+        return File.ReadAllText(Path.Combine(directory!.FullName, "src", "FullWorth.Web", "wwwroot", relativePath));
     }
 }
