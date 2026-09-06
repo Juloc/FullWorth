@@ -294,13 +294,6 @@ public sealed class ReceiptImportService(
         }
         if (documents.Count == 0) throw new ReceiptImportException("Paperless filter returned no importable documents.");
 
-        var importedIds = await store.GetImportedPaperlessDocumentIdsAsync(
-            fullWorthSpaceId,
-            documents.Select(x => x.Id).ToArray(),
-            ct);
-        documents = documents.Where(x => !importedIds.Contains(x.Id)).ToList();
-        if (documents.Count == 0) throw new ReceiptImportException("No new Paperless documents to import.");
-
         var autoStart = request.AutoStart ?? settings.AutoStart;
         var currency = NormalizeCurrency(request.Currency);
         var batch = await store.CreateBatchAsync(userId, fullWorthSpaceId, ReceiptImportSourceTypes.Paperless, "Paperless-ngx", currency, autoStart, null, ct);
