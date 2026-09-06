@@ -179,7 +179,7 @@ public static class InvestmentImportParityEndpoints
                 errorCount++;
                 candidates.Add(new Candidate(
                     Guid.NewGuid(), index + 1, null, null, null, null, null, null, null,
-                    null, null, null, 0m, "EUR", 0m, 0m, 0m, null, null,
+                    null, null, null, null, 0m, "EUR", 0m, 0m, 0m, null,
                     Sha256($"invalid|{index + 1}|{rows[index].Count}"), "error", exception.Message, "new"));
             }
         }
@@ -949,7 +949,7 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
         var assetType = NormalizeAssetType(Cell(mapping.AssetClass), mapping.SourceProvider);
         return new Candidate(
             Guid.NewGuid(), rowNumber, tradeDate, settlementDate, type, securityName, isin, wkn, ticker,
-            quantity, price, gross, amount, currency, fees, taxes, withholding, assetType,
+            assetType, quantity, price, gross, amount, currency, fees, taxes, withholding,
             Clean(Cell(mapping.ExternalKey)), "", "ready", null, "new");
     }
 

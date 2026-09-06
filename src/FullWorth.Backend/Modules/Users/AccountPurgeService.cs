@@ -295,8 +295,7 @@ public sealed class AccountPurgeService(
         await using var transaction = await intelligenceDb.Database.BeginTransactionAsync(ct);
 
         var feedbackIds = await intelligenceDb.IntelligenceFeedbackEvents.AsNoTracking()
-            .Where(x => x.UserId == userId ||
-                        (x.FullWorthSpaceId.HasValue && personalSpaceIds.Contains(x.FullWorthSpaceId.Value)))
+            .Where(x => x.UserId == userId || personalSpaceIds.Contains(x.FullWorthSpaceId))
             .Select(x => x.Id)
             .ToListAsync(ct);
         if (feedbackIds.Count > 0)
@@ -659,7 +658,7 @@ public sealed class AccountPurgeService(
     }
 
     private static string QuoteColumnStatic(IEntityType entity, IProperty property) =>
-        """ + ColumnName(entity, property).Replace(""", """") + """;
+        "\"" + ColumnName(entity, property).Replace("\"", "\"\"") + "\"";
 
     private static string ColumnName(IEntityType entity, IProperty property)
     {
@@ -677,7 +676,7 @@ public sealed class AccountPurgeService(
 
     private static string DelimitTableStatic(IEntityType entity)
     {
-        static string Q(string value) => """ + value.Replace(""", """") + """;
+        static string Q(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
         var table = Q(entity.GetTableName()!);
         return entity.GetSchema() is { Length: > 0 } schema ? $"{Q(schema)}.{table}" : table;
     }

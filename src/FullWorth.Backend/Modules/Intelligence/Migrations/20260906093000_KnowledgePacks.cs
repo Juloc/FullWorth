@@ -7,7 +7,7 @@ namespace FullWorth.Backend.Modules.Intelligence.Migrations;
 
 [DbContext(typeof(IntelligenceDbContext))]
 [Migration("20260906093000_KnowledgePacks")]
-public sealed class KnowledgePacks : Migration
+public sealed class ReAddKnowledgePacks : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
