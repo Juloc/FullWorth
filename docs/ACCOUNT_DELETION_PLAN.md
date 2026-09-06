@@ -232,7 +232,19 @@ After all personal spaces and direct user-owned data are purged:
 
 There must be no remaining mapping from that GUID to the former email/name in FullWorth databases.
 
-This avoids weakening existing Restrict foreign keys globally just to support deletion.
+Important: a tombstone is a technical referential-integrity placeholder, not an analytics identity.
+
+Rules:
+
+- every deleted user keeps a distinct internal tombstone GUID; never collapse multiple deleted users into one shared "Deleted user" record
+- user-level statistics, leaderboards, personal aggregates, cohort views and dashboards must exclude tombstone users by default
+- historical rows that still reference a tombstone may only be included in space/global aggregates when the metric is explicitly defined as user-independent
+- any aggregation grouped by UserId must filter inactive/tombstone users unless the query is an explicit internal integrity/audit report
+- no UI should present multiple deleted users as if they were one person merely because the display label is the same
+- analytics projections should expose a dedicated IsDeleted/IsTombstone state internally instead of inferring deletion from the display name
+- tests must prove that two deleted users never merge into the same statistical bucket
+
+This avoids weakening existing Restrict foreign keys globally just to support deletion while keeping deleted identities out of normal analytics.
 
 ## 7. Purge manifest: mandatory safety guard
 
@@ -372,6 +384,8 @@ Required tests:
 ### Manifest
 - every mapped application entity is classified
 - intentionally adding an unclassified fake/new entity makes the guard fail
+- tombstone users are excluded from normal user-level analytics
+- two different deleted-user GUIDs never collapse into one analytics identity
 
 ### Cloud
 - user-correlatable pending data is removed
