@@ -30,6 +30,12 @@ function bind(){
     await Promise.all([calculate(),loadScenarios()]);
   });
   $('#car-enabled').addEventListener('change',syncCarFields);
+  $('#gross-period').addEventListener('change',syncGrossFields);
+  $('#salary-payments').addEventListener('change',syncGrossFields);
+  $('#gross-input').addEventListener('input',syncGrossFields);
+  $('#tax-class').addEventListener('change',syncTaxFactor);
+  ['car-vehicle-type','car-acquisition-date','car-list-price','car-electric-range','car-co2'].forEach(id=>$(`#${id}`)?.addEventListener('change',syncCarRuleFields));
+  $('#car-commute-method').addEventListener('change',syncCarCommuteFields);
   $('#calculate').addEventListener('click',()=>calculate().catch(handle));
   $('#save-profile').addEventListener('click',()=>saveProfile().catch(handle));
   $('#add-benefit').addEventListener('click',()=>addBenefit());
@@ -37,6 +43,7 @@ function bind(){
   $('#save-scenario').addEventListener('click',()=>saveScenario().catch(handle));
   $('#clear-comparison').addEventListener('click',()=>{state.selected=[];renderScenarios();renderComparison()});
   $('#children').addEventListener('change',()=>{if(number('children')>0)$('#childless-surcharge').checked=false});
+  syncGrossFields();syncTaxFactor();syncCarRuleFields();syncCarCommuteFields();
 }
 
 function showTab(name){
@@ -73,11 +80,18 @@ async function calculate(){
 }
 
 function readProfile(){
+  const payments=Math.min(14,Math.max(12,Math.round(number('salary-payments')||12)));
+  const mode=value('gross-period')==='monthly'?'monthly':'annual';
+  const annualGross=mode==='monthly'?number('gross-input')*payments:number('gross-input');
+  const taxClass=Math.round(number('tax-class'));
   return{
     name:value('profile-name')||'Aktuelles Gehalt',
-    annualGross:number('annual-gross'),
+    annualGross,
     annualBonus:number('annual-bonus'),
-    taxClass:Math.round(number('tax-class')),
+    grossInputMode:mode,
+    salaryPaymentsPerYear:payments,
+    taxClass,
+    taxClass4Factor:taxClass===4?Math.min(1,Math.max(0.001,number('tax-class4-factor')||1)):1,
     stateCode:value('state-code'),
     churchTax:$('#church-tax').checked,
     childrenUnder25:Math.max(0,Math.round(number('children'))),
@@ -89,8 +103,14 @@ function readProfile(){
     companyCar:{
       enabled:$('#car-enabled').checked,
       listPrice:number('car-list-price'),
-      taxableListPriceFactor:number('car-factor'),
+      taxableListPriceFactor:deriveCarFactor(),
+      vehicleType:value('car-vehicle-type')||'manual',
+      acquisitionDate:value('car-acquisition-date')||null,
+      electricRangeKm:number('car-electric-range'),
+      co2GramsPerKm:number('car-co2'),
       oneWayCommuteKm:number('car-commute'),
+      commuteMethod:value('car-commute-method')||'monthly',
+      commuteDaysPerMonth:Math.max(0,Math.min(31,Math.round(number('car-commute-days')))),
       employeeContributionMonthly:number('car-contribution'),
       employerCostMonthly:number('car-employer-cost'),
       privateAlternativeCostMonthly:number('car-private-cost')
@@ -107,9 +127,13 @@ function readProfile(){
 
 function fillProfile(profile){
   set('profile-name',profile.name);
-  set('annual-gross',profile.annualGross);
+  const mode=profile.grossInputMode==='monthly'?'monthly':'annual';
+  const payments=Math.min(14,Math.max(12,Number(profile.salaryPaymentsPerYear)||12));
+  set('gross-period',mode);set('salary-payments',payments);
+  set('gross-input',mode==='monthly'?(Number(profile.annualGross)||0)/payments:profile.annualGross);
   set('annual-bonus',profile.annualBonus);
   set('tax-class',profile.taxClass||1);
+  set('tax-class4-factor',profile.taxClass4Factor??1);
   set('state-code',profile.stateCode||'BW');
   $('#church-tax').checked=!!profile.churchTax;
   set('children',profile.childrenUnder25??0);
@@ -119,16 +143,74 @@ function fillProfile(profile){
   set('vacation-days',profile.vacationDays??30);
   const car=profile.companyCar||{};
   $('#car-enabled').checked=!!car.enabled;
-  set('car-list-price',car.listPrice??50000);set('car-factor',car.taxableListPriceFactor??1);set('car-commute',car.oneWayCommuteKm??0);set('car-contribution',car.employeeContributionMonthly??0);set('car-employer-cost',car.employerCostMonthly??0);set('car-private-cost',car.privateAlternativeCostMonthly??0);
+  set('car-list-price',car.listPrice??50000);set('car-factor',car.taxableListPriceFactor??1);
+  set('car-vehicle-type',car.vehicleType||'manual');set('car-acquisition-date',car.acquisitionDate||'2026-01-01');
+  set('car-electric-range',car.electricRangeKm??80);set('car-co2',car.co2GramsPerKm??50);
+  set('car-commute',car.oneWayCommuteKm??0);set('car-commute-method',car.commuteMethod||'monthly');set('car-commute-days',car.commuteDaysPerMonth??10);
+  set('car-contribution',car.employeeContributionMonthly??0);set('car-employer-cost',car.employerCostMonthly??0);set('car-private-cost',car.privateAlternativeCostMonthly??0);
   const bav=profile.occupationalPension||{};
   set('bav-employee',bav.employeeContributionMonthly??0);set('bav-employer',bav.employerContributionMonthly??0);set('bav-years',bav.projectionYears??30);set('bav-return',bav.expectedAnnualReturnPercent??3);
   $('#benefits-list').innerHTML='';
   (profile.benefits||[]).forEach(addBenefit);
-  syncCarFields();
+  syncGrossFields();syncTaxFactor();syncCarFields();syncCarRuleFields();syncCarCommuteFields();
 }
 
 function syncCarFields(){
   $('#car-fields').classList.toggle('enabled',$('#car-enabled').checked);
+}
+function syncGrossFields(){
+  const monthly=value('gross-period')==='monthly';
+  $('#gross-amount-title').textContent=monthly?'Monatsbrutto':'Jahresbrutto';
+  $('#salary-payments-field').hidden=!monthly;
+  const payments=Math.min(14,Math.max(12,Math.round(number('salary-payments')||12)));
+  const annual=monthly?number('gross-input')*payments:number('gross-input');
+  $('#gross-annual-preview').textContent=monthly?`= ${money.format(annual)} Jahresbrutto`:'Gesamtbrutto ohne zusätzlichen Bonus.';
+}
+function syncTaxFactor(){
+  const isFour=Math.round(number('tax-class'))===4;
+  $('#tax-factor-field').hidden=!isFour;
+}
+function hybridMinimumRange(){
+  const date=value('car-acquisition-date')||'2026-01-01';
+  return date>='2025-01-01'?80:(date>='2022-01-01'?60:40);
+}
+function deriveCarFactor(){
+  const type=value('car-vehicle-type')||'manual';
+  if(type==='manual')return number('car-factor')||1;
+  if(type==='combustion')return 1;
+  const price=number('car-list-price');
+  const date=value('car-acquisition-date')||'2026-01-01';
+  if(type==='electric'){
+    const limit=date>='2025-07-01'?100000:(date>='2024-01-01'?70000:60000);
+    return price<=limit?0.25:0.5;
+  }
+  if(type==='hybrid'){
+    const byRange=number('car-electric-range')>=hybridMinimumRange();
+    const co2=number('car-co2');
+    const byCo2=co2>0&&co2<=50;
+    return byRange||byCo2?0.5:1;
+  }
+  return 1;
+}
+function syncCarRuleFields(){
+  const type=value('car-vehicle-type')||'manual';
+  $('#car-factor-field').hidden=type!=='manual';
+  const hybrid=type==='hybrid';
+  $('#car-range-field').hidden=!hybrid;$('#car-co2-field').hidden=!hybrid;
+  const factor=deriveCarFactor();
+  if(type!=='manual')set('car-factor',factor);
+  let note=`Regel: ${String(factor).replace('.',',')} % vom Bruttolistenpreis.`;
+  if(type==='electric'){
+    const date=value('car-acquisition-date')||'2026-01-01';
+    const limit=date>='2025-07-01'?100000:(date>='2024-01-01'?70000:60000);
+    note+=` E-Auto-Grenze: ${money.format(limit)}.`;
+  }else if(hybrid){
+    note+=` Plug-in-Hybrid: mindestens ${hybridMinimumRange()} km elektrische Reichweite oder höchstens 50 g CO₂/km.`;
+  }
+  $('#car-rule-summary').textContent=note;
+}
+function syncCarCommuteFields(){
+  $('#car-commute-days-field').hidden=value('car-commute-method')!=='daily';
 }
 
 function addBenefit(benefit={}){
