@@ -10,7 +10,7 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     private static readonly string[] RequiredAuthKeys =
     [
         "appDescription", "language", "theme", "email", "password", "showPassword", "hidePassword",
-        "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms",
+        "signIn", "createAccount", "register", "registering", "displayName", "acceptTerms", "confirmAdult", "imprint",
         "forgotPassword", "continue", "backToSignIn", "invalidCredentials",
         "forgotConfirmation", "newPassword", "confirmPassword", "resetPassword", "passwordChanged",
         "passkey", "recoveryCode", "recoveryCodesShownOnce", "recoveryCodesStoreSecurely", "genericError"
@@ -81,8 +81,10 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("action=\"/auth/register\"", html);
         Assert.Contains("https://fullworth.de/privacy/", html);
         Assert.Contains("https://fullworth.de/terms/", html);
+        Assert.Contains("https://fullworth.de/imprint/", html);
         Assert.Contains("register: '/auth/register'", js);
         Assert.Contains("acceptTerms", js);
+        Assert.Contains("confirmAdult", js);
     }
 
     [Fact]
