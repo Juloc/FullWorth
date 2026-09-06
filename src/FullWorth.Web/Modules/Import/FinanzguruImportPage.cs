@@ -35,6 +35,14 @@ public static class FinanzguruImportPageEndpoints
         <div id="import-status" class="row-sub import-status" role="status" aria-live="polite"></div>
         <div id="import-result" class="rows" hidden></div>
       </article>
+
+      <article class="panel import-card import-link-card">
+        <div class="panel-head"><h2 id="import-link-heading"></h2></div>
+        <p class="row-sub panel-intro" id="import-link-hint"></p>
+        <div id="import-link-status" class="row-sub import-status" role="status" aria-live="polite"></div>
+        <div id="import-link-list" class="import-link-list"></div>
+        <p class="row-sub import-link-footer"><a href="/accounts" id="import-link-accounts"></a></p>
+      </article>
     </section>
   </main>
   <script src="/security/browser-fetch.js"></script>

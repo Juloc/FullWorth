@@ -51,6 +51,7 @@ public sealed class FinanzguruImportTests
         {
             var transactions = await db.Transactions.Where(tx => tx.AccountId == scenario.Account).ToListAsync();
             Assert.Equal(2, transactions.Count);
+            Assert.All(transactions, transaction => Assert.False(transaction.UseForBalanceHistory));
             Assert.Equal(2, await db.TransactionAllocations.CountAsync());
             var split = transactions.Single(tx => tx.ExternalKey == "finanzguru:split-original");
             var allocations = await db.TransactionAllocations.Where(item => item.TransactionId == split.Id).OrderBy(item => item.Amount).ToListAsync();

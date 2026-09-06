@@ -263,7 +263,8 @@ public sealed class NetWorthHistoryRebuildTests
             BookingDate = oldDay,
             ValueDate = oldDay,
             Amount = -50000m,
-            Currency = "EUR"
+            Currency = "EUR",
+            UseForBalanceHistory = false
         });
         db.NetWorthSnapshots.Add(new NetWorthSnapshot
         {
@@ -289,6 +290,88 @@ public sealed class NetWorthHistoryRebuildTests
         Assert.Equal(today, point.Date);
         Assert.Equal(1688.77m, point.Accounts);
         Assert.Equal(1688.77m, point.NetWorth);
+    }
+
+    [Fact]
+    public async Task RebuildUsesExplicitlyTrustedImportedHistoryWithCurrentBalanceAnchor()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var accountId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var oldDay = today.AddDays(-2);
+
+        db.Users.Add(new FullWorthUser
+        {
+            Id = userId,
+            EmailNormalized = "TRUSTED-IMPORT@EXAMPLE.COM",
+            DisplayName = "Trusted Import Test"
+        });
+        db.FullWorthSpaces.Add(new FullWorthSpace { Id = spaceId, Name = "Trusted Import", BaseCurrency = "EUR" });
+        db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+        {
+            FullWorthSpaceId = spaceId,
+            UserId = userId,
+            Role = FullWorthSpaceRoles.Owner
+        });
+        db.Accounts.Add(new FinanceAccount
+        {
+            Id = accountId,
+            FullWorthSpaceId = spaceId,
+            Provider = "live-bank",
+            IdentificationHash = "trusted-import-account",
+            ProviderAccountId = "trusted-import-account",
+            InstitutionName = "Test Bank",
+            DisplayName = "Checking",
+            Currency = "EUR",
+            IsActive = true,
+            IncludeInNetWorth = true,
+            Owners =
+            [
+                new AccountOwner
+                {
+                    AccountId = accountId,
+                    UserId = userId,
+                    OwnershipType = AccountOwnershipTypes.Owner
+                }
+            ]
+        });
+        db.BalanceSnapshots.Add(new BalanceSnapshot
+        {
+            AccountId = accountId,
+            Amount = 900m,
+            Currency = "EUR",
+            BalanceType = "manualCurrent",
+            ReferenceDate = today,
+            CapturedAt = DateTimeOffset.UtcNow
+        });
+        db.Transactions.Add(new FinanceTransaction
+        {
+            AccountId = accountId,
+            ExternalKey = "finanzguru:trusted",
+            Status = "BOOK",
+            BookingDate = oldDay,
+            ValueDate = oldDay,
+            Amount = -100m,
+            Currency = "EUR",
+            UseForBalanceHistory = true
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.RebuildHistoryForUserAsync(spaceId, userId, null, CancellationToken.None);
+
+        var history = await db.NetWorthSnapshots.AsNoTracking()
+            .Where(snapshot => snapshot.FullWorthSpaceId == spaceId && snapshot.UserId == userId && snapshot.Currency == "EUR")
+            .OrderBy(snapshot => snapshot.Date)
+            .ToListAsync();
+
+        Assert.Equal(3, history.Count);
+        Assert.Equal(1_000m, history[0].Accounts);
+        Assert.Equal(900m, history[^1].Accounts);
     }
 
     [Fact]

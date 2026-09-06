@@ -27,6 +27,15 @@ public sealed record FinanzguruImportResult(
 
 public sealed class FinanzguruImportConflictException(string message) : Exception(message);
 
+public sealed record FinanzguruExplicitLinkRequest(
+    Guid TargetAccountId,
+    decimal? CurrentBalance,
+    string? CurrentBalanceCurrency);
+
+public sealed record FinanzguruConfirmHistoryRequest(
+    decimal? CurrentBalance,
+    string? CurrentBalanceCurrency);
+
 public sealed class FinanzguruImportService(
     FullWorthDbContext db,
     FinanzguruWorkbookReader reader,
@@ -130,6 +139,7 @@ public sealed class FinanzguruImportService(
                     EntryReference = row.EntryReference,
                     IsTransfer = row.IsTransfer,
                     IsIgnored = false,
+                    UseForBalanceHistory = false,
                     CategorizationSource = categoryId.HasValue || children.Count > 0 ? "finanzguru" : "none",
                     RawJson = cipher.Protect(JsonSerializer.Serialize(new
                     {
@@ -206,13 +216,17 @@ public sealed class FinanzguruImportService(
             var hash = IdentificationHash(sourceKey);
             importAccounts.TryGetValue(hash, out var importedAccount);
 
-            // Prefer a real bank account even when an older Finanzguru archive already exists. This is
-            // what makes re-imports safe after the user connects the account later: stable Finanzguru
-            // external keys are then found on the live account instead of being recreated in the archive.
+            // A user-confirmed link is authoritative and survives later re-imports, including imports
+            // whose source account has no usable IBAN. Without such a link, retain the conservative
+            // unique-IBAN heuristic for convenient automatic matching.
             var normalizedReference = NormalizeAccountReference(sample.ReferenceAccount);
             var ibanLast4 = LooksLikeIban(normalizedReference) ? normalizedReference[^4..] : null;
-            FinanceAccount? liveMatch = null;
-            if (ibanLast4 is not null)
+            FinanceAccount? liveMatch = importedAccount?.ImportLinkedAccountId is { } linkedId
+                ? ownedAccounts.SingleOrDefault(account =>
+                    account.Id == linkedId &&
+                    string.Equals(account.Currency, sample.Currency, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (liveMatch is null && ibanLast4 is not null)
             {
                 var candidates = ownedAccounts
                     .Where(account => string.Equals(account.IbanLast4, ibanLast4, StringComparison.OrdinalIgnoreCase)
@@ -424,6 +438,78 @@ public static class FinanzguruImportEndpoints
 
     public static IEndpointRouteBuilder MapFinanzguruImportEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/import/finanzguru/accounts", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            CancellationToken ct) =>
+        {
+            var result = await reconciliation.ListLinkOptionsAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        }).WithTags("Import");
+
+        app.MapPost("/api/import/finanzguru/accounts/{targetAccountId:guid}/confirm-history", async (
+            Guid targetAccountId,
+            Guid fullWorthSpaceId,
+            FinanzguruConfirmHistoryRequest request,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var userId = currentUser.RequireUserId();
+                var result = await reconciliation.ConfirmAttachedHistoryAsync(
+                    userId,
+                    fullWorthSpaceId,
+                    targetAccountId,
+                    request.CurrentBalance,
+                    request.CurrentBalanceCurrency,
+                    ct);
+                if (result is null) return Results.NotFound();
+
+                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
+        app.MapPost("/api/import/finanzguru/accounts/{importAccountId:guid}/link", async (
+            Guid importAccountId,
+            Guid fullWorthSpaceId,
+            FinanzguruExplicitLinkRequest request,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var userId = currentUser.RequireUserId();
+                var result = await reconciliation.LinkExplicitAsync(
+                    userId,
+                    fullWorthSpaceId,
+                    importAccountId,
+                    request.TargetAccountId,
+                    request.CurrentBalance,
+                    request.CurrentBalanceCurrency,
+                    ct);
+                if (result is null) return Results.NotFound();
+
+                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).WithTags("Import");
+
         app.MapPost("/api/import/finanzguru", async (
             Guid fullWorthSpaceId,
             HttpRequest request,

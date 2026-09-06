@@ -60,9 +60,10 @@ public sealed class NetWorthSnapshotService(
 
     /// <summary>
     /// Rebuilds materialized net-worth history from source data. The latest bank balance is the anchor;
-    /// trusted booked bank-provider transactions are then walked backwards. Import-only Finanzguru rows
-    /// are deliberately excluded from this reconstruction: they are useful for analytics, but without a
-    /// matching provider transaction or historical balance they cannot prove what the account balance was.
+    /// trusted booked transactions are then walked backwards. Raw import rows stay excluded until the user
+    /// explicitly links the import to a real account; that confirmation upgrades them to a trusted history
+    /// source. This prevents unverified imports from inventing old balances while still allowing complete
+    /// imported history to reconstruct the account once it has a current balance anchor.
     ///
     /// Asset/liability history cannot be reconstructed from a single current value. Existing historical
     /// snapshot components are therefore preserved and carried forward across gaps; dates before the first
@@ -121,7 +122,7 @@ public sealed class NetWorthSnapshotService(
             .Where(transaction =>
                 anchoredAccountIds.Contains(transaction.AccountId) &&
                 transaction.Status != "PDNG" &&
-                !transaction.ExternalKey.StartsWith("finanzguru:") &&
+                transaction.UseForBalanceHistory &&
                 (transaction.BookingDate != null || transaction.ValueDate != null))
             .Select(transaction => new
             {
