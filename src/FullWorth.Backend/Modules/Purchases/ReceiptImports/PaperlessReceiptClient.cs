@@ -68,6 +68,26 @@ public sealed class PaperlessReceiptClient(
         return new PaperlessPreviewResult(total, result, total > result.Count);
     }
 
+    public async Task<PaperlessFilterOptionsView> GetFilterOptionsAsync(
+        string baseUrl,
+        string token,
+        CancellationToken ct)
+    {
+        var tagsTask = ReadNamedOptionsAsync(baseUrl, token, "api/tags/?page_size=1000&ordering=name", ct);
+        var typesTask = ReadNamedOptionsAsync(baseUrl, token, "api/document_types/?page_size=1000&ordering=name", ct);
+        var correspondentsTask = ReadNamedOptionsAsync(baseUrl, token, "api/correspondents/?page_size=1000&ordering=name", ct);
+        var storagePathsTask = ReadNamedOptionsAsync(baseUrl, token, "api/storage_paths/?page_size=1000&ordering=name", ct);
+        var customFieldsTask = ReadNamedOptionsAsync(baseUrl, token, "api/custom_fields/?page_size=1000&ordering=name", ct);
+
+        await Task.WhenAll(tagsTask, typesTask, correspondentsTask, storagePathsTask, customFieldsTask);
+        return new PaperlessFilterOptionsView(
+            await tagsTask,
+            await typesTask,
+            await correspondentsTask,
+            await storagePathsTask,
+            await customFieldsTask);
+    }
+
     public async Task<PaperlessDocumentDownload> DownloadAsync(
         string baseUrl,
         string token,
@@ -120,7 +140,7 @@ public sealed class PaperlessReceiptClient(
     {
         var baseUri = NormalizeBaseUri(baseUrl);
         var target = Uri.TryCreate(relativeOrAbsolute, UriKind.Absolute, out var absolute)
-            ? ValidateNextUri(baseUri, absolute)
+            ? RebaseToConfiguredServer(baseUri, absolute)
             : new Uri(baseUri, relativeOrAbsolute.TrimStart('/'));
         var request = new HttpRequestMessage(method, target);
         request.Headers.Authorization = new AuthenticationHeaderValue("Token", token.Trim());
@@ -139,13 +159,24 @@ public sealed class PaperlessReceiptClient(
         return builder.Uri;
     }
 
-    private static Uri ValidateNextUri(Uri baseUri, Uri next)
+    private static Uri RebaseToConfiguredServer(Uri baseUri, Uri next)
     {
-        if (!string.Equals(baseUri.Scheme, next.Scheme, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(baseUri.Host, next.Host, StringComparison.OrdinalIgnoreCase) ||
-            baseUri.Port != next.Port)
-            throw new InvalidOperationException("Paperless pagination attempted to leave the configured server.");
-        return next;
+        // Paperless commonly emits pagination links using its internal PAPERLESS_URL
+        // (for example http://paperless:8000) even when FullWorth connects through
+        // a reverse proxy. Never follow that advertised origin. Reuse only the
+        // path/query and keep requests pinned to the configured server.
+        var path = next.AbsolutePath.TrimStart('/');
+        var configuredPrefix = baseUri.AbsolutePath.Trim('/');
+
+        if (!string.IsNullOrWhiteSpace(configuredPrefix))
+        {
+            var prefix = configuredPrefix + "/";
+            if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                path = path[prefix.Length..];
+        }
+
+        var relative = path + next.Query;
+        return new Uri(baseUri, relative);
     }
 
     private static string BuildDocumentsUrl(PaperlessPreviewRequest filter, int pageSize)
@@ -171,8 +202,48 @@ public sealed class PaperlessReceiptClient(
         if (string.IsNullOrWhiteSpace(next)) return null;
         var baseUri = NormalizeBaseUri(baseUrl);
         if (!Uri.TryCreate(next, UriKind.Absolute, out var absolute)) return next;
-        ValidateNextUri(baseUri, absolute);
-        return absolute.ToString();
+        return RebaseToConfiguredServer(baseUri, absolute).ToString();
+    }
+
+    private async Task<IReadOnlyList<PaperlessFilterOption>> ReadNamedOptionsAsync(
+        string baseUrl,
+        string token,
+        string firstPage,
+        CancellationToken ct)
+    {
+        const int maxItems = 5000;
+        var result = new List<PaperlessFilterOption>();
+        var next = firstPage;
+
+        while (!string.IsNullOrWhiteSpace(next) && result.Count < maxItems)
+        {
+            using var request = CreateRequest(HttpMethod.Get, baseUrl, token, next);
+            using var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Paperless returned HTTP {(int)response.StatusCode} while loading filter options.");
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var root = json.RootElement;
+            if (!root.TryGetProperty("results", out var resultsNode) || resultsNode.ValueKind != JsonValueKind.Array) break;
+
+            foreach (var item in resultsNode.EnumerateArray())
+            {
+                if (result.Count >= maxItems) break;
+                if (!item.TryGetProperty("id", out var idNode) || !idNode.TryGetInt32(out var id)) continue;
+                var name = item.TryGetProperty("name", out var nameNode) ? nameNode.GetString() : null;
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                result.Add(new PaperlessFilterOption(id, name.Trim()));
+            }
+
+            next = ReadNextRelative(root, baseUrl);
+        }
+
+        return result
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     private static PaperlessDocumentSummary ParseDocument(JsonElement document)
