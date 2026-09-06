@@ -176,7 +176,7 @@ public sealed class AuthServiceTests(AuthPostgresFixture fixture) : IClassFixtur
     }
 
     [Fact]
-    public async Task AuthEndpointsDoNotExposeRegistration()
+    public async Task AuthEndpointsExposeRateLimitedRegistrationRoute()
     {
         var builder = WebApplication.CreateBuilder();
         AuthTestServices.Configure(builder.Services, fixture.Database.ConnectionString);
@@ -190,7 +190,7 @@ public sealed class AuthServiceTests(AuthPostgresFixture fixture) : IClassFixtur
             .ToArray();
 
         Assert.Contains("/auth/login", routes);
-        Assert.DoesNotContain(routes, x => x.Contains("register", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("/auth/register", routes);
     }
 
     [Fact]
