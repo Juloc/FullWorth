@@ -39,10 +39,11 @@ public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
             .OrderByDescending(x => x.Confidence)
             .ToListAsync(ct);
 
-        var providers = signatures.Count == 0
+        var providerKeys = signatures.Select(x => x.ProviderKey).Distinct(StringComparer.Ordinal).ToArray();
+        var providers = providerKeys.Length == 0
             ? new List<OfficialContractProvider>()
             : await db.OfficialContractProviders.AsNoTracking()
-                .Where(x => signatures.Select(s => s.ProviderKey).Contains(x.ProviderKey))
+                .Where(x => providerKeys.Contains(x.ProviderKey))
                 .ToListAsync(ct);
 
         var byKey = providers.ToDictionary(x => x.ProviderKey, StringComparer.Ordinal);
@@ -74,6 +75,7 @@ public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
             .ToListAsync(ct);
         if (aliasCandidates.Count == 0) return null;
 
+        var resolvedAliases = new List<(OfficialContractProvider Provider, decimal Confidence, bool ExactCountry)>();
         foreach (var alias in aliasCandidates)
         {
             var key = await ResolveRedirectAsync("provider", alias.CanonicalKey, ct);
@@ -82,10 +84,22 @@ public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
                     x.ProviderKey == key &&
                     (x.Country == "GLOBAL" || normalizedCountry == "GLOBAL" || x.Country == normalizedCountry), ct);
             if (provider is not null)
-                return ToIdentity(provider, alias.Confidence);
+                resolvedAliases.Add((provider, alias.Confidence, provider.Country == normalizedCountry));
         }
 
-        return null;
+        var bestAliases = resolvedAliases
+            .OrderByDescending(x => x.ExactCountry)
+            .ThenByDescending(x => x.Confidence)
+            .ToList();
+        if (bestAliases.Count == 0) return null;
+        var best = bestAliases[0];
+        if (bestAliases.Skip(1).Any(x =>
+                x.ExactCountry == best.ExactCountry &&
+                x.Confidence == best.Confidence &&
+                !string.Equals(x.Provider.ProviderKey, best.Provider.ProviderKey, StringComparison.Ordinal)))
+            return null;
+
+        return ToIdentity(best.Provider, best.Confidence);
     }
 
     public async Task<CloudProductIdentity?> ResolveProductByGtinAsync(string? gtin, CancellationToken ct)
@@ -124,6 +138,7 @@ public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
             .Take(10)
             .ToListAsync(ct);
 
+        var resolvedProducts = new List<(OfficialProduct Product, decimal Confidence, int ContextRank)>();
         foreach (var candidate in candidates)
         {
             if (candidate.MerchantContext is not null &&
@@ -135,11 +150,28 @@ public sealed class CloudOperationalRegistryResolver(IntelligenceDbContext db)
                 .SingleOrDefaultAsync(x =>
                     x.ProductKey == key &&
                     (x.Country == "GLOBAL" || normalizedCountry == "GLOBAL" || x.Country == normalizedCountry), ct);
-            if (product is not null)
-                return ToIdentity(product, candidate.Confidence);
+            if (product is null) continue;
+
+            var contextRank = candidate.MerchantContext is not null &&
+                              string.Equals(candidate.MerchantContext, normalizedMerchant, StringComparison.Ordinal)
+                ? 2
+                : 1;
+            resolvedProducts.Add((product, candidate.Confidence, contextRank));
         }
 
-        return null;
+        var bestProducts = resolvedProducts
+            .OrderByDescending(x => x.ContextRank)
+            .ThenByDescending(x => x.Confidence)
+            .ToList();
+        if (bestProducts.Count == 0) return null;
+        var bestProduct = bestProducts[0];
+        if (bestProducts.Skip(1).Any(x =>
+                x.ContextRank == bestProduct.ContextRank &&
+                x.Confidence == bestProduct.Confidence &&
+                !string.Equals(x.Product.ProductKey, bestProduct.Product.ProductKey, StringComparison.Ordinal)))
+            return null;
+
+        return ToIdentity(bestProduct.Product, bestProduct.Confidence);
     }
 
     private async Task<string> ResolveRedirectAsync(string entityType, string canonicalKey, CancellationToken ct)
