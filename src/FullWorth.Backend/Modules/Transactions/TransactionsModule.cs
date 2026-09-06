@@ -26,6 +26,8 @@ public sealed class FinanceTransaction
     public string? Description { get; set; }
     public string? MerchantCategoryCode { get; set; }
     public string? EntryReference { get; set; }
+    // Keyed lookup token for the creditor/debtor account identifier. Never stores a plaintext IBAN.
+    public string? CounterpartyAccountLookup { get; set; }
     public string? UserNote { get; set; }
     public bool IsIgnored { get; set; }
     public bool IsTransfer { get; set; }
