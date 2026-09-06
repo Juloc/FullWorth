@@ -587,6 +587,42 @@ public sealed class AccountPurgeService(
         }
     }
 
+    private static async Task ClearRestrictSelfReferencesAsync(
+        DbContext context,
+        PurgeEntityDescriptor descriptor,
+        Guid spaceId,
+        CancellationToken ct)
+    {
+        var selfReferences = descriptor.EntityType.GetForeignKeys()
+            .Where(fk => fk.PrincipalEntityType == descriptor.EntityType &&
+                         fk.DeleteBehavior is DeleteBehavior.Restrict or DeleteBehavior.NoAction)
+            .ToArray();
+        if (selfReferences.Length == 0) return;
+
+        var spacePredicate = BuildSpacePredicate(
+            descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
+
+        foreach (var foreignKey in selfReferences)
+        {
+            if (foreignKey.Properties.Any(property => !property.IsNullable))
+                throw new InvalidOperationException(
+                    $"Purge cannot safely clear non-nullable self reference on {descriptor.EntityType.Name}.");
+
+            var assignments = string.Join(", ", foreignKey.Properties.Select(property =>
+                $"{QuoteColumnStatic(descriptor.EntityType, property)} = NULL"));
+            var connection = context.Database.GetDbConnection();
+            await using var command = connection.CreateCommand();
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                $"UPDATE {DelimitTable(context, descriptor.EntityType)} AS t0 SET {assignments} WHERE {spacePredicate};";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "spaceId";
+            parameter.Value = spaceId;
+            command.Parameters.Add(parameter);
+            await command.ExecuteNonQueryAsync(ct);
+        }
+    }
+
     private static async Task ExecuteDeleteAsync(
         DbContext context,
         PurgeEntityDescriptor descriptor,
