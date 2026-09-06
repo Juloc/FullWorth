@@ -100,6 +100,9 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("api/import-mapping/detect", centerJs);
         Assert.Contains("api/investment-import/detect", centerJs);
         Assert.Contains("presetSuggestedMapping", centerJs);
+        Assert.Contains("for(const alias of aliases)", centerJs);
+        Assert.Contains("set('tradeDate','date','datetime')", centerJs);
+        Assert.Contains("validationErrors", centerJs);
         Assert.Contains("preset==='outbank'", centerJs);
         Assert.Contains("preset==='finanzfluss'", centerJs);
         Assert.Contains("preset==='parqet'", centerJs);
@@ -149,6 +152,8 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
                 Assert.Contains("createPortfolio", js);
                 Assert.Contains("assetClass", js);
                 Assert.Contains("sourceProvider='trade_republic'", js);
+                Assert.Contains("for(const name of names)", js);
+                Assert.Contains("s.tradeDate=findHeader(data.headers,'date','datetime')", js);
                 Assert.Contains("transactionTypes", js);
                 Assert.Contains("reconciliationHtml", js);
                 Assert.Contains("__new__", js);

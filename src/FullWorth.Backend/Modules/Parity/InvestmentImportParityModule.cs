@@ -1372,6 +1372,14 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         var formats = new[] { "yyyy-MM-dd", "dd.MM.yyyy", "d.M.yyyy", "dd/MM/yyyy", "MM/dd/yyyy", "yyyy/MM/dd" };
         foreach (var format in formats)
             if (DateOnly.TryParseExact(text, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) return date;
+
+        // Broker exports frequently contain a full ISO timestamp even when the logical field is a trade date
+        // (for example Trade Republic's leading "datetime" column). Preserve the calendar date encoded by
+        // the timestamp instead of rejecting the whole import.
+        if (DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal, out var timestamp))
+            return DateOnly.FromDateTime(timestamp.Date);
+
         if (DateOnly.TryParse(text, CultureInfo.CurrentCulture, out var current)) return current;
         throw new FormatException($"Invalid date '{value}'.");
     }
