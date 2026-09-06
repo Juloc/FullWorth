@@ -85,7 +85,10 @@ public sealed class CloudContractBenchmarkContributionServiceTests
             CancellationToken.None);
 
         var service = new CloudContractBenchmarkContributionService(
-            financeDb, intelligenceDb, state);
+            financeDb,
+            intelligenceDb,
+            state,
+            new CloudOperationalRegistryResolver(intelligenceDb));
         var now = new DateTimeOffset(2026, 9, 6, 8, 0, 0, TimeSpan.Zero);
 
         var queued = await service.QueueCurrentAsync(now, CancellationToken.None);
@@ -105,7 +108,7 @@ public sealed class CloudContractBenchmarkContributionServiceTests
 
         var names = root.EnumerateObject().Select(x => x.Name).OrderBy(x => x).ToArray();
         Assert.Equal(
-            new[] { "country", "currency", "metricKey", "observedMonth", "value" },
+            new[] { "country", "currency", "entityKey", "metricKey", "observedMonth", "value" },
             names);
         Assert.DoesNotContain("Provider A", row.PayloadJson, StringComparison.Ordinal);
         Assert.DoesNotContain("Provider B", row.PayloadJson, StringComparison.Ordinal);
