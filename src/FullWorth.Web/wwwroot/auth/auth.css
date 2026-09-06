@@ -44,6 +44,15 @@ html[data-theme="dark"] .auth-primary:hover{box-shadow:none;opacity:.9}
 .auth-secondary{background:rgba(255,255,255,.8);color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.025)}
 html[data-theme="dark"] .auth-secondary{background:var(--surface)}
 .auth-secondary:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(16,24,40,.055)}
+.auth-social{display:grid;gap:var(--s2);margin-bottom:var(--s4)}
+.auth-provider{width:100%;min-height:42px;display:flex;align-items:center;justify-content:center;gap:var(--s3);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.auth-provider:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--line) 60%,var(--text));box-shadow:0 4px 12px rgba(16,24,40,.055)}
+.auth-provider-mark{width:20px;height:20px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;font-size:12px;font-weight:700;line-height:1}
+.auth-provider-mark-apple{font-size:8px}
+.auth-social-legal{margin:var(--s1) 0 0;color:var(--muted);font-size:11px;line-height:1.45;text-align:center}
+.auth-divider-labelled{gap:var(--s3)}
+.auth-divider-labelled span{flex:1;width:auto}
+.auth-divider-labelled em{flex:0 0 auto;color:var(--muted);font-size:11px;font-style:normal}
 button:disabled{cursor:not-allowed;opacity:.62}
 button.is-loading{position:relative}
 button.is-loading::before{content:"";width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:var(--s2);animation:auth-spin .75s linear infinite}
