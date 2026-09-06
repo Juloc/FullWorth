@@ -59,12 +59,16 @@
 /* Coach quick access: full-width app while closed, docked desktop panel while open, fullscreen mobile overlay. */
 :root{--coach-dock-w:clamp(280px,32vw,420px)}
 .coach-head-actions{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;justify-content:flex-end}
-.coach-context{display:inline-flex;align-items:center;min-height:26px;max-width:100%;padding:3px 8px;border:1px solid var(--line);border-radius:var(--radius-pill);color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.coach-context{display:flex;align-items:center;gap:5px;min-height:26px;max-width:100%;flex-wrap:wrap;color:var(--muted);font-size:10px}
+.coach-context-chip{display:inline-flex;align-items:center;max-width:220px;min-height:24px;padding:3px 8px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button.coach-context-chip{cursor:pointer}
+button.coach-context-chip::after{content:"×";margin-left:5px;opacity:.65}
 .coach-new-chat{min-height:30px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer}
 .coach-launcher{position:fixed;right:24px;bottom:24px;z-index:58;display:grid;place-items:center;width:52px;height:52px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--cta);color:var(--cta-text);box-shadow:var(--shadow-float);cursor:pointer}
 .coach-launcher svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .coach-launcher[hidden],.coach-dock[hidden]{display:none!important}
-.coach-dock{position:fixed;inset:0 0 0 auto;z-index:57;width:var(--coach-dock-w);height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--surface);border-left:1px solid var(--line);box-shadow:-10px 0 28px rgba(0,0,0,.08)}
+.coach-dock{position:fixed;inset:0 0 0 auto;z-index:57;width:var(--coach-dock-w);height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--surface);border-left:1px solid var(--line);box-shadow:-10px 0 28px rgba(0,0,0,.08);transition:transform .16s ease}
+.coach-dock.is-swiping{transition:none}
 .coach-dock-resizer{position:absolute;top:0;bottom:0;left:-4px;z-index:4;width:8px;cursor:col-resize;touch-action:none}
 .coach-dock-resizer::after{content:"";position:absolute;top:0;bottom:0;left:4px;width:1px;background:transparent;transition:background-color .15s ease}
 .coach-dock-resizer:hover::after,.coach-dock-resizer.is-dragging::after{background:var(--k4)}
@@ -73,6 +77,7 @@ body.coach-dock-resizing{cursor:col-resize;user-select:none}
 .coach-dock-title{display:flex;align-items:center;gap:var(--s2);min-width:0}.coach-dock-title>.brand-logo{width:28px;height:28px}
 .coach-dock-title>div{display:grid;min-width:0}.coach-dock-title strong{font-size:15px}.coach-dock-title span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .coach-dock-actions{display:flex;align-items:center;gap:6px}.coach-dock-actions .icon-button{width:34px;height:34px}
+.coach-dock-pin.active{background:var(--surface-3);border-color:var(--k3)}
 .coach-dock-close{font-size:22px;line-height:1}
 .coach-dock-chat{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:var(--s3);padding:var(--s3)}
 .coach-dock .coach-messages{min-height:0;max-height:none;height:100%;padding:0 2px}
@@ -84,7 +89,8 @@ body.coach-dock-open.nav-collapsed .shell,body.coach-dock-open.nav-auto-collapse
   body.coach-dock-open .shell,body.coach-dock-open.nav-collapsed .shell,body.coach-dock-open.nav-auto-collapsed .shell{grid-template-columns:1fr}
   .coach-dock{inset:0;width:100vw;max-width:none;border-left:0;box-shadow:none}
   .coach-dock-resizer{display:none}
-  .coach-dock-header{padding:max(var(--s3),env(safe-area-inset-top)) var(--s3) var(--s3)}
+  .coach-dock-header{padding:max(var(--s3),env(safe-area-inset-top)) var(--s3) var(--s3);touch-action:pan-x}
+  .coach-dock-pin{display:none}
   .coach-dock-chat{padding:var(--s3) var(--s3) max(var(--s3),env(safe-area-inset-bottom))}
   .coach-launcher{right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:50px;height:50px}
 }
