@@ -23,6 +23,10 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         AccountDeletionSnapshot.Apply(modelBuilder);
         TransactionBalanceHistoryTrustSnapshot.Apply(modelBuilder);
         TransferDetectionIbanSnapshot.Apply(modelBuilder);
+        modelBuilder.Entity("FullWorth.Backend.Modules.Budgets.Budget", entity =>
+        {
+            entity.Property<bool>("CarryOverOverspend").HasColumnType("boolean");
+        });
 #pragma warning restore 612, 618
     }
 }
