@@ -161,7 +161,7 @@ public sealed class BrandAssetBlob
     public string ContentSha256 { get; set; } = string.Empty;
     public string MediaType { get; set; } = "image/svg+xml";
     public int ByteLength { get; set; }
-    public string ContentBase64 { get; set; } = string.Empty;
+    public byte[] Content { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastUsedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -320,7 +320,6 @@ public static class KnowledgePackModelConfiguration
             entity.HasIndex(x => x.ContentSha256).IsUnique();
             entity.Property(x => x.ContentSha256).HasMaxLength(64);
             entity.Property(x => x.MediaType).HasMaxLength(80);
-            entity.Property(x => x.ContentBase64).HasColumnType("text");
         });
 
         modelBuilder.Entity<CustomBrandPack>(entity =>
