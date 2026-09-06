@@ -2,6 +2,7 @@ import { openRealEstateDetail } from './wealth-real-estate.js';
 import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?"), an allocation card
@@ -24,7 +25,7 @@ const WINDOWS = [
 ];
 
 // View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
-const nw = { overview: null, history: [], bookingActivity: [], assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
+const nw = { overview: null, history: [], bookingActivity: [], importCompleteness: null, assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -50,7 +51,8 @@ const COPY = {
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
     window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.',
     customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.',
-    bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne historischen Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
+    bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne bestätigte Kontozuordnung und Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
+    bookingOnlyHint: 'Importierte Buchungen sind vorhanden, aber noch kein belastbarer historischer Vermögensstand.',
     emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.'
   },
   en: {
@@ -68,7 +70,8 @@ const COPY = {
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
     window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.',
     customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
-    bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a historical balance they are shown as booking activity, not as net worth.',
+    bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a confirmed account mapping and balance they are shown as booking activity, not as net worth.',
+    bookingOnlyHint: 'Imported bookings are available, but no reliable historical net-worth value exists yet.',
     emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.'
   }
 };
@@ -152,9 +155,10 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, bookingActivity, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
+  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
     loadHistory(nw.windowMonths),
     loadBookingActivity(nw.windowMonths),
+    loadFinanzguruCompleteness(ctx.api),
     ctx.api('api/assets').catch(() => []),
     ctx.api('api/liabilities').catch(() => []),
     ctx.api('api/accounts').catch(() => []),
@@ -168,6 +172,7 @@ export async function renderNetWorth(context) {
   nw.overview = overview;
   nw.history = history || [];
   nw.bookingActivity = bookingActivity || [];
+  nw.importCompleteness = importCompleteness || null;
   nw.assets = assets || [];
   nw.liabilities = liabilities || [];
   nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id));
@@ -183,7 +188,8 @@ export async function renderNetWorth(context) {
 function paintNetWorth() {
   const host = ctx.$('#view-networth');
   if (!host) return;
-  host.innerHTML = `${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+  const completeness = finanzguruCompletenessNotice(nw.importCompleteness, { scope: 'wealth', lang: isDe() ? 'de' : 'en' });
+  host.innerHTML = `${completeness}${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
 
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
@@ -311,7 +317,9 @@ function bookingActivityMarkup(geometry) {
 }
 
 function bookingHistoryHint() {
-  if (!nw.bookingActivity?.length || !nw.history?.length) return '';
+  if (!nw.bookingActivity?.length) return '';
+  if (!nw.history?.length)
+    return `<div class="nw-booking-history-hint"><span class="nw-booking-history-dot"></span><span>${ctx.esc(t('bookingOnlyHint'))}</span></div>`;
   const firstActivity = Math.min(...nw.bookingActivity.map(point => parseChartDate(point.month)).filter(Number.isFinite));
   const firstHistory = Math.min(...nw.history.map(point => parseChartDate(point.date)).filter(Number.isFinite));
   if (!Number.isFinite(firstActivity) || !Number.isFinite(firstHistory) || firstActivity >= firstHistory) return '';
