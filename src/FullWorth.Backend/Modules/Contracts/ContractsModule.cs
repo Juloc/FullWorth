@@ -17,6 +17,7 @@ public sealed class RecurringContract
     public string Kind { get; set; } = "contract";
     public Guid? CategoryId { get; set; }
     public Guid? AccountId { get; set; }
+    public Guid? MergedIntoContractId { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "EUR";
     public string BillingCycle { get; set; } = "monthly";
@@ -71,6 +72,18 @@ public enum ContractMutationResult
 
 public sealed record ContractMutationOutcome(ContractMutationResult Result, ContractView? Contract = null, string? Error = null);
 
+public sealed record ContractMergeRequest(IReadOnlyList<Guid> SourceContractIds);
+
+public sealed record ContractMergeSourceView(
+    Guid Id,
+    string Name,
+    string? ProviderName,
+    Guid? AccountId,
+    decimal Amount,
+    string Currency,
+    string BillingCycle,
+    DateOnly? NextDueDate);
+
 public sealed class ContractStore(FullWorthDbContext db, AuditService? auditService = null)
 {
     private readonly AuditService audit = auditService ?? new AuditService(db);
@@ -117,7 +130,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
 
     public async Task<ContractAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
     {
-        var contract = await VisibleContracts(userId, fullWorthSpaceId)
+        var contract = await VisibleContractRecords(userId, fullWorthSpaceId)
             .Where(x => x.Id == contractId)
             .Select(x => new { x.Id, x.AccountId })
             .SingleOrDefaultAsync(ct);
@@ -186,39 +199,193 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return ContractMutationResult.Success;
     }
 
+    public async Task<IReadOnlyList<ContractMergeSourceView>?> ListMergedSourcesForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid contractId,
+        CancellationToken ct)
+    {
+        if (!await VisibleContracts(userId, fullWorthSpaceId).AnyAsync(contract => contract.Id == contractId, ct))
+            return null;
+
+        return await VisibleContractRecords(userId, fullWorthSpaceId)
+            .Where(contract => contract.MergedIntoContractId == contractId)
+            .OrderBy(contract => contract.CreatedAt)
+            .Select(contract => new ContractMergeSourceView(
+                contract.Id,
+                contract.Name,
+                contract.ProviderName,
+                contract.AccountId,
+                contract.Amount,
+                contract.Currency,
+                contract.BillingCycle,
+                contract.NextDueDate))
+            .ToListAsync(ct);
+    }
+
+    public async Task<ContractMutationOutcome> MergeForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid targetContractId,
+        ContractMergeRequest request,
+        CancellationToken ct)
+    {
+        var targetAccess = await GetAccessAsync(userId, fullWorthSpaceId, targetContractId, ct);
+        if (targetAccess == ContractAccessLevel.None) return new(ContractMutationResult.NotFound);
+        if (targetAccess != ContractAccessLevel.Write) return new(ContractMutationResult.Forbidden);
+
+        var target = await db.Contracts.SingleOrDefaultAsync(contract =>
+            contract.Id == targetContractId &&
+            contract.FullWorthSpaceId == fullWorthSpaceId &&
+            contract.MergedIntoContractId == null, ct);
+        if (target is null) return new(ContractMutationResult.NotFound);
+
+        var sourceIds = (request.SourceContractIds ?? Array.Empty<Guid>())
+            .Where(id => id != Guid.Empty && id != targetContractId)
+            .Distinct()
+            .ToArray();
+        if (sourceIds.Length == 0)
+            return new(ContractMutationResult.Invalid, Error: "Select at least one contract to merge.");
+
+        var sources = await db.Contracts
+            .Where(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                sourceIds.Contains(contract.Id) &&
+                contract.MergedIntoContractId == null)
+            .ToListAsync(ct);
+        if (sources.Count != sourceIds.Length) return new(ContractMutationResult.NotFound);
+
+        foreach (var source in sources)
+        {
+            var access = await GetAccessAsync(userId, fullWorthSpaceId, source.Id, ct);
+            if (access == ContractAccessLevel.None) return new(ContractMutationResult.NotFound);
+            if (access != ContractAccessLevel.Write) return new(ContractMutationResult.Forbidden);
+        }
+
+        // Keep the merge graph flat. If a selected source already owns older aliases/account-history,
+        // re-parent those records to the selected target before hiding the source row itself.
+        var nestedSources = await db.Contracts
+            .Where(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId.HasValue &&
+                sourceIds.Contains(contract.MergedIntoContractId.Value))
+            .ToListAsync(ct);
+        foreach (var nested in nestedSources)
+        {
+            nested.MergedIntoContractId = target.Id;
+            nested.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        foreach (var source in sources)
+        {
+            source.MergedIntoContractId = target.Id;
+            source.UpdatedAt = DateTimeOffset.UtcNow;
+            audit.Record(fullWorthSpaceId, userId, "contract.merged", "RecurringContract", source.Id);
+        }
+
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return new(ContractMutationResult.Success, await GetForUserAsync(userId, fullWorthSpaceId, target.Id, ct));
+    }
+
+    public async Task<ContractMutationResult> UnmergeForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid targetContractId,
+        Guid sourceContractId,
+        CancellationToken ct)
+    {
+        var targetAccess = await GetAccessAsync(userId, fullWorthSpaceId, targetContractId, ct);
+        if (targetAccess == ContractAccessLevel.None) return ContractMutationResult.NotFound;
+        if (targetAccess != ContractAccessLevel.Write) return ContractMutationResult.Forbidden;
+
+        var source = await db.Contracts.SingleOrDefaultAsync(contract =>
+            contract.Id == sourceContractId &&
+            contract.FullWorthSpaceId == fullWorthSpaceId &&
+            contract.MergedIntoContractId == targetContractId, ct);
+        if (source is null) return ContractMutationResult.NotFound;
+
+        var sourceAccess = await GetAccessAsync(userId, fullWorthSpaceId, sourceContractId, ct);
+        if (sourceAccess == ContractAccessLevel.None) return ContractMutationResult.NotFound;
+        if (sourceAccess != ContractAccessLevel.Write) return ContractMutationResult.Forbidden;
+
+        source.MergedIntoContractId = null;
+        source.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Record(fullWorthSpaceId, userId, "contract.unmerged", "RecurringContract", source.Id);
+        await db.SaveChangesAsync(ct);
+        return ContractMutationResult.Success;
+    }
+
     // Contract detail activity (UI_UX_SPEC §13): linked payments, payment trend, next expected payment
     // and annualized cost. The date stepping and annualization are owned here (not the browser, §30) via
     // the shared ContractCycle helper so detection and the detail view step cadence identically.
     public async Task<ContractActivity?> GetActivityForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
     {
-        var contract = await VisibleContracts(userId, fullWorthSpaceId).Where(x => x.Id == contractId).SingleOrDefaultAsync(ct);
+        var contract = await VisibleContracts(userId, fullWorthSpaceId)
+            .Where(x => x.Id == contractId)
+            .SingleOrDefaultAsync(ct);
         if (contract is null) return null;
 
-        var name = contract.Name.ToLower();
-        var provider = string.IsNullOrWhiteSpace(contract.ProviderName) ? null : contract.ProviderName.Trim().ToLower();
-        var currency = contract.Currency;
-        var accountId = contract.AccountId;
+        var mergedSources = await VisibleContractRecords(userId, fullWorthSpaceId)
+            .Where(source => source.MergedIntoContractId == contractId)
+            .ToListAsync(ct);
+        var identities = new[] { contract }.Concat(mergedSources).ToArray();
 
-        // Heuristic link: same-currency outflows whose (normalized) counterparty matches the contract
-        // name or provider. Contracts do not (yet) store a hard match key, so this stays a best-effort view.
-        // When the contract is bound to a specific account, only that account's charges count; otherwise
-        // any account visible to the user in the space is considered.
+        var aliases = identities
+            .SelectMany(item => new[] { item.Name, item.ProviderName })
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => ContractIdentity.Normalize(value))
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var currency = contract.Currency;
+        var linkedAccountIds = identities
+            .Where(item => item.AccountId.HasValue)
+            .Select(item => item.AccountId!.Value)
+            .Distinct()
+            .ToArray();
+        var hasUnboundSource = identities.Any(item => !item.AccountId.HasValue);
+
         var visibleAccountIds = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-        var payments = await db.Transactions.AsNoTracking()
-            .Where(t => visibleAccountIds.Contains(t.AccountId))
-            .Where(t => accountId == null || t.AccountId == accountId)
-            .Where(t => t.Amount < 0 && !t.IsIgnored && !t.IsTransfer && t.Currency == currency)
-            .Where(t =>
-                (t.NormalizedCounterparty != null && t.NormalizedCounterparty.ToLower() == name)
-                || (provider != null && t.Counterparty != null && t.Counterparty.ToLower().Contains(provider))
-                || (t.Counterparty != null && t.Counterparty.ToLower().Contains(name)))
-            .OrderByDescending(t => t.BookingDate ?? t.ValueDate)
-            .Take(60)
-            .Select(t => new ContractPayment(t.Id, t.BookingDate ?? t.ValueDate, -t.Amount, t.Currency))
+        var transactionQuery = db.Transactions.AsNoTracking()
+            .Where(transaction => visibleAccountIds.Contains(transaction.AccountId))
+            .Where(transaction =>
+                transaction.Amount < 0 &&
+                !transaction.IsIgnored &&
+                !transaction.IsTransfer &&
+                transaction.Currency == currency);
+
+        if (!hasUnboundSource && linkedAccountIds.Length > 0)
+            transactionQuery = transactionQuery.Where(transaction => linkedAccountIds.Contains(transaction.AccountId));
+
+        // Load a bounded recent set, then apply the shared identity normalizer in memory. This lets one
+        // logical contract match all merged aliases (including account-change spelling variants such as
+        // Ö/OE and ß/SS) without maintaining browser-side matching rules.
+        var candidates = await transactionQuery
+            .OrderByDescending(transaction => transaction.BookingDate ?? transaction.ValueDate)
+            .Take(400)
+            .Select(transaction => new
+            {
+                transaction.Id,
+                Date = transaction.BookingDate ?? transaction.ValueDate,
+                Amount = -transaction.Amount,
+                transaction.Currency,
+                transaction.Counterparty,
+                transaction.NormalizedCounterparty
+            })
             .ToListAsync(ct);
 
-        var last = payments.Count > 0 ? payments.Max(p => p.Date) : null;
-        var average = payments.Count > 0 ? Math.Round(payments.Average(p => p.Amount), 2) : (decimal?)null;
+        var payments = candidates
+            .Where(transaction => aliases.Any(alias =>
+                ContractIdentity.Matches(alias, transaction.NormalizedCounterparty) ||
+                ContractIdentity.Matches(alias, transaction.Counterparty)))
+            .Take(60)
+            .Select(transaction => new ContractPayment(transaction.Id, transaction.Date, transaction.Amount, transaction.Currency))
+            .ToList();
+
+        var last = payments.Count > 0 ? payments.Max(payment => payment.Date) : null;
+        var average = payments.Count > 0 ? Math.Round(payments.Average(payment => payment.Amount), 2) : (decimal?)null;
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var next = ComputeNextExpected(contract, last, today);
         var annualized = Math.Round(contract.Amount * ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval), 2);
@@ -239,6 +406,10 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         contract.EndDate is { } end && candidate > end ? null : candidate;
 
     private IQueryable<RecurringContract> VisibleContracts(Guid userId, Guid fullWorthSpaceId) =>
+        VisibleContractRecords(userId, fullWorthSpaceId)
+            .Where(contract => contract.MergedIntoContractId == null);
+
+    private IQueryable<RecurringContract> VisibleContractRecords(Guid userId, Guid fullWorthSpaceId) =>
         db.Contracts.AsNoTracking().Where(contract =>
             contract.FullWorthSpaceId == fullWorthSpaceId &&
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId) &&
@@ -364,6 +535,46 @@ public sealed record ContractActivity(
     decimal? AverageAmount,
     IReadOnlyList<ContractPayment> Payments);
 
+public static class ContractIdentity
+{
+    private static readonly HashSet<string> LegalSuffixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AG", "GMBH", "KG", "OHG", "SE", "SA", "SAS", "BV", "NV", "INC", "LTD", "LLC", "PLC", "AB"
+    };
+
+    public static string Normalize(string? value)
+    {
+        var folded = (value ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant()
+            .Replace("Ä", "AE", StringComparison.Ordinal)
+            .Replace("Ö", "OE", StringComparison.Ordinal)
+            .Replace("Ü", "UE", StringComparison.Ordinal)
+            .Replace("ẞ", "SS", StringComparison.Ordinal)
+            .Replace("ß", "SS", StringComparison.Ordinal);
+
+        var normalized = new string(folded
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
+            .ToArray());
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        while (tokens.Count > 1 && LegalSuffixes.Contains(tokens[^1])) tokens.RemoveAt(tokens.Count - 1);
+        return string.Join(' ', tokens);
+    }
+
+    public static bool Matches(string normalizedIdentity, string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedIdentity) || string.IsNullOrWhiteSpace(candidate)) return false;
+        var normalizedCandidate = Normalize(candidate);
+        if (normalizedCandidate.Length == 0) return false;
+        if (string.Equals(normalizedIdentity, normalizedCandidate, StringComparison.Ordinal)) return true;
+
+        var left = normalizedIdentity.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var right = normalizedCandidate.Replace(" ", string.Empty, StringComparison.Ordinal);
+        return left.Length >= 6 && right.Length >= 6 &&
+               (left.Contains(right, StringComparison.Ordinal) || right.Contains(left, StringComparison.Ordinal));
+    }
+}
+
 // Cadence math shared by contract detection and the detail view so both step identically.
 public static class ContractCycle
 {
@@ -433,6 +644,18 @@ public static class ContractEndpoints
             var activity = await store.GetActivityForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return activity is null ? Results.NotFound() : Results.Ok(activity);
         });
+
+        group.MapGet("/{id:guid}/merged-sources", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
+        {
+            var sources = await store.ListMergedSourcesForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            return sources is null ? Results.NotFound() : Results.Ok(sources);
+        });
+
+        group.MapPost("/{id:guid}/merge", async (Guid id, Guid fullWorthSpaceId, ContractMergeRequest request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
+            ToResult(await store.MergeForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct)));
+
+        group.MapDelete("/{id:guid}/merge/{sourceId:guid}", async (Guid id, Guid sourceId, Guid fullWorthSpaceId, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
+            ToResult(await store.UnmergeForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, sourceId, ct)));
 
         group.MapPost("/", async (Guid fullWorthSpaceId, ContractWrite request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
             ToResult(await store.CreateForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
