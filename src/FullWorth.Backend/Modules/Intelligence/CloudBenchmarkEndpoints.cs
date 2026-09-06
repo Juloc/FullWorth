@@ -217,6 +217,146 @@ public static class CloudBenchmarkEndpoints
             });
         });
 
+        group.MapGet("/savings", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FullWorthDbContext financeDb,
+            CloudSavingsBenchmarkContributionService localSavings,
+            CloudIntelligenceStateService cloudState,
+            CloudInstanceCredentialStore credentials,
+            IFullWorthCloudClient cloud,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            var isMember = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
+                x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId, ct);
+            if (!isMember) return Results.NotFound();
+
+            var local = await localSavings.ComputeSpaceAsync(
+                fullWorthSpaceId,
+                DateTimeOffset.UtcNow,
+                ct);
+            if (local is null)
+                return Results.Ok(new { available = false });
+
+            if (!await cloudState.HasCurrentActiveConsentAsync(ct))
+                return Results.Ok(new
+                {
+                    available = false,
+                    localSavingsRate = local.SavingsRate,
+                    local.ObservedMonth
+                });
+
+            var state = await cloudState.GetEnabledStateAsync(ct);
+            if (state is null)
+                return Results.Ok(new
+                {
+                    available = false,
+                    localSavingsRate = local.SavingsRate,
+                    local.ObservedMonth
+                });
+
+            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                try
+                {
+                    var registration = await cloud.RegisterAsync(
+                        state.InstanceId,
+                        CloudIntelligencePolicy.CurrentVersion,
+                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        ct);
+                    await credentials.SaveAsync(registration, ct);
+                    secret = registration.Credential;
+                }
+                catch (FullWorthCloudException)
+                {
+                    return Results.Ok(new
+                    {
+                        available = false,
+                        localSavingsRate = local.SavingsRate,
+                        local.ObservedMonth
+                    });
+                }
+            }
+
+            FullWorthCloudBenchmark? aggregate = null;
+            var peerFilter = "all";
+            try
+            {
+                var incomeBand = local.IncomeBand == "unknown" ? null : local.IncomeBand;
+                aggregate = await cloud.GetBenchmarkAsync(
+                    secret,
+                    "savings.rate",
+                    null,
+                    local.Country,
+                    null,
+                    null,
+                    incomeBand,
+                    null,
+                    local.ObservedMonth,
+                    ct);
+                if (aggregate is not null)
+                    peerFilter = incomeBand is null ? "country" : "country_income";
+                else if (local.Country is not null)
+                {
+                    aggregate = await cloud.GetBenchmarkAsync(
+                        secret,
+                        "savings.rate",
+                        null,
+                        local.Country,
+                        null,
+                        null,
+                        null,
+                        null,
+                        local.ObservedMonth,
+                        ct);
+                    if (aggregate is not null) peerFilter = "country";
+                }
+                if (aggregate is null)
+                {
+                    aggregate = await cloud.GetBenchmarkAsync(
+                        secret,
+                        "savings.rate",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        local.ObservedMonth,
+                        ct);
+                    peerFilter = "all";
+                }
+            }
+            catch (FullWorthCloudException)
+            {
+                aggregate = null;
+            }
+
+            if (aggregate is null)
+                return Results.Ok(new
+                {
+                    available = false,
+                    localSavingsRate = local.SavingsRate,
+                    local.ObservedMonth
+                });
+
+            return Results.Ok(new
+            {
+                available = true,
+                localSavingsRate = local.SavingsRate,
+                local.ObservedMonth,
+                peerFilter,
+                aggregate.ObservationCount,
+                aggregate.DistinctInstanceCount,
+                aggregate.Median,
+                aggregate.Mean,
+                aggregate.P25,
+                aggregate.P75
+            });
+        });
+
         return app;
     }
 
