@@ -203,7 +203,7 @@ public sealed class CoachService(
             : NormalizeUiMap(context.Details, AllowedUiDetailKeys, 14, 180);
         var selectedIds = entityType is null
             ? Array.Empty<string>()
-            : (context.SelectedIds ?? [])
+            : (context.SelectedIds ?? Array.Empty<string>())
                 .Select(value => NormalizeUiValue(value, 100))
                 .Where(value => value is not null)
                 .Select(value => value!)
