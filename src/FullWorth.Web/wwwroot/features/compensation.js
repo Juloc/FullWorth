@@ -1,3 +1,4 @@
+import { apiClient, jsonBody as sharedJsonBody } from '../core/services.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const state={spaces:[],space:null,result:null,regularMonthResult:null,scenarios:[],selected:[]};
@@ -432,14 +433,10 @@ function number(id){return Number(value(id))||0}
 function set(id,v){const el=$(`#${id}`);if(el)el.value=v??''}
 function localIsoDate(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
 function date(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE').format(new Date(`${String(v).slice(0,10)}T12:00:00`))}
-function json(method,body){return{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}}
+function json(method,body){return sharedJsonBody(body,method)}
 async function api(path,options={},allow404=false){
-  const response=await fetch(`/bff/backend/${path.replace(/^\//,'')}`,options);
-  if(response.status===401){location.href=`/auth/login?returnUrl=${encodeURIComponent(location.pathname)}`;throw new Error('Anmeldung erforderlich.');}
-  if(allow404&&response.status===404)return null;
-  if(!response.ok){let message=`Fehler ${response.status}`;try{const data=await response.json();message=data.error||data.title||data.message||message}catch{}throw new Error(message)}
-  if(response.status===204)return null;
-  return response.json();
+  try{return await apiClient.backend(path,options)}
+  catch(error){if(allow404&&error?.status===404)return null;throw error}
 }
 function notify(message){const toast=$('#comp-error');toast.textContent=message;toast.classList.add('show');clearTimeout(notify.timer);notify.timer=setTimeout(()=>toast.classList.remove('show'),3200)}
 function handle(error){console.error(error);notify(error?.message||'Unbekannter Fehler.');}
