@@ -223,6 +223,14 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 .widget-controls button{width:30px;height:30px;padding:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
 .widget-catalog button{text-align:left}
 /* Budget cards (§12) */
+.budget-wizard{min-width:min(520px,92vw)}
+.budget-wizard-presets{display:grid;gap:7px;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.budget-preset-row{display:flex;gap:8px;flex-wrap:wrap}
+.budget-preset-row .btn-secondary{font-size:12px}
+.budget-wizard-section{display:grid;gap:var(--s3);padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.budget-wizard-section:last-of-type{border-bottom:0}
+.budget-cycle-fields>[hidden]{display:none}
+.budget-rollover-summary{margin-top:4px}
 .budget-cards{display:grid;gap:var(--s3)}
 .budget-card{padding:var(--s3) 0;border-bottom:1px solid var(--line)}
 .budget-card:last-child{border-bottom:0}
