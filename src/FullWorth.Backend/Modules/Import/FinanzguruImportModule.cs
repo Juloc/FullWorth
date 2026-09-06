@@ -430,6 +430,17 @@ public static class FinanzguruImportEndpoints
 
     public static IEndpointRouteBuilder MapFinanzguruImportEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/import/finanzguru/accounts", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            CancellationToken ct) =>
+        {
+            var result = await reconciliation.ListLinkOptionsAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        }).WithTags("Import");
+
         app.MapPost("/api/import/finanzguru/accounts/{importAccountId:guid}/link", async (
             Guid importAccountId,
             Guid fullWorthSpaceId,
