@@ -435,7 +435,7 @@ function rowFor(c) {
       ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
       : '';
   const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
-  row.innerHTML = `${identityIcon(c.name, { logoAssetPath: c.logoAssetPath })}
+  row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
       <div class="fw-row-sub">${sub}</div>
@@ -465,9 +465,12 @@ async function loadDetected(interactive) {
     const due = cand.nextDueDate ? ` · ${ctx.esc(ctx.get('contracts.nextDue'))}: ${ctx.esc(ctx.date(cand.nextDueDate))}` : '';
     return `
     <div class="detected-row" data-i="${i}">
-      <div class="row-main">
-        <div class="row-title">${ctx.esc(cand.counterparty)}</div>
-        <div class="row-sub">${ctx.esc(ctx.get('contracts.cycle_' + (cand.billingCycle || 'monthly')))}${due}</div>
+      <div class="row-main detected-main">
+        ${identityIcon(cand.counterparty)}
+        <div class="detected-copy">
+          <div class="row-title">${ctx.esc(cand.counterparty)}</div>
+          <div class="row-sub">${ctx.esc(ctx.get('contracts.cycle_' + (cand.billingCycle || 'monthly')))}${due}</div>
+        </div>
       </div>
       <div class="row-side detected-side">
         <span class="amount">${ctx.money(cand.typicalAmount, cand.currency)}</span>
