@@ -324,9 +324,11 @@ export function createAccessSetup(ctx, openBankingWizard) {
     try {
       const status = await api('api/intelligence/admin/cloud');
       panel.hidden = false;
-      sub.textContent = status.mode === 'enabled'
-        ? get('cloudIntelligence.enabled')
-        : get('cloudIntelligence.disabled');
+      sub.textContent = status.requiresSetupDecision
+        ? get('cloudIntelligence.consentUpdateRequired')
+        : status.mode === 'enabled'
+          ? get('cloudIntelligence.enabled')
+          : get('cloudIntelligence.disabled');
       if (status.lastErrorCode)
         sub.textContent += ' · ' + status.lastErrorCode;
       row.onclick = () => openCloudWizard(status);
