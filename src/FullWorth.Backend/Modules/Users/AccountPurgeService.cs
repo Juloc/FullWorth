@@ -294,6 +294,18 @@ public sealed class AccountPurgeService(
 
         await using var transaction = await intelligenceDb.Database.BeginTransactionAsync(ct);
 
+        var feedbackIds = await intelligenceDb.IntelligenceFeedbackEvents.AsNoTracking()
+            .Where(x => x.UserId == userId ||
+                        (x.FullWorthSpaceId.HasValue && personalSpaceIds.Contains(x.FullWorthSpaceId.Value)))
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+        if (feedbackIds.Count > 0)
+        {
+            await intelligenceDb.CloudSubmissionOutbox
+                .Where(x => x.FeedbackEventId.HasValue && feedbackIds.Contains(x.FeedbackEventId.Value))
+                .ExecuteDeleteAsync(ct);
+        }
+
         foreach (var descriptor in OrderForDelete(userOwned))
         {
             var predicate = BuildUserPredicate(descriptor.EntityType, "t0", 0, new HashSet<IEntityType>());
