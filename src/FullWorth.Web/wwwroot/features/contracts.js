@@ -596,6 +596,7 @@ async function openCancellationDialog(contract, existing) {
     <div class='panel-head'><div><h2>${ctx.esc(ctx.get('contracts.manageCancellation'))}</h2><div class='row-sub'>${ctx.esc(contract.name)}</div></div><button type='button' data-close aria-label='${ctx.esc(ctx.get('common.close'))}'>×</button></div>
     <label>${ctx.esc(ctx.get('contracts.status'))}<select name='status'>${statusOptions}</select></label>
     <label>${ctx.esc(ctx.get('contracts.minimumTermEnd'))}<input name='minimumTermEnd' type='date' value='${dv(details.minimumTermEnd)}'></label>
+    <label>${ctx.esc(ctx.get('contracts.cancelEffectiveDate'))}<input name='effectiveEndDate' type='date' value='${dv(contract.endDate)}'></label>
     <div class='rule-grid'>
       <label>${ctx.esc(ctx.get('contracts.noticePeriod'))}<input name='noticeValue' type='number' min='0' value='${details.noticePeriodValue ?? ''}'></label>
       <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='noticeUnit'>${unitOptions(details.noticePeriodUnit || 'months')}</select></label>
@@ -618,6 +619,7 @@ async function openCancellationDialog(contract, existing) {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const numberOrNull = name => fd.get(name) === '' ? null : Number(fd.get(name));
+    const effectiveEndDate = fd.get('effectiveEndDate') || null;
     const body = {
       minimumTermEnd: fd.get('minimumTermEnd') || null,
       noticePeriodValue: numberOrNull('noticeValue'),
@@ -632,6 +634,9 @@ async function openCancellationDialog(contract, existing) {
     };
     try {
       await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
+      if (effectiveEndDate !== (contract.endDate || null)) {
+        await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), endDate: effectiveEndDate }, 'PUT'));
+      }
       dlg.close();
       ctx.toast(ctx.get('common.saved'));
       await renderContracts(ctx);
