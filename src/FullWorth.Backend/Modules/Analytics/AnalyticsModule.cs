@@ -385,7 +385,8 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
 
             if (carryMode != CarryOverMode.Disabled)
             {
-                var activeFrom = budget.StartDate ?? DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+                var created = DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
+                var activeFrom = budget.StartDate ?? BudgetCycleCalculator.CurrentPeriod(cycle, created).Start;
                 var priorPeriods = PriorBudgetPeriods(cycle, activeFrom, period);
                 if (priorPeriods.Count > 0)
                 {
