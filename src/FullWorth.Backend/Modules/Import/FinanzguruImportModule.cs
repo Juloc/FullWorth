@@ -32,6 +32,10 @@ public sealed record FinanzguruExplicitLinkRequest(
     decimal? CurrentBalance,
     string? CurrentBalanceCurrency);
 
+public sealed record FinanzguruConfirmHistoryRequest(
+    decimal? CurrentBalance,
+    string? CurrentBalanceCurrency);
+
 public sealed class FinanzguruImportService(
     FullWorthDbContext db,
     FinanzguruWorkbookReader reader,
@@ -443,6 +447,36 @@ public static class FinanzguruImportEndpoints
             var result = await reconciliation.ListLinkOptionsAsync(
                 currentUser.RequireUserId(), fullWorthSpaceId, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
+        }).WithTags("Import");
+
+        app.MapPost("/api/import/finanzguru/accounts/{targetAccountId:guid}/confirm-history", async (
+            Guid targetAccountId,
+            Guid fullWorthSpaceId,
+            FinanzguruConfirmHistoryRequest request,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var userId = currentUser.RequireUserId();
+                var result = await reconciliation.ConfirmAttachedHistoryAsync(
+                    userId,
+                    fullWorthSpaceId,
+                    targetAccountId,
+                    request.CurrentBalance,
+                    request.CurrentBalanceCurrency,
+                    ct);
+                if (result is null) return Results.NotFound();
+
+                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
         }).WithTags("Import");
 
         app.MapPost("/api/import/finanzguru/accounts/{importAccountId:guid}/link", async (
