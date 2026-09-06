@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,6 +64,7 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
             {
                 x.transaction.CategoryId,
                 x.transaction.NormalizedCounterparty,
+                x.transaction.MerchantCategoryCode,
                 x.transaction.Amount
             })
             .SingleOrDefaultAsync(ct);
@@ -71,6 +73,23 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
 
         if (before is null || context.Response.StatusCode != StatusCodes.Status204NoContent || before.CategoryId == requestedCategoryId)
             return;
+
+        var category = requestedCategoryId.HasValue
+            ? await financeDb.Categories.AsNoTracking()
+                .Where(x => x.Id == requestedCategoryId.Value && x.FullWorthSpaceId == fullWorthSpaceId)
+                .Select(x => new { x.Key, x.Name, x.IsSystem })
+                .SingleOrDefaultAsync(ct)
+            : null;
+
+        string? cloudMerchantAlias = null;
+        var normalizedAlias = MerchantNormalization.Normalize(before.NormalizedCounterparty);
+        if (normalizedAlias is not null)
+        {
+            var knownMerchantAlias = await financeDb.Set<MerchantAlias>().AsNoTracking().AnyAsync(x =>
+                x.FullWorthSpaceId == fullWorthSpaceId && x.NormalizedAlias == normalizedAlias, ct);
+            if (knownMerchantAlias || !string.IsNullOrWhiteSpace(before.MerchantCategoryCode))
+                cloudMerchantAlias = normalizedAlias;
+        }
 
         await feedback.RecordCategoryDecisionAsync(
             fullWorthSpaceId,
@@ -81,7 +100,12 @@ public sealed class TransactionClassificationFeedbackMiddleware(RequestDelegate 
             before.CategoryId,
             requestedCategoryId,
             "category_changed",
-            ct);
+            ct,
+            cloudMerchantAlias,
+            category?.Key,
+            category?.Name,
+            category is { IsSystem: false },
+            context.Request.Headers.AcceptLanguage.ToString());
     }
 
     private static bool IsClassificationPatch(HttpRequest request, out Guid transactionId)
