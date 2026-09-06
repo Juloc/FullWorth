@@ -398,7 +398,9 @@ function openMoreSheet(){
     // Prefer the nav label; fall back to the page title when a view has no nav.* key (merchants, audit)
     // so the sheet never shows a raw i18n key.
     const nav=get(`nav.${view}`);
-    const label=nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav;
+    const label=view==='transactions'
+      ? get('transactions.allTx')
+      : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav);
     return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
   }).join('');
   const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
