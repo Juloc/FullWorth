@@ -340,7 +340,12 @@ function safeObjectContext(value){
     entityId:value.entityId==null?null:String(value.entityId).slice(0,100),
     entityLabel:value.entityLabel==null?null:String(value.entityLabel).slice(0,160),
     details,
-    selectedIds:Array.isArray(value.selectedIds)?value.selectedIds.slice(0,20).map(x=>String(x).slice(0,100)):[]
+    selectedIds:Array.isArray(value.selectedIds)?value.selectedIds.slice(0,20).map(x=>String(x).slice(0,100)):[],
+    selectedItems:Array.isArray(value.selectedItems)?value.selectedItems.slice(0,20).map(item=>({
+      id:String(item?.id||'').slice(0,100),
+      label:item?.label==null?null:String(item.label).slice(0,160),
+      details:Object.fromEntries(Object.entries(item?.details||{}).slice(0,10).map(([key,val])=>[String(key).slice(0,40),String(val??'').slice(0,180)]))
+    })).filter(item=>item.id):[]
   };
 }
 
