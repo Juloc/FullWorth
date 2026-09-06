@@ -16,7 +16,20 @@ public sealed record ChartResult(string Currency, string Measure, string Dimensi
 
 public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Modules.Fx.CurrencyConverter fx)
 {
-    public async Task<object?> OverviewForUserAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct)
+    public Task<object?> OverviewForUserAsync(
+        Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct) =>
+        OverviewForUserAsync(userId, fullWorthSpaceId, from, to, currency, "month", null, null, ct);
+
+    public async Task<object?> OverviewForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? from,
+        DateOnly? to,
+        string currency,
+        string granularity,
+        Guid? accountId,
+        Guid? accountGroupId,
+        CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         currency = NormalizeCurrency(currency);
@@ -25,8 +38,18 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
         // §18: include foreign-currency transactions and convert each to the base currency at the rate
         // effective on its value date (historical, not today's), instead of the old `Currency == base`
         // filter that silently dropped them. A missing rate marks the result incomplete and drops that row.
+        granularity = NormalizeGranularity(granularity);
         var query = AccessibleTransactions(userId, fullWorthSpaceId)
             .Where(transaction => !transaction.IsIgnored && !transaction.IsTransfer && transaction.Status != "PDNG");
+        if (accountId.HasValue) query = query.Where(transaction => transaction.AccountId == accountId.Value);
+        if (accountGroupId.HasValue)
+        {
+            var groupId = accountGroupId.Value;
+            query = query.Where(transaction => db.Accounts.Any(account =>
+                account.Id == transaction.AccountId &&
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.GroupId == groupId));
+        }
         if (from.HasValue) query = query.Where(transaction => transaction.BookingDate >= from.Value);
         if (to.HasValue) query = query.Where(transaction => transaction.BookingDate <= to.Value);
 
@@ -97,7 +120,62 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
             })
             .OrderBy(item => item.year).ThenBy(item => item.month).ToList();
 
-        return new { currency, income, expenses, net = income - expenses, byCategory, byMonth, incomplete = acc.Incomplete || allocationsIncomplete };
+        // The selected cycle changes both the outer window and the chart buckets. byMonth remains for
+        // compatibility with older clients; byPeriod is the cycle-aware series used by the new UI.
+        DateOnly PeriodStart(DateOnly date) => granularity switch
+        {
+            "week" => date.AddDays(-(((int)date.DayOfWeek + 6) % 7)),
+            "quarter" => new DateOnly(date.Year, ((date.Month - 1) / 3) * 3 + 1, 1),
+            "year" => new DateOnly(date.Year, 1, 1),
+            _ => new DateOnly(date.Year, date.Month, 1)
+        };
+        string PeriodLabel(DateOnly start) => granularity switch
+        {
+            "week" => $"{start.Year:D4}-{start.Month:D2}-{start.Day:D2}",
+            "quarter" => $"{start.Year:D4}-Q{((start.Month - 1) / 3) + 1}",
+            "year" => $"{start.Year:D4}",
+            _ => $"{start.Year:D4}-{start.Month:D2}"
+        };
+
+        var periodExpense = new Dictionary<DateOnly, decimal>();
+        foreach (var allocation in allocations)
+        {
+            if (!txMeta.TryGetValue(allocation.TransactionId, out var meta)) continue;
+            var key = PeriodStart(meta.Date);
+            periodExpense[key] = periodExpense.GetValueOrDefault(key) + allocation.Amount;
+        }
+        var periodIncome = new Dictionary<DateOnly, decimal>();
+        foreach (var transaction in transactions.Where(item => item.Amount > 0 && item.RefundOfTransactionId == null))
+        {
+            var converted = Convert(transaction.Id, transaction.Amount);
+            if (!converted.HasValue || !txMeta.TryGetValue(transaction.Id, out var meta)) continue;
+            var key = PeriodStart(meta.Date);
+            periodIncome[key] = periodIncome.GetValueOrDefault(key) + converted.Value;
+        }
+        var byPeriod = periodExpense.Keys.Union(periodIncome.Keys)
+            .OrderBy(key => key)
+            .Select(key => new
+            {
+                start = key,
+                label = PeriodLabel(key),
+                income = periodIncome.GetValueOrDefault(key),
+                expenses = periodExpense.GetValueOrDefault(key),
+                net = periodIncome.GetValueOrDefault(key) - periodExpense.GetValueOrDefault(key)
+            })
+            .ToList();
+
+        return new
+        {
+            currency,
+            income,
+            expenses,
+            net = income - expenses,
+            byCategory,
+            byMonth,
+            byPeriod,
+            granularity,
+            incomplete = acc.Incomplete || allocationsIncomplete
+        };
     }
 
     public async Task<DashboardResult?> DashboardForUserAsync(Guid userId, Guid fullWorthSpaceId, string currency, CancellationToken ct)
@@ -429,6 +507,12 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
         Guid fullWorthSpaceId, IReadOnlyList<ExpenseTx> transactions, string baseCurrency, CancellationToken ct) =>
         new ExpenseAllocationBuilder(db).BuildAsync(fullWorthSpaceId, transactions, fx, baseCurrency, ct);
 
+    private static string NormalizeGranularity(string? granularity)
+    {
+        var normalized = (granularity ?? "month").Trim().ToLowerInvariant();
+        return normalized is "week" or "month" or "quarter" or "year" ? normalized : "month";
+    }
+
     private static string NormalizeCurrency(string currency)
     {
         var normalized = string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
@@ -454,8 +538,20 @@ public static class AnalyticsEndpoints
     {
         var group = app.MapGroup("/api/analytics").WithTags("Analytics");
 
-        group.MapGet("/overview", async (Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
-            ToResult(await service.OverviewForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency ?? "EUR", ct)));
+        group.MapGet("/overview", async (
+            Guid fullWorthSpaceId,
+            DateOnly? from,
+            DateOnly? to,
+            string? currency,
+            string? granularity,
+            Guid? accountId,
+            Guid? accountGroupId,
+            CurrentUserContext currentUser,
+            AnalyticsService service,
+            CancellationToken ct) =>
+            ToResult(await service.OverviewForUserAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency ?? "EUR",
+                granularity ?? "month", accountId, accountGroupId, ct)));
 
         group.MapGet("/dashboard", async (Guid fullWorthSpaceId, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
         {
