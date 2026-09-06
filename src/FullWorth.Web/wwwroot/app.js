@@ -1413,6 +1413,13 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       const sub=document.createElement('span');sub.className='row-sub';sub.textContent=meta.join(' · ');text.appendChild(sub);
       if(health&&health!=='ok')b.classList.add('bank-option-status-'+health);
       b.appendChild(text);
+      if(health&&health!=='ok'){
+        const chip=document.createElement('span');
+        chip.className='bank-status-chip '+health;
+        const dot=document.createElement('span');dot.className='bank-status-dot';dot.setAttribute('aria-hidden','true');
+        chip.append(dot,document.createTextNode(providerStatusLabel(health)));
+        b.appendChild(chip);
+      }
       b.onclick=()=>{dlg.close();if(bank.fullworthProvider==='fints')openIngConnectionOptions(reconnectConnection);else openBankConnectionOptions(bank,reconnectConnection?.id||null,status?.profile?.id||null)};
       box.appendChild(b);
     }
@@ -1425,12 +1432,17 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
     countryInput.value=country;box.innerHTML=`<div class="row-sub">${esc(get('bankingSetup.loading'))}</div>`;
     const ing=country==='DE'?[ingFinTsBankOption()]:[];
     if(!bankingReady(status)){
-      providerStatusState=null;statusConnect.hidden=true;statusState.textContent=get('bankingSetup.notConfigured');banks=ing;draw(search.value);return;
+      providerStatusState=null;
+      statusConnect.hidden=true;
+      statusState.textContent=get('bankingSetup.notConfigured');
+      statusTools.classList.add('status-attention');
+      statusTools.classList.remove('status-active');
+      banks=ing;draw(search.value);return;
     }
     try{
       const [data,providerStatus]=await Promise.all([
         bankApi(`api/banking/institutions?country=${encodeURIComponent(country)}`),
-        bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`).catch(()=>null)
+        bankApi(`api/banking/provider-status?country=${encodeURIComponent(country)}`).catch(()=>({available:false,reason:'provider_status_request_failed',statuses:[]}))
       ]);
       providerStatusState=providerStatus;
       const canConnectStatus=providerStatus&&
@@ -1439,6 +1451,8 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       statusState.textContent=providerStatus?.available
         ?get('bankingSetup.statusActive')
         :(canConnectStatus?get('bankingSetup.statusConnectShort'):get('bankingSetup.statusUnavailable'));
+      statusTools.classList.toggle('status-attention',providerStatus?.available!==true);
+      statusTools.classList.toggle('status-active',providerStatus?.available===true);
       const enableBanks=mergeBankOptions(data.aspsps||[]).filter(bank=>country!=='DE'||!isIngEnableBank(bank)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
       banks=[...ing,...applyProviderStatuses(enableBanks,providerStatusState)];
       draw(search.value);
