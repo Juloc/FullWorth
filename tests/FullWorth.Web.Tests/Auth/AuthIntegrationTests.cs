@@ -221,6 +221,25 @@ public sealed class AuthIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/auth")]
+    [InlineData("/auth/")]
+    [InlineData("/auth/login")]
+    [InlineData("/auth/register")]
+    [InlineData("/auth/index.html")]
+    public async Task AuthEntryRoutesRedirectAuthenticatedUsersToApp(string path)
+    {
+        await using var factory = new FullWorthWebFactory();
+        var user = await CreateUserAsync(factory);
+        using var client = CreateClient(factory);
+        var login = await LoginAsync(client, user.Email, Password);
+
+        using var response = await SendAsync(client, HttpMethod.Get, path, login.Cookie);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+    }
+
     [Fact]
     public async Task LogoutRevokesSessionAndReplayedCookieIsDenied()
     {
