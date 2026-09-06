@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using FullWorth.Web.Data;
 using FullWorth.Web.Modules.Bootstrap;
 using FullWorth.Web.Modules.Sessions;
 using FullWorth.Web.Security.BackendContext;
