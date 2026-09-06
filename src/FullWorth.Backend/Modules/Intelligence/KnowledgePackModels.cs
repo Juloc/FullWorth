@@ -30,12 +30,40 @@ public sealed record KnowledgePackMerchantPayload(
     string? Domain,
     string? LogoKey);
 
+public sealed record KnowledgePackOntologyEntityPayload(
+    string EntityType,
+    string CanonicalKey,
+    string DisplayName,
+    string? ParentCanonicalKey,
+    string Status,
+    int Version);
+
+public sealed record KnowledgePackOntologyAliasPayload(
+    string EntityType,
+    string CanonicalKey,
+    string Alias,
+    string NormalizedAlias,
+    string Locale,
+    string? Country,
+    decimal Confidence,
+    int DistinctInstances,
+    int Version);
+
+public sealed record KnowledgePackOntologyRedirectPayload(
+    string EntityType,
+    string FromCanonicalKey,
+    string ToCanonicalKey,
+    int Version);
+
 public sealed record KnowledgePackPayload(
     string PackId,
     string Version,
     string SchemaVersion,
     string Region,
-    IReadOnlyList<KnowledgePackMerchantPayload> Merchants);
+    IReadOnlyList<KnowledgePackMerchantPayload> Merchants,
+    IReadOnlyList<KnowledgePackOntologyEntityPayload>? OntologyEntities = null,
+    IReadOnlyList<KnowledgePackOntologyAliasPayload>? OntologyAliases = null,
+    IReadOnlyList<KnowledgePackOntologyRedirectPayload>? OntologyRedirects = null);
 
 public sealed class KnowledgePackInstallation
 {
@@ -81,6 +109,41 @@ public sealed class OfficialMerchantMapping
     public decimal Confidence { get; set; }
     public string? Domain { get; set; }
     public string? LogoKey { get; set; }
+}
+
+
+public sealed class OfficialOntologyEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EntityType { get; set; } = string.Empty;
+    public string CanonicalKey { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string? ParentCanonicalKey { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int Version { get; set; }
+}
+
+public sealed class OfficialOntologyAlias
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EntityType { get; set; } = string.Empty;
+    public string CanonicalKey { get; set; } = string.Empty;
+    public string Alias { get; set; } = string.Empty;
+    public string NormalizedAlias { get; set; } = string.Empty;
+    public string Locale { get; set; } = "und";
+    public string Country { get; set; } = "GLOBAL";
+    public decimal Confidence { get; set; }
+    public int DistinctInstances { get; set; }
+    public int Version { get; set; }
+}
+
+public sealed class OfficialOntologyRedirect
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EntityType { get; set; } = string.Empty;
+    public string FromCanonicalKey { get; set; } = string.Empty;
+    public string ToCanonicalKey { get; set; } = string.Empty;
+    public int Version { get; set; }
 }
 
 /// <summary>
@@ -138,6 +201,37 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.Confidence).HasPrecision(6, 5);
             entity.Property(x => x.Domain).HasMaxLength(255);
             entity.Property(x => x.LogoKey).HasMaxLength(180);
+        });
+
+        modelBuilder.Entity<OfficialOntologyEntity>(entity =>
+        {
+            entity.HasIndex(x => new { x.EntityType, x.CanonicalKey }).IsUnique();
+            entity.Property(x => x.EntityType).HasMaxLength(32);
+            entity.Property(x => x.CanonicalKey).HasMaxLength(180);
+            entity.Property(x => x.DisplayName).HasMaxLength(200);
+            entity.Property(x => x.ParentCanonicalKey).HasMaxLength(180);
+            entity.Property(x => x.Status).HasMaxLength(24);
+        });
+
+        modelBuilder.Entity<OfficialOntologyAlias>(entity =>
+        {
+            entity.HasIndex(x => new { x.EntityType, x.NormalizedAlias, x.Locale, x.Country });
+            entity.HasIndex(x => new { x.EntityType, x.CanonicalKey });
+            entity.Property(x => x.EntityType).HasMaxLength(32);
+            entity.Property(x => x.CanonicalKey).HasMaxLength(180);
+            entity.Property(x => x.Alias).HasMaxLength(200);
+            entity.Property(x => x.NormalizedAlias).HasMaxLength(200);
+            entity.Property(x => x.Locale).HasMaxLength(20);
+            entity.Property(x => x.Country).HasMaxLength(8);
+            entity.Property(x => x.Confidence).HasPrecision(6, 5);
+        });
+
+        modelBuilder.Entity<OfficialOntologyRedirect>(entity =>
+        {
+            entity.HasIndex(x => new { x.EntityType, x.FromCanonicalKey }).IsUnique();
+            entity.Property(x => x.EntityType).HasMaxLength(32);
+            entity.Property(x => x.FromCanonicalKey).HasMaxLength(180);
+            entity.Property(x => x.ToCanonicalKey).HasMaxLength(180);
         });
     }
 }
