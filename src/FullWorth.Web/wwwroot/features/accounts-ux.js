@@ -25,7 +25,7 @@ async function bundle(force=false){reset();if(!S.space)return{accounts:[],connec
   // S.bundle, so on a COLD-START failure (S.bundle still null) an un-assigned fallback would leave the
   // guard bypassed and every DOM mutation would refetch — the exact storm this cache is meant to prevent.
   catch(e){console.error(e);S.bundleAt=Date.now();return S.bundle=(S.bundle||{accounts:[],connections:[],groups:[]})}}
-function bankKey(v){return(v||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/\b(ag|se|gmbh|bank|deutschland|germany)\b/g,'').replace(/[^a-z0-9]/g,'')}
+function bankKey(v){const k=(v||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/\b(ag|se|gmbh|bank|deutschland|germany)\b/g,'').replace(/[^a-z0-9]/g,'');return k==='dkb'?'deutschekreditbank':k}
 async function banks(){if(S.banks)return S.banks;try{S.banks=arr(await req('api/banking/institutions?country=DE',{},'banking'),'aspsps')}catch{S.banks=[]}return S.banks}
 function matchBank(name,bs){const k=bankKey(name);if(!k)return null;return bs.find(x=>bankKey(x.name)===k)||bs.find(x=>{const y=bankKey(x.name);return y.length>2&&(y.includes(k)||k.includes(y))})||null}
 function logo(b){const raw=b?.logo||b?.logoUrl||b?.logo_url||'';try{const u=new URL(raw,location.origin);return u.origin===location.origin||(u.protocol==='https:'&&(u.hostname==='enablebanking.com'||u.hostname.endsWith('.enablebanking.com')))?u.href:''}catch{return''}}
