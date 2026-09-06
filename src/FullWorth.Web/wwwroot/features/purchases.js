@@ -198,7 +198,29 @@ async function openDetail(id) {
         unitPrice: original.unitPrice ?? null,
         totalPrice: Number(r.querySelector('.item-total').value || 0),
         currency: original.currency || purchase.currency,
-        notes: original.notes ?? null
+        notes: original.notes ?? null,
+        productId: original.productId ?? null,
+        rawName: original.rawName ?? original.name ?? null,
+        barcode: original.barcode ?? null,
+        quantityUnit: original.quantityUnit ?? null,
+        packageQuantity: original.packageQuantity ?? null,
+        packageUnit: original.packageUnit ?? null,
+        packageCount: original.packageCount ?? null,
+        baseUnitPrice: original.baseUnitPrice ?? null,
+        discountAmount: original.discountAmount ?? null,
+        depositAmount: original.depositAmount ?? null,
+        taxRate: original.taxRate ?? null,
+        taxAmount: original.taxAmount ?? null,
+        lineType: original.lineType ?? null,
+        extractionConfidence: original.extractionConfidence ?? null,
+        isManuallyCorrected: original.isManuallyCorrected ?? false,
+        totalPriceOverridden: original.totalPriceOverridden ?? false,
+        sortOrder: original.sortOrder ?? Number(r.dataset.index),
+        returnDeadline: original.returnDeadline ?? null,
+        warrantyEnd: original.warrantyEnd ?? null,
+        serialNumber: original.serialNumber ?? null,
+        originalUnitPrice: original.originalUnitPrice ?? null,
+        discountLabel: original.discountLabel ?? null
       };
     });
     try { await ctx.api(`api/purchases/${id}/items`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); dlg.close(); await renderPurchases(ctx); }
