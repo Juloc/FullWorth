@@ -1,0 +1,41 @@
+name: Verify Backend Final
+
+on:
+  push:
+    branches:
+      - 'verify/backend-final-fast'
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
+      Logging__LogLevel__Default: Warning
+      Logging__LogLevel__Microsoft: Warning
+      Logging__LogLevel__Microsoft_EntityFrameworkCore: Warning
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs fullworth-postgres
+          exit 1
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Backend tests
+        run: dotnet test tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj -c Release --blame-hang-timeout 7m --blame-hang-dump-type mini --logger "console;verbosity=minimal"
