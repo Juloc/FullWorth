@@ -196,10 +196,10 @@ async function openFilterSheet() {
 async function openBookingDialog() {
   let accounts, options;
   try {
-    accounts = (await ctx.api('api/accounts')).filter(a => a.provider === 'manual' && !a.bankConnectionId);
+    accounts = (await ctx.api('api/accounts')).filter(a => a.provider !== 'finanzguru-import' && a.isActive !== false);
     options = await ctx.categoryOptions();
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
-  if (!accounts.length) { ctx.toast(ctx.get('transactions.needManualAccount')); return; }
+  if (!accounts.length) { ctx.toast(ctx.get('common.empty')); return; }
 
   const today = new Date().toISOString().slice(0, 10);
   const accountOptions = accounts.map(a => `<option value="${a.id}" data-currency="${ctx.esc(a.currency)}">${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
