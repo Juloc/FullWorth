@@ -1313,6 +1313,8 @@ Drag-and-drop always has an accessible non-drag alternative such as Move up/down
 
 # 26. Frontend component contract
 
+The active cleanup/migration plan for this frontend is documented in `docs/FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md`. New frontend work must not introduce additional workaround layers that conflict with that plan.
+
 Do not create a giant design-system framework. Create small reusable UI modules/components.
 
 Required shared concepts:
