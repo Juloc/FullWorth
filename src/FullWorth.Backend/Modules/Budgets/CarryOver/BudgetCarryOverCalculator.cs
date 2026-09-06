@@ -6,6 +6,9 @@ public enum CarryOverMode
     /// <summary>Every cycle starts fresh at the base budget amount.</summary>
     Disabled,
 
+    /// <summary>Unused budget rolls forward, but an overspend never reduces the next cycle.</summary>
+    PositiveOnly,
+
     /// <summary>The remainder (leftover or overspend) of each cycle is carried into the next.</summary>
     Enabled,
 }
@@ -37,6 +40,8 @@ public static class BudgetCarryOverCalculator
             // (which can be negative for an overspend) becomes the next cycle's carry-in.
             var effective = baseAmount + carry;
             carry = effective - spend;
+            if (mode == CarryOverMode.PositiveOnly && carry < 0m)
+                carry = 0m;
         }
 
         return carry;

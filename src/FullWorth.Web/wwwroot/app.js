@@ -580,9 +580,12 @@ async function openBudgetDetail(id){
   const forecastLine=trend==='NoData'?'':`<div class="budget-detail-forecast"><div class="kv"><span>${esc(get('budgets.projectedEnd'))}</span><strong class="amount">${money(s.projectedEndSpend,currency)}</strong></div><div class="kv"><span>${esc(get(projOverUnder>0?'budgets.projectedOver':'budgets.projectedUnder'))}</span><strong class="amount ${projOverUnder>0?'negative':'positive'}">${money(Math.abs(projOverUnder),currency)}</strong></div></div>`;
   const rows=(s.contributing||[]).map(t=>`<div class="row"><div class="row-main"><div class="row-title">${esc(t.counterparty||'—')}</div><div class="row-sub">${t.bookingDate?date(t.bookingDate):''}${t.category?` · ${esc(t.category)}`:''}</div></div><div class="amount negative">${money(-Math.abs(Number(t.amount||0)),t.currency||currency)}</div></div>`).join('');
   const cycleLabel=s.period&&s.period!=='monthly'?`${esc(get('budgets.period_'+s.period)||s.period)} · `:'';
+  const carryIn=Number(s.carryIn||0);
+  const rolloverLine=Math.abs(carryIn)>0.004?`<div class="row-sub budget-rollover-summary">${esc(get('budgets.baseAmount'))}: ${money(s.baseBudgetAmount??s.budgetAmount,currency)} · ${esc(get('budgets.carryIn'))}: ${carryIn>0?'+':''}${money(carryIn,currency)}</div>`:'';
   const dlg=dialog(`<div class="dialog-card budget-detail">
     <div class="panel-head"><h2>${esc(s.name)}</h2><div class="panel-head-actions"><button type="button" class="ghost" data-edit>${esc(get('common.edit'))}</button><button data-close aria-label="${esc(get('common.close'))}">×</button></div></div>
     <div class="row-sub">${cycleLabel}${date(s.periodStart)}–${date(s.periodEnd)}</div>
+    ${rolloverLine}
     <div class="budget-detail-stats">
       <div class="kv"><span>${esc(get('budgets.spent'))}</span><strong class="amount">${money(s.spent,currency)}</strong></div>
       <div class="kv"><span>${esc(get('budgets.budget'))}</span><strong class="amount">${money(s.budgetAmount,currency)}</strong></div>
@@ -850,16 +853,100 @@ function openBalanceDialog(account){
 async function openBudgetDialog(existing){
   const currency=existing?.currency||state.space?.baseCurrency||'EUR';
   let options;try{options=await categoryOptions(existing?.categoryId||undefined)}catch(err){toast(err.message||get('common.error'));return}
-  const periods=['monthly','weekly','biweekly','paycycle'].map(p=>`<option value="${p}"${existing?.period===p?' selected':''}>${esc(get(`budgets.period_${p}`))}</option>`).join('');
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get(existing?'budgets.edit':'budgets.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><label>${esc(get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${existing?esc(String(existing.amount)):''}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('budgets.period'))}<select name="period">${periods}</select></label><label>${esc(get('transactions.category'))}<select name="category"><option value="">${esc(get('common.all'))}</option>${options}</select></label><label class="check"><input name="carryOver" type="checkbox"${existing?.carryOver?' checked':''}>${esc(get('budgets.carryOver'))}</label><div class="dialog-actions">${existing?`<button type="button" class="ghost danger" data-delete>${esc(get('common.delete'))}</button>`:''}<button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
+  const selectedPeriod=existing?.period||'monthly';
+  const periods=['daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom']
+    .map(p=>`<option value="${p}"${selectedPeriod===p?' selected':''}>${esc(get(`budgets.period_${p}`))}</option>`).join('');
+  const rollover=!existing?.carryOver?'reset':existing?.carryOverOverspend===false?'positive':'full';
+  const rolloverOptions=['reset','positive','full']
+    .map(mode=>`<option value="${mode}"${rollover===mode?' selected':''}>${esc(get(`budgets.rollover_${mode}`))}</option>`).join('');
+  const presets=!existing?`<div class="budget-wizard-presets"><div class="row-sub">${esc(get('budgets.quickStart'))}</div><div class="budget-preset-row">
+    <button type="button" class="btn-secondary" data-budget-preset="weekly-groceries">${esc(get('budgets.preset_weeklyGroceries'))}</button>
+    <button type="button" class="btn-secondary" data-budget-preset="monthly">${esc(get('budgets.preset_monthly'))}</button>
+    <button type="button" class="btn-secondary" data-budget-preset="paycycle">${esc(get('budgets.preset_paycycle'))}</button>
+  </div></div>`:'';
+  const dlg=dialog(`<form class="dialog-card budget-wizard"><h2>${esc(get(existing?'budgets.edit':'budgets.new'))}</h2>
+    ${presets}
+    <div class="budget-wizard-section">
+      <label>${esc(get('common.name'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label>
+      <div class="form-grid">
+        <label>${esc(get('transactions.amount'))}<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required value="${existing?esc(String(existing.amount)):''}"></label>
+        <label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label>
+      </div>
+      <label>${esc(get('budgets.period'))}<select name="period">${periods}</select></label>
+      <div class="form-grid budget-cycle-fields">
+        <label data-budget-start>${esc(get('budgets.anchorDate'))}<input name="startDate" type="date" value="${esc(existing?.startDate||'')}"><small class="row-sub" data-budget-anchor-hint></small></label>
+        <label data-budget-end>${esc(get('budgets.endDate'))}<input name="endDate" type="date" value="${esc(existing?.endDate||'')}"></label>
+      </div>
+    </div>
+    <div class="budget-wizard-section">
+      <label>${esc(get('transactions.category'))}<select name="category"><option value="">${esc(get('common.all'))}</option>${options}</select></label>
+      <label>${esc(get('budgets.rollover'))}<select name="rollover">${rolloverOptions}</select><small class="row-sub" data-rollover-hint></small></label>
+    </div>
+    <div class="dialog-actions">${existing?`<button type="button" class="btn-danger" data-delete>${esc(get('common.delete'))}</button>`:''}<button type="button" class="btn-secondary" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="btn-primary">${esc(get(existing?'common.save':'common.create'))}</button></div>
+  </form>`);
+  const form=dlg.querySelector('form');
+  const periodSelect=form.querySelector('[name="period"]');
+  const rolloverSelect=form.querySelector('[name="rollover"]');
+  const startWrap=form.querySelector('[data-budget-start]');
+  const endWrap=form.querySelector('[data-budget-end]');
+  const startInput=form.querySelector('[name="startDate"]');
+  const endInput=form.querySelector('[name="endDate"]');
+  const anchorHint=form.querySelector('[data-budget-anchor-hint]');
+  const rolloverHint=form.querySelector('[data-rollover-hint]');
+  const localIso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mondayIso=()=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return localIso(d)};
+  const syncCycleFields=()=>{
+    const period=periodSelect.value;
+    const needsAnchor=['weekly','biweekly','paycycle','custom'].includes(period);
+    startWrap.hidden=!needsAnchor;
+    endWrap.hidden=period!=='custom';
+    startInput.required=period==='custom';
+    endInput.required=period==='custom';
+    anchorHint.textContent=get(period==='paycycle'?'budgets.anchorHint_paycycle':period==='custom'?'budgets.anchorHint_custom':'budgets.anchorHint_week');
+    if(period==='paycycle'&&!startInput.value)startInput.value=localIso(new Date());
+  };
+  const syncRolloverHint=()=>{rolloverHint.textContent=get(`budgets.rolloverHint_${rolloverSelect.value}`)};
+  periodSelect.addEventListener('change',syncCycleFields);
+  rolloverSelect.addEventListener('change',syncRolloverHint);
+  form.querySelectorAll('[data-budget-preset]').forEach(button=>button.addEventListener('click',()=>{
+    const preset=button.dataset.budgetPreset;
+    const name=form.querySelector('[name="name"]');
+    if(preset==='weekly-groceries'){
+      if(!name.value)name.value=get('budgets.presetName_weeklyGroceries');
+      periodSelect.value='weekly';rolloverSelect.value='positive';startInput.value=mondayIso();
+    }else if(preset==='paycycle'){
+      if(!name.value)name.value=get('budgets.presetName_paycycle');
+      periodSelect.value='paycycle';rolloverSelect.value='full';startInput.value=localIso(new Date());
+    }else{
+      if(!name.value)name.value=get('budgets.presetName_monthly');
+      periodSelect.value='monthly';rolloverSelect.value='reset';
+    }
+    syncCycleFields();syncRolloverHint();
+    form.querySelector('[name="amount"]').focus();
+  }));
+  syncCycleFields();syncRolloverHint();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('[data-delete]')?.addEventListener('click',async()=>{
     if(!await ctx.confirm(get('budgets.deleteConfirm').replace('{name}',()=>existing.name),{destructive:true,confirmLabel:get('common.delete')}))return;
     try{await api(`api/budgets/${existing.id}`,{method:'DELETE'});dlg.close();toast(get('common.deleted'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
   });
-  dlg.querySelector('form').onsubmit=async e=>{
+  form.onsubmit=async e=>{
     e.preventDefault();const fd=new FormData(e.currentTarget);
-    const body=jsonBody({name:fd.get('name'),categoryId:fd.get('category')||null,amount:Number(fd.get('amount')),currency:fd.get('currency'),period:fd.get('period'),carryOver:fd.get('carryOver')==='on',isActive:true,startDate:null,endDate:null});
+    const period=String(fd.get('period')||'monthly');
+    const rolloverMode=String(fd.get('rollover')||'reset');
+    const usesAnchor=['weekly','biweekly','paycycle','custom'].includes(period);
+    const body=jsonBody({
+      name:fd.get('name'),
+      categoryId:fd.get('category')||null,
+      amount:Number(fd.get('amount')),
+      currency:fd.get('currency'),
+      period,
+      carryOver:rolloverMode!=='reset',
+      carryOverOverspend:rolloverMode==='full',
+      isActive:true,
+      startDate:usesAnchor?(fd.get('startDate')||null):null,
+      endDate:period==='custom'?(fd.get('endDate')||null):null
+    });
     try{await api(existing?`api/budgets/${existing.id}`:'api/budgets',existing?{...body,method:'PUT'}:body);dlg.close();toast(get('common.saved'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
   };
   dlg.showModal();
