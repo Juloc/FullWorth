@@ -82,6 +82,69 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
     }
 
     [Fact]
+    public async Task TradeRepublicIsoDatetimeColumnStagesWithoutRejectingEveryRow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+
+        const string csv =
+            "datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
+            "2026-08-01T10:15:30.123Z,2026-08-01,DEFAULT,TRADE,BUY,FUND,Core MSCI World,IE00B4L5Y983,1,100,-100,0,0,EUR,tr-datetime-buy\r\n" +
+            "2026-08-02T12:00:00+02:00,2026-08-02,DEFAULT,CASH,INTEREST_PAYMENT,,,,,2.5,0,0.5,EUR,tr-datetime-interest\r\n" +
+            "2026-08-03T18:45:01Z,2026-08-03,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,100,0,0,EUR,tr-datetime-deposit\r\n";
+
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/investment-import/upload?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+        file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        form.Add(file, "file", "trade-republic-datetime.csv");
+        form.Add(new StringContent(JsonSerializer.Serialize(new
+        {
+            // Intentionally use the timestamp column. The backend must still extract the calendar date.
+            tradeDate = "datetime",
+            tradeType = "type",
+            settlementDate = (string?)null,
+            securityName = "name",
+            isin = "symbol",
+            wkn = (string?)null,
+            ticker = (string?)null,
+            quantity = "shares",
+            price = "price",
+            grossAmount = (string?)null,
+            amount = "amount",
+            currency = "currency",
+            fees = "fee",
+            taxes = "tax",
+            withholdingTax = (string?)null,
+            assetClass = "asset_class",
+            sourceProvider = "trade_republic",
+            externalKey = "transaction_id"
+        }), Encoding.UTF8, "application/json"), "mapping");
+        request.Content = form;
+
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(3, body.RootElement.GetProperty("sourceRows").GetInt32());
+        Assert.Equal(3, body.RootElement.GetProperty("ready").GetInt32());
+        Assert.Equal(0, body.RootElement.GetProperty("errors").GetInt32());
+
+        var jobId = body.RootElement.GetProperty("jobId").GetGuid();
+        using var summaryRequest = UserRequest(HttpMethod.Get,
+            $"/api/investment-import/jobs/{jobId:D}/summary?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var summaryResponse = await client.SendAsync(summaryRequest);
+        Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
+        using var summary = JsonDocument.Parse(await summaryResponse.Content.ReadAsStringAsync());
+        Assert.Equal(3, summary.RootElement.GetProperty("ready").GetInt32());
+        Assert.Equal(0, summary.RootElement.GetProperty("errors").GetInt32());
+        Assert.All(summary.RootElement.GetProperty("preview").EnumerateArray(),
+            item => Assert.NotNull(item.GetProperty("tradeDate").GetString()));
+    }
+
+    [Fact]
     public async Task TradeRepublicImportCanCreatePortfolioWhenNoneExists()
     {
         using var factory = new BackendWebApplicationFactory();
@@ -89,9 +152,9 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio
         var owner = Guid.NewGuid();
         await SeedOwner(factory, owner);
 
-        const string csv = "date,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
-                           "2026-08-01,BUY,FUND,Core MSCI World,IE00B4L5Y983,1.5,100,-150,1,0,EUR,tr-buy-1\r\n" +
-                           "2026-08-02,INTEREST_PAYMENT,,,,,,2.5,0,0.5,EUR,tr-interest-1\r\n";
+        const string csv = "datetime,date,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id\r\n" +
+                           "2026-08-01T10:15:30Z,2026-08-01,BUY,FUND,Core MSCI World,IE00B4L5Y983,1.5,100,-150,1,0,EUR,tr-buy-1\r\n" +
+                           "2026-08-02T11:00:00Z,2026-08-02,INTEREST_PAYMENT,,,,,,2.5,0,0.5,EUR,tr-interest-1\r\n";
         var job = await UploadTradeRepublic(client, owner, csv);
 
         using var request = UserRequest(HttpMethod.Post,
