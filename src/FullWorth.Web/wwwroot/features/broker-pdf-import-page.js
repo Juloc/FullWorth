@@ -1,3 +1,4 @@
+import { api as sharedApi } from '../core/services.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
   de:{subtitle:'Broker-Abrechnungen lokal auslesen und vor dem Import prüfen – auch Scan-PDFs per OCR.',back:'Zurück',space:'FullWorth Space',hint:'FullWorth versucht zuerst den eingebetteten PDF-Text. Bei Scan-PDFs oder mehreren Abrechnungen läuft automatisch lokales OCR mit Poppler und Tesseract. Es wird nichts automatisch gebucht: Erkennung, Wertpapier-Zuordnung und Zieldepot werden vor dem Commit angezeigt.',portfolio:'Zieldepot',file:'Broker-Abrechnung als PDF',analyse:'PDF analysieren',review:'Import prüfen',security:'Wertpapiere prüfen',create:'Fehlende Wertpapiere automatisch anlegen',commit:'Ins Depot importieren',working:'Wird verarbeitet …',ocr:'Lokale OCR läuft …',needFile:'Bitte zuerst eine PDF-Datei wählen.',needPortfolio:'Bitte ein Zieldepot wählen.',newPortfolio:'Neues PDF-Import-Depot anlegen',broker:'Erkannter Broker',confidence:'Erkennungssicherheit',extraction:'Auslesemethode',textExtraction:'PDF-Text',ocrExtraction:'Lokale OCR',warnings:'Hinweise',rows:'Zeilen',ready:'Bereit',errors:'Fehler',matched:'Automatisch erkannt',autoNew:'Automatisch / neu anlegen',imported:'Importiert',duplicates:'Duplikate',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.'},
@@ -10,12 +11,7 @@ const state={space:null,portfolios:[],securities:[],detect:null,jobId:null,summa
 function setText(id,value){const el=$(id);if(el)el.textContent=value}
 setText('pdf-subtitle',t.subtitle);setText('pdf-back',t.back);setText('pdf-space-label',t.space);setText('pdf-hint',t.hint);setText('pdf-portfolio-label',t.portfolio);setText('pdf-file-label',t.file);setText('pdf-detect',t.analyse);setText('pdf-stage',t.review);setText('pdf-security-title',t.security);setText('pdf-create-securities-label',t.create);setText('pdf-commit',t.commit);
 
-async function api(path,options={}){
-  const response=await fetch(`/bff/backend/${path.replace(/^\//,'')}`,options);
-  if(!response.ok){let message=`HTTP ${response.status}`;try{const body=await response.json();message=body.error||body.detail||body.title||message}catch{}const err=new Error(message);err.status=response.status;throw err}
-  if(response.status===204)return null;
-  return response.json();
-}
+async function api(path,options={}){return sharedApi(path,options)}
 function status(message){setText('pdf-status',message)}
 function fail(err){console.error(err);status(`${t.error} ${err?.message||''}`.trim())}
 function formWithFile(file){const body=new FormData();body.append('file',file,file.name);return body}
