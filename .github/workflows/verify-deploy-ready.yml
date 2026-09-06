@@ -1,0 +1,103 @@
+name: Verify Deploy Ready
+
+on:
+  push:
+    branches:
+      - 'verify/deploy-ready-final-20260906'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs fullworth-postgres
+          exit 1
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore FullWorth.slnx
+      - name: Build
+        run: dotnet build FullWorth.slnx -c Release --no-restore
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj
+          - tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj
+          - tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj
+          - tests/FullWorth.FinTs.Tests/FullWorth.FinTs.Tests.csproj
+    env:
+      FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs fullworth-postgres
+          exit 1
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test "${{ matrix.project }}" -c Release --blame-hang-timeout 7m --blame-hang-dump-type mini --logger "console;verbosity=normal"
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Compose
+        run: docker compose --env-file .env.example config --quiet
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: src/FullWorth.Backend/Dockerfile
+          - name: banking
+            dockerfile: src/FullWorth.Banking/Dockerfile
+          - name: web
+            dockerfile: src/FullWorth.Web/Dockerfile
+          - name: codex
+            dockerfile: src/FullWorth.CodexBridge/Dockerfile
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -f "${{ matrix.dockerfile }}" -t "fullworth-${{ matrix.name }}:verify" .
