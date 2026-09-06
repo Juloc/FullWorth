@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v75';
+const VERSION = 'v76';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -19,6 +19,8 @@ const APP_SHELL = [
   '/core/state.js',
   '/core/router.js',
   '/core/feature-registry.js',
+  '/core/i18n.js',
+  '/ui/toast.js',
   '/ui/ux-kit.js',
   '/features/contracts.js',
   '/features/analytics.js',
