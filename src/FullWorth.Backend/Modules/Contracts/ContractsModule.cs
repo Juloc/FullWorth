@@ -99,13 +99,21 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return entity;
     }
 
-    public Task<List<ContractView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
-        Project(VisibleContracts(userId, fullWorthSpaceId)
-                .OrderBy(x => x.NextDueDate).ThenBy(x => x.Name))
+    public async Task<List<ContractView>> ListForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var contracts = await VisibleContracts(userId, fullWorthSpaceId)
+            .OrderBy(x => x.NextDueDate)
+            .ThenBy(x => x.Name)
             .ToListAsync(ct);
+        return contracts.Select(ToView).ToList();
+    }
 
-    public Task<ContractView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
-        Project(VisibleContracts(userId, fullWorthSpaceId).Where(x => x.Id == contractId)).SingleOrDefaultAsync(ct);
+    public async Task<ContractView?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
+    {
+        var contract = await VisibleContracts(userId, fullWorthSpaceId)
+            .SingleOrDefaultAsync(x => x.Id == contractId, ct);
+        return contract is null ? null : ToView(contract);
+    }
 
     public async Task<ContractAccessLevel> GetAccessAsync(Guid userId, Guid fullWorthSpaceId, Guid contractId, CancellationToken ct)
     {
@@ -236,8 +244,17 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId) &&
             (contract.AccountId == null || db.AccountOwners.Any(owner => owner.AccountId == contract.AccountId.Value && owner.UserId == userId)));
 
-    private IQueryable<ContractView> Project(IQueryable<RecurringContract> contracts) =>
-        contracts.Select(contract => new ContractView(
+    private static ContractView ToView(RecurringContract contract)
+    {
+        // One cadence calculation path for list/detail/detection. Activity already uses
+        // ContractCycle.PeriodsPerYear; list normalization now uses the same source of truth.
+        var annualized = Math.Round(
+            contract.Amount * ContractCycle.PeriodsPerYear(contract.BillingCycle, contract.Interval),
+            2,
+            MidpointRounding.AwayFromZero);
+        var monthly = Math.Round(annualized / 12m, 2, MidpointRounding.AwayFromZero);
+
+        return new ContractView(
             contract.Id,
             contract.FullWorthSpaceId,
             contract.Name,
@@ -257,18 +274,9 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             contract.Notes,
             contract.CreatedAt,
             contract.UpdatedAt,
-            contract.Amount * (
-                contract.BillingCycle == "weekly" ? 52m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
-                contract.BillingCycle == "quarterly" ? 1m / (3m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
-                contract.BillingCycle == "yearly" ? 1m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
-                contract.BillingCycle == "daily" ? 365m / (12m * (contract.Interval <= 0 ? 1 : contract.Interval)) :
-                1m / (contract.Interval <= 0 ? 1 : contract.Interval)),
-            contract.Amount * (
-                contract.BillingCycle == "weekly" ? 52m / (contract.Interval <= 0 ? 1 : contract.Interval) :
-                contract.BillingCycle == "quarterly" ? 4m / (contract.Interval <= 0 ? 1 : contract.Interval) :
-                contract.BillingCycle == "yearly" ? 1m / (contract.Interval <= 0 ? 1 : contract.Interval) :
-                contract.BillingCycle == "daily" ? 365m / (contract.Interval <= 0 ? 1 : contract.Interval) :
-                12m / (contract.Interval <= 0 ? 1 : contract.Interval))));
+            monthly,
+            annualized);
+    }
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking()
