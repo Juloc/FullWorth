@@ -165,6 +165,63 @@ public static class ReceiptImportEndpoints
             { return Results.BadRequest(new { error = ex.Message }); }
         });
 
+        group.MapGet("/paperless/presets", async (
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            return Results.Ok(await service.ListPaperlessPresetsAsync(userId, fullWorthSpaceId, ct));
+        });
+
+        group.MapPost("/paperless/presets", async (
+            Guid fullWorthSpaceId,
+            PaperlessImportPresetWrite request,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            try { return Results.Ok(await service.SavePaperlessPresetAsync(userId, fullWorthSpaceId, null, request, ct)); }
+            catch (Exception ex) when (ex is ReceiptImportException or InvalidOperationException or HttpRequestException)
+            { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
+        group.MapPut("/paperless/presets/{presetId:guid}", async (
+            Guid presetId,
+            Guid fullWorthSpaceId,
+            PaperlessImportPresetWrite request,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            try { return Results.Ok(await service.SavePaperlessPresetAsync(userId, fullWorthSpaceId, presetId, request, ct)); }
+            catch (Exception ex) when (ex is ReceiptImportException or InvalidOperationException or HttpRequestException)
+            { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
+        group.MapDelete("/paperless/presets/{presetId:guid}", async (
+            Guid presetId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            await service.DeletePaperlessPresetAsync(userId, fullWorthSpaceId, presetId, ct);
+            return Results.NoContent();
+        });
+
         group.MapPost("/paperless/preview", async (
             Guid fullWorthSpaceId,
             PaperlessPreviewRequest request,
