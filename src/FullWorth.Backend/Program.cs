@@ -110,6 +110,7 @@ builder.Services.Configure<PurchaseStorageOptions>(builder.Configuration.GetSect
 builder.Services.Configure<ReceiptImportOptions>(builder.Configuration.GetSection(ReceiptImportOptions.SectionName));
 builder.Services.Configure<PriceChangeDetectionOptions>(builder.Configuration.GetSection(PriceChangeDetectionOptions.SectionName));
 builder.Services.AddScoped<UserStore>(services => new UserStore(services.GetRequiredService<FullWorthDbContext>()));
+builder.Services.AddScoped<AccountPurgeService>();
 builder.Services.AddScoped<FullWorthSpaceStore>(services => new FullWorthSpaceStore(
     services.GetRequiredService<FullWorthDbContext>(),
     services.GetRequiredService<AuditService>()));
