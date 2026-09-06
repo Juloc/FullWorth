@@ -36,8 +36,10 @@ html[data-theme="dark"]{
   --shadow:none;
 }
 *{box-sizing:border-box}
-html,body{margin:0;max-width:100%;overflow-x:clip;touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{font-family:var(--font);-webkit-tap-highlight-color:transparent;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
+html,body{margin:0;max-width:100%;overflow-x:clip}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
+html.pwa-standalone,html.pwa-standalone body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html.pwa-standalone body{-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
 h1,h2{margin:0}
 a{color:var(--accent)}
