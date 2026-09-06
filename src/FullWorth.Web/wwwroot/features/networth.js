@@ -421,6 +421,9 @@ function emergencyAccounts() {
 }
 
 function emergencyCurrentAmount() {
+  const server = nw.overview?.emergencyFund;
+  if (server?.enabled === true && Number.isFinite(Number(server.currentAmount)))
+    return num(server.currentAmount);
   return emergencyAccounts().reduce((sum, account) => {
     if (account.baseValue != null) return sum + num(account.baseValue);
     if (account.latestBalance && account.latestBalance.currency === nw.currency) return sum + num(account.latestBalance.amount);
@@ -443,8 +446,10 @@ function emergencyScopeLabel() {
 
 function buildEmergencyCard() {
   const pref = nw.emergency || {};
-  const target = num(pref.targetAmount);
-  if (pref.enabled !== true || target <= 0) return '';
+  const server = nw.overview?.emergencyFund;
+  const target = num(server?.targetAmount ?? pref.targetAmount);
+  const enabled = server?.enabled === true || pref.enabled === true;
+  if (!enabled || target <= 0) return '';
   const current = emergencyCurrentAmount();
   const pct = Math.max(0, Math.min(100, target > 0 ? current / target * 100 : 0));
   const body = `<div class="nw-emergency">
