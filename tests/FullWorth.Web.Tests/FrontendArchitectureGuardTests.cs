@@ -89,7 +89,6 @@ public sealed class FrontendArchitectureGuardTests
             "app.js",
             // Legacy migration allow-list. This list may only shrink.
             "features/advanced-transaction-bulk-ui.js",
-            "features/broker-pdf-import-page.js",
             "features/capability-ui-guard.js",
             "features/category-intelligence-ui.js",
             "features/category-merge-ui.js",
@@ -98,7 +97,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/feature-parity-ui.js",
             "features/finanzguru-import-page.js",
             "features/fullworth-space-switcher-ui.js",
-            "features/import-center-page.js",
             "features/investment-import-ui.js",
             "features/investment-performance-ui.js",
             "features/mobile-review-ui.js",
@@ -120,7 +118,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/transaction-review-controls.js",
             "features/transactions.js",
             "features/wealth-investment-consolidation.js",
-            "features/wealth-portability.js",
             "features/wealth-specialized-assets-extra.js",
             "features/wealth-specialized-assets.js",
         };
