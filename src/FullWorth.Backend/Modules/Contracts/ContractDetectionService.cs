@@ -102,7 +102,7 @@ public sealed class ContractDetectionService(
                 .Where(entry => entry.FullWorthSpaceId == fullWorthSpaceId)
                 .Select(entry => new { entry.Counterparty, entry.Currency })
                 .ToListAsync(ct))
-            .Select(entry => (entry.Counterparty, entry.Currency))
+            .Select(entry => (CandidateProviderKey(entry.Counterparty), entry.Currency.Trim().ToUpperInvariant()))
             .ToHashSet();
 
         // Accepted auto-detected candidates must not reappear immediately after the owner
@@ -117,7 +117,7 @@ public sealed class ContractDetectionService(
                                        owner.UserId == userId)))
                 .Select(contract => new { contract.ProviderName, contract.Currency })
                 .ToListAsync(ct))
-            .Select(contract => (contract.ProviderName!.Trim(), contract.Currency.Trim().ToUpperInvariant()))
+            .Select(contract => (CandidateProviderKey(contract.ProviderName!), contract.Currency.Trim().ToUpperInvariant()))
             .ToHashSet();
 
         var deduplicated = result
@@ -135,8 +135,8 @@ public sealed class ContractDetectionService(
                 .First());
 
         return deduplicated
-            .Where(candidate => !dismissed.Contains((candidate.Counterparty, candidate.Currency)))
-            .Where(candidate => !accepted.Contains((candidate.Counterparty.Trim(), candidate.Currency.Trim().ToUpperInvariant())))
+            .Where(candidate => !dismissed.Contains((CandidateProviderKey(candidate.Counterparty), candidate.Currency.Trim().ToUpperInvariant())))
+            .Where(candidate => !accepted.Contains((CandidateProviderKey(candidate.Counterparty), candidate.Currency.Trim().ToUpperInvariant())))
             .OrderByDescending(x => x.Confidence).ThenBy(x => x.NextDueDate).ToList();
 
     }
