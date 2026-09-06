@@ -7,6 +7,7 @@
 
 import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
 
 let ctx = null;
 // Kept for backwards compatibility with the builder period presets (and the required export).
@@ -47,7 +48,7 @@ export async function renderAnalytics(context) {
   const cmp = '&comparison=previous-period';
 
   // All card queries share the selected window. overviewPrev backs the income/spending trend badges.
-  const [overview, overviewPrev, history, categories, merchants, forecast, catList] = await Promise.all([
+  const [overview, overviewPrev, history, categories, merchants, forecast, catList, importCompleteness] = await Promise.all([
     ctx.api(`api/analytics/overview?from=${from}&to=${to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
@@ -55,6 +56,7 @@ export async function renderAnalytics(context) {
     ctx.api(`api/analytics/merchants?from=${from}&to=${to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
     ctx.api('api/analytics/forecast?months=12').catch(() => null),
     ctx.api('api/categories').catch(() => []),
+    loadFinanzguruCompleteness(ctx.api),
   ]);
   // Map categoryId -> icon key (user emoji Icon, else semantic Key) so the category list can show the
   // same icon it uses elsewhere. Flatten in case the endpoint nests children under parents.
@@ -62,6 +64,9 @@ export async function renderAnalytics(context) {
   // Prefer a real emoji Icon; ignore the "cat-N" colour placeholder some categories store in Icon and
   // fall back to the semantic Key (which resolves to a line-art glyph).
   (function walk(list) { (list || []).forEach(c => { if (c && c.id) catIcon.set(c.id, (c.icon && !/^cat-\d/.test(c.icon)) ? c.icon : c.key); if (c && c.children) walk(c.children); }); })(catList);
+
+  const completenessNotice = finanzguruCompletenessNotice(importCompleteness, { scope: 'analytics', lang });
+  if (completenessNotice) view.insertAdjacentHTML('afterbegin', completenessNotice);
 
   const cur = overview?.currency || history?.[0]?.currency || 'EUR';
   fillSpending(ctx.$('#an-spending'), overview, overviewPrev);

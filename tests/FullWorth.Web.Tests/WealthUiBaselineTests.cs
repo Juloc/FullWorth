@@ -51,6 +51,30 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task ImportedDataCompletenessWarningsReachWealthAnalyticsAndDashboard()
+    {
+        var helper = await GetAsync("/features/data-completeness.js");
+        var wealth = await GetAsync("/features/networth.js");
+        var analytics = await GetAsync("/features/analytics.js");
+        var dashboard = await GetAsync("/ui/dashboard.js");
+        var css = await GetAsync("/app.css");
+
+        Assert.Contains("api/import/finanzguru/accounts", helper);
+        Assert.Contains("needsBalance", helper);
+        Assert.Contains("Kontostand ergänzen", helper);
+        Assert.Contains("Importkonto verbinden", helper);
+        Assert.Contains("Historie bestätigen", helper);
+        Assert.Contains("loadFinanzguruCompleteness", wealth);
+        Assert.Contains("finanzguruCompletenessNotice", wealth);
+        Assert.Contains("bookingOnlyHint", wealth);
+        Assert.Contains("loadFinanzguruCompleteness", analytics);
+        Assert.Contains("scope: 'analytics'", analytics);
+        Assert.Contains("loadFinanzguruCompleteness", dashboard);
+        Assert.Contains("dashboard-data-completeness", dashboard);
+        Assert.Contains(".data-completeness-warning", css);
+    }
+
+    [Fact]
     public async Task AssetWizardUsesCanonicalTaxonomyAndValuationHistory()
     {
         var js = await GetAsync("/features/networth.js");

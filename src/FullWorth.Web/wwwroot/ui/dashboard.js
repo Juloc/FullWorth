@@ -6,6 +6,7 @@ import { money, converted, maskIdentifier } from './money.js';
 import { isPrivate } from './privacy.js';
 import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
 import { bindChartScrubber } from './chart-scrubber.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../features/data-completeness.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
 // endpoints that already exist. Per-widget title + width are user-configurable (§7); scope/period/
@@ -74,7 +75,18 @@ export async function renderDashboard(ctx) {
   const grid = ctx.$('#dashboard-grid');
   const bar = ctx.$('#dashboard-editbar');
   bar.hidden = !editing;
-  const layout = await loadLayout(ctx);
+  const [layout, importCompleteness] = await Promise.all([
+    loadLayout(ctx),
+    loadFinanzguruCompleteness(ctx.api)
+  ]);
+
+  grid.parentElement?.querySelector('#dashboard-data-completeness')?.remove();
+  const completenessNotice = finanzguruCompletenessNotice(importCompleteness, {
+    scope: 'dashboard',
+    lang: document.documentElement.lang?.startsWith('en') ? 'en' : 'de'
+  });
+  if (completenessNotice)
+    grid.insertAdjacentHTML('beforebegin', `<div id="dashboard-data-completeness">${completenessNotice}</div>`);
 
   grid.innerHTML = '';
   if (!layout.length) {
