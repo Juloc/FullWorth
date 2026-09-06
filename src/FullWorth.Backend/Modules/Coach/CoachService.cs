@@ -210,7 +210,19 @@ public sealed class CoachService(
                 .Distinct(StringComparer.Ordinal)
                 .Take(20)
                 .ToArray();
-        return new(page, title, path, filters, entityType, entityId, entityLabel, details, selectedIds);
+        var selectedItems = entityType is null
+            ? Array.Empty<CoachUiSelectionItem>()
+            : (context.SelectedItems ?? Array.Empty<CoachUiSelectionItem>())
+                .Select(item => new CoachUiSelectionItem(
+                    NormalizeUiValue(item.Id, 100) ?? string.Empty,
+                    NormalizeUiValue(item.Label, 160),
+                    NormalizeUiMap(item.Details, AllowedUiDetailKeys, 10, 180)))
+                .Where(item => item.Id.Length > 0)
+                .GroupBy(item => item.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .Take(20)
+                .ToArray();
+        return new(page, title, path, filters, entityType, entityId, entityLabel, details, selectedIds, selectedItems);
     }
 
     private static Dictionary<string, string> NormalizeUiMap(
