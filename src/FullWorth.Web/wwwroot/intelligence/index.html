@@ -95,6 +95,43 @@
         </div>
       </section>
 
+      <section class="panel brand-pack-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Eigene Brand-Packs</h2>
+            <p class="row-sub">Eigene Logos und Firmen-Aliase bleiben auf dieser Instanz und überschreiben bei Treffern das offizielle FullWorth-Pack.</p>
+          </div>
+          <button id="brand-pack-refresh" type="button" class="ghost">Aktualisieren</button>
+        </div>
+        <div class="brand-pack-import">
+          <input id="brand-pack-file" type="file" accept=".json,application/json">
+          <button id="brand-pack-import" type="button">Pack importieren</button>
+        </div>
+        <details class="cloud-details brand-pack-format">
+          <summary>Pack-Format</summary>
+          <pre class="intel-code">{
+  "name": "Meine Firmenlogos",
+  "version": "1.0",
+  "priority": 2000,
+  "enabled": true,
+  "assets": [{
+    "brandKey": "meine-firma",
+    "canonicalName": "Meine Firma",
+    "mediaType": "image/svg+xml",
+    "contentBase64": "PHN2ZyB4bWxucz0i..."
+  }],
+  "aliases": [{
+    "aliasKey": "MEINE FIRMA GMBH",
+    "brandKey": "meine-firma",
+    "country": "DE"
+  }]
+}</pre>
+          <p class="row-sub">SVGs werden lokal auf Hash, Größe und aktive Inhalte geprüft. Identische SVGs werden nur einmal im gemeinsamen Content-Cache gespeichert.</p>
+        </details>
+        <p id="brand-pack-result" class="intel-result" aria-live="polite"></p>
+        <div id="brand-pack-list" class="rows"></div>
+      </section>
+
       <section class="intel-metrics">
         <article class="metric"><span>Provider</span><strong id="metric-provider">—</strong></article>
         <article class="metric"><span>Offene Vorschläge</span><strong id="metric-suggestions">—</strong></article>
@@ -168,6 +205,7 @@
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="/security/browser-fetch.js"></script>
   <script type="module" src="/intelligence/cloud.js"></script>
+  <script type="module" src="/intelligence/brand-packs.js"></script>
   <script type="module" src="/intelligence/intelligence.js"></script>
   <script type="module" src="/intelligence/jobs.js"></script>
 </body>
