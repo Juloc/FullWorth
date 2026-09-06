@@ -17,6 +17,30 @@ public sealed record FinanzguruExplicitLinkResult(
     int TransactionsTrustedForHistory,
     bool CurrentBalanceAdded);
 
+public sealed record FinanzguruImportAccountLinkView(
+    Guid Id,
+    string DisplayName,
+    string Currency,
+    string? IbanLast4,
+    int TransactionCount,
+    DateOnly? FirstBookingDate,
+    DateOnly? LastBookingDate,
+    Guid? SuggestedTargetAccountId);
+
+public sealed record FinanzguruTargetAccountLinkView(
+    Guid Id,
+    string DisplayName,
+    string InstitutionName,
+    string Currency,
+    string? IbanLast4,
+    bool HasCurrentBalance,
+    bool IsActive,
+    bool IncludeInNetWorth);
+
+public sealed record FinanzguruLinkOptionsView(
+    IReadOnlyList<FinanzguruImportAccountLinkView> ImportAccounts,
+    IReadOnlyList<FinanzguruTargetAccountLinkView> TargetAccounts);
+
 /// <summary>
 /// Reattaches historical Finanzguru imports to a real bank account once that account is connected.
 /// Matching is deliberately conservative: same FullWorthSpace, currency, IBAN last-4 and at least one
@@ -25,6 +49,75 @@ public sealed record FinanzguruExplicitLinkResult(
 public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db, AuditService audit)
 {
     public const string ImportProvider = "finanzguru-import";
+
+    public async Task<FinanzguruLinkOptionsView?> ListLinkOptionsAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct)
+    {
+        var isMember = await db.FullWorthSpaceMembers.AsNoTracking()
+            .AnyAsync(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId, ct);
+        if (!isMember) return null;
+
+        var importAccounts = await db.Accounts.AsNoTracking()
+            .Where(account =>
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.Provider == ImportProvider &&
+                account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
+            .OrderBy(account => account.DisplayName)
+            .ToListAsync(ct);
+
+        var targets = await db.Accounts.AsNoTracking()
+            .Where(account =>
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.Provider != ImportProvider &&
+                account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
+            .OrderByDescending(account => account.IsActive)
+            .ThenBy(account => account.InstitutionName)
+            .ThenBy(account => account.DisplayName)
+            .ToListAsync(ct);
+
+        var targetViews = targets.Select(account => new FinanzguruTargetAccountLinkView(
+            account.Id,
+            account.DisplayName,
+            account.InstitutionName,
+            account.Currency,
+            account.IbanLast4,
+            db.BalanceSnapshots.AsNoTracking().Any(balance => balance.AccountId == account.Id),
+            account.IsActive,
+            account.IncludeInNetWorth)).ToArray();
+
+        var importViews = new List<FinanzguruImportAccountLinkView>();
+        foreach (var account in importAccounts)
+        {
+            var dates = await db.Transactions.AsNoTracking()
+                .Where(transaction => transaction.AccountId == account.Id)
+                .Select(transaction => transaction.BookingDate ?? transaction.ValueDate)
+                .ToListAsync(ct);
+            var knownDates = dates.Where(date => date.HasValue).Select(date => date!.Value).ToArray();
+            if (dates.Count == 0) continue;
+
+            var suggested = targets
+                .Where(target =>
+                    string.Equals(target.Currency, account.Currency, StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(account.IbanLast4) &&
+                    string.Equals(target.IbanLast4, account.IbanLast4, StringComparison.OrdinalIgnoreCase))
+                .Select(target => (Guid?)target.Id)
+                .SingleOrDefault();
+
+            importViews.Add(new FinanzguruImportAccountLinkView(
+                account.Id,
+                account.DisplayName,
+                account.Currency,
+                account.IbanLast4,
+                dates.Count,
+                knownDates.Length == 0 ? null : knownDates.Min(),
+                knownDates.Length == 0 ? null : knownDates.Max(),
+                suggested));
+        }
+
+        return new FinanzguruLinkOptionsView(importViews, targetViews);
+    }
 
     public async Task<FinanzguruReconciliationResult> ReconcileAsync(
         Guid fullWorthSpaceId,
