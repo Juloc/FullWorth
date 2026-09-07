@@ -1,8 +1,15 @@
+function applyThemeChrome(theme) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#121416' : '#f5f6f7');
+}
+
 try {
   const theme = localStorage.getItem('finance.theme') || 'system';
-  document.documentElement.dataset.theme = theme === 'system'
+  const actualTheme = theme === 'system'
     ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
+  document.documentElement.dataset.theme = actualTheme;
+  applyThemeChrome(actualTheme);
 
   const visualTheme = localStorage.getItem('finance.visualTheme') || 'clean';
   document.documentElement.dataset.visualTheme = ['clean', 'cute'].includes(visualTheme) ? visualTheme : 'clean';
@@ -10,22 +17,14 @@ try {
   const font = localStorage.getItem('finance.font') || 'default';
   document.documentElement.dataset.font = ['default', 'fredoka'].includes(font) ? font : 'default';
 } catch {
+  const actualTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = actualTheme;
+  applyThemeChrome(actualTheme);
 }
 
-// Inject the appearance stylesheets independently of localStorage access: reading storage can throw
-// when site data is blocked (sandboxed/lockdown contexts), and the core feature CSS must still load.
-try {
-  const appearance = document.createElement('link');
-  appearance.rel = 'stylesheet';
-  appearance.href = '/appearance.css';
-  document.head.appendChild(appearance);
-
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/parity-completion.css';
-  document.head.appendChild(link);
-} catch {
-}
+// appearance.css and parity-completion.css are loaded as render-blocking <link>s in index.html so the
+// page paints once in its final style (no post-load restyle flash). They are intentionally not injected
+// here anymore.
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
