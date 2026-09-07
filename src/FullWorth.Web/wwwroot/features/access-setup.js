@@ -1,5 +1,5 @@
 export function createAccessSetup(ctx, openBankingWizard) {
-  const { api, bankApi, get, esc, toast, dialog, confirm, jsonBody } = ctx;
+  const { api, bankApi, get, esc, toast, dialog, confirm: confirmAction, jsonBody } = ctx;
   let activeAiPoll = null;
 
   const putJson = data => ({
@@ -119,7 +119,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         }
       };
       step.querySelector('[data-remove]').onclick = async event => {
-        if (!await confirm(get('aiAccess.removeConfirm'), {
+        if (!await confirmAction(get('aiAccess.removeConfirm'), {
           destructive: true,
           confirmLabel: get('aiAccess.remove')
         })) return;
