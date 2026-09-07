@@ -1,3 +1,4 @@
+import { confirmMessage } from '../ui/confirm.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -103,9 +104,9 @@ async function openUser(id){
 
 async function runAction(action){
   const u=state.detail?.user;if(!u)return;
-  if(action==='schedule-deletion'&&!confirm(`Löschung für ${u.email} vormerken? Der User hat 7 Tage zur Reaktivierung.`))return;
-  if(action==='disable'&&!confirm(`${u.email} sperren?`))return;
-  if(action==='revoke-admin'&&!confirm(`Adminrecht von ${u.email} entfernen?`))return;
+  if(action==='schedule-deletion'&&!await confirmMessage({title:'Löschung vormerken',message:`Löschung für ${u.email} vormerken? Der User hat 7 Tage zur Reaktivierung.`,confirmLabel:'Vormerken',cancelLabel:'Abbrechen',destructive:true}))return;
+  if(action==='disable'&&!await confirmMessage({title:'User sperren',message:`${u.email} sperren?`,confirmLabel:'Sperren',cancelLabel:'Abbrechen',destructive:true}))return;
+  if(action==='revoke-admin'&&!await confirmMessage({title:'Adminrecht entfernen',message:`Adminrecht von ${u.email} entfernen?`,confirmLabel:'Entfernen',cancelLabel:'Abbrechen',destructive:true}))return;
   try{
     await request(`/auth/admin/users/${u.id}/${action}`,{method:'POST'});
     toast('Gespeichert');
