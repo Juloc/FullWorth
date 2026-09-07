@@ -39,6 +39,8 @@ export async function renderAnalytics(context) {
   const lang = isDe() ? 'de' : 'en';
   const win = cycleWindow(cycle, offset, lang);
   activeWindow = win;
+  activeBucket = activeBucketRange(win.granularity, win.to);
+  win.activeLabel = activeBucket.label;
 
   view.innerHTML = shellHtml(win);
   wireControls(view);
@@ -52,8 +54,8 @@ export async function renderAnalytics(context) {
     ctx.api(`api/analytics/overview?from=${from}&to=${to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
-    ctx.api(`api/analytics/categories?from=${from}&to=${to}&granularity=${gran}${cmp}`).catch(() => null),
-    ctx.api(`api/analytics/merchants?from=${from}&to=${to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
+    ctx.api(`api/analytics/categories?from=${activeBucket.from}&to=${activeBucket.to}&granularity=${gran}${cmp}`).catch(() => null),
+    ctx.api(`api/analytics/merchants?from=${activeBucket.from}&to=${activeBucket.to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
     ctx.api('api/analytics/forecast?months=12').catch(() => null),
     ctx.api('api/categories').catch(() => []),
     loadFinanzguruCompleteness(ctx.api),
@@ -163,9 +165,9 @@ function shellHtml(win) {
 
   const cards = `<div class="fw-analysis-grid">
     ${card('an-spending', t('Ausgabenentwicklung', 'Spending development'), t('Ausgaben je Periode', 'Spending per period'))}
-    ${card('an-inout', ctx.get('analytics.incomeExpense'), t('Einnahmen und Ausgaben', 'Income and expenses'))}
-    ${card('an-category', ctx.get('analytics.categories'), t('Größte Kategorien', 'Top categories'))}
-    ${card('an-merchant', ctx.get('analytics.merchants'), t('Größte Händler', 'Top merchants'))}
+    ${card('an-inout', ctx.get('analytics.incomeExpense'), win.activeLabel)}
+    ${card('an-category', ctx.get('analytics.categories'), win.activeLabel)}
+    ${card('an-merchant', ctx.get('analytics.merchants'), win.activeLabel)}
     ${card('an-networth', ctx.get('analytics.trend'), t('Vermögen über die Zeit', 'Net worth over time'))}
     ${card('an-forecast', ctx.get('analytics.forecast'), t('Geschätzte Entwicklung', 'Estimated trajectory'))}
   </div>`;
@@ -225,6 +227,30 @@ function perBucket() { const g = activeWindow?.granularity;
            { week: '/ week', month: '/ month', quarter: '/ quarter', year: '/ year' }[g] || '/ month'); }
 function avgPerBucket(total) { const n = activeWindow?.buckets || 12; return (Number(total) || 0) / Math.max(1, n); }
 
+// The ACTIVE bucket = the concrete period the selector names (current month/quarter/… = the last bucket
+// of the preview window). Category/merchant/in-out KPIs are scoped to it (not the 12-bucket average); the
+// chart keeps the surrounding history. `to` is the window end (end of the active bucket).
+let activeBucket = null;
+function activeBucketRange(gran, toIso) {
+  const to = new Date(String(toIso).slice(0, 10) + 'T12:00:00');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const de = isDe();
+  let start, label;
+  if (gran === 'week') {
+    const day = (to.getDay() + 6) % 7; start = new Date(to); start.setDate(to.getDate() - day);
+    label = new Intl.DateTimeFormat(de ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short' }).format(start) + '–' +
+            new Intl.DateTimeFormat(de ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' }).format(to);
+  } else if (gran === 'quarter') {
+    const q = Math.floor(to.getMonth() / 3); start = new Date(to.getFullYear(), q * 3, 1); label = `Q${q + 1} ${to.getFullYear()}`;
+  } else if (gran === 'year') {
+    start = new Date(to.getFullYear(), 0, 1); label = `${to.getFullYear()}`;
+  } else {
+    start = new Date(to.getFullYear(), to.getMonth(), 1);
+    label = new Intl.DateTimeFormat(de ? 'de-DE' : 'en-US', { month: 'long', year: 'numeric' }).format(start);
+  }
+  return { from: iso(start), to: String(toIso).slice(0, 10), label };
+}
+
 function monthLabel(row) {
   if (row?.start) {
     const start = new Date(String(row.start).slice(0, 10) + 'T12:00:00');
@@ -257,8 +283,9 @@ function axisPeriodLabel(row) {
 
 function analyticsTxScope(extra = '') {
   const p = new URLSearchParams();
-  if (activeWindow?.from) p.set('from', activeWindow.from);
-  if (activeWindow?.to) p.set('to', activeWindow.to);
+  const scope = activeBucket || activeWindow;
+  if (scope?.from) p.set('from', scope.from);
+  if (scope?.to) p.set('to', scope.to);
   p.set('status', 'booked');
   if (extra) {
     const more = new URLSearchParams(extra);
@@ -466,15 +493,21 @@ function fillInout(el, o, oPrev) {
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
-  const incTrend = pct(o?.income || 0, oPrev?.income || 0);
-  const expTrend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
-  const net = o?.net ?? ((o?.income || 0) - (o?.expenses || 0));
-  const netCls = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
+  // Active-bucket KPIs = the concrete selected period (the last bucket of the history window), not the
+  // window average; the bar chart still shows the surrounding history. Trend compares to the prev bucket.
+  const active = rows[rows.length - 1] || {};
+  const prevB = rows[rows.length - 2] || {};
+  const aInc = Number(active.income) || 0;
+  const aExp = Number(active.expenses) || 0;
+  const aNet = active.net ?? (aInc - Math.abs(aExp));
+  const incTrend = pct(aInc, Number(prevB.income) || 0);
+  const expTrend = pct(Math.abs(aExp), Math.abs(Number(prevB.expenses) || 0));
+  const netCls = aNet > 0 ? 'positive' : aNet < 0 ? 'negative' : '';
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => inoutBars(rows)) +
     `<div class="an-card-foot"><div class="an-kpi-group">` +
-    kpi(ctx.money(avgPerBucket(o?.income || 0), cur), `Ø ${esc(ctx.get('transactions.income'))} ${esc(perBucket())} ${trendBadge(incTrend, true)}`) +
-    kpi(ctx.money(avgPerBucket(o?.expenses || 0), cur), `Ø ${esc(ctx.get('transactions.expenses'))} ${esc(perBucket())} ${trendBadge(expTrend, false)}`) +
-    `</div>` + kpi(`<span class="${netCls}">${ctx.money(avgPerBucket(net), cur)}</span>`, `Ø ${esc(ctx.get('analytics.net'))} ${esc(perBucket())}`) + `</div>`;
+    kpi(ctx.money(aInc, cur), `${esc(ctx.get('transactions.income'))} ${trendBadge(incTrend, true)}`) +
+    kpi(ctx.money(aExp, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
+    `</div>` + kpi(`<span class="${netCls}">${ctx.money(aNet, cur)}</span>`, esc(ctx.get('analytics.net'))) + `</div>`;
   bindInoutScrubber(el, rows, cur);
   bindPeriodDrills(el, rows);
 }
@@ -515,14 +548,14 @@ function fillCategory(el, result, catIcon) {
     const pctW = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
     const cat = categoryColorIndex(r.categoryId || r.name);
     const drill = r.categoryId ? ` data-cat-id="${esc(r.categoryId)}" role="button" tabindex="0"` : '';
-    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="tx-cat-ic" data-cat="${cat}">${categoryIconInner(catIcon?.get(r.categoryId)) || ''}</span>${esc(r.name)}</span><span class="amount">${ctx.money(avgPerBucket(r.current), cur)}</span>${trendBadge(r.trendPercent, false)}</div>
+    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="tx-cat-ic" data-cat="${cat}">${categoryIconInner(catIcon?.get(r.categoryId)) || ''}</span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
       <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
   }).join('');
   // Screenshot parity: a soft category donut sits above the list, sharing its per-category palette; the
   // list below doubles as the legend. Wrapped in chart() so privacy mode swaps its (leaking) geometry.
   const donutHtml = categoryDonut(cats, total, cur);
   const donut = donutHtml ? chart(() => donutHtml) : '';
-  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(total), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}</div>`;
+  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben', 'Spending')))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
     const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`));
@@ -549,7 +582,7 @@ function categoryDonut(cats, total, cur) {
     arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="16" stroke-linecap="round" class="donut-seg" data-cat="${s.cat}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
     offset += len;
   }
-  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(avgPerBucket(total), cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))} ${esc(perBucket())}</span></div></div>`;
+  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(total, cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))}</span></div></div>`;
 }
 
 // 4) Spend by merchant — top merchants with brand identity, count/average, spend + per-row trend.
@@ -562,8 +595,8 @@ function fillMerchant(el, result) {
   // Drill-down (UX rework §6): a merchant has no stored FK on transactions, so scope by the merchant name
   // as a counterparty search (the tx list ILIKEs the counterparty) — the pragmatic equivalent of a
   // merchant filter without a backend change.
-  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(avgPerBucket(r.currentSpend), cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
-  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(total), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}</div>`;
+  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
+  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben', 'Spending')))}</div>`;
   el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
     const q = row.dataset.merchant;
     if (!q) return;
