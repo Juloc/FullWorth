@@ -1,20 +1,24 @@
 name: Release
 
-# Build the service images and publish them to GHCR (this repo's Container Registry).
-# Cost policy: normal CI stays manual-only. Version tags are the intentional exception:
-# pushing a v* tag automatically publishes the release images.
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
 jobs:
-  images:
+  build-amd64:
+    name: AMD64 · ${{ matrix.service }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,35 +34,52 @@ jobs:
             dockerfile: src/FullWorth.CodexBridge/Dockerfile
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Validate version and prepare tags
+        id: vars
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          sha_tag="sha-${GITHUB_SHA::7}"
+
+          {
+            echo 'tags<<EOF'
+            echo "$image:$version"
+            echo "$image:$sha_tag"
+            echo "$image:$version-amd64"
+            echo "$image:$sha_tag-amd64"
+
+            if [[ "$version" != *-* ]]; then
+              major="${version%%.*}"
+              rest="${version#*.}"
+              minor="${rest%%.*}"
+              echo "$image:$major"
+              echo "$image:$major.$minor"
+              echo "$image:latest"
+              echo "$image:$major-amd64"
+              echo "$image:$major.$minor-amd64"
+              echo "$image:latest-amd64"
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # metadata-action lowercases the image name automatically (repository_owner may be mixed case).
-      # For a pre-release tag (contains a hyphen, e.g. -rc.1) we publish ONLY the exact version + sha:
-      # no moving `latest` / `X.Y` alias points at an unvalidated build.
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/fullworth-${{ matrix.service }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
-            type=sha,format=short
-          flavor: |
-            latest=auto
-
-      - name: Build and push
+      - name: Build and publish AMD64
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -66,7 +87,151 @@ jobs:
           push: true
           platforms: linux/amd64
           provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=fullworth-${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}
+          tags: ${{ steps.vars.outputs.tags }}
+          cache-from: type=gha,scope=fullworth-${{ matrix.service }}-amd64
+          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}-amd64
+
+  build-arm64:
+    name: ARM64 · ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            dockerfile: src/FullWorth.Backend/Dockerfile
+          - service: banking
+            dockerfile: src/FullWorth.Banking/Dockerfile
+          - service: web
+            dockerfile: src/FullWorth.Web/Dockerfile
+          - service: codex
+            dockerfile: src/FullWorth.CodexBridge/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate version and prepare ARM tags
+        id: vars
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          sha_tag="sha-${GITHUB_SHA::7}"
+
+          {
+            echo 'tags<<EOF'
+            echo "$image:$version-arm64"
+            echo "$image:$sha_tag-arm64"
+
+            if [[ "$version" != *-* ]]; then
+              major="${version%%.*}"
+              rest="${version#*.}"
+              minor="${rest%%.*}"
+              echo "$image:$major-arm64"
+              echo "$image:$major.$minor-arm64"
+              echo "$image:latest-arm64"
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish ARM64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/arm64
+          provenance: false
+          tags: ${{ steps.vars.outputs.tags }}
+          cache-from: type=gha,scope=fullworth-${{ matrix.service }}-arm64
+          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}-arm64
+
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-amd64
+
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          args=(release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
+
+          if [[ "$version" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists."
+          else
+            gh "${args[@]}"
+          fi
+
+  multiarch:
+    name: Multi-Arch · ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs:
+      - build-amd64
+      - build-arm64
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, banking, web, codex]
+
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish multi-architecture manifests
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          sha_tag="sha-${GITHUB_SHA::7}"
+
+          merge_tag() {
+            tag="$1"
+            docker buildx imagetools create \
+              --tag "$image:$tag" \
+              "$image:$tag-amd64" \
+              "$image:$tag-arm64"
+          }
+
+          merge_tag "$version"
+          merge_tag "$sha_tag"
+
+          if [[ "$version" != *-* ]]; then
+            major="${version%%.*}"
+            rest="${version#*.}"
+            minor="${rest%%.*}"
+            merge_tag "$major"
+            merge_tag "$major.$minor"
+            merge_tag "latest"
+          fi

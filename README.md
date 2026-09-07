@@ -1,24 +1,109 @@
 # FullWorth
 
-FullWorth is a self-hosted personal finance application. It helps manage accounts, transactions, budgets, contracts, purchases, and optional bank connections.
+FullWorth is a self-hosted personal finance application for accounts, transactions, budgets, contracts, purchases, investments and optional bank connections.
 
-## Run
+## Quick start
 
-FullWorth is intended to run behind an HTTPS reverse proxy. You need Docker and Docker Compose.
+Requirements:
+
+- Docker + Docker Compose
+- an HTTPS reverse proxy such as Caddy
+- a public hostname, for example `finance.example.com`
+
+Create a secure `.env`:
 
 ```bash
-cp .env.example .env
-# Set the required values in .env, including ENABLE_BANKING_REDIRECT_URL.
-docker compose up -d --build
+sh scripts/setup-env.sh finance.example.com you@example.com
 ```
 
-Set strong, unique values for the database password, service keys, and data-encryption key. Configure `FULLWORTH_ALLOWED_HOSTS`, `FULLWORTH_PASSKEY_RP_ID`, `FULLWORTH_PASSKEY_ORIGIN`, and `ENABLE_BANKING_REDIRECT_URL` for the public HTTPS hostname before exposing the application.
+The script generates all internal secrets plus a random first-admin password. Then start FullWorth:
 
-Enable Banking is BYO by default: each FullWorth user configures their own Enable Banking application and RSA key from the FullWorth settings wizard. A global PEM file is no longer required to boot the stack. Existing deployments that still use one global Enable Banking application can use `docker-compose.enable-banking-legacy.yml` during migration. That legacy credential is used only for already-existing profile-less bank connections; every newly created connection requires the current FullWorth user to configure their own BYO Enable Banking profile.
+```bash
+docker compose pull
+docker compose up -d
+```
+
+After the first successful sign-in, remove `FULLWORTH_BOOTSTRAP_EMAIL` and `FULLWORTH_BOOTSTRAP_PASSWORD` from `.env`.
+
+Example Caddy route:
+
+```caddy
+finance.example.com {
+    reverse_proxy 127.0.0.1:8098
+}
+```
+
+Only `.env.example` and `docker-compose.yml` are used as the canonical deployment examples. Optional and advanced settings stay commented in the same `.env.example`.
+
+## Enable Banking
+
+Bank access is optional. FullWorth can be used with manual accounts and imports without Enable Banking.
+
+For automatic bank synchronization, each self-hosted user configures their own Enable Banking account/application from the first-login setup or later in Settings. FullWorth can create the application automatically (Beta), or the user can provide an Application ID and private key manually.
+
+The public callback URL is derived automatically from `FULLWORTH_DOMAIN`:
+
+```text
+https://finance.example.com/connect/enable-banking/callback
+```
+
+Legacy global Enable Banking credentials remain supported only for existing older installations.
+
+## Docker image tags
+
+Images are published to GHCR as:
+
+- `ghcr.io/juloc/fullworth-web`
+- `ghcr.io/juloc/fullworth-backend`
+- `ghcr.io/juloc/fullworth-banking`
+- `ghcr.io/juloc/fullworth-codex`
+
+Stable releases publish:
+
+- `1.4.0` — exact release
+- `1.4` — latest stable release in that minor line
+- `1` — latest stable release in that major line
+- `latest` — latest stable release
+- `sha-abcdef0` — exact commit build
+
+Pre-releases such as `1.4.0-rc.1` publish only the exact version and commit tags, so they never move `latest`, `1` or `1.4`.
+
+Architecture-specific tags are also available directly:
+
+- `1.4.0-amd64`
+- `1.4.0-arm64`
+
+Normal release tags are published for AMD64 first. ARM64 builds run independently in parallel. When both architectures are ready, the normal tags are upgraded to multi-architecture manifests so Docker automatically pulls the correct image.
+
+## Releases
+
+Push a SemVer tag to publish a release:
+
+```bash
+git tag v1.4.0
+git push origin v1.4.0
+```
+
+Release candidates use tags such as:
+
+```bash
+git tag v1.4.0-rc.1
+git push origin v1.4.0-rc.1
+```
+
+The release workflow publishes the images and creates the matching GitHub Release with generated release notes. See [docs/RELEASE.md](docs/RELEASE.md) for the release checklist.
+
+## Development
+
+```bash
+dotnet restore FullWorth.slnx
+dotnet build FullWorth.slnx --configuration Release
+dotnet test FullWorth.slnx --configuration Release --no-build
+```
 
 ## Documentation
 
-Deployment, backup, and security documentation is available in [docs](docs/). The project is currently in beta; use it with backups and care.
+Additional deployment, backup, security and product documentation is available in [docs](docs/).
 
 ## License
 

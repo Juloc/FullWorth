@@ -447,6 +447,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<div class="setup-progress">2 / 3</div>' +
         '<h3>' + esc(get('onboarding.bankTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.bankText')) + '</p>' +
+        '<p class="row-sub">' + esc(get('onboarding.bankHow')) + '</p>' +
+        '<p class="row-sub">' + esc(get('onboarding.bankOwnAccess')) + '</p>' +
         '<div class="row-sub">' +
           esc(configured
             ? get('onboarding.configured').replace(
