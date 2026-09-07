@@ -1,8 +1,13 @@
 import { money, percent } from '../ui/money.js';
 import { createDialog } from '../ui/dialog.js';
+import { apiClient } from '../core/services.js';
+import { state } from '../core/state.js';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-const S={space:'',prefs:null,bundle:null,bundleAt:0,banks:null,unread:new Set(),hasUnread:false,unreadAt:0,groupMode:false,busy:false,queued:false,initialConnections:location.pathname.replace(/\/+$/,'')==='/accounts/connections',restored:false};
+const S={space:'',prefs:null,bundle:null,bundleAt:0,banks:null,unread:new Set(),hasUnread:false,unreadAt:0,groupMode:false,busy:false,initialConnections:location.pathname.replace(/\/+$/,'')==='/accounts/connections',restored:false};
+let appCtx=null;
+let lifecycle={};
+let lifecycleBound=false;
 const KEYS={accounts:'accounts.visuals',groups:'account-groups.visuals',seen:'transactions.seenAt'};
 const PATH={wallet:'<path d="M4 7.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2h12"/><path d="M20 11h-5a2 2 0 0 0 0 4h5"/>',bank:'<path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 18h18M12 3l9 5H3z"/>',cash:'<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',card:'<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6 15h4"/>',chart:'<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>',home:'<path d="M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5M10 20v-6h4v6"/>',car:'<path d="M5 17h14l1-5-2-4H6l-2 4 1 5Z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',briefcase:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18"/>',folder:'<path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/>',plus:'<path d="M12 5v14M5 12h14"/>',grip:'<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',palette:'<path d="M12 3a9 9 0 0 0 0 18h1.1a2 2 0 0 0 1.6-3.2 1.7 1.7 0 0 1 1.4-2.8H18a3 3 0 0 0 3-3 9 9 0 0 0-9-9Z"/>',transactions:'<path d="M4 7h16M4 12h16M4 17h10"/><path d="m17 15 3 3-3 3"/>',link:'<path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1"/>',save:'<path d="M5 3h12l3 3v15H4V3M8 3v6h8V3M8 21v-7h8v7"/>',close:'<path d="m6 6 12 12M18 6 6 18"/>',edit:'<path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/>'};
 const T={de:{accounts:'Konten',transactions:'Buchungen',connections:'Bankverbindungen',accountsSub:'Konten, Gruppen und Bargeld verwalten',connectionsSub:'Bankzugänge verbinden, synchronisieren und erneuern',groups:'Gruppen',addAccount:'Konto hinzufügen',addConnection:'Bankverbindung hinzufügen',addGroup:'Gruppe hinzufügen',group:'Gruppe',newGroup:'Neue Gruppe',groupName:'Gruppenname',accountIcon:'Konto-Icon',editIcon:'Icon bearbeiten',icon:'Icon',color:'Icon-Farbe',background:'Hintergrund',save:'Speichern',saving:'Speichert…',cancel:'Abbrechen',close:'Schließen',ungrouped:'Ohne Gruppe',reorder:'Konten oder ganze Gruppen am Griff verschieben.',performance:'Performance',moveAccount:'Konto verschieben',moveGroup:'Gruppe verschieben',editGroup:'Gruppe bearbeiten',restoreDefault:'Standard wiederherstellen',newTx:'Neue Buchungen'},en:{accounts:'Accounts',transactions:'Transactions',connections:'Bank connections',accountsSub:'Manage accounts, groups and cash',connectionsSub:'Connect, sync and renew bank access',groups:'Groups',addAccount:'Add account',addConnection:'Add bank connection',addGroup:'Add group',group:'Group',newGroup:'New group',groupName:'Group name',accountIcon:'Account icon',editIcon:'Edit icon',icon:'Icon',color:'Icon color',background:'Background',save:'Save',saving:'Saving…',cancel:'Cancel',close:'Close',ungrouped:'Ungrouped',reorder:'Drag accounts or whole groups by the handle.',performance:'Performance',moveAccount:'Move account',moveGroup:'Move group',editGroup:'Edit group',restoreDefault:'Restore default',newTx:'New transactions'}};
@@ -10,9 +15,13 @@ const tr=()=>T[(document.documentElement.lang||'').startsWith('en')?'en':'de'];
 const text=(el,v)=>{if(el&&el.textContent!==v)el.textContent=v};
 const svg=(n,c='')=>`<svg class="${c}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PATH[n]||PATH.wallet}</svg>`;
 const arr=(x,k)=>Array.isArray(x)?x:Array.isArray(x?.[k])?x[k]:Array.isArray(x?.items)?x.items:[];
-const sid=()=>localStorage.getItem('finance.space')||'';
-const scoped=p=>sid()?`${p}${p.includes('?')?'&':'?'}fullWorthSpaceId=${encodeURIComponent(sid())}`:p;
-async function req(path,opt={},service='backend'){const h=new Headers(opt.headers||{});if(opt.body!=null&&!h.has('Content-Type'))h.set('Content-Type','application/json');const r=await fetch(`/bff/${service}/${scoped(path.replace(/^\//,''))}`,{credentials:'same-origin',...opt,headers:h});if(!r.ok){let m=`${r.status} ${r.statusText}`;try{const b=await r.json();m=b?.error||b?.message||m}catch{}throw new Error(m)}if(r.status===204)return null;const raw=await r.text();return raw?JSON.parse(raw):null}
+const sid=()=>state.space?.id||localStorage.getItem('finance.space')||'';
+async function req(path,opt={},service='backend'){
+  const h=new Headers(opt.headers||{});
+  if(opt.body!=null&&!h.has('Content-Type')&&!(opt.body instanceof FormData))h.set('Content-Type','application/json');
+  const options={...opt,headers:h};
+  return service==='banking'?apiClient.banking(path,options):apiClient.backend(path,options);
+}
 function reset(){const id=sid();if(S.space===id)return;S.space=id;S.prefs=null;S.bundle=null;S.bundleAt=0;S.banks=null;S.unread.clear();S.hasUnread=false;S.unreadAt=0}
 async function prefs(force=false){reset();if(!S.space)return{accounts:{},groups:{},seen:{}};if(S.prefs&&!force)return S.prefs;const out={};await Promise.all(Object.entries(KEYS).map(async([n,k])=>{try{out[n]=(await req(`api/preferences/${encodeURIComponent(k)}`))?.value||{}}catch{out[n]={}}}));S.prefs=out;return out}
 async function savePref(n){await req(`api/preferences/${encodeURIComponent(KEYS[n])}`,{method:'PUT',body:JSON.stringify(S.prefs?.[n]||{})})}
@@ -35,12 +44,11 @@ function bankForAccount(a,bs,connections=[]){const conn=a?.bankConnectionId?(con
 function accountIdentity(a,bs,connections=[]){const overridden=hasVisualOverride('accounts',a.id),v=vis('accounts',a.id,'wallet'),lg=logo(bankForAccount(a,bs,connections)),bankDefault=!!a.bankConnectionId||!!lg;return{node:overridden?identity(v):identity(bankDefault?{icon:'bank',color:'#334155',background:'#eef2f7'}:v,lg,bankDefault,a.institutionName||''),sig:`${a.id}|${overridden?'custom':'default'}|${lg}|${v.icon}|${v.color}|${v.background}`}}
 function identity(v,bankLogo='',bankOnly=false,alt=''){const e=document.createElement('span');e.className=`account-identity-icon${bankOnly?' bank-only':''}`;e.style.color=v.color;e.style.background=v.background;if(!bankOnly)e.insertAdjacentHTML('beforeend',svg(v.icon));if(bankLogo){const i=document.createElement('img');i.src=bankLogo;i.alt=bankOnly?alt:'';i.loading='lazy';i.referrerPolicy='no-referrer';i.className=bankOnly?'account-bank-primary':'account-bank-badge';i.onerror=()=>i.remove();e.append(i)}else if(bankOnly)e.insertAdjacentHTML('beforeend',svg('bank'));return e}
 function iconButton(b,icon,label){if(!b)return;b.classList.add('ux-icon-text-button');if(b.dataset.uxIcon!==icon||!$('.ux-button-label',b)){b.innerHTML=`${svg(icon,'ux-button-icon')}<span class="ux-button-label"></span>`;b.dataset.uxIcon=icon}text($('.ux-button-label',b),label);b.title=label;b.setAttribute('aria-label',label)}
-function ensureCss(){if($('#accounts-ux-css'))return;const l=document.createElement('link');l.id='accounts-ux-css';l.rel='stylesheet';l.href='/features/accounts-ux.css';document.head.append(l)}
 function ensureNav(){const av=$('#view-accounts'),tv=$('#view-transactions'),nav=$('#nav');if(!av||!tv||!nav)return;let grp=$('#accounts-sidebar-group');const ab=nav.querySelector('[data-view="accounts"]'),tb=nav.querySelector('[data-view="transactions"]');if(ab&&!grp){grp=document.createElement('div');grp.id='accounts-sidebar-group';grp.className='accounts-sidebar-group';ab.before(grp);grp.append(ab);const ch=document.createElement('div');ch.className='accounts-sidebar-children';grp.append(ch);if(tb)ch.append(tb);const bb=document.createElement('button');bb.type='button';bb.className='accounts-connections-nav';bb.dataset.accountSubpage='connections';bb.innerHTML=`${svg('link')}<span></span>`;bb.onclick=goConnections;ch.append(bb)}for(const v of[av,tv])if(!$('.accounts-local-nav',v)){const n=document.createElement('nav');n.className='accounts-local-nav';for(const[k,i,fn]of[['accounts','wallet',goAccounts],['transactions','transactions',goTransactions],['connections','link',goConnections]]){const b=document.createElement('button');b.type='button';b.dataset.accountSubpage=k;b.innerHTML=`${svg(i)}<span></span>`;b.onclick=fn;n.append(b)}v.prepend(n)}const labs={accounts:tr().accounts,transactions:tr().transactions,connections:tr().connections};for(const b of $$('[data-account-subpage]'))text($('span',b),labs[b.dataset.accountSubpage])}
-function goAccounts(){if(!$('#view-accounts')?.classList.contains('active'))return $('#nav [data-view="accounts"]')?.click();if(location.pathname!=='/accounts')history.pushState({view:'accounts'},'','/accounts');route()}
-function goTransactions(){($('#nav [data-view="transactions"]')||$('#bottom-nav [data-view="transactions"]'))?.click()}
-function goConnections(){if(!$('#view-accounts')?.classList.contains('active')){$('#nav [data-view="accounts"]')?.click();return setTimeout(()=>{history.replaceState({view:'accounts'},'','/accounts/connections');route()})}if(location.pathname!=='/accounts/connections')history.pushState({view:'accounts'},'','/accounts/connections');route()}
-function openBank(){ $('#add-account')?.click();let i=0;const f=()=>{const b=$('[data-choice="bank"]');if(b)b.click();else if(++i<30)setTimeout(f,30)};setTimeout(f)}
+async function goAccounts(){if(!$('#view-accounts')?.classList.contains('active'))await appCtx?.showView?.('accounts',{query:''});if(location.pathname!=='/accounts')history.pushState({view:'accounts'},'','/accounts');route()}
+function goTransactions(){return appCtx?.showView?.('transactions',{query:''})}
+async function goConnections(){if(!$('#view-accounts')?.classList.contains('active'))await appCtx?.showView?.('accounts',{query:''});if(location.pathname!=='/accounts/connections')history.pushState({view:'accounts'},'','/accounts/connections');route()}
+function openBank(){return lifecycle.openBank?.()}
 function route(){const aa=$('#view-accounts')?.classList.contains('active'),ta=$('#view-transactions')?.classList.contains('active'),conn=aa&&location.pathname.replace(/\/+$/,'')==='/accounts/connections';const ap=$('#accounts-view-list')?.closest('.panel'),cp=$('#connections-list')?.closest('.panel');if(ap)ap.hidden=conn;if(cp)cp.hidden=!conn;$$('.accounts-local-nav button,.accounts-connections-nav').forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current')});const k=ta?'transactions':conn?'connections':aa?'accounts':'';if(k)$$(`[data-account-subpage="${k}"]`).forEach(b=>{b.classList.add('active');b.setAttribute('aria-current','page')});if(conn){text($('#page-title'),tr().connections);text($('#page-subtitle'),tr().connectionsSub);const p=$('#primary-action');if(p){p.hidden=false;text(p,tr().addConnection);p.onclick=openBank}ensureConnectionAction()}else if(aa){text($('#page-title'),tr().accounts);text($('#page-subtitle'),tr().accountsSub);const p=$('#primary-action');if(p){p.hidden=false;text(p,tr().addAccount);p.onclick=()=>$('#add-account')?.click()}}}
 function ensureConnectionAction(){const h=$('#connections-list')?.closest('.panel')?.querySelector('.panel-head');if(!h)return;let b=$('.ux-add-connection',h);if(!b){b=document.createElement('button');b.type='button';b.className='ux-add-connection';b.onclick=openBank;h.append(b)}iconButton(b,'plus',tr().addConnection)}
 function toolbar(){iconButton($('#add-group'),S.groupMode?'close':'grip',S.groupMode?tr().cancel:tr().groups);iconButton($('#add-account'),'plus',tr().addAccount)}
@@ -67,7 +75,7 @@ async function editAccount(a){await prefs();const d=modal(`${tr().accountIcon}: 
 function captureOrder(){return S.groupMode?$$('#accounts-view-list .account-group-edit-block').map(b=>({groupId:b.dataset.groupId||'',accounts:$$('.account-edit-row',b).map(r=>r.dataset.accountId)})):null}
 function restoreOrder(snap){if(!snap)return;const root=$('#accounts-view-list'),blocks=new Map($$('.account-group-edit-block',root).map(b=>[b.dataset.groupId||'',b])),add=$('.add-account-group-row',root),rows=new Map($$('.account-edit-row',root).map(r=>[r.dataset.accountId,r]));for(const x of snap){const b=blocks.get(x.groupId);if(!b)continue;root.insertBefore(b,add);const l=$('.account-group-edit-accounts',b);for(const id of x.accounts)if(rows.has(id))l.append(rows.get(id))}}
 async function editGroup(g){await prefs();const snap=captureOrder(),d=modal(g?tr().group:tr().newGroup),body=$('.account-ux-dialog-body',d),lab=document.createElement('label');lab.className='account-visual-field';lab.innerHTML=`<span>${tr().groupName}</span><input name="groupName" type="text" maxlength="120" required>`;$('[name="groupName"]',lab).value=g?.name||'';body.append(lab,fields(g?vis('groups',g.id,'folder'):{icon:'folder',color:'#334155',background:'#eef2f7'}));$('form',d).onsubmit=async e=>{e.preventDefault();const s=$('.account-dialog-save',d);s.disabled=true;try{const name=$('[name="groupName"]',d).value.trim();let id=g?.id;if(g)await req(`api/account-groups/${g.id}`,{method:'PUT',body:JSON.stringify({name,sortOrder:g.sortOrder??0})});else{const bb=await bundle(true),so=Math.max(0,...bb.groups.map(x=>Number(x.sortOrder)||0))+100;id=(await req('api/account-groups',{method:'POST',body:JSON.stringify({name,sortOrder:so})}))?.id}if(id){S.prefs.groups[id]={icon:$('.account-icon-choice.selected',d)?.dataset.icon||'folder',color:$('[name="iconColor"]',d).value,background:$('[name="iconBackground"]',d).value};await savePref('groups')}S.bundleAt=0;d.close();if(S.groupMode){await renderGroupMode();restoreOrder(snap)}else reloadAccounts()}catch(err){console.error(err);s.disabled=false}}}
-function reloadAccounts(){S.bundleAt=0;if($('#view-accounts')?.classList.contains('active'))$('#nav [data-view="accounts"]')?.click();else schedule()}
+function reloadAccounts(){S.bundleAt=0;return lifecycle.reloadAccounts?.()}
 function editAccountRow(a,bs,connections=[]){const r=document.createElement('div');r.className='account-edit-row';r.dataset.accountId=a.id;const h=document.createElement('button');h.type='button';h.className='account-drag-handle';h.dataset.dragKind='account';h.innerHTML=svg('grip');h.title=tr().moveAccount;h.setAttribute('aria-label',tr().moveAccount);const m=document.createElement('div');m.className='account-edit-main';m.innerHTML='<strong></strong><span></span>';text($('strong',m),a.displayName||a.institutionName||'');text($('span',m),a.institutionName||'');const amt=document.createElement('span');amt.className='account-edit-balance mono';text(amt,a.latestBalance?money(a.latestBalance.amount,a.latestBalance.currency||a.currency||'EUR'):'—');r.append(h,accountIdentity(a,bs,connections).node,m,amt);return r}
 function groupBlock(g,as,bs,connections=[],ung=false){const b=document.createElement('section');b.className=`account-group-edit-block${ung?' is-ungrouped':''}`;b.dataset.groupId=g?.id||'';const h=document.createElement('div');h.className='account-group-edit-head';if(ung)h.innerHTML='<span class="drag-handle-spacer"></span>';else{const d=document.createElement('button');d.type='button';d.className='account-drag-handle group-handle';d.dataset.dragKind='group';d.innerHTML=svg('grip');d.title=tr().moveGroup;d.setAttribute('aria-label',tr().moveGroup);h.append(d)}h.append(identity(g?vis('groups',g.id,'folder'):{icon:'folder',color:'#64748b',background:'#eef2f7'}));const n=document.createElement('strong');text(n,g?.name||tr().ungrouped);h.append(n);if(g){const e=document.createElement('button');e.type='button';e.className='icon-button';e.innerHTML=svg('edit');e.title=tr().editGroup;e.setAttribute('aria-label',tr().editGroup);e.onclick=()=>editGroup(g);h.append(e)}const l=document.createElement('div');l.className='account-group-edit-accounts';as.sort((a,z)=>(Number(a.sortOrder)||0)-(Number(z.sortOrder)||0)||(a.displayName||'').localeCompare(z.displayName||'')).forEach(a=>l.append(editAccountRow(a,bs,connections)));b.append(h,l);return b}
 async function renderGroupMode(){const root=$('#accounts-view-list');if(!root||!S.groupMode)return;const [bb,bs]=await Promise.all([bundle(true),banks()]),as=bb.accounts.filter(a=>a.isActive!==false),gs=[...bb.groups].sort((a,z)=>(Number(a.sortOrder)||0)-(Number(z.sortOrder)||0)||a.name.localeCompare(z.name));root.replaceChildren();for(const g of gs)root.append(groupBlock(g,as.filter(a=>String(a.groupId||'')===String(g.id)),bs,bb.connections));root.append(groupBlock(null,as.filter(a=>!a.groupId),bs,bb.connections,true));const add=document.createElement('button');add.type='button';add.className='add-account-group-row';add.innerHTML=`${svg('plus')}<span>${tr().addGroup}</span>`;add.onclick=()=>editGroup(null);root.append(add);let bar=$('#account-group-savebar');if(!bar){bar=document.createElement('div');bar.id='account-group-savebar';bar.className='account-group-savebar';bar.innerHTML=`<span class="account-group-save-hint">${tr().reorder}</span><div><button type="button" class="ghost group-edit-cancel">${tr().cancel}</button><button type="button" class="group-edit-save">${svg('save')}<span>${tr().save}</span></button></div>`;root.after(bar);$('.group-edit-cancel',bar).onclick=()=>leaveGroups(false);$('.group-edit-save',bar).onclick=saveGroups}drag(root)}
@@ -78,21 +86,65 @@ async function leaveGroups(saved){S.groupMode=false;document.body.classList.remo
 async function unread(force=false){reset();if(!S.space)return;if(!force&&Date.now()-S.unreadAt<5000)return applyUnread();S.unreadAt=Date.now();await prefs();try{const items=arr(await req('api/transactions?limit=500&sort=date&order=desc'),'items'),ids=items.map(x=>String(x.id||'')).filter(Boolean),known=Array.isArray(S.prefs.seen?.knownIds)?new Set(S.prefs.seen.knownIds.map(String)):null;if(!known){S.prefs.seen={knownIds:ids,seenAt:new Date().toISOString()};await savePref('seen');S.unread.clear();S.hasUnread=false;return applyUnread()}const fresh=items.filter(x=>x.id&&!known.has(String(x.id)));S.hasUnread=!!fresh.length;S.unread=new Set(fresh.map(x=>String(x.accountId||'')).filter(Boolean));applyUnread()}catch(e){console.error(e)}}
 async function markSeen(){try{const items=arr(await req('api/transactions?limit=500&sort=date&order=desc'),'items');await prefs();S.prefs.seen={knownIds:items.map(x=>String(x.id||'')).filter(Boolean),seenAt:new Date().toISOString()};await savePref('seen');S.unread.clear();S.hasUnread=false;S.unreadAt=Date.now();applyUnread()}catch(e){console.error(e)}}
 function applyUnread(){for(const b of [...$$('#nav [data-view="transactions"]'),...$$('#bottom-nav [data-view="transactions"]'),...$$('.accounts-local-nav [data-account-subpage="transactions"]')]){const d=$('.nav-unread-dot',b);if(S.hasUnread&&!d)b.insertAdjacentHTML('beforeend',`<span class="nav-unread-dot" aria-label="${tr().newTx}"></span>`);else if(!S.hasUnread)d?.remove()}}
-function manualDialog(){for(const d of $$('dialog:not([data-ux-manual])')){const f=$('form',d),n=f?.querySelector('[name="name"]'),i=f?.querySelector('[name="institution"]'),bal=f?.querySelector('[name="balance"]');if(!f||!n||!i||!bal)continue;d.dataset.uxManual='1';const fs=fields({icon:'wallet',color:'#334155',background:'#eef2f7'});$('.dialog-actions',f)?.before(fs);f.addEventListener('submit',()=>{sessionStorage.setItem('finance.pending-manual-visual',JSON.stringify({name:n.value.trim(),icon:$('.account-icon-choice.selected',fs)?.dataset.icon||'wallet',color:$('[name="iconColor"]',fs).value,background:$('[name="iconBackground"]',fs).value,at:Date.now()}));setTimeout(resolveManual,250)},{capture:true,once:true})}}
-async function resolveManual(){const raw=sessionStorage.getItem('finance.pending-manual-visual');if(!raw)return;let p;try{p=JSON.parse(raw)}catch{return}if(!p||Date.now()-Number(p.at||0)>15000)return sessionStorage.removeItem('finance.pending-manual-visual');try{const a=(await bundle(true)).accounts.filter(x=>!x.bankConnectionId&&x.provider==='manual'&&(x.displayName||'').trim()===p.name).sort((x,z)=>Date.parse(z.updatedAt||0)-Date.parse(x.updatedAt||0))[0];if(!a)return setTimeout(resolveManual,350);await prefs();S.prefs.accounts[a.id]={icon:p.icon,color:p.color,background:p.background};await savePref('accounts');sessionStorage.removeItem('finance.pending-manual-visual');reloadAccounts()}catch{setTimeout(resolveManual,500)}}
-async function enhance(){if(S.busy)return;S.busy=true;
-  // Stop self-triggering: enhance re-applies classes/icons (e.g. route() toggles nav `.active`), which the
-  // MutationObserver would see as new work and re-run enhance in a tight loop. Detach while we mutate, then
-  // reconnect on the next frame so only genuine (navigation/data) DOM changes schedule the next pass.
-  if(typeof uxObserver!=='undefined')uxObserver.disconnect();
-  try{ensureCss();reset();ensureNav();toolbar();if(S.initialConnections&&!S.restored&&$('#view-accounts')?.classList.contains('active')){S.restored=true;history.replaceState({view:'accounts'},'','/accounts/connections')}route();manualDialog();if(S.space){await prefs();const [bb,bs]=await Promise.all([bundle(),banks()]);if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){await decorateAccounts(bb,bs);await decorateConnections(bb,bs)}decorateOtherAccounts(bb,bs)}await unread();const tx=$('#view-transactions')?.classList.contains('active');if(tx&&!document.body.dataset.transactionsSeenActive){document.body.dataset.transactionsSeenActive='1';await markSeen()}else if(!tx)delete document.body.dataset.transactionsSeenActive}finally{S.busy=false;
-    // Reconnect SYNCHRONOUSLY (not on the next frame): enhance's own mutations already happened while the
-    // observer was detached, so re-observing now cannot see them (no self-trigger) — but it minimises the
-    // window in which a concurrent app.js render could write rows the observer would otherwise miss.
-    if(typeof uxObserver!=='undefined')uxObserver.observe(document.documentElement,OBS_OPTS)}}
-function schedule(){if(S.queued)return;S.queued=true;requestAnimationFrame(()=>{S.queued=false;enhance().catch(console.error)})}
-document.addEventListener('click',e=>{if(e.target.closest('#add-group')){e.preventDefault();e.stopImmediatePropagation();S.groupMode?leaveGroups(false):enterGroups();return}if(e.target.closest('[data-sync],[data-reconnect],#refresh')){S.bundleAt=0;S.unreadAt=0;setTimeout(()=>unread(true),1200)}},true);
-window.addEventListener('popstate',()=>setTimeout(schedule));
-const OBS_OPTS={childList:true,subtree:true,attributes:true,attributeFilter:['lang','class']};
-const uxObserver=new MutationObserver(schedule);uxObserver.observe(document.documentElement,OBS_OPTS);
-ensureCss();schedule();
+export function attachManualAccountVisualFields(dlg){
+  if(!dlg)return()=>null;
+  const form=$('form',dlg),actions=$('.dialog-actions',form);
+  if(!form||!actions)return()=>null;
+  const fs=fields({icon:'wallet',color:'#334155',background:'#eef2f7'});
+  actions.before(fs);
+  return()=>({
+    icon:$('.account-icon-choice.selected',fs)?.dataset.icon||'wallet',
+    color:$('[name="iconColor"]',fs)?.value||'#334155',
+    background:$('[name="iconBackground"]',fs)?.value||'#eef2f7'
+  });
+}
+export async function persistAccountVisual(accountId,visual){
+  if(!accountId||!visual)return;
+  await prefs();
+  S.prefs.accounts[accountId]=visual;
+  await savePref('accounts');
+  S.bundleAt=0;
+}
+export async function refreshAccountPresentation(context=appCtx){
+  if(context)appCtx=context;
+  if(S.busy)return;
+  S.busy=true;
+  try{
+    reset();ensureNav();toolbar();
+    if(S.initialConnections&&!S.restored&&$('#view-accounts')?.classList.contains('active')){
+      S.restored=true;history.replaceState({view:'accounts'},'','/accounts/connections');
+    }
+    route();
+    if(S.space){
+      await prefs();
+      const [bb,bs]=await Promise.all([bundle(),banks()]);
+      if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){
+        await decorateAccounts(bb,bs);
+        await decorateConnections(bb,bs);
+      }
+      decorateOtherAccounts(bb,bs);
+    }
+    await unread();
+    const tx=$('#view-transactions')?.classList.contains('active');
+    if(tx&&!document.body.dataset.transactionsSeenActive){
+      document.body.dataset.transactionsSeenActive='1';
+      await markSeen();
+    }else if(!tx)delete document.body.dataset.transactionsSeenActive;
+  }finally{S.busy=false}
+}
+
+export function invalidateAccountPresentation(){
+  S.bundleAt=0;S.unreadAt=0;S.banks=null;
+}
+
+export function initializeAccountPresentation(context,callbacks={}){
+  appCtx=context||appCtx;
+  lifecycle={...lifecycle,...callbacks};
+  ensureNav();toolbar();
+  if(lifecycleBound)return;
+  lifecycleBound=true;
+  $('#add-group')?.addEventListener('click',e=>{
+    e.preventDefault();
+    S.groupMode?leaveGroups(false):enterGroups();
+  });
+}
