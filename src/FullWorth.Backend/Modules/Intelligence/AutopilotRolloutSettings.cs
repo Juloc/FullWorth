@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace FullWorth.Backend.Modules.Intelligence;
 
 public enum AutopilotRolloutState
