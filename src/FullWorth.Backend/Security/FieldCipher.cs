@@ -8,8 +8,9 @@ namespace FullWorth.Backend.Security;
 /// At-rest encryption for individual sensitive DB fields (P0.4). Uses AES-256-GCM with a random nonce
 /// per value (so ciphertext is non-deterministic) and a keyed HMAC "blind index" for the few fields
 /// that must still be looked up / uniquely constrained by value. The key comes from
-/// <c>Security:DataEncryptionKey</c> (base64, 32 bytes); in Production it is mandatory, and outside
-/// Production a missing key yields an identity cipher so dev/test run without configuring a key.
+/// <c>Security:DataEncryptionKey</c> (base64, 32 bytes) or is derived from
+/// <c>Security:MasterKey</c>. In Production one of them is mandatory; outside Production a missing
+/// key yields an identity cipher so dev/test run without configuring a key.
 /// </summary>
 public sealed class FieldCipher
 {
@@ -31,19 +32,31 @@ public sealed class FieldCipher
     public static FieldCipher FromConfiguration(IConfiguration configuration, IHostEnvironment environment)
     {
         var configured = configuration["Security:DataEncryptionKey"];
-        if (string.IsNullOrWhiteSpace(configured))
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            if (environment.IsProduction())
-                throw new InvalidOperationException("Security:DataEncryptionKey must be configured (32 bytes, base64) before exposing the service.");
-            return Null;
+            byte[] key;
+            try { key = Convert.FromBase64String(configured.Trim()); }
+            catch (FormatException) { throw new InvalidOperationException("Security:DataEncryptionKey must be valid base64."); }
+            if (key.Length != 32)
+                throw new InvalidOperationException("Security:DataEncryptionKey must decode to exactly 32 bytes (AES-256).");
+            return new FieldCipher(key);
         }
 
-        byte[] key;
-        try { key = Convert.FromBase64String(configured.Trim()); }
-        catch (FormatException) { throw new InvalidOperationException("Security:DataEncryptionKey must be valid base64."); }
-        if (key.Length != 32)
-            throw new InvalidOperationException("Security:DataEncryptionKey must decode to exactly 32 bytes (AES-256).");
-        return new FieldCipher(key);
+        var masterKey = configuration["Security:MasterKey"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(masterKey))
+        {
+            if (masterKey.Length < 32
+                || masterKey.StartsWith("replace-", StringComparison.OrdinalIgnoreCase)
+                || masterKey.Contains("change-me", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Security:MasterKey must be a stable random secret of at least 32 characters.");
+
+            var key = SHA256.HashData(Encoding.UTF8.GetBytes("fullworth:data-encryption:v1:" + masterKey));
+            return new FieldCipher(key);
+        }
+
+        if (environment.IsProduction())
+            throw new InvalidOperationException("Security:DataEncryptionKey or Security:MasterKey must be configured before exposing the service.");
+        return Null;
     }
 
     /// <summary>Encrypt a value for storage. Null passes through; identity cipher returns the input.</summary>
