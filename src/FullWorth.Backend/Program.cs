@@ -85,6 +85,8 @@ builder.Services.AddScoped<CloudInstanceCredentialStore>();
 builder.Services.AddScoped<CloudLearningOutboxUploader>();
 builder.Services.AddScoped<CloudContractBenchmarkContributionService>();
 builder.Services.AddHostedService<CloudContractBenchmarkContributionWorker>();
+builder.Services.AddScoped<CloudMerchantBenchmarkContributionService>();
+builder.Services.AddHostedService<CloudMerchantBenchmarkContributionWorker>();
 builder.Services.AddScoped<CloudSavingsBenchmarkContributionService>();
 builder.Services.AddHostedService<CloudSavingsBenchmarkContributionWorker>();
 builder.Services.AddScoped<CloudProductPriceContributionService>();
