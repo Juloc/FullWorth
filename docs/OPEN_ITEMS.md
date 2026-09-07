@@ -7,21 +7,17 @@ together. Everything NOT listed here was verified as shipped.
 ## Structural (frontend architecture)
 Source: `FRONTEND_RESTRUCTURE_HANDOFF.md`, `FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md`.
 
-> **The owner landed a large refactor of this area concurrent with the 2026-09-07 audit**
-> (commits `5a614be`…`9f9893f`: shared navigation + event core `core/navigation.js`/`core/event-bus.js`,
-> per-feature **activate/unmount lifecycle** in `core/feature-registry.js`, centralized route writes, and a
-> shared Dashboard↔Analytics period via `cycleWindow` `activeFrom`/`averageFrom`). Those are **done** and are
-> removed from the list below; re-verify against current `main` before acting.
+> **Largely completed by the owner during/right after the 2026-09-07 audit** (commits `5a614be`…`9f2d97c`).
+> Verified on `main`: shared navigation + event core (`core/navigation.js`/`core/event-bus.js`), per-feature
+> activate/unmount **lifecycle** (`core/feature-registry.js`), centralized route writes, shared
+> Dashboard↔Analytics period (`cycleWindow` `activeFrom`/`averageFrom`), **comparable-window budgets**, and
+> **`app.js` reduced 1366 → 464 lines** (banking/accounts extracted, `window.fwNavScope` fully removed — 0
+> callers). This section is essentially resolved.
 
-Still open:
-- **Shrink `app.js`** — still ~1366 lines; it still owns `showView` and has banking + account management inline
-  (~134 banking refs). Reduce it to bootstrap/composition.
-- **Finish the `window.fwNavScope` → `core/navigation.js` migration** — the shared nav API exists
-  (`installNavigation`/`navigate`) but 3 files still call the old global: `features/transactions.js`,
-  `features/coach-shell.js`, `features/accounts-ux.js` (accounts is frozen).
+Possibly-remaining (verify against `main`):
 - **Feature dirs** (`features/<name>/{index,view,dialogs,state,css}`) and the **`styles/` split**
-  (tokens/shell/components/responsive) — not created (features are flat `*.js`, CSS is flat top-level).
-- Create `docs/FRONTEND_ARCHITECTURE.md` (the Phase-1 "permanent contract") — never written.
+  (tokens/shell/components/responsive) — may still be flat.
+- `docs/FRONTEND_ARCHITECTURE.md` (the Phase-1 "permanent contract") — was never written.
 
 ## Behaviour / finance-model gaps
 - **Shared money-variant model** in `ui/money.js`: expose neutral/income/warning/danger/debt variants and use
