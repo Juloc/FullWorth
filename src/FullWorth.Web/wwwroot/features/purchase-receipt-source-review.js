@@ -1,3 +1,4 @@
+import { apiClient } from '../core/services.js';
 // Multi-page / multi-image receipt review. Source files stay server-side; previews are loaded only
 // through the authenticated BFF. The module is deliberately read-only because source editing belongs
 // to the durable scan draft before extraction starts.
@@ -6,7 +7,7 @@ const text = (de, en) => (document.documentElement.lang || 'de').toLowerCase().s
 
 function bffContentUrl(contentUrl) {
   if (!contentUrl) return '';
-  return `/bff/backend/${String(contentUrl).replace(/^\//, '')}`;
+  return apiClient.backendUrl(String(contentUrl).replace(/^\//, ''));
 }
 
 export async function mountReceiptSourceReview({ dlg, purchase, api, esc, showError }) {
