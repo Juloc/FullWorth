@@ -412,6 +412,290 @@ Rules:
 The target is the calm, neutral consumer-finance hierarchy visible in the supplied Finanzguru references, while keeping FullWorth's own colors and branding.
 
 
+
+## Research-backed aggregation and grouping model
+
+Reference behavior checked against the supplied Finanzguru screenshots plus current Finanzguru/Finanzfluss product/help material.
+
+The important product distinction is:
+
+```text
+selected period
+!=
+history shown in the preview chart
+!=
+average/comparison value
+```
+
+FullWorth currently mixes these concepts in several places. In particular, `cycleWindow()` currently maps:
+
+```text
+Woche    -> letzte 12 Wochen
+Monat    -> letzte 12 Monate
+Quartal  -> letzte 8 Quartale
+Jahr     -> letzte 5 Jahre
+```
+
+and then several cards use the aggregate over that entire history window as the main number. This is the core semantics bug. The selector must describe the **active bucket**, while a chart may independently show surrounding/history buckets.
+
+### Canonical period model
+
+Use one reusable period state:
+
+```text
+granularity: week | month | quarter | year
+activePeriod: one concrete week/month/quarter/year
+previewWindow: N buckets around/before the active period
+comparison: previous bucket | average of trailing N buckets | none
+scope: accounts/groups/categories/merchants/etc.
+```
+
+Examples:
+
+| Selector | Primary value means | Preview can show | Optional comparison |
+| --- | --- | --- | --- |
+| Woche | selected ISO week | last 12 weeks | Ø/week or previous week |
+| Monat | selected calendar month | last 6-12 months | Ø/month over trailing 12 months or previous month |
+| Quartal | selected calendar quarter | last 6-8 quarters | Ø/quarter or previous quarter |
+| Jahr | selected calendar year | last 5 years | Ø/year or previous year |
+
+Do **not** make the primary value the sum of all buckets currently visible in the preview chart unless the UI explicitly says e.g. `Summe letzte 12 Monate`.
+
+Prev/next navigation moves by **one active bucket**:
+
+```text
+Monat: September -> August -> Juli
+Quartal: Q3 -> Q2 -> Q1
+Jahr: 2026 -> 2025 -> 2024
+Woche: KW 36 -> KW 35
+```
+
+This matches the simple mental model used by Finanzfluss mobile detail views and avoids the current FullWorth interpretation of `Monat` as a 12-month aggregate.
+
+### Development/trend cards
+
+A development card has two layers:
+
+1. **history preview**: multiple buckets in a chart
+2. **main KPI**: either the active bucket or an explicitly labelled average per bucket
+
+For a Finanzguru-style spending-development card, this is valid:
+
+```text
+chart: last 12 months
+main KPI: Ø 2.318 € / Monat
+trend: +36 € / Monat
+tap a bar: open that exact month
+```
+
+It is **not** valid to show:
+
+```text
+selector: Monat
+chart: 12 months
+main KPI: 27.816 €
+```
+
+without clearly labelling that figure as the total over 12 months.
+
+### Income / expenses / saldo
+
+For the active period show:
+
+- income for the active bucket
+- expenses for the active bucket
+- saldo for the active bucket
+- optional saved amount / savings rate when reliable
+
+The chart can show previous buckets for context.
+
+Drill-down:
+
+- tap income -> income bookings for the active bucket
+- tap expenses -> expense bookings for the active bucket
+- tap a historical bar -> bookings for that bar's exact bucket
+
+Do not make all visible history buckets the detail scope by default.
+
+### Categories
+
+Category analysis is always scoped to **one active period** first.
+
+Structure:
+
+```text
+active period total
+-> root/main categories
+-> tap category
+-> subcategories
+-> tap "Gesamt" or a subcategory
+-> matching transactions
+```
+
+A category parent total includes descendants exactly once.
+
+The preview/home card may show a donut plus the largest root categories, but its sum and rows must refer to the same active period.
+
+Support:
+
+- expenses / income switch where useful
+- EUR / percent switch in detail
+- account/group scope
+- period navigation
+
+Do not mix a 12-month category total with a `Monat` label.
+
+### Merchants / recipients
+
+Same period semantics as categories:
+
+```text
+active period
+-> merchants/recipients grouped by normalized merchant
+-> amount + transaction count + optional average booking value
+-> tap merchant
+-> matching transactions in the same active period
+```
+
+A historical merchant trend may exist in detail, but the list itself must not silently aggregate the entire preview history.
+
+### Accounts and account groups
+
+Keep the existing drill logic:
+
+```text
+account group -> combined bookings of its accounts
+account       -> bookings of that account
+```
+
+Group balances are point-in-time sums, not transaction-period sums.
+
+Any analytics account/group filter must use the same active-period model above.
+
+### Contracts
+
+Contract summaries use a normalized cadence, not the raw sum of upcoming payments.
+
+Primary summary:
+
+```text
+Ø monthly contract cost
+optional annualized total
+```
+
+Individual contracts retain their real cadence.
+
+Useful grouping/sorting dimensions are independent of the time selector:
+
+- account
+- contract type
+- category
+- cadence
+- next due date
+- monthly equivalent
+- annual cost
+- provider/name
+
+A yearly contract should contribute `annual amount / 12` to the monthly-equivalent summary, while still being shown as yearly in its row/detail.
+
+### Budgets
+
+Budgets are evaluated against **their own active budget period**.
+
+Default mobile interpretation:
+
+- selected/current month (or salary-cycle period)
+- spent in that period
+- remaining in that period
+- forecast for that period
+
+Historical bars may show previous budget periods, but do not add them into the current-period KPI.
+
+### Wealth / net worth
+
+Net worth is a **point-in-time value**, never a sum across periods.
+
+Overview/dashboard should use a compact preview:
+
+```text
+current net worth
++ small history line/sparkline
++ change over selected preview range
+-> tap -> full Wealth view
+```
+
+Full Wealth detail:
+
+- current net worth
+- history
+- allocation by account / investment / real estate / other assets
+- liabilities separately
+- emergency fund when configured
+
+Changing the time range changes the history/comparison, not the meaning of the current net-worth number.
+
+### Dashboard/overview cards
+
+Dashboard cards are previews, not separate calculation systems.
+
+They should always reuse the same domain query/period model as detail pages.
+
+Examples:
+
+- Einnahmen & Ausgaben -> active month values + small history preview
+- Vermögen -> current value + sparkline + change
+- Verträge -> monthly equivalent + next due preview
+- Budgets -> current budget period status
+- recent bookings -> actual latest bookings
+
+Tap the card/title/row to enter the corresponding detail with the same scope/period where applicable.
+
+## Current FullWorth mismatches to fix during migration
+
+These are known issues in the current frontend and must not be preserved just because they exist on `main`.
+
+### Analytics
+
+- `ui/ux-kit.js::cycleWindow()` currently treats `month` as 12 months, `quarter` as 8 quarters and `year` as 5 years.
+- `features/analytics.js::fillSpending()` uses `overview.expenses` for the entire history window and labels it `Ausgaben gesamt`.
+- `fillInout()` likewise uses income/expense/net over the entire history window as its main KPI.
+- category and merchant cards currently receive the same broad history window; for the simple card view they should instead represent the active bucket, with history used only for comparison/trend.
+- the current global cycle therefore conflates **granularity**, **active period** and **preview history**.
+
+Refactor these into separate concepts rather than patching labels.
+
+### Dashboard
+
+- the net-worth widget currently shows only a number plus assets/liabilities; add the compact history/change preview.
+- the default income/expense widget uses the current month, but the period configuration has different semantics from Analytics. Both must use one shared PeriodState/PeriodPicker model.
+- dashboard cards must deep-link with period/scope instead of starting a fresh unrelated view.
+
+### Normal debits/expenses are visually over-signalled
+
+Current FullWorth uses `negative` styling for many ordinary expense/debit values, including normal income/expense widgets and upcoming contract amounts.
+
+For the consumer-finance default:
+
+- ordinary outgoing bookings are **not an error**
+- ordinary contract costs are **not an error**
+- ordinary spending totals are **not an error**
+- use normal FullWorth primary/neutral text and chart colors for normal outflow
+- a Finanzguru-style spending-development chart can use the main FullWorth accent for spending
+- green may be used sparingly for actual income/gain/positive states
+- red is reserved for genuine problem/risk states: overdraft, budget exceeded, failed/late payment, sync error, loss/warning where red is semantically required
+
+Transaction-list debit amounts should normally be neutral/primary, not red merely because their sign is negative.
+
+This visual semantic rule must be applied centrally in `MoneyValue`/amount variants rather than fixed page-by-page.
+
+## Reference behavior used for this decision
+
+Finanzfluss mobile uses a period selector for `Monat / Quartal / Jahr`, while its overview charts show several historical buckets; the KPIs in detail refer to the selected concrete period, and footer arrows move one period at a time. Category drill-down proceeds from main category to subcategory to matching transactions.
+
+Finanzguru similarly separates overview/trend history from the normalized KPI on development cards (for example an average `€/Monat` across a multi-month development chart), and its analysis system supports grouping by main category, subcategory or recipient with drill-through to filtered bookings.
+
+Do not copy either product's branding or exact visual assets. Copy the **information semantics and interaction clarity**.
+
 ## Definition of done for this restructuring
 
 The restructuring is complete when:
