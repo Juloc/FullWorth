@@ -17,13 +17,15 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
-import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
+import { renderBudgets, newBudget } from './features/budgets.js';
 import { downloadWealthBackup } from './features/wealth-portability.js';
 import { createDialog } from './ui/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
+import { installNavigation, navigate } from './core/navigation.js';
+import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './ui/toast.js';
 import { openGlobalSearch } from './ui/global-search.js';
 
@@ -55,7 +57,9 @@ async function boot(){
   await loadMessages();await loadCapabilities();bind();syncAdminVisibility();syncPrivacyToggle();syncNavToggle();
   const startView=handleConnectRedirect()||viewFromPath(location.pathname);
   try{await loadSpaces()}catch(e){console.error(e);toast(get('common.error'))}
-  await showView(startView,{replace:true});
+  const canonicalStart=pathForView(startView);
+  const startPath=location.pathname===canonicalStart||location.pathname.startsWith(canonicalStart.replace(/\/$/,'')+'/')?location.pathname:undefined;
+  await showView(startView,{replace:true,path:startPath});
   // Inactivity lock: covers the app after 10 min idle; unlock re-loads the current screen.
   initLock(ctx,{onUnlock:loadCurrent});
   await accessSetup.maybeOpenRegistrationOnboarding();
@@ -211,7 +215,7 @@ function bind(){
   // is reachable on desktop; #bottom-nav is the mobile bar.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view,{query:''})));
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
-  window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
+  window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true,path:location.pathname}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
   $('#delete-account')?.addEventListener('click',openDeleteAccountDialog);
   $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
@@ -224,7 +228,7 @@ function bind(){
   $('#refresh').addEventListener('click',loadCurrent);
   bindTransactions(ctx);
   $('#add-account').addEventListener('click',openAddAccountDialog);
-  $('#add-group')?.addEventListener('click',()=>openGroupDialog());
+  $('#add-group')?.addEventListener('click',()=>emitAppEvent('accounts:toggle-groups'));
   $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
   bindContracts(ctx);
   bindNetWorth(ctx);
@@ -376,17 +380,12 @@ function initResizableSidebar(){
 }
 async function showView(view,opts={}){
   state.view=view;
-  // Keep the URL in sync so a reload/deep-link lands on this screen and Back/Forward work.
-  const base=pathForView(view);
-  // Scope query (e.g. /transactions?accountId=… or ?groupId=…): an explicit opts.query wins; otherwise
-  // keep the current query when re-entering the same path (boot/deep-link), else clear it on a fresh nav.
-  const query=opts.query!==undefined?String(opts.query):(location.pathname===base?location.search.replace(/^\?/,''):'');
-  const path=query?`${base}?${query}`:base;
+  const base=opts.path||pathForView(view);
+  const sameBase=location.pathname===base;
+  const query=opts.query!==undefined?String(opts.query):(sameBase?location.search.replace(/^\?/,''):'');
+  const target=query?`${base}?${query}`:base;
   if(!opts.fromHistory){
-    // Replace when re-landing on the exact same URL (or asked to); push a real entry otherwise so
-    // drilling into a different account/group is a Back step.
-    if(opts.replace||location.pathname+location.search===path)history.replaceState({view},'',path);
-    else history.pushState({view},'',path);
+    router.write(view,{query,replace:!!opts.replace||location.pathname+location.search===target,state:{view},path:base});
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
   $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
@@ -395,11 +394,12 @@ async function showView(view,opts={}){
   renderPageHeader();
   window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
   await loadCurrent();
+  emitAppEvent('surface:rendered',{view,path:location.pathname+location.search});
 }
 async function loadCurrent(){
   try{
     if(!state.space){await loadSpaces();if(!state.space){toast(get('common.error'));return}}
-    await featureRegistry.refresh(state.view,ctx);
+    await featureRegistry.activate(state.view,ctx);
   }catch(e){console.error(e);toast(get('common.error'))}
 }
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
@@ -431,12 +431,16 @@ function openMoreSheet(){
   dlg.showModal();
 }
 
+installNavigation((view,options={})=>showView(view,options));
+onAppEvent('accounts:open-add',()=>openAddAccountDialog());
+onAppEvent('accounts:open-bank',()=>openBankDialog());
+
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
 const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,empty,skeleton,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
-  navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
+  navScope:(view,query)=>navigate(view,{query:query||''}),showView:(view,opts)=>navigate(view,opts||{})};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
 const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
@@ -454,10 +458,6 @@ const featureRegistry=createFeatureRegistry()
   .register('merchants',()=>renderMerchants(ctx))
   .register('audit',()=>renderAudit(ctx))
   .register('settings',()=>loadSettings());
-// Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
-// import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
-window.fwNavScope=(view,query)=>showView(view,{query:query||''});
-window.fwOpenBudget=id=>openBudgetDetail(ctx,id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
 function renderRows(el,rows,map){el.innerHTML='';for(const x of rows||[]){const [title,sub,value]=map(x);el.insertAdjacentHTML('beforeend',`<div class="row"><div class="row-main"><div class="row-title">${esc(title)}</div><div class="row-sub">${esc(sub)}</div></div><div class="amount">${esc(value)}</div></div>`)}if(!(rows||[]).length)empty(el)}
@@ -683,11 +683,13 @@ function openManualAccountDialog(){
     e.preventDefault();const fd=new FormData(e.currentTarget);
     if(!state.space){toast(get('common.error'));return}
     try{
-      await api('api/accounts',jsonBody({fullWorthSpaceId:state.space.id,bankConnectionId:null,displayName:fd.get('name'),currency:fd.get('currency'),includeInNetWorth:true,sortOrder:0,institutionName:fd.get('institution')||null,initialBalance:fd.get('balance')===''?null:Number(fd.get('balance'))}));
-      dlg.close();toast(get('accounts.created'));await loadAccountsView();
+      const created=await api('api/accounts',jsonBody({fullWorthSpaceId:state.space.id,bankConnectionId:null,displayName:fd.get('name'),currency:fd.get('currency'),includeInNetWorth:true,sortOrder:0,institutionName:fd.get('institution')||null,initialBalance:fd.get('balance')===''?null:Number(fd.get('balance'))}));
+      emitAppEvent('accounts:manual-created',{account:created});
+      dlg.close();toast(get('accounts.created'));await loadAccountsView();emitAppEvent('surface:rendered',{view:'accounts',path:location.pathname+location.search});
     }catch(err){toast(err.message||get('common.error'))}
   };
   dlg.showModal();
+  emitAppEvent('accounts:manual-dialog-opened',{dialog:dlg});
 }
 function openBalanceDialog(account){
   const current=account.latestBalance?account.latestBalance.amount:'';
