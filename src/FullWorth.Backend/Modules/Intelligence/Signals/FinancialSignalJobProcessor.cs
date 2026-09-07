@@ -36,7 +36,7 @@ public sealed class FinancialSignalJobProcessor(
                         target.FullWorthSpaceId,
                         from: null,
                         to: null,
-                        ct);
+                        ct: ct);
                     await detection.DetectAndPersistAsync(snapshot, DateTimeOffset.UtcNow, ct);
                 }
                 catch (KeyNotFoundException)
