@@ -5,51 +5,23 @@ import {
 } from './purchase-articles-advanced-actions.js';
 import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';
 import { mountReceiptSourceReview } from './purchase-receipt-source-review.js';
+import { api as sharedApi } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
+import { openPurchaseWorkspace, openProduct } from './purchase-articles-workspace.js';
 
 // Adapter between the existing purchase workspace and the secondary advanced-actions module. It avoids
 // coupling the large renderer to these workflows: IDs are captured from the existing list interactions
 // (with Resource Timing as a fallback for immediately-created manual purchases), while API calls continue
 // through the same BFF and FullWorth-Space query contract as the rest of the UI.
 
-let lastPurchaseId = null;
-let lastProductId = null;
-let scanScheduled = false;
-
-const spaceId = () => localStorage.getItem('finance.space') || '';
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const text = (de, en) => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? de : en;
 
-function withSpace(path) {
-  const [base, query = ''] = String(path).replace(/^\//, '').split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `${base}?${params}`;
-}
-
-async function api(path, options) {
-  const response = await fetch(`/bff/backend/${withSpace(path)}`, options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try {
-      const body = await response.json();
-      message = body.error || body.message || body.title || message;
-      if (body.detail?.conflict) message += ` (${body.detail.conflict})`;
-    } catch { /* keep HTTP status */ }
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
+const api=(path,options)=>sharedApi(path,options);
 
 function makeDialog(html) {
-  const dlg = document.createElement('dialog');
-  dlg.className = 'pa-dialog';
-  dlg.innerHTML = html;
-  document.body.appendChild(dlg);
-  dlg.addEventListener('close', () => dlg.remove(), { once: true });
-  return dlg;
+  const normalized = html.replace(/class="pa-dialog-card\b/, 'class="dialog-card pa-dialog-card');
+  return createDialog(normalized,{className:'pa-dialog',closeLabel:text('Schließen','Close')});
 }
 
 function showError(dlg, message) {
@@ -76,37 +48,14 @@ function fmtDate(value) {
   catch { return String(value); }
 }
 
-function latestResourceId(kind) {
-  const pattern = kind === 'purchase'
-    ? /\/api\/purchases\/([0-9a-f-]{36})\/workspace(?:\?|$)/i
-    : /\/api\/products\/([0-9a-f-]{36})(?:\?|$)/i;
-  const entries = performance.getEntriesByType?.('resource') || [];
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const match = String(entries[i].name || '').match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
-
-function clickExisting(selector) {
-  const row = document.querySelector(selector);
-  if (!row) return false;
-  row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-  return true;
-}
-
 async function reopenPurchase(id, currentDialog) {
   if (currentDialog?.open) currentDialog.close();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  if (!clickExisting(`[data-purchase-id="${id}"]`)) {
-    document.querySelector('[data-pa-tab="articles"]')?.click();
-  }
+  await openPurchaseWorkspace(id);
 }
 
 async function reopenProduct(id, currentDialog) {
   if (currentDialog?.open) currentDialog.close();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  if (!clickExisting(`[data-product-id="${id}"]`)) document.querySelector('[data-pa-tab="products"]')?.click();
+  await openProduct(id);
 }
 
 function mountCurrencySafePaymentPicker(dialog, purchase, writable) {
@@ -164,9 +113,8 @@ function mountCurrencySafePaymentPicker(dialog, purchase, writable) {
 async function mountPurchaseDialog(dialog) {
   if (!dialog?.querySelector('.pa-workspace') || dialog.dataset.paAdvancedInstaller === 'loading' || dialog.dataset.paAdvancedMounted === 'true') return;
   dialog.dataset.paAdvancedInstaller = 'loading';
-  const id = lastPurchaseId || latestResourceId('purchase');
+  const id = dialog.dataset.purchaseId;
   if (!id) { dialog.dataset.paAdvancedInstaller = ''; return; }
-  lastPurchaseId = id;
   try {
     const workspace = await api(`api/purchases/${id}/workspace`);
     const purchase = workspace.purchase;
@@ -207,9 +155,8 @@ async function mountPurchaseDialog(dialog) {
 async function mountProductDialog(dialog) {
   if (!dialog?.querySelector('.pa-product-detail') || dialog.dataset.paProductAdvancedInstaller === 'loading' || dialog.dataset.paProductAdvancedMounted === 'true') return;
   dialog.dataset.paProductAdvancedInstaller = 'loading';
-  const id = lastProductId || latestResourceId('product');
+  const id = dialog.dataset.productId;
   if (!id) { dialog.dataset.paProductAdvancedInstaller = ''; return; }
-  lastProductId = id;
   try {
     const data = await api(`api/products/${id}`);
     if (!data?.product) return;
@@ -229,39 +176,14 @@ async function mountProductDialog(dialog) {
   }
 }
 
-function scan() {
-  scanScheduled = false;
+export async function refreshPurchaseAdvancedInstaller(detail = {}) {
   const advancedPanel = document.querySelector('.purchase-advanced-panel:not([hidden])');
-  const activeTab = document.querySelector('[data-pa-tab].active')?.dataset.paTab;
+  const activeTab = detail.tab || document.querySelector('[data-pa-tab].active')?.dataset.paTab;
   if (advancedPanel && activeTab === 'articles') {
     mountExportAndWarrantyActions(advancedPanel, { api, esc, makeDialog, money, fmtDate, showError });
   }
-  document.querySelectorAll('dialog.pa-dialog').forEach(dialog => {
-    if (dialog.querySelector('.pa-workspace')) void mountPurchaseDialog(dialog);
-    else if (dialog.querySelector('.pa-product-detail')) void mountProductDialog(dialog);
-  });
+
+  const dialog = detail.dialog;
+  if (dialog?.querySelector('.pa-workspace')) await mountPurchaseDialog(dialog);
+  else if (dialog?.querySelector('.pa-product-detail')) await mountProductDialog(dialog);
 }
-
-function scheduleScan() {
-  if (scanScheduled) return;
-  scanScheduled = true;
-  queueMicrotask(scan);
-}
-
-document.addEventListener('click', event => {
-  const purchase = event.target.closest?.('[data-purchase-id]');
-  if (purchase?.dataset.purchaseId) lastPurchaseId = purchase.dataset.purchaseId;
-  const product = event.target.closest?.('[data-product-id]');
-  if (product?.dataset.productId) lastProductId = product.dataset.productId;
-  scheduleScan();
-}, true);
-
-function install() {
-  if (!document.body) return;
-  const observer = new MutationObserver(scheduleScan);
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
-  scheduleScan();
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-else install();
