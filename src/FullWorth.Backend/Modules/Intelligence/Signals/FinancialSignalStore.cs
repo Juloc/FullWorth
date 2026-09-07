@@ -71,6 +71,7 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
         }
 
         var meaningfulChange =
+            row.ResolvedAt.HasValue ||
             !string.Equals(row.Type, detected.Type.Trim(), StringComparison.Ordinal) ||
             !string.Equals(row.SubjectType, detected.SubjectType.Trim(), StringComparison.Ordinal) ||
             !string.Equals(row.SubjectId, detected.SubjectId.Trim(), StringComparison.Ordinal) ||
