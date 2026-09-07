@@ -35,8 +35,9 @@ import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
 import { createToast } from './ui/toast.js';
 import { openGlobalSearch } from './ui/global-search.js';
-import { bindCompensationNavigation, compensationMoreButton } from './ui/compensation-navigation.js';
+import { bindCompensationNavigation } from './ui/compensation-navigation.js';
 import { createLayoutShell } from './ui/layout-shell.js';
+import { createShellPresentation } from './ui/shell-presentation.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
@@ -55,11 +56,13 @@ const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
 const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>newAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
-const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const toastController=createToast($('#toast'));
 const toast=(text,duration)=>toastController.show(text,duration);
 const {initResizableSidebar,resetLayout,syncNavToggle,syncResponsiveSidebar,toggleSidebar}=createLayoutShell({get,toast});
+const shellPresentation=createShellPresentation({state,i18n,get,primaryAction:PRIMARY_ACTION,dialog:(html,options)=>dialog(html,options),navigate:(view,options)=>showView(view,options)});
+const {applyTheme,media,renderPageHeader,renderTranslations,renderUserBlock}=shellPresentation;
+const openMoreSheet=()=>shellPresentation.openMoreSheet(MORE_VIEWS,esc);
 
 async function boot(){
   setMoneyLocale(state.lang);
@@ -94,17 +97,6 @@ function handleConnectRedirect(){
   return'accounts';
 }
 async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
-function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
-  // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
-  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
-function renderPageHeader(){
-  const p=state.messages.pages?.[state.view];
-  if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle}
-  const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
-  if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
-}
-function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',actual==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
-function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
 async function loadSpaces(){
   const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
   const saved=localStorage.getItem('finance.space');
@@ -114,12 +106,6 @@ async function loadSpaces(){
   invalidateLayout(); // dashboard layout is per space
 }
 // Sidebar foot: current space name, currency and an avatar initial (§3.1 user block).
-function renderUserBlock(){
-  const sp=state.space;
-  $('#user-space-name').textContent=sp?.name||'';
-  $('#user-space-sub').textContent=sp?.baseCurrency||'';
-  $('#user-avatar').textContent=(sp?.name||'F').trim().charAt(0).toUpperCase()||'F';
-}
 function bind(){
   $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
   $('#theme').addEventListener('change',e=>{state.theme=e.target.value;localStorage.setItem('finance.theme',state.theme);applyTheme()});
@@ -202,25 +188,6 @@ function dialog(html,options={}){return createDialog(html,{closeLabel:get('commo
 // §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
 // category under multiple parents with the same name is still distinguishable at a glance.
 async function categoryOptions(selected){const categories=await api('api/categories');const byId=new Map(categories.map(c=>[c.id,c]));const path=c=>{const chain=[];let cur=c;while(cur){chain.unshift(cur.name);cur=cur.parentId?byId.get(cur.parentId):null}return chain.join(' › ')};return categories.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${esc(path(c))}</option>`).join('')}
-
-function openMoreSheet(){
-  const items=MORE_VIEWS.map(view=>{
-    const source=$(`.sidebar button[data-view="${view}"]`);
-    const icon=source?source.querySelector('svg').outerHTML:'';
-    // Prefer the nav label; fall back to the page title when a view has no nav.* key (merchants, audit)
-    // so the sheet never shows a raw i18n key.
-    const nav=get(`nav.${view}`);
-    const label=view==='transactions'
-      ? get('transactions.allTx')
-      : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav);
-    return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
-  }).join('') + compensationMoreButton(esc(get('nav.compensation')));
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
-  dlg.classList.add('more-sheet-dialog');
-  dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
-  bindCompensationNavigation(dlg);
-  dlg.showModal();
-}
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
