@@ -785,7 +785,7 @@ async function openQuickEdit(contract, field) {
   }
 
   const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet contract-quick-edit">
-    <div class="panel-head"><h2>${ctx.esc(title)}</h2><button tye="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="panel-head"><h2>${ctx.esc(title)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     ${control}
     <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
