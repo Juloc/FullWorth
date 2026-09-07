@@ -128,6 +128,7 @@ function normalizeFont(value) {
 }
 
 function numberInRange(value, [min, max], fallback) {
+  if (value === null || value === '') return fallback;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
