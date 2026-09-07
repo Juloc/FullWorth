@@ -65,8 +65,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/receipt-scan-local-builder.js",
             "features/receipt-scan-set.js",
             "features/tax.js",
-            "features/wealth-investment-consolidation.js",
-            "features/wealth-specialized-assets-extra.js",
             "features/wealth-specialized-assets.js"
         };
 
@@ -108,9 +106,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/tax.js",
             "features/transaction-review-controls.js",
             "features/transactions.js",
-            "features/wealth-investment-consolidation.js",
-            "features/wealth-specialized-assets-extra.js",
-            "features/wealth-specialized-assets.js",
         };
 
         AssertNoNewViolations(
@@ -172,6 +167,9 @@ public sealed class FrontendArchitectureGuardTests
             "features/accounts-ux.js",
 
             // Legacy patch-layer migration allow-list. This list may only shrink.
+            "features/wealth-investment-consolidation.js",
+            "features/wealth-specialized-assets-extra.js",
+            "features/wealth-specialized-assets.js",
             "features/advanced-transaction-bulk-ui.js",
             "features/capability-ui-guard.js",
             "features/compensation-nav.js",
@@ -192,9 +190,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/tax-review-extra.js",
             "features/tax.js",
             "features/transaction-review-controls.js",
-            "features/wealth-investment-consolidation.js",
-            "features/wealth-specialized-assets-extra.js",
-            "features/wealth-specialized-assets.js",
 
             // Shared infrastructure observers are explicitly reviewed and scoped.
             "ui/accessibility-release.js",
