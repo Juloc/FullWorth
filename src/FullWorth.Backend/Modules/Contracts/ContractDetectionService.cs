@@ -212,28 +212,62 @@ public sealed class ContractDetectionService(
         };
         if (!existingWasFound) db.Contracts.Add(existing);
 
-        existing.Name = candidate.Counterparty.Trim();
-        existing.ProviderName = candidate.Counterparty.Trim();
-        existing.Kind = "contract";
-        existing.CategoryId = candidate.CategoryId;
-
-        // A recurring contract can move between accounts without becoming a second contract. Once two
-        // different source accounts have been observed, keep the logical contract account-agnostic so
-        // its payment history remains visible across both accounts.
-        if (existing.AccountId.HasValue &&
+        // Keep one logical contract when its payment account changes. Preserve the old account as a
+        // merged history source and move the visible/root contract to the newest payment account. This
+        // keeps filters and the contract detail useful without losing payments from the previous account.
+        if (existingWasFound &&
+            existing.AccountId.HasValue &&
             candidate.AccountId.HasValue &&
             existing.AccountId.Value != candidate.AccountId.Value)
         {
-            existing.AccountId = null;
+            var previousAccountId = existing.AccountId.Value;
+            var previousAccountAlreadyPreserved = await db.Contracts.AsNoTracking().AnyAsync(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == existing.Id &&
+                contract.AccountId == previousAccountId, ct);
+
+            if (!previousAccountAlreadyPreserved)
+            {
+                db.Contracts.Add(new RecurringContract
+                {
+                    FullWorthSpaceId = existing.FullWorthSpaceId,
+                    Name = existing.Name,
+                    ProviderName = existing.ProviderName,
+                    Kind = existing.Kind,
+                    CategoryId = existing.CategoryId,
+                    AccountId = previousAccountId,
+                    MergedIntoContractId = existing.Id,
+                    Amount = existing.Amount,
+                    Currency = existing.Currency,
+                    BillingCycle = existing.BillingCycle,
+                    Interval = existing.Interval,
+                    StartDate = existing.StartDate,
+                    EndDate = existing.EndDate,
+                    NextDueDate = existing.NextDueDate,
+                    AutoDetected = true,
+                    IsActive = existing.IsActive,
+                    Notes = existing.Notes,
+                    CreatedAt = existing.CreatedAt,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+            }
+
+            existing.AccountId = candidate.AccountId;
         }
         else if (!existing.AccountId.HasValue && existingWasFound)
         {
-            // Preserve an already-unbound contract instead of binding it again to only the newest account.
+            // Legacy account-agnostic contracts stay unbound because their older source account is not
+            // reconstructable safely here.
         }
         else
         {
             existing.AccountId = candidate.AccountId;
         }
+
+        existing.Name = candidate.Counterparty.Trim();
+        existing.ProviderName = candidate.Counterparty.Trim();
+        existing.Kind = "contract";
+        existing.CategoryId = candidate.CategoryId;
         existing.Amount = candidate.TypicalAmount;
         existing.Currency = currency;
         existing.BillingCycle = candidate.BillingCycle.Trim().ToLowerInvariant();
