@@ -21,7 +21,7 @@ let categoryNames = new Map();
 let categoryIcons = new Map();
 let accountNames = new Map();
 // Filter/sort state is URL-backed so the contracts view is restorable and shareable.
-const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'due', order: 'asc' };
+const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'cycle', order: 'asc' };
 
 function loadViewState() {
   const p = new URLSearchParams(location.search);
@@ -30,7 +30,7 @@ function loadViewState() {
   view.account = p.get('accountId') || '';
   view.category = p.get('categoryId') || '';
   view.cycle = p.get('cycle') || '';
-  view.sort = p.get('sort') || 'due';
+  view.sort = p.get('sort') || 'cycle';
   view.order = p.get('order') === 'desc' ? 'desc' : 'asc';
 }
 function syncViewState() {
@@ -40,7 +40,7 @@ function syncViewState() {
   if (view.account) p.set('accountId', view.account);
   if (view.category) p.set('categoryId', view.category);
   if (view.cycle) p.set('cycle', view.cycle);
-  if (view.sort && view.sort !== 'due') p.set('sort', view.sort);
+  if (view.sort && view.sort !== 'cycle') p.set('sort', view.sort);
   if (view.order === 'desc') p.set('order', 'desc');
   const qs = p.toString();
   history.replaceState({ view: 'contracts' }, '', qs ? '/contracts?' + qs : '/contracts');
@@ -122,12 +122,11 @@ function sortIcon(paths) {
 // the same i18n labels the old <select> used, so behaviour is unchanged; only the presentation is new.
 function sortOptions() {
   return [
-    { key: 'due', label: ctx.get('contracts.nextDue'), icon: sortIcon('<path d="M4 5h16v15H4z"/><path d="M4 9h16"/><path d="M8 3v4M16 3v4"/>') },
-    { key: 'monthly', label: t('Monatlich', 'Monthly'), icon: sortIcon('<path d="M20 8a8 8 0 0 0-14-4L3 7"/><path d="M3 3.5V7h3.5"/><path d="M4 16a8 8 0 0 0 14 4l3-3"/><path d="M21 20.5V17h-3.5"/>') },
-    { key: 'annual', label: ctx.get('contracts.annualized'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
+    { key: 'cycle', label: t('Turnus', 'Billing cycle'), icon: sortIcon('<path d="M20 8a8 8 0 0 0-14-4L3 7"/><path d="M3 3.5V7h3.5"/><path d="M4 16a8 8 0 0 0 14 4l3-3"/><path d="M21 20.5V17h-3.5"/>') },
+    { key: 'annual', label: t('Kosten pro Jahr', 'Cost per year'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
     { key: 'account', label: ctx.get('contracts.account'), icon: sortIcon('<path d="M3 10 12 4l9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9"/><path d="M3 20h18"/>') },
+    { key: 'due', label: t('Nächste Fälligkeit', 'Next due date'), icon: sortIcon('<path d="M4 5h16v15H4z"/><path d="M4 9h16"/><path d="M8 3v4M16 3v4"/>') },
     { key: 'category', label: t('Kategorie', 'Category'), icon: sortIcon('<path d="M4 4h7l9 9-7 7-9-9V4Z"/><path d="M8.5 8.5h.01"/>') },
-    { key: 'type', label: t('Art', 'Type'), icon: sortIcon('<path d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z"/>') },
     { key: 'name', label: ctx.get('common.name'), icon: sortIcon('<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M13 6h7M13 11h5M13 16h3"/>') },
   ];
 }
@@ -170,22 +169,38 @@ function openSortSheet(host) {
   dlg.showModal();
 }
 
-// Grouping (matches the reference's per-account sections): only the account/category dimensions group —
-// the others stay a flat, globally-sorted list. Returns the key/label bucket for one contract.
-function groupKeyFor() { return ['account', 'category', 'type'].includes(view.sort) ? view.sort : null; }
-function groupBucket(c) {
-  if (view.sort === 'account')
-    return { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account') };
-  if (view.sort === 'type')
-    return { key: c.kind || 'contract', label: ctx.get('contracts.kind_' + (c.kind || 'contract')) };
-  return { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category') };
+// The selected sort dimension also defines the visual grouping where that improves scanning.
+function dueBucket(c) {
+  const value = String(c.nextDueDate || '');
+  if (!value) return { key: 'none', label: t('Ohne Fälligkeit', 'No due date'), rank: 5 };
+  const now = new Date();
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  const ym = today.slice(0, 7);
+  const dueYm = value.slice(0, 7);
+  if (value < today) return { key: 'overdue', label: t('Überfällig', 'Overdue'), rank: 0 };
+  if (dueYm === ym) return { key: 'month', label: t('Diesen Monat', 'This month'), rank: 1 };
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextYm = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0')].join('-');
+  if (dueYm === nextYm) return { key: 'next', label: t('Nächsten Monat', 'Next month'), rank: 2 };
+  return { key: 'later', label: t('Später', 'Later'), rank: 3 };
 }
-function groupMonthly(items) { return items.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0); }
+function groupKeyFor() { return ['cycle', 'account', 'category', 'due'].includes(view.sort) ? view.sort : null; }
+function groupBucket(c) {
+  if (view.sort === 'cycle') {
+    const key = c.billingCycle || 'monthly';
+    const rank = ({ monthly: 0, quarterly: 1, yearly: 2, weekly: 3 })[key] ?? 4;
+    return { key, label: ctx.get('contracts.cycle_' + key), rank };
+  }
+  if (view.sort === 'account') return { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account'), rank: 0 };
+  if (view.sort === 'due') return dueBucket(c);
+  return { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category'), rank: 0 };
+}
+function groupMonthly(items) { return items.reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0); }
 function groupHead(label, items, cur) {
   const el = document.createElement('div');
   el.className = 'contracts-group-head';
-  el.innerHTML = `<div class="contracts-group-id"><span class="contracts-group-name">${esc(label)}</span><span class="contracts-group-count">(${items.length})</span></div>
-    <div class="contracts-group-sum">${ctx.money(groupMonthly(items), cur)}<small>${esc(ctx.get('contracts.cycle_monthly'))}</small></div>`;
+  const suffix = view.sort === 'due' ? '' : `<span class="contracts-group-sum">${ctx.money(groupMonthly(items), cur)}<small>${esc(t('mtl.', 'mo.'))}</small></span>`;
+  el.innerHTML = `<div class="contracts-group-id"><span class="contracts-group-name">${esc(label)}</span><span class="contracts-group-count">(${items.length})</span></div>${suffix}`;
   return el;
 }
 
