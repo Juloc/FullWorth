@@ -60,7 +60,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/receipt-scan-ai.js",
             "features/receipt-scan-local-builder.js",
             "features/receipt-scan-set.js",
-            "features/tax.js",
             "features/wealth-specialized-assets.js"
         };
 
@@ -92,8 +91,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/purchase-intelligence-ui.js",
             "features/purchase-receipt-source-review.js",
             "features/receipt-scan-ai.js",
-            "features/tax-review-extra.js",
-            "features/tax.js",
             "features/transaction-review-controls.js",
             "features/transactions.js",
         };
@@ -134,7 +131,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/parity-final-ui.js",
             "features/purchase-articles-advanced-actions.js",
             "features/purchase-discount-actions.js",
-            "features/tax-review-extra.js",
             "intelligence/brand-packs.js",
             "intelligence/intelligence.js",
             "passkeys/passkeys.js"
@@ -167,8 +163,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/purchase-discount-analytics-ui.js",
             "features/purchase-intelligence-ui.js",
             "features/receipt-scan-local-builder.js",
-            "features/tax-review-extra.js",
-            "features/tax.js",
             "features/transaction-review-controls.js",
 
             // Shared infrastructure observers are explicitly reviewed and scoped.
