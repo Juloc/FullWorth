@@ -95,15 +95,15 @@ public sealed class ContractDetectionCandidateLifecycleTests
             db.Users.Add(new FullWorthUser
             {
                 Id = owner,
-                EmailNormalized = $\"{owner:N}@EXAMPLE.COM\",
-                DisplayName = \"Account switch owner\",
+                EmailNormalized = $"{owner:N}@EXAMPLE.COM",
+                DisplayName = "Account switch owner",
                 IsActive = true
             });
             db.FullWorthSpaces.Add(new FullWorthSpace
             {
                 Id = space,
-                Name = \"Account switch\",
-                BaseCurrency = \"EUR\"
+                Name = "Account switch",
+                BaseCurrency = "EUR"
             });
             db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
             {
@@ -115,11 +115,11 @@ public sealed class ContractDetectionCandidateLifecycleTests
             {
                 Id = connection,
                 FullWorthSpaceId = space,
-                Provider = \"test\",
-                InstitutionName = \"Test Bank\",
-                Country = \"DE\",
-                ProviderSessionId = $\"switch-{connection:N}\",
-                Status = \"AUTHORIZED\"
+                Provider = "test",
+                InstitutionName = "Test Bank",
+                Country = "DE",
+                ProviderSessionId = $"switch-{connection:N}",
+                Status = "AUTHORIZED"
             });
 
             for (var index = 0; index < accounts.Length; index++)
@@ -130,12 +130,12 @@ public sealed class ContractDetectionCandidateLifecycleTests
                     Id = accountId,
                     FullWorthSpaceId = space,
                     BankConnectionId = connection,
-                    Provider = \"test\",
-                    IdentificationHash = $\"switch-{accountId:N}\",
-                    ProviderAccountId = $\"provider-{accountId:N}\",
-                    InstitutionName = \"Test Bank\",
-                    DisplayName = $\"Account {index + 1}\",
-                    Currency = \"EUR\"
+                    Provider = "test",
+                    IdentificationHash = $"switch-{accountId:N}",
+                    ProviderAccountId = $"provider-{accountId:N}",
+                    InstitutionName = "Test Bank",
+                    DisplayName = $"Account {index + 1}",
+                    Currency = "EUR"
                 });
                 db.AccountOwners.Add(new AccountOwner
                 {
@@ -145,7 +145,7 @@ public sealed class ContractDetectionCandidateLifecycleTests
                 });
             }
 
-            var names = new[] { \"mueller gmbh\", \"müller gmbh\", \"mueller\" };
+            var names = new[] { "mueller gmbh", "müller gmbh", "mueller" };
             var month = 9;
             for (var accountIndex = 0; accountIndex < accounts.Length; accountIndex++)
             {
@@ -154,13 +154,13 @@ public sealed class ContractDetectionCandidateLifecycleTests
                     db.Transactions.Add(new FinanceTransaction
                     {
                         AccountId = accounts[accountIndex],
-                        ExternalKey = $\"switch-{accountIndex}-{sample}\",
+                        ExternalKey = $"switch-{accountIndex}-{sample}",
                         Amount = -182m,
-                        Currency = \"EUR\",
+                        Currency = "EUR",
                         Counterparty = names[accountIndex],
                         NormalizedCounterparty = names[accountIndex],
                         BookingDate = today.AddMonths(-month--),
-                        CategorizationSource = \"none\"
+                        CategorizationSource = "none"
                     });
                 }
             }
@@ -171,14 +171,14 @@ public sealed class ContractDetectionCandidateLifecycleTests
         using var client = factory.CreateClient();
         using var response = await client.SendAsync(Request(
             HttpMethod.Get,
-            $\"/api/contracts/detection?fullWorthSpaceId={space}\",
+            $"/api/contracts/detection?fullWorthSpaceId={space}",
             owner));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var candidates = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
         var candidate = Assert.Single(candidates!);
-        Assert.Equal(9, candidate.GetProperty(\"samples\").GetInt32());
-        Assert.Equal(182m, candidate.GetProperty(\"typicalAmount\").GetDecimal());
+        Assert.Equal(9, candidate.GetProperty("samples").GetInt32());
+        Assert.Equal(182m, candidate.GetProperty("typicalAmount").GetDecimal());
     }
 
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId)
