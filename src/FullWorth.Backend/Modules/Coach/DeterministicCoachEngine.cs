@@ -64,7 +64,7 @@ public sealed class DeterministicCoachEngine
         var q = question.ToLowerInvariant();
         if (Has(q, "financially independent", "financial independence", "finanziell unabhängig", "finanzielle unabhängigkeit", "finanzielle unabhaengigkeit"))
             return Intent.FinancialIndependence;
-        if (Has(q, "reich", "100k", "100.000", "100000", "250k", "500k", "million", "millionär")) return Intent.TargetDate;
+        if (Has(q, "reich", "100k", "100.000", "100,000", "100000", "250k", "250.000", "250,000", "500k", "500.000", "500,000", "million", "millionär", "reach €")) return Intent.TargetDate;
         if (Has(q, "leisten", "afford", "kann ich mir")) return Intent.Affordability;
         if (Has(q, "bereut", "regret", "schlecht", "unnötig", "unnoetig")) return Intent.RegrettedSpending;
         if (Has(q, "worth it", "gelohnt", "gut ausgegeben", "war es wert", "was war gut")) return Intent.WorthwhileSpending;

@@ -52,6 +52,23 @@ public sealed class DeterministicCoachEngineTests
         Assert.Null(first.AssumedAnnualReturn);
     }
 
+    [Theory]
+    [InlineData("Was ist diesen Monat wichtig?")]
+    [InlineData("Was hat sich gegenüber dem letzten Zeitraum verändert?")]
+    [InlineData("Wo könnte ich sinnvoll reduzieren?")]
+    [InlineData("Wann erreiche ich 100.000 €?")]
+    [InlineData("What matters this month?")]
+    [InlineData("What changed compared with the previous period?")]
+    [InlineData("Where could I reasonably cut back?")]
+    [InlineData("When could I reach €100,000?")]
+    public void CoachStarterPromptsResolveToConcreteDeterministicIntents(string question)
+    {
+        var answer = new DeterministicCoachEngine().Answer(question, Context());
+
+        Assert.DoesNotContain("deterministisch auswerten", answer.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("analyze your FullWorth data deterministically", answer.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static CoachContext Context(
         IReadOnlyList<CoachCategoryFact>? categories = null,
         SpendingReviewSummaryDto? reviews = null,

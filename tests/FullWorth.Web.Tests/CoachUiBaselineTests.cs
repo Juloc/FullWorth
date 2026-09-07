@@ -42,17 +42,20 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var shell = await GetAsync("/features/coach-shell.js");
         var coachCss = await GetAsync("/features/coach.css");
-        Assert.Contains("Deterministisch", shell);
+        Assert.Contains("Lokale Auswertung", shell);
         Assert.Contains("Verwendete Fakten", shell);
         Assert.Contains("FullWorth-Daten im sicheren Kontext", shell);
         Assert.Contains("id=\"coach-model\"", shell);
         Assert.Contains("finance.coach.model", shell);
         Assert.Contains("api/coach/models", shell);
         Assert.Contains("model: selectedModel || null", shell);
-        Assert.Contains("Wo ist mein Geld hin?", shell);
-        Assert.Contains("Was habe ich bereut?", shell);
-        Assert.Contains("Was war es wert?", shell);
+        Assert.Contains("Was ist diesen Monat wichtig?", shell);
+        Assert.Contains("Was hat sich gegenüber dem letzten Zeitraum verändert?", shell);
+        Assert.Contains("Wo könnte ich sinnvoll reduzieren?", shell);
         Assert.Contains("Wann erreiche ich 100.000 €?", shell);
+        Assert.Contains("Wobei soll ich helfen?", shell);
+        Assert.Contains("coach-suggestion-list", shell);
+        Assert.Contains("coach-followups", shell);
         Assert.Contains("launcher.id = 'coach-launcher'", shell);
         Assert.Contains("dock.id = 'coach-dock'", shell);
         Assert.Contains("finance.coach.quickAccess", shell);
@@ -65,7 +68,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("finance.coach.pinned", shell);
         Assert.Contains("fullworth:coach-open", shell);
         Assert.Contains("coach-context-chip", shell);
-        Assert.Contains("starterQuestions", shell);
+        Assert.Contains("starterSuggestions", shell);
         Assert.Contains("renderContextActions", shell);
         Assert.Contains("dockWidthMode", shell);
         Assert.Contains("initDockSwipe", shell);
