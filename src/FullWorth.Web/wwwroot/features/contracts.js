@@ -135,37 +135,28 @@ function sortLabel() { const o = sortOptions().find(x => x.key === view.sort); r
 // Sort bottom-sheet (mirrors the Finanzguru "Sortierung" sheet): one tap per dimension + a direction
 // segment. Selecting a dimension applies it and closes; the ascending/descending toggle applies live.
 function openSortSheet(host) {
-  const rows = sortOptions().map(o => `
-    <button type="button" class="contracts-sortopt${view.sort === o.key ? ' active' : ''}" data-sort-opt="${o.key}" aria-pressed="${view.sort === o.key}">
-      <span class="contracts-sortopt-ic">${o.icon}</span>
-      <span class="contracts-sortopt-label">${esc(o.label)}</span>
+  const rows = sortOptions().map(option => `
+    <button type="button" class="contracts-sortopt${view.sort === option.key ? ' active' : ''}" data-sort-opt="${option.key}" aria-pressed="${view.sort === option.key}">
+      <span class="contracts-sortopt-ic">${option.icon}</span>
+      <span class="contracts-sortopt-label">${esc(option.label)}</span>
       <span class="contracts-sortopt-radio" aria-hidden="true"></span>
     </button>`).join('');
-  const dir = `<div class="contracts-sortdir" data-order-seg role="group" aria-label="${esc(t('Reihenfolge', 'Order'))}">
-      <button type="button" class="${view.order === 'asc' ? 'active' : ''}" data-order-val="asc" aria-pressed="${view.order === 'asc'}">${esc(t('Aufsteigend', 'Ascending'))}</button>
-      <button type="button" class="${view.order === 'desc' ? 'active' : ''}" data-order-val="desc" aria-pressed="${view.order === 'desc'}">${esc(t('Absteigend', 'Descending'))}</button>
-    </div>`;
+
   const dlg = ctx.dialog(`<div class="dialog-card contracts-sortsheet">
     <div class="panel-head"><h2>${esc(t('Sortierung', 'Sort by'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
     <div class="contracts-sortlist">${rows}</div>
-    ${dir}
   </div>`);
   dlg.classList.add('contracts-sortsheet-dlg');
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelectorAll('[data-sort-opt]').forEach(b => b.addEventListener('click', () => {
-    view.sort = b.dataset.sortOpt;
+  dlg.querySelectorAll('[data-sort-opt]').forEach(button => button.addEventListener('click', () => {
+    view.sort = button.dataset.sortOpt;
+    view.order = view.sort === 'annual' ? 'desc' : 'asc';
     syncViewState();
-    const cur = host.querySelector('[data-sort-current]'); if (cur) cur.textContent = sortLabel();
+    const current = host.querySelector('[data-sort-current]');
+    if (current) current.textContent = sortLabel();
     renderList(host);
     dlg.close();
   }));
-  dlg.querySelector('[data-order-seg]')?.addEventListener('click', e => {
-    const b = e.target.closest('[data-order-val]'); if (!b) return;
-    view.order = b.dataset.orderVal;
-    syncViewState();
-    dlg.querySelectorAll('[data-order-val]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on); });
-    renderList(host);
-  });
   dlg.showModal();
 }
 
