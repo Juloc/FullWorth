@@ -79,7 +79,7 @@ function handleConnectRedirect(){
   const params=new URLSearchParams(location.search);
   const connected=params.get('bankConnected');const error=params.get('bankError');
   if(!connected&&!error)return null;
-  history.replaceState(null,'',location.pathname);
+  router.write(viewFromPath(location.pathname),{replace:true,state:null,path:location.pathname});
   if(connected){toast(get('accounts.connected').replace('{name}',()=>connected),6000);return'accounts'}
   const known={access_denied:'accounts.connectCancelled',app_invalid_callback:'accounts.connectExpired',app_not_configured:'accounts.notConfigured',app_missing_parameters:'accounts.connectFailed',reauthorization_required:'accounts.connectReauth'};
   toast(get(known[error]||'accounts.connectFailed'),8000);
@@ -292,7 +292,7 @@ function syncResponsiveSidebar(){
   const changed=document.body.classList.contains('nav-auto-collapsed')!==shouldCollapse;
   document.body.classList.toggle('nav-auto-collapsed',shouldCollapse);
   syncNavToggle();
-  if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
+  if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
 }
 onAppEvent('layout:sync-sidebar',syncResponsiveSidebar);
 
@@ -394,12 +394,12 @@ async function showView(view,opts={}){
   renderPageHeader();
   window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
   await loadCurrent();
-  emitAppEvent('surface:rendered',{view,path:location.pathname+location.search});
 }
 async function loadCurrent(){
   try{
     if(!state.space){await loadSpaces();if(!state.space){toast(get('common.error'));return}}
     await featureRegistry.activate(state.view,ctx);
+    emitAppEvent('surface:rendered',{view:state.view,path:location.pathname+location.search});
   }catch(e){console.error(e);toast(get('common.error'))}
 }
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
