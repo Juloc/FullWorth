@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-fullworth}
       POSTGRES_USER: ${POSTGRES_USER:-fullworth}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
     volumes:
       - fullworth-postgres-data:/var/lib/postgresql
     healthcheck:
@@ -18,21 +18,11 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  fullworth-codex-volume-init:
-    image: alpine:3.22
-    restart: "no"
-    command: ["/bin/sh", "-ec", "mkdir -p /data/codex && chown -R 1000:1000 /data/codex"]
-    volumes:
-      - fullworth-codex-data:/data/codex
-
   fullworth-codex:
     image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
-    depends_on:
-      fullworth-codex-volume-init:
-        condition: service_completed_successfully
     environment:
-      BRIDGE_KEY: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
+      BRIDGE_KEY: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
       CODEX_HOME: /data/codex
       CODEX_WORKDIR: /tmp/codex-work
     volumes:
@@ -56,16 +46,17 @@ services:
       fullworth-postgres:
         condition: service_healthy
     environment:
-      ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD}
-      Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:?FULLWORTH_BACKEND_INTERNAL_KEY is required}
-      Security__IngestKey: ${FULLWORTH_INGEST_KEY:?FULLWORTH_INGEST_KEY is required}
-      Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:?FULLWORTH_DATA_ENCRYPTION_KEY is required}
+      ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:-}
+      Security__MasterKey: ${FULLWORTH_SECRET:-}
       PurchaseStorage__RootPath: /data/purchases
       CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
       CodexTest__BaseUrl: http://fullworth-codex:8080
-      CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
+      CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
       AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
-      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
+      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
       FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
       FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
       FullWorthCloud__KnowledgePackPublicKeyPath: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_PATH:-}
@@ -94,10 +85,10 @@ services:
     environment:
       FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
       Backend__BaseUrl: http://fullworth-backend:8080
-      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:?FULLWORTH_INGEST_KEY is required}
-      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:?FULLWORTH_BANKING_API_KEY is required}
+      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
       EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
-      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}/connect/enable-banking/callback
+      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}/connect/enable-banking/callback
       EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
       EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
       EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
@@ -130,17 +121,17 @@ services:
       fullworth-banking:
         condition: service_healthy
     environment:
-      ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
       DataProtection__KeyPath: /data/dataprotection
       ReverseProxy__KnownProxies__0: ${FULLWORTH_KNOWN_PROXY:-}
       ReverseProxy__KnownNetworks__0: ${FULLWORTH_KNOWN_PROXY_NETWORK:-172.16.0.0/12}
       Services__BackendUrl: http://fullworth-backend:8080
-      Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:?FULLWORTH_BACKEND_INTERNAL_KEY is required}
+      Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
       Services__BankingUrl: http://fullworth-banking:8080
-      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:?FULLWORTH_BANKING_API_KEY is required}
-      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
+      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
       Passkeys__RelyingPartyName: FullWorth
-      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
+      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
       Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
       ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
       ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
@@ -148,7 +139,7 @@ services:
       ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
       ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
       ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
-      AllowedHosts: ${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
+      AllowedHosts: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
       Bootstrap__Email: ${FULLWORTH_BOOTSTRAP_EMAIL:-}
       Bootstrap__Password: ${FULLWORTH_BOOTSTRAP_PASSWORD:-}
       Bootstrap__DisplayName: ${FULLWORTH_BOOTSTRAP_DISPLAY_NAME:-}

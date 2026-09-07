@@ -1,31 +1,44 @@
 # FullWorth
 
-FullWorth is a self-hosted personal finance application for accounts, transactions, budgets, contracts, purchases, investments and optional bank connections.
+[![Release](https://img.shields.io/github/v/release/Juloc/FullWorth?include_prereleases&sort=semver)](https://github.com/Juloc/FullWorth/releases)
+[![Release images](https://github.com/Juloc/FullWorth/actions/workflows/release.yml/badge.svg)](https://github.com/Juloc/FullWorth/actions/workflows/release.yml)
+[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://github.com/Juloc/FullWorth/pkgs/container/fullworth-web)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
+![Self-hosted](https://img.shields.io/badge/self--hosted-yes-2ea44f)
 
-## Quick start
+FullWorth is a self-hosted personal finance app for accounts, transactions, budgets, contracts, purchases, investments and optional automatic bank synchronization.
 
-Requirements:
+## Docker setup
+
+You need:
 
 - Docker + Docker Compose
-- an HTTPS reverse proxy such as Caddy
-- a public hostname, for example `finance.example.com`
+- a domain such as `finance.example.com`
+- HTTPS through Caddy, Traefik or another reverse proxy
 
-Create a secure `.env`:
+Download `docker-compose.yml` and copy `.env.example` to `.env`.
 
-```bash
-sh scripts/setup-env.sh finance.example.com you@example.com
+For a normal installation you only need to fill in:
+
+```env
+FULLWORTH_DOMAIN=finance.example.com
+FULLWORTH_SECRET=use-a-long-random-secret-from-your-password-manager
 ```
 
-The script generates all internal secrets plus a random first-admin password. Then start FullWorth:
+Use a random value of at least 32 characters. Keep `FULLWORTH_SECRET` safe and stable; it protects the database connection, internal services and encrypted FullWorth data.
+
+Start FullWorth:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-After the first successful sign-in, remove `FULLWORTH_BOOTSTRAP_EMAIL` and `FULLWORTH_BOOTSTRAP_PASSWORD` from `.env`.
+FullWorth listens on `127.0.0.1:8098` by default.
 
-Example Caddy route:
+### Caddy example
 
 ```caddy
 finance.example.com {
@@ -33,78 +46,57 @@ finance.example.com {
 }
 ```
 
-Only `.env.example` and `docker-compose.yml` are used as the canonical deployment examples. Optional and advanced settings stay commented in the same `.env.example`.
+Open `https://finance.example.com`.
+
+On a fresh installation, registration is available for the **first account only**. That account becomes the instance administrator. After it is created, public registration closes automatically.
 
 ## Enable Banking
 
-Bank access is optional. FullWorth can be used with manual accounts and imports without Enable Banking.
+Bank access is optional. FullWorth also works with manual accounts and imports.
 
-For automatic bank synchronization, each self-hosted user configures their own Enable Banking account/application from the first-login setup or later in Settings. FullWorth can create the application automatically (Beta), or the user can provide an Application ID and private key manually.
+During the first-login setup, FullWorth explains Enable Banking and lets each user configure their own banking access.
 
-The public callback URL is derived automatically from `FULLWORTH_DOMAIN`:
+FullWorth can:
+
+- create the Enable Banking application automatically (Alpha), or
+- use an Application ID + private key created manually in the Enable Banking Control Panel.
+
+For private self-hosting, every user should use their own Enable Banking account/application for their own accounts.
+
+The callback URL is created automatically from `FULLWORTH_DOMAIN`:
 
 ```text
 https://finance.example.com/connect/enable-banking/callback
 ```
 
-Legacy global Enable Banking credentials remain supported only for existing older installations.
+## Updates
 
-## Docker image tags
-
-Images are published to GHCR as:
-
-- `ghcr.io/juloc/fullworth-web`
-- `ghcr.io/juloc/fullworth-backend`
-- `ghcr.io/juloc/fullworth-banking`
-- `ghcr.io/juloc/fullworth-codex`
-
-Stable releases publish:
-
-- `1.4.0` — exact release
-- `1.4` — latest stable release in that minor line
-- `1` — latest stable release in that major line
-- `latest` — latest stable release
-- `sha-abcdef0` — exact commit build
-
-Pre-releases such as `1.4.0-rc.1` publish only the exact version and commit tags, so they never move `latest`, `1` or `1.4`.
-
-Architecture-specific tags are also available directly:
-
-- `1.4.0-amd64`
-- `1.4.0-arm64`
-
-Normal release tags are published for AMD64 first. ARM64 builds run independently in parallel. When both architectures are ready, the normal tags are upgraded to multi-architecture manifests so Docker automatically pulls the correct image.
-
-## Releases
-
-Push a SemVer tag to publish a release:
+To update to the newest stable images:
 
 ```bash
-git tag v1.4.0
-git push origin v1.4.0
+docker compose pull
+docker compose up -d
 ```
 
-Release candidates use tags such as:
+To stay on a specific version, set for example:
 
-```bash
-git tag v1.4.0-rc.1
-git push origin v1.4.0-rc.1
+```env
+FULLWORTH_VERSION=1.4.0
 ```
 
-The release workflow publishes the images and creates the matching GitHub Release with generated release notes. See [docs/RELEASE.md](docs/RELEASE.md) for the release checklist.
+Normal version tags automatically use the correct architecture on both **AMD64** and **ARM64**.
 
-## Development
+## Backup
 
-```bash
-dotnet restore FullWorth.slnx
-dotnet build FullWorth.slnx --configuration Release
-dotnet test FullWorth.slnx --configuration Release --no-build
-```
+Back up these Docker volumes:
 
-## Documentation
+- `fullworth-postgres-data`
+- `fullworth-purchases-data`
+- `fullworth-web-dataprotection`
+- `fullworth-codex-data`
 
-Additional deployment, backup, security and product documentation is available in [docs](docs/).
+Also back up your `.env`. Losing `FULLWORTH_SECRET` can make encrypted data inaccessible.
 
 ## License
 
-FullWorth is source-available proprietary software. Personal, non-commercial self-hosting and modification are permitted under the [FullWorth Proprietary License](LICENSE). Redistribution, commercial use, hosted use for third parties, and use in competing products require prior written permission.
+FullWorth is source-available proprietary software. Personal, non-commercial self-hosting and modification are permitted under the [FullWorth Proprietary License](LICENSE).
