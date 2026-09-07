@@ -20,7 +20,6 @@ function loadCoachExtension() {
     document.head.appendChild(stylesheet);
   }
   import('/features/coach-shell.js').catch(() => { /* optional shell extension */ });
-  import('/features/transaction-review-controls.js').catch(() => { /* optional transaction review extension */ });
 }
 
 if (document.readyState === 'loading')

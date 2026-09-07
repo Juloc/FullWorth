@@ -1,8 +1,10 @@
+import { api as sharedApi } from '../core/services.js';
+import { state } from '../core/state.js';
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const lang = () => (localStorage.getItem('finance.language') || (navigator.language || 'de')).startsWith('de') ? 'de' : 'en';
-const spaceId = () => localStorage.getItem('finance.space');
+const spaceId = () => state.space?.id || localStorage.getItem('finance.space');
 const isCoachPath = () => location.pathname.replace(/\/+$/, '') === '/coach';
 let active = false;
 let currentConversationId = null;
@@ -42,28 +44,21 @@ function formatMoney(value, currency = 'EUR') { return new Intl.NumberFormat(lan
 function formatPercent(value) { return new Intl.NumberFormat(lang() === 'de' ? 'de-DE' : 'en-US', { style: 'percent', maximumFractionDigits: 0 }).format(Number(value || 0)); }
 
 async function ensureSpace() {
-  if (spaceId()) return spaceId();
-  const response = await fetch('/bff/backend/api/fullworth-spaces');
-  if (!response.ok) throw new Error(String(response.status));
-  const spaces = await response.json();
+  if (state.space?.id) return state.space.id;
+
+  const stored = localStorage.getItem('finance.space');
+  const spaces = state.spaces?.length ? state.spaces : await sharedApi('api/fullworth-spaces');
   if (!spaces?.length) throw new Error(tr('Kein FullWorth Space vorhanden.', 'No FullWorth Space exists.'));
-  localStorage.setItem('finance.space', spaces[0].id);
-  return spaces[0].id;
+
+  state.spaces = spaces;
+  state.space = spaces.find(space => space.id === stored) || spaces[0];
+  localStorage.setItem('finance.space', state.space.id);
+  return state.space.id;
 }
 
 async function api(path, options = {}) {
   await ensureSpace();
-  const clean = path.replace(/^\//, '');
-  const [base, query = ''] = clean.split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  const response = await fetch(`/bff/backend/${base}?${params}`, options);
-  if (!response.ok) {
-    let message = String(response.status);
-    try { const body = await response.json(); message = body.error || body.message || body.title || message; } catch { }
-    throw new Error(message);
-  }
-  return response.status === 204 ? null : response.json();
+  return sharedApi(path, options);
 }
 
 function installShell() {

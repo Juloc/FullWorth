@@ -1,5 +1,3 @@
-import '../features/tax.js';
-import '../features/tax-review-extra.js';
 
 // FullWorth micro-motion layer.
 // Keeps motion generic and non-invasive: no business data access, no extra dependencies,

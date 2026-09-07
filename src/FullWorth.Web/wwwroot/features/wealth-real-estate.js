@@ -1,11 +1,19 @@
 import '../ui/accessibility-release.js';
-import './wealth-specialized-assets.js';
-import './wealth-specialized-assets-extra.js';
-import './wealth-investment-consolidation.js';
+import { refreshSpecializedAssets } from './wealth-specialized-assets.js';
+import { refreshExtraSpecializedAssets } from './wealth-specialized-assets-extra.js';
+import { refreshInvestmentConsolidation } from './wealth-investment-consolidation.js';
 import './wealth-portability.js';
 import { openRealEstateDetail as openCoreRealEstateDetail } from './wealth-real-estate-core.js';
 import { attachRealEstateOperations } from './wealth-real-estate-operations.js';
 import { attachRealEstateAdvanced } from './wealth-real-estate-advanced.js';
+
+export async function refreshWealthExtensions() {
+  await Promise.all([
+    refreshSpecializedAssets(),
+    refreshExtraSpecializedAssets(),
+    refreshInvestmentConsolidation()
+  ]);
+}
 
 export async function openRealEstateDetail(ctx, asset, onChanged) {
   const before = new Set(document.querySelectorAll('dialog'));

@@ -1,3 +1,4 @@
+import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
 const H$=s=>document.querySelector(s);
 const H$$=s=>[...document.querySelectorAll(s)];
 const heuro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
@@ -230,8 +231,8 @@ function fmtDate(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE').fo
 function spaceId(){return H$('#space-select')?.value||''}
 function hval(id){return H$('#'+id)?.value??''}function hnum(id){return Number(hval(id))||0}function hset(id,v){const e=H$('#'+id);if(e)e.value=v??''}
 function hn(v){const n=Number(v);return Number.isFinite(n)?n:0}
-function hjson(method,body){return{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}}
-async function hapi(path,options={}){const r=await fetch(`/bff/backend/${String(path).replace(/^\//,'')}`,options);if(!r.ok){let m=`Fehler ${r.status}`;try{const b=await r.json();m=b.error||b.title||b.message||m}catch{}throw new Error(m)}if(r.status===204)return null;return r.json()}
+function hjson(method,body){return sharedJsonBody(body,method)}
+async function hapi(path,options={}){return sharedApi(path,options)}
 function hmessage(t){const e=H$('#comp-error');e.textContent=t;e.classList.add('show');clearTimeout(hmessage.timer);hmessage.timer=setTimeout(()=>e.classList.remove('show'),3200)}
 function herror(e){console.error(e);hmessage(e?.message||'Unbekannter Fehler.')}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}

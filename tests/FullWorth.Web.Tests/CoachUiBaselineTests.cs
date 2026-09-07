@@ -9,25 +9,32 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task CoachExtensionsUseOnlyAuthenticatedBffForFinanceData()
     {
+        // transaction-review-controls.js was merged into coach-shell.js by the architecture cleanup;
+        // its spending-review sentiment controls now live inline in the shell module below.
         var shell = await GetAsync("/features/coach-shell.js");
-        var reviews = await GetAsync("/features/transaction-review-controls.js");
+        var apiClient = await GetAsync("/core/api.js");
         var register = await GetAsync("/pwa/register-sw.js");
 
-        Assert.Contains("/bff/backend/api/fullworth-spaces", shell);
-        Assert.Contains("/bff/backend/${base}", shell);
+        // Coach no longer builds /bff/* URLs itself: it delegates every finance-data call to the
+        // shared authenticated BFF client (core/services.js -> core/api.js), which is the only place
+        // allowed to construct /bff/backend and /bff/banking URLs (also enforced by
+        // FrontendArchitectureGuardTests.NoNewFeatureMayCallBffDirectly).
+        Assert.Contains("import { api as sharedApi } from '../core/services.js'", shell);
+        Assert.Contains("api/fullworth-spaces", shell);
+        Assert.DoesNotContain("/bff/backend", shell);
+        Assert.DoesNotContain("/bff/banking", shell);
         Assert.DoesNotContain("fetch('/api", shell);
         Assert.DoesNotContain("fetch(`/api", shell);
+        Assert.Contains("service !== 'backend' && service !== 'banking'", apiClient);
+        Assert.Contains("return `/bff/${service}/${withSpace(path)}`;", apiClient);
 
-        Assert.Contains("/bff/backend/${base}", reviews);
-        Assert.Contains("api/spending-reviews/transactions/${lastTransactionId}", reviews);
-        Assert.Contains("data-sentiment=\"Positive\"", reviews);
-        Assert.Contains("data-sentiment=\"Neutral\"", reviews);
-        Assert.Contains("data-sentiment=\"Negative\"", reviews);
-        Assert.DoesNotContain("fetch('/api", reviews);
-        Assert.DoesNotContain("fetch(`/api", reviews);
+        Assert.Contains("api/spending-reviews/transactions/${tx.id}", shell);
+        Assert.Contains("sentimentButton('Positive'", shell);
+        Assert.Contains("sentimentButton('Neutral'", shell);
+        Assert.Contains("sentimentButton('Negative'", shell);
+        Assert.Contains("data-sentiment=\"${sentiment}\"", shell);
 
         Assert.Contains("import('/features/coach-shell.js')", register);
-        Assert.Contains("import('/features/transaction-review-controls.js')", register);
     }
 
     [Fact]

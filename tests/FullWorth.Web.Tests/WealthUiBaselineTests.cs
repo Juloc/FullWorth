@@ -197,7 +197,11 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("api/export/wealth-backup", portability);
         Assert.Contains("Accept: 'application/zip'", portability);
         Assert.Contains("cache: 'no-store'", portability);
-        Assert.Contains("stopImmediatePropagation", portability);
+        // stopImmediatePropagation is gone: it used to guard against a legacy patch-layer handler
+        // double-firing alongside the real one. app.js now wires #export-data to downloadWealthBackup
+        // with a single owned listener, and FrontendArchitectureGuardTests.NoNewPatchLayerFileNames
+        // blocks reintroducing that kind of patch layer, so the double-fire this guarded against is
+        // structurally impossible now.
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         Assert.Contains("'/features/wealth-portability.js'", sw);
         Assert.Contains("url.pathname.startsWith('/bff')", sw);

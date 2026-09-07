@@ -1,6 +1,7 @@
+import { api as sharedApi, jsonBody } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
-let scheduled = null;
 
 const TEXT = {
   de: {
@@ -55,26 +56,8 @@ function ensureCss() {
   document.head.appendChild(link);
 }
 
-function withSpace(path) {
-  const [base, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  const space = localStorage.getItem('finance.space');
-  if (space && !params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', space);
-  return `/bff/backend/${base.replace(/^\//, '')}${params.toString() ? `?${params}` : ''}`;
-}
-
-async function api(path, options) {
-  const response = await fetch(withSpace(path), options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try { const body = await response.json(); message = body.error || body.message || body.title || message; } catch {}
-    throw new Error(message);
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
-
-function json(method, body) { return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
+const api=(path,options)=>sharedApi(path,options);
+const json=(method,body)=>jsonBody(body,method);
 
 function orderedAssets(assets) {
   return [
@@ -84,9 +67,9 @@ function orderedAssets(assets) {
   ];
 }
 
-function scheduleEnhance() {
-  clearTimeout(scheduled);
-  scheduled = setTimeout(enhanceRows, 30);
+export async function refreshSpecializedAssets() {
+  ensureCss();
+  await enhanceRows();
 }
 
 async function enhanceRows() {
@@ -122,13 +105,7 @@ async function enhanceRows() {
   }
 }
 
-function dialog(html) {
-  const dlg = document.createElement('dialog');
-  dlg.innerHTML = html;
-  document.body.appendChild(dlg);
-  dlg.addEventListener('close', () => dlg.remove());
-  return dlg;
-}
+function dialog(html) { return createDialog(html); }
 
 function tabs(dlg) {
   const buttons = [...dlg.querySelectorAll('[data-tab]')];
@@ -331,15 +308,3 @@ function bindFinancing(dlg, asset) {
     catch (error) { toast(error.message || t('invalid')); }
   });
 }
-
-function init() {
-  ensureCss();
-  const root = document.querySelector('#assets-list');
-  if (!root) { setTimeout(init, 100); return; }
-  new MutationObserver(scheduleEnhance).observe(root, { childList: true, subtree: true });
-  document.querySelector('#privacy-toggle')?.addEventListener('click', scheduleEnhance);
-  scheduleEnhance();
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
-else init();

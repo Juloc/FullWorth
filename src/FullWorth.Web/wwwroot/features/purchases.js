@@ -1,5 +1,5 @@
 import { bindGptReceiptTest } from './purchases-gpt-test.js';
-import { tryGptReceiptScan } from './purchases-gpt-normal.js';
+import { initializePurchaseEnhancements, tryGptReceiptScan } from './purchases-gpt-normal.js';
 import { identityIcon, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
@@ -10,6 +10,7 @@ let ctx = null;
 
 export function bindPurchases(context) {
   ctx = context;
+  initializePurchaseEnhancements(ctx);
   ctx.$('#purchase-source').addEventListener('change', () => renderPurchases(ctx));
   ctx.$('#scan-receipt').addEventListener('click', () => ctx.$('#receipt-file').click());
   ctx.$('#receipt-file').addEventListener('change', scanReceipt);

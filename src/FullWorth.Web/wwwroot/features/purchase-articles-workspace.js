@@ -1,3 +1,6 @@
+import { api as sharedApi, apiClient, jsonBody } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
+import { confirmMessage } from '../ui/confirm.js';
 // Advanced purchases/articles UI. It is loaded as a side effect by purchases-gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
 // Receipts remains the default, while Articles, Products and Analytics use the new API families.
@@ -64,35 +67,8 @@ let advancedPanel = null;
 
 const t = key => (strings[(document.documentElement.lang || 'de').startsWith('de') ? 'de' : 'en'][key] || key);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
-const spaceId = () => localStorage.getItem('finance.space') || '';
-
-function withSpace(path) {
-  const [base, query = ''] = String(path).replace(/^\//, '').split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `${base}?${params}`;
-}
-
-async function api(path, options) {
-  const response = await fetch(`/bff/backend/${withSpace(path)}`, options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try {
-      const body = await response.json();
-      message = body.error || body.message || body.title || message;
-      if (body.detail?.conflict) message += ` (${body.detail.conflict})`;
-    } catch { /* keep status */ }
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
-
-function json(method, body) {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
+const api=(path,options)=>sharedApi(path,options);
+const json=(method,body)=>jsonBody(body,method);
 
 function money(value, currency = 'EUR') {
   const amount = Number(value || 0);
@@ -115,7 +91,7 @@ function ensureStyle() {
   document.head.appendChild(link);
 }
 
-function install() {
+export function ensurePurchaseArticlesWorkspace() {
   if (installed) return;
   host = document.querySelector('#view-purchases');
   originalToolbar = host?.querySelector('.toolbar');
@@ -140,6 +116,7 @@ function install() {
     if (!button) return;
     switchTab(button.dataset.paTab);
   });
+  notifyPurchaseUiChanged({tab:activeTab});
 }
 
 async function switchTab(tab) {
@@ -149,7 +126,10 @@ async function switchTab(tab) {
   originalToolbar.hidden = !normal;
   originalPanel.hidden = !normal;
   advancedPanel.hidden = normal;
-  if (normal) return;
+  if (normal) {
+    notifyPurchaseUiChanged({tab});
+    return;
+  }
   advancedPanel.innerHTML = `<div class="pa-loading">${esc(t('processing'))}</div>`;
   try {
     if (tab === 'articles') await renderArticles();
@@ -158,6 +138,7 @@ async function switchTab(tab) {
   } catch (error) {
     advancedPanel.innerHTML = `<div class="pa-error"><strong>${esc(t('error'))}</strong><div>${esc(error.message)}</div></div>`;
   }
+  notifyPurchaseUiChanged({tab});
 }
 
 async function renderArticles() {
@@ -226,7 +207,7 @@ async function openManualPurchase() {
   dlg.showModal();
 }
 
-async function openPurchaseWorkspace(id) {
+export async function openPurchaseWorkspace(id) {
   const [workspace, categories] = await Promise.all([
     api(`api/purchases/${id}/workspace`),
     api('api/categories').catch(() => [])
@@ -291,8 +272,10 @@ async function openPurchaseWorkspace(id) {
       catch (error) { showDialogError(dlg, error.message); }
     });
   }
-  dlg.querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => window.open(`/bff/backend/${withSpace(`api/purchases/${id}/documents/${button.dataset.viewDocument}/content`)}`, '_blank', 'noopener'));
+  dlg.querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => window.open(apiClient.backendUrl(`api/purchases/${id}/documents/${button.dataset.viewDocument}/content`), '_blank', 'noopener'));
+  dlg.dataset.purchaseId = id;
   dlg.showModal();
+  notifyPurchaseUiChanged({dialog:dlg,purchaseId:id,kind:'purchase'});
 }
 
 function itemEditor(item, categoryOptions, writable) {
@@ -464,7 +447,7 @@ async function confirmPurchase(dlg, purchaseId) {
 }
 
 async function deletePurchase(dlg, id) {
-  if (!window.confirm(t('deleteConfirm'))) return;
+  if (!await confirmMessage({message:t('deleteConfirm'),title:t('deletePurchase'),confirmLabel:t('deletePurchase'),cancelLabel:t('close'),destructive:true})) return;
   try { await api(`api/purchases/${id}`, { method: 'DELETE' }); dlg.close(); if (activeTab === 'articles') await renderArticles(); }
   catch (error) { showDialogError(dlg, error.message); }
 }
@@ -532,7 +515,7 @@ async function openProductCreate(onSaved) {
   dlg.showModal();
 }
 
-async function openProduct(id) {
+export async function openProduct(id) {
   const data = await api(`api/products/${id}`);
   const product = data.product;
   const history = data.history || {};
@@ -541,7 +524,9 @@ async function openProduct(id) {
     ${comp ? `<div class="pa-metrics"><div><span>Packung</span><strong>${comp.packPriceChangePercent == null ? '—' : `${comp.packPriceChangePercent}%`}</strong></div><div><span>${esc(t('basePrice'))}</span><strong>${comp.basePriceChangePercent == null ? '—' : `${comp.basePriceChangePercent}%`}</strong></div><div><span>Packungsgröße</span><strong>${comp.packageSizeChangePercent == null ? '—' : `${comp.packageSizeChangePercent}%`}</strong></div>${comp.possibleShrinkflation ? `<div class="warn"><span>⚠</span><strong>${esc(t('shrinkflation'))}</strong></div>` : ''}</div>` : ''}
     <h3>${esc(t('history'))}</h3><div class="pa-list">${(history.observations || []).slice().reverse().map(row => `<div class="pa-history-row"><div><strong>${esc(row.merchant)}</strong><span>${esc(fmtDate(row.purchaseDate))} · ${esc(row.name)}</span></div><div><strong>${esc(money(row.unitPrice ?? row.totalPrice, row.currency))}</strong>${row.baseUnitPrice == null ? '' : `<span>${esc(money(row.baseUnitPrice, row.currency))}/${esc(row.packageUnit || row.quantityUnit)}</span>`}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.dataset.productId = id;
   dlg.showModal();
+  notifyPurchaseUiChanged({dialog:dlg,productId:id,kind:'product'});
 }
 
 async function renderAnalytics() {
@@ -572,13 +557,13 @@ function categoryOptionsHtml(categories) {
   return categories.filter(x => !x.isArchived).map(x => `<option value="${x.id}">${esc(path(x))}</option>`).join('');
 }
 
+function notifyPurchaseUiChanged(detail = {}) {
+  document.dispatchEvent(new CustomEvent('fullworth:purchases-ui-changed', { detail }));
+}
+
 function makeDialog(html) {
-  const dlg = document.createElement('dialog');
-  dlg.className = 'pa-dialog';
-  dlg.innerHTML = html;
-  document.body.appendChild(dlg);
-  dlg.addEventListener('close', () => dlg.remove(), { once: true });
-  return dlg;
+  const normalized = html.replace(/class="pa-dialog-card\b/, 'class="dialog-card pa-dialog-card');
+  return createDialog(normalized,{className:'pa-dialog',closeLabel:t('close')});
 }
 
 function showDialogError(dlg, message) {
@@ -593,5 +578,3 @@ function showDialogError(dlg, message) {
   box.textContent = message || t('error');
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-else queueMicrotask(install);

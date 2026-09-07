@@ -40,9 +40,13 @@ public sealed class PwaAssetsTests
         // share-target ingress (manifest action "/share/receipt"); we forbid the "/share" prefix rather
         // than a bare "/receipt" substring, which would also match the legitimate static
         // /features/receipt-scan-*.js shell modules that must stay precached for offline use.
+        // Each forbidden prefix is anchored to the start of a shell entry (right after the opening
+        // quote) rather than matched anywhere in the blob: the architecture cleanup introduced the
+        // legitimate static module core/api.js into the shell, whose path contains the substring
+        // "/api" without being the sensitive /api route.
         var shell = Between(sw, "const APP_SHELL = [", "];");
         foreach (var forbidden in new[] { "/api", "/bff", "/auth", "/connect", "/share" })
-            Assert.DoesNotContain(forbidden, shell);
+            Assert.DoesNotMatch(new Regex($@"'{Regex.Escape(forbidden)}"), shell);
 
         // The runtime guard must treat those prefixes as network-only (uncached) — mirroring isSensitive().
         foreach (var guard in new[] { "'/api'", "'/bff'", "'/auth'", "'/share'" })

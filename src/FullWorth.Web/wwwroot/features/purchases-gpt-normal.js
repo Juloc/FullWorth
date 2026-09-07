@@ -1,14 +1,15 @@
-import './purchase-articles-workspace.js';
-import './purchase-articles-advanced-installer.js';
-import './purchase-price-insights.js';
-import './purchase-advanced-insights.js';
-import './receipt-imports.js';
-import './receipt-import-batch-details.js';
+import { ensurePurchaseArticlesWorkspace } from './purchase-articles-workspace.js';
+import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced.js';
+import { refreshPurchasePriceInsights } from './purchase-price-insights.js';
+import { refreshPurchaseAdvancedInsights } from './purchase-advanced-insights.js';
+import { ensureReceiptImportsLauncher } from './receipt-imports.js';
+import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js';
 import { addReceiptScanFiles } from './receipt-scan-set.js';
 
 let latestContext = null;
 let scanSetCaptureInstalled = false;
 let importReviewNavigationInstalled = false;
+let purchaseLifecycleInstalled = false;
 
 function configureReceiptInput() {
   const input = document.getElementById('receipt-file');
@@ -36,34 +37,24 @@ function installScanSetCapture() {
   }, true);
 }
 
+function refreshImportReviewNavigation() {
+  document.querySelectorAll('.receipt-import-batch').forEach(batch => {
+    const stats = batch.querySelectorAll('.receipt-import-stats span');
+    const reviewCount = Number.parseInt(stats[3]?.textContent || '0', 10) || 0;
+    const actions = batch.querySelector('.receipt-import-actions');
+    if (!actions || reviewCount <= 0 || actions.querySelector('[data-review-import]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost';
+    button.dataset.reviewImport = 'true';
+    button.textContent = t('Prüfen', 'Review');
+    actions.prepend(button);
+  });
+}
+
 function installImportReviewNavigation() {
   if (importReviewNavigationInstalled) return;
   importReviewNavigationInstalled = true;
-
-  const decorate = () => {
-    document.querySelectorAll('.receipt-import-batch').forEach(batch => {
-      const stats = batch.querySelectorAll('.receipt-import-stats span');
-      const reviewCount = Number.parseInt(stats[3]?.textContent || '0', 10) || 0;
-      const actions = batch.querySelector('.receipt-import-actions');
-      if (!actions || reviewCount <= 0 || actions.querySelector('[data-review-import]')) return;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ghost';
-      button.dataset.reviewImport = 'true';
-      button.textContent = t('Prüfen', 'Review');
-      actions.prepend(button);
-    });
-  };
-
-  const observer = new MutationObserver(decorate);
-  const begin = () => {
-    if (!document.body) return;
-    observer.observe(document.body, { childList: true, subtree: true });
-    decorate();
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin, { once: true });
-  else begin();
-
   document.addEventListener('click', event => {
     const button = event.target instanceof Element ? event.target.closest('[data-review-import]') : null;
     if (!button) return;
@@ -79,11 +70,34 @@ function installImportReviewNavigation() {
   });
 }
 
-configureReceiptInput();
-installScanSetCapture();
-installImportReviewNavigation();
-if (document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', configureReceiptInput, { once: true });
+function installPurchaseLifecycle() {
+  if (purchaseLifecycleInstalled) return;
+  purchaseLifecycleInstalled = true;
+  document.addEventListener('fullworth:purchases-ui-changed', event => {
+    const detail = event.detail || {};
+    void Promise.allSettled([
+      refreshPurchaseAdvancedInstaller(detail),
+      refreshPurchasePriceInsights(detail),
+      refreshPurchaseAdvancedInsights(detail)
+    ]);
+  });
+  document.addEventListener('fullworth:receipt-imports-rendered', () => {
+    refreshImportReviewNavigation();
+    refreshReceiptImportBatchDetails();
+  });
+}
+
+export function initializePurchaseEnhancements(ctx) {
+  latestContext = ctx;
+  configureReceiptInput();
+  installScanSetCapture();
+  installImportReviewNavigation();
+  installPurchaseLifecycle();
+  ensurePurchaseArticlesWorkspace();
+  ensureReceiptImportsLauncher();
+  refreshImportReviewNavigation();
+  refreshReceiptImportBatchDetails();
+}
 
 export function tryGptReceiptScan(ctx, file) {
   latestContext = ctx;

@@ -1,101 +1,409 @@
-const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-const initialTaxPath=location.pathname==='/tax'||location.pathname.startsWith('/tax/');
-const initialTaxReview=location.pathname.startsWith('/tax/review');
-const state={enabled:false,space:'',year:new Date().getFullYear(),busy:false,settings:null,profile:null,candidates:[]};
-const T={
-  de:{nav:'Steuern',title:'Steuern',subtitle:'Mögliche steuerlich relevante Ausgaben prüfen',overview:'Übersicht',review:'Prüfen',year:'Steuerjahr',analyze:'Neu analysieren',analyzing:'Analysiert…',possible:'Möglicherweise relevant',confirmed:'Bestätigt',needsReview:'Zu prüfen',missingDocs:'Beleg fehlt',openCases:'Offene Hinweise',allCases:'Alle Hinweise',none:'Keine offenen Steuerhinweise.',confirm:'Bestätigen',reject:'Nicht relevant',edit:'Anteil ändern',eligible:'Berücksichtigter Anteil',document:'Beleg vorhanden',confidenceHigh:'Starker Hinweis',confidenceMedium:'Prüfen',confidenceLow:'Unsicher',disclaimer:'Hinweise sind eine Vorprüfung und keine Steuerberatung.',settings:'Steuerassistent',personal:'Für mich aktivieren',personalHint:'Analysiert nur Daten, auf die du Zugriff hast. Abschalten entfernt Steuern aus deiner Navigation.',spaceOff:'Der Steuerassistent ist für diesen Finanzbereich deaktiviert.',spaceOn:'Für diesen Finanzbereich aktiviert.',enableSpace:'Für Bereich aktivieren',ownerOnly:'Nur Eigentümer des Finanzbereichs können diese Einstellung ändern.',saved:'Gespeichert.',analysisDone:'Analyse abgeschlossen.',amountPrompt:'Welcher Anteil ist steuerlich relevant?',percent:'Prozent',cancel:'Abbrechen',save:'Speichern',sourceTransaction:'Bankbuchung',sourcePurchase:'Kauf',sourceItem:'Kaufartikel',statusConfirmed:'Bestätigt',statusRejected:'Nicht relevant',statusNeedsReview:'Zu prüfen',statusNeedsDocument:'Beleg fehlt',statusDetected:'Erkannt',statusIncomplete:'Unvollständig',breakdown:'Nach Kategorie'},
-  en:{nav:'Taxes',title:'Taxes',subtitle:'Review potentially tax-relevant expenses',overview:'Overview',review:'Review',year:'Tax year',analyze:'Analyze again',analyzing:'Analyzing…',possible:'Potentially relevant',confirmed:'Confirmed',needsReview:'Needs review',missingDocs:'Receipt missing',openCases:'Open suggestions',allCases:'All suggestions',none:'No open tax suggestions.',confirm:'Confirm',reject:'Not relevant',edit:'Change share',eligible:'Eligible share',document:'Receipt available',confidenceHigh:'Strong suggestion',confidenceMedium:'Review',confidenceLow:'Uncertain',disclaimer:'Suggestions are a preliminary review and are not tax advice.',settings:'Tax assistant',personal:'Enable for me',personalHint:'Only analyzes data you can access. Turning it off removes Taxes from your navigation.',spaceOff:'The tax assistant is disabled for this finance space.',spaceOn:'Enabled for this finance space.',enableSpace:'Enable for space',ownerOnly:'Only fullworth-space owners can change this setting.',saved:'Saved.',analysisDone:'Analysis complete.',amountPrompt:'What share is tax-relevant?',percent:'Percent',cancel:'Cancel',save:'Save',sourceTransaction:'Bank transaction',sourcePurchase:'Purchase',sourceItem:'Purchase item',statusConfirmed:'Confirmed',statusRejected:'Not relevant',statusNeedsReview:'Needs review',statusNeedsDocument:'Receipt missing',statusDetected:'Detected',statusIncomplete:'Incomplete',breakdown:'By category'}
+// Tax assistant — restored on the view-registry architecture (was a working feature on main; the
+// architecture cleanup removed the frontend while /api/tax/* stayed intact server-side). Surfaces
+// potentially tax-relevant expenses detected from transactions/purchases/documents so the owner can
+// confirm/reject each candidate before it counts toward a tax year.
+//
+// Two URLs share one view: /tax (overview) and /tax/review (open candidates only). core/router.js
+// resolves a view from only the first path segment, so both land on the registered 'tax' view; this
+// module reads the full pathname itself (like contracts.js's own history.pushState use for its
+// filter/sort state) to pick the active tab and to keep Back/Forward working between them.
+//
+// Year-review checklist, CSV/JSON export, per-candidate document upload and the advanced analysis
+// toggles live in tax-review-extra.js and are composed in directly below — no MutationObserver
+// polling, no cross-view DOM patching (FrontendArchitectureGuardTests forbids both).
+import { sectionCard, esc } from '../ui/ux-kit.js';
+import { renderTaxYearPanel, renderAdvancedSettings, wireDocumentUploads } from './tax-review-extra.js';
+
+let ctx = null;
+let year = null; // sticky across re-renders (tab switch, decide, analyze) until the user picks another
+let candidates = [];
+
+const T = {
+  de: {
+    title: 'Steuern', overview: 'Übersicht', review: 'Prüfen', year: 'Steuerjahr',
+    analyze: 'Neu analysieren', analyzing: 'Analysiert…',
+    possible: 'Möglicherweise relevant', confirmed: 'Bestätigt', needsReview: 'Zu prüfen', missingDocs: 'Beleg fehlt',
+    openCases: 'Offene Hinweise', allCases: 'Alle Hinweise', none: 'Keine offenen Steuerhinweise.',
+    confirm: 'Bestätigen', reject: 'Nicht relevant', edit: 'Anteil ändern', eligible: 'Berücksichtigter Anteil', document: 'Beleg vorhanden',
+    confidenceHigh: 'Starker Hinweis', confidenceMedium: 'Prüfen', confidenceLow: 'Unsicher',
+    disclaimer: 'Hinweise sind eine Vorprüfung und keine Steuerberatung.', breakdown: 'Nach Kategorie',
+    settingsTitle: 'Steuerassistent', personal: 'Für mich aktivieren',
+    personalHint: 'Analysiert nur Daten, auf die du Zugriff hast. Abschalten entfernt die Ansicht für dich.',
+    spaceOff: 'Der Steuerassistent ist für diesen Finanzbereich deaktiviert.', spaceOn: 'Für diesen Finanzbereich aktiviert.',
+    enableSpace: 'Für Bereich aktivieren', ownerOnly: 'Nur Eigentümer des Finanzbereichs können diese Einstellung ändern.',
+    amountPrompt: 'Welcher Anteil ist steuerlich relevant?', percent: 'Prozent',
+    sourceTransaction: 'Bankbuchung', sourcePurchase: 'Kauf', sourceItem: 'Kaufartikel', fallbackTitle: 'Steuerhinweis',
+    statusConfirmed: 'Bestätigt', statusRejected: 'Nicht relevant', statusNeedsReview: 'Zu prüfen', statusNeedsDocument: 'Beleg fehlt',
+    statusDetected: 'Erkannt', statusIncomplete: 'Unvollständig', analysisDone: 'Analyse abgeschlossen.', settingsBtn: 'Einstellungen'
+  },
+  en: {
+    title: 'Taxes', overview: 'Overview', review: 'Review', year: 'Tax year',
+    analyze: 'Analyze again', analyzing: 'Analyzing…',
+    possible: 'Potentially relevant', confirmed: 'Confirmed', needsReview: 'Needs review', missingDocs: 'Receipt missing',
+    openCases: 'Open suggestions', allCases: 'All suggestions', none: 'No open tax suggestions.',
+    confirm: 'Confirm', reject: 'Not relevant', edit: 'Change share', eligible: 'Eligible share', document: 'Receipt available',
+    confidenceHigh: 'Strong suggestion', confidenceMedium: 'Review', confidenceLow: 'Uncertain',
+    disclaimer: 'Suggestions are a preliminary review and are not tax advice.', breakdown: 'By category',
+    settingsTitle: 'Tax assistant', personal: 'Enable for me',
+    personalHint: 'Only analyzes data you can access. Turning it off removes this view for you.',
+    spaceOff: 'The tax assistant is disabled for this finance space.', spaceOn: 'Enabled for this finance space.',
+    enableSpace: 'Enable for space', ownerOnly: 'Only fullworth-space owners can change this setting.',
+    amountPrompt: 'What share is tax-relevant?', percent: 'Percent',
+    sourceTransaction: 'Bank transaction', sourcePurchase: 'Purchase', sourceItem: 'Purchase item', fallbackTitle: 'Tax suggestion',
+    statusConfirmed: 'Confirmed', statusRejected: 'Not relevant', statusNeedsReview: 'Needs review', statusNeedsDocument: 'Receipt missing',
+    statusDetected: 'Detected', statusIncomplete: 'Incomplete', analysisDone: 'Analysis complete.', settingsBtn: 'Settings'
+  }
 };
-const tr=()=>T[(document.documentElement.lang||'').startsWith('en')?'en':'de'];
-const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const text=(el,value)=>{const v=String(value??'');if(el&&el.textContent!==v)el.textContent=v};
-const sid=()=>localStorage.getItem('finance.space')||'';
-const scoped=p=>{const id=sid();if(!id)return p;const [base,q='']=p.split('?');const u=new URLSearchParams(q);if(!u.has('fullWorthSpaceId'))u.set('fullWorthSpaceId',id);return `${base}?${u}`};
-async function req(path,opt={}){const h=new Headers(opt.headers||{});if(opt.body!=null&&!h.has('Content-Type'))h.set('Content-Type','application/json');const r=await fetch(`/bff/backend/${scoped(path.replace(/^\//,''))}`,{credentials:'same-origin',...opt,headers:h});if(!r.ok){let m=`${r.status}`;try{const b=await r.json();m=b?.error||b?.message||b?.title||m}catch{}const e=new Error(m);e.status=r.status;throw e}if(r.status===204)return null;return r.json()}
-const money=(n,c='EUR')=>new Intl.NumberFormat((document.documentElement.lang||'').startsWith('en')?'en-US':'de-DE',{style:'currency',currency:c||'EUR'}).format(Number(n||0));
-const date=v=>v?new Intl.DateTimeFormat((document.documentElement.lang||'').startsWith('en')?'en-US':'de-DE').format(new Date(`${String(v).slice(0,10)}T12:00:00`)):'—';
-function toast(msg){const e=$('#toast');if(!e)return;text(e,msg);e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),3200)}
-function ensureCss(){if($('#tax-feature-css'))return;const l=document.createElement('link');l.id='tax-feature-css';l.rel='stylesheet';l.href='/features/tax.css';document.head.append(l)}
-function icon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5Z"/><path d="M8 8h8M8 12h2m4 0h2M8 16h2m4 0h2"/></svg>'}
-function ensureUi(){
-  ensureCss();
-  const nav=$('#nav');
-  if(nav&&!$('#tax-nav')){
-    const b=document.createElement('button');b.id='tax-nav';b.type='button';b.dataset.taxNav='1';b.innerHTML=`${icon()}<span>${esc(tr().nav)}</span>`;b.hidden=true;
-    const purchases=nav.querySelector('[data-view="purchases"]');if(purchases)purchases.after(b);else nav.appendChild(b);
-    b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();openTax('/tax')},{capture:true});
+function lang() { return (document.documentElement.lang || '').startsWith('en') ? 'en' : 'de'; }
+function tr() { return T[lang()]; }
+
+function isReviewPath() { return location.pathname.startsWith('/tax/review'); }
+function taxPath(tab) { return tab === 'review' ? '/tax/review' : '/tax'; }
+
+export function bindTax(context) {
+  ctx = context;
+}
+
+export async function renderTax(context) {
+  ctx = context;
+  const host = ctx.$('#view-tax');
+  if (!host) return;
+
+  let settings = null, profile = null, loadError = null;
+  try {
+    [settings, profile] = await Promise.all([
+      ctx.api('api/tax/settings'),
+      ctx.api('api/tax/profile/settings')
+    ]);
+  } catch (err) { loadError = err; }
+
+  if (year == null) year = Number(settings?.defaultTaxYear || new Date().getFullYear());
+
+  const enabled = !loadError && !!settings?.enabled && !!profile?.assistantEnabled;
+  if (!enabled) {
+    host.innerHTML = gateHtml(settings, profile, loadError);
+    wireGate(host);
+    return;
   }
-  const main=$('#main');
-  if(main&&!$('#view-tax')){
-    const s=document.createElement('section');s.id='view-tax';s.className='view tax-view';s.innerHTML=`
-      <div class="tax-toolbar">
-        <div class="tax-tabs"><button type="button" data-tax-tab="overview"></button><button type="button" data-tax-tab="review"></button></div>
-        <label class="tax-year"><span></span><select id="tax-year"></select></label>
-        <button id="tax-analyze" type="button" class="primary-action"></button>
+
+  const reviewOnly = isReviewPath();
+  host.innerHTML = viewHtml(reviewOnly);
+  wireControls(host, settings, profile);
+  await loadData(host, reviewOnly);
+}
+
+// ---- disabled/gate state (personal opt-in and/or space-level opt-in are off) ----
+
+function gateHtml(settings, profile, loadError) {
+  if (loadError) {
+    return sectionCard(tr().title, `<div class="row-sub">${esc(loadError.message || ctx.get('common.error'))}</div>`, { className: 'tax-summary' });
+  }
+  const spaceOff = !settings?.enabled;
+  const body = `
+    <p class="tax-setting-copy">${esc(spaceOff ? tr().spaceOff : tr().spaceOn)}</p>
+    <label class="check"><input id="tax-personal-enabled" type="checkbox" ${profile?.assistantEnabled ? 'checked' : ''}><span>${esc(tr().personal)}</span></label>
+    <div class="tax-setting-copy">${esc(tr().personalHint)}</div>
+    ${spaceOff ? `<button type="button" id="tax-space-enable" class="ghost">${esc(tr().enableSpace)}</button>` : ''}`;
+  return sectionCard(tr().title, body, { className: 'tax-summary tax-gate' });
+}
+
+function wireGate(host) {
+  host.querySelector('#tax-personal-enabled')?.addEventListener('change', async e => {
+    const checked = e.currentTarget.checked;
+    e.currentTarget.disabled = true;
+    try {
+      await ctx.api('api/tax/profile/settings', ctx.jsonBody({ assistantEnabled: checked }, 'PUT'));
+      ctx.toast(ctx.get('common.saved'));
+      await renderTax(ctx);
+    } catch (err) {
+      e.currentTarget.checked = !checked;
+      ctx.toast(err.message || ctx.get('common.error'));
+    } finally { e.currentTarget.disabled = false; }
+  });
+  host.querySelector('#tax-space-enable')?.addEventListener('click', async e => {
+    e.currentTarget.disabled = true;
+    try {
+      await ctx.api('api/tax/settings', ctx.jsonBody({ ...settingsWritePayload(null), enabled: true }, 'PUT'));
+      ctx.toast(ctx.get('common.saved'));
+      await renderTax(ctx);
+    } catch (err) {
+      ctx.toast(err.status === 403 ? tr().ownerOnly : (err.message || ctx.get('common.error')));
+    } finally { e.currentTarget.disabled = false; }
+  });
+}
+
+function settingsWritePayload(base) {
+  const s = base || { countryCode: 'DE', defaultTaxYear: new Date().getFullYear(), automaticAnalysisEnabled: true, aiAnalysisEnabled: false, analyzeTransactions: true, analyzePurchases: true, analyzeDocuments: true, showTaxNotifications: true };
+  return {
+    countryCode: s.countryCode || 'DE',
+    defaultTaxYear: s.defaultTaxYear || new Date().getFullYear(),
+    automaticAnalysisEnabled: s.automaticAnalysisEnabled !== false,
+    aiAnalysisEnabled: !!s.aiAnalysisEnabled,
+    analyzeTransactions: s.analyzeTransactions !== false,
+    analyzePurchases: s.analyzePurchases !== false,
+    analyzeDocuments: s.analyzeDocuments !== false,
+    showTaxNotifications: s.showTaxNotifications !== false
+  };
+}
+
+// ---- enabled state: toolbar + hero + breakdown + candidate list ----
+
+function yearOptionsHtml() {
+  const current = new Date().getFullYear();
+  const values = [];
+  for (let y = current + 1; y >= 2020; y--) values.push(y);
+  if (year != null && !values.includes(year)) values.push(year);
+  return values.sort((a, b) => b - a).map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('');
+}
+
+function viewHtml(reviewOnly) {
+  return `<div class="tax-toolbar">
+      <div class="tax-tabs">
+        <button type="button" class="${reviewOnly ? '' : 'active'}" data-tax-tab="overview">${esc(tr().overview)}</button>
+        <button type="button" class="${reviewOnly ? 'active' : ''}" data-tax-tab="review">${esc(tr().review)}</button>
       </div>
-      <article class="fw-card tax-hero">
-        <div class="tax-hero-top">
-          <div class="tax-hero-lead"><span class="fw-summary-label" data-tax-label="possible"></span><div class="fw-summary-value" id="tax-possible">—</div></div>
-          <dl class="tax-hero-side">
-            <div><dt data-tax-label="confirmed"></dt><dd class="amount" id="tax-confirmed">—</dd></div>
-            <div><dt data-tax-label="review"></dt><dd class="amount" id="tax-review-count">—</dd></div>
-            <div><dt data-tax-label="docs"></dt><dd class="amount" id="tax-doc-count">—</dd></div>
-          </dl>
-        </div>
-        <div class="tax-alloc" id="tax-breakdown-bar" hidden></div>
-      </article>
-      <article class="fw-card tax-breakdown-card" id="tax-breakdown-card" hidden><div class="fw-card-head"><h2 class="fw-card-title" data-tax-label="breakdown"></h2></div><div id="tax-breakdown" class="rows tax-breakdown-list"></div></article>
-      <article class="panel tax-cases"><div class="panel-head"><h2 id="tax-list-title"></h2></div><div id="tax-candidate-list" class="tax-review-list"></div></article>
-      <p class="tax-disclaimer"></p>`;
-    main.appendChild(s);
-    $('[data-tax-tab="overview"]',s).onclick=()=>openTax('/tax');
-    $('[data-tax-tab="review"]',s).onclick=()=>openTax('/tax/review');
-    $('#tax-year',s).onchange=e=>{state.year=Number(e.target.value);renderTax()};
-    $('#tax-analyze',s).onclick=analyze;
+      <label class="tax-year"><span>${esc(tr().year)}</span><select id="tax-year">${yearOptionsHtml()}</select></label>
+      <button type="button" class="ghost" data-tax-settings>${esc(tr().settingsBtn)}</button>
+      <button type="button" id="tax-analyze" class="primary-action">${esc(tr().analyze)}</button>
+    </div>
+    <article class="fw-card tax-hero">
+      <div class="tax-hero-top">
+        <div class="tax-hero-lead"><span class="fw-summary-label">${esc(tr().possible)}</span><div class="fw-summary-value" id="tax-possible">—</div></div>
+        <dl class="tax-hero-side">
+          <div><dt>${esc(tr().confirmed)}</dt><dd class="amount" id="tax-confirmed">—</dd></div>
+          <div><dt>${esc(tr().needsReview)}</dt><dd class="amount" id="tax-review-count">—</dd></div>
+          <div><dt>${esc(tr().missingDocs)}</dt><dd class="amount" id="tax-doc-count">—</dd></div>
+        </dl>
+      </div>
+      <div class="tax-alloc" id="tax-breakdown-bar" hidden></div>
+    </article>
+    <article class="fw-card tax-breakdown-card" id="tax-breakdown-card" hidden>
+      <div class="fw-card-head"><h3 class="fw-card-title">${esc(tr().breakdown)}</h3></div>
+      <div id="tax-breakdown" class="rows tax-breakdown-list"></div>
+    </article>
+    <div data-tax-year-panel class="panel tax-year-review" hidden></div>
+    <article class="panel tax-cases">
+      <div class="panel-head"><h2 id="tax-list-title">${esc(reviewOnly ? tr().openCases : tr().allCases)}</h2></div>
+      <div id="tax-candidate-list" class="tax-review-list">
+        <div class="tax-loading"></div><div class="tax-loading"></div><div class="tax-loading"></div>
+      </div>
+    </article>
+    <p class="tax-disclaimer">${esc(tr().disclaimer)}</p>`;
+}
+
+function wireControls(host, settings, profile) {
+  host.querySelector('[data-tax-tab="overview"]').addEventListener('click', () => switchTab('overview'));
+  host.querySelector('[data-tax-tab="review"]').addEventListener('click', () => switchTab('review'));
+  host.querySelector('#tax-year').addEventListener('change', e => { year = Number(e.target.value); renderTax(ctx); });
+  host.querySelector('#tax-analyze').addEventListener('click', () => analyze(host));
+  host.querySelector('[data-tax-settings]').addEventListener('click', () => openSettingsDialog(settings, profile));
+}
+
+function switchTab(tab) {
+  const path = taxPath(tab);
+  if (location.pathname !== path) history.pushState({ view: 'tax' }, '', path);
+  renderTax(ctx);
+}
+
+async function loadData(host, reviewOnly) {
+  const list = host.querySelector('#tax-candidate-list');
+  try {
+    const [summary, rows] = await Promise.all([
+      ctx.api(`api/tax/years/${year}/summary`),
+      ctx.api(`api/tax/candidates?year=${year}`)
+    ]);
+    candidates = rows || [];
+    const currency = candidates[0]?.currency || 'EUR';
+    const confirmedAmount = Number(summary.confirmedAmount || 0);
+    const reviewCount = Number(summary.needsReviewCount || 0);
+    const docCount = Number(summary.needsDocumentCount || 0);
+    setText(host, '#tax-possible', ctx.money(summary.suggestedAmount, currency));
+    setText(host, '#tax-confirmed', ctx.money(confirmedAmount, currency));
+    host.querySelector('#tax-confirmed')?.classList.toggle('tax-pos', confirmedAmount > 0);
+    setText(host, '#tax-review-count', String(reviewCount));
+    host.querySelector('#tax-review-count')?.classList.toggle('tax-warn', reviewCount > 0);
+    setText(host, '#tax-doc-count', String(docCount));
+    host.querySelector('#tax-doc-count')?.classList.toggle('tax-warn', docCount > 0);
+    drawBreakdown(host, candidates);
+    const visible = reviewOnly
+      ? candidates.filter(c => ['needs_review', 'detected', 'needs_document', 'incomplete'].includes(c.status))
+      : candidates;
+    drawCandidates(host, visible);
+    await renderTaxYearPanel(ctx, host, year);
+    wireDocumentUploads(ctx, host, visible, { onUploaded: () => renderTax(ctx) });
+  } catch (err) {
+    const breakdownCard = host.querySelector('#tax-breakdown-card');
+    if (breakdownCard) breakdownCard.hidden = true;
+    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${esc(err.message || ctx.get('common.error'))}</div></div>`;
   }
-  ensureSettings();translateUi();
 }
-function ensureSettings(){
-  const view=$('#view-settings');if(!view||$('#tax-settings-panel'))return;
-  const p=document.createElement('article');p.id='tax-settings-panel';p.className='panel';p.innerHTML=`<div class="panel-head"><h2></h2></div><div class="settings-grid tax-settings-grid"><label class="check"><input id="tax-personal-enabled" type="checkbox"><span data-tax-setting="personal"></span></label><div class="tax-setting-copy" data-tax-setting="personalHint"></div><div id="tax-space-state" class="tax-setting-copy"></div><button id="tax-space-enable" type="button" class="ghost" hidden></button></div>`;
-  view.appendChild(p);$('#tax-personal-enabled',p).onchange=savePersonal;$('#tax-space-enable',p).onclick=enableSpace;
+
+function setText(host, selector, value) {
+  const el = host.querySelector(selector);
+  if (el) el.textContent = value;
 }
-function translateUi(){
-  const x=tr();text($('#tax-nav span'),x.nav);const v=$('#view-tax');if(v){text($('[data-tax-tab="overview"]',v),x.overview);text($('[data-tax-tab="review"]',v),x.review);text($('.tax-year span',v),x.year);text($('#tax-analyze',v),state.busy?x.analyzing:x.analyze);text($('[data-tax-label="possible"]',v),x.possible);text($('[data-tax-label="confirmed"]',v),x.confirmed);text($('[data-tax-label="review"]',v),x.needsReview);text($('[data-tax-label="docs"]',v),x.missingDocs);text($('[data-tax-label="breakdown"]',v),x.breakdown);text($('.tax-disclaimer',v),x.disclaimer)}
-  const s=$('#tax-settings-panel');if(s){text($('h2',s),x.settings);text($('[data-tax-setting="personal"]',s),x.personal);text($('[data-tax-setting="personalHint"]',s),x.personalHint);text($('#tax-space-enable',s),x.enableSpace)}
+
+function statusLabel(status) {
+  const x = tr();
+  const map = { confirmed: x.statusConfirmed, rejected: x.statusRejected, needs_review: x.statusNeedsReview, needs_document: x.statusNeedsDocument, detected: x.statusDetected, incomplete: x.statusIncomplete };
+  return map[status] || status;
 }
-function years(){const sel=$('#tax-year');if(!sel)return;const current=new Date().getFullYear();if(!sel.options.length){for(let y=current+1;y>=2020;y--){const o=document.createElement('option');o.value=String(y);o.textContent=String(y);sel.append(o)}}if(![...sel.options].some(o=>Number(o.value)===state.year))state.year=current;sel.value=String(state.year)}
-async function availability(force=false){
-  const space=sid();if(!space)return false;if(!force&&state.space===space&&state.settings&&state.profile)return state.enabled;state.space=space;
-  try{const [settings,profile]=await Promise.all([req('api/tax/settings'),req('api/tax/profile/settings')]);state.settings=settings;state.profile=profile;state.year=Number(settings.defaultTaxYear||new Date().getFullYear());state.enabled=!!settings.enabled&&!!profile.assistantEnabled}catch(e){console.warn('tax availability',e);state.enabled=false}
-  const nav=$('#tax-nav');if(nav)nav.hidden=!state.enabled;renderSettingsState();return state.enabled;
+function confidenceLabel(confidence) {
+  const n = Number(confidence || 0);
+  return n >= 0.7 ? tr().confidenceHigh : n >= 0.4 ? tr().confidenceMedium : tr().confidenceLow;
 }
-function renderSettingsState(){const x=tr();const personal=$('#tax-personal-enabled');if(personal){personal.checked=state.profile?.assistantEnabled===true;personal.disabled=!state.profile}text($('#tax-space-state'),state.settings?.enabled?x.spaceOn:x.spaceOff);const enable=$('#tax-space-enable');if(enable)enable.hidden=state.settings?.enabled!==false}
-async function savePersonal(e){const checked=e.currentTarget.checked;e.currentTarget.disabled=true;try{state.profile=await req('api/tax/profile/settings',{method:'PUT',body:JSON.stringify({assistantEnabled:checked})});state.enabled=!!state.settings?.enabled&&!!state.profile?.assistantEnabled;const nav=$('#tax-nav');if(nav)nav.hidden=!state.enabled;toast(tr().saved);if(!state.enabled&&$('#view-tax')?.classList.contains('active'))leaveTax()}catch(err){e.currentTarget.checked=!checked;toast(err.message)}finally{e.currentTarget.disabled=false;renderSettingsState()}}
-async function enableSpace(e){if(!state.settings)return;e.currentTarget.disabled=true;try{const s=state.settings;state.settings=await req('api/tax/settings',{method:'PUT',body:JSON.stringify({enabled:true,countryCode:s.countryCode,defaultTaxYear:s.defaultTaxYear,automaticAnalysisEnabled:s.automaticAnalysisEnabled,aiAnalysisEnabled:s.aiAnalysisEnabled,analyzeTransactions:s.analyzeTransactions,analyzePurchases:s.analyzePurchases,analyzeDocuments:s.analyzeDocuments,showTaxNotifications:s.showTaxNotifications})});state.enabled=!!state.profile?.assistantEnabled;const nav=$('#tax-nav');if(nav)nav.hidden=!state.enabled;toast(tr().saved)}catch(err){toast(err.status===403?tr().ownerOnly:err.message)}finally{e.currentTarget.disabled=false;renderSettingsState()}}
-function setHeader(){if(!$('#view-tax')?.classList.contains('active'))return;text($('#page-title'),tr().title);text($('#page-subtitle'),tr().subtitle);const p=$('#primary-action');if(p){p.hidden=true;p.onclick=null}}
-function setNav(){$$('.sidebar button[data-view],.sidebar button[data-tax-nav]').forEach(b=>{const on=b.id==='tax-nav';b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});$$('#bottom-nav button[data-view]').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-current','false')});$('#bottom-more')?.classList.add('active')}
-async function openTax(path='/tax',replace=false){ensureUi();if(!await availability()){renderSettingsState();return}$$('.view').forEach(v=>v.classList.remove('active'));$('#view-tax').classList.add('active');setNav();setHeader();if(location.pathname!==path)(replace?history.replaceState({tax:true},'',path):history.pushState({tax:true},'',path));await renderTax()}
-function leaveTax(){$('#nav [data-view="dashboard"]')?.click()}
-async function renderTax(){
-  if(!state.enabled)return;translateUi();years();setHeader();const reviewOnly=location.pathname.startsWith('/tax/review');$('[data-tax-tab="overview"]').classList.toggle('active',!reviewOnly);$('[data-tax-tab="review"]').classList.toggle('active',reviewOnly);text($('#tax-list-title'),reviewOnly?tr().openCases:tr().allCases);const list=$('#tax-candidate-list');list.innerHTML='<div class="tax-loading"></div><div class="tax-loading"></div><div class="tax-loading"></div>';
-  try{const [summary,candidates]=await Promise.all([req(`api/tax/years/${state.year}/summary`),req(`api/tax/candidates?year=${state.year}`)]);state.candidates=candidates||[];const cur=state.candidates[0]?.currency||'EUR';const conf=Number(summary.confirmedAmount||0),rc=Number(summary.needsReviewCount||0),dc=Number(summary.needsDocumentCount||0);text($('#tax-possible'),money(summary.suggestedAmount,cur));text($('#tax-confirmed'),money(conf,cur));$('#tax-confirmed')?.classList.toggle('tax-pos',conf>0);text($('#tax-review-count'),rc);$('#tax-review-count')?.classList.toggle('tax-warn',rc>0);text($('#tax-doc-count'),dc);$('#tax-doc-count')?.classList.toggle('tax-warn',dc>0);drawBreakdown(state.candidates);drawCandidates(reviewOnly?state.candidates.filter(x=>['needs_review','detected','needs_document','incomplete'].includes(x.status)):state.candidates)}catch(err){const bc=$('#tax-breakdown-card');if(bc)bc.hidden=true;const bb=$('#tax-breakdown-bar');if(bb){bb.hidden=true;bb.innerHTML=''}list.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(err.message)}</div></div>`}
+function sourceTypeLabel(sourceType) {
+  const x = tr();
+  return sourceType === 'transaction' ? x.sourceTransaction : sourceType === 'purchase_item' ? x.sourceItem : x.sourcePurchase;
 }
-function statusText(s){const x=tr(),map={confirmed:x.statusConfirmed,rejected:x.statusRejected,needs_review:x.statusNeedsReview,needs_document:x.statusNeedsDocument,detected:x.statusDetected,incomplete:x.statusIncomplete};return map[s]||s}
-function confidence(c){const n=Number(c||0);return n>=.7?tr().confidenceHigh:n>=.4?tr().confidenceMedium:tr().confidenceLow}
-function sourceType(s){const x=tr();return s==='transaction'?x.sourceTransaction:s==='purchase_item'?x.sourceItem:x.sourcePurchase}
-function drawCandidates(items){const list=$('#tax-candidate-list');list.innerHTML='';if(!items.length){list.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(tr().none)}</div></div>`;return}for(const c of items){const row=document.createElement('div');row.className=`tax-case tax-status-${c.status}`;const final=['confirmed','rejected','ignored'].includes(c.status);row.innerHTML=`<div class="tax-case-main"><div class="tax-case-top"><div><div class="row-title">${esc(c.sourceTitle||'Steuerhinweis')}</div><div class="row-sub">${esc([c.sourceDate?date(c.sourceDate):'',sourceType(c.sourceType)].filter(Boolean).join(' · '))}</div></div><div class="amount">${money(c.eligibleAmount,c.currency)}</div></div><div class="tax-badges"><span>${esc(c.taxCategoryName||c.taxCategoryCode||'—')}</span><span>${esc(confidence(c.confidence))}</span><span>${esc(statusText(c.status))}</span>${c.hasDocument?`<span class="tax-doc-ok">${esc(tr().document)}</span>`:''}</div><p>${esc(c.explanation||'')}</p>${Number(c.eligiblePercentage)!==100?`<div class="row-sub">${esc(tr().eligible)}: ${esc(c.eligiblePercentage)}% · ${money(c.grossAmount,c.currency)} → ${money(c.eligibleAmount,c.currency)}</div>`:''}</div><div class="tax-case-actions">${!final?`<button type="button" class="ghost" data-share>${esc(tr().edit)}</button><button type="button" class="ghost" data-reject>${esc(tr().reject)}</button><button type="button" data-confirm>${esc(tr().confirm)}</button>`:''}</div>`;row.querySelector('[data-confirm]')?.addEventListener('click',()=>decide(c.id,'confirm'));row.querySelector('[data-reject]')?.addEventListener('click',()=>decide(c.id,'reject'));row.querySelector('[data-share]')?.addEventListener('click',()=>editShare(c));list.append(row)}}
-function drawBreakdown(items){const card=$('#tax-breakdown-card'),bar=$('#tax-breakdown-bar'),list=$('#tax-breakdown');if(!card||!list)return;const groups=new Map();for(const c of items||[]){if(['rejected','ignored'].includes(c.status))continue;const amt=Number(c.eligibleAmount||0);if(!(amt>0))continue;const key=c.taxCategoryCode||c.taxCategoryName||'—';const g=groups.get(key)||{name:c.taxCategoryName||c.taxCategoryCode||'—',amount:0,count:0,currency:c.currency||'EUR'};g.amount+=amt;g.count+=1;groups.set(key,g)}const rows=[...groups.values()].sort((a,b)=>b.amount-a.amount);const total=rows.reduce((s,g)=>s+g.amount,0);if(!rows.length||!(total>0)){card.hidden=true;if(bar){bar.hidden=true;bar.innerHTML=''}list.innerHTML='';return}card.hidden=false;const cat=i=>(i%8)+1;if(bar){bar.hidden=false;bar.innerHTML=rows.map((g,i)=>`<span class="tax-seg" data-cat="${cat(i)}" style="flex:${g.amount} 1 0"></span>`).join('')}list.innerHTML=rows.map((g,i)=>`<div class="row tax-brow"><span class="cat-dot" data-cat="${cat(i)}"></span><div class="tax-brow-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${g.count} · ${Math.round(g.amount/total*100)}%</div></div><div class="amount">${money(g.amount,g.currency)}</div></div>`).join('')}
-async function decide(id,action){try{await req(`api/tax/candidates/${id}/${action}`,{method:'POST'});await renderTax()}catch(err){toast(err.message)}}
-function editShare(c){const d=document.createElement('dialog');d.innerHTML=`<form class="dialog-card"><div class="panel-head"><h2>${esc(tr().amountPrompt)}</h2><button type="button" data-close>×</button></div><label>${esc(tr().percent)}<input name="pct" type="number" min="0" max="100" step="1" value="${esc(c.eligiblePercentage)}" required></label><div class="dialog-actions"><button type="button" data-cancel>${esc(tr().cancel)}</button><button type="submit">${esc(tr().save)}</button></div></form>`;document.body.append(d);const close=()=>d.close();d.onclose=()=>d.remove();$('[data-close]',d).onclick=close;$('[data-cancel]',d).onclick=close;$('form',d).onsubmit=async e=>{e.preventDefault();const pct=Number(new FormData(e.currentTarget).get('pct'));try{await req(`api/tax/candidates/${c.id}`,{method:'PUT',body:JSON.stringify({taxCategoryId:null,eligiblePercentage:pct,status:null})});close();await renderTax()}catch(err){toast(err.message)}};d.showModal()}
-async function analyze(){if(state.busy)return;state.busy=true;translateUi();const b=$('#tax-analyze');if(b)b.disabled=true;try{await req(`api/tax/analyze?year=${state.year}`,{method:'POST'});toast(tr().analysisDone);await renderTax()}catch(err){toast(err.message)}finally{state.busy=false;if(b)b.disabled=false;translateUi()}}
-function augmentMore(root=document){if(!state.enabled)return;const list=$('.more-sheet .more-list',root)||$('.more-list',root);if(!list||$('[data-tax-more]',list))return;const b=document.createElement('button');b.type='button';b.dataset.taxMore='1';b.innerHTML=`${icon()}<span>${esc(tr().nav)}</span>`;b.onclick=()=>{b.closest('dialog')?.close();openTax('/tax')};list.append(b)}
-let spaceSyncTimer;
-function monitor(){
-  document.addEventListener('click',e=>{const view=e.target.closest?.('[data-view]');if(view){$('#tax-nav')?.classList.remove('active');if(view.dataset.view==='settings')setTimeout(async()=>{await availability(true);renderSettingsState()},0)}},true);
-  $('#refresh')?.addEventListener('click',e=>{if($('#view-tax')?.classList.contains('active')){e.stopImmediatePropagation();renderTax()}},{capture:true});
-  window.addEventListener('popstate',()=>{if(location.pathname==='/tax'||location.pathname.startsWith('/tax/'))openTax(location.pathname,true)});
-  new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node instanceof Element)augmentMore(node);if(sid()&&sid()!==state.space){clearTimeout(spaceSyncTimer);spaceSyncTimer=setTimeout(()=>availability(true),80)}if($('#view-tax')?.classList.contains('active'))setHeader();translateUi()}).observe(document.body,{subtree:true,childList:true});
+
+function drawCandidates(host, items) {
+  const list = host.querySelector('#tax-candidate-list');
+  if (!items.length) {
+    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${esc(tr().none)}</div></div>`;
+    return;
+  }
+  list.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const c of items) {
+    const row = document.createElement('div');
+    row.className = `tax-case tax-status-${c.status}`;
+    row.dataset.taxCandidateId = c.id;
+    const final = ['confirmed', 'rejected', 'ignored'].includes(c.status);
+    row.innerHTML = `
+      <div class="tax-case-main">
+        <div class="tax-case-top">
+          <div>
+            <div class="row-title">${esc(c.sourceTitle || tr().fallbackTitle)}</div>
+            <div class="row-sub">${esc([c.sourceDate ? ctx.date(c.sourceDate) : '', sourceTypeLabel(c.sourceType)].filter(Boolean).join(' · '))}</div>
+          </div>
+          <div class="amount">${ctx.money(c.eligibleAmount, c.currency)}</div>
+        </div>
+        <div class="tax-badges">
+          <span>${esc(c.taxCategoryName || c.taxCategoryCode || '—')}</span>
+          <span>${esc(confidenceLabel(c.confidence))}</span>
+          <span>${esc(statusLabel(c.status))}</span>
+          ${c.hasDocument ? `<span class="tax-doc-ok">${esc(tr().document)}</span>` : ''}
+        </div>
+        <p>${esc(c.explanation || '')}</p>
+        ${Number(c.eligiblePercentage) !== 100 ? `<div class="row-sub">${esc(tr().eligible)}: ${esc(c.eligiblePercentage)}% · ${ctx.money(c.grossAmount, c.currency)} → ${ctx.money(c.eligibleAmount, c.currency)}</div>` : ''}
+      </div>
+      <div class="tax-case-actions">
+        ${!final ? `<button type="button" class="ghost" data-share>${esc(tr().edit)}</button><button type="button" class="ghost" data-reject>${esc(tr().reject)}</button><button type="button" data-confirm>${esc(tr().confirm)}</button>` : ''}
+      </div>`;
+    row.querySelector('[data-confirm]')?.addEventListener('click', () => decide(c.id, 'confirm'));
+    row.querySelector('[data-reject]')?.addEventListener('click', () => decide(c.id, 'reject'));
+    row.querySelector('[data-share]')?.addEventListener('click', () => openEditShare(c));
+    frag.appendChild(row);
+  }
+  list.appendChild(frag);
 }
-async function init(){ensureUi();monitor();let tries=0;while(!sid()&&tries++<40)await new Promise(r=>setTimeout(r,50));await availability(true);if(initialTaxPath&&state.enabled)setTimeout(()=>openTax(initialTaxReview?'/tax/review':'/tax',true),0)}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+
+function drawBreakdown(host, items) {
+  const card = host.querySelector('#tax-breakdown-card');
+  const bar = host.querySelector('#tax-breakdown-bar');
+  const list = host.querySelector('#tax-breakdown');
+  if (!card || !list) return;
+  const groups = new Map();
+  for (const c of items || []) {
+    if (['rejected', 'ignored'].includes(c.status)) continue;
+    const amount = Number(c.eligibleAmount || 0);
+    if (!(amount > 0)) continue;
+    const key = c.taxCategoryCode || c.taxCategoryName || '—';
+    const group = groups.get(key) || { name: c.taxCategoryName || c.taxCategoryCode || '—', amount: 0, count: 0, currency: c.currency || 'EUR' };
+    group.amount += amount;
+    group.count += 1;
+    groups.set(key, group);
+  }
+  const rows = [...groups.values()].sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((sum, g) => sum + g.amount, 0);
+  if (!rows.length || !(total > 0)) {
+    card.hidden = true;
+    if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+    list.innerHTML = '';
+    return;
+  }
+  card.hidden = false;
+  const cat = i => (i % 8) + 1;
+  if (bar) {
+    bar.hidden = false;
+    bar.innerHTML = rows.map((g, i) => `<span class="tax-seg" data-cat="${cat(i)}" style="flex:${g.amount} 1 0"></span>`).join('');
+  }
+  list.innerHTML = rows.map((g, i) => `<div class="row tax-brow"><span class="cat-dot" data-cat="${cat(i)}"></span><div class="tax-brow-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${g.count} · ${Math.round(g.amount / total * 100)}%</div></div><div class="amount">${ctx.money(g.amount, g.currency)}</div></div>`).join('');
+}
+
+async function decide(id, action) {
+  try {
+    await ctx.api(`api/tax/candidates/${id}/${action}`, { method: 'POST' });
+    await renderTax(ctx);
+  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+}
+
+function openEditShare(c) {
+  const dlg = ctx.dialog(`<form class="dialog-card">
+    <div class="panel-head"><h2>${esc(tr().amountPrompt)}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <label>${esc(tr().percent)}<input name="pct" type="number" min="0" max="100" step="1" value="${esc(c.eligiblePercentage)}" required></label>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit">${esc(ctx.get('common.save'))}</button></div>
+  </form>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async e => {
+    e.preventDefault();
+    const pct = Number(new FormData(e.currentTarget).get('pct'));
+    try {
+      await ctx.api(`api/tax/candidates/${c.id}`, ctx.jsonBody({ taxCategoryId: null, eligiblePercentage: pct, status: null }, 'PUT'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderTax(ctx);
+    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  };
+  dlg.showModal();
+}
+
+async function analyze(host) {
+  const button = host.querySelector('#tax-analyze');
+  if (button) { button.disabled = true; button.textContent = tr().analyzing; }
+  try {
+    await ctx.api(`api/tax/analyze?year=${year}`, { method: 'POST' });
+    ctx.toast(tr().analysisDone);
+    await renderTax(ctx);
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+    if (button) { button.disabled = false; button.textContent = tr().analyze; }
+  }
+}
+
+// ---- settings dialog: personal opt-in, plus the advanced analysis toggles from tax-review-extra.js
+// composed directly into the same dialog (a single settings surface instead of the old two
+// DOM-injected panels spread across the Settings view and a MutationObserver). The per-space
+// enable/disable toggle only ever needs to live in the gate screen above: this dialog is only
+// reachable from the fully-enabled view, at which point the space is already on for everyone. ----
+
+function openSettingsDialog(settings, profile) {
+  const dlg = ctx.dialog(`<div class="dialog-card">
+    <div class="panel-head"><h2>${esc(tr().settingsTitle)}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <div class="settings-grid tax-settings-grid">
+      <label class="check"><input id="tax-personal-enabled" type="checkbox" ${profile?.assistantEnabled ? 'checked' : ''}><span>${esc(tr().personal)}</span></label>
+      <div class="tax-setting-copy">${esc(tr().personalHint)}</div>
+    </div>
+  </div>`);
+  const card = dlg.querySelector('.dialog-card');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+
+  card.querySelector('#tax-personal-enabled').addEventListener('change', async e => {
+    const checked = e.currentTarget.checked;
+    e.currentTarget.disabled = true;
+    try {
+      await ctx.api('api/tax/profile/settings', ctx.jsonBody({ assistantEnabled: checked }, 'PUT'));
+      ctx.toast(ctx.get('common.saved'));
+    } catch (err) {
+      e.currentTarget.checked = !checked;
+      ctx.toast(err.message || ctx.get('common.error'));
+    } finally { e.currentTarget.disabled = false; }
+  });
+
+  renderAdvancedSettings(ctx, card, settings, { onSaved: () => {} });
+
+  dlg.addEventListener('close', () => renderTax(ctx), { once: true });
+  dlg.showModal();
+}

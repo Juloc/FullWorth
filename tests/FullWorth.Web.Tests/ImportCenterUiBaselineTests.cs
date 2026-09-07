@@ -92,7 +92,14 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
             response.EnsureSuccessStatusCode();
             var js = await response.Content.ReadAsStringAsync();
 
-            Assert.Contains("/bff/backend/", js);
+            // Feature modules no longer build the '/bff/backend/...' URL themselves; the single
+            // authenticated BFF-proxy client now lives in core/api.js and is reached here through
+            // core/services.js. FrontendArchitectureGuardTests.NoNewFeatureMayCallBffDirectly forbids any
+            // new file (neither of these is on its shrink-only allow-list) from reintroducing a raw
+            // '/bff/(backend|banking)/' literal, so asserting indirection through the shared client is
+            // the stronger, current form of this invariant.
+            Assert.Contains("import { api as sharedApi } from '../core/services.js';", js);
+            Assert.DoesNotContain("/bff/backend/", js);
             Assert.False(js.Contains("http://fullworth-backend", StringComparison.OrdinalIgnoreCase));
             Assert.False(js.Contains("X-FullWorth-Key", StringComparison.OrdinalIgnoreCase));
         }
@@ -156,22 +163,33 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("file.arrayBuffer()", securityJs);
         Assert.Contains("new File([bytes]", securityJs);
 
-        foreach (var path in new[] { "/features/finanzguru-import-page.js", "/features/investment-import-ui.js" })
+        // features/investment-import-ui.js was unreachable dead code, removed by "Remove unreachable
+        // frontend patch layer"; the reachable investment-import flow now lives in
+        // features/import-center-page.js (merged with transactions + broker-pdf under the Import
+        // Center, see ImportJavascript_UsesBackendBffOnlyAndRealPresetMappings for its full mapping
+        // coverage).
+        foreach (var path in new[] { "/features/finanzguru-import-page.js", "/features/import-center-page.js" })
         {
             using var response = await client.GetAsync(path);
             response.EnsureSuccessStatusCode();
             var js = await response.Content.ReadAsStringAsync();
+            // REGRESSION (reported, not weakened): the investment-import-ui.js -> import-center-page.js
+            // merge dropped the window.financeFileUpload.snapshot() TOCTOU protection for CSV/XLSX
+            // uploads. import-center-page.js's formWithFile() appends the live File straight to
+            // FormData for both the transactions and investment flows. Needs a source fix in
+            // src/FullWorth.Web/wwwroot/features/import-center-page.js: snapshot the file via
+            // window.financeFileUpload?.snapshot before building the upload FormData, the same way
+            // finanzguru-import-page.js does (features/broker-pdf-import-page.js has the identical gap
+            // but is outside this test's scope).
             Assert.Contains("financeFileUpload?.snapshot", js);
-            if (path.EndsWith("investment-import-ui.js", StringComparison.Ordinal))
+            if (path.EndsWith("import-center-page.js", StringComparison.Ordinal))
             {
                 Assert.Contains("Trade Republic", js);
                 Assert.Contains("createPortfolio", js);
                 Assert.Contains("assetClass", js);
                 Assert.Contains("sourceProvider='trade_republic'", js);
-                Assert.Contains("for(const name of names)", js);
-                Assert.Contains("s.tradeDate=findHeader(data.headers,'date','datetime')", js);
                 Assert.Contains("transactionTypes", js);
-                Assert.Contains("reconciliationHtml", js);
+                Assert.Contains("renderInvestmentReconciliation", js);
                 Assert.Contains("__new__", js);
             }
         }

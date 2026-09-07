@@ -12,7 +12,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     [Fact]
     public void Advanced_installer_mounts_canonical_discount_editor()
     {
-        var js = Read("features", "purchase-articles-advanced-installer.js");
+        var js = Read("features", "purchase-articles-advanced.js");
 
         Assert.Contains("import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';", js);
         Assert.Contains("await mountPurchaseDiscountActions", js);

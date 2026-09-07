@@ -1,25 +1,13 @@
+import { api as sharedApi } from '../core/services.js';
 // Advanced confirmed-purchase insights. This augments the existing analytics grid and never owns
 // navigation or financial state. All calculations live in the backend so mobile/desktop show the same data.
 
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const isDe = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de');
 const text = (de, en) => isDe() ? de : en;
-const spaceId = () => localStorage.getItem('finance.space') || '';
 let busy = false;
-let queued = false;
 
-function withSpace(path) {
-  const [base, query = ''] = String(path).replace(/^\//, '').split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `${base}?${params}`;
-}
-
-async function api(path) {
-  const response = await fetch(`/bff/backend/${withSpace(path)}`);
-  if (!response.ok) throw new Error(`${response.status}`);
-  return response.json();
-}
+const api=path=>sharedApi(path);
 
 function money(value, currency = 'EUR') {
   try { return new Intl.NumberFormat(document.documentElement.lang || 'de', { style: 'currency', currency }).format(Number(value || 0)); }
@@ -104,25 +92,9 @@ async function decorate(panel) {
   finally { busy = false; }
 }
 
-function scan() {
-  queued = false;
+export async function refreshPurchaseAdvancedInsights(detail = {}) {
   ensureStyle();
   const panel = document.querySelector('.purchase-advanced-panel:not([hidden])');
-  const tab = document.querySelector('[data-pa-tab].active')?.dataset.paTab;
-  if (panel && tab === 'analytics') void decorate(panel);
+  const tab = detail.tab || document.querySelector('[data-pa-tab].active')?.dataset.paTab;
+  if (panel && tab === 'analytics') await decorate(panel);
 }
-
-function schedule() {
-  if (queued) return;
-  queued = true;
-  queueMicrotask(scan);
-}
-
-document.addEventListener('click', schedule, true);
-function install() {
-  if (!document.body) return;
-  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
-  schedule();
-}
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-else install();

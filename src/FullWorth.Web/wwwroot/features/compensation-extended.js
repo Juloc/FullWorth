@@ -1,3 +1,4 @@
+import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const euro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2});
@@ -183,8 +184,8 @@ function spaceId(){return $('#space-select')?.value||''}
 function value(id){return $(`#${id}`)?.value??''}
 function number(id){return Number(value(id))||0}
 function set(id,v){const el=$(`#${id}`);if(el)el.value=v??''}
-function json(method,body){return{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}}
-async function api(path,options={},allow204=false){const response=await fetch(`/bff/backend/${String(path).replace(/^\//,'')}`,options);if(allow204&&response.status===204)return null;if(!response.ok){let message=`Fehler ${response.status}`;try{const body=await response.json();message=body.error||body.title||body.message||message}catch{}throw new Error(message)}if(response.status===204)return null;return response.json()}
+function json(method,body){return sharedJsonBody(body,method)}
+async function api(path,options={},allow204=false){return sharedApi(path,options)}
 function month(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE',{month:'long',year:'numeric'}).format(new Date(`${String(v).slice(0,10)}T12:00:00`))}
 function signedEuro(v){const x=Number(v||0);return `${x>=0?'+':'−'}${euro.format(Math.abs(x))}`}
 function showMessage(text){const toast=$('#comp-error');toast.textContent=text;toast.classList.add('show');clearTimeout(showMessage.timer);showMessage.timer=setTimeout(()=>toast.classList.remove('show'),3200)}

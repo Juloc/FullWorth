@@ -12,8 +12,12 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Normal_purchase_scan_loads_advanced_workspace_installer()
     {
+        // The installer module was renamed/merged from purchase-articles-advanced-installer.js into
+        // purchase-articles-advanced.js and is now wired through the fullworth:purchases-ui-changed
+        // event (see Advanced_installer_reuses_existing_workspace_instead_of_replacing_it) rather than a
+        // bare side-effect import.
         var js = Read("features", "purchases-gpt-normal.js");
-        Assert.Contains("import './purchase-articles-advanced-installer.js';", js);
+        Assert.Contains("import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced.js';", js);
     }
 
     [Fact]
@@ -46,20 +50,25 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Advanced_installer_reuses_existing_workspace_instead_of_replacing_it()
     {
-        var js = Read("features", "purchase-articles-advanced-installer.js");
+        var js = Read("features", "purchase-articles-advanced.js");
 
         Assert.Contains(".pa-workspace", js);
         Assert.Contains(".pa-product-detail", js);
         Assert.Contains("api/purchases/${id}/workspace", js);
         Assert.Contains("mountPurchaseAdvancedActions", js);
         Assert.Contains("mountProductAdvancedActions", js);
-        Assert.Contains("MutationObserver", js);
+        // Polling the DOM with a MutationObserver was the patch-layer shape this branch removed (new
+        // files may no longer add one: FrontendArchitectureGuardTests.NoNewGlobalDomPatchObservers).
+        // "Reuse, don't replace" is now enforced with idempotent dataset guards checked before mounting,
+        // fed by the purchase workspace explicitly dispatching fullworth:purchases-ui-changed.
+        Assert.Contains("dialog.dataset.paAdvancedMounted === 'true'", js);
+        Assert.Contains("dialog.dataset.paProductAdvancedMounted === 'true'", js);
     }
 
     [Fact]
     public void Payment_picker_never_relabels_foreign_currency_transactions()
     {
-        var js = Read("features", "purchase-articles-advanced-installer.js");
+        var js = Read("features", "purchase-articles-advanced.js");
         var css = Read("features", "purchase-articles-workspace.css");
 
         Assert.Contains("mountCurrencySafePaymentPicker", js);
@@ -72,7 +81,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Payment_picker_does_not_offer_another_amount_when_purchase_is_fully_linked()
     {
-        var js = Read("features", "purchase-articles-advanced-installer.js");
+        var js = Read("features", "purchase-articles-advanced.js");
 
         Assert.Contains("const fullyLinked = remaining <= 0.005", js);
         Assert.Contains("Der Kauf ist bereits vollständig mit Zahlungen verknüpft.", js);
@@ -96,9 +105,18 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
 
         Assert.Contains("/features/purchase-articles-workspace.js", sw);
         Assert.Contains("/features/purchase-articles-workspace.css", sw);
-        Assert.Contains("/features/purchase-articles-advanced-installer.js", sw);
+        Assert.Contains("/features/purchase-articles-advanced.js", sw);
         Assert.Contains("/features/purchase-articles-advanced-actions.js", sw);
-        Assert.Contains("/features/receipt-scan-ai.js", sw);
+        // REGRESSION (reported, not weakened): receipt-scan-ai.js was deleted, and the branch's later
+        // removal of the also-unreachable features/receipt-scan-local-builder.js ("Remove unreachable
+        // frontend patch layer") left sw.js's APP_SHELL precache list pointing at that now-nonexistent
+        // file (and its .css) while never listing the real, reachable features/receipt-scan-set.js/.css.
+        // Because install() precaches via cache.addAll (atomic: one 404 fails the whole precache), this
+        // currently breaks service-worker install entirely. Needs a source fix in
+        // src/FullWorth.Web/wwwroot/sw.js: replace '/features/receipt-scan-local-builder.js' and
+        // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/features/receipt-scan-set.js'
+        // and '/features/receipt-scan-set.css'.
+        Assert.Contains("/features/receipt-scan-set.js", sw);
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }
 

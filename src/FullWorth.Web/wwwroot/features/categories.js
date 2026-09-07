@@ -1,3 +1,4 @@
+import { ButtonRole, buttonClass } from '../ui/buttons.js';
 // Category tree (UI_UX_SPEC §10). Hierarchical view with expand/collapse; each node can be renamed,
 // re-iconed and MOVED to another parent (accessible explicit Move via the edit dialog, §10.2), or
 // archived (§10.4). Archived categories stay on history and are hidden unless "Show archived" is on.
@@ -10,6 +11,55 @@ const collapsed = new Set(); // category ids collapsed by the user this session
 export function bindCategories(context) {
   ctx = context;
   ctx.$('#cat-archived').addEventListener('change', () => renderCategories(ctx));
+}
+
+export async function newCategory(context) {
+  ctx = context;
+  let options;
+  try {
+    options = await ctx.categoryOptions();
+  } catch (error) {
+    ctx.toast(error.message || ctx.get('common.error'));
+    return;
+  }
+
+  const dlg = ctx.dialog(`<form class="dialog-card">
+    <h2>${ctx.esc(ctx.get('categories.new'))}</h2>
+    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120"></label>
+    <label>${ctx.esc(ctx.get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label>
+    <label>${ctx.esc(ctx.get('categories.parent'))}
+      <select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${options}</select>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.create'))}</button>
+    </div>
+  </form>`);
+
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get('name') || '').trim();
+    const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
+
+    try {
+      await ctx.api('api/categories', ctx.jsonBody({
+        key,
+        name,
+        parentId: form.get('parent') || null,
+        icon: form.get('icon') || null,
+        sortOrder: null
+      }));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderCategories(ctx);
+    } catch (error) {
+      ctx.toast(error.message || ctx.get('common.error'));
+    }
+  };
+
+  dlg.showModal();
 }
 
 export async function renderCategories(context) {
@@ -98,7 +148,7 @@ function openEdit(node, all) {
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(node.name)}"></label>
     <label>${ctx.esc(ctx.get('categories.icon'))}<input name="icon" maxlength="8" value="${ctx.esc(node.icon || '')}"></label>
     <label>${ctx.esc(ctx.get('categories.parent'))}<select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${parentOptions(node, all, node.parentId)}</select></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

@@ -1,28 +1,15 @@
+import { api as sharedApi } from '../core/services.js';
 // Lightweight product/savings enhancer. It deliberately augments the existing purchases workspace
 // instead of owning navigation or financial state. All data is fetched from the canonical backend APIs;
 // unconfirmed OCR/import drafts are already excluded there from product price observations.
 
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const text = (de, en) => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? de : en;
-const spaceId = () => localStorage.getItem('finance.space') || '';
-let lastProductId = null;
-let scanQueued = false;
 let productListBusy = false;
 let analyticsBusy = false;
 let dialogBusy = false;
 
-function withSpace(path) {
-  const [base, query = ''] = String(path).replace(/^\//, '').split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `${base}?${params}`;
-}
-
-async function api(path) {
-  const response = await fetch(`/bff/backend/${withSpace(path)}`);
-  if (!response.ok) throw new Error(`${response.status}`);
-  return response.status === 204 ? null : response.json();
-}
+const api=path=>sharedApi(path);
 
 function money(value, currency = 'EUR') {
   const amount = Number(value || 0);
@@ -46,16 +33,6 @@ function savingsPercent(original, effective) {
   const e = Number(effective);
   if (!(o > 0) || !(e >= 0) || e >= o) return null;
   return ((o - e) / o) * 100;
-}
-
-function latestResourceProductId() {
-  const entries = performance.getEntriesByType?.('resource') || [];
-  const pattern = /\/api\/products\/([0-9a-f-]{36})(?:\?|$)/i;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const match = String(entries[i].name || '').match(pattern);
-    if (match) return match[1];
-  }
-  return null;
 }
 
 async function decorateProductRows(panel) {
@@ -110,7 +87,7 @@ async function decorateProductDialog(dialog) {
   if (dialogBusy || dialog.dataset.paPriceInsightsMounted === 'true') return;
   const root = dialog.querySelector('.pa-product-detail');
   if (!root) return;
-  const id = lastProductId || latestResourceProductId();
+  const id = dialog.dataset.productId;
   if (!id) return;
   dialogBusy = true;
   try {
@@ -158,36 +135,12 @@ async function decorateAnalytics(panel) {
   finally { analyticsBusy = false; }
 }
 
-function scan() {
-  scanQueued = false;
+export async function refreshPurchasePriceInsights(detail = {}) {
   ensureStyle();
   const panel = document.querySelector('.purchase-advanced-panel:not([hidden])');
-  const tab = document.querySelector('[data-pa-tab].active')?.dataset.paTab;
-  if (panel && tab === 'products') void decorateProductRows(panel);
-  if (panel && tab === 'analytics') void decorateAnalytics(panel);
-  document.querySelectorAll('dialog.pa-dialog').forEach(dialog => {
-    if (dialog.querySelector('.pa-product-detail')) void decorateProductDialog(dialog);
-  });
+  const tab = detail.tab || document.querySelector('[data-pa-tab].active')?.dataset.paTab;
+  if (panel && tab === 'products') await decorateProductRows(panel);
+  if (panel && tab === 'analytics') await decorateAnalytics(panel);
+  const dialog = detail.dialog;
+  if (dialog?.querySelector('.pa-product-detail')) await decorateProductDialog(dialog);
 }
-
-function scheduleScan() {
-  if (scanQueued) return;
-  scanQueued = true;
-  queueMicrotask(scan);
-}
-
-document.addEventListener('click', event => {
-  const product = event.target.closest?.('[data-product-id]');
-  if (product?.dataset.productId) lastProductId = product.dataset.productId;
-  scheduleScan();
-}, true);
-
-function install() {
-  if (!document.body) return;
-  const observer = new MutationObserver(scheduleScan);
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
-  scheduleScan();
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-else install();

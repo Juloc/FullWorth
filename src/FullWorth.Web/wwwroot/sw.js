@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v76';
+const VERSION = 'v85';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -15,8 +15,24 @@ const APP_SHELL = [
   '/design-depth.css',
   '/dialogs.css',
   '/app.js',
+  '/core/api.js',
+  '/core/state.js',
+  '/core/router.js',
+  '/core/feature-registry.js',
+  '/core/i18n.js',
+  '/core/services.js',
+  '/ui/toast.js',
+  '/ui/global-search.js',
+  '/ui/buttons.js',
+  '/ui/confirm.js',
+  '/ui/dialog.js',
   '/ui/ux-kit.js',
+  '/features/budgets.js',
   '/features/contracts.js',
+  '/features/tax.js',
+  '/features/tax-review-extra.js',
+  '/features/tax.css',
+  '/features/tax-review-extra.css',
   '/features/analytics.js',
   '/features/data-completeness.js',
   '/features/transactions.js',
@@ -44,13 +60,11 @@ const APP_SHELL = [
   '/features/receipt-imports.js',
   '/features/receipt-import-batch-details.js',
   '/features/receipt-imports.css',
-  '/features/receipt-scan-local-builder.js',
-  '/features/receipt-scan-local-builder.css',
-  '/features/receipt-scan-ai.js',
-  '/features/receipt-scan-ai.css',
+  '/features/receipt-scan-set.js',
+  '/features/receipt-scan-set.css',
   '/features/purchase-articles-workspace.js',
   '/features/purchase-articles-workspace.css',
-  '/features/purchase-articles-advanced-installer.js',
+  '/features/purchase-articles-advanced.js',
   '/features/purchase-articles-advanced-actions.js',
   '/features/purchase-discount-actions.js',
   '/features/purchase-price-insights.js',
@@ -61,7 +75,6 @@ const APP_SHELL = [
   '/features/purchases-gpt-test.js',
   '/features/purchases-gpt-test.css',
   '/features/coach-shell.js',
-  '/features/transaction-review-controls.js',
   '/features/coach.css',
   '/ui/accessibility-release.js',
   '/ui/motion.js',

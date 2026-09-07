@@ -1,12 +1,15 @@
 import { money, setMoneyLocale } from '../ui/money.js';
 import { isPrivate, onPrivacyChange } from '../ui/privacy.js';
+import { api as sharedApi } from '../core/services.js';
+import { state } from '../core/state.js';
+import { createDialog } from '../ui/dialog.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[char]));
 const lang = () => document.documentElement.lang?.startsWith('en') ? 'en' : 'de';
 const text = (de, en) => lang() === 'en' ? en : de;
-const spaceId = () => localStorage.getItem('finance.space') || '';
+const spaceId = () => state.space?.id || localStorage.getItem('finance.space') || '';
 const dateText = value => value ? new Intl.DateTimeFormat(lang() === 'en' ? 'en-US' : 'de-DE').format(new Date(`${String(value).slice(0, 10)}T12:00:00`)) : '—';
 const amount = (value, currency) => {
   if (isPrivate()) return '••••••';
@@ -15,22 +18,7 @@ const amount = (value, currency) => {
   return money(Number(value), currency || 'EUR');
 };
 
-function withSpace(path) {
-  const [base, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  if (spaceId() && !params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `/bff/backend/${base.replace(/^\//, '')}${params.toString() ? `?${params}` : ''}`;
-}
-async function api(path, options) {
-  const response = await fetch(withSpace(path), options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try { const body = await response.json(); message = body.error || body.title || body.message || message; } catch {}
-    throw new Error(message);
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
+const api=(path,options)=>sharedApi(path,options);
 function toast(message) {
   const el = $('#toast'); if (!el) return;
   el.textContent = message; el.classList.add('show');
@@ -46,7 +34,6 @@ function ensureCss() {
 let lastPortfolioId = null;
 let portfolioCache = null;
 let overviewCache = new Map();
-let enhanceTimer = null;
 let securityDialogState = null;
 
 // Register before loading the existing portfolio UI so the selected id is retained for its modal.
@@ -179,9 +166,7 @@ async function openSecurityDetail(portfolioId, securityId) {
     const dividends = securityTrades.filter(item => item.tradeType === 'dividend');
     const avgCost = position.costBasis != null && Number(position.quantity) > 0 ? Number(position.costBasis) / Number(position.quantity) : null;
 
-    const dialog = document.createElement('dialog');
-    dialog.className = 'fp-dialog ip-dialog wealth-security-dialog';
-    dialog.innerHTML = `<div class="fp-dialog-card ip-card"><div class="fp-dialog-head ip-head"><div><h2>${esc(security.name)}</h2><div class="fp-muted">${esc([security.isin,security.ticker,security.assetType,security.currency].filter(Boolean).join(' · '))}</div></div><button type="button" data-security-close aria-label="${esc(text('Schließen','Close'))}">×</button></div>
+    const dialog = createDialog(`<div class="dialog-card fp-dialog-card ip-card"><div class="panel-head fp-dialog-head ip-head"><div><h2>${esc(security.name)}</h2><div class="fp-muted">${esc([security.isin,security.ticker,security.assetType,security.currency].filter(Boolean).join(' · '))}</div></div></div>
       <div class="ip-content">
         <div class="ip-metrics">
           ${metric(text('Marktwert','Market value'), amount(position.marketValue, overview.portfolio.currency))}
@@ -196,16 +181,14 @@ async function openSecurityDetail(portfolioId, securityId) {
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Depot','Portfolio'))}</h3></div><div class="ip-row"><div><strong>${esc(overview.portfolio.name)}</strong><div class="fp-muted">${esc(overview.portfolio.currency)}</div></div><button type="button" class="ghost" data-open-performance>${esc(text('Performance öffnen','Open performance'))}</button></div></section>
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Transaktionen','Transactions'))}</h3><span>${securityTrades.length}</span></div>${tradeRows(securityTrades, overview.portfolio.currency)}</section>
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Dividenden / Ausschüttungen','Dividends / distributions'))}</h3><span>${dividends.length}</span></div>${tradeRows(dividends, overview.portfolio.currency)}</section>
-      </div></div>`;
-    document.body.appendChild(dialog);
+      </div></div>`,{className:'fp-dialog ip-dialog wealth-security-dialog',closeLabel:text('Schließen','Close')});
     securityDialogState = { dialog, portfolioId, securityId };
-    $('[data-security-close]', dialog).onclick = () => dialog.close();
     $('[data-open-performance]', dialog).onclick = () => {
       dialog.close();
       const parent = $$('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
       parent?.querySelector('[data-ip-tab="performance"]')?.click();
     };
-    dialog.addEventListener('close', () => { if (securityDialogState?.dialog === dialog) securityDialogState = null; dialog.remove(); });
+    dialog.addEventListener('close', () => { if (securityDialogState?.dialog === dialog) securityDialogState = null; }, { once:true });
     dialog.showModal();
   } catch (error) { toast(error.message || text('Wertpapier konnte nicht geladen werden.','Could not load security.')); }
 }
@@ -216,9 +199,24 @@ function tradeRows(rows, currency) {
   return `<div class="ip-list">${rows.map(row => `<div class="ip-row"><div><strong>${esc(row.tradeType || '—')}</strong><div class="fp-muted">${esc(dateText(row.tradeDate))}${row.quantity != null ? ` · ${esc(String(row.quantity))}` : ''}</div></div><div class="ip-row-value"><strong>${amount(row.amount, row.currency || currency)}</strong></div></div>`).join('')}</div>`;
 }
 
-function scheduleEnhance() { clearTimeout(enhanceTimer); enhanceTimer = setTimeout(async () => { await enhanceWealthRows(); const dialog = $$('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog')); if (dialog) await enhancePortfolioDialog(dialog); }, 40); }
+export async function refreshInvestmentConsolidation() {
+  ensureCss();
+  await enhanceWealthRows();
+  const dialog = $('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
+  if (dialog) await enhancePortfolioDialog(dialog);
+}
 
-new MutationObserver(scheduleEnhance).observe(document.body, { childList:true, subtree:true });
-document.addEventListener('fullworth-space-changed', () => { portfolioCache = null; overviewCache.clear(); scheduleEnhance(); });
-onPrivacyChange(() => { if (securityDialogState?.dialog?.open) { const id = securityDialogState.securityId; const portfolio = securityDialogState.portfolioId; securityDialogState.dialog.close(); void openSecurityDetail(portfolio, id); } });
-scheduleEnhance();
+document.addEventListener('fullworth-space-changed', () => {
+  portfolioCache = null;
+  overviewCache.clear();
+  void refreshInvestmentConsolidation();
+});
+document.addEventListener('fullworth:investment-dialog-opened', () => void refreshInvestmentConsolidation());
+onPrivacyChange(() => {
+  if (securityDialogState?.dialog?.open) {
+    const id = securityDialogState.securityId;
+    const portfolio = securityDialogState.portfolioId;
+    securityDialogState.dialog.close();
+    void openSecurityDetail(portfolio, id);
+  }
+});

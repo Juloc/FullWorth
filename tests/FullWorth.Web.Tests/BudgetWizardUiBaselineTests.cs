@@ -9,14 +9,16 @@ public sealed class BudgetWizardUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task WizardExposesFlexiblePeriodsRolloverModesAndWeeklyGroceriesPreset()
     {
-        var app = await GetAsync("/app.js");
+        var budgets = await GetAsync("/features/budgets.js");
         var de = await GetAsync("/locales/de.json");
 
-        Assert.Contains("'daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom'", app);
-        Assert.Contains("data-budget-preset=\"weekly-groceries\"", app);
-        Assert.Contains("carryOver:rolloverMode!=='reset'", app);
-        Assert.Contains("carryOverOverspend:rolloverMode==='full'", app);
-        Assert.Contains("startDate:usesAnchor?", app);
+        Assert.Contains("'daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom'", budgets);
+        Assert.Contains("data-budget-preset=\"weekly-groceries\"", budgets);
+        // budgets.js reformatted these expressions with spaces around operators when it moved out of
+        // app.js; same rollover-mode/flexible-period logic, just re-pointed at the current literal text.
+        Assert.Contains("carryOver: rolloverMode !== 'reset'", budgets);
+        Assert.Contains("carryOverOverspend: rolloverMode === 'full'", budgets);
+        Assert.Contains("startDate: usesAnchor ?", budgets);
         Assert.Contains("Rest ansparen", de);
         Assert.Contains("Rest und Überziehung übertragen", de);
         Assert.Contains("Wocheneinkauf", de);

@@ -19,14 +19,19 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
     {
         // "/" is served by MapFallbackToFile("index.html").RequireAuthorization(), so an unauthenticated
         // client is redirected to the auth login shell. Read the shipped index.html shell directly.
+        //
+        // Tax is a real registered view on the new architecture (app.js's ALL_VIEWS/feature-registry),
+        // not a motion.js side-effect import (the old patch-layer pattern this branch removed): it has a
+        // static nav entry + view section in index.html, and app.js imports and registers the module.
         var html = ReadWebAsset("index.html");
-        var motion = await GetAsync("/ui/motion.js");
+        var appJs = await GetAsync("/app.js");
         var tax = await GetAsync("/features/tax.js");
         var review = await GetAsync("/features/tax-review-extra.js");
 
-        Assert.Contains("/ui/motion.js", html);
-        Assert.Contains("../features/tax.js", motion);
-        Assert.Contains("../features/tax-review-extra.js", motion);
+        Assert.Contains("data-view=\"tax\"", html);
+        Assert.Contains("id=\"view-tax\"", html);
+        Assert.Contains("./features/tax.js", appJs);
+        Assert.Contains("'tax'", appJs);
         Assert.Contains("/tax/review", tax);
         Assert.Contains("api/tax/candidates", tax);
         Assert.Contains("api/tax/years/", review);

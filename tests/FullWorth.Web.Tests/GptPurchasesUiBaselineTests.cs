@@ -16,7 +16,7 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
         var normal = Read("purchases-gpt-normal.js");
         var scanSet = Read("receipt-scan-set.js");
 
-        Assert.Contains("import { tryGptReceiptScan } from './purchases-gpt-normal.js'", purchases);
+        Assert.Contains("import { initializePurchaseEnhancements, tryGptReceiptScan } from './purchases-gpt-normal.js'", purchases);
         Assert.Contains("await tryGptReceiptScan(ctx, file)", purchases);
         Assert.Contains("import { addReceiptScanFiles } from './receipt-scan-set.js'", normal);
         Assert.Contains("return addReceiptScanFiles(ctx, files).then", normal);

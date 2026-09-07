@@ -1,33 +1,10 @@
+import { api as sharedApi, apiClient } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
 // Detail explorer for bulk receipt import batches. The core importer owns polling and batch actions;
 // this module only enriches rendered cards and loads details after an explicit user action.
 
-let installed = false;
-let scheduled = false;
-
-install();
-
-function install() {
-  if (installed) return;
-  installed = true;
-
-  const begin = () => {
-    if (!document.body) return;
-    const observer = new MutationObserver(scheduleDecorate);
-    observer.observe(document.body, { childList: true, subtree: true });
-    decorate();
-  };
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin, { once: true });
-  else begin();
-}
-
-function scheduleDecorate() {
-  if (scheduled) return;
-  scheduled = true;
-  queueMicrotask(() => {
-    scheduled = false;
-    decorate();
-  });
+export function refreshReceiptImportBatchDetails() {
+  decorate();
 }
 
 function decorate() {
@@ -68,7 +45,8 @@ async function openDetails(card, button) {
     const detail = await api(`api/purchases/receipt-imports/batches/${encodeURIComponent(id)}`);
     showDetailDialog(detail);
   } catch (error) {
-    alert(error?.message || t('Details konnten nicht geladen werden.', 'Could not load details.'));
+    const toast=document.getElementById('toast');
+    if(toast){toast.textContent=error?.message || t('Details konnten nicht geladen werden.','Could not load details.');toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3200);}
   } finally {
     button.disabled = false;
   }
@@ -77,17 +55,13 @@ async function openDetails(card, button) {
 function showDetailDialog(batch) {
   document.querySelector('dialog.receipt-import-batch-dialog')?.close();
 
-  const dlg = document.createElement('dialog');
-  dlg.className = 'receipt-import-batch-dialog';
-  dlg.innerHTML = `<div class="receipt-import-batch-dialog-shell">
+  const dlg = createDialog(`<div class="dialog-card receipt-import-batch-dialog-shell">
     <div class="panel-head receipt-import-batch-dialog-head">
       <div><h2>${esc(t('Importdetails', 'Import details'))}</h2><div class="row-sub">${esc(batchSubtitle(batch))}</div></div>
       <button type="button" class="icon-button" data-close aria-label="${esc(t('Schließen', 'Close'))}">×</button>
     </div>
     <div class="receipt-import-batch-dialog-body" data-import-batch-detail-panel></div>
-  </div>`;
-  document.body.appendChild(dlg);
-  dlg.addEventListener('close', () => dlg.remove(), { once: true });
+  </div>`, { className:'receipt-import-batch-dialog', closeLabel:t('Schließen','Close') });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-import-batch-detail-panel]').replaceWith(renderPanel(batch));
   dlg.showModal();
@@ -153,28 +127,10 @@ function batchSubtitle(batch) {
 }
 
 function receiptUrl(purchaseId) {
-  const id = spaceId();
-  const query = new URLSearchParams({ fullWorthSpaceId: id || '' });
-  return `/bff/backend/api/purchases/${encodeURIComponent(purchaseId)}/receipt?${query}`;
+  return apiClient.backendUrl(`api/purchases/${encodeURIComponent(purchaseId)}/receipt`);
 }
 
-async function api(path) {
-  const id = spaceId();
-  if (!id) throw new Error(t('Kein FullWorth Space ausgewählt.', 'No FullWorth Space selected.'));
-  const [base, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', id);
-  const response = await fetch(`/bff/backend/${base.replace(/^\//, '')}?${params}`);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try {
-      const body = await response.json();
-      message = body.error || body.message || body.title || message;
-    } catch {}
-    throw new Error(message);
-  }
-  return response.status === 204 ? null : response.json();
-}
+const api=path=>sharedApi(path);
 
 function sourceLabel(source) {
   if (source === 'paperless') return 'Paperless-ngx';
@@ -205,6 +161,5 @@ function formatDate(value) {
   }
 }
 
-function spaceId() { return localStorage.getItem('finance.space'); }
 function t(de, en) { return document.documentElement.lang?.toLowerCase().startsWith('en') ? en : de; }
 function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
