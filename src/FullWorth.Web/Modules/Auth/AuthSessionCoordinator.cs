@@ -52,7 +52,28 @@ public sealed class AuthSessionCoordinator(
         if (user.IsDisabled || await users.IsLockedOutAsync(user))
             return false;
 
-        return await SignInUserAsync(user, context, ct);
+        var securityStamp = await users.GetSecurityStampAsync(user);
+        var session = await sessions.CreateSessionAsync(
+            user.Id,
+            securityStamp,
+            context.Request.Headers.UserAgent.ToString(),
+            context.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        try
+        {
+            await signInManager.SignInWithClaimsAsync(
+                user,
+                isPersistent: true,
+                [SessionClaims.CreateSessionIdClaim(session.Id)]);
+        }
+        catch
+        {
+            await sessions.RevokeSessionAsync(user.Id, session.Id, ct);
+            throw;
+        }
+
+        return true;
     }
 
     /// <summary>
