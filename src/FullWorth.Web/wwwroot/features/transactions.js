@@ -5,6 +5,7 @@
 
 import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
+import { apiClient } from '../core/services.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -587,7 +588,7 @@ async function openDetail(listItem) {
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
     ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
-    ${receiptPurchase ? `<a class="row settings-link" href="/bff/backend/api/purchases/${receiptPurchase.id}/receipt?fullWorthSpaceId=${encodeURIComponent(spaceId())}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
+    ${receiptPurchase ? `<a class="row settings-link" href="${ctx.esc(apiClient.backendUrl(`api/purchases/${receiptPurchase.id}/receipt`))}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
     <div class="dialog-actions">${t.isManual ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('transactions.delete'))}</button>` : ''}<button type="button" class="ghost" data-coach>${ctx.esc(deLabel('Coach fragen','Ask Coach'))}</button><button type="button" class="ghost" data-split>${ctx.esc(ctx.get('transactions.split'))}</button><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
@@ -878,7 +879,3 @@ async function openRefundPicker(t) {
   dlg.showModal();
 }
 
-function spaceId() {
-  // The receipt link needs the space param; read it from the persisted selection the app stores.
-  return localStorage.getItem('finance.space') || '';
-}
