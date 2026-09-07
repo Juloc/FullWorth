@@ -1,4 +1,4 @@
-import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
+import { openRealEstateDetail } from './wealth-real-estate.js';
 import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
@@ -202,7 +202,6 @@ function paintNetWorth() {
   renderAssets(nw.assets);
   renderLiabilities(nw.liabilities);
   renderInvestments(nw.portfolios, nw.overview);
-  void refreshWealthExtensions();
 
   // Loans are owned by features/loans.js. Re-bind its "add" button (our rebuilt markup replaced the
   // static one) and re-render #nw-loans so the list survives internal refreshes, not just view opens.
