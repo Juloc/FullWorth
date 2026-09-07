@@ -155,7 +155,7 @@ function shellHtml(win) {
     <div class="fw-cycle" role="tablist" aria-label="${esc(t('Zeitraum', 'Cycle'))}">${cycleBtns}</div>
     <div class="fw-window">
       <button type="button" data-nav="prev" aria-label="${esc(t('Vorheriger Zeitraum', 'Previous window'))}">‹</button>
-      <span class="fw-window-label" aria-live="polite">${esc(win.label)}</span>
+      <span class="fw-window-label" aria-live="polite">${esc(win.activeLabel || win.label)}</span>
       <button type="button" data-nav="next"${nextDisabled} aria-label="${esc(t('Nächster Zeitraum', 'Next window'))}">›</button>
     </div>
   </div>`;
@@ -464,7 +464,9 @@ function fillSpending(el, o, oPrev) {
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
-  const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
+  // Trend = the active bucket vs the previous bucket (month-over-month), not window-over-window — with
+  // one-bucket stepping the trailing windows overlap by all but one bucket, so a window delta is ~0.
+  const trend = pct(Math.abs(Number(rows[rows.length - 1]?.expenses) || 0), Math.abs(Number(rows[rows.length - 2]?.expenses) || 0));
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
     `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(o?.expenses || 0), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}${trendBadge(trend, false)}</div>`;
   bindSpendingScrubber(el, rows, cur);

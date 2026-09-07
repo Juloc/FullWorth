@@ -138,8 +138,9 @@ export function trendBadge(pct, goodWhenUp = false) {
   return `<span class="fw-trend ${good ? 'fw-trend-good' : 'fw-trend-bad'}">${up ? '▲' : '▼'}&nbsp;${Math.abs(Math.round(p))}%</span>`;
 }
 
-// Period cycle windows (UX rework §6). Woche→last 12 weeks, Monat→12 months, Quartal→8 quarters,
-// Jahr→5 years, shifted by `offset` whole windows (prev/next navigation). Returns {from,to,granularity,label}.
+// Period cycle windows (UX rework §6). The window is the N-bucket history the chart draws (Woche→12 weeks,
+// Monat→12 months, Quartal→8 quarters, Jahr→5 years) and always ENDS at the active bucket. `offset` moves
+// the active bucket — and therefore the whole trailing window — by ONE bucket (prev/next = one month/…).
 export const CYCLES = ['week', 'month', 'quarter', 'year'];
 export function cycleWindow(cycle, offset = 0, lang = 'de') {
   const de = lang !== 'en';
@@ -156,10 +157,10 @@ export function cycleWindow(cycle, offset = 0, lang = 'de') {
   // then DERIVE `end` from it — shifting the last-day-of-month `end` directly would overflow when the
   // source day (e.g. Feb 29) doesn't exist in the target month, drifting `to` by a day at leap boundaries.
   if (offset) {
-    if (cycle === 'week') start.setDate(start.getDate() + offset * n * 7);
-    else if (cycle === 'quarter') start.setMonth(start.getMonth() + offset * n * 3);
-    else if (cycle === 'year') start.setFullYear(start.getFullYear() + offset * n);
-    else start.setMonth(start.getMonth() + offset * n);
+    if (cycle === 'week') start.setDate(start.getDate() + offset * 7);
+    else if (cycle === 'quarter') start.setMonth(start.getMonth() + offset * 3);
+    else if (cycle === 'year') start.setFullYear(start.getFullYear() + offset);
+    else start.setMonth(start.getMonth() + offset);
     end.setTime(start.getTime());
     if (cycle === 'week') end.setDate(end.getDate() + n * 7 - 1);
     else if (cycle === 'quarter') end.setMonth(end.getMonth() + n * 3, 0);
