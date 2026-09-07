@@ -1,12 +1,13 @@
 #!/usr/bin/env sh
 set -eu
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: ./scripts/setup-env.sh fullworth.example.com" >&2
+if [ "$#" -ne 2 ]; then
+  echo "Usage: sh scripts/setup-env.sh fullworth.example.com admin@example.com" >&2
   exit 1
 fi
 
 domain="$1"
+admin_email="$2"
 case "$domain" in
   http://*|https://*|*/*|*" "*)
     echo "Use only the hostname, e.g. fullworth.example.com" >&2
@@ -45,9 +46,16 @@ replace_value FULLWORTH_INGEST_KEY "$(openssl rand -hex 32)"
 replace_value FULLWORTH_BANKING_API_KEY "$(openssl rand -hex 32)"
 replace_value FULLWORTH_DATA_ENCRYPTION_KEY "$(openssl rand -base64 32 | tr -d '\n')"
 
+admin_password="$(openssl rand -hex 18)"
+printf '\nFULLWORTH_BOOTSTRAP_EMAIL=%s\n' "$admin_email" >> .env
+printf 'FULLWORTH_BOOTSTRAP_PASSWORD=%s\n' "$admin_password" >> .env
+
 # Enable the isolated Codex bridge securely. Authentication with Codex/ChatGPT is still optional
 # and is completed by each user from the FullWorth first-login setup or Settings.
 printf '\nFULLWORTH_CODEX_BRIDGE_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
 
 echo "Created .env for $domain"
+echo "Initial admin: $admin_email"
+echo "Initial password: $admin_password"
+echo "Remove FULLWORTH_BOOTSTRAP_EMAIL/PASSWORD from .env after the first successful sign-in."
 echo "Next: docker compose pull && docker compose up -d"
