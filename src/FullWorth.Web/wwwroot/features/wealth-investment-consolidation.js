@@ -202,7 +202,7 @@ function tradeRows(rows, currency) {
 export async function refreshInvestmentConsolidation() {
   ensureCss();
   await enhanceWealthRows();
-  const dialog = $('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
+  const dialog = $$('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
   if (dialog) await enhancePortfolioDialog(dialog);
 }
 
