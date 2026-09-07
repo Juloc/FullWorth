@@ -670,12 +670,13 @@ function starterSuggestions(){
   ];
   return local;
 }
-function renderStarters(visible = true) {
+function renderStarters(visible = null) {
+  const shouldShow = visible ?? !messageRoots().some(root => root.querySelector('.coach-message'));
   const starters=starterSuggestions().slice(0, 3);
   all('#coach-starters,#coach-dock-starters').forEach(root => {
     root.innerHTML = '';
-    root.hidden = !visible;
-    if (!visible) return;
+    root.hidden = !shouldShow;
+    if (!shouldShow) return;
 
     const head = document.createElement('div');
     head.className = 'coach-starter-head';
