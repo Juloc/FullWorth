@@ -1,7 +1,7 @@
 # FullWorth AI Autopilot — Deployable Step-by-Step Rollout
 
-Completed: **Deploy 0 — Baseline and guardrails**.  
-Current implementation: **Deploy 1 — FinancialContext foundation**.
+Completed: **Deploy 0 — Baseline and guardrails** and **Deploy 1 — FinancialContext foundation**.  
+Current implementation: **Deploy 2 — FinancialSignal schema and API**.
 
 This plan turns the AI Autopilot implementation into small releases that can be deployed between every major step.
 

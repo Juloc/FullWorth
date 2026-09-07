@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Intelligence.Signals;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -49,6 +50,8 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<OfficialProductGtin> OfficialProductGtins => Set<OfficialProductGtin>();
     public DbSet<OfficialProductAlias> OfficialProductAliases => Set<OfficialProductAlias>();
     public DbSet<IntelligenceDigest> IntelligenceDigests => Set<IntelligenceDigest>();
+    public DbSet<FinancialSignal> FinancialSignals => Set<FinancialSignal>();
+    public DbSet<FinancialSignalState> FinancialSignalStates => Set<FinancialSignalState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -62,6 +65,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
         KnowledgePackModelConfiguration.Configure(modelBuilder);
         OperationalRegistryModelConfiguration.Configure(modelBuilder);
         IntelligenceDigestModelConfiguration.Configure(modelBuilder);
+        FinancialSignalModelConfiguration.Configure(modelBuilder);
 
         // The fast unit-style Intelligence tests run this model on in-memory SQLite, which cannot
         // order or compare DateTimeOffset columns (many queries filter/order by StartedAt/CreatedAt).

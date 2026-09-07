@@ -10,9 +10,9 @@ Main finance migrations:
 
 Intelligence migrations:
 
-- `20260906181500_CloudOperationalRegistries`
+- `20260907210000_FinancialSignals`
 
-Deploy 0 adds **no database migration**.
+Deploy 0 and Deploy 1 add **no database migration**. Deploy 2 adds only the additive Intelligence tables `FinancialSignals` and `FinancialSignalStates`.
 
 ## Before merge
 
@@ -109,3 +109,20 @@ Rollback is therefore:
 3. verify login and one finance read.
 
 No database downgrade is required.
+
+
+## Deploy 2 smoke additions
+
+- [ ] startup applies `20260907210000_FinancialSignals`
+- [ ] existing finance migration history is unchanged
+- [ ] `GET /api/insights` returns an empty array for a normal user when no detector has produced signals
+- [ ] a non-member receives 404 for another FullWorth Space
+- [ ] dismiss/snooze/read affect only the authenticated user's signal state
+- [ ] no signal is generated merely by starting the application
+- [ ] AI credentials are not required
+
+### Deploy 2 rollback
+
+The new Intelligence tables are additive and contain no finance source-of-truth rows.
+
+Rollback the application image without downgrading the database. The unused signal tables may remain until a later controlled cleanup.
