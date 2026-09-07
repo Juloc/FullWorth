@@ -30,7 +30,7 @@ public sealed class CoachContextBuilder(
         DateOnly? requestedFrom,
         DateOnly? requestedTo,
         CancellationToken ct) =>
-        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: false, ct);
+        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: false, ct: ct);
 
     public Task<CoachContext> BuildForFinancialContextAsync(
         Guid userId,
@@ -38,7 +38,7 @@ public sealed class CoachContextBuilder(
         DateOnly? requestedFrom,
         DateOnly? requestedTo,
         CancellationToken ct) =>
-        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: true, ct);
+        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: true, ct: ct);
 
     private async Task<CoachContext> BuildCoreAsync(
         Guid userId,
