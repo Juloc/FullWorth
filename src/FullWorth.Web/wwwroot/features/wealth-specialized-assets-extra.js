@@ -1,3 +1,5 @@
+import { api as sharedApi, jsonBody } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
 let scheduled = null;
@@ -43,23 +45,11 @@ function fmtDate(value) { if (!value) return '—'; try { return new Intl.DateTi
 function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function num(value) { return value === '' || value == null ? null : Number(value); }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
-function json(method, body) { return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
+const json=(method,body)=>jsonBody(body,method);
 function opts(values, selected) { return values.map(value => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(value)}</option>`).join(''); }
 
-function withSpace(path) {
-  const [base, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  const space = localStorage.getItem('finance.space');
-  if (space && !params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', space);
-  return `/bff/backend/${base.replace(/^\//, '')}${params.toString() ? `?${params}` : ''}`;
-}
-async function api(path, options) {
-  const response = await fetch(withSpace(path), options);
-  if (!response.ok) { let message = `${response.status}`; try { const body = await response.json(); message = body.error || body.message || body.title || message; } catch {} throw new Error(message); }
-  if (response.status === 204) return null;
-  return response.json();
-}
-function dialog(html) { const dlg = document.createElement('dialog'); dlg.innerHTML = html; document.body.appendChild(dlg); dlg.addEventListener('close', () => dlg.remove()); return dlg; }
+const api=(path,options)=>sharedApi(path,options);
+function dialog(html) { return createDialog(html); }
 function orderedAssets(assets) { return [...assets.filter(x => x.kind === 'real_estate'), ...assets.filter(x => x.kind === 'vehicle'), ...assets.filter(x => !['real_estate', 'vehicle'].includes(x.kind))]; }
 
 function scheduleEnhance() { clearTimeout(scheduled); scheduled = setTimeout(enhanceRows, 35); }
