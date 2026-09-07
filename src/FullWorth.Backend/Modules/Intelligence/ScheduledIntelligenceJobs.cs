@@ -189,8 +189,8 @@ public sealed class ScheduledIntelligenceJobProcessor(
     AiCostEstimator costEstimator,
     ScheduledDomainIntelligenceAdapters domainAdapters,
     IntelligenceDigestService digests,
-    FinancialSignalJobProcessor signalProcessor,
-    ILogger<ScheduledIntelligenceJobProcessor> logger)
+    ILogger<ScheduledIntelligenceJobProcessor> logger,
+    FinancialSignalJobProcessor? signalProcessor = null)
 {
     private const int DailyCandidateLimitPerSpace = 30;
     private const int DeepCandidateLimitPerSpace = 60;
@@ -234,6 +234,11 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
         {
             if (FinancialSignalJobTypes.IsSupported(job.Type))
             {
+                if (signalProcessor is null)
+                {
+                    await FailAsync(job, "signal_processor_missing", ct);
+                    return;
+                }
                 await signalProcessor.ProcessAsync(job, ct);
                 return;
             }
