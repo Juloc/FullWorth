@@ -820,144 +820,194 @@ function openPaymentsDialog(contract, payments) {
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.showModal();
 }
+
 async function openDetail(id) {
   let contract, activity, cancellation, cloudBenchmark, mergedSources;
   try {
     [contract, activity, cancellation, cloudBenchmark, mergedSources] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
-      ctx.api(`api/contract-parity/${id}/cancellation`),
+      ctx.api(`api/contract-parity/${id}/cancellation`).catch(() => null),
       ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
       ctx.api(`api/contracts/${id}/merged-sources`).catch(() => [])
     ]);
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+    return;
+  }
+
+  cancellation ||= {};
   contract.cancellation = cancellation;
   const lifecycle = lifecycleStatus(contract);
-
-  const valueMode = ctx.get('contracts.mode_' + (activity?.valueMode || 'manual'));
-  const next = activity?.nextExpected ? ctx.date(activity.nextExpected) : '—';
-  const lastPay = activity?.lastPayment ? ctx.date(activity.lastPayment) : '—';
   const payments = activity?.payments || [];
-  const trend = sparkline(payments);
-  const paymentRows = payments.length
-    ? payments.map(p => `<div class="preview-row"><span class="preview-label">${ctx.esc(ctx.date(p.date))}</span><span class="preview-amt">${ctx.money(p.amount, p.currency)}</span></div>`).join('')
+  const previewPayments = payments.slice(0, 4);
+  const cycle = ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'));
+  const category = categoryLabel(contract) || ctx.get('contracts.kind_' + (contract.kind || 'contract'));
+  const account = accountLabel(contract) || '—';
+  const next = activity?.nextExpected || contract.nextDueDate;
+  const annualized = activity?.annualizedAmount ?? contract.annualizedAmount ?? 0;
+  const statusMarker = lifecycle === 'archived'
+    ? ctx.get('contracts.archived')
+    : lifecycle === 'cancelled'
+      ? ctx.get('contracts.status_cancelled')
+      : lifecycle === 'planned'
+        ? ctx.get('contracts.status_planned')
+        : '';
+
+  const paymentRows = previewPayments.length
+    ? previewPayments.map((payment, index) => `<div class="contract-payment-row">
+        <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${index === 0 ? ctx.esc(t('Letzte Zahlung', 'Last payment')) : ctx.esc(category)}</span></div>
+        <strong>${ctx.money(payment.amount, payment.currency)}</strong>
+      </div>`).join('')
     : `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`;
 
-  const meta = [
-    [ctx.get('contracts.mode'), valueMode],
-    [ctx.get('contracts.expected'), ctx.money(activity?.expectedAmount ?? contract.amount, contract.currency)],
-    [ctx.get('contracts.annualized'), ctx.money(activity?.annualizedAmount ?? 0, contract.currency)],
-    [ctx.get('contracts.nextExpected'), next],
-    [ctx.get('contracts.lastPayment'), lastPay],
-    [ctx.get('contracts.billingCycle'), ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'))],
-    [ctx.get('contracts.kind'), ctx.get('contracts.kind_' + (contract.kind || 'contract'))],
-    [ctx.get('contracts.startDate'), contract.startDate ? ctx.date(contract.startDate) : '—'],
-    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—'],
-    [ctx.get('contracts.status'), lifecycle === 'archived' ? ctx.get('contracts.archived') : cancellationStatusLabel(cancellation?.cancellationStatus)],
-    [ctx.get('contracts.minimumTermEnd'), cancellation?.minimumTermEnd ? ctx.date(cancellation.minimumTermEnd) : '—'],
-    [ctx.get('contracts.noticePeriod'), periodLabel(cancellation?.noticePeriodValue, cancellation?.noticePeriodUnit)],
-    [ctx.get('contracts.cancellationDeadline'), cancellation?.cancellationDeadline ? ctx.date(cancellation.cancellationDeadline) : '—'],
-    [ctx.get('contracts.renewalPeriod'), periodLabel(cancellation?.renewalPeriodValue, cancellation?.renewalPeriodUnit)],
-    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? t('Ja', 'Yes') : t('Nein', 'No')],
-    [ctx.get('contracts.cancelledOn'), cancellation?.cancellationSentAt ? ctx.dateTime(cancellation.cancellationSentAt) : '—'],
-    [ctx.get('contracts.confirmedOn'), cancellation?.cancellationConfirmedAt ? ctx.dateTime(cancellation.cancellationConfirmedAt) : '—'],
-    [ctx.get('contracts.customerNumber'), cancellation?.customerNumber || '—']
-  ].map(([k, v]) => `<div class="detail-item"><span class="detail-k">${ctx.esc(k)}</span><span class="detail-v">${ctx.esc(v)}</span></div>`).join('');
+  const extraData = [
+    contract.startDate ? [ctx.get('contracts.startDate'), ctx.date(contract.startDate)] : null,
+    contract.endDate ? [ctx.get('contracts.endDate'), ctx.date(contract.endDate)] : null,
+    cancellation.minimumTermEnd ? [ctx.get('contracts.minimumTermEnd'), ctx.date(cancellation.minimumTermEnd)] : null,
+    cancellation.cancellationDeadline ? [ctx.get('contracts.cancellationDeadline'), ctx.date(cancellation.cancellationDeadline)] : null,
+    cancellation.customerNumber ? [ctx.get('contracts.customerNumber'), cancellation.customerNumber] : null,
+    [t('Kosten pro Jahr', 'Cost per year'), ctx.money(annualized, contract.currency)],
+    [t('Erkennung', 'Detection'), contract.autoDetected ? t('Automatisch', 'Automatic') : t('Manuell', 'Manual')]
+  ].filter(Boolean).map(([label, value]) => `<div class="contract-data-row"><span>${ctx.esc(label)}</span><strong>${ctx.esc(value)}</strong></div>`).join('');
 
-  const benchmarkSection = cloudBenchmark?.available
-    ? (() => {
-        const local = Number(cloudBenchmark.localMonthly);
-        const median = Number(cloudBenchmark.median);
-        const delta = median > 0 ? ((local - median) / median) * 100 : null;
-        const relation = delta == null
-          ? ''
-          : delta > 2
-            ? t(Math.round(delta) + ' % über Median', Math.round(delta) + '% above median')
-            : delta < -2
-              ? t(Math.abs(Math.round(delta)) + ' % unter Median', Math.abs(Math.round(delta)) + '% below median')
-              : t('nahe am Median', 'near median');
-        const scopeLabel = cloudBenchmark.scope === 'provider' && cloudBenchmark.providerName
-          ? t('Gleicher Provider: ', 'Same provider: ') + cloudBenchmark.providerName
-          : t('Ähnliche Verträge', 'Similar contracts');
-        return `<div class="detail-section contract-cloud-detail">
-          <h3>${ctx.esc(t('FullWorth Cloud Vergleich', 'FullWorth Cloud comparison'))}</h3>
-          <div class="row-sub">${ctx.esc(scopeLabel)} · ${cloudBenchmark.distinctInstanceCount} ${ctx.esc(t('Instanzen', 'instances'))}</div>
-          <div class="detail-grid">
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Dein Monatswert', 'Your monthly value'))}</span><span class="detail-v">${ctx.money(local, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Cloud-Median', 'Cloud median'))}</span><span class="detail-v">${ctx.money(median, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Typische Spanne', 'Typical range'))}</span><span class="detail-v">${ctx.money(cloudBenchmark.p25, cloudBenchmark.currency)}–${ctx.money(cloudBenchmark.p75, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Einordnung', 'Comparison'))}</span><span class="detail-v">${ctx.esc(relation || '—')}</span></div>
-          </div>
-          <div class="row-sub">${ctx.esc(t('Beobachtete, aggregierte Community-Werte; kein garantiertes Marktangebot.', 'Observed aggregate community values; not a guaranteed market offer.'))}</div>
-        </div>`;
-      })()
-    : '';
+  let benchmark = '';
+  if (cloudBenchmark?.available) {
+    const median = Number(cloudBenchmark.median) || 0;
+    const local = Number(cloudBenchmark.localMonthly) || Number(contract.monthlyEquivalent) || 0;
+    const delta = median > 0 ? Math.round(((local - median) / median) * 100) : 0;
+    const relation = Math.abs(delta) <= 2
+      ? t('Nahe am Vergleich', 'Near benchmark')
+      : delta > 0
+        ? t(`${delta} % über Vergleich`, `${delta}% above benchmark`)
+        : t(`${Math.abs(delta)} % unter Vergleich`, `${Math.abs(delta)}% below benchmark`);
+    benchmark = `<section class="contract-detail-card">
+      <div class="contract-insight-row"><span>${ctx.esc(t('Kostenvergleich', 'Cost comparison'))}</span><strong>${ctx.esc(relation)}</strong><span aria-hidden="true">›</span></div>
+    </section>`;
+  }
 
-  const mergedSourceRows = (mergedSources || []).map(source => {
-    const account = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
-    return `<div class="preview-row contract-merged-source">
-      <div><strong>${ctx.esc(source.name)}</strong><div class="row-sub">${ctx.esc(account)} · ${ctx.money(source.amount, source.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (source.billingCycle || 'monthly')))}</div></div>
-      <button type="button" class="btn btn-secondary" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button>
-    </div>`;
+  const sources = (mergedSources || []).map(source => {
+    const sourceAccount = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
+    return `<div class="contract-source-row"><div><strong>${ctx.esc(source.name)}</strong><span>${ctx.esc(sourceAccount)}</span></div><button type="button" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button></div>`;
   }).join('');
-  const mergedSourcesSection = `<div class="detail-section">
-    <h3>${ctx.esc(ctx.get('contracts.mergedSources'))}</h3>
-    <div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesHint'))}</div>
-    ${mergedSourceRows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesNone'))}</div>`}
-    <button type="button" class="btn btn-secondary contract-merge-add" data-merge>${ctx.esc(ctx.get('contracts.merge'))}</button>
-  </div>`;
 
-  const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
-  const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
-    <div class="panel-head"><h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    ${contract.providerName ? `<div class="row-sub">${ctx.esc(contract.providerName)}</div>` : ''}
-    <div class="detail-grid">${meta}</div>
-    ${benchmarkSection}
-    ${mergedSourcesSection}
-    ${cancellation?.providerContact ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.providerContact'))}</h3><div class="row-sub">${ctx.esc(cancellation.providerContact)}</div></div>` : ''}
-    ${trend}
-    <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
-    ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
-    <div class="dialog-actions">
-      <button type="button" class="btn btn-secondary" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
-      ${contract.isActive
-        ? `<button type="button" class="btn btn-secondary" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="btn btn-danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
-        : `<button type="button" class="btn btn-primary" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
+  const dlg = ctx.dialog(`<div class="dialog-card contract-detail contract-detail-v2">
+    <div class="contract-detail-topbar">
+      <button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button>
+      <button type="button" data-edit-all aria-label="${ctx.esc(ctx.get('contracts.edit'))}">•••</button>
     </div>
+
+    <div class="contract-detail-hero">
+      <div class="contract-detail-logo">${identityIcon(contract.providerName || contract.name, { logoAssetPath: contract.logoAssetPath, categoryIconKey: categoryIconKey(contract) })}</div>
+      <div class="contract-detail-name">
+        <h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2>
+        <button type="button" data-quick-edit="name" aria-label="${ctx.esc(t('Name bearbeiten', 'Edit name'))}">✎</button>
+      </div>
+      ${contract.providerName && contract.providerName !== contract.name ? `<div class="contract-detail-provider">${ctx.esc(contract.providerName)}</div>` : ''}
+      <div class="contract-detail-price">${ctx.money(activity?.expectedAmount ?? contract.amount, contract.currency)} <small>/ ${ctx.esc(cycle)}</small></div>
+      <div class="contract-detail-due">${next ? `${ctx.esc(t('Nächste Zahlung', 'Next payment'))} ${ctx.esc(ctx.date(next))}` : ctx.esc(t('Keine Fälligkeit hinterlegt', 'No due date set'))}</div>
+    </div>
+
+    <section class="contract-detail-card contract-main-fields">
+      ${editableDetailRow(ctx.get('transactions.amount'), ctx.money(contract.amount, contract.currency), 'amount')}
+      ${editableDetailRow(ctx.get('contracts.billingCycle'), cycle, 'cycle')}
+      ${editableDetailRow(t('Kategorie', 'Category'), category, 'category')}
+      ${editableDetailRow(t('Zahlungskonto', 'Payment account'), account, 'account')}
+      ${editableDetailRow(t('Nächste Fälligkeit', 'Next due date'), next ? ctx.date(next) : '—', 'nextDue')}
+    </section>
+
+    ${benchmark}
+
+    <div class="contract-section-label">${ctx.esc(t('Buchungen', 'Payments'))}</div>
+    <section class="contract-detail-card">
+      <div class="contract-payment-list">${paymentRows}</div>
+      ${payments.length > 4 ? `<button type="button" class="contract-card-link" data-all-payments>${ctx.esc(t(`Alle ${payments.length} Buchungen anzeigen`, `Show all ${payments.length} payments`))}<span>›</span></button>` : ''}
+    </section>
+
+    <div class="contract-section-label">${ctx.esc(t('Vertrag', 'Contract'))}</div>
+    <section class="contract-detail-card contract-actions-card">
+      <button type="button" data-cancellation><span>${ctx.esc(t('Laufzeit & Kündigung', 'Term & cancellation'))}</span><span>›</span></button>
+      ${contract.notes
+        ? `<div class="contract-note"><span>${ctx.esc(ctx.get('contracts.notes'))}</span><p>${ctx.esc(contract.notes)}</p></div>`
+        : `<button type="button" data-edit-all><span>${ctx.esc(t('Notiz hinzufügen', 'Add note'))}</span><span>›</span></button>`}
+      ${sources ? `<details class="contract-sources"><summary>${ctx.esc(t('Zahlungskonten & Historie', 'Payment accounts & history'))} <small>${mergedSources.length}</small></summary>${sources}</details>` : ''}
+      <button type="button" data-merge><span>${ctx.esc(t('Ähnliche Verträge zusammenführen', 'Merge similar contracts'))}</span><span>›</span></button>
+    </section>
+
+    <details class="contract-detail-card contract-more-data">
+      <summary>${ctx.esc(t('Weitere Vertragsdaten', 'More contract details'))}<span>›</span></summary>
+      <div>${extraData}</div>
+    </details>
+
+    <div class="contract-section-label">${ctx.esc(t('Einstellungen', 'Settings'))}</div>
+    <section class="contract-detail-card contract-actions-card">
+      <button type="button" data-edit-all><span>${ctx.esc(t('Alle Daten bearbeiten', 'Edit all details'))}</span><span>›</span></button>
+      <button type="button" data-coach><span>${ctx.esc(t('Coach fragen', 'Ask Coach'))}</span><span>›</span></button>
+      ${contract.isActive
+        ? `<button type="button" class="contract-action-danger" data-archive><span>${ctx.esc(ctx.get('contracts.archive'))}</span><span>›</span></button>`
+        : `<button type="button" data-reactivate><span>${ctx.esc(ctx.get('contracts.reactivate'))}</span><span>›</span></button>`}
+    </section>
   </div>`);
-  const coachAction = document.createElement('button');
-  coachAction.type = 'button'; coachAction.className = 'btn btn-secondary'; coachAction.textContent = t('Coach fragen','Ask Coach');
-  coachAction.addEventListener('click', () => { dlg.close(); askCoachAboutContract(contract, activity); });
-  dlg.querySelector('.dialog-actions')?.prepend(coachAction);
+  dlg.classList.add('contracts-detail-dlg');
+
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
-  dlg.querySelector('[data-merge]')?.addEventListener('click', () => { dlg.close(); openMergeDialog(contract); });
+  dlg.querySelectorAll('[data-quick-edit]').forEach(button => button.addEventListener('click', () => {
+    dlg.close();
+    openQuickEdit(contract, button.dataset.quickEdit);
+  }));
+  dlg.querySelectorAll('[data-edit-all]').forEach(button => button.addEventListener('click', () => {
+    dlg.close();
+    openContractDialog(contract);
+  }));
+  dlg.querySelector('[data-all-payments]')?.addEventListener('click', () => openPaymentsDialog(contract, payments));
+  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => {
+    dlg.close();
+    openCancellationDialog(contract, cancellation);
+  });
+  dlg.querySelector('[data-merge]')?.addEventListener('click', () => {
+    dlg.close();
+    openMergeDialog(contract);
+  });
+  dlg.querySelector('[data-coach]')?.addEventListener('click', () => {
+    dlg.close();
+    askCoachAboutContract(contract, activity);
+  });
   dlg.querySelectorAll('[data-unmerge]').forEach(button => button.addEventListener('click', async () => {
-    const sourceId = button.dataset.unmerge;
     button.disabled = true;
     try {
-      await ctx.api(`api/contract-parity/merge/${id}/${sourceId}`, { method: 'DELETE' });
+      await ctx.api(`api/contract-parity/merge/${id}/${button.dataset.unmerge}`, { method: 'DELETE' });
       dlg.close();
       ctx.toast(ctx.get('contracts.unmergedToast'));
       await renderContracts(ctx);
+      await openDetail(id);
     } catch (err) {
       button.disabled = false;
       ctx.toast(err.message || ctx.get('common.error'));
     }
   }));
-  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => { dlg.close(); openCancellationDialog(contract, cancellation); });
   dlg.querySelector('[data-archive]')?.addEventListener('click', async () => {
     if (!await ctx.confirm(ctx.get('contracts.archiveConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.archive') })) return;
-    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.archivedToast')); await renderContracts(ctx); }
-    catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+    try {
+      await ctx.api(`api/contracts/${id}`, { method: 'DELETE' });
+      dlg.close();
+      ctx.toast(ctx.get('contracts.archivedToast'));
+      await renderContracts(ctx);
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   });
   dlg.querySelector('[data-reactivate]')?.addEventListener('click', async () => {
-    try { await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx); }
-    catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+    try {
+      await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   });
   dlg.showModal();
 }
-
 function mergeCandidateScore(primary, candidate) {
   let score = 0;
   const primaryIdentity = contractIdentityKey(primary);
