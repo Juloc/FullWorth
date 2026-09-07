@@ -4,7 +4,7 @@ Current continuation handoff: `docs/FRONTEND_ARCHITECTURE_HANDOFF.md`
 
 Status: approved architecture cleanup plan  
 Scope: FullWorth.Web frontend  
-Constraint: Accounts UI is frozen until explicit user approval.
+Constraint: Accounts visible UX remains stable; structural migration was explicitly approved on 2026-09-07.
 
 ## Goal
 
@@ -297,31 +297,20 @@ Backend owns:
 - authorization/capabilities
 - financial state transitions
 
-## Phase 10 — Accounts migration — BLOCKED
+## Phase 10 — Accounts structural migration — APPROVED / IN PROGRESS
 
-Accounts are currently being redesigned separately.
+Explicit approval was given on 2026-09-07 to finish the remaining frontend restructuring while preserving the established Accounts UX.
 
-Until explicit approval:
-- do not change Accounts layout
-- do not change Accounts visual design
-- do not move Accounts controls
-- do not alter Accounts navigation behavior
-- do not replace `accounts-ux.js` in a way that changes user-visible behavior
+Completed structural steps:
 
-Allowed before approval:
-- prepare shared API/dialog/button/core infrastructure
-- add architecture tests
-- document the migration
-- avoid introducing new dependencies on the existing workaround layer
+- Accounts UX uses the shared API client instead of a feature-local BFF client.
+- Scoped navigation uses the shared navigation service instead of synthetic button clicks or window globals.
+- The global MutationObserver integration loop was removed.
+- Newly-created manual-account identity is handed off by exact entity id instead of polling for a freshly-created row.
+- Explicit app events trigger account post-render enhancement.
+- Account/group transaction drill-down behavior is preserved.
 
-After explicit approval and after the intended Accounts UX is known:
-- implement the final Accounts view as the real owner
-- move remaining Account logic out of `app.js`
-- remove duplicate account render paths
-- remove `accounts-ux.js`
-- remove its MutationObserver
-- remove synthetic clicks and timing/polling workarounds
-- keep behavior covered by tests
+Further extraction of account renderer/workflow code from `app.js` should be mechanical ownership cleanup only, not another visual redesign.
 
 ## Delivery order
 
@@ -334,7 +323,7 @@ After explicit approval and after the intended Accounts UX is known:
 7. Consolidate purchase/parity/investment patch layers
 8. Split shared and feature CSS
 9. Remove temporary architecture allow-list entries
-10. Accounts migration only after explicit approval
+10. Finish mechanical Accounts ownership extraction without changing visible UX
 
 ## Definition of done
 
@@ -350,4 +339,4 @@ The cleanup is complete when:
 - no timing/polling workaround is required for feature integration
 - no installer/final/parity patch layers remain
 - architecture tests prevent these patterns from returning
-- Accounts has been migrated only after separate explicit approval
+- Accounts structural migration uses shared core services and contains no observer/synthetic-click integration
