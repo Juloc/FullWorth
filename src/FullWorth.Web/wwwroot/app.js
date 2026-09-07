@@ -148,7 +148,7 @@ function bind(){
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
   // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
-  document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
+  document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openGlobalSearch(ctx)}});
 }
 function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());$('#privacy-default').checked=privacyDefault()}
 async function showView(view,opts={}){
