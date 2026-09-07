@@ -21,7 +21,7 @@ let categoryNames = new Map();
 let categoryIcons = new Map();
 let accountNames = new Map();
 // Filter/sort state is URL-backed so the contracts view is restorable and shareable.
-const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'due', order: 'asc' };
+const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'cycle', order: 'asc' };
 
 function loadViewState() {
   const p = new URLSearchParams(location.search);
@@ -30,7 +30,7 @@ function loadViewState() {
   view.account = p.get('accountId') || '';
   view.category = p.get('categoryId') || '';
   view.cycle = p.get('cycle') || '';
-  view.sort = p.get('sort') || 'due';
+  view.sort = p.get('sort') || 'cycle';
   view.order = p.get('order') === 'desc' ? 'desc' : 'asc';
 }
 function syncViewState() {
@@ -40,7 +40,7 @@ function syncViewState() {
   if (view.account) p.set('accountId', view.account);
   if (view.category) p.set('categoryId', view.category);
   if (view.cycle) p.set('cycle', view.cycle);
-  if (view.sort && view.sort !== 'due') p.set('sort', view.sort);
+  if (view.sort && view.sort !== 'cycle') p.set('sort', view.sort);
   if (view.order === 'desc') p.set('order', 'desc');
   const qs = p.toString();
   history.replaceState({ view: 'contracts' }, '', qs ? '/contracts?' + qs : '/contracts');
@@ -122,12 +122,11 @@ function sortIcon(paths) {
 // the same i18n labels the old <select> used, so behaviour is unchanged; only the presentation is new.
 function sortOptions() {
   return [
-    { key: 'due', label: ctx.get('contracts.nextDue'), icon: sortIcon('<path d="M4 5h16v15H4z"/><path d="M4 9h16"/><path d="M8 3v4M16 3v4"/>') },
-    { key: 'monthly', label: t('Monatlich', 'Monthly'), icon: sortIcon('<path d="M20 8a8 8 0 0 0-14-4L3 7"/><path d="M3 3.5V7h3.5"/><path d="M4 16a8 8 0 0 0 14 4l3-3"/><path d="M21 20.5V17h-3.5"/>') },
-    { key: 'annual', label: ctx.get('contracts.annualized'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
+    { key: 'cycle', label: t('Turnus', 'Billing cycle'), icon: sortIcon('<path d="M20 8a8 8 0 0 0-14-4L3 7"/><path d="M3 3.5V7h3.5"/><path d="M4 16a8 8 0 0 0 14 4l3-3"/><path d="M21 20.5V17h-3.5"/>') },
+    { key: 'annual', label: t('Kosten pro Jahr', 'Cost per year'), icon: sortIcon('<path d="M12 7c3.9 0 7 1.3 7 3s-3.1 3-7 3-7-1.3-7-3 3.1-3 7-3Z"/><path d="M5 10v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>') },
     { key: 'account', label: ctx.get('contracts.account'), icon: sortIcon('<path d="M3 10 12 4l9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9"/><path d="M3 20h18"/>') },
+    { key: 'due', label: t('Nächste Fälligkeit', 'Next due date'), icon: sortIcon('<path d="M4 5h16v15H4z"/><path d="M4 9h16"/><path d="M8 3v4M16 3v4"/>') },
     { key: 'category', label: t('Kategorie', 'Category'), icon: sortIcon('<path d="M4 4h7l9 9-7 7-9-9V4Z"/><path d="M8.5 8.5h.01"/>') },
-    { key: 'type', label: t('Art', 'Type'), icon: sortIcon('<path d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z"/>') },
     { key: 'name', label: ctx.get('common.name'), icon: sortIcon('<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M13 6h7M13 11h5M13 16h3"/>') },
   ];
 }
@@ -136,56 +135,63 @@ function sortLabel() { const o = sortOptions().find(x => x.key === view.sort); r
 // Sort bottom-sheet (mirrors the Finanzguru "Sortierung" sheet): one tap per dimension + a direction
 // segment. Selecting a dimension applies it and closes; the ascending/descending toggle applies live.
 function openSortSheet(host) {
-  const rows = sortOptions().map(o => `
-    <button type="button" class="contracts-sortopt${view.sort === o.key ? ' active' : ''}" data-sort-opt="${o.key}" aria-pressed="${view.sort === o.key}">
-      <span class="contracts-sortopt-ic">${o.icon}</span>
-      <span class="contracts-sortopt-label">${esc(o.label)}</span>
+  const rows = sortOptions().map(option => `
+    <button type="button" class="contracts-sortopt${view.sort === option.key ? ' active' : ''}" data-sort-opt="${option.key}" aria-pressed="${view.sort === option.key}">
+      <span class="contracts-sortopt-ic">${option.icon}</span>
+      <span class="contracts-sortopt-label">${esc(option.label)}</span>
       <span class="contracts-sortopt-radio" aria-hidden="true"></span>
     </button>`).join('');
-  const dir = `<div class="contracts-sortdir" data-order-seg role="group" aria-label="${esc(t('Reihenfolge', 'Order'))}">
-      <button type="button" class="${view.order === 'asc' ? 'active' : ''}" data-order-val="asc" aria-pressed="${view.order === 'asc'}">${esc(t('Aufsteigend', 'Ascending'))}</button>
-      <button type="button" class="${view.order === 'desc' ? 'active' : ''}" data-order-val="desc" aria-pressed="${view.order === 'desc'}">${esc(t('Absteigend', 'Descending'))}</button>
-    </div>`;
+
   const dlg = ctx.dialog(`<div class="dialog-card contracts-sortsheet">
     <div class="panel-head"><h2>${esc(t('Sortierung', 'Sort by'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
     <div class="contracts-sortlist">${rows}</div>
-    ${dir}
   </div>`);
   dlg.classList.add('contracts-sortsheet-dlg');
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelectorAll('[data-sort-opt]').forEach(b => b.addEventListener('click', () => {
-    view.sort = b.dataset.sortOpt;
+  dlg.querySelectorAll('[data-sort-opt]').forEach(button => button.addEventListener('click', () => {
+    view.sort = button.dataset.sortOpt;
+    view.order = view.sort === 'annual' ? 'desc' : 'asc';
     syncViewState();
-    const cur = host.querySelector('[data-sort-current]'); if (cur) cur.textContent = sortLabel();
+    const current = host.querySelector('[data-sort-current]');
+    if (current) current.textContent = sortLabel();
     renderList(host);
     dlg.close();
   }));
-  dlg.querySelector('[data-order-seg]')?.addEventListener('click', e => {
-    const b = e.target.closest('[data-order-val]'); if (!b) return;
-    view.order = b.dataset.orderVal;
-    syncViewState();
-    dlg.querySelectorAll('[data-order-val]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on); });
-    renderList(host);
-  });
   dlg.showModal();
 }
 
-// Grouping (matches the reference's per-account sections): only the account/category dimensions group —
-// the others stay a flat, globally-sorted list. Returns the key/label bucket for one contract.
-function groupKeyFor() { return ['account', 'category', 'type'].includes(view.sort) ? view.sort : null; }
-function groupBucket(c) {
-  if (view.sort === 'account')
-    return { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account') };
-  if (view.sort === 'type')
-    return { key: c.kind || 'contract', label: ctx.get('contracts.kind_' + (c.kind || 'contract')) };
-  return { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category') };
+// The selected sort dimension also defines the visual grouping where that improves scanning.
+function dueBucket(c) {
+  const value = String(c.nextDueDate || '');
+  if (!value) return { key: 'none', label: t('Ohne Fälligkeit', 'No due date'), rank: 5 };
+  const now = new Date();
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  const ym = today.slice(0, 7);
+  const dueYm = value.slice(0, 7);
+  if (value < today) return { key: 'overdue', label: t('Überfällig', 'Overdue'), rank: 0 };
+  if (dueYm === ym) return { key: 'month', label: t('Diesen Monat', 'This month'), rank: 1 };
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextYm = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0')].join('-');
+  if (dueYm === nextYm) return { key: 'next', label: t('Nächsten Monat', 'Next month'), rank: 2 };
+  return { key: 'later', label: t('Später', 'Later'), rank: 3 };
 }
-function groupMonthly(items) { return items.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0); }
+function groupKeyFor() { return ['cycle', 'account', 'category', 'due'].includes(view.sort) ? view.sort : null; }
+function groupBucket(c) {
+  if (view.sort === 'cycle') {
+    const key = c.billingCycle || 'monthly';
+    const rank = ({ monthly: 0, quarterly: 1, yearly: 2, weekly: 3 })[key] ?? 4;
+    return { key, label: ctx.get('contracts.cycle_' + key), rank };
+  }
+  if (view.sort === 'account') return { key: c.accountId || '', label: accountLabel(c) || t('Ohne Konto', 'No account'), rank: 0 };
+  if (view.sort === 'due') return dueBucket(c);
+  return { key: c.categoryId || '', label: categoryLabel(c) || t('Ohne Kategorie', 'No category'), rank: 0 };
+}
+function groupMonthly(items) { return items.reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0); }
 function groupHead(label, items, cur) {
   const el = document.createElement('div');
   el.className = 'contracts-group-head';
-  el.innerHTML = `<div class="contracts-group-id"><span class="contracts-group-name">${esc(label)}</span><span class="contracts-group-count">(${items.length})</span></div>
-    <div class="contracts-group-sum">${ctx.money(groupMonthly(items), cur)}<small>${esc(ctx.get('contracts.cycle_monthly'))}</small></div>`;
+  const suffix = view.sort === 'due' ? '' : `<span class="contracts-group-sum">${ctx.money(groupMonthly(items), cur)}<small>${esc(t('mtl.', 'mo.'))}</small></span>`;
+  el.innerHTML = `<div class="contracts-group-id"><span class="contracts-group-name">${esc(label)}</span><span class="contracts-group-count">(${items.length})</span></div>${suffix}`;
   return el;
 }
 
@@ -260,18 +266,29 @@ export async function renderContracts(context) {
 // Whole-view markup: top summary card (sum of monthlyEquivalent / annualizedAmount over active
 // contracts, computed server-side), the detected/price-change alert slots, then the filter + list card.
 function contractFilterCount() {
-  return [view.account, view.category, view.cycle].filter(Boolean).length;
+  return [
+    view.status && view.status !== 'active' ? view.status : '',
+    view.kind, view.account, view.category, view.cycle
+  ].filter(Boolean).length;
 }
 
 function openContractFilterSheet(host) {
-  const accountOptions = [...accountNames.entries()].map(([id, label]) =>
-    `<option value="${esc(id)}"${view.account === id ? ' selected' : ''}>${esc(label)}</option>`).join('');
-  const categoryOptions = [...categoryNames.entries()].map(([id, label]) =>
-    `<option value="${esc(id)}"${view.category === id ? ' selected' : ''}>${esc(label)}</option>`).join('');
-  const cycleOptions = CYCLES.map(value =>
-    `<option value="${value}"${view.cycle === value ? ' selected' : ''}>${esc(ctx.get('contracts.cycle_' + value))}</option>`).join('');
-  const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet" method="dialog">
-    <div class="panel-head"><h2>${esc(t('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+  const option = (value, label, selected) => `<option value="${esc(value)}"${selected === value ? ' selected' : ''}>${esc(label)}</option>`;
+  const accountOptions = [...accountNames.entries()].map(([id, label]) => option(id, label, view.account)).join('');
+  const categoryOptions = [...categoryNames.entries()].map(([id, label]) => option(id, label, view.category)).join('');
+  const cycleOptions = CYCLES.map(value => option(value, ctx.get('contracts.cycle_' + value), view.cycle)).join('');
+  const kindOptions = KINDS.map(value => option(value, ctx.get('contracts.kind_' + value), view.kind)).join('');
+  const statusOptions = [
+    ['', ctx.get('common.all')],
+    ['active', ctx.get('contracts.status_active')],
+    ['cancelled', ctx.get('contracts.status_cancelled')],
+    ['archived', ctx.get('contracts.archived')],
+  ].map(([value, label]) => option(value, label, view.status)).join('');
+
+  const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet contract-filter-sheet" method="dialog">
+    <div class="panel-head"><h2>${esc(t('Verträge filtern', 'Filter contracts'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <label>${esc(t('Status', 'Status'))}<select name="status">${statusOptions}</select></label>
+    <label>${esc(t('Art', 'Type'))}<select name="kind"><option value="">${esc(ctx.get('common.all'))}</option>${kindOptions}</select></label>
     <label>${esc(ctx.get('contracts.account'))}<select name="account"><option value="">${esc(ctx.get('common.all'))}</option>${accountOptions}</select></label>
     <label>${esc(t('Kategorie', 'Category'))}<select name="category"><option value="">${esc(ctx.get('common.all'))}</option>${categoryOptions}</select></label>
     <label>${esc(t('Turnus', 'Billing cycle'))}<select name="cycle"><option value="">${esc(ctx.get('common.all'))}</option>${cycleOptions}</select></label>
@@ -280,12 +297,14 @@ function openContractFilterSheet(host) {
   dlg.classList.add('contracts-sortsheet-dlg');
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-reset]').onclick = () => {
-    view.account = ''; view.category = ''; view.cycle = '';
+    view.status = 'active'; view.kind = ''; view.account = ''; view.category = ''; view.cycle = '';
     syncViewState(); dlg.close();
     host.innerHTML = viewHtml(); wireControls(host); renderList(host);
   };
   dlg.querySelector('[data-apply]').onclick = () => {
     const fd = new FormData(dlg.querySelector('form'));
+    view.status = String(fd.get('status') || '');
+    view.kind = String(fd.get('kind') || '');
     view.account = String(fd.get('account') || '');
     view.category = String(fd.get('category') || '');
     view.cycle = String(fd.get('cycle') || '');
@@ -330,54 +349,47 @@ function duplicateReviewHtml() {
 }
 
 function viewHtml() {
-  const active = allContracts.filter(c => c.isActive);
-  const sumMonthly = active.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0);
-  const sumAnnual = active.reduce((s, c) => s + (Number(c.annualizedAmount) || 0), 0);
-  const cur = (active.find(c => c.currency) || {}).currency || 'EUR';
-  // Hero summary (matches the reference's "Ausgaben für Verträge · Ø … / Monat"): the monthly total is the
-  // focal figure, with the annualized cost and active count as a supporting meta line.
-  const summaryBody = `<div class="contracts-hero">
-    <div class="contracts-hero-fig">
-      <span class="contracts-hero-value">${ctx.money(sumMonthly, cur)}</span>
-      <span class="contracts-hero-unit">/ ${esc(t('Monat', 'month'))}</span>
-    </div>
-    <div class="contracts-hero-meta">
-      <span class="contracts-hero-annual">${ctx.money(sumAnnual, cur)} ${esc(t('pro Jahr', 'per year'))}</span>
-      <span class="contracts-hero-dot" aria-hidden="true">·</span>
-      <span>${esc(t(`${active.length} aktive Verträge`, `${active.length} active contracts`))}</span>
-    </div>
-  </div>`;
-  const summary = sectionCard(t('Ausgaben für Verträge', 'Contract spending'), summaryBody, {
-    className: 'contracts-summary',
-  });
-
-  const kindChip = (val, label) => `<button type="button" class="fw-chip${view.kind === val ? ' active' : ''}" data-kind="${val}">${esc(label)}</button>`;
-  const typeChips = `<div class="fw-chips" data-type-chips>${kindChip('', ctx.get('common.all'))}${KINDS.map(k => kindChip(k, ctx.get('contracts.kind_' + k))).join('')}</div>`;
-  const statusChip = (val, label) => `<button type="button" class="fw-chip${view.status === val ? ' active' : ''}" data-status="${val}">${esc(label)}</button>`;
-  // Full-width sort pill → opens the bottom-sheet. Status filter + detect stay as subtle contextual chips.
+  const active = allContracts.filter(contract => contract.isActive);
+  const sumMonthly = active.reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0);
+  const sumAnnual = active.reduce((sum, contract) => sum + (Number(contract.annualizedAmount) || 0), 0);
+  const cur = (active.find(contract => contract.currency) || {}).currency || 'EUR';
   const filterCount = contractFilterCount();
-  const controls = `<div class="contracts-controls">
-    <div class="fw-chips" data-status-chips>${statusChip('active', ctx.get('contracts.status_active'))}${statusChip('cancelled', ctx.get('contracts.status_cancelled'))}${statusChip('archived', ctx.get('contracts.archived'))}${statusChip('all', ctx.get('common.all'))}</div>
-  </div>
-  <div class="contracts-toolbar">
-    <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
-      <strong data-sort-current>${esc(sortLabel())}</strong>
-      <span class="contracts-sortbar-caret" aria-hidden="true">⇅</span>
-    </button>
-    <button type="button" class="fw-chip contracts-filter-open" data-filter-open>${esc(t('Filter', 'Filters'))}${filterCount ? ` <strong>${filterCount}</strong>` : ''}</button>
-  </div>`;
 
-  const listCard = sectionCard('', `${typeChips}${controls}<div class="contracts-list" data-list></div>`, { className: 'contracts-listcard' });
+  const summary = `<section class="fw-card contracts-summary">
+    <button type="button" class="contracts-summary-open" data-contract-analysis>
+      <span class="contracts-summary-copy">
+        <span class="contracts-summary-label">${esc(t('Ausgaben für Verträge', 'Contract spending'))}</span>
+        <span class="contracts-summary-value">Ø ${ctx.money(sumMonthly, cur)} <small>/ ${esc(t('Monat', 'month'))}</small></span>
+        <span class="contracts-summary-meta">${ctx.money(sumAnnual, cur)} ${esc(t('pro Jahr', 'per year'))} · ${active.length} ${esc(t('aktiv', 'active'))}</span>
+      </span>
+      <span class="contracts-summary-link">${esc(t('Analyse', 'Analysis'))} <span aria-hidden="true">›</span></span>
+    </button>
+  </section>`;
+
+  const toolbar = `<div class="contracts-toolbar">
+    <button type="button" class="contracts-sortbar" data-sort-open aria-haspopup="dialog">
+      <span>${esc(t('Sortieren nach', 'Sort by'))}</span>
+      <strong data-sort-current>${esc(sortLabel())}</strong>
+      <span class="contracts-sortbar-caret" aria-hidden="true">↕</span>
+    </button>
+    <button type="button" class="contracts-filter-open${filterCount ? ' active' : ''}" data-filter-open aria-label="${esc(t('Filter', 'Filters'))}">
+      ${sortIcon('<path d="M4 6h16M7 12h10M10 18h4"/>')}
+      ${filterCount ? `<span>${filterCount}</span>` : ''}
+    </button>
+  </div>`;
 
   const duplicateReview = duplicateReviewHtml();
 
   return `<div class="contracts-ux">
     ${summary}
     ${duplicateReview}
-    <div id="contracts-cloud-benchmarks" hidden></div>
     <div id="contracts-price-changes" class="detected-panel" hidden></div>
     <div id="contracts-detected" class="detected-panel" hidden></div>
-    ${listCard}
+    <div class="contracts-listcard">
+      ${toolbar}
+      <div class="contracts-list" data-list></div>
+    </div>
+    <div id="contracts-cloud-benchmarks" hidden></div>
   </div>`;
 }
 
@@ -435,16 +447,9 @@ async function loadCloudBenchmarks() {
 }
 
 function wireControls(host) {
-  host.querySelector('[data-type-chips]')?.addEventListener('click', e => {
-    const btn = e.target.closest('[data-kind]'); if (!btn) return;
-    view.kind = btn.dataset.kind; syncViewState(); setActive(host, '[data-type-chips] .fw-chip', btn); renderList(host);
-  });
-  host.querySelector('[data-status-chips]')?.addEventListener('click', e => {
-    const btn = e.target.closest('[data-status]'); if (!btn) return;
-    view.status = btn.dataset.status; syncViewState(); setActive(host, '[data-status-chips] .fw-chip', btn); renderList(host);
-  });
   host.querySelector('[data-sort-open]')?.addEventListener('click', () => openSortSheet(host));
   host.querySelector('[data-filter-open]')?.addEventListener('click', () => openContractFilterSheet(host));
+  host.querySelector('[data-contract-analysis]')?.addEventListener('click', () => openContractAnalysis());
   host.querySelectorAll('[data-duplicate-merge]').forEach(button => button.addEventListener('click', () => {
     const target = contractsById.get(button.dataset.duplicateMerge);
     if (!target) return;
@@ -465,26 +470,36 @@ function renderList(host) {
     box.innerHTML = `<div class="contracts-empty">${esc(ctx.get('common.empty'))}</div>`;
     return;
   }
+
   box.innerHTML = '';
   const frag = document.createDocumentFragment();
   if (!groupKeyFor()) {
-    for (const c of shown) frag.appendChild(rowFor(c));
+    const card = document.createElement('div');
+    card.className = 'contracts-row-card';
+    for (const contract of shown) card.appendChild(rowFor(contract));
+    frag.appendChild(card);
     box.appendChild(frag);
     return;
   }
-  // Cluster the already-sorted rows into account/category sections, each with its own header + monthly sum
-  // (like the reference's "DKB Girokonto (9) · Ø … mtl"). Groups order by total monthly spend, biggest first.
+
   const groups = new Map();
-  for (const c of shown) {
-    const b = groupBucket(c);
-    if (!groups.has(b.key)) groups.set(b.key, { label: b.label, items: [] });
-    groups.get(b.key).items.push(c);
+  for (const contract of shown) {
+    const bucket = groupBucket(contract);
+    if (!groups.has(bucket.key)) groups.set(bucket.key, { ...bucket, items: [] });
+    groups.get(bucket.key).items.push(contract);
   }
-  const cur = (allContracts.find(c => c.currency) || {}).currency || 'EUR';
-  const ordered = [...groups.values()].sort((a, b) => groupMonthly(b.items) - groupMonthly(a.items));
-  for (const g of ordered) {
-    frag.appendChild(groupHead(g.label, g.items, cur));
-    for (const c of g.items) frag.appendChild(rowFor(c));
+
+  const cur = (allContracts.find(contract => contract.currency) || {}).currency || 'EUR';
+  const ordered = [...groups.values()].sort((a, b) => {
+    if (view.sort === 'cycle' || view.sort === 'due') return (a.rank ?? 0) - (b.rank ?? 0);
+    return groupMonthly(b.items) - groupMonthly(a.items) || String(a.label).localeCompare(String(b.label));
+  });
+  for (const group of ordered) {
+    frag.appendChild(groupHead(group.label, group.items, cur));
+    const card = document.createElement('div');
+    card.className = 'contracts-row-card';
+    for (const contract of group.items) card.appendChild(rowFor(contract));
+    frag.appendChild(card);
   }
   box.appendChild(frag);
 }
@@ -510,14 +525,14 @@ function filterContracts(list) {
 function sortContracts(list) {
   const dir = view.order === 'desc' ? -1 : 1;
   const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
-  const dueKey = c => (c.nextDueDate ? String(c.nextDueDate) : '9999-12-31'); // nulls sort last
+  const dueKey = contract => contract.nextDueDate ? String(contract.nextDueDate) : '9999-12-31';
+  const cycleRank = contract => ({ monthly: 0, quarterly: 1, yearly: 2, weekly: 3 })[contract.billingCycle || 'monthly'] ?? 4;
   const cmp = {
+    cycle: (a, b) => cycleRank(a) - cycleRank(b),
     due: (a, b) => dueKey(a).localeCompare(dueKey(b)),
-    monthly: (a, b) => (Number(a.monthlyEquivalent) || 0) - (Number(b.monthlyEquivalent) || 0),
     annual: (a, b) => (Number(a.annualizedAmount) || 0) - (Number(b.annualizedAmount) || 0),
     account: (a, b) => accountLabel(a).localeCompare(accountLabel(b)),
     category: (a, b) => categoryLabel(a).localeCompare(categoryLabel(b)),
-    type: (a, b) => String(a.kind || '').localeCompare(String(b.kind || '')),
     name: byName,
   }[view.sort] || (() => 0);
   return list.slice().sort((a, b) => dir * cmp(a, b) || byName(a, b));
@@ -578,17 +593,18 @@ async function resolvePriceChange(id, action) {
 function rowFor(c) {
   const row = document.createElement('div');
   const lifecycle = lifecycleStatus(c);
-  row.className = 'fw-row contract-row' + (lifecycle === 'archived' ? ' contract-archived' : '');
+  const dueBucketInfo = dueBucket(c);
+  row.className = 'fw-row contract-row' +
+    (lifecycle === 'archived' ? ' contract-archived' : '') +
+    (dueBucketInfo.key === 'overdue' && c.isActive ? ' contract-overdue' : '');
   row.tabIndex = 0;
   row.setAttribute('role', 'button');
+
   const cycleKey = c.billingCycle || 'monthly';
   const cycle = ctx.get('contracts.cycle_' + cycleKey);
   const kind = ctx.get('contracts.kind_' + (c.kind || 'contract'));
-  const cat = categoryLabel(c);
-  const due = (c.isActive && c.nextDueDate) ? `${ctx.get('contracts.nextDue')}: ${ctx.date(c.nextDueDate)}` : '';
-  // For non-monthly cadences show the normalized monthly figure so rows stay comparable at a glance.
-  const permo = (cycleKey !== 'monthly' && Number(c.monthlyEquivalent) > 0)
-    ? `≈ ${ctx.money(c.monthlyEquivalent, c.currency)} / ${t('Mon.', 'mo.')}` : '';
+  const category = categoryLabel(c) || kind;
+  const account = accountLabel(c);
   const statusMarker = lifecycle === 'archived'
     ? ctx.get('contracts.archived')
     : lifecycle === 'cancelled'
@@ -597,21 +613,45 @@ function rowFor(c) {
         ? ctx.get('contracts.status_planned')
         : '';
   const marker = statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : '';
-  const cancellationHint = lifecycle === 'cancelled' && c.cancellation?.cancellationSentAt
-    ? `${ctx.get('contracts.cancelledOn')}: ${ctx.date(c.cancellation.cancellationSentAt)}`
+
+  let secondary = category;
+  if (view.sort === 'category' && account) secondary = account;
+  else if (view.sort === 'name' || view.sort === 'annual') secondary = [category, cycle].filter(Boolean).join(' · ');
+
+  let amount = ctx.money(c.amount, c.currency);
+  let amountSub = cycle;
+  if (view.sort === 'annual') {
+    amount = ctx.money(c.annualizedAmount, c.currency);
+    amountSub = t('pro Jahr', 'per year');
+  } else if (view.sort === 'due') {
+    amountSub = c.nextDueDate ? ctx.date(c.nextDueDate) : t('keine Fälligkeit', 'no due date');
+  } else if (view.sort === 'cycle') {
+    amountSub = '';
+  }
+
+  const alert = dueBucketInfo.key === 'overdue' && c.isActive
+    ? `<div class="contract-row-alert">${esc(t('Fälligkeit überschritten', 'Past due'))}</div>`
     : lifecycle === 'planned' && c.cancellation?.cancellationDeadline
-      ? `${ctx.get('contracts.cancellationDeadline')}: ${ctx.date(c.cancellation.cancellationDeadline)}`
+      ? `<div class="contract-row-alert">${esc(t('Kündigungsfrist', 'Cancellation deadline'))}: ${ctx.esc(ctx.date(c.cancellation.cancellationDeadline))}</div>`
       : '';
-  const sub = [(cat || kind), due, cancellationHint, permo].filter(Boolean).map(p => ctx.esc(p)).join(' · ');
+
   row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath, categoryIconKey: categoryIconKey(c) })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
-      <div class="fw-row-sub">${sub}</div>
+      <div class="fw-row-sub">${ctx.esc(secondary)}</div>
+      ${alert}
     </div>
-    <div class="fw-row-amt">${ctx.money(c.amount, c.currency)}<small>${ctx.esc(cycle)}</small></div>`;
+    <div class="fw-row-amt">${amount}${amountSub ? `<small>${ctx.esc(amountSub)}</small>` : ''}</div>
+    <span class="contract-row-chevron" aria-hidden="true">›</span>`;
+
   const open = () => openDetail(c.id);
   row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
-  row.addEventListener('keydown', e => { if (!e.target.closest('button') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
+  row.addEventListener('keydown', event => {
+    if (!event.target.closest('button') && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      open();
+    }
+  });
   return row;
 }
 
@@ -687,144 +727,278 @@ async function dismissCandidate(candidate) {
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }
 
+
+function editableDetailRow(label, value, field) {
+  return `<button type="button" class="contract-field-row" data-quick-edit="${field}">
+    <span>${ctx.esc(label)}</span>
+    <strong>${ctx.esc(value || '—')}</strong>
+    <span class="contract-field-edit" aria-hidden="true">✎</span>
+  </button>`;
+}
+
+async function saveContractPatch(contract, patch) {
+  await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), ...patch }, 'PUT'));
+  ctx.toast(ctx.get('common.saved'));
+  await renderContracts(ctx);
+}
+
+async function openQuickEdit(contract, field) {
+  let title = '';
+  let control = '';
+  let readValue = null;
+
+  if (field === 'amount') {
+    title = t('Betrag bearbeiten', 'Edit amount');
+    control = `<label>${ctx.esc(ctx.get('transactions.amount'))}<input name="value" type="number" step="0.01" inputmode="decimal" required value="${Number(contract.amount) || 0}"></label>`;
+    readValue = fd => ({ amount: Number(fd.get('value')) });
+  } else if (field === 'cycle') {
+    title = t('Turnus bearbeiten', 'Edit billing cycle');
+    control = `<label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="value">${CYCLES.map(value => `<option value="${value}"${value === (contract.billingCycle || 'monthly') ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.cycle_' + value))}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ billingCycle: String(fd.get('value') || 'monthly') });
+  } else if (field === 'category') {
+    title = t('Kategorie bearbeiten', 'Edit category');
+    control = `<label>${ctx.esc(t('Kategorie', 'Category'))}<select name="value"><option value="">—</option>${[...categoryNames.entries()].map(([id, label]) => `<option value="${id}"${id === contract.categoryId ? ' selected' : ''}>${ctx.esc(label)}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ categoryId: String(fd.get('value') || '') || null });
+  } else if (field === 'account') {
+    title = t('Zahlungskonto bearbeiten', 'Edit payment account');
+    control = `<label>${ctx.esc(ctx.get('contracts.account'))}<select name="value"><option value="">—</option>${[...accountNames.entries()].map(([id, label]) => `<option value="${id}"${id === contract.accountId ? ' selected' : ''}>${ctx.esc(label)}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ accountId: String(fd.get('value') || '') || null });
+  } else if (field === 'nextDue') {
+    title = t('Nächste Fälligkeit bearbeiten', 'Edit next due date');
+    control = `<label>${ctx.esc(t('Nächste Fälligkeit', 'Next due date'))}<input name="value" type="date" value="${String(contract.nextDueDate || '').slice(0, 10)}"></label>`;
+    readValue = fd => ({ nextDueDate: String(fd.get('value') || '') || null });
+  } else if (field === 'name') {
+    title = t('Name bearbeiten', 'Edit name');
+    control = `<label>${ctx.esc(ctx.get('common.name'))}<input name="value" maxlength="160" required value="${ctx.esc(contract.name || '')}"></label>`;
+    readValue = fd => ({ name: String(fd.get('value') || '').trim() });
+  } else {
+    return;
+  }
+
+  const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet contract-quick-edit">
+    <div class="panel-head"><h2>${ctx.esc(title)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    ${control}
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.classList.add('contracts-sortsheet-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await saveContractPatch(contract, readValue(new FormData(event.currentTarget)));
+      dlg.close();
+      await openDetail(contract.id);
+    } catch (err) {
+      submit.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
+  };
+  dlg.showModal();
+}
+
+function openPaymentsDialog(contract, payments) {
+  const rows = (payments || []).map(payment => `<div class="contract-payment-row">
+    <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${ctx.esc(contract.providerName || contract.name)}</span></div>
+    <strong>${ctx.money(payment.amount, payment.currency)}</strong>
+  </div>`).join('');
+  const dlg = ctx.dialog(`<div class="dialog-card contract-payments-dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(t('Buchungen', 'Payments'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="contract-payment-list">${rows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`}</div>
+  </div>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.showModal();
+}
+
 async function openDetail(id) {
   let contract, activity, cancellation, cloudBenchmark, mergedSources;
   try {
     [contract, activity, cancellation, cloudBenchmark, mergedSources] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
-      ctx.api(`api/contract-parity/${id}/cancellation`),
+      ctx.api(`api/contract-parity/${id}/cancellation`).catch(() => null),
       ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
       ctx.api(`api/contracts/${id}/merged-sources`).catch(() => [])
     ]);
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+    return;
+  }
+
+  cancellation ||= {};
   contract.cancellation = cancellation;
   const lifecycle = lifecycleStatus(contract);
-
-  const valueMode = ctx.get('contracts.mode_' + (activity?.valueMode || 'manual'));
-  const next = activity?.nextExpected ? ctx.date(activity.nextExpected) : '—';
-  const lastPay = activity?.lastPayment ? ctx.date(activity.lastPayment) : '—';
   const payments = activity?.payments || [];
-  const trend = sparkline(payments);
-  const paymentRows = payments.length
-    ? payments.map(p => `<div class="preview-row"><span class="preview-label">${ctx.esc(ctx.date(p.date))}</span><span class="preview-amt">${ctx.money(p.amount, p.currency)}</span></div>`).join('')
+  const previewPayments = payments.slice(0, 4);
+  const cycle = ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'));
+  const category = categoryLabel(contract) || ctx.get('contracts.kind_' + (contract.kind || 'contract'));
+  const account = accountLabel(contract) || '—';
+  const next = activity?.nextExpected || contract.nextDueDate;
+  const annualized = activity?.annualizedAmount ?? contract.annualizedAmount ?? 0;
+  const statusMarker = lifecycle === 'archived'
+    ? ctx.get('contracts.archived')
+    : lifecycle === 'cancelled'
+      ? ctx.get('contracts.status_cancelled')
+      : lifecycle === 'planned'
+        ? ctx.get('contracts.status_planned')
+        : '';
+
+  const paymentRows = previewPayments.length
+    ? previewPayments.map((payment, index) => `<div class="contract-payment-row">
+        <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${index === 0 ? ctx.esc(t('Letzte Zahlung', 'Last payment')) : ctx.esc(category)}</span></div>
+        <strong>${ctx.money(payment.amount, payment.currency)}</strong>
+      </div>`).join('')
     : `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`;
 
-  const meta = [
-    [ctx.get('contracts.mode'), valueMode],
-    [ctx.get('contracts.expected'), ctx.money(activity?.expectedAmount ?? contract.amount, contract.currency)],
-    [ctx.get('contracts.annualized'), ctx.money(activity?.annualizedAmount ?? 0, contract.currency)],
-    [ctx.get('contracts.nextExpected'), next],
-    [ctx.get('contracts.lastPayment'), lastPay],
-    [ctx.get('contracts.billingCycle'), ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'))],
-    [ctx.get('contracts.kind'), ctx.get('contracts.kind_' + (contract.kind || 'contract'))],
-    [ctx.get('contracts.startDate'), contract.startDate ? ctx.date(contract.startDate) : '—'],
-    [ctx.get('contracts.endDate'), contract.endDate ? ctx.date(contract.endDate) : '—'],
-    [ctx.get('contracts.status'), lifecycle === 'archived' ? ctx.get('contracts.archived') : cancellationStatusLabel(cancellation?.cancellationStatus)],
-    [ctx.get('contracts.minimumTermEnd'), cancellation?.minimumTermEnd ? ctx.date(cancellation.minimumTermEnd) : '—'],
-    [ctx.get('contracts.noticePeriod'), periodLabel(cancellation?.noticePeriodValue, cancellation?.noticePeriodUnit)],
-    [ctx.get('contracts.cancellationDeadline'), cancellation?.cancellationDeadline ? ctx.date(cancellation.cancellationDeadline) : '—'],
-    [ctx.get('contracts.renewalPeriod'), periodLabel(cancellation?.renewalPeriodValue, cancellation?.renewalPeriodUnit)],
-    [ctx.get('contracts.autoRenews'), cancellation?.autoRenews ? t('Ja', 'Yes') : t('Nein', 'No')],
-    [ctx.get('contracts.cancelledOn'), cancellation?.cancellationSentAt ? ctx.dateTime(cancellation.cancellationSentAt) : '—'],
-    [ctx.get('contracts.confirmedOn'), cancellation?.cancellationConfirmedAt ? ctx.dateTime(cancellation.cancellationConfirmedAt) : '—'],
-    [ctx.get('contracts.customerNumber'), cancellation?.customerNumber || '—']
-  ].map(([k, v]) => `<div class="detail-item"><span class="detail-k">${ctx.esc(k)}</span><span class="detail-v">${ctx.esc(v)}</span></div>`).join('');
+  const extraData = [
+    contract.startDate ? [ctx.get('contracts.startDate'), ctx.date(contract.startDate)] : null,
+    contract.endDate ? [ctx.get('contracts.endDate'), ctx.date(contract.endDate)] : null,
+    cancellation.minimumTermEnd ? [ctx.get('contracts.minimumTermEnd'), ctx.date(cancellation.minimumTermEnd)] : null,
+    cancellation.cancellationDeadline ? [ctx.get('contracts.cancellationDeadline'), ctx.date(cancellation.cancellationDeadline)] : null,
+    cancellation.customerNumber ? [ctx.get('contracts.customerNumber'), cancellation.customerNumber] : null,
+    [t('Kosten pro Jahr', 'Cost per year'), ctx.money(annualized, contract.currency)],
+    [t('Erkennung', 'Detection'), contract.autoDetected ? t('Automatisch', 'Automatic') : t('Manuell', 'Manual')]
+  ].filter(Boolean).map(([label, value]) => `<div class="contract-data-row"><span>${ctx.esc(label)}</span><strong>${ctx.esc(value)}</strong></div>`).join('');
 
-  const benchmarkSection = cloudBenchmark?.available
-    ? (() => {
-        const local = Number(cloudBenchmark.localMonthly);
-        const median = Number(cloudBenchmark.median);
-        const delta = median > 0 ? ((local - median) / median) * 100 : null;
-        const relation = delta == null
-          ? ''
-          : delta > 2
-            ? t(Math.round(delta) + ' % über Median', Math.round(delta) + '% above median')
-            : delta < -2
-              ? t(Math.abs(Math.round(delta)) + ' % unter Median', Math.abs(Math.round(delta)) + '% below median')
-              : t('nahe am Median', 'near median');
-        const scopeLabel = cloudBenchmark.scope === 'provider' && cloudBenchmark.providerName
-          ? t('Gleicher Provider: ', 'Same provider: ') + cloudBenchmark.providerName
-          : t('Ähnliche Verträge', 'Similar contracts');
-        return `<div class="detail-section contract-cloud-detail">
-          <h3>${ctx.esc(t('FullWorth Cloud Vergleich', 'FullWorth Cloud comparison'))}</h3>
-          <div class="row-sub">${ctx.esc(scopeLabel)} · ${cloudBenchmark.distinctInstanceCount} ${ctx.esc(t('Instanzen', 'instances'))}</div>
-          <div class="detail-grid">
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Dein Monatswert', 'Your monthly value'))}</span><span class="detail-v">${ctx.money(local, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Cloud-Median', 'Cloud median'))}</span><span class="detail-v">${ctx.money(median, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Typische Spanne', 'Typical range'))}</span><span class="detail-v">${ctx.money(cloudBenchmark.p25, cloudBenchmark.currency)}–${ctx.money(cloudBenchmark.p75, cloudBenchmark.currency)}</span></div>
-            <div class="detail-item"><span class="detail-k">${ctx.esc(t('Einordnung', 'Comparison'))}</span><span class="detail-v">${ctx.esc(relation || '—')}</span></div>
-          </div>
-          <div class="row-sub">${ctx.esc(t('Beobachtete, aggregierte Community-Werte; kein garantiertes Marktangebot.', 'Observed aggregate community values; not a guaranteed market offer.'))}</div>
-        </div>`;
-      })()
-    : '';
+  let benchmark = '';
+  if (cloudBenchmark?.available) {
+    const median = Number(cloudBenchmark.median) || 0;
+    const local = Number(cloudBenchmark.localMonthly) || Number(contract.monthlyEquivalent) || 0;
+    const delta = median > 0 ? Math.round(((local - median) / median) * 100) : 0;
+    const relation = Math.abs(delta) <= 2
+      ? t('Nahe am Vergleich', 'Near benchmark')
+      : delta > 0
+        ? t(`${delta} % über Vergleich`, `${delta}% above benchmark`)
+        : t(`${Math.abs(delta)} % unter Vergleich`, `${Math.abs(delta)}% below benchmark`);
+    benchmark = `<section class="contract-detail-card">
+      <div class="contract-insight-row"><span>${ctx.esc(t('Kostenvergleich', 'Cost comparison'))}</span><strong>${ctx.esc(relation)}</strong><span aria-hidden="true">›</span></div>
+    </section>`;
+  }
 
-  const mergedSourceRows = (mergedSources || []).map(source => {
-    const account = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
-    return `<div class="preview-row contract-merged-source">
-      <div><strong>${ctx.esc(source.name)}</strong><div class="row-sub">${ctx.esc(account)} · ${ctx.money(source.amount, source.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (source.billingCycle || 'monthly')))}</div></div>
-      <button type="button" class="btn btn-secondary" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button>
-    </div>`;
+  const sources = (mergedSources || []).map(source => {
+    const sourceAccount = source.accountId ? (accountNames.get(source.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
+    return `<div class="contract-source-row"><div><strong>${ctx.esc(source.name)}</strong><span>${ctx.esc(sourceAccount)}</span></div><button type="button" data-unmerge="${source.id}">${ctx.esc(ctx.get('contracts.unmerge'))}</button></div>`;
   }).join('');
-  const mergedSourcesSection = `<div class="detail-section">
-    <h3>${ctx.esc(ctx.get('contracts.mergedSources'))}</h3>
-    <div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesHint'))}</div>
-    ${mergedSourceRows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.mergedSourcesNone'))}</div>`}
-    <button type="button" class="btn btn-secondary contract-merge-add" data-merge>${ctx.esc(ctx.get('contracts.merge'))}</button>
-  </div>`;
 
-  const statusMarker = lifecycle === 'archived' ? ctx.get('contracts.archived') : lifecycle === 'cancelled' ? ctx.get('contracts.status_cancelled') : lifecycle === 'planned' ? ctx.get('contracts.status_planned') : '';
-  const dlg = ctx.dialog(`<div class="dialog-card contract-detail">
-    <div class="panel-head"><h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    ${contract.providerName ? `<div class="row-sub">${ctx.esc(contract.providerName)}</div>` : ''}
-    <div class="detail-grid">${meta}</div>
-    ${benchmarkSection}
-    ${mergedSourcesSection}
-    ${cancellation?.providerContact ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.providerContact'))}</h3><div class="row-sub">${ctx.esc(cancellation.providerContact)}</div></div>` : ''}
-    ${trend}
-    <div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.payments'))}</h3>${paymentRows}</div>
-    ${contract.notes ? `<div class="detail-section"><h3>${ctx.esc(ctx.get('contracts.notes'))}</h3><div class="row-sub">${ctx.esc(contract.notes)}</div></div>` : ''}
-    <div class="dialog-actions">
-      <button type="button" class="btn btn-secondary" data-edit>${ctx.esc(ctx.get('contracts.edit'))}</button>
-      ${contract.isActive
-        ? `<button type="button" class="btn btn-secondary" data-cancellation>${ctx.esc(ctx.get('contracts.manageCancellation'))}</button><button type="button" class="btn btn-danger" data-archive>${ctx.esc(ctx.get('contracts.archive'))}</button>`
-        : `<button type="button" class="btn btn-primary" data-reactivate>${ctx.esc(ctx.get('contracts.reactivate'))}</button>`}
+  const dlg = ctx.dialog(`<div class="dialog-card contract-detail contract-detail-v2">
+    <div class="contract-detail-topbar">
+      <button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button>
+      <button type="button" data-edit-all aria-label="${ctx.esc(ctx.get('contracts.edit'))}">•••</button>
     </div>
+
+    <div class="contract-detail-hero">
+      <div class="contract-detail-logo">${identityIcon(contract.providerName || contract.name, { logoAssetPath: contract.logoAssetPath, categoryIconKey: categoryIconKey(contract) })}</div>
+      <div class="contract-detail-name">
+        <h2>${ctx.esc(contract.name)}${statusMarker ? ` <span class="tx-marker">${ctx.esc(statusMarker)}</span>` : ''}</h2>
+        <button type="button" data-quick-edit="name" aria-label="${ctx.esc(t('Name bearbeiten', 'Edit name'))}">✎</button>
+      </div>
+      ${contract.providerName && contract.providerName !== contract.name ? `<div class="contract-detail-provider">${ctx.esc(contract.providerName)}</div>` : ''}
+      <div class="contract-detail-price">${ctx.money(activity?.expectedAmount ?? contract.amount, contract.currency)} <small>/ ${ctx.esc(cycle)}</small></div>
+      <div class="contract-detail-due">${next ? `${ctx.esc(t('Nächste Zahlung', 'Next payment'))} ${ctx.esc(ctx.date(next))}` : ctx.esc(t('Keine Fälligkeit hinterlegt', 'No due date set'))}</div>
+    </div>
+
+    <section class="contract-detail-card contract-main-fields">
+      ${editableDetailRow(ctx.get('transactions.amount'), ctx.money(contract.amount, contract.currency), 'amount')}
+      ${editableDetailRow(ctx.get('contracts.billingCycle'), cycle, 'cycle')}
+      ${editableDetailRow(t('Kategorie', 'Category'), category, 'category')}
+      ${editableDetailRow(t('Zahlungskonto', 'Payment account'), account, 'account')}
+      ${editableDetailRow(t('Nächste Fälligkeit', 'Next due date'), next ? ctx.date(next) : '—', 'nextDue')}
+    </section>
+
+    ${benchmark}
+
+    <div class="contract-section-label">${ctx.esc(t('Buchungen', 'Payments'))}</div>
+    <section class="contract-detail-card">
+      <div class="contract-payment-list">${paymentRows}</div>
+      ${payments.length > 4 ? `<button type="button" class="contract-card-link" data-all-payments>${ctx.esc(t(`Alle ${payments.length} Buchungen anzeigen`, `Show all ${payments.length} payments`))}<span>›</span></button>` : ''}
+    </section>
+
+    <div class="contract-section-label">${ctx.esc(t('Vertrag', 'Contract'))}</div>
+    <section class="contract-detail-card contract-actions-card">
+      <button type="button" data-cancellation><span>${ctx.esc(t('Laufzeit & Kündigung', 'Term & cancellation'))}</span><span>›</span></button>
+      ${contract.notes
+        ? `<div class="contract-note"><span>${ctx.esc(ctx.get('contracts.notes'))}</span><p>${ctx.esc(contract.notes)}</p></div>`
+        : `<button type="button" data-edit-all><span>${ctx.esc(t('Notiz hinzufügen', 'Add note'))}</span><span>›</span></button>`}
+      ${sources ? `<details class="contract-sources"><summary>${ctx.esc(t('Zahlungskonten & Historie', 'Payment accounts & history'))} <small>${mergedSources.length}</small></summary>${sources}</details>` : ''}
+      <button type="button" data-merge><span>${ctx.esc(t('Ähnliche Verträge zusammenführen', 'Merge similar contracts'))}</span><span>›</span></button>
+    </section>
+
+    <details class="contract-detail-card contract-more-data">
+      <summary>${ctx.esc(t('Weitere Vertragsdaten', 'More contract details'))}<span>›</span></summary>
+      <div>${extraData}</div>
+    </details>
+
+    <div class="contract-section-label">${ctx.esc(t('Einstellungen', 'Settings'))}</div>
+    <section class="contract-detail-card contract-actions-card">
+      <button type="button" data-edit-all><span>${ctx.esc(t('Alle Daten bearbeiten', 'Edit all details'))}</span><span>›</span></button>
+      <button type="button" data-coach><span>${ctx.esc(t('Coach fragen', 'Ask Coach'))}</span><span>›</span></button>
+      ${contract.isActive
+        ? `<button type="button" class="btn btn-danger contract-action-danger" data-archive><span>${ctx.esc(ctx.get('contracts.archive'))}</span><span>›</span></button>`
+        : `<button type="button" data-reactivate><span>${ctx.esc(ctx.get('contracts.reactivate'))}</span><span>›</span></button>`}
+    </section>
   </div>`);
-  const coachAction = document.createElement('button');
-  coachAction.type = 'button'; coachAction.className = 'btn btn-secondary'; coachAction.textContent = t('Coach fragen','Ask Coach');
-  coachAction.addEventListener('click', () => { dlg.close(); askCoachAboutContract(contract, activity); });
-  dlg.querySelector('.dialog-actions')?.prepend(coachAction);
+  dlg.classList.add('contracts-detail-dlg');
+
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openContractDialog(contract); };
-  dlg.querySelector('[data-merge]')?.addEventListener('click', () => { dlg.close(); openMergeDialog(contract); });
+  dlg.querySelectorAll('[data-quick-edit]').forEach(button => button.addEventListener('click', () => {
+    dlg.close();
+    openQuickEdit(contract, button.dataset.quickEdit);
+  }));
+  dlg.querySelectorAll('[data-edit-all]').forEach(button => button.addEventListener('click', () => {
+    dlg.close();
+    openContractDialog(contract);
+  }));
+  dlg.querySelector('[data-all-payments]')?.addEventListener('click', () => openPaymentsDialog(contract, payments));
+  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => {
+    dlg.close();
+    openCancellationDialog(contract, cancellation);
+  });
+  dlg.querySelector('[data-merge]')?.addEventListener('click', () => {
+    dlg.close();
+    openMergeDialog(contract);
+  });
+  dlg.querySelector('[data-coach]')?.addEventListener('click', () => {
+    dlg.close();
+    askCoachAboutContract(contract, activity);
+  });
   dlg.querySelectorAll('[data-unmerge]').forEach(button => button.addEventListener('click', async () => {
-    const sourceId = button.dataset.unmerge;
     button.disabled = true;
     try {
-      await ctx.api(`api/contract-parity/merge/${id}/${sourceId}`, { method: 'DELETE' });
+      await ctx.api(`api/contract-parity/merge/${id}/${button.dataset.unmerge}`, { method: 'DELETE' });
       dlg.close();
       ctx.toast(ctx.get('contracts.unmergedToast'));
       await renderContracts(ctx);
+      await openDetail(id);
     } catch (err) {
       button.disabled = false;
       ctx.toast(err.message || ctx.get('common.error'));
     }
   }));
-  dlg.querySelector('[data-cancellation]')?.addEventListener('click', () => { dlg.close(); openCancellationDialog(contract, cancellation); });
   dlg.querySelector('[data-archive]')?.addEventListener('click', async () => {
     if (!await ctx.confirm(ctx.get('contracts.archiveConfirm').replace('{name}', contract.name), { destructive: true, confirmLabel: ctx.get('contracts.archive') })) return;
-    try { await ctx.api(`api/contracts/${id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('contracts.archivedToast')); await renderContracts(ctx); }
-    catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+    try {
+      await ctx.api(`api/contracts/${id}`, { method: 'DELETE' });
+      dlg.close();
+      ctx.toast(ctx.get('contracts.archivedToast'));
+      await renderContracts(ctx);
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   });
   dlg.querySelector('[data-reactivate]')?.addEventListener('click', async () => {
-    try { await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx); }
-    catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+    try {
+      await ctx.api(`api/contracts/${id}`, jsonBody({ ...contractToWrite(contract), isActive: true }, 'PUT'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+    } catch (err) {
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   });
   dlg.showModal();
 }
-
 function mergeCandidateScore(primary, candidate) {
   let score = 0;
   const primaryIdentity = contractIdentityKey(primary);
@@ -972,6 +1146,152 @@ function sparkline(payments) {
   return `<div class="contract-trend"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('contracts.trend'))}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>`;
 }
 
+
+
+function contractMonthKey(value) {
+  return String(value instanceof Date
+    ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+    : value || '').slice(0, 7);
+}
+
+function contractAnalysisBars(months) {
+  const max = Math.max(1, ...months.map(month => month.value));
+  const width = 720, height = 180, baseline = 148;
+  const slot = width / Math.max(1, months.length);
+  const bars = months.map((month, index) => {
+    const barHeight = Math.max(2, (month.value / max) * 116);
+    const x = index * slot + slot * .18;
+    const barWidth = slot * .64;
+    const y = baseline - barHeight;
+    const label = new Intl.DateTimeFormat(lang() ? 'de-DE' : 'en-US', { month: 'short' })
+      .format(new Date(month.key + '-01T12:00:00'));
+    return `<g><rect class="contract-analysis-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5"></rect><text class="contract-analysis-axis" x="${(x + barWidth / 2).toFixed(1)}" y="172" text-anchor="middle">${ctx.esc(label)}</text></g>`;
+  }).join('');
+  return `<svg class="contract-analysis-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}"><line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" class="contract-analysis-zero"></line>${bars}</svg>`;
+}
+
+function contractAnalysisDonut(rows, total) {
+  if (!rows.length || total <= 0) return '';
+  let offset = 0;
+  const segments = rows.slice(0, 8).map((row, index) => {
+    const share = Math.max(0, Math.min(100, row.value / total * 100));
+    const segment = `<circle class="contract-analysis-segment contract-analysis-seg-${index % 8}" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="${share} ${100 - share}" stroke-dashoffset="${-offset}" />`;
+    offset += share;
+    return segment;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" class="contract-analysis-donut" aria-hidden="true"><circle class="contract-analysis-donut-bg" cx="50" cy="50" r="40"/>${segments}</svg>`;
+}
+
+function contractDateParam(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function openContractAnalysis() {
+  const active = allContracts.filter(contract => contract.isActive);
+  const currency = (active.find(contract => contract.currency) || {}).currency || 'EUR';
+  const monthly = active.reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0);
+  const annual = active.reduce((sum, contract) => sum + (Number(contract.annualizedAmount) || 0), 0);
+  const reserve = active
+    .filter(contract => (contract.billingCycle || 'monthly') !== 'monthly')
+    .reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0);
+
+  const categories = new Map();
+  for (const contract of active) {
+    const label = categoryLabel(contract) || ctx.get('contracts.kind_' + (contract.kind || 'contract'));
+    categories.set(label, (categories.get(label) || 0) + (Number(contract.monthlyEquivalent) || 0));
+  }
+  const categoryRows = [...categories.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const dlg = ctx.dialog(`<div class="dialog-card contract-analysis-dialog">
+    <div class="panel-head"><h2>${ctx.esc(t('Vertragsanalyse', 'Contract analysis'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="contract-analysis-loading">${ctx.esc(t('Buchungen werden ausgewertet …', 'Analyzing payments …'))}</div>
+  </div>`);
+  dlg.classList.add('contracts-analysis-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.showModal();
+
+  const now = new Date();
+  const firstMonth = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const months = [];
+  const monthMap = new Map();
+  for (let offset = 11; offset >= 0; offset--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const key = contractMonthKey(date);
+    const month = { key, value: 0 };
+    months.push(month);
+    monthMap.set(key, month);
+  }
+
+  const overviewPromise = ctx.api(`api/analytics/overview?from=${contractDateParam(firstMonth)}&to=${contractDateParam(lastMonth)}&granularity=month`).catch(() => null);
+  const activities = [];
+  const analysisContracts = active.slice(0, 60);
+  for (let index = 0; index < analysisContracts.length; index += 6) {
+    const batch = await Promise.allSettled(
+      analysisContracts.slice(index, index + 6).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))
+    );
+    activities.push(...batch);
+  }
+  const overview = await overviewPromise;
+
+  for (const result of activities) {
+    if (result.status !== 'fulfilled') continue;
+    for (const payment of result.value?.payments || []) {
+      const target = monthMap.get(contractMonthKey(payment.date));
+      if (target) target.value += Number(payment.amount) || 0;
+    }
+  }
+
+  const periods = overview?.byPeriod || overview?.byMonth || [];
+  const incomeMonths = periods.map(period => Number(period.income) || 0).filter(value => value > 0);
+  const averageIncome = incomeMonths.length ? incomeMonths.reduce((sum, value) => sum + value, 0) / incomeMonths.length : null;
+  const available = averageIncome == null ? null : averageIncome - monthly;
+  const share = averageIncome && averageIncome > 0 ? Math.round(monthly / averageIncome * 100) : null;
+
+  const maxCategory = Math.max(1, ...categoryRows.map(row => row.value));
+  const categoriesHtml = categoryRows.map((row, index) => `<div class="contract-analysis-category">
+    <span class="contract-analysis-category-dot contract-analysis-bg-${index % 8}"></span>
+    <strong>${ctx.esc(row.label)}</strong>
+    <span>${ctx.money(row.value, currency)}</span>
+    <progress max="${maxCategory}" value="${row.value}"></progress>
+  </div>`).join('');
+
+  const body = dlg.querySelector('.contract-analysis-dialog');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="panel-head"><h2>${ctx.esc(t('Vertragsanalyse', 'Contract analysis'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+
+    <section class="contract-analysis-card contract-analysis-balance">
+      <h3>${ctx.esc(t('Durchschnittlich pro Monat', 'Average per month'))}</h3>
+      ${averageIncome == null ? '' : `<div><span>${ctx.esc(t('Einnahmen', 'Income'))}</span><strong class="positive">${ctx.money(averageIncome, currency)}</strong></div>`}
+      <div><span>${ctx.esc(t('Verträge', 'Contracts'))}${share == null ? '' : ` <small>${share} %</small>`}</span><strong>−${ctx.money(monthly, currency)}</strong></div>
+      ${available == null ? '' : `<div class="contract-analysis-available"><span>${ctx.esc(t('Frei verfügbar', 'Available'))}</span><strong class="${available >= 0 ? 'positive' : 'negative'}">${ctx.money(available, currency)}</strong></div>`}
+      <small>${ctx.money(annual, currency)} ${ctx.esc(t('Vertragskosten pro Jahr', 'contract cost per year'))}</small>
+    </section>
+
+    <section class="contract-analysis-card">
+      <h3>${ctx.esc(t('Verträge pro Kategorie', 'Contracts by category'))}</h3>
+      <div class="contract-analysis-donut-wrap">
+        ${contractAnalysisDonut(categoryRows, monthly)}
+        <div class="contract-analysis-donut-center"><strong>${ctx.money(monthly, currency)}</strong><span>${ctx.esc(t('monatlich', 'monthly'))}</span></div>
+      </div>
+      <div class="contract-analysis-categories">${categoriesHtml || `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`}</div>
+    </section>
+
+    <section class="contract-analysis-card">
+      <h3>${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}</h3>
+      <p>${ctx.esc(t('Erkannte Vertragszahlungen der letzten 12 Monate.', 'Detected contract payments over the last 12 months.'))}</p>
+      ${contractAnalysisBars(months)}
+      ${reserve > 0 ? `<div class="contract-analysis-tip"><strong>${ctx.esc(t('Tipp', 'Tip'))}</strong><span>${ctx.esc(t('Für nicht-monatliche Verträge monatlich zurücklegen:', 'Set aside monthly for non-monthly contracts:'))} ${ctx.money(reserve, currency)}</span></div>` : ''}
+    </section>`;
+  body.querySelector('[data-close]').onclick = () => dlg.close();
+}
+
 function contractToWrite(c) {
   return {
     name: c.name, providerName: c.providerName || null, kind: c.kind || 'contract',
@@ -986,61 +1306,96 @@ function jsonBody(body, method) {
   return { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
+
 async function openContractDialog(existing) {
-  const c = existing || {};
-  const currency = c.currency || 'EUR';
+  const contract = existing || {};
+  const currency = contract.currency || 'EUR';
   let categories, accounts;
   try {
-    categories = await ctx.categoryOptions(c.categoryId);
+    categories = await ctx.categoryOptions(contract.categoryId);
     accounts = (await ctx.api('api/accounts')) || [];
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
-  const opt = (list, sel, prefix) => list.map(v => `<option value="${v}"${sel === v ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + v))}</option>`).join('');
-  const accountOpts = accounts.map(a => `<option value="${a.id}"${c.accountId === a.id ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
-  const dv = v => v ? String(v).slice(0, 10) : '';
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+    return;
+  }
 
-  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog">
+  const option = (list, selected, prefix) => list.map(value =>
+    `<option value="${value}"${selected === value ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + value))}</option>`
+  ).join('');
+  const accountOptions = accounts.map(account =>
+    `<option value="${account.id}"${contract.accountId === account.id ? ' selected' : ''}>${ctx.esc(account.displayName || account.institutionName)}</option>`
+  ).join('');
+  const dateValue = value => value ? String(value).slice(0, 10) : '';
+
+  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog contract-edit-v2">
     <div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'contracts.edit' : 'contracts.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(c.name || '')}"></label>
-    <label>${ctx.esc(ctx.get('contracts.provider'))}<input name="provider" maxlength="160" value="${ctx.esc(c.providerName || '')}"></label>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.kind'))}<select name="kind">${opt(KINDS, c.kind || 'subscription', 'contracts.kind_')}</select></label>
-      <label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${opt(CYCLES, c.billingCycle || 'monthly', 'contracts.cycle_')}</select></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${c.amount ?? ''}"></label>
-      <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.interval'))}<input name="interval" type="number" min="1" value="${c.interval || 1}"></label>
-      <label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dv(c.nextDueDate)}"></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" value="${dv(c.startDate)}"></label>
-      <label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dv(c.endDate)}"></label>
-    </div>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${categories}</select></label>
-    <label>${ctx.esc(ctx.get('contracts.account'))}<select name="account"><option value="">—</option>${accountOpts}</select></label>
-    <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="2">${ctx.esc(c.notes || '')}</textarea></label>
+
+    <fieldset>
+      <legend>${ctx.esc(t('Basisdaten', 'Basics'))}</legend>
+      <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(contract.name || '')}"></label>
+      <label>${ctx.esc(ctx.get('contracts.provider'))}<input name="provider" maxlength="160" value="${ctx.esc(contract.providerName || '')}"></label>
+      <label>${ctx.esc(ctx.get('contracts.kind'))}<select name="kind">${option(KINDS, contract.kind || 'subscription', 'contracts.kind_')}</select></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>${ctx.esc(t('Zahlung', 'Payment'))}</legend>
+      <div class="rule-grid">
+        <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${contract.amount ?? ''}"></label>
+        <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
+      </div>
+      <label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${option(CYCLES, contract.billingCycle || 'monthly', 'contracts.cycle_')}</select></label>
+      <label>${ctx.esc(t('Kategorie', 'Category'))}<select name="category"><option value="">—</option>${categories}</select></label>
+      <label>${ctx.esc(t('Zahlungskonto', 'Payment account'))}<select name="account"><option value="">—</option>${accountOptions}</select></label>
+    </fieldset>
+
+    <details class="contract-edit-more">
+      <summary>${ctx.esc(t('Weitere Vertragsdaten', 'More contract details'))}</summary>
+      <label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dateValue(contract.nextDueDate)}"></label>
+      <div class="rule-grid">
+        <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" value="${dateValue(contract.startDate)}"></label>
+        <label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dateValue(contract.endDate)}"></label>
+      </div>
+      <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="3">${ctx.esc(contract.notes || '')}</textarea></label>
+    </details>
+
     <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
   </form>`);
+
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async e => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
     const body = {
-      name: fd.get('name'), providerName: fd.get('provider') || null, kind: fd.get('kind'),
-      categoryId: fd.get('category') || null, accountId: fd.get('account') || null,
-      amount: Number(fd.get('amount')), currency: (fd.get('currency') || 'EUR').toUpperCase(),
-      billingCycle: fd.get('cycle'), interval: Number(fd.get('interval') || 1),
-      startDate: fd.get('start') || null, endDate: fd.get('end') || null, nextDueDate: fd.get('nextDue') || null,
-      isActive: existing ? existing.isActive !== false : true, notes: (fd.get('notes') || '').trim() || null
+      name: fd.get('name'),
+      providerName: fd.get('provider') || null,
+      kind: fd.get('kind'),
+      categoryId: fd.get('category') || null,
+      accountId: fd.get('account') || null,
+      amount: Number(fd.get('amount')),
+      currency: (fd.get('currency') || 'EUR').toUpperCase(),
+      billingCycle: fd.get('cycle'),
+      interval: existing?.interval || 1,
+      startDate: fd.get('start') || null,
+      endDate: fd.get('end') || null,
+      nextDueDate: fd.get('nextDue') || null,
+      isActive: existing ? existing.isActive !== false : true,
+      notes: (fd.get('notes') || '').trim() || null
     };
+
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
     try {
-      const path = existing ? `api/contracts/${existing.id}` : 'api/contracts';
-      await ctx.api(path, jsonBody(body, existing ? 'PUT' : 'POST'));
-      dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx);
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+      const endpoint = existing ? `api/contracts/${existing.id}` : 'api/contracts';
+      const saved = await ctx.api(endpoint, jsonBody(body, existing ? 'PUT' : 'POST'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+      if (saved?.id) await openDetail(saved.id);
+    } catch (err) {
+      submit.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   };
   dlg.showModal();
 }
