@@ -1,3 +1,4 @@
+import { confirmMessage } from '../ui/confirm.js';
 // Canonical purchase discount editor. Purchase.DiscountAmount is a derived mirror; all mutations use
 // /discounts so basket promotions are never forced onto an arbitrary product and manual corrections
 // remain distinguishable from OCR/Amazon/Codex imports.
@@ -52,7 +53,13 @@ export async function mountPurchaseDiscountActions({ dlg, purchase, writable, ap
     card.querySelectorAll('[data-discount-edit]').forEach(button => button.addEventListener('click', () =>
       openEditor(rows.find(row => String(row.id) === button.dataset.discountEdit) || null)));
     card.querySelectorAll('[data-discount-delete]').forEach(button => button.addEventListener('click', async () => {
-      if (!window.confirm(text('Rabatt wirklich löschen? Der Kauf wird wieder auf „Zu prüfen“ gesetzt.', 'Delete this discount? The purchase will return to needs-review.'))) return;
+      if (!await confirmMessage({
+        title: text('Rabatt löschen', 'Delete discount'),
+        message: text('Rabatt wirklich löschen? Der Kauf wird wieder auf „Zu prüfen“ gesetzt.', 'Delete this discount? The purchase will return to needs-review.'),
+        confirmLabel: text('Löschen', 'Delete'),
+        cancelLabel: text('Abbrechen', 'Cancel'),
+        destructive: true
+      })) return;
       try {
         await api(`api/purchases/${purchase.id}/discounts/${button.dataset.discountDelete}`, { method: 'DELETE' });
         await refresh();
