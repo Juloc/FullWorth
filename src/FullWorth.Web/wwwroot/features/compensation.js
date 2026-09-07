@@ -1,4 +1,5 @@
 import { apiClient, jsonBody as sharedJsonBody } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const state={spaces:[],space:null,result:null,regularMonthResult:null,scenarios:[],selected:[]};
@@ -396,7 +397,7 @@ async function renderComparison(){
 }
 
 async function deleteScenario(id){
-  if(!confirm('Szenario wirklich löschen?'))return;
+  if(!await confirmMessage({title:'Szenario löschen',message:'Szenario wirklich löschen?',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true}))return;
   await api(`api/compensation/scenarios/${id}?fullWorthSpaceId=${state.space.id}`,{method:'DELETE'});
   state.selected=state.selected.filter(x=>x!==id);
   await loadScenarios();
