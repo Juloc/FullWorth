@@ -116,6 +116,7 @@ export function ensurePurchaseArticlesWorkspace() {
     if (!button) return;
     switchTab(button.dataset.paTab);
   });
+  notifyPurchaseUiChanged({tab:activeTab});
 }
 
 async function switchTab(tab) {
