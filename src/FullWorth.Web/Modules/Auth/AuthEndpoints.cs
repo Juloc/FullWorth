@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Web.Modules.Auth;
@@ -40,11 +41,13 @@ public static class AuthEndpoints
 
     private static async Task<IResult> ProvidersAsync(
         IAuthenticationSchemeProvider schemes,
-        IOptions<RegistrationOptions> registration)
+        IOptions<RegistrationOptions> registration,
+        UserManager<AuthUser> userManager)
     {
+        var registrationEnabled = registration.Value.Enabled || !await userManager.Users.AnyAsync();
         return Results.Ok(new
         {
-            registrationEnabled = registration.Value.Enabled,
+            registrationEnabled,
             google = await schemes.GetSchemeAsync("Google") is not null,
             apple = await schemes.GetSchemeAsync("Apple") is not null
         });
