@@ -1237,10 +1237,16 @@ async function openContractAnalysis() {
     monthMap.set(key, month);
   }
 
-  const [activities, overview] = await Promise.all([
-    Promise.allSettled(active.slice(0, 60).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))),
-    ctx.api(`api/analytics/overview?from=${contractDateParam(firstMonth)}&to=${contractDateParam(lastMonth)}&granularity=month`).catch(() => null)
-  ]);
+  const overviewPromise = ctx.api(`api/analytics/overview?from=${contractDateParam(firstMonth)}&to=${contractDateParam(lastMonth)}&granularity=month`).catch(() => null);
+  const activities = [];
+  const analysisContracts = active.slice(0, 60);
+  for (let index = 0; index < analysisContracts.length; index += 6) {
+    const batch = await Promise.allSettled(
+      analysisContracts.slice(index, index + 6).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))
+    );
+    activities.push(...batch);
+  }
+  const overview = await overviewPromise;
 
   for (const result of activities) {
     if (result.status !== 'fulfilled') continue;
