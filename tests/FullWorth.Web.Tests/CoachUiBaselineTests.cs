@@ -104,12 +104,14 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var contracts = await GetAsync("/features/contracts.js");
         var networth = await GetAsync("/features/networth.js");
         var accounts = await GetAsync("/features/accounts-ux.js");
+        var coach = await GetAsync("/features/coach-shell.js");
         var dialogs = await GetAsync("/ui/dialog.js");
 
         Assert.Contains("id=\"layout-reset\"", html);
         Assert.Contains("finance.sidebar.width.", app);
         Assert.Contains("fullworth:view-change", app);
-        Assert.Contains("window.fwOpenBudget", app);
+        Assert.Contains("onAppEvent('budget:open'", app);
+        Assert.Contains("emitAppEvent('budget:open'", coach);
         Assert.Contains("selectedForCoach", transactions);
         Assert.Contains("selectedItems", transactions);
         Assert.Contains("data-tx-select", transactions);
