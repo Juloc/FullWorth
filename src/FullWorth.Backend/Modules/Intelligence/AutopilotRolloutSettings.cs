@@ -34,7 +34,8 @@ public static class AutopilotFeatures
 /// <summary>
 /// Central rollout switchboard for the AI Autopilot migration.
 ///
-/// All features default to Off. Configuration is optional and therefore does not add a required
+/// Defaults follow the currently deployed rollout stage. Signals are Shadow from Deploy 3 onward;
+/// all user-visible/write features remain Off. Configuration is optional and therefore does not add a required
 /// environment variable to normal FullWorth installations. A feature can later be moved through
 /// Off -> Shadow -> On independently while main remains deployable.
 ///
@@ -67,9 +68,12 @@ public sealed class AutopilotRolloutSettings
 
     public IReadOnlyDictionary<string, AutopilotRolloutState> Snapshot() => states;
 
-    private static AutopilotRolloutState Parse(string? value, string feature)
+    private static AutopilotRolloutState DefaultState(string feature) =>
+        feature == AutopilotFeatures.Signals ? AutopilotRolloutState.Shadow : AutopilotRolloutState.Off;
+
+    private static AutopilotRolloutState Parse(string? value, string feature, AutopilotRolloutState defaultState)
     {
-        if (string.IsNullOrWhiteSpace(value)) return AutopilotRolloutState.Off;
+        if (string.IsNullOrWhiteSpace(value)) return defaultState;
 
         return value.Trim().ToLowerInvariant() switch
         {
