@@ -736,6 +736,90 @@ async function dismissCandidate(candidate) {
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }
 
+
+function editableDetailRow(label, value, field) {
+  return `<button type="button" class="contract-field-row" data-quick-edit="${field}">
+    <span>${ctx.esc(label)}</span>
+    <strong>${ctx.esc(value || '—')}</strong>
+    <span class="contract-field-edit" aria-hidden="true">✎</span>
+  </button>`;
+}
+
+async function saveContractPatch(contract, patch) {
+  await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), ...patch }, 'PUT'));
+  ctx.toast(ctx.get('common.saved'));
+  await renderContracts(ctx);
+}
+
+async function openQuickEdit(contract, field) {
+  let title = '';
+  let control = '';
+  let readValue = null;
+
+  if (field === 'amount') {
+    title = t('Betrag bearbeiten', 'Edit amount');
+    control = `<label>${ctx.esc(ctx.get('transactions.amount'))}<input name="value" type="number" step="0.01" inputmode="decimal" required value="${Number(contract.amount) || 0}"></label>`;
+    readValue = fd => ({ amount: Number(fd.get('value')) });
+  } else if (field === 'cycle') {
+    title = t('Turnus bearbeiten', 'Edit billing cycle');
+    control = `<label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="value">${CYCLES.map(value => `<option value="${value}"${value === (contract.billingCycle || 'monthly') ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.cycle_' + value))}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ billingCycle: String(fd.get('value') || 'monthly') });
+  } else if (field === 'category') {
+    title = t('Kategorie bearbeiten', 'Edit category');
+    control = `<label>${ctx.esc(t('Kategorie', 'Category'))}<select name="value"><option value="">—</option>${[...categoryNames.entries()].map(([id, label]) => `<option value="${id}"${id === contract.categoryId ? ' selected' : ''}>${ctx.esc(label)}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ categoryId: String(fd.get('value') || '') || null });
+  } else if (field === 'account') {
+    title = t('Zahlungskonto bearbeiten', 'Edit payment account');
+    control = `<label>${ctx.esc(ctx.get('contracts.account'))}<select name="value"><option value="">—</option>${[...accountNames.entries()].map(([id, label]) => `<option value="${id}"${id === contract.accountId ? ' selected' : ''}>${ctx.esc(label)}</option>`).join('')}</select></label>`;
+    readValue = fd => ({ accountId: String(fd.get('value') || '') || null });
+  } else if (field === 'nextDue') {
+    title = t('Nächste Fälligkeit bearbeiten', 'Edit next due date');
+    control = `<label>${ctx.esc(t('Nächste Fälligkeit', 'Next due date'))}<input name="value" type="date" value="${String(contract.nextDueDate || '').slice(0, 10)}"></label>`;
+    readValue = fd => ({ nextDueDate: String(fd.get('value') || '') || null });
+  } else if (field === 'name') {
+    title = t('Name bearbeiten', 'Edit name');
+    control = `<label>${ctx.esc(ctx.get('common.name'))}<input name="value" maxlength="160" required value="${ctx.esc(contract.name || '')}"></label>`;
+    readValue = fd => ({ name: String(fd.get('value') || '').trim() });
+  } else {
+    return;
+  }
+
+  const dlg = ctx.dialog(`<form class="dialog-card contracts-sortsheet contract-quick-edit">
+    <div class="panel-head"><h2>${ctx.esc(title)}</h2><button tye="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    ${control}
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get('common.apply'))}</button></div>
+  </form>`);
+  dlg.classList.add('contracts-sortsheet-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await saveContractPatch(contract, readValue(new FormData(event.currentTarget)));
+      dlg.close();
+      await openDetail(contract.id);
+    } catch (err) {
+      submit.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
+  };
+  dlg.showModal();
+}
+
+function openPaymentsDialog(contract, payments) {
+  const rows = (payments || []).map(payment => `<div class="contract-payment-row">
+    <div><strong>${ctx.esc(ctx.date(payment.date))}</strong><span>${ctx.esc(contract.providerName || contract.name)}</span></div>
+    <strong>${ctx.money(payment.amount, payment.currency)}</strong>
+  </div>`).join('');
+  const dlg = ctx.dialog(`<div class="dialog-card contract-payments-dialog">
+    <div class="panel-head"><div><h2>${ctx.esc(t('Buchungen', 'Payments'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="contract-payment-list">${rows || `<div class="row-sub">${ctx.esc(ctx.get('contracts.noPayments'))}</div>`}</div>
+  </div>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.showModal();
+}
 async function openDetail(id) {
   let contract, activity, cancellation, cloudBenchmark, mergedSources;
   try {
