@@ -104,7 +104,7 @@ public sealed class ContractDetectionService(
                 last.Date,
                 AddCycle(last.Date, cycle.Value.Cycle, cycle.Value.Interval),
                 entries.GroupBy(x => x.CategoryId).OrderByDescending(x => x.Count()).Select(x => x.Key).FirstOrDefault(),
-                entries.GroupBy(x => x.AccountId).OrderByDescending(x => x.Count()).Select(x => (Guid?)x.Key).FirstOrDefault(),
+                last.AccountId,
                 entries.Count,
                 variation,
                 confidence));
