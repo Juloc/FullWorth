@@ -37,6 +37,7 @@ export function bindAccounts(context){
   $('#add-account')?.addEventListener('click',openAddAccountDialogInternal);
   initializeAccountPresentation(ctx,{
     openBank:()=>openBankDialog(),
+    openAddAccount:()=>openAddAccountDialogInternal(),
     reloadAccounts:rerenderAccounts
   });
 }
