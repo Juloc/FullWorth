@@ -1,7 +1,7 @@
 import { money, setMoneyLocale } from './ui/money.js';
-import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault, setPrivacyDefault } from './ui/privacy.js';
+import { isPrivate, togglePrivacy, onPrivacyChange, setPrivacyDefault } from './ui/privacy.js';
 import { confirmDialog } from './ui/confirm.js';
-import { initLock, openPinDialog } from './ui/lock.js';
+import { initLock } from './ui/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
 import { renderCategories, bindCategories, newCategory } from './features/categories.js';
@@ -16,6 +16,7 @@ import { renderTax, bindTax } from './features/tax.js';
 import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
+import { bindSettings, renderSettings } from './features/settings.js';
 import { createAccessSetup } from './features/access-setup.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
 import {
@@ -90,99 +91,6 @@ function handleConnectRedirect(){
   toast(get(known[error]||'accounts.connectFailed'),8000);
   return'accounts';
 }
-async function openDeleteAccountDialog(){
-  const dlg=createDialog(`
-    <form class="dialog-card" id="delete-account-form">
-      <div class="panel-head"><h2>${get('settings.deleteAccount')}</h2></div>
-      <p class="row-sub">${get('settings.deleteAccountExplain')}</p>
-      <div class="form-grid">
-        <label><span>${get('auth.password')}</span><input id="delete-account-password" type="password" autocomplete="current-password" required></label>
-        <label class="check"><input id="delete-account-confirm" type="checkbox" required><span>${get('settings.deleteAccountConfirm')}</span></label>
-      </div>
-      <p id="delete-account-error" class="row-sub" hidden></p>
-      <div class="dialog-actions">
-        <button type="button" class="ghost" data-close>${get('common.cancel')}</button>
-        <button type="submit" class="danger">${get('settings.deleteAccountAction')}</button>
-      </div>
-    </form>`,{closeLabel:get('common.close')});
-  const form=dlg.querySelector('#delete-account-form');
-  dlg.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>{if(dlg.open)dlg.close('cancel')}));
-  form.addEventListener('submit',async e=>{
-    e.preventDefault();
-    const password=dlg.querySelector('#delete-account-password').value;
-    const confirmed=dlg.querySelector('#delete-account-confirm').checked;
-    const error=dlg.querySelector('#delete-account-error');
-    if(!password||!confirmed)return;
-    const submit=form.querySelector('button[type="submit"]');
-    submit.disabled=true;error.hidden=true;
-    try{
-      const response=await fetch('/auth/account-deletion/request',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({currentPassword:password})
-      });
-      if(response.ok){location.assign('/account/deletion');return}
-      const payload=await response.json().catch(()=>({}));
-      error.textContent=payload.error==='invalid_password'?get('settings.deleteAccountPasswordInvalid'):get('settings.deleteAccountFailed');
-      error.hidden=false;
-    }catch{
-      error.textContent=get('settings.deleteAccountFailed');error.hidden=false;
-    }finally{submit.disabled=false}
-  });
-  dlg.showModal();
-}
-
-async function openTwoFactorDialog(){
-  let status;
-  try{
-    status=await fetch('/auth/two-factor/status',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject());
-  }catch{toast(get('common.error'));return}
-
-  if(status.enabled){
-    const dlg=dialog(`
-      <form class="dialog-card" id="two-factor-disable-form">
-        <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
-        <p class="row-sub">${get('twoFactor.enabled')}</p>
-        <label><span>${get('twoFactor.code')}</span><input id="two-factor-disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-        <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit" class="danger">${get('twoFactor.disable')}</button></div>
-      </form>`);
-    dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
-    dlg.querySelector('form').addEventListener('submit',async e=>{
-      e.preventDefault();
-      const code=dlg.querySelector('#two-factor-disable-code').value;
-      const response=await fetch('/auth/two-factor/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-      if(response.ok){state.capabilities.twoFactorEnabled=false;dlg.close();toast(get('twoFactor.disabled'));return}
-      toast(get('twoFactor.invalidCode'));
-    });
-    dlg.showModal();return;
-  }
-
-  let setup;
-  try{
-    const response=await fetch('/auth/two-factor/setup',{method:'POST'});
-    if(!response.ok)throw new Error();
-    setup=await response.json();
-  }catch{toast(get('common.error'));return}
-
-  const dlg=dialog(`
-    <form class="dialog-card" id="two-factor-enable-form">
-      <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
-      <p class="row-sub">${get('twoFactor.setupHelp')}</p>
-      <div class="row"><div class="row-main"><div class="row-title">${get('twoFactor.sharedKey')}</div><div class="row-sub"><code class="two-factor-key">${esc(setup.sharedKey)}</code></div></div></div>
-      <label><span>${get('twoFactor.code')}</span><input id="two-factor-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-      <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit">${get('twoFactor.enable')}</button></div>
-    </form>`);
-  dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
-  dlg.querySelector('form').addEventListener('submit',async e=>{
-    e.preventDefault();
-    const code=dlg.querySelector('#two-factor-enable-code').value;
-    const response=await fetch('/auth/two-factor/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-    if(response.ok){state.capabilities.twoFactorEnabled=true;dlg.close();toast(get('twoFactor.enabledToast'));return}
-    toast(get('twoFactor.invalidCode'));
-  });
-  dlg.showModal();
-}
-
 async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
 function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
@@ -223,10 +131,6 @@ function bind(){
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
   bindCompensationNavigation();
-  $('#delete-account')?.addEventListener('click',openDeleteAccountDialog);
-  $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
-  $('#admin-settings-link')?.addEventListener('click',()=>location.assign('/admin'));
-  $('#two-factor-settings')?.addEventListener('click',openTwoFactorDialog);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
@@ -247,9 +151,9 @@ function bind(){
   bindMerchants(ctx);
   bindAudit(ctx);
   bindSharing(ctx);
+  bindSettings(ctx,{accessSetup,renderEnableBankingSettings});
   $('#export-data')?.addEventListener('click',event=>downloadWealthBackup(ctx,event.currentTarget));
   bindDashboard(ctx);
-  $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
   $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
   $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
@@ -463,7 +367,7 @@ const featureRegistry=createFeatureRegistry()
   .register('notifications',()=>renderNotifications(ctx))
   .register('merchants',()=>renderMerchants(ctx))
   .register('audit',()=>renderAudit(ctx))
-  .register('settings',()=>loadSettings());
+  .register('settings',()=>renderSettings(ctx));
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
@@ -471,7 +375,6 @@ window.fwOpenBudget=id=>openBudgetDetail(ctx,id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
 
-async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
 initResizableSidebar();
 syncResponsiveSidebar();
