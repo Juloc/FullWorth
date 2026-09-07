@@ -38,7 +38,7 @@ public sealed class RegistrationService(
 
         try
         {
-        var email = (request.Email ?? string.Empty).Trim();
+            var email = (request.Email ?? string.Empty).Trim();
         var displayName = (request.DisplayName ?? string.Empty).Trim();
         if (email.Length == 0 || displayName.Length == 0 || displayName.Length > 200 || !request.AcceptTerms || !request.ConfirmAdult)
             return RegisterResultDto.Invalid();
@@ -110,7 +110,7 @@ public sealed class RegistrationService(
 
         try
         {
-        var email = (login.Principal.FindFirstValue(ClaimTypes.Email)
+            var email = (login.Principal.FindFirstValue(ClaimTypes.Email)
             ?? login.Principal.FindFirstValue("email")
             ?? string.Empty).Trim();
         if (email.Length == 0)
@@ -135,6 +135,14 @@ public sealed class RegistrationService(
         var authUser = await userManager.FindByEmailAsync(email);
         if (authUser is null)
             return RegisterResultDto.Failed();
+
+        if (firstRegistration)
+        {
+            authUser.IsAdmin = true;
+            var adminResult = await userManager.UpdateAsync(authUser);
+            if (!adminResult.Succeeded)
+                return new RegisterResultDto(false, "registration_failed", null, adminResult.Errors.Select(error => error.Description).ToArray());
+        }
 
         var agreement = await AddAgreementClaimsAsync(authUser);
         if (!agreement.Succeeded)
