@@ -1107,6 +1107,13 @@ Add user settings later:
 
 Do not hide whether an external provider is used.
 
+Provider descriptors should expose a configured data boundary:
+
+- `local` — self-hosted/local compatible endpoint
+- `external` — data leaves the FullWorth instance
+
+Do not infer this from hostname at runtime; make it an explicit administrator configuration/property.
+
 ---
 
 # 19. Security requirements
@@ -1343,19 +1350,7 @@ No new bottom nav item.
 
 **Done when:** user can understand and manage signals without Coach.
 
-## PR 5 — Optional AI explanations + push
-
-Implement:
-
-- SignalExplanationService
-- explanation cache
-- minimal provider payloads
-- `financial_insight` notification type
-- high-priority push policy
-
-**Done when:** AI improves wording but disabling it changes no core signal behavior.
-
-## PR 6 — ActionProposal framework
+## PR 5 — ActionProposal framework
 
 Implement:
 
@@ -1369,7 +1364,7 @@ Implement:
 
 **Done when:** every write from an insight/Coach is previewed and explicitly confirmed.
 
-## PR 7 — Natural-language rules
+## PR 6 — Natural-language rules
 
 Implement:
 
@@ -1382,7 +1377,7 @@ Implement:
 
 **Done when:** simple supported phrases compile to visible structured rules; unsupported semantics are rejected clearly.
 
-## PR 8 — Simulation engine
+## PR 7 — Simulation engine
 
 Implement:
 
@@ -1395,6 +1390,18 @@ Implement:
 - Coach structured scenario rendering
 
 **Done when:** all numbers come from deterministic code and assumptions are shown.
+
+## PR 8 — Optional AI explanations + push
+
+Implement:
+
+- SignalExplanationService
+- explanation cache
+- minimal provider payloads
+- `financial_insight` notification type
+- high-priority push policy
+
+**Done when:** AI improves wording but disabling it changes no core signal behavior.
 
 ## PR 9 — Coach + product unification
 
