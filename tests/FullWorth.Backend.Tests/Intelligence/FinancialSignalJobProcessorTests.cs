@@ -47,8 +47,24 @@ public sealed class FinancialSignalJobProcessorTests
         intelligenceDb.IntelligenceJobs.Add(job);
         await intelligenceDb.SaveChangesAsync();
 
-        Assert.Empty(await intelligenceDb.AiInstanceSettings.AsNoTracking().ToListAsync());
-        Assert.Empty(await intelligenceDb.AiCredentials.AsNoTracking().ToListAsync());
+        var aiSettings = await intelligenceDb.AiInstanceSettings.SingleOrDefaultAsync(x =>
+            x.ScopeKey == AiInstanceSettings.InstanceScopeKey);
+        if (aiSettings is null)
+        {
+            aiSettings = new AiInstanceSettings
+            {
+                ScopeKey = AiInstanceSettings.InstanceScopeKey,
+                Enabled = false,
+                CredentialId = null
+            };
+            intelligenceDb.AiInstanceSettings.Add(aiSettings);
+        }
+        else
+        {
+            aiSettings.Enabled = false;
+            aiSettings.CredentialId = null;
+        }
+        await intelligenceDb.SaveChangesAsync();
 
         var processor = scope.ServiceProvider.GetRequiredService<ScheduledIntelligenceJobProcessor>();
         await processor.ProcessAsync(job, CancellationToken.None);
