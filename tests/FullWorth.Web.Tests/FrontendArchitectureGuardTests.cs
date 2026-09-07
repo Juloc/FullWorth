@@ -47,8 +47,6 @@ public sealed class FrontendArchitectureGuardTests
         {
             "ui/dialog.js",
             // Legacy migration allow-list. This list may only shrink.
-            "features/receipt-scan-ai.js",
-            "features/receipt-scan-set.js",
             "features/wealth-specialized-assets.js"
         };
 
@@ -67,7 +65,6 @@ public sealed class FrontendArchitectureGuardTests
             // Legacy migration allow-list. This list may only shrink.
             "features/purchase-articles-advanced-actions.js",
             "features/purchase-receipt-source-review.js",
-            "features/receipt-scan-ai.js",
             "features/transactions.js",
         };
 
