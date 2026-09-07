@@ -219,7 +219,11 @@ function trendStats(history) {
   const last = Number(usable.at(-1).netWorth);
   const delta = last - first;
   const pct = first !== 0 ? (delta / Math.abs(first)) * 100 : (delta !== 0 ? 100 : 0);
-  return { hasData: true, pct, delta };
+  // A near-zero baseline (history that starts at ~0) makes the percentage astronomical and meaningless
+  // (e.g. "+698.648 %"); there the absolute change is the figure that matters, so flag when the % is worth
+  // showing at all — the % badge is suppressed when the start value is a negligible fraction of the current.
+  const pctMeaningful = Math.abs(first) >= Math.abs(last) * 0.05;
+  return { hasData: true, pct, delta, pctMeaningful };
 }
 
 function currentRangeLabel() {
@@ -234,7 +238,7 @@ function heroTrendInner() {
   if (!stats.hasData) return `<span class="fw-trend">—</span>`;
   const sign = (!ctx.isPrivate() && stats.delta > 0) ? '+' : '';
   const cls = stats.delta > 0 ? 'positive' : stats.delta < 0 ? 'negative' : '';
-  return `${trendBadge(stats.pct, true)}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(currentRangeLabel())}</span></div>`;
+  return `${stats.pctMeaningful ? trendBadge(stats.pct, true) : ''}<div class="nw-trend-desc"><span class="nw-delta ${cls}">${sign}${ctx.money(stats.delta, nw.currency)}</span><span class="nw-window-label">${ctx.esc(currentRangeLabel())}</span></div>`;
 }
 
 // Smooth net-worth area chart: a Catmull-Rom-through-points curve emitted as a cubic-bezier <path>

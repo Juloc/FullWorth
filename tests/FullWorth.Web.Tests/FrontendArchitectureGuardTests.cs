@@ -80,7 +80,6 @@ public sealed class FrontendArchitectureGuardTests
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "security/browser-fetch.js",
-            "features/capability-ui-guard.js"
         };
 
         AssertNoNewViolations(
