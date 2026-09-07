@@ -47,18 +47,7 @@ public sealed class FrontendArchitectureGuardTests
         {
             "ui/dialog.js",
             // Legacy migration allow-list. This list may only shrink.
-            "features/advanced-transaction-bulk-ui.js",
-            "features/export-portability-ui.js",
-            "features/feature-parity-ui.js",
-            "features/fullworth-space-switcher-ui.js",
-            "features/investment-import-ui.js",
-            "features/mobile-review-ui.js",
-            "features/parity-completion-ui.js",
-            "features/parity-final-ui.js",
-            "features/purchase-discount-analytics-ui.js",
-            "features/purchase-intelligence-ui.js",
             "features/receipt-scan-ai.js",
-            "features/receipt-scan-local-builder.js",
             "features/receipt-scan-set.js",
             "features/wealth-specialized-assets.js"
         };
@@ -75,23 +64,10 @@ public sealed class FrontendArchitectureGuardTests
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             // Transitional shell/client.
-            "app.js",
             // Legacy migration allow-list. This list may only shrink.
-            "features/advanced-transaction-bulk-ui.js",
-            "features/capability-ui-guard.js",
-            "features/export-portability-ui.js",
-            "features/feature-parity-ui.js",
-            "features/fullworth-space-switcher-ui.js",
-            "features/investment-import-ui.js",
-            "features/mobile-review-ui.js",
-            "features/parity-completion-ui.js",
-            "features/parity-final-ui.js",
             "features/purchase-articles-advanced-actions.js",
-            "features/purchase-discount-analytics-ui.js",
-            "features/purchase-intelligence-ui.js",
             "features/purchase-receipt-source-review.js",
             "features/receipt-scan-ai.js",
-            "features/transaction-review-controls.js",
             "features/transactions.js",
         };
 
@@ -106,7 +82,6 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "app.js",
             "security/browser-fetch.js",
             "features/capability-ui-guard.js"
         };
@@ -128,7 +103,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/compensation-extended.js",
             "features/compensation-history.js",
             "features/compensation.js",
-            "features/parity-final-ui.js",
             "features/purchase-articles-advanced-actions.js",
             "features/purchase-discount-actions.js",
             "intelligence/brand-packs.js",
@@ -151,19 +125,7 @@ public sealed class FrontendArchitectureGuardTests
             "features/accounts-ux.js",
 
             // Legacy patch-layer migration allow-list. This list may only shrink.
-            "features/advanced-transaction-bulk-ui.js",
-            "features/capability-ui-guard.js",
             "features/compensation-nav.js",
-            "features/export-portability-ui.js",
-            "features/feature-parity-ui.js",
-            "features/fullworth-space-switcher-ui.js",
-            "features/investment-import-ui.js",
-            "features/mobile-review-ui.js",
-            "features/parity-final-ui.js",
-            "features/purchase-discount-analytics-ui.js",
-            "features/purchase-intelligence-ui.js",
-            "features/receipt-scan-local-builder.js",
-            "features/transaction-review-controls.js",
 
             // Shared infrastructure observers are explicitly reviewed and scoped.
             "ui/accessibility-release.js",
@@ -183,9 +145,6 @@ public sealed class FrontendArchitectureGuardTests
         var featureRoot = Path.Combine(WwwRoot(), "features");
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "feature-parity-ui.js",
-            "parity-completion-ui.js",
-            "parity-final-ui.js",
             "purchase-articles-advanced-installer.js"
         };
 
