@@ -2,7 +2,6 @@ import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
-let scheduled = null;
 
 const COPY = {
   de: {
@@ -52,7 +51,7 @@ const api=(path,options)=>sharedApi(path,options);
 function dialog(html) { return createDialog(html); }
 function orderedAssets(assets) { return [...assets.filter(x => x.kind === 'real_estate'), ...assets.filter(x => x.kind === 'vehicle'), ...assets.filter(x => !['real_estate', 'vehicle'].includes(x.kind))]; }
 
-function scheduleEnhance() { clearTimeout(scheduled); scheduled = setTimeout(enhanceRows, 35); }
+export async function refreshExtraSpecializedAssets() { await enhanceRows(); }
 async function enhanceRows() {
   if (enhancing) return;
   const root = document.querySelector('#assets-list');
@@ -216,10 +215,3 @@ function bindDistributionActivity(dlg, asset) {
     try { await api(`api/assets/${asset.id}/cashflows`, json('POST', { transactionId: null, date: fd.get('date'), type: 'distribution', amount: Number(fd.get('amount')), direction: 'income', currency: String(fd.get('currency')).toUpperCase(), isPlanned: false, notes: fd.get('notes') || null })); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
   });
 }
-
-function init() {
-  const root = document.querySelector('#assets-list'); if (!root) { setTimeout(init, 100); return; }
-  new MutationObserver(scheduleEnhance).observe(root, { childList: true, subtree: true });
-  document.querySelector('#privacy-toggle')?.addEventListener('click', scheduleEnhance); scheduleEnhance();
-}
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true }); else init();
