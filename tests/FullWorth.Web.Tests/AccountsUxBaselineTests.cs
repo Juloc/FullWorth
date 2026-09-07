@@ -38,11 +38,13 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task AccountsUx_UsesBffAndPersistentAccountGroupApis()
+    public async Task AccountsUx_UsesSharedApiAndPersistentAccountGroupApis()
     {
         var js = await GetAsync("/features/accounts-ux.js");
 
-        Assert.Contains("/bff/", js);
+        Assert.DoesNotContain("/bff/", js);
+        Assert.Contains("apiClient.backend", js);
+        Assert.Contains("apiClient.banking", js);
         Assert.Contains("api/accounts", js);
         Assert.Contains("api/account-groups", js);
         Assert.Contains("api/preferences/", js);
@@ -53,6 +55,11 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("http://fullworth-backend:8080", js, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("http://fullworth-banking:8080", js, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("X-FullWorth-Banking-Key", js, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("new MutationObserver", js);
+        Assert.DoesNotContain(".click()", js);
+        Assert.DoesNotContain("fwNavScope", js);
+        Assert.Contains("navigate(", js);
+        Assert.Contains("onAppEvent(", js);
     }
 
     [Fact]
