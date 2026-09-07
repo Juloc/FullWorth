@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Transactions;
@@ -22,20 +23,36 @@ public sealed class FinancialDataChangeSet
     public HashSet<Guid> AccountIds { get; } = [];
     public DateOnly? EarliestDate { get; private set; }
     public bool FullHistory { get; private set; }
+    public bool NetWorthAffected { get; private set; }
+    public bool SignalsAffected { get; private set; }
     public bool HasChanges => FullWorthSpaceIds.Count > 0 || AccountIds.Count > 0;
 
-    public void MarkSpace(Guid fullWorthSpaceId, DateOnly? from = null, bool fullHistory = false)
+    public void MarkSpace(
+        Guid fullWorthSpaceId,
+        DateOnly? from = null,
+        bool fullHistory = false,
+        bool netWorth = true,
+        bool signals = true)
     {
         if (fullWorthSpaceId != Guid.Empty) FullWorthSpaceIds.Add(fullWorthSpaceId);
         MarkDate(from);
         if (fullHistory) FullHistory = true;
+        NetWorthAffected |= netWorth;
+        SignalsAffected |= signals;
     }
 
-    public void MarkAccount(Guid accountId, DateOnly? from = null, bool fullHistory = false)
+    public void MarkAccount(
+        Guid accountId,
+        DateOnly? from = null,
+        bool fullHistory = false,
+        bool netWorth = true,
+        bool signals = true)
     {
         if (accountId != Guid.Empty) AccountIds.Add(accountId);
         MarkDate(from);
         if (fullHistory) FullHistory = true;
+        NetWorthAffected |= netWorth;
+        SignalsAffected |= signals;
     }
 
     public void Merge(FinancialDataChangeSet other)
@@ -44,6 +61,8 @@ public sealed class FinancialDataChangeSet
         AccountIds.UnionWith(other.AccountIds);
         MarkDate(other.EarliestDate);
         FullHistory |= other.FullHistory;
+        NetWorthAffected |= other.NetWorthAffected;
+        SignalsAffected |= other.SignalsAffected;
     }
 
     private void MarkDate(DateOnly? date)
@@ -101,7 +120,10 @@ internal static class FinancialDataChangeDetector
         foreach (var entry in db.ChangeTracker.Entries<FinanceTransaction>())
         {
             if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
-            if (entry.State == EntityState.Modified && !TransactionBalanceFieldsChanged(entry)) continue;
+            var balanceChanged = entry.State is EntityState.Added or EntityState.Deleted || TransactionBalanceFieldsChanged(entry);
+            var signalChanged = entry.State is EntityState.Added or EntityState.Deleted ||
+                                balanceChanged || TransactionSignalFieldsChanged(entry);
+            if (!balanceChanged && !signalChanged) continue;
 
             var currentDate = entry.Entity.BookingDate ?? entry.Entity.ValueDate;
             var originalDate = entry.State is EntityState.Modified or EntityState.Deleted
@@ -109,9 +131,9 @@ internal static class FinancialDataChangeDetector
                 : null;
             var from = Min(currentDate, originalDate) ?? today;
 
-            changes.MarkAccount(entry.Entity.AccountId, from);
+            changes.MarkAccount(entry.Entity.AccountId, from, netWorth: balanceChanged, signals: signalChanged);
             if (entry.State is EntityState.Modified or EntityState.Deleted)
-                changes.MarkAccount(entry.Property(x => x.AccountId).OriginalValue, from);
+                changes.MarkAccount(entry.Property(x => x.AccountId).OriginalValue, from, netWorth: balanceChanged, signals: signalChanged);
         }
 
         foreach (var entry in db.ChangeTracker.Entries<BalanceSnapshot>())
@@ -193,12 +215,31 @@ internal static class FinancialDataChangeDetector
                 changes.MarkSpace(entry.Property(x => x.FullWorthSpaceId).OriginalValue, today);
         }
 
+        foreach (var entry in db.ChangeTracker.Entries<Budget>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            if (entry.State == EntityState.Modified && !AnyModified(entry,
+                    nameof(Budget.FullWorthSpaceId), nameof(Budget.CategoryId), nameof(Budget.Amount),
+                    nameof(Budget.Currency), nameof(Budget.Period), nameof(Budget.CarryOver),
+                    nameof(Budget.CarryOverOverspend), nameof(Budget.IsActive), nameof(Budget.StartDate), nameof(Budget.EndDate)))
+                continue;
+            changes.MarkSpace(entry.Entity.FullWorthSpaceId, today, netWorth: false, signals: true);
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+                changes.MarkSpace(entry.Property(x => x.FullWorthSpaceId).OriginalValue, today, netWorth: false, signals: true);
+        }
+
         return changes;
     }
 
     private static bool TransactionBalanceFieldsChanged(EntityEntry<FinanceTransaction> entry) => AnyModified(entry,
         nameof(FinanceTransaction.AccountId), nameof(FinanceTransaction.Status), nameof(FinanceTransaction.BookingDate),
         nameof(FinanceTransaction.ValueDate), nameof(FinanceTransaction.Amount), nameof(FinanceTransaction.Currency));
+
+    private static bool TransactionSignalFieldsChanged(EntityEntry<FinanceTransaction> entry) => AnyModified(entry,
+        nameof(FinanceTransaction.CategoryId), nameof(FinanceTransaction.Counterparty),
+        nameof(FinanceTransaction.NormalizedCounterparty), nameof(FinanceTransaction.Description),
+        nameof(FinanceTransaction.MerchantCategoryCode), nameof(FinanceTransaction.IsIgnored),
+        nameof(FinanceTransaction.IsTransfer), nameof(FinanceTransaction.CategorizationSource));
 
     private static bool AnyModified<TEntity>(EntityEntry<TEntity> entry, params string[] properties) where TEntity : class =>
         properties.Any(name => entry.Property(name).IsModified);
@@ -238,10 +279,22 @@ public sealed class FinancialDataConsistencyCoordinator(
             }
 
             if (spaces.Count == 0) return;
-            var snapshots = scope.ServiceProvider.GetRequiredService<NetWorthSnapshotService>();
-            var from = changes.FullHistory ? (DateOnly?)null : changes.EarliestDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-            foreach (var fullWorthSpaceId in spaces)
-                await snapshots.RebuildHistoryForSpaceAsync(fullWorthSpaceId, from, ct);
+
+            if (changes.NetWorthAffected)
+            {
+                var snapshots = scope.ServiceProvider.GetRequiredService<NetWorthSnapshotService>();
+                var from = changes.FullHistory ? (DateOnly?)null : changes.EarliestDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                foreach (var fullWorthSpaceId in spaces)
+                    await snapshots.RebuildHistoryForSpaceAsync(fullWorthSpaceId, from, ct);
+            }
+
+            if (changes.SignalsAffected)
+            {
+                var signalQueue = scope.ServiceProvider.GetRequiredService<FullWorth.Backend.Modules.Intelligence.Signals.FinancialSignalRefreshQueue>();
+                var now = DateTimeOffset.UtcNow;
+                foreach (var fullWorthSpaceId in spaces)
+                    await signalQueue.EnqueueSpaceAsync(fullWorthSpaceId, now, "financial-data-commit", ct);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
