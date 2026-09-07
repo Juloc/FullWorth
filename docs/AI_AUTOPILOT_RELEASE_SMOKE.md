@@ -70,15 +70,17 @@ When banking is configured:
 
 No user-visible Autopilot feature exists yet.
 
-The following rollout features must all be `off` unless an administrator explicitly overrides optional configuration:
+Deploy 3 default rollout state:
 
-- signals
-- insights
-- actions
-- automation-rules
-- scenarios
-- proactive-ai-explanations
-- insight-push
+- signals = `shadow`
+- insights = `off`
+- actions = `off`
+- automation-rules = `off`
+- scenarios = `off`
+- proactive-ai-explanations = `off`
+- insight-push = `off`
+
+An administrator can still explicitly override `signals=off` to disable shadow processing.
 
 ## Optional rollout override
 
@@ -126,3 +128,26 @@ No database downgrade is required.
 The new Intelligence tables are additive and contain no finance source-of-truth rows.
 
 Rollback the application image without downgrading the database. The unused signal tables may remain until a later controlled cleanup.
+
+
+## Deploy 3 smoke additions
+
+Deploy 3 adds no new migration.
+
+- [ ] `signals` resolves to `shadow` with no explicit configuration
+- [ ] `insights` and every user-visible/write Autopilot feature remain `off`
+- [ ] bank/import transaction commits enqueue at most one space refresh per five-minute debounce bucket
+- [ ] category-only transaction changes enqueue signals without rebuilding net-worth history
+- [ ] budget changes enqueue signals without rebuilding net-worth history
+- [ ] daily fallback creates at most one signal job per UTC day
+- [ ] signal jobs complete with no `AiInstanceSettings`, AI credential, or provider configured
+- [ ] no `AiRun` row is created by deterministic signal processing
+- [ ] shadow detectors can persist spending, budget, savings, data-quality, and classification-quality signals
+- [ ] no new dashboard section or navigation item is visible yet
+- [ ] setting `Autopilot__Features__signals=off` makes queued signal jobs a safe no-op
+
+### Deploy 3 rollback
+
+Set `Autopilot__Features__signals=off` first if immediate load reduction is needed, then roll back the application image.
+
+Existing FinancialSignal rows may remain in the additive Intelligence tables. They are not finance source-of-truth data and do not need a database downgrade.
