@@ -58,7 +58,7 @@ During the first-login setup, FullWorth explains Enable Banking and lets each us
 
 FullWorth can:
 
-- create the Enable Banking application automatically (Beta), or
+- create the Enable Banking application automatically (Alpha), or
 - use an Application ID + private key created manually in the Enable Banking Control Panel.
 
 For private self-hosting, every user should use their own Enable Banking account/application for their own accounts.
