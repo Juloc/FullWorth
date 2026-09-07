@@ -34,7 +34,6 @@ function ensureCss() {
 let lastPortfolioId = null;
 let portfolioCache = null;
 let overviewCache = new Map();
-let enhanceTimer = null;
 let securityDialogState = null;
 
 // Register before loading the existing portfolio UI so the selected id is retained for its modal.
@@ -200,9 +199,24 @@ function tradeRows(rows, currency) {
   return `<div class="ip-list">${rows.map(row => `<div class="ip-row"><div><strong>${esc(row.tradeType || '—')}</strong><div class="fp-muted">${esc(dateText(row.tradeDate))}${row.quantity != null ? ` · ${esc(String(row.quantity))}` : ''}</div></div><div class="ip-row-value"><strong>${amount(row.amount, row.currency || currency)}</strong></div></div>`).join('')}</div>`;
 }
 
-function scheduleEnhance() { clearTimeout(enhanceTimer); enhanceTimer = setTimeout(async () => { await enhanceWealthRows(); const dialog = $$('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog')); if (dialog) await enhancePortfolioDialog(dialog); }, 40); }
+export async function refreshInvestmentConsolidation() {
+  ensureCss();
+  await enhanceWealthRows();
+  const dialog = $('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
+  if (dialog) await enhancePortfolioDialog(dialog);
+}
 
-new MutationObserver(scheduleEnhance).observe(document.body, { childList:true, subtree:true });
-document.addEventListener('fullworth-space-changed', () => { portfolioCache = null; overviewCache.clear(); scheduleEnhance(); });
-onPrivacyChange(() => { if (securityDialogState?.dialog?.open) { const id = securityDialogState.securityId; const portfolio = securityDialogState.portfolioId; securityDialogState.dialog.close(); void openSecurityDetail(portfolio, id); } });
-scheduleEnhance();
+document.addEventListener('fullworth-space-changed', () => {
+  portfolioCache = null;
+  overviewCache.clear();
+  void refreshInvestmentConsolidation();
+});
+document.addEventListener('fullworth:investment-dialog-opened', () => void refreshInvestmentConsolidation());
+onPrivacyChange(() => {
+  if (securityDialogState?.dialog?.open) {
+    const id = securityDialogState.securityId;
+    const portfolio = securityDialogState.portfolioId;
+    securityDialogState.dialog.close();
+    void openSecurityDetail(portfolio, id);
+  }
+});
