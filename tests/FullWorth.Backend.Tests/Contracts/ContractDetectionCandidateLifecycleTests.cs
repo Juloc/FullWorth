@@ -79,6 +79,183 @@ public sealed class ContractDetectionCandidateLifecycleTests
         Assert.Single(commerzbank);
     }
 
+
+    [Fact]
+    public async Task ProviderSpellingVariantsAcrossAccountChanges_AreOneCandidate()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var owner = Guid.NewGuid();
+        var space = Guid.NewGuid();
+        var connection = Guid.NewGuid();
+        var accounts = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = owner,
+                EmailNormalized = $"{owner:N}@EXAMPLE.COM",
+                DisplayName = "Account switch owner",
+                IsActive = true
+            });
+            db.FullWorthSpaces.Add(new FullWorthSpace
+            {
+                Id = space,
+                Name = "Account switch",
+                BaseCurrency = "EUR"
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = space,
+                UserId = owner,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            db.BankConnections.Add(new BankConnection
+            {
+                Id = connection,
+                FullWorthSpaceId = space,
+                Provider = "test",
+                InstitutionName = "Test Bank",
+                Country = "DE",
+                ProviderSessionId = $"switch-{connection:N}",
+                Status = "AUTHORIZED"
+            });
+
+            for (var index = 0; index < accounts.Length; index++)
+            {
+                var accountId = accounts[index];
+                db.Accounts.Add(new FinanceAccount
+                {
+                    Id = accountId,
+                    FullWorthSpaceId = space,
+                    BankConnectionId = connection,
+                    Provider = "test",
+                    IdentificationHash = $"switch-{accountId:N}",
+                    ProviderAccountId = $"provider-{accountId:N}",
+                    InstitutionName = "Test Bank",
+                    DisplayName = $"Account {index + 1}",
+                    Currency = "EUR"
+                });
+                db.AccountOwners.Add(new AccountOwner
+                {
+                    AccountId = accountId,
+                    UserId = owner,
+                    OwnershipType = AccountOwnershipTypes.Owner
+                });
+            }
+
+            var names = new[] { "mueller gmbh", "müller gmbh", "mueller" };
+            var month = 9;
+            for (var accountIndex = 0; accountIndex < accounts.Length; accountIndex++)
+            {
+                for (var sample = 0; sample < 3; sample++)
+                {
+                    db.Transactions.Add(new FinanceTransaction
+                    {
+                        AccountId = accounts[accountIndex],
+                        ExternalKey = $"switch-{accountIndex}-{sample}",
+                        Amount = -182m,
+                        Currency = "EUR",
+                        Counterparty = names[accountIndex],
+                        NormalizedCounterparty = names[accountIndex],
+                        BookingDate = today.AddMonths(-month--),
+                        CategorizationSource = "none"
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts/detection?fullWorthSpaceId={space}",
+            owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var candidates = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var candidate = Assert.Single(candidates!);
+        Assert.Equal(9, candidate.GetProperty("samples").GetInt32());
+        Assert.Equal(182m, candidate.GetProperty("typicalAmount").GetDecimal());
+        Assert.Equal(accounts[2], candidate.GetProperty("accountId").GetGuid());
+    }
+
+    [Fact]
+    public async Task AcceptingSameContractOnNewAccount_PreservesOldAccountAsMergedHistory()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        var newAccount = Guid.NewGuid();
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Accounts.Add(new FinanceAccount
+            {
+                Id = newAccount,
+                FullWorthSpaceId = s.Space,
+                BankConnectionId = s.Connection,
+                Provider = "test",
+                IdentificationHash = $"detect-{newAccount:N}",
+                ProviderAccountId = $"provider-{newAccount:N}",
+                InstitutionName = "Test Bank",
+                DisplayName = "New payment account",
+                Currency = "EUR"
+            });
+            db.AccountOwners.Add(new AccountOwner
+            {
+                AccountId = newAccount,
+                UserId = s.Owner,
+                OwnershipType = AccountOwnershipTypes.Owner
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        var detectionPath = $"/api/contracts/detection?fullWorthSpaceId={s.Space}";
+        using var detected = await client.SendAsync(Request(HttpMethod.Get, detectionPath, s.Owner));
+        var candidates = await detected.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var firstCandidate = Assert.Single(candidates!);
+
+        using var firstAccept = Request(HttpMethod.Post, $"/api/contracts/detection/accept?fullWorthSpaceId={s.Space}", s.Owner);
+        firstAccept.Content = JsonContent.Create(firstCandidate);
+        using var firstAccepted = await client.SendAsync(firstAccept);
+        Assert.Equal(HttpStatusCode.OK, firstAccepted.StatusCode);
+
+        var nextDue = DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(1);
+        using var secondAccept = Request(HttpMethod.Post, $"/api/contracts/detection/accept?fullWorthSpaceId={s.Space}", s.Owner);
+        secondAccept.Content = JsonContent.Create(new
+        {
+            counterparty = "NETFLIX",
+            typicalAmount = 12.99m,
+            currency = "EUR",
+            billingCycle = "monthly",
+            interval = 1,
+            lastPaymentDate = nextDue.AddMonths(-1),
+            nextDueDate = nextDue,
+            categoryId = (Guid?)null,
+            accountId = (Guid?)newAccount,
+            samples = 4,
+            amountVariation = 0m,
+            confidence = 0.95m
+        });
+        using var secondAccepted = await client.SendAsync(secondAccept);
+        Assert.Equal(HttpStatusCode.OK, secondAccepted.StatusCode);
+        var contract = await secondAccepted.Content.ReadFromJsonAsync<JsonElement>();
+        var contractId = contract.GetProperty("id").GetGuid();
+        Assert.Equal(newAccount, contract.GetProperty("accountId").GetGuid());
+
+        using var sourcesResponse = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts/{contractId}/merged-sources?fullWorthSpaceId={s.Space}",
+            s.Owner));
+        Assert.Equal(HttpStatusCode.OK, sourcesResponse.StatusCode);
+        var sources = await sourcesResponse.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var source = Assert.Single(sources!);
+        Assert.Equal(s.Account, source.GetProperty("accountId").GetGuid());
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId)
     {
         var request = new HttpRequestMessage(method, path);

@@ -50,6 +50,51 @@ function syncViewState() {
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
 function t(de, en) { return lang() ? de : en; }
 
+const CONTRACT_LEGAL_SUFFIXES = new Set(['AG', 'GMBH', 'KG', 'OHG', 'SE', 'SA', 'SAS', 'BV', 'NV', 'INC', 'LTD', 'LLC', 'PLC', 'AB']);
+function contractIdentityKey(contract) {
+  const raw = String(contract?.providerName || contract?.name || '').trim().toUpperCase()
+    .replaceAll('Ä', 'AE').replaceAll('Ö', 'OE').replaceAll('Ü', 'UE').replaceAll('ẞ', 'SS').replaceAll('ß', 'SS');
+  const tokens = raw.replace(/[^A-Z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  while (tokens.length > 1 && CONTRACT_LEGAL_SUFFIXES.has(tokens[tokens.length - 1])) tokens.pop();
+  return tokens.join(' ');
+}
+function sameExpectedAmount(a, b) {
+  const left = Math.abs(Number(a?.amount) || 0);
+  const right = Math.abs(Number(b?.amount) || 0);
+  const tolerance = Math.max(0.02, Math.max(left, right) * 0.02);
+  return Math.abs(left - right) <= tolerance;
+}
+function likelyDuplicateGroups() {
+  const groups = [];
+  const candidates = allContracts.filter(contract => contract.autoDetected && contract.isActive !== false);
+  for (const contract of candidates) {
+    const key = contractIdentityKey(contract);
+    if (!key) continue;
+    let group = groups.find(item =>
+      item.key === key &&
+      item.currency === String(contract.currency || '').toUpperCase() &&
+      item.cycle === String(contract.billingCycle || 'monthly') &&
+      item.interval === Number(contract.interval || 1) &&
+      sameExpectedAmount(item.contracts[0], contract));
+    if (!group) {
+      group = {
+        key,
+        currency: String(contract.currency || '').toUpperCase(),
+        cycle: String(contract.billingCycle || 'monthly'),
+        interval: Number(contract.interval || 1),
+        contracts: []
+      };
+      groups.push(group);
+    }
+    group.contracts.push(contract);
+  }
+  return groups.filter(group => {
+    if (group.contracts.length < 2) return false;
+    const accountIds = new Set(group.contracts.map(contract => contract.accountId).filter(Boolean));
+    return accountIds.size >= 2;
+  });
+}
+
 const CANCELLED_STATES = new Set(['sent', 'confirmed', 'cancelled']);
 function cancellationStatus(c) { return c?.cancellationStatus || 'none'; }
 function lifecycleStatus(c) {
@@ -250,6 +295,40 @@ function openContractFilterSheet(host) {
   dlg.showModal();
 }
 
+function duplicateReviewHtml() {
+  const groups = likelyDuplicateGroups();
+  if (!groups.length) return '';
+
+  const rows = groups.map(group => {
+    const ordered = group.contracts.slice().sort((a, b) =>
+      String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    const target = ordered[ordered.length - 1];
+    const sourceIds = ordered.slice(0, -1).map(contract => contract.id);
+    const accounts = new Set(ordered.map(contract => contract.accountId).filter(Boolean));
+    const cycle = ctx.get('contracts.cycle_' + (target.billingCycle || 'monthly'));
+    return `<div class="fw-row">
+      <div class="fw-row-main">
+        <div class="fw-row-title">${esc(target.providerName || target.name)}</div>
+        <div class="fw-row-sub">${esc(t(
+          `${ordered.length} erkannte Einträge · ${accounts.size} Zahlungskonten`,
+          `${ordered.length} detected entries · ${accounts.size} payment accounts`
+        ))}</div>
+      </div>
+      <div class="fw-row-amt">${ctx.money(target.amount, target.currency)}<small>${esc(cycle)}</small></div>
+      <button type="button" class="btn btn-secondary" data-duplicate-merge="${target.id}" data-duplicate-sources="${sourceIds.join(',')}">${esc(t('Prüfen', 'Review'))}</button>
+    </div>`;
+  }).join('');
+
+  return sectionCard(
+    t('Mögliche doppelte Verträge', 'Possible duplicate contracts'),
+    `<div class="row-sub">${esc(t(
+      'Diese automatisch erkannten Verträge sehen nach einem Kontowechsel aus. Prüfe sie und führe sie bei Bedarf zu einem Vertrag zusammen.',
+      'These automatically detected contracts look like an account change. Review them and merge them into one contract if appropriate.'
+    ))}</div><div class="rows">${rows}</div>`,
+    { className: 'contracts-duplicate-review' }
+  );
+}
+
 function viewHtml() {
   const active = allContracts.filter(c => c.isActive);
   const sumMonthly = active.reduce((s, c) => s + (Number(c.monthlyEquivalent) || 0), 0);
@@ -290,8 +369,11 @@ function viewHtml() {
 
   const listCard = sectionCard('', `${typeChips}${controls}<div class="contracts-list" data-list></div>`, { className: 'contracts-listcard' });
 
+  const duplicateReview = duplicateReviewHtml();
+
   return `<div class="contracts-ux">
     ${summary}
+    ${duplicateReview}
     <div id="contracts-cloud-benchmarks" hidden></div>
     <div id="contracts-price-changes" class="detected-panel" hidden></div>
     <div id="contracts-detected" class="detected-panel" hidden></div>
@@ -363,6 +445,12 @@ function wireControls(host) {
   });
   host.querySelector('[data-sort-open]')?.addEventListener('click', () => openSortSheet(host));
   host.querySelector('[data-filter-open]')?.addEventListener('click', () => openContractFilterSheet(host));
+  host.querySelectorAll('[data-duplicate-merge]').forEach(button => button.addEventListener('click', () => {
+    const target = contractsById.get(button.dataset.duplicateMerge);
+    if (!target) return;
+    const sourceIds = String(button.dataset.duplicateSources || '').split(',').filter(Boolean);
+    openMergeDialog(target, sourceIds);
+  }));
 }
 
 function setActive(host, selector, activeEl) {
@@ -739,6 +827,9 @@ async function openDetail(id) {
 
 function mergeCandidateScore(primary, candidate) {
   let score = 0;
+  const primaryIdentity = contractIdentityKey(primary);
+  const candidateIdentity = contractIdentityKey(candidate);
+  if (primaryIdentity && candidateIdentity && primaryIdentity === candidateIdentity) score += 12;
   if ((primary.currency || '') === (candidate.currency || '')) score += 4;
   if (Math.abs(Number(primary.amount || 0) - Number(candidate.amount || 0)) < 0.01) score += 6;
   if ((primary.billingCycle || 'monthly') === (candidate.billingCycle || 'monthly')) score += 3;
@@ -746,7 +837,8 @@ function mergeCandidateScore(primary, candidate) {
   return score;
 }
 
-async function openMergeDialog(contract) {
+async function openMergeDialog(contract, preselectedIds = []) {
+  const preselected = new Set(preselectedIds);
   const candidates = allContracts
     .filter(candidate => candidate.id !== contract.id && (candidate.currency || '') === (contract.currency || ''))
     .slice()
@@ -764,7 +856,7 @@ async function openMergeDialog(contract) {
     const account = candidate.accountId ? (accountNames.get(candidate.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
     const archived = candidate.isActive === false ? ` · ${ctx.get('contracts.archived')}` : '';
     return `<label class="check contract-merge-option">
-      <input type="checkbox" name="sourceContractId" value="${candidate.id}">
+      <input type="checkbox" name="sourceContractId" value="${candidate.id}"${preselected.has(candidate.id) ? ' checked' : ''}>
       <span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${ctx.esc(account)} · ${ctx.money(candidate.amount, candidate.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (candidate.billingCycle || 'monthly')))}${ctx.esc(archived)}</span></span>
     </label>`;
   }).join('');
@@ -779,6 +871,7 @@ async function openMergeDialog(contract) {
   const submit = dlg.querySelector('[data-merge-submit]');
   const updateSubmit = () => { submit.disabled = !dlg.querySelector('input[name="sourceContractId"]:checked'); };
   dlg.querySelectorAll('input[name="sourceContractId"]').forEach(input => input.addEventListener('change', updateSubmit));
+  updateSubmit();
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
