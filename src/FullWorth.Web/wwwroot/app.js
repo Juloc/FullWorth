@@ -26,6 +26,7 @@ import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
 import { createToast } from './ui/toast.js';
 import { openGlobalSearch } from './ui/global-search.js';
+import { bindCompensationNavigation, compensationMoreButton } from './ui/compensation-navigation.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
@@ -213,6 +214,7 @@ function bind(){
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
+  bindCompensationNavigation();
   $('#delete-account')?.addEventListener('click',openDeleteAccountDialog);
   $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
   $('#admin-settings-link')?.addEventListener('click',()=>location.assign('/admin'));
@@ -424,10 +426,11 @@ function openMoreSheet(){
       ? get('transactions.allTx')
       : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav);
     return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
-  }).join('');
+  }).join('') + compensationMoreButton(esc(get('nav.compensation')));
   const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
   dlg.classList.add('more-sheet-dialog');
   dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
+  bindCompensationNavigation(dlg);
   dlg.showModal();
 }
 
