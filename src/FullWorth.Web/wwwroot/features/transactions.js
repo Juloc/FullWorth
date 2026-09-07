@@ -89,14 +89,13 @@ function applySearch() {
   const v = ctx.$('#tx-query').value.trim();
   if (v) params.set('query', v); else params.delete('query');
   const qs = params.toString();
-  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
-  renderTransactions(ctx);
+  ctx.showView('transactions', { query: qs, replace: true });
 }
 
 function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
 function txReplaceUrl(params) {
   const qs = params.toString();
-  history.replaceState({ view: 'transactions' }, '', qs ? `/transactions?${qs}` : '/transactions');
+  return ctx.showView('transactions', { query: qs, replace: true });
 }
 
 // Active-filter count badge on the Filter button (§5). Search text is intentionally excluded because
@@ -166,7 +165,7 @@ async function openFilterSheet() {
     const p = new URLSearchParams(location.search);
     ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
     ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
-    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+    dlg.close(); txReplaceUrl(p);
   };
   dlg.querySelector('[data-apply]').onclick = () => {
     const fd = new FormData(dlg.querySelector('form'));
@@ -188,7 +187,7 @@ async function openFilterSheet() {
     }
     ctx.$('#tx-direction').value = String(fd.get('direction') || '');
     ctx.$('#tx-flags').value = '';
-    txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
+    dlg.close(); txReplaceUrl(p);
   };
   dlg.showModal();
 }
@@ -591,7 +590,7 @@ async function openDetail(listItem) {
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
     ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
-    ${receiptPurchase ? `<a class="row settings-link" href="/bff/backend/api/purchases/${receiptPurchase.id}/receipt?fullWorthSpaceId=${encodeURIComponent(spaceId())}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
+    ${receiptPurchase ? `<a class="row settings-link" href="${ctx.bffUrl(`api/purchases/${receiptPurchase.id}/receipt`)}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
     <div class="dialog-actions">${t.isManual ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('transactions.delete'))}</button>` : ''}<button type="button" class="ghost" data-coach>${ctx.esc(deLabel('Coach fragen','Ask Coach'))}</button><button type="button" class="ghost" data-split>${ctx.esc(ctx.get('transactions.split'))}</button><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
