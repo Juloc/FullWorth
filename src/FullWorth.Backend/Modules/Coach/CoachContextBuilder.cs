@@ -24,7 +24,29 @@ public sealed class CoachContextBuilder(
         "convenience_cost", "avoidable_fee", "poor_value"
     };
 
-    public async Task<CoachContext> BuildAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? requestedFrom, DateOnly? requestedTo, CancellationToken ct)
+    public Task<CoachContext> BuildAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? requestedFrom,
+        DateOnly? requestedTo,
+        CancellationToken ct) =>
+        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: false, ct);
+
+    public Task<CoachContext> BuildForFinancialContextAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? requestedFrom,
+        DateOnly? requestedTo,
+        CancellationToken ct) =>
+        BuildCoreAsync(userId, fullWorthSpaceId, requestedFrom, requestedTo, includePreviousSavings: true, ct);
+
+    private async Task<CoachContext> BuildCoreAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? requestedFrom,
+        DateOnly? requestedTo,
+        bool includePreviousSavings,
+        CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var from = requestedFrom ?? new DateOnly(today.Year, today.Month, 1);
@@ -116,18 +138,29 @@ public sealed class CoachContextBuilder(
             : null;
 
         var savingsStart = today.AddDays(-90);
-        var previousSavingsEnd = savingsStart.AddDays(-1);
-        var previousSavingsStart = previousSavingsEnd.AddDays(-90);
         var savingsRows = await LoadRows(accessible.Where(x => x.BookingDate >= savingsStart && x.BookingDate <= today), fullWorthSpaceId, today, ct);
-        var previousSavingsRows = await LoadRows(accessible.Where(x => x.BookingDate >= previousSavingsStart && x.BookingDate <= previousSavingsEnd), fullWorthSpaceId, previousSavingsEnd, ct);
         var savingsAccumulator = new FxAccumulator(await fx.PrepareAsync(currency, savingsStart, today, ct));
-        var previousSavingsAccumulator = new FxAccumulator(await fx.PrepareAsync(currency, previousSavingsStart, previousSavingsEnd, ct));
         ConvertRows(savingsRows, savingsAccumulator);
-        ConvertRows(previousSavingsRows, previousSavingsAccumulator);
         var savingsTotal = savingsRows.Sum(x => x.Amount);
-        var previousSavingsTotal = previousSavingsRows.Sum(x => x.Amount);
         decimal? averageMonthlySavings = savingsAccumulator.Incomplete ? null : savingsTotal / 3m;
-        decimal? previousAverageMonthlySavings = previousSavingsAccumulator.Incomplete ? null : previousSavingsTotal / 3m;
+
+        decimal? previousAverageMonthlySavings = null;
+        if (includePreviousSavings)
+        {
+            var previousSavingsEnd = savingsStart.AddDays(-1);
+            var previousSavingsStart = previousSavingsEnd.AddDays(-90);
+            var previousSavingsRows = await LoadRows(
+                accessible.Where(x => x.BookingDate >= previousSavingsStart && x.BookingDate <= previousSavingsEnd),
+                fullWorthSpaceId,
+                previousSavingsEnd,
+                ct);
+            var previousSavingsAccumulator = new FxAccumulator(
+                await fx.PrepareAsync(currency, previousSavingsStart, previousSavingsEnd, ct));
+            ConvertRows(previousSavingsRows, previousSavingsAccumulator);
+            if (!previousSavingsAccumulator.Incomplete)
+                previousAverageMonthlySavings = previousSavingsRows.Sum(x => x.Amount) / 3m;
+        }
+
         var incomplete = periodAccumulator.Incomplete || reviewSummary.Incomplete || savingsAccumulator.Incomplete || wealthOverview?.IsComplete == false;
 
         var positiveExamples = BuildExamples(currentRows, SpendingSentiment.Positive);
