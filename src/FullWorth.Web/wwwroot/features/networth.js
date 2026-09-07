@@ -435,18 +435,19 @@ function wireHero(hero) {
 
 /* ---- Card 2: "Verteilung deines Vermögens" --------------------------------------------------- */
 
-// Donut geometry: a single ring whose segments are dash-slices of one radius. Round line-caps + a
-// per-segment gap subtracted from each arc make the slices read as soft rounded arcs (the caps fill
-// most of the gap back, leaving a hairline of breathing room). Colours stay on the --cat palette.
+// Donut geometry: a single ring whose segments are dash-slices of one radius. Keep the separation
+// small and proportional for tiny slices so 1–5% positions remain visually truthful instead of
+// turning into detached round dots. Colours stay on the --cat palette.
 const DONUT_R = 80;
 const DONUT_C = 2 * Math.PI * DONUT_R;
+const DONUT_MAX_GAP = 4;
 
 function donutSvg(segments, assetSum, label, currency) {
-  const gap = segments.length > 1 ? 24 : 0; // circumference removed per slice; round caps add ~stroke-width back
   let cursor = 0;
   const arcs = segments.map(segment => {
     const full = (segment.amount / assetSum) * DONUT_C;
-    const arc = Math.max(full - gap, 1);
+    const gap = segments.length > 1 ? Math.min(DONUT_MAX_GAP, full * 0.2) : 0;
+    const arc = Math.max(full - gap, 0.75);
     const dash = `${arc.toFixed(2)} ${(DONUT_C - arc).toFixed(2)}`;
     const offset = (-cursor).toFixed(2);
     cursor += full;
