@@ -91,7 +91,7 @@ function ensureStyle() {
   document.head.appendChild(link);
 }
 
-function install() {
+export function ensurePurchaseArticlesWorkspace() {
   if (installed) return;
   host = document.querySelector('#view-purchases');
   originalToolbar = host?.querySelector('.toolbar');
@@ -125,7 +125,10 @@ async function switchTab(tab) {
   originalToolbar.hidden = !normal;
   originalPanel.hidden = !normal;
   advancedPanel.hidden = normal;
-  if (normal) return;
+  if (normal) {
+    notifyPurchaseUiChanged({tab});
+    return;
+  }
   advancedPanel.innerHTML = `<div class="pa-loading">${esc(t('processing'))}</div>`;
   try {
     if (tab === 'articles') await renderArticles();
@@ -134,6 +137,7 @@ async function switchTab(tab) {
   } catch (error) {
     advancedPanel.innerHTML = `<div class="pa-error"><strong>${esc(t('error'))}</strong><div>${esc(error.message)}</div></div>`;
   }
+  notifyPurchaseUiChanged({tab});
 }
 
 async function renderArticles() {
@@ -268,7 +272,9 @@ async function openPurchaseWorkspace(id) {
     });
   }
   dlg.querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => window.open(apiClient.backendUrl(`api/purchases/${id}/documents/${button.dataset.viewDocument}/content`), '_blank', 'noopener'));
+  dlg.dataset.purchaseId = id;
   dlg.showModal();
+  notifyPurchaseUiChanged({dialog:dlg,purchaseId:id,kind:'purchase'});
 }
 
 function itemEditor(item, categoryOptions, writable) {
@@ -517,7 +523,9 @@ async function openProduct(id) {
     ${comp ? `<div class="pa-metrics"><div><span>Packung</span><strong>${comp.packPriceChangePercent == null ? '—' : `${comp.packPriceChangePercent}%`}</strong></div><div><span>${esc(t('basePrice'))}</span><strong>${comp.basePriceChangePercent == null ? '—' : `${comp.basePriceChangePercent}%`}</strong></div><div><span>Packungsgröße</span><strong>${comp.packageSizeChangePercent == null ? '—' : `${comp.packageSizeChangePercent}%`}</strong></div>${comp.possibleShrinkflation ? `<div class="warn"><span>⚠</span><strong>${esc(t('shrinkflation'))}</strong></div>` : ''}</div>` : ''}
     <h3>${esc(t('history'))}</h3><div class="pa-list">${(history.observations || []).slice().reverse().map(row => `<div class="pa-history-row"><div><strong>${esc(row.merchant)}</strong><span>${esc(fmtDate(row.purchaseDate))} · ${esc(row.name)}</span></div><div><strong>${esc(money(row.unitPrice ?? row.totalPrice, row.currency))}</strong>${row.baseUnitPrice == null ? '' : `<span>${esc(money(row.baseUnitPrice, row.currency))}/${esc(row.packageUnit || row.quantityUnit)}</span>`}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.dataset.productId = id;
   dlg.showModal();
+  notifyPurchaseUiChanged({dialog:dlg,productId:id,kind:'product'});
 }
 
 async function renderAnalytics() {
@@ -548,6 +556,10 @@ function categoryOptionsHtml(categories) {
   return categories.filter(x => !x.isArchived).map(x => `<option value="${x.id}">${esc(path(x))}</option>`).join('');
 }
 
+function notifyPurchaseUiChanged(detail = {}) {
+  document.dispatchEvent(new CustomEvent('fullworth:purchases-ui-changed', { detail }));
+}
+
 function makeDialog(html) {
   const normalized = html.replace(/class="pa-dialog-card\b/, 'class="dialog-card pa-dialog-card');
   return createDialog(normalized,{className:'pa-dialog',closeLabel:t('close')});
@@ -565,5 +577,3 @@ function showDialogError(dlg, message) {
   box.textContent = message || t('error');
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-else queueMicrotask(install);
