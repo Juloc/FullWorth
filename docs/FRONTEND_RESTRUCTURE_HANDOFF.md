@@ -351,6 +351,67 @@ Once the foundation is stable, continue the simple finance-app presentation:
 - advanced/admin controls stay available but one level deeper
 - FullWorth branding remains distinct
 
+
+## Important UX corrections to preserve during the restructure
+
+These points are product requirements, not optional visual polish.
+
+### Analytics/statistics period semantics
+
+The current analytics/statistics presentation must not make a trailing 12-month total look like a normal "monthly" value.
+
+Rules:
+
+- `Monat` means the selected/current month as the primary period.
+- When a 12-month context is shown on a monthly-oriented card, the primary comparison value should normally be the **monthly average**, not the sum of all 12 months.
+- A yearly total may still exist in detail views, but it must be explicitly labelled as a yearly/12-month total.
+- The same rule applies consistently to income, expenses, contracts/fixed costs and category/merchant summaries where a monthly interpretation is expected.
+- Do not mix "selected month", "last 12 months" and "monthly average" without explicit labels.
+
+Interaction:
+
+- tapping a statistic/card should open the corresponding detail for the selected period/scope, e.g. the selected month and its matching bookings
+- do not send the user first into the advanced/custom builder
+- period and scope must survive the drill-down
+
+Acceptance example:
+
+```text
+Monat selected
+-> card shows September
+-> optional comparison: monthly average of trailing 12 months
+-> tap card/category/merchant
+-> detail opens September with matching bookings
+```
+
+### Wealth preview/drill-down
+
+Where wealth is referenced outside the full Wealth page, use a compact preview rather than exposing management UI.
+
+A useful preview can contain:
+
+- current net worth
+- small trend/sparkline
+- period change
+- clear tap/click target to open the full Wealth view
+
+The full Wealth page then contains trend, allocation, emergency fund and details/management.
+
+### Normal spending is not an error state
+
+Normal expenses must **not** be visually treated as danger.
+
+Rules:
+
+- do not make "Ausgaben" the dominant red element of Overview or Analytics
+- red is reserved for genuinely negative/problem states such as overdraft, budget exceeded, failed payment/sync or meaningful loss
+- normal spending should use neutral text/card styling or the normal FullWorth accent/category treatment
+- income and expenses should have balanced visual hierarchy
+- avoid a large red expense hero that makes the whole app feel like an alert screen
+
+The target is the calm, neutral consumer-finance hierarchy visible in the supplied Finanzguru references, while keeping FullWorth's own colors and branding.
+
+
 ## Definition of done for this restructuring
 
 The restructuring is complete when:
