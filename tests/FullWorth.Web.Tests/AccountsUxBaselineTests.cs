@@ -78,10 +78,10 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void BankPicker_UsesOnlyNativeAppLogoRenderer()
     {
-        var app = ReadAsset("app.js");
+        var accounts = ReadAsset("features", "accounts.js");
         var ux = ReadAsset("features", "accounts-ux.js");
 
-        Assert.Contains("logo.className='bank-option-logo'", app);
+        Assert.Contains("logo.className='bank-option-logo'", accounts);
         Assert.DoesNotContain("decorateBankPicker", ux);
         Assert.DoesNotContain("className='bank-logo'", ux);
     }
@@ -119,12 +119,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void Ing_DefaultsToOwnedFinTs_WithoutRequiringEnableBanking()
     {
-        var app = ReadAsset("app.js");
+        var accounts = ReadAsset("features", "accounts.js");
         var de = ReadAsset("locales", "de.json");
 
-        Assert.Contains("fullworthProvider:'fints'", app);
-        Assert.Contains("api/banking/fints/ing/connect", app);
-        Assert.Contains("api/banking/fints/connections/", app);
+        Assert.Contains("fullworthProvider:'fints'", accounts);
+        Assert.Contains("api/banking/fints/ing/connect", accounts);
+        Assert.Contains("api/banking/fints/connections/", accounts);
         Assert.Contains("ingFinTsFull", de);
         Assert.Contains("ingEnableBankingOnly", de);
     }
