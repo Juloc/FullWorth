@@ -52,7 +52,7 @@ public sealed class AutopilotRolloutSettings
     {
         states = AutopilotFeatures.All.ToDictionary(
             feature => feature,
-            feature => Parse(configuration[$"{SectionName}:{feature}"], feature),
+            feature => Parse(configuration[$"{SectionName}:{feature}"], feature, DefaultState(feature)),
             StringComparer.Ordinal);
     }
 
