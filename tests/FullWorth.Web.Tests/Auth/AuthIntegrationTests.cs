@@ -241,18 +241,28 @@ public sealed class AuthIntegrationTests
     }
 
     [Fact]
-    public async Task ExternalAuthCapabilities_AreSafeWhenProvidersAreNotConfigured()
+    public async Task ExternalAuthCapabilities_AllowFirstRegistrationOnlyByDefault()
     {
         await using var factory = new FullWorthWebFactory();
         using var client = CreateClient(factory);
 
-        using var response = await client.GetAsync("/auth/providers");
+        using (var response = await client.GetAsync("/auth/providers"))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.True(json.RootElement.GetProperty("registrationEnabled").GetBoolean());
+            Assert.False(json.RootElement.GetProperty("google").GetBoolean());
+            Assert.False(json.RootElement.GetProperty("apple").GetBoolean());
+        }
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.False(json.RootElement.GetProperty("registrationEnabled").GetBoolean());
-        Assert.False(json.RootElement.GetProperty("google").GetBoolean());
-        Assert.False(json.RootElement.GetProperty("apple").GetBoolean());
+        _ = await CreateUserAsync(factory);
+
+        using (var response = await client.GetAsync("/auth/providers"))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(json.RootElement.GetProperty("registrationEnabled").GetBoolean());
+        }
     }
 
     [Fact]
