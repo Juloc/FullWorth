@@ -25,15 +25,21 @@ public sealed class RegistrationService(
         CancellationToken ct)
     {
         var registration = options.Value;
-        var firstRegistration = !registration.Enabled;
+        var firstRegistration = !await userManager.Users.AnyAsync(ct);
+        var registrationGateHeld = false;
+
         if (firstRegistration)
         {
             await FirstRegistrationGate.WaitAsync(ct);
-            if (await userManager.Users.AnyAsync(ct))
-            {
+            registrationGateHeld = true;
+            firstRegistration = !await userManager.Users.AnyAsync(ct);
+        }
+
+        if (!registration.Enabled && !firstRegistration)
+        {
+            if (registrationGateHeld)
                 FirstRegistrationGate.Release();
-                return RegisterResultDto.Disabled();
-            }
+            return RegisterResultDto.Disabled();
         }
 
         try
@@ -86,7 +92,7 @@ public sealed class RegistrationService(
         }
         finally
         {
-            if (firstRegistration)
+            if (registrationGateHeld)
                 FirstRegistrationGate.Release();
         }
     }
@@ -97,15 +103,21 @@ public sealed class RegistrationService(
         CancellationToken ct)
     {
         var registration = options.Value;
-        var firstRegistration = !registration.Enabled;
+        var firstRegistration = !await userManager.Users.AnyAsync(ct);
+        var registrationGateHeld = false;
+
         if (firstRegistration)
         {
             await FirstRegistrationGate.WaitAsync(ct);
-            if (await userManager.Users.AnyAsync(ct))
-            {
+            registrationGateHeld = true;
+            firstRegistration = !await userManager.Users.AnyAsync(ct);
+        }
+
+        if (!registration.Enabled && !firstRegistration)
+        {
+            if (registrationGateHeld)
                 FirstRegistrationGate.Release();
-                return RegisterResultDto.Disabled();
-            }
+            return RegisterResultDto.Disabled();
         }
 
         try
@@ -154,7 +166,7 @@ public sealed class RegistrationService(
         }
         finally
         {
-            if (firstRegistration)
+            if (registrationGateHeld)
                 FirstRegistrationGate.Release();
         }
     }
