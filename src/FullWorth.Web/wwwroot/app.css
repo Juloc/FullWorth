@@ -1573,3 +1573,28 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));max-height:92v
   .contract-detail-v2,.contract-analysis-dialog{max-height:94vh;border-radius:18px 18px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
   .contract-analysis-dialog{border-radius:18px 18px 0 0}
 }
+
+.contract-analysis-balance{gap:0}
+.contract-analysis-balance h3{margin-bottom:8px}
+.contract-analysis-balance>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.contract-analysis-balance>div span{color:var(--muted)}
+.contract-analysis-balance>div span small{margin-left:5px;padding:2px 5px;border-radius:5px;background:var(--surface-3);font-size:10px}
+.contract-analysis-balance>small{padding-top:9px;color:var(--muted)}
+.contract-analysis-balance .positive{color:var(--positive)}
+.contract-analysis-balance .negative{color:var(--negative)}
+.contract-analysis-available{font-weight:700}
+.contract-analysis-donut-wrap{position:relative;width:min(230px,70vw);aspect-ratio:1;margin:4px auto 12px}
+.contract-analysis-donut{width:100%;height:100%}
+.contract-analysis-donut-bg,.contract-analysis-segment{fill:none;stroke-width:14}
+.contract-analysis-donut-bg{stroke:var(--surface-3)}
+.contract-analysis-segment{transform:rotate(-90deg);transform-origin:50% 50%}
+.contract-analysis-seg-0{stroke:var(--cat-1)}.contract-analysis-seg-1{stroke:var(--cat-2)}.contract-analysis-seg-2{stroke:var(--cat-3)}.contract-analysis-seg-3{stroke:var(--cat-4)}
+.contract-analysis-seg-4{stroke:var(--cat-5)}.contract-analysis-seg-5{stroke:var(--cat-6)}.contract-analysis-seg-6{stroke:var(--cat-7)}.contract-analysis-seg-7{stroke:var(--cat-8)}
+.contract-analysis-donut-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center;pointer-events:none}
+.contract-analysis-donut-center strong{font-size:20px}
+.contract-analysis-donut-center span{font-size:11px;color:var(--muted)}
+.contract-analysis-category{grid-template-columns:10px minmax(0,1fr) auto}
+.contract-analysis-category-dot{width:8px;height:26px;border-radius:4px}
+.contract-analysis-bg-0{background:var(--cat-1)}.contract-analysis-bg-1{background:var(--cat-2)}.contract-analysis-bg-2{background:var(--cat-3)}.contract-analysis-bg-3{background:var(--cat-4)}
+.contract-analysis-bg-4{background:var(--cat-5)}.contract-analysis-bg-5{background:var(--cat-6)}.contract-analysis-bg-6{background:var(--cat-7)}.contract-analysis-bg-7{background:var(--cat-8)}
+.contract-analysis-category progress{grid-column:2/-1}
