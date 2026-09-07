@@ -185,7 +185,7 @@ export function initializePasskeyManagement({ root, message, locale = 'de' }) {
         remove.addEventListener('click', async event => {
           const button = event.currentTarget;
           const managementId = button.dataset.managementId;
-          if (!managementId || !await confirmMessage({title:message('passkeys.remove'),message:message('passkeys.removeConfirm'),confirmLabel:message('passkeys.remove'),cancelLabel:message('common.cancel'),destructive:true})) return;
+          if (!managementId || !await confirmMessage({title:message('passkeys.remove'),message:message('passkeys.removeConfirm'),confirmLabel:message('passkeys.remove'),cancelLabel:locale==='de'?'Abbrechen':'Cancel',destructive:true})) return;
           button.disabled = true;
           try {
             await requestJson(`${endpoints.credentials}/${encodeURIComponent(managementId)}`, { method: 'DELETE' });
