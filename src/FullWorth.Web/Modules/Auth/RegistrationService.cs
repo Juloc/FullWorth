@@ -4,6 +4,7 @@ using System.Security.Claims;
 using FullWorth.Web.Modules.Bootstrap;
 using FullWorth.Web.Security.BackendContext;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace FullWorth.Web.Modules.Auth;
@@ -16,15 +17,27 @@ public sealed class RegistrationService(
     AuthService auth,
     AuthSessionCoordinator sessions)
 {
+    private static readonly SemaphoreSlim FirstRegistrationGate = new(1, 1);
+
     public async Task<RegisterResultDto> RegisterAsync(
         RegisterRequest request,
         HttpContext context,
         CancellationToken ct)
     {
         var registration = options.Value;
-        if (!registration.Enabled)
-            return RegisterResultDto.Disabled();
+        var firstRegistration = !registration.Enabled;
+        if (firstRegistration)
+        {
+            await FirstRegistrationGate.WaitAsync(ct);
+            if (await userManager.Users.AnyAsync(ct))
+            {
+                FirstRegistrationGate.Release();
+                return RegisterResultDto.Disabled();
+            }
+        }
 
+        try
+        {
         var email = (request.Email ?? string.Empty).Trim();
         var displayName = (request.DisplayName ?? string.Empty).Trim();
         if (email.Length == 0 || displayName.Length == 0 || displayName.Length > 200 || !request.AcceptTerms || !request.ConfirmAdult)
@@ -62,6 +75,12 @@ public sealed class RegistrationService(
         return login.Succeeded && login.User is not null
             ? RegisterResultDto.Success(login.User)
             : RegisterResultDto.Failed();
+        }
+        finally
+        {
+            if (firstRegistration)
+                FirstRegistrationGate.Release();
+        }
     }
 
     public async Task<RegisterResultDto> RegisterExternalAsync(
@@ -70,9 +89,19 @@ public sealed class RegistrationService(
         CancellationToken ct)
     {
         var registration = options.Value;
-        if (!registration.Enabled)
-            return RegisterResultDto.Disabled();
+        var firstRegistration = !registration.Enabled;
+        if (firstRegistration)
+        {
+            await FirstRegistrationGate.WaitAsync(ct);
+            if (await userManager.Users.AnyAsync(ct))
+            {
+                FirstRegistrationGate.Release();
+                return RegisterResultDto.Disabled();
+            }
+        }
 
+        try
+        {
         var email = (login.Principal.FindFirstValue(ClaimTypes.Email)
             ?? login.Principal.FindFirstValue("email")
             ?? string.Empty).Trim();
@@ -106,6 +135,12 @@ public sealed class RegistrationService(
         return await sessions.SignInUserAsync(authUser, context, ct)
             ? RegisterResultDto.Success(authResult.User)
             : RegisterResultDto.Failed();
+        }
+        finally
+        {
+            if (firstRegistration)
+                FirstRegistrationGate.Release();
+        }
     }
 
     private async Task<(RegistrationBackendResponse? Created, string? Error)> CreateFinanceUserAsync(
