@@ -1,3 +1,6 @@
+import { api as sharedApi, apiClient, jsonBody } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
+import { confirmMessage } from '../ui/confirm.js';
 // Advanced purchases/articles UI. It is loaded as a side effect by purchases-gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
 // Receipts remains the default, while Articles, Products and Analytics use the new API families.
@@ -64,35 +67,8 @@ let advancedPanel = null;
 
 const t = key => (strings[(document.documentElement.lang || 'de').startsWith('de') ? 'de' : 'en'][key] || key);
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
-const spaceId = () => localStorage.getItem('finance.space') || '';
-
-function withSpace(path) {
-  const [base, query = ''] = String(path).replace(/^\//, '').split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', spaceId());
-  return `${base}?${params}`;
-}
-
-async function api(path, options) {
-  const response = await fetch(`/bff/backend/${withSpace(path)}`, options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try {
-      const body = await response.json();
-      message = body.error || body.message || body.title || message;
-      if (body.detail?.conflict) message += ` (${body.detail.conflict})`;
-    } catch { /* keep status */ }
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
-
-function json(method, body) {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
+const api=(path,options)=>sharedApi(path,options);
+const json=(method,body)=>jsonBody(body,method);
 
 function money(value, currency = 'EUR') {
   const amount = Number(value || 0);
@@ -291,7 +267,7 @@ async function openPurchaseWorkspace(id) {
       catch (error) { showDialogError(dlg, error.message); }
     });
   }
-  dlg.querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => window.open(`/bff/backend/${withSpace(`api/purchases/${id}/documents/${button.dataset.viewDocument}/content`)}`, '_blank', 'noopener'));
+  dlg.querySelectorAll('[data-view-document]').forEach(button => button.onclick = () => window.open(apiClient.backendUrl(`api/purchases/${id}/documents/${button.dataset.viewDocument}/content`), '_blank', 'noopener'));
   dlg.showModal();
 }
 
@@ -464,7 +440,7 @@ async function confirmPurchase(dlg, purchaseId) {
 }
 
 async function deletePurchase(dlg, id) {
-  if (!window.confirm(t('deleteConfirm'))) return;
+  if (!await confirmMessage({message:t('deleteConfirm'),title:t('deletePurchase'),confirmLabel:t('deletePurchase'),cancelLabel:t('close'),destructive:true})) return;
   try { await api(`api/purchases/${id}`, { method: 'DELETE' }); dlg.close(); if (activeTab === 'articles') await renderArticles(); }
   catch (error) { showDialogError(dlg, error.message); }
 }
@@ -573,12 +549,8 @@ function categoryOptionsHtml(categories) {
 }
 
 function makeDialog(html) {
-  const dlg = document.createElement('dialog');
-  dlg.className = 'pa-dialog';
-  dlg.innerHTML = html;
-  document.body.appendChild(dlg);
-  dlg.addEventListener('close', () => dlg.remove(), { once: true });
-  return dlg;
+  const normalized = html.replace(/class="pa-dialog-card\b/, 'class="dialog-card pa-dialog-card');
+  return createDialog(normalized,{className:'pa-dialog',closeLabel:t('close')});
 }
 
 function showDialogError(dlg, message) {
