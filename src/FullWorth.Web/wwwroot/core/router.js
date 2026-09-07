@@ -19,9 +19,10 @@ export function createRouter({ views, defaultView = 'dashboard' }) {
     return segment && known.has(segment) ? segment : defaultView;
   }
 
-  function write(view, { query = '', replace = false, state = null } = {}) {
+  function write(view, { query = '', replace = false, state = null, path = null } = {}) {
     const suffix = query ? (String(query).startsWith('?') ? String(query) : '?' + String(query)) : '';
-    const url = pathForView(view) + suffix;
+    const base = path || pathForView(view);
+    const url = base + suffix;
     history[replace ? 'replaceState' : 'pushState'](state, '', url);
     return url;
   }
