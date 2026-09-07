@@ -218,13 +218,26 @@ async function saveLayout(ctx, layout) {
 export function invalidateLayout() { cachedLayout = null; }
 
 async function gatherData(ctx) {
-  const [dashboard, accounts, budgets, groups] = await Promise.all([
+  const [dashboard, accounts, budgets, groups, nwHistory] = await Promise.all([
     ctx.api('api/analytics/dashboard').catch(() => null),
     ctx.api('api/accounts').catch(() => []),
     ctx.api('api/analytics/budget-status').catch(() => ({ items: [] })),
     ctx.api('api/account-groups').catch(() => []),
+    ctx.api('api/net-worth/history').catch(() => []),
   ]);
-  return { dashboard, accounts, budgets, groups };
+  return { dashboard, accounts, budgets, groups, nwHistory };
+}
+
+// Compact net-worth preview sparkline (FRONTEND_RESTRUCTURE_HANDOFF: the Overview net-worth widget is a
+// preview — current value + small history + change — that taps through to the full Wealth view, not a
+// second calculation surface). Uses the same neutral FullWorth accent as the other charts.
+function miniSparkline(vals) {
+  if (!vals || vals.length < 2) return '';
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  const w = 240, h = 40;
+  const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * w).toFixed(1)},${(h - 4 - ((v - min) / span) * (h - 8)).toFixed(1)}`);
+  const line = 'M' + pts.join(' L');
+  return `<svg class="dash-nw-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${line} L${w},${h} L0,${h} Z" class="dash-nw-spark-fill"/><path d="${line}" class="dash-nw-spark-line"/></svg>`;
 }
 
 // Scoped-navigation helper for drillable widget rows (Overview → scoped bookings, UX rework §3).
@@ -246,7 +259,16 @@ function renderWidget(type, ctx, body, data, cfg) {
   const cur = d?.currency || 'EUR';
   if (type === 'net-worth') {
     if (!d) { body.innerHTML = emptyState(ctx); return; }
-    body.innerHTML = `<div class="widget-metric dash-metric"><strong>${money(d.netWorth, cur)}</strong></div><div class="widget-split dash-metric-split"><span>${ctx.esc(ctx.get('dashboard.assets'))}: ${money(d.assets, cur)}</span><span>${ctx.esc(ctx.get('dashboard.liabilities'))}: ${money(d.liabilities, cur)}</span></div>${d.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''}`;
+    const hist = (data.nwHistory || []).map(x => Number(x.netWorth) || 0);
+    const change = hist.length > 1 ? hist[hist.length - 1] - hist[0] : 0;
+    const changeCls = change > 0 ? 'positive' : change < 0 ? 'negative' : 'muted';
+    const changeBadge = hist.length > 1 && change !== 0
+      ? `<span class="dash-nw-change ${changeCls}">${change > 0 ? '+' : '−'}${money(Math.abs(change), cur)}</span>` : '';
+    body.innerHTML = `<div class="dash-nw" role="button" tabindex="0" aria-label="${ctx.esc(ctx.get('widgets.netWorth'))}"><div class="widget-metric dash-metric"><strong>${money(d.netWorth, cur)}</strong>${changeBadge}</div>${miniSparkline(hist)}<div class="widget-split dash-metric-split"><span>${ctx.esc(ctx.get('dashboard.assets'))}: ${money(d.assets, cur)}</span><span>${ctx.esc(ctx.get('dashboard.liabilities'))}: ${money(d.liabilities, cur)}</span></div>${d.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''}</div>`;
+    const nav = () => window.fwNavScope && window.fwNavScope('networth');
+    const el = body.querySelector('.dash-nw');
+    el?.addEventListener('click', nav);
+    el?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nav(); } });
     return;
   }
   if (type === 'available') {
