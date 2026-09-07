@@ -4,7 +4,7 @@ import { confirmDialog } from './ui/confirm.js';
 import { initLock, openPinDialog } from './ui/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
-import { renderCategories, bindCategories, newCategory } from './features/categories.js';
+import { renderCategories, bindCategories } from './features/categories.js';
 import { renderRules, bindRules, newRule } from './features/rules.js';
 import { renderContracts, bindContracts, newContract } from './features/contracts.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './features/networth.js';
@@ -16,15 +16,7 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
-import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
-import { downloadWealthBackup } from './features/wealth-portability.js';
 import { createDialog } from './ui/dialog.js';
-import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
-import { state } from './core/state.js';
-import { createRouter } from './core/router.js';
-import { createFeatureRegistry } from './core/feature-registry.js';
-import { createToast } from './ui/toast.js';
-import { openGlobalSearch } from './ui/global-search.js';
 
 // Coalesce identical backend GETs at the one choke point every caller shares — window.fetch. The
 // feature-parity modules each keep their own fetch wrapper and independently pull the same
@@ -53,7 +45,7 @@ import { openGlobalSearch } from './ui/global-search.js';
     return p.then(r=>r.clone());
   };
 })();
-const get=path=>i18n.get(path);
+const state={lang:localStorage.getItem('finance.language')||((navigator.language||'de').startsWith('de')?'de':'en'),theme:localStorage.getItem('finance.theme')||'system',messages:{},view:'dashboard',spaces:[],space:null,capabilities:{admin:false,twoFactorEnabled:false}};
 // Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
@@ -63,16 +55,14 @@ const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
 // any of these paths and the app resolves the view from location.pathname on boot.
-const router=createRouter({views:ALL_VIEWS,defaultView:'dashboard'});
-const pathForView=router.pathForView;
-const viewFromPath=router.viewFromPath;
+const VIEW_PATH={dashboard:'/'};ALL_VIEWS.forEach(v=>{if(v!=='dashboard')VIEW_PATH[v]='/'+v});
+const pathForView=v=>VIEW_PATH[v]||'/';
+function viewFromPath(p){const seg=(p||'/').replace(/^\/+|\/+$/g,'').split('/')[0];return seg&&ALL_VIEWS.includes(seg)?seg:'dashboard'}
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>openBudgetDialog()],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>openCategoryDialog()],accounts:['accounts.add',()=>openAddAccountDialog()],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
-const toastController=createToast($('#toast'));
-const toast=(text,duration)=>toastController.show(text,duration);
 
 async function boot(){
   setMoneyLocale(state.lang);
@@ -106,6 +96,7 @@ function handleConnectRedirect(){
   toast(get(known[error]||'accounts.connectFailed'),8000);
   return'accounts';
 }
+function get(path){return path.split('.').reduce((o,k)=>o?.[k],state.messages)||path}
 async function openDeleteAccountDialog(){
   const dlg=createDialog(`
     <form class="dialog-card" id="delete-account-form">
@@ -199,8 +190,8 @@ async function openTwoFactorDialog(){
   dlg.showModal();
 }
 
-async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
-function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
+async function loadMessages(){state.messages=await fetch(`/locales/${state.lang}.json`).then(r=>r.json());document.documentElement.lang=state.lang;renderTranslations();renderPageHeader()}
+function renderTranslations(){$$('[data-i18n]').forEach(el=>el.textContent=get(el.dataset.i18n));$$('[data-i18n-placeholder]').forEach(el=>el.placeholder=get(el.dataset.i18nPlaceholder));$$('[data-i18n-title]').forEach(el=>el.title=get(el.dataset.i18nTitle));const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
@@ -244,7 +235,7 @@ function bind(){
   $('#two-factor-settings')?.addEventListener('click',openTwoFactorDialog);
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
-  $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
+  $('#global-search').addEventListener('click',openSearch);
   $$('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewJump)));
   $('#refresh').addEventListener('click',loadCurrent);
   bindTransactions(ctx);
@@ -262,7 +253,7 @@ function bind(){
   bindMerchants(ctx);
   bindAudit(ctx);
   bindSharing(ctx);
-  $('#export-data')?.addEventListener('click',event=>downloadWealthBackup(ctx,event.currentTarget));
+  $('#export-data')?.addEventListener('click',downloadExport);
   bindDashboard(ctx);
   $('#lock-settings')?.addEventListener('click',()=>openPinDialog(ctx));
   $('#privacy-default').addEventListener('change',e=>setPrivacyDefault(e.target.checked));
@@ -423,15 +414,43 @@ async function showView(view,opts={}){
 async function loadCurrent(){
   try{
     if(!state.space){await loadSpaces();if(!state.space){toast(get('common.error'));return}}
-    await featureRegistry.refresh(state.view,ctx);
+    switch(state.view){
+      case'dashboard':return await loadDashboard();
+      case'transactions':return await renderTransactions(ctx);
+      case'accounts':return await loadAccountsView();
+      case'budgets':return await loadBudgets();
+      case'contracts':return await renderContracts(ctx);
+      case'networth':await renderNetWorth(ctx);return await renderLoans(ctx);
+      case'analytics':return await renderAnalytics(ctx);
+      case'purchases':return await renderPurchases(ctx);
+      case'categories':return await renderCategories(ctx);
+      case'rules':return await renderRules(ctx);
+      case'notifications':return await renderNotifications(ctx);
+      case'merchants':return await renderMerchants(ctx);
+      case'audit':return await renderAudit(ctx);
+      case'settings':return loadSettings();
+    }
   }catch(e){console.error(e);toast(get('common.error'))}
 }
+async function fail(r){let message=`${r.status}`;try{const body=await r.json();message=body.message||body.error||body.title||message}catch{}throw new Error(message)}
+function withSpace(path){
+  if(!state.space)return path;
+  const [base,query='']=path.split('?');
+  const params=new URLSearchParams(query);
+  if(params.has('fullWorthSpaceId'))return path;
+  params.set('fullWorthSpaceId',state.space.id);
+  return `${base}?${params}`;
+}
+async function api(path,options){const r=await fetch(`/bff/backend/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
+async function bankApi(path,options){const r=await fetch(`/bff/banking/${withSpace(path.replace(/^\//,''))}`,options);if(!r.ok)await fail(r);if(r.status===204)return null;return r.json()}
+const jsonBody=data=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
 function dateTime(value){if(!value)return'—';const raw=String(value);if(!/[T ]\d{2}:\d{2}/.test(raw))return date(value);const parsed=new Date(raw);if(Number.isNaN(parsed.getTime()))return date(value);return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US',{dateStyle:'medium',timeStyle:'medium'}).format(parsed)}
 function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(message||get('common.empty'))}</div></div>`}
 function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar"></div><div class="skel-bar short"></div></div>`).join('')}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function acctId(last4){return last4?` · ${maskIdentifier(last4)}`:''}
+function toast(text,duration){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),duration||3200)}
 function dialog(html,options={}){return createDialog(html,{closeLabel:get('common.close'),...options})}
 // §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
 // category under multiple parents with the same name is still distinguishable at a glance.
@@ -456,33 +475,139 @@ function openMoreSheet(){
 }
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
+async function openSearch(){
+  const dlg=dialog(`<form method="dialog" class="dialog-card search-dialog"><div class="panel-head"><h2>${esc(get('search.title'))}</h2><button value="cancel" data-close>×</button></div><input id="search-input" type="search" autocomplete="off" data-i18n-placeholder="search.placeholder" placeholder="${esc(get('search.placeholder'))}"><div id="search-results" class="rows"></div></form>`);
+  const input=dlg.querySelector('#search-input');const results=dlg.querySelector('#search-results');
+  let timer;
+  input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>runSearch(input.value.trim(),results,dlg),220)});
+  dlg.addEventListener('close',()=>{});dlg.showModal();input.focus();
+}
+async function runSearch(query,results,dlg){
+  if(query.length<2){results.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(get('search.hint'))}</div></div>`;return}
+  skeleton(results,3);
+  try{
+    const [tx,accounts,categories,contracts,purchases,assets]=await Promise.all([
+      api(`api/transactions?limit=8&query=${encodeURIComponent(query)}`).catch(()=>({items:[]})),
+      api('api/accounts').catch(()=>[]),
+      api('api/categories').catch(()=>[]),
+      api('api/contracts').catch(()=>[]),
+      api('api/purchases').catch(()=>[]),
+      api('api/assets').catch(()=>[])]);
+    const q=query.toLowerCase();
+    const groups=[
+      [get('search.transactions'),(tx.items||[]).map(x=>({title:x.counterparty||'—',sub:`${date(x.bookingDate)} · ${money(x.amount,x.currency)}`,go:'transactions'}))],
+      [get('search.accounts'),(accounts||[]).filter(x=>(x.displayName||x.institutionName||'').toLowerCase().includes(q)).map(x=>({title:x.displayName||x.institutionName,sub:x.institutionName,go:'accounts'}))],
+      [get('nav.categories'),(categories||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:'',go:'categories'}))],
+      [get('nav.contracts'),(contracts||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.amount,x.currency),go:'contracts'}))],
+      [get('nav.purchases'),(purchases||[]).filter(x=>(x.merchant||x.externalOrderId||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.merchant||x.externalOrderId||'—',sub:`${date(x.purchaseDate)} · ${money(x.totalAmount,x.currency)}`,go:'purchases'}))],
+      [get('portfolio.assets'),(assets||[]).filter(x=>(x.name||'').toLowerCase().includes(q)).slice(0,8).map(x=>({title:x.name,sub:money(x.currentValue,x.currency),go:'networth'}))],
+    ].filter(([,items])=>items.length);
+    if(!groups.length){empty(results,get('search.none'));return}
+    results.innerHTML=groups.map(([label,items])=>`<div class="search-group">${esc(label)}</div>`+items.map(i=>`<button type="button" class="row search-hit" data-go="${i.go}"><div class="row-main"><div class="row-title">${esc(i.title)}</div>${i.sub?`<div class="row-sub">${esc(i.sub)}</div>`:''}</div></button>`).join('')).join('');
+    results.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
+  }catch(err){empty(results,err.message||get('common.error'))}
+}
+
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
-const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,empty,skeleton,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>apiClient.backendUrl(path),
+const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,categoryOptions,jsonBody,reload:loadCurrent,confirm:(message,opts)=>confirmDialog(ctx,message,opts),bffUrl:path=>`/bff/backend/${withSpace(path.replace(/^\//,''))}`,
   // Drill-down helper (UX rework §3): open a view with a URL scope, e.g. navScope('transactions','accountId='+id).
   navScope:(view,query)=>showView(view,{query:query||''}),showView:(view,opts)=>showView(view,opts)};
 const accessSetup=createAccessSetup(ctx,(status,options)=>openEnableBankingWizard(status,options));
-const featureRegistry=createFeatureRegistry()
-  .register('dashboard',()=>loadDashboard())
-  .register('transactions',()=>renderTransactions(ctx))
-  .register('accounts',()=>loadAccountsView())
-  .register('budgets',()=>renderBudgets(ctx))
-  .register('contracts',()=>renderContracts(ctx))
-  .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
-  .register('analytics',()=>renderAnalytics(ctx))
-  .register('purchases',()=>renderPurchases(ctx))
-  .register('categories',()=>renderCategories(ctx))
-  .register('rules',()=>renderRules(ctx))
-  .register('notifications',()=>renderNotifications(ctx))
-  .register('merchants',()=>renderMerchants(ctx))
-  .register('audit',()=>renderAudit(ctx))
-  .register('settings',()=>loadSettings());
 // Feature modules loaded as separate <script type="module"> (accounts-ux.js, dashboard widgets) can't
 // import app.js internals; expose only the safe scoped-navigation entry point for account/group drill-down.
 window.fwNavScope=(view,query)=>showView(view,{query:query||''});
-window.fwOpenBudget=id=>openBudgetDetail(ctx,id);
+window.fwOpenBudget=id=>openBudgetDetail(id);
 async function loadDashboard(){await renderDashboard(ctx)}
 
+async function loadBudgets(){
+  const currency=state.space?.baseCurrency||'EUR';
+  const status=await api('api/analytics/budget-status');
+  const items=status.items||[];
+  const totalBudgeted=items.reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalSpent=items.reduce((s,x)=>s+Number(x.spent||0),0);
+  $('#budget-total').textContent=money(totalBudgeted,currency);
+  $('#budget-spent').textContent=money(totalSpent,currency);
+  $('#budget-remaining').textContent=money(totalBudgeted-totalSpent,currency);
+  const el=$('#budgets-list');el.innerHTML='';
+  if(!items.length){empty(el);return}
+  for(const x of items){
+    const pct=Math.max(0,Number(x.percent||0));
+    const clamped=Math.min(100,pct);
+    // Status from usage: over (>100), near (>=85), on track (§12.2).
+    const status=pct>100?'over':pct>=85?'near':'ontrack';
+    const cycleLabel=x.period&&x.period!=='monthly'?`${esc(get('budgets.period_'+x.period)||x.period)} · ${date(x.periodStart)}–${date(x.periodEnd)} · `:'';
+    el.insertAdjacentHTML('beforeend',`<div class="budget-card" role="button" tabindex="0" data-id="${esc(x.budgetId||x.id)}"><div class="budget-card-head"><div class="row-title">${esc(x.name)}</div><div class="budget-card-head-actions"><button type="button" class="ghost budget-coach" data-coach>Coach</button><span class="budget-status ${status}">${esc(get('budgets.status_'+status))}</span></div></div><div class="progress ${status}"><span data-w="${clamped}"></span></div><div class="budget-card-foot"><span>${cycleLabel}${money(x.spent,currency)} / ${money(x.amount,currency)}</span><span>${esc(get('budgets.remaining'))}: ${money(x.remaining,currency)}</span></div></div>`);
+  }
+  // §18: flag when some spend was in a currency with no conversion rate (excluded from the figures).
+  if(status.incomplete)el.insertAdjacentHTML('afterbegin',`<div class="fx-incomplete">${esc(get('common.fxIncomplete'))}</div>`);
+  // Set bar widths via JS (avoids a source inline style; keeps the CSP inline-style budget at one).
+  el.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  // §12: each card opens the budget detail (window, forecast, contributing transactions).
+  el.querySelectorAll('.budget-card[data-id]').forEach(card=>{
+    const item=items.find(x=>String(x.budgetId||x.id)===String(card.dataset.id));
+    const open=()=>openBudgetDetail(card.dataset.id);
+    card.querySelector('[data-coach]')?.addEventListener('click',event=>{
+      event.stopPropagation();
+      if(!item)return;
+      window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+        entityType:'budget',entityId:item.budgetId||item.id,entityLabel:item.name,
+        details:{amount:String(item.amount??''),currency,status:item.percent>100?'over':item.percent>=85?'near':'ontrack'}
+      }}));
+    });
+    card.addEventListener('click',event=>{if(!event.target.closest('button'))open()});
+    card.addEventListener('keydown',ev=>{if(!ev.target.closest('button')&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();open()}});
+  });
+}
+// §12 budget detail: cycle window, spend vs. budget, cycle-end forecast, and the transactions
+// contributing to this cycle. Reuses the shared api()/money()/dialog() path.
+async function openBudgetDetail(id){
+  let s;
+  try{s=await api(`api/budgets/${id}/status`)}catch(err){toast(err.message||get('common.error'));return}
+  if(!s){toast(get('common.error'));return}
+  const currency=s.currency||state.space?.baseCurrency||'EUR';
+  const pct=Math.max(0,Number(s.percentUsed||0));
+  const clamped=Math.min(100,pct);
+  const barStatus=pct>100?'over':pct>=85?'near':'ontrack';
+  // Hatched forecast segment = projected end-of-cycle spend beyond what's already spent (capped at 100%).
+  const projectedPct=Number(s.budgetAmount)>0?(Number(s.projectedEndSpend||0)/Number(s.budgetAmount))*100:0;
+  const forecastPct=Math.max(0,Math.min(100,projectedPct)-clamped);
+  const trend=(s.trend||'NoData');
+  const trendKey='budgets.trend_'+trend.toLowerCase();
+  const projOverUnder=Number(s.projectedOverUnder||0);
+  // Colour is reserved for money statements (design rule): the forecast figures carry sentiment,
+  // the trend text stays neutral (the % pill already signals status at a glance).
+  const forecastLine=trend==='NoData'?'':`<div class="budget-detail-forecast"><div class="kv"><span>${esc(get('budgets.projectedEnd'))}</span><strong class="amount">${money(s.projectedEndSpend,currency)}</strong></div><div class="kv"><span>${esc(get(projOverUnder>0?'budgets.projectedOver':'budgets.projectedUnder'))}</span><strong class="amount ${projOverUnder>0?'negative':'positive'}">${money(Math.abs(projOverUnder),currency)}</strong></div></div>`;
+  const rows=(s.contributing||[]).map(t=>`<div class="row"><div class="row-main"><div class="row-title">${esc(t.counterparty||'—')}</div><div class="row-sub">${t.bookingDate?date(t.bookingDate):''}${t.category?` · ${esc(t.category)}`:''}</div></div><div class="amount negative">${money(-Math.abs(Number(t.amount||0)),t.currency||currency)}</div></div>`).join('');
+  const cycleLabel=s.period&&s.period!=='monthly'?`${esc(get('budgets.period_'+s.period)||s.period)} · `:'';
+  const carryIn=Number(s.carryIn||0);
+  const rolloverLine=Math.abs(carryIn)>0.004?`<div class="row-sub budget-rollover-summary">${esc(get('budgets.baseAmount'))}: ${money(s.baseBudgetAmount??s.budgetAmount,currency)} · ${esc(get('budgets.carryIn'))}: ${carryIn>0?'+':''}${money(carryIn,currency)}</div>`:'';
+  const dlg=dialog(`<div class="dialog-card budget-detail">
+    <div class="panel-head"><h2>${esc(s.name)}</h2><div class="panel-head-actions"><button type="button" class="ghost" data-edit>${esc(get('common.edit'))}</button><button data-close aria-label="${esc(get('common.close'))}">×</button></div></div>
+    <div class="row-sub">${cycleLabel}${date(s.periodStart)}–${date(s.periodEnd)}</div>
+    ${rolloverLine}
+    <div class="budget-detail-stats">
+      <div class="kv"><span>${esc(get('budgets.spent'))}</span><strong class="amount">${money(s.spent,currency)}</strong></div>
+      <div class="kv"><span>${esc(get('budgets.budget'))}</span><strong class="amount">${money(s.budgetAmount,currency)}</strong></div>
+      <div class="kv"><span>${esc(get('budgets.remaining'))}</span><strong class="amount${Number(s.remaining)<0?' negative':''}">${money(s.remaining,currency)}</strong></div>
+    </div>
+    <div class="progress ${barStatus}"><span data-w="${clamped}"></span><span class="forecast" data-w="${forecastPct}"></span></div>
+    <div class="budget-detail-trend"><span class="budget-status ${barStatus}">${esc(Math.round(pct))}%</span><span>${esc(get(trendKey))}</span></div>
+    ${forecastLine}
+    <div class="row-group">${esc(get('budgets.contributing'))}</div>
+    <div class="budget-detail-rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('common.empty'))}</div></div>`}</div>
+  </div>`);
+  dlg.querySelectorAll('.progress > span[data-w]').forEach(s=>{s.style.width=s.dataset.w+'%'});
+  const coach=document.createElement('button');coach.type='button';coach.className='ghost';coach.textContent='Coach';
+  coach.addEventListener('click',()=>{dlg.close();window.dispatchEvent(new CustomEvent('fullworth:coach-open',{detail:{
+    entityType:'budget',entityId:s.budgetId,entityLabel:s.name,
+    details:{amount:String(s.budgetAmount??''),currency,status:barStatus,count:String((s.contributing||[]).length)}
+  }}))});
+  dlg.querySelector('.panel-head-actions')?.prepend(coach);
+  dlg.querySelector('[data-close]').addEventListener('click',()=>dlg.close());
+  dlg.querySelector('[data-edit]').addEventListener('click',()=>openBudgetEdit(s.budgetId,()=>dlg.close()));
+  dlg.showModal();
+}
 function renderRows(el,rows,map){el.innerHTML='';for(const x of rows||[]){const [title,sub,value]=map(x);el.insertAdjacentHTML('beforeend',`<div class="row"><div class="row-main"><div class="row-title">${esc(title)}</div><div class="row-sub">${esc(sub)}</div></div><div class="amount">${esc(value)}</div></div>`)}if(!(rows||[]).length)empty(el)}
 
 
@@ -725,7 +850,142 @@ function openBalanceDialog(account){
 
 // Create OR edit a budget: pass the existing budget object to pre-fill + switch to PUT, with a delete
 // action. Called with no argument for the "+ new budget" flow.
+async function openBudgetDialog(existing){
+  const currency=existing?.currency||state.space?.baseCurrency||'EUR';
+  let options;try{options=await categoryOptions(existing?.categoryId||undefined)}catch(err){toast(err.message||get('common.error'));return}
+  const selectedPeriod=existing?.period||'monthly';
+  const periods=['daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom']
+    .map(p=>`<option value="${p}"${selectedPeriod===p?' selected':''}>${esc(get(`budgets.period_${p}`))}</option>`).join('');
+  const rollover=!existing?.carryOver?'reset':existing?.carryOverOverspend===false?'positive':'full';
+  const rolloverOptions=['reset','positive','full']
+    .map(mode=>`<option value="${mode}"${rollover===mode?' selected':''}>${esc(get(`budgets.rollover_${mode}`))}</option>`).join('');
+  const presets=!existing?`<div class="budget-wizard-presets"><div class="row-sub">${esc(get('budgets.quickStart'))}</div><div class="budget-preset-row">
+    <button type="button" class="btn-secondary" data-budget-preset="weekly-groceries">${esc(get('budgets.preset_weeklyGroceries'))}</button>
+    <button type="button" class="btn-secondary" data-budget-preset="monthly">${esc(get('budgets.preset_monthly'))}</button>
+    <button type="button" class="btn-secondary" data-budget-preset="paycycle">${esc(get('budgets.preset_paycycle'))}</button>
+  </div></div>`:'';
+  const dlg=dialog(`<form class="dialog-card budget-wizard"><h2>${esc(get(existing?'budgets.edit':'budgets.new'))}</h2>
+    ${presets}
+    <div class="budget-wizard-section">
+      <label>${esc(get('common.name'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label>
+      <div class="form-grid">
+        <label>${esc(get('transactions.amount'))}<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required value="${existing?esc(String(existing.amount)):''}"></label>
+        <label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label>
+      </div>
+      <label>${esc(get('budgets.period'))}<select name="period">${periods}</select></label>
+      <div class="form-grid budget-cycle-fields">
+        <label data-budget-start>${esc(get('budgets.anchorDate'))}<input name="startDate" type="date" value="${esc(existing?.startDate||'')}"><small class="row-sub" data-budget-anchor-hint></small></label>
+        <label data-budget-end>${esc(get('budgets.endDate'))}<input name="endDate" type="date" value="${esc(existing?.endDate||'')}"></label>
+      </div>
+    </div>
+    <div class="budget-wizard-section">
+      <label>${esc(get('transactions.category'))}<select name="category"><option value="">${esc(get('common.all'))}</option>${options}</select></label>
+      <label>${esc(get('budgets.rollover'))}<select name="rollover">${rolloverOptions}</select><small class="row-sub" data-rollover-hint></small></label>
+    </div>
+    <div class="dialog-actions">${existing?`<button type="button" class="btn-danger" data-delete>${esc(get('common.delete'))}</button>`:''}<button type="button" class="btn-secondary" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="btn-primary">${esc(get(existing?'common.save':'common.create'))}</button></div>
+  </form>`);
+  const form=dlg.querySelector('form');
+  const periodSelect=form.querySelector('[name="period"]');
+  const rolloverSelect=form.querySelector('[name="rollover"]');
+  const startWrap=form.querySelector('[data-budget-start]');
+  const endWrap=form.querySelector('[data-budget-end]');
+  const startInput=form.querySelector('[name="startDate"]');
+  const endInput=form.querySelector('[name="endDate"]');
+  const anchorHint=form.querySelector('[data-budget-anchor-hint]');
+  const rolloverHint=form.querySelector('[data-rollover-hint]');
+  const localIso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mondayIso=()=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return localIso(d)};
+  const syncCycleFields=()=>{
+    const period=periodSelect.value;
+    const needsAnchor=['weekly','biweekly','paycycle','custom'].includes(period);
+    startWrap.hidden=!needsAnchor;
+    endWrap.hidden=period!=='custom';
+    startInput.required=period==='custom';
+    endInput.required=period==='custom';
+    anchorHint.textContent=get(period==='paycycle'?'budgets.anchorHint_paycycle':period==='custom'?'budgets.anchorHint_custom':'budgets.anchorHint_week');
+    if(period==='paycycle'&&!startInput.value)startInput.value=localIso(new Date());
+  };
+  const syncRolloverHint=()=>{rolloverHint.textContent=get(`budgets.rolloverHint_${rolloverSelect.value}`)};
+  periodSelect.addEventListener('change',syncCycleFields);
+  rolloverSelect.addEventListener('change',syncRolloverHint);
+  form.querySelectorAll('[data-budget-preset]').forEach(button=>button.addEventListener('click',()=>{
+    const preset=button.dataset.budgetPreset;
+    const name=form.querySelector('[name="name"]');
+    if(preset==='weekly-groceries'){
+      if(!name.value)name.value=get('budgets.presetName_weeklyGroceries');
+      periodSelect.value='weekly';rolloverSelect.value='positive';startInput.value=mondayIso();
+    }else if(preset==='paycycle'){
+      if(!name.value)name.value=get('budgets.presetName_paycycle');
+      periodSelect.value='paycycle';rolloverSelect.value='full';startInput.value=localIso(new Date());
+    }else{
+      if(!name.value)name.value=get('budgets.presetName_monthly');
+      periodSelect.value='monthly';rolloverSelect.value='reset';
+    }
+    syncCycleFields();syncRolloverHint();
+    form.querySelector('[name="amount"]').focus();
+  }));
+  syncCycleFields();syncRolloverHint();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-delete]')?.addEventListener('click',async()=>{
+    if(!await ctx.confirm(get('budgets.deleteConfirm').replace('{name}',()=>existing.name),{destructive:true,confirmLabel:get('common.delete')}))return;
+    try{await api(`api/budgets/${existing.id}`,{method:'DELETE'});dlg.close();toast(get('common.deleted'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
+  });
+  form.onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    const period=String(fd.get('period')||'monthly');
+    const rolloverMode=String(fd.get('rollover')||'reset');
+    const usesAnchor=['weekly','biweekly','paycycle','custom'].includes(period);
+    const body=jsonBody({
+      name:fd.get('name'),
+      categoryId:fd.get('category')||null,
+      amount:Number(fd.get('amount')),
+      currency:fd.get('currency'),
+      period,
+      carryOver:rolloverMode!=='reset',
+      carryOverOverspend:rolloverMode==='full',
+      isActive:true,
+      startDate:usesAnchor?(fd.get('startDate')||null):null,
+      endDate:period==='custom'?(fd.get('endDate')||null):null
+    });
+    try{await api(existing?`api/budgets/${existing.id}`:'api/budgets',existing?{...body,method:'PUT'}:body);dlg.close();toast(get('common.saved'));await loadBudgets()}catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+async function openBudgetEdit(id,closeDrawer){
+  let budget;try{budget=await api(`api/budgets/${id}`)}catch(err){toast(err.message||get('common.error'));return}
+  closeDrawer?.();
+  openBudgetDialog(budget);
+}
+async function openCategoryDialog(){
+  let options;try{options=await categoryOptions()}catch(err){toast(err.message||get('common.error'));return}
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('categories.new'))}</h2><label>${esc(get('common.name'))}<input name="name" required maxlength="120"></label><label>${esc(get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label><label>${esc(get('categories.parent'))}<select name="parent"><option value="">${esc(get('categories.topLevel'))}</option>${options}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();const fd=new FormData(e.currentTarget);
+    const name=fd.get('name').trim();const key=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||`cat-${Date.now()}`;
+    try{await api('api/categories',jsonBody({key,name,parentId:fd.get('parent')||null,icon:fd.get('icon')||null,sortOrder:null}));dlg.close();toast(get('common.saved'));await loadCategories()}catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+
+
 async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderEnableBankingSettings(),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
+// Export the space's full data snapshot (§ data portability). The endpoint returns plain JSON, so we
+// fetch the raw response as a blob and hand it to a download anchor — api() would parse it to an object,
+// which cannot trigger a "save as file". withSpace() supplies the required fullWorthSpaceId.
+async function downloadExport(){
+  const btn=$('#export-data');if(btn)btn.disabled=true;
+  try{
+    const r=await fetch(`/bff/backend/${withSpace('api/export/snapshot')}`);
+    if(!r.ok)await fail(r);
+    const blob=await r.blob();const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`finance-export-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    toast(get('export.done'));
+  }catch(err){toast(err.message||get('common.error'))}
+  finally{if(btn)btn.disabled=false}
+}
+
 const ENABLE_BANKING_SIGN_IN='https://enablebanking.com/sign-in/';
 const ENABLE_BANKING_APPS='https://enablebanking.com/cp/applications';
 const ENABLE_BANKING_LINKED='https://enablebanking.com/docs/api/linked-accounts';
