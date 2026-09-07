@@ -218,8 +218,8 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
         string feedback,
         CancellationToken ct)
     {
-        var normalized = feedback.Trim().ToLowerInvariant();
-        if (!FinancialSignalFeedback.IsValid(normalized))
+        var normalized = feedback?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized) || !FinancialSignalFeedback.IsValid(normalized))
             throw new ArgumentException("Feedback must be useful or irrelevant.", nameof(feedback));
 
         if (!await SignalExistsAsync(userId, fullWorthSpaceId, signalId, ct)) return false;
@@ -359,6 +359,7 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
         Required(detected.SubjectId, 160, nameof(detected.SubjectId));
         Required(detected.SemanticKey, 300, nameof(detected.SemanticKey));
         Required(detected.Source, 40, nameof(detected.Source));
+        Required(detected.Severity, 24, nameof(detected.Severity));
         Required(detected.TitleKey, 160, nameof(detected.TitleKey));
         if (!FinancialSignalSeverities.IsValid(detected.Severity.Trim().ToLowerInvariant()))
             throw new ArgumentException("Signal severity must be info, attention or high.");
