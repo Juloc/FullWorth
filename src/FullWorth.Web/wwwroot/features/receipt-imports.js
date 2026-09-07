@@ -1,5 +1,6 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { confirmMessage } from '../ui/confirm.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
 // photos into one logical receipt.
@@ -465,7 +466,7 @@ async function savePaperlessPreset() {
 
 async function deletePaperlessPreset() {
   if (!activePaperlessPresetId) return;
-  if (!confirm(t('Diese Vorlage löschen?', 'Delete this preset?'))) return;
+  if (!await confirmMessage({message:t('Diese Vorlage löschen?','Delete this preset?'),title:t('Vorlage löschen','Delete preset'),confirmLabel:t('Löschen','Delete'),cancelLabel:t('Abbrechen','Cancel'),destructive:true})) return;
   try {
     await api(`api/purchases/receipt-imports/paperless/presets/${activePaperlessPresetId}`, { method: 'DELETE' });
     activePaperlessPresetId = null;
