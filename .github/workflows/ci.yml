@@ -44,11 +44,15 @@ jobs:
           - name: purchases
             filter: "FullyQualifiedName~.Purchases.|FullyQualifiedName~.Parity.|FullyQualifiedName~.Performance.|FullyQualifiedName~.Preferences."
           - name: api
-            filter: "FullyQualifiedName~.Api.|FullyQualifiedName~.Contracts.|FullyQualifiedName~.Loans.|FullyQualifiedName~.Import."
+            filter: "FullyQualifiedName~.Api."
+          - name: contracts
+            filter: "FullyQualifiedName~.Contracts.|FullyQualifiedName~.Loans.|FullyQualifiedName~.Import."
           - name: intelligence
             filter: "FullyQualifiedName~.Intelligence.|FullyQualifiedName~.Security.|FullyQualifiedName~.Tax.|FullyQualifiedName~.Budgets."
           - name: portfolio
-            filter: "FullyQualifiedName~.Portfolio.|FullyQualifiedName~.Transactions.|FullyQualifiedName~.Analytics.|FullyQualifiedName~.Categories.|FullyQualifiedName~.BankConnections."
+            filter: "FullyQualifiedName~.Portfolio.|FullyQualifiedName~.Transactions."
+          - name: analytics
+            filter: "FullyQualifiedName~.Analytics.|FullyQualifiedName~.Categories.|FullyQualifiedName~.BankConnections."
           - name: rest
             filter: "FullyQualifiedName!~.Purchases.&FullyQualifiedName!~.Parity.&FullyQualifiedName!~.Performance.&FullyQualifiedName!~.Preferences.&FullyQualifiedName!~.Api.&FullyQualifiedName!~.Contracts.&FullyQualifiedName!~.Loans.&FullyQualifiedName!~.Import.&FullyQualifiedName!~.Intelligence.&FullyQualifiedName!~.Security.&FullyQualifiedName!~.Tax.&FullyQualifiedName!~.Budgets.&FullyQualifiedName!~.Portfolio.&FullyQualifiedName!~.Transactions.&FullyQualifiedName!~.Analytics.&FullyQualifiedName!~.Categories.&FullyQualifiedName!~.BankConnections."
     steps:
