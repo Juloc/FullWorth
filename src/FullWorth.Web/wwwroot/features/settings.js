@@ -1,3 +1,4 @@
+import { secureFetch } from '../security/secure-fetch.js';
 import { state } from '../core/state.js';
 import { privacyDefault } from '../ui/privacy.js';
 import { openPinDialog } from '../ui/lock.js';
@@ -50,7 +51,7 @@ async function openDeleteAccountDialog(){
     const submit=form.querySelector('button[type="submit"]');
     submit.disabled=true;error.hidden=true;
     try{
-      const response=await fetch('/auth/account-deletion/request',{
+      const response=await secureFetch('/auth/account-deletion/request',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({currentPassword:password})
@@ -69,7 +70,7 @@ async function openDeleteAccountDialog(){
 async function openTwoFactorDialog(){
   let status;
   try{
-    status=await fetch('/auth/two-factor/status',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject());
+    status=await secureFetch('/auth/two-factor/status',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject());
   }catch{toast(get('common.error'));return}
 
   if(status.enabled){
@@ -84,7 +85,7 @@ async function openTwoFactorDialog(){
     dlg.querySelector('form').addEventListener('submit',async e=>{
       e.preventDefault();
       const code=dlg.querySelector('#two-factor-disable-code').value;
-      const response=await fetch('/auth/two-factor/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      const response=await secureFetch('/auth/two-factor/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
       if(response.ok){state.capabilities.twoFactorEnabled=false;dlg.close();toast(get('twoFactor.disabled'));return}
       toast(get('twoFactor.invalidCode'));
     });
@@ -93,7 +94,7 @@ async function openTwoFactorDialog(){
 
   let setup;
   try{
-    const response=await fetch('/auth/two-factor/setup',{method:'POST'});
+    const response=await secureFetch('/auth/two-factor/setup',{method:'POST'});
     if(!response.ok)throw new Error();
     setup=await response.json();
   }catch{toast(get('common.error'));return}
@@ -110,7 +111,7 @@ async function openTwoFactorDialog(){
   dlg.querySelector('form').addEventListener('submit',async e=>{
     e.preventDefault();
     const code=dlg.querySelector('#two-factor-enable-code').value;
-    const response=await fetch('/auth/two-factor/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    const response=await secureFetch('/auth/two-factor/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
     if(response.ok){state.capabilities.twoFactorEnabled=true;dlg.close();toast(get('twoFactor.enabledToast'));return}
     toast(get('twoFactor.invalidCode'));
   });
