@@ -75,6 +75,7 @@ builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();
 builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiCompatibleIntelligenceProvider>());
 builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<CodexBridgeIntelligenceProvider>());
 builder.Services.AddScoped<IntelligenceProviderRegistry>();
+builder.Services.AddSingleton(new AutopilotRolloutSettings(builder.Configuration));
 builder.Services.AddScoped<IntelligenceStore>();
 builder.Services.AddScoped<IntelligenceAdminBootstrapper>();
 builder.Services.AddScoped<IntelligenceAdminAuthorizer>();

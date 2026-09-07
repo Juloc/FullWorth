@@ -1,5 +1,7 @@
 # FullWorth AI Autopilot — Deployable Step-by-Step Rollout
 
+Current implementation: **Deploy 0 — Baseline and guardrails**.
+
 This plan turns the AI Autopilot implementation into small releases that can be deployed between every major step.
 
 The rule for the whole project:
