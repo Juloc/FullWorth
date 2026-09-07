@@ -48,9 +48,6 @@ public sealed class FrontendArchitectureGuardTests
             "ui/dialog.js",
             // Legacy migration allow-list. This list may only shrink.
             "features/advanced-transaction-bulk-ui.js",
-            "features/category-intelligence-ui.js",
-            "features/category-merge-ui.js",
-            "features/category-order-ui.js",
             "features/export-portability-ui.js",
             "features/feature-parity-ui.js",
             "features/fullworth-space-switcher-ui.js",
@@ -90,9 +87,6 @@ public sealed class FrontendArchitectureGuardTests
             // Legacy migration allow-list. This list may only shrink.
             "features/advanced-transaction-bulk-ui.js",
             "features/capability-ui-guard.js",
-            "features/category-intelligence-ui.js",
-            "features/category-merge-ui.js",
-            "features/category-order-ui.js",
             "features/export-portability-ui.js",
             "features/feature-parity-ui.js",
             "features/fullworth-space-switcher-ui.js",
@@ -183,9 +177,6 @@ public sealed class FrontendArchitectureGuardTests
             // Legacy patch-layer migration allow-list. This list may only shrink.
             "features/advanced-transaction-bulk-ui.js",
             "features/capability-ui-guard.js",
-            "features/category-intelligence-ui.js",
-            "features/category-merge-ui.js",
-            "features/category-order-ui.js",
             "features/compensation-nav.js",
             "features/export-portability-ui.js",
             "features/feature-parity-ui.js",
