@@ -3,6 +3,7 @@
     "dashboard": "Overview",
     "transactions": "Transactions",
     "purchases": "Purchases",
+    "tax": "Taxes",
     "contracts": "Contracts",
     "budgets": "Budgets",
     "portfolio": "Net worth",
@@ -34,6 +35,10 @@
     "purchases": {
       "title": "Purchases",
       "subtitle": "Receipts, Amazon orders and individual items"
+    },
+    "tax": {
+      "title": "Taxes",
+      "subtitle": "Review potentially tax-relevant expenses"
     },
     "contracts": {
       "title": "Contracts",

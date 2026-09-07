@@ -3,6 +3,7 @@
     "dashboard": "Übersicht",
     "transactions": "Buchungen",
     "purchases": "Käufe",
+    "tax": "Steuern",
     "contracts": "Verträge",
     "budgets": "Budgets",
     "portfolio": "Vermögen",
@@ -34,6 +35,10 @@
     "purchases": {
       "title": "Käufe",
       "subtitle": "Belege, Amazon-Bestellungen und einzelne Artikel"
+    },
+    "tax": {
+      "title": "Steuern",
+      "subtitle": "Mögliche steuerlich relevante Ausgaben prüfen"
     },
     "contracts": {
       "title": "Verträge",

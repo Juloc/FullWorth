@@ -12,6 +12,7 @@ import { renderNotifications } from './features/notifications.js';
 import { renderLoans, bindLoans } from './features/loans.js';
 import { renderAnalytics, bindAnalytics } from './features/analytics.js';
 import { renderPurchases, bindPurchases } from './features/purchases.js';
+import { renderTax, bindTax } from './features/tax.js';
 import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
@@ -32,7 +33,7 @@ const get=path=>i18n.get(path);
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
 const MOBILE_PRIMARY=['dashboard','contracts','analytics','networth'];
-const ALL_VIEWS=['dashboard','transactions','accounts','budgets','contracts','networth','analytics','purchases','categories','rules','notifications','merchants','audit','settings'];
+const ALL_VIEWS=['dashboard','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','categories','rules','notifications','merchants','audit','settings'];
 const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
@@ -233,6 +234,7 @@ function bind(){
   bindCategories(ctx);
   bindRules(ctx);
   bindPurchases(ctx);
+  bindTax(ctx);
   bindMerchants(ctx);
   bindAudit(ctx);
   bindSharing(ctx);
@@ -445,6 +447,7 @@ const featureRegistry=createFeatureRegistry()
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})
   .register('analytics',()=>renderAnalytics(ctx))
   .register('purchases',()=>renderPurchases(ctx))
+  .register('tax',()=>renderTax(ctx))
   .register('categories',()=>renderCategories(ctx))
   .register('rules',()=>renderRules(ctx))
   .register('notifications',()=>renderNotifications(ctx))
