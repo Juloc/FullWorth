@@ -34,8 +34,8 @@ public sealed class FinancialSignalJobProcessor(
                     var snapshot = await contextSnapshots.BuildAsync(
                         target.UserId,
                         target.FullWorthSpaceId,
-                        requestedFrom: null,
-                        requestedTo: null,
+                        from: null,
+                        to: null,
                         ct);
                     await detection.DetectAndPersistAsync(snapshot, DateTimeOffset.UtcNow, ct);
                 }
