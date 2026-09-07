@@ -1,5 +1,7 @@
 import { api as sharedApi } from '../core/services.js';
 import { state } from '../core/state.js';
+import { navigate } from '../core/navigation.js';
+import { emitAppEvent, onAppEvent } from '../core/event-bus.js';
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -376,7 +378,7 @@ function initDockResize() {
   window.addEventListener('resize', clamp);
   window.addEventListener('fullworth:sidebar-resize', clamp);
   window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
-  window.fwClampCoachWidth = clamp;
+  onAppEvent('layout:clamp-coach', clamp);
 }
 
 function initDockSwipe(){
@@ -504,10 +506,10 @@ async function openDock() {
   if (dock) dock.hidden = false;
   document.body.classList.add('coach-dock-open');
   if (window.matchMedia('(min-width:768px)').matches) {
-    window.fwClampCoachWidth?.();
-    window.fwClampSidebarWidth?.();
-    window.fwClampCoachWidth?.();
-    window.fwSyncResponsiveSidebar?.();
+    emitAppEvent('layout:clamp-coach');
+    emitAppEvent('layout:clamp-sidebar');
+    emitAppEvent('layout:clamp-coach');
+    emitAppEvent('layout:sync-sidebar');
   }
   syncQuickAccess();
   setMascotLabel();
@@ -524,7 +526,7 @@ function closeDock() {
   const dock = $('#coach-dock');
   if (dock) { dock.hidden = true; dock.style.transform=''; }
   window.dispatchEvent(new Event('resize'));
-  window.fwSyncResponsiveSidebar?.();
+  emitAppEvent('layout:sync-sidebar');
   syncQuickAccess();
 }
 
@@ -969,16 +971,16 @@ function renderContextActions(){
   if(!context?.entityType)return;
   const actions=[];
   const add=(label,run)=>actions.push({label,run});
-  const openView=view=>document.querySelector(`.sidebar [data-view="${view}"],#bottom-nav [data-view="${view}"]`)?.click();
+  const openView=view=>navigate(view,{query:''});
   if(context.entityType==='transaction'&&context.entityId){
     add(tr('Kategorie ändern','Change category'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-transaction',{detail:{id:context.entityId}})));
-    add(tr('Regel erstellen','Create rule'),()=>{openView('rules');setTimeout(()=>$('#primary-action')?.click(),40)});
+    add(tr('Regel erstellen','Create rule'),()=>openView('rules').then(()=>emitAppEvent('rules:new')));
   }else if(context.entityType==='contract'&&context.entityId){
     add(tr('Vertrag öffnen','Open contract'),()=>window.dispatchEvent(new CustomEvent('fullworth:open-contract',{detail:{id:context.entityId}})));
   }else if(context.entityType==='account'&&context.entityId){
-    add(tr('Kontobuchungen öffnen','Open account transactions'),()=>window.fwNavScope?.('transactions','accountId='+encodeURIComponent(context.entityId)));
+    add(tr('Kontobuchungen öffnen','Open account transactions'),()=>navigate('transactions',{query:'accountId='+encodeURIComponent(context.entityId)}));
   }else if(context.entityType==='budget'&&context.entityId){
-    add(tr('Budget öffnen','Open budget'),()=>{openView('budgets');setTimeout(()=>window.fwOpenBudget?.(context.entityId),50)});
+    add(tr('Budget öffnen','Open budget'),()=>openView('budgets').then(()=>emitAppEvent('budget:open',{id:context.entityId})));
   }else if(['asset','liability','portfolio'].includes(context.entityType)){
     add(tr('Vermögen öffnen','Open net worth'),()=>openView('networth'));
   }else if(context.entityType==='transactions'){
