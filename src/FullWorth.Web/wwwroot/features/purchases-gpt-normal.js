@@ -1,5 +1,5 @@
 import { ensurePurchaseArticlesWorkspace } from './purchase-articles-workspace.js';
-import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced-installer.js';
+import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced.js';
 import { refreshPurchasePriceInsights } from './purchase-price-insights.js';
 import { refreshPurchaseAdvancedInsights } from './purchase-advanced-insights.js';
 import { ensureReceiptImportsLauncher } from './receipt-imports.js';
