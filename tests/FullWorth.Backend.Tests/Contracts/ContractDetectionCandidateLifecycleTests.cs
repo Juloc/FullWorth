@@ -79,6 +79,108 @@ public sealed class ContractDetectionCandidateLifecycleTests
         Assert.Single(commerzbank);
     }
 
+
+    [Fact]
+    public async Task ProviderSpellingVariantsAcrossAccountChanges_AreOneCandidate()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var owner = Guid.NewGuid();
+        var space = Guid.NewGuid();
+        var connection = Guid.NewGuid();
+        var accounts = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = owner,
+                EmailNormalized = $\"{owner:N}@EXAMPLE.COM\",
+                DisplayName = \"Account switch owner\",
+                IsActive = true
+            });
+            db.FullWorthSpaces.Add(new FullWorthSpace
+            {
+                Id = space,
+                Name = \"Account switch\",
+                BaseCurrency = \"EUR\"
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = space,
+                UserId = owner,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            db.BankConnections.Add(new BankConnection
+            {
+                Id = connection,
+                FullWorthSpaceId = space,
+                Provider = \"test\",
+                InstitutionName = \"Test Bank\",
+                Country = \"DE\",
+                ProviderSessionId = $\"switch-{connection:N}\",
+                Status = \"AUTHORIZED\"
+            });
+
+            for (var index = 0; index < accounts.Length; index++)
+            {
+                var accountId = accounts[index];
+                db.Accounts.Add(new FinanceAccount
+                {
+                    Id = accountId,
+                    FullWorthSpaceId = space,
+                    BankConnectionId = connection,
+                    Provider = \"test\",
+                    IdentificationHash = $\"switch-{accountId:N}\",
+                    ProviderAccountId = $\"provider-{accountId:N}\",
+                    InstitutionName = \"Test Bank\",
+                    DisplayName = $\"Account {index + 1}\",
+                    Currency = \"EUR\"
+                });
+                db.AccountOwners.Add(new AccountOwner
+                {
+                    AccountId = accountId,
+                    UserId = owner,
+                    OwnershipType = AccountOwnershipTypes.Owner
+                });
+            }
+
+            var names = new[] { \"mueller gmbh\", \"müller gmbh\", \"mueller\" };
+            var month = 9;
+            for (var accountIndex = 0; accountIndex < accounts.Length; accountIndex++)
+            {
+                for (var sample = 0; sample < 3; sample++)
+                {
+                    db.Transactions.Add(new FinanceTransaction
+                    {
+                        AccountId = accounts[accountIndex],
+                        ExternalKey = $\"switch-{accountIndex}-{sample}\",
+                        Amount = -182m,
+                        Currency = \"EUR\",
+                        Counterparty = names[accountIndex],
+                        NormalizedCounterparty = names[accountIndex],
+                        BookingDate = today.AddMonths(-month--),
+                        CategorizationSource = \"none\"
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $\"/api/contracts/detection?fullWorthSpaceId={space}\",
+            owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var candidates = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var candidate = Assert.Single(candidates!);
+        Assert.Equal(9, candidate.GetProperty(\"samples\").GetInt32());
+        Assert.Equal(182m, candidate.GetProperty(\"typicalAmount\").GetDecimal());
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId)
     {
         var request = new HttpRequestMessage(method, path);
