@@ -206,7 +206,7 @@ async function openManualPurchase() {
   dlg.showModal();
 }
 
-async function openPurchaseWorkspace(id) {
+export async function openPurchaseWorkspace(id) {
   const [workspace, categories] = await Promise.all([
     api(`api/purchases/${id}/workspace`),
     api('api/categories').catch(() => [])
@@ -514,7 +514,7 @@ async function openProductCreate(onSaved) {
   dlg.showModal();
 }
 
-async function openProduct(id) {
+export async function openProduct(id) {
   const data = await api(`api/products/${id}`);
   const product = data.product;
   const history = data.history || {};
