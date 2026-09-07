@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
@@ -56,7 +56,7 @@ jobs:
             echo "$image:$version-amd64"
             echo "$image:$sha_tag-amd64"
 
-            if [[ "$version" != *-* && "$version" != *+* ]]; then
+            if [[ "$version" != *-* ]]; then
               major="${version%%.*}"
               rest="${version#*.}"
               minor="${rest%%.*}"
@@ -115,7 +115,7 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
@@ -128,7 +128,7 @@ jobs:
             echo "$image:$version-arm64"
             echo "$image:$sha_tag-arm64"
 
-            if [[ "$version" != *-* && "$version" != *+* ]]; then
+            if [[ "$version" != *-* ]]; then
               major="${version%%.*}"
               rest="${version#*.}"
               minor="${rest%%.*}"
@@ -178,7 +178,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           args=(release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
 
-          if [[ "$version" == *-* || "$version" == *+* ]]; then
+          if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
           fi
 
@@ -227,7 +227,7 @@ jobs:
           merge_tag "$version"
           merge_tag "$sha_tag"
 
-          if [[ "$version" != *-* && "$version" != *+* ]]; then
+          if [[ "$version" != *-* ]]; then
             major="${version%%.*}"
             rest="${version#*.}"
             minor="${rest%%.*}"
