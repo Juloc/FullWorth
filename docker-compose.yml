@@ -1,3 +1,5 @@
+name: fullworth
+
 services:
   fullworth-postgres:
     image: postgres:18-alpine
@@ -5,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-fullworth}
       POSTGRES_USER: ${POSTGRES_USER:-fullworth}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - fullworth-postgres-data:/var/lib/postgresql
     healthcheck:
@@ -13,13 +15,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
 
   fullworth-codex-volume-init:
     image: alpine:3.22
@@ -29,13 +26,7 @@ services:
       - fullworth-codex-data:/data/codex
 
   fullworth-codex:
-    # Experimental, internal-only bridge used by Purchases -> "GPT Scan · Test".
-    # ChatGPT/Codex credentials are persisted only in this dedicated volume. It deliberately does
-    # not receive FULLWORTH_BACKEND_INTERNAL_KEY; the bridge has its own least-privilege secret.
-    image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-1.2.0-rc.6}
-    build:
-      context: .
-      dockerfile: src/FullWorth.CodexBridge/Dockerfile
+    image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       fullworth-codex-volume-init:
@@ -52,24 +43,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    stop_grace_period: 15s
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 768M
     read_only: true
     tmpfs:
       - /tmp
 
   fullworth-backend:
-    # Published to GHCR by .github/workflows/release.yml. `docker compose pull` fetches this image;
-    # `docker compose up -d --build` still builds from source locally (build takes precedence on up).
-    image: ghcr.io/juloc/fullworth-backend:${FULLWORTH_VERSION:-1.2.0-rc.6}
-    build:
-      context: .
-      dockerfile: src/FullWorth.Backend/Dockerfile
+    image: ghcr.io/juloc/fullworth-backend:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       fullworth-postgres:
@@ -77,22 +58,15 @@ services:
     environment:
       ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD}
       Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:?FULLWORTH_BACKEND_INTERNAL_KEY is required}
-      Security__IngestKey: ${FULLWORTH_INGEST_KEY}
+      Security__IngestKey: ${FULLWORTH_INGEST_KEY:?FULLWORTH_INGEST_KEY is required}
       Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:?FULLWORTH_DATA_ENCRYPTION_KEY is required}
       PurchaseStorage__RootPath: /data/purchases
-      # Fail safe on existing deployments: the experimental route stays disabled until explicitly
-      # enabled and given its dedicated bridge key.
       CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
       CodexTest__BaseUrl: http://fullworth-codex:8080
       CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
-      # General per-user AI access uses the same isolated Codex sidecar, independently of the
-      # experimental receipt-test flag.
       AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
       AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-}
-      # Shared bootstrap token used only to enroll this instance with the official FullWorth Cloud.
-      # The cloud issues a separate rotatable instance credential after registration.
       FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
-      # Pinned public verification key for signed knowledge packs. Public, not a secret.
       FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
       FullWorthCloud__KnowledgePackPublicKeyPath: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_PATH:-}
       FullWorthCloud__KnowledgePackId: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_ID:-fullworth-official}
@@ -105,22 +79,14 @@ services:
       timeout: 3s
       retries: 5
       start_period: 40s
-    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1024M
     read_only: true
     tmpfs:
       - /tmp
 
   fullworth-banking:
-    image: ghcr.io/juloc/fullworth-banking:${FULLWORTH_VERSION:-1.2.0-rc.6}
-    build:
-      context: .
-      dockerfile: src/FullWorth.Banking/Dockerfile
+    image: ghcr.io/juloc/fullworth-banking:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       fullworth-backend:
@@ -128,12 +94,10 @@ services:
     environment:
       FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
       Backend__BaseUrl: http://fullworth-backend:8080
-      Backend__IngestKey: ${FULLWORTH_INGEST_KEY}
-      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY}
-      # Redirect URL is required for all BYO profiles. ApplicationId/private-key are legacy-only:
-      # normal installations configure each user's Enable Banking application in the FullWorth UI.
+      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:?FULLWORTH_INGEST_KEY is required}
+      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:?FULLWORTH_BANKING_API_KEY is required}
       EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
-      EnableBanking__RedirectUrl: ${ENABLE_BANKING_REDIRECT_URL}
+      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}/connect/enable-banking/callback
       EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
       EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
       EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
@@ -149,22 +113,14 @@ services:
       timeout: 3s
       retries: 5
       start_period: 40s
-    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1024M
     read_only: true
     tmpfs:
       - /tmp
 
   fullworth-web:
-    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-1.2.0-rc.6}
-    build:
-      context: .
-      dockerfile: src/FullWorth.Web/Dockerfile
+    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       fullworth-postgres:
@@ -175,23 +131,16 @@ services:
         condition: service_healthy
     environment:
       ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD}
-      # Durable Data Protection key ring (backed by a volume) so cookies/antiforgery survive restarts.
       DataProtection__KeyPath: /data/dataprotection
-      # Trust either an exact reverse-proxy address or the Docker bridge CIDR. Docker gateway
-      # addresses can change between deployments, while the bridge normally stays in 172.16/12.
-      # This lets X-Forwarded-Proto=https reach ASP.NET without trusting arbitrary public sources.
       ReverseProxy__KnownProxies__0: ${FULLWORTH_KNOWN_PROXY:-}
       ReverseProxy__KnownNetworks__0: ${FULLWORTH_KNOWN_PROXY_NETWORK:-172.16.0.0/12}
       Services__BackendUrl: http://fullworth-backend:8080
       Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:?FULLWORTH_BACKEND_INTERNAL_KEY is required}
       Services__BankingUrl: http://fullworth-banking:8080
-      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY}
-      Passkeys__RelyingPartyId: ${FULLWORTH_PASSKEY_RP_ID:?FULLWORTH_PASSKEY_RP_ID is required}
-      Passkeys__RelyingPartyName: ${FULLWORTH_PASSKEY_RP_NAME:-FullWorth}
-      Passkeys__Origins__0: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
-      Passkeys__Origins__1: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
-      Passkeys__Origins__2: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
-      Passkeys__Origins__3: ${FULLWORTH_PASSKEY_ORIGIN:?FULLWORTH_PASSKEY_ORIGIN is required}
+      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:?FULLWORTH_BANKING_API_KEY is required}
+      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
+      Passkeys__RelyingPartyName: FullWorth
+      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
       Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
       ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
       ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
@@ -199,25 +148,18 @@ services:
       ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
       ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
       ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
-      AllowedHosts: ${FULLWORTH_ALLOWED_HOSTS:?FULLWORTH_ALLOWED_HOSTS is required}
-      # First-run admin bootstrap (optional). Set both to create the first login on startup;
-      # leave empty once a user exists. Remove/rotate after the first successful sign-in.
+      AllowedHosts: ${FULLWORTH_DOMAIN:?FULLWORTH_DOMAIN is required}
       Bootstrap__Email: ${FULLWORTH_BOOTSTRAP_EMAIL:-}
       Bootstrap__Password: ${FULLWORTH_BOOTSTRAP_PASSWORD:-}
       Bootstrap__DisplayName: ${FULLWORTH_BOOTSTRAP_DISPLAY_NAME:-}
       Bootstrap__SpaceName: ${FULLWORTH_BOOTSTRAP_SPACE_NAME:-Household}
       Bootstrap__BaseCurrency: ${FULLWORTH_BOOTSTRAP_BASE_CURRENCY:-EUR}
     ports:
-      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8101}:8080"
+      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080"
     volumes:
       - fullworth-web-dataprotection:/data/dataprotection
-    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
     read_only: true
     tmpfs:
       - /tmp
@@ -227,4 +169,3 @@ volumes:
   fullworth-purchases-data:
   fullworth-web-dataprotection:
   fullworth-codex-data:
-
