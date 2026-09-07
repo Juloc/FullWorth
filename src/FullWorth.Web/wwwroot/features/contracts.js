@@ -944,7 +944,7 @@ async function openDetail(id) {
       <button type="button" data-edit-all><span>${ctx.esc(t('Alle Daten bearbeiten', 'Edit all details'))}</span><span>›</span></button>
       <button type="button" data-coach><span>${ctx.esc(t('Coach fragen', 'Ask Coach'))}</span><span>›</span></button>
       ${contract.isActive
-        ? `<button type="button" class="contract-action-danger" data-archive><span>${ctx.esc(ctx.get('contracts.archive'))}</span><span>›</span></button>`
+        ? `<button type="button" class="btn btn-danger contract-action-danger" data-archive><span>${ctx.esc(ctx.get('contracts.archive'))}</span><span>›</span></button>`
         : `<button type="button" data-reactivate><span>${ctx.esc(ctx.get('contracts.reactivate'))}</span><span>›</span></button>`}
     </section>
   </div>`);
