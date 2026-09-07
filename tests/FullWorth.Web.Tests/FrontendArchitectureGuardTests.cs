@@ -118,9 +118,6 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            // Accounts is explicitly frozen until its separate redesign is approved.
-            "features/accounts-ux.js",
-
             // Legacy patch-layer migration allow-list. This list may only shrink.
             "features/compensation-nav.js",
 
@@ -163,10 +160,26 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
-    public void AccountsCleanupRemainsBlockedUntilExplicitMigration()
+    public void AccountsIntegrationUsesSharedCoreWithoutPatchObserverOrSyntheticNavigation()
     {
-        var plan = File.ReadAllText(Path.Combine(Root(), "docs", "FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md"));
-        Assert.Contains("Accounts migration — BLOCKED", plan);
-        Assert.True(File.Exists(Path.Combine(WwwRoot(), "features", "accounts-ux.js")));
+        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts-ux.js"));
+        Assert.DoesNotContain("/bff/", accounts);
+        Assert.DoesNotContain("new MutationObserver", accounts);
+        Assert.DoesNotContain(".click()", accounts);
+        Assert.DoesNotContain("fwNavScope", accounts);
+        Assert.Contains("apiClient.backend", accounts);
+        Assert.Contains("navigate(", accounts);
+        Assert.Contains("onAppEvent(", accounts);
+    }
+
+    [Fact]
+    public void NoGlobalFeatureNavigationBridgeReturns()
+    {
+        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        Assert.DoesNotContain("window.fwNavScope", app);
+        Assert.DoesNotContain("window.fwOpenBudget", app);
+        Assert.DoesNotContain("window.fwSyncResponsiveSidebar", app);
+        Assert.DoesNotContain("window.fwClampSidebarWidth", app);
+        Assert.Contains("installNavigation", app);
     }
 }
