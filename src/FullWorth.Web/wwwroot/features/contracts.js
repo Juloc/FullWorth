@@ -1269,61 +1269,96 @@ function jsonBody(body, method) {
   return { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
+
 async function openContractDialog(existing) {
-  const c = existing || {};
-  const currency = c.currency || 'EUR';
+  const contract = existing || {};
+  const currency = contract.currency || 'EUR';
   let categories, accounts;
   try {
-    categories = await ctx.categoryOptions(c.categoryId);
+    categories = await ctx.categoryOptions(contract.categoryId);
     accounts = (await ctx.api('api/accounts')) || [];
-  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
-  const opt = (list, sel, prefix) => list.map(v => `<option value="${v}"${sel === v ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + v))}</option>`).join('');
-  const accountOpts = accounts.map(a => `<option value="${a.id}"${c.accountId === a.id ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
-  const dv = v => v ? String(v).slice(0, 10) : '';
+  } catch (err) {
+    ctx.toast(err.message || ctx.get('common.error'));
+    return;
+  }
 
-  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog">
+  const option = (list, selected, prefix) => list.map(value =>
+    `<option value="${value}"${selected === value ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + value))}</option>`
+  ).join('');
+  const accountOptions = accounts.map(account =>
+    `<option value="${account.id}"${contract.accountId === account.id ? ' selected' : ''}>${ctx.esc(account.displayName || account.institutionName)}</option>`
+  ).join('');
+  const dateValue = value => value ? String(value).slice(0, 10) : '';
+
+  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog contract-edit-v2">
     <div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'contracts.edit' : 'contracts.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(c.name || '')}"></label>
-    <label>${ctx.esc(ctx.get('contracts.provider'))}<input name="provider" maxlength="160" value="${ctx.esc(c.providerName || '')}"></label>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.kind'))}<select name="kind">${opt(KINDS, c.kind || 'subscription', 'contracts.kind_')}</select></label>
-      <label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${opt(CYCLES, c.billingCycle || 'monthly', 'contracts.cycle_')}</select></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${c.amount ?? ''}"></label>
-      <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.interval'))}<input name="interval" type="number" min="1" value="${c.interval || 1}"></label>
-      <label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dv(c.nextDueDate)}"></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" value="${dv(c.startDate)}"></label>
-      <label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dv(c.endDate)}"></label>
-    </div>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${categories}</select></label>
-    <label>${ctx.esc(ctx.get('contracts.account'))}<select name="account"><option value="">—</option>${accountOpts}</select></label>
-    <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="2">${ctx.esc(c.notes || '')}</textarea></label>
+
+    <fieldset>
+      <legend>${ctx.esc(t('Basisdaten', 'Basics'))}</legend>
+      <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(contract.name || '')}"></label>
+      <label>${ctx.esc(ctx.get('contracts.provider'))}<input name="provider" maxlength="160" value="${ctx.esc(contract.providerName || '')}"></label>
+      <label>${ctx.esc(ctx.get('contracts.kind'))}<select name="kind">${option(KINDS, contract.kind || 'subscription', 'contracts.kind_')}</select></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>${ctx.esc(t('Zahlung', 'Payment'))}</legend>
+      <div class="rule-grid">
+        <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${contract.amount ?? ''}"></label>
+        <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
+      </div>
+      <label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${option(CYCLES, contract.billingCycle || 'monthly', 'contracts.cycle_')}</select></label>
+      <label>${ctx.esc(t('Kategorie', 'Category'))}<select name="category"><option value="">—</option>${categories}</select></label>
+      <label>${ctx.esc(t('Zahlungskonto', 'Payment account'))}<select name="account"><option value="">—</option>${accountOptions}</select></label>
+    </fieldset>
+
+    <details class="contract-edit-more">
+      <summary>${ctx.esc(t('Weitere Vertragsdaten', 'More contract details'))}</summary>
+      <label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dateValue(contract.nextDueDate)}"></label>
+      <div class="rule-grid">
+        <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" value="${dateValue(contract.startDate)}"></label>
+        <label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dateValue(contract.endDate)}"></label>
+      </div>
+      <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="3">${ctx.esc(contract.notes || '')}</textarea></label>
+    </details>
+
     <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
   </form>`);
+
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async e => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  dlg.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
     const body = {
-      name: fd.get('name'), providerName: fd.get('provider') || null, kind: fd.get('kind'),
-      categoryId: fd.get('category') || null, accountId: fd.get('account') || null,
-      amount: Number(fd.get('amount')), currency: (fd.get('currency') || 'EUR').toUpperCase(),
-      billingCycle: fd.get('cycle'), interval: Number(fd.get('interval') || 1),
-      startDate: fd.get('start') || null, endDate: fd.get('end') || null, nextDueDate: fd.get('nextDue') || null,
-      isActive: existing ? existing.isActive !== false : true, notes: (fd.get('notes') || '').trim() || null
+      name: fd.get('name'),
+      providerName: fd.get('provider') || null,
+      kind: fd.get('kind'),
+      categoryId: fd.get('category') || null,
+      accountId: fd.get('account') || null,
+      amount: Number(fd.get('amount')),
+      currency: (fd.get('currency') || 'EUR').toUpperCase(),
+      billingCycle: fd.get('cycle'),
+      interval: existing?.interval || 1,
+      startDate: fd.get('start') || null,
+      endDate: fd.get('end') || null,
+      nextDueDate: fd.get('nextDue') || null,
+      isActive: existing ? existing.isActive !== false : true,
+      notes: (fd.get('notes') || '').trim() || null
     };
+
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
     try {
-      const path = existing ? `api/contracts/${existing.id}` : 'api/contracts';
-      await ctx.api(path, jsonBody(body, existing ? 'PUT' : 'POST'));
-      dlg.close(); ctx.toast(ctx.get('common.saved')); await renderContracts(ctx);
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+      const endpoint = existing ? `api/contracts/${existing.id}` : 'api/contracts';
+      const saved = await ctx.api(endpoint, jsonBody(body, existing ? 'PUT' : 'POST'));
+      dlg.close();
+      ctx.toast(ctx.get('common.saved'));
+      await renderContracts(ctx);
+      if (saved?.id) await openDetail(saved.id);
+    } catch (err) {
+      submit.disabled = false;
+      ctx.toast(err.message || ctx.get('common.error'));
+    }
   };
   dlg.showModal();
 }
