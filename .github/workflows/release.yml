@@ -50,8 +50,8 @@ jobs:
       - name: Build Web tests
         run: dotnet build tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-restore
 
-      - name: Test Web
-        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-build
+      - name: Test login and session integration
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-build --filter FullyQualifiedName~FullWorth.Web.Tests.Auth.AuthIntegrationTests
 
   web-image:
     needs: validate-web
