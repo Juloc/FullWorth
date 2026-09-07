@@ -2,8 +2,8 @@ import { ensurePurchaseArticlesWorkspace } from './purchase-articles-workspace.j
 import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced-installer.js';
 import { refreshPurchasePriceInsights } from './purchase-price-insights.js';
 import { refreshPurchaseAdvancedInsights } from './purchase-advanced-insights.js';
-import './receipt-imports.js';
-import './receipt-import-batch-details.js';
+import { ensureReceiptImportsLauncher } from './receipt-imports.js';
+import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js';
 import { addReceiptScanFiles } from './receipt-scan-set.js';
 
 let latestContext = null;
@@ -81,7 +81,10 @@ function installPurchaseLifecycle() {
       refreshPurchaseAdvancedInsights(detail)
     ]);
   });
-  document.addEventListener('fullworth:receipt-imports-rendered', refreshImportReviewNavigation);
+  document.addEventListener('fullworth:receipt-imports-rendered', () => {
+    refreshImportReviewNavigation();
+    refreshReceiptImportBatchDetails();
+  });
 }
 
 export function initializePurchaseEnhancements(ctx) {
@@ -91,7 +94,9 @@ export function initializePurchaseEnhancements(ctx) {
   installImportReviewNavigation();
   installPurchaseLifecycle();
   ensurePurchaseArticlesWorkspace();
+  ensureReceiptImportsLauncher();
   refreshImportReviewNavigation();
+  refreshReceiptImportBatchDetails();
 }
 
 export function tryGptReceiptScan(ctx, file) {
