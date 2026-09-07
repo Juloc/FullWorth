@@ -302,8 +302,8 @@ function duplicateReviewHtml() {
   const rows = groups.map(group => {
     const ordered = group.contracts.slice().sort((a, b) =>
       String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-    const target = ordered[0];
-    const sourceIds = ordered.slice(1).map(contract => contract.id);
+    const target = ordered[ordered.length - 1];
+    const sourceIds = ordered.slice(0, -1).map(contract => contract.id);
     const accounts = new Set(ordered.map(contract => contract.accountId).filter(Boolean));
     const cycle = ctx.get('contracts.cycle_' + (target.billingCycle || 'monthly'));
     return `<div class="fw-row">
