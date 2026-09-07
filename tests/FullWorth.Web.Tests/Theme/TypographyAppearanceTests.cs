@@ -32,7 +32,8 @@ public sealed class TypographyAppearanceTests
         Assert.Contains("finance.typography.weight", script);
         Assert.Contains("finance.typography.letterSpacing", script);
         Assert.Contains("finance.typography.lineHeight", script);
-        Assert.Contains("data-typography-input", script);
+        Assert.Contains("dataset.typographyInput", script);
+        Assert.Contains("value === null || value === ''", script);
         Assert.Contains("Comic Sans MS", script);
         Assert.Contains("Barlow Condensed", script);
     }
@@ -47,6 +48,7 @@ public sealed class TypographyAppearanceTests
         Assert.Contains("finance.typography.weight", script);
         Assert.Contains("finance.typography.letterSpacing", script);
         Assert.Contains("finance.typography.lineHeight", script);
+        Assert.Contains("value === null || value === ''", script);
     }
 
     private static string WebRootFile(params string[] parts)
