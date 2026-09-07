@@ -120,7 +120,8 @@ public sealed class FxHistoricalAnalyticsTests
         using var client = factory.CreateClient();
 
         var root = await GetAsync(client, s, "/api/analytics/merchants?year=2026&month=8&top=10");
-        var rewe = root.GetProperty("merchants").EnumerateArray().Single(m => m.GetProperty("merchant").GetString() == "REWE");
+        var rewe = root.GetProperty("merchants").EnumerateArray().Single(m =>
+            string.Equals(m.GetProperty("merchant").GetString(), "Rewe", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(100m, rewe.GetProperty("currentSpend").GetDecimal());
         Assert.False(root.GetProperty("incomplete").GetBoolean());
     }
