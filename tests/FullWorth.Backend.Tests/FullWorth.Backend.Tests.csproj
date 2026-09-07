@@ -27,4 +27,13 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <!-- Cap xUnit collection parallelism at 2. This integration suite spins up one WebApplicationFactory
+       host + its own cloned Postgres DB per test class; on a high-core dev box the default (= core count)
+       runs ~8 hosts at once and the connection burst against the single test Postgres produces transient
+       flakes (rotating cast of failures, all pass in isolation). 2 matches the CI runner (2 cores) so this
+       is CI-neutral; locally it trades some speed for a stable full run. -->
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
