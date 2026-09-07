@@ -104,7 +104,7 @@ function txReplaceUrl(params) {
 function updateFilterBadge(f) {
   const btn = ctx.$('#tx-filter'); if (!btn) return;
   const n = [
-    f.direction, f.from || f.to, f.categoryId, f.accountId, f.groupId, f.merchant,
+    f.direction, f.from || f.to, f.categoryId, f.accountId, f.groupId, f.merchantId || f.merchant,
     f.minAmount || f.maxAmount, f.status, f.transfersOnly, f.ignoredOnly, f.refundOnly, f.hasReceipt
   ].filter(Boolean).length;
   let badge = btn.querySelector('.tx-filter-count');
@@ -133,9 +133,10 @@ async function openFilterSheet() {
     `<option value="${ctx.esc(a.id)}"${a.id === accountId ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
   const groupOptions = (groups || []).map(g =>
     `<option value="${ctx.esc(g.id)}"${g.id === groupId ? ' selected' : ''}>${ctx.esc(g.name)}</option>`).join('');
+  const merchantIdValue = params.get('merchantId') || '';
   const merchantValue = params.get('merchant') || '';
   const merchantOptions = (merchants || []).map(m =>
-    `<option value="${ctx.esc(m.name)}"${m.name === merchantValue ? ' selected' : ''}>${ctx.esc(m.name)}</option>`).join('');
+    `<option value="${ctx.esc(m.id)}"${String(m.id) === merchantIdValue || (!merchantIdValue && m.name === merchantValue) ? ' selected' : ''}>${ctx.esc(m.name)}</option>`).join('');
 
   const dlg = ctx.dialog(`<form class="dialog-card drawer tx-filter-sheet" method="dialog">
     <div class="panel-head"><h2>${ctx.esc(deLabel('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
@@ -145,7 +146,7 @@ async function openFilterSheet() {
     <label>${ctx.esc(deLabel('Status', 'Status'))}<select name="status"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="booked"${params.get('status') === 'booked' ? ' selected' : ''}>${ctx.esc(deLabel('Gebucht', 'Booked'))}</option><option value="pending"${params.get('status') === 'pending' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</option></select></label>
     <div class="tx-filter-range"><label>${ctx.esc(deLabel('Von', 'From'))}<input type="date" name="from" value="${ctx.esc(params.get('from') || '')}"></label><label>${ctx.esc(deLabel('Bis', 'To'))}<input type="date" name="to" value="${ctx.esc(params.get('to') || '')}"></label></div>
     <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${catOptions}</select></label>
-    <label>${ctx.esc(deLabel('Händler', 'Merchant'))}<select name="merchant"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${merchantOptions}</select></label>
+    <label>${ctx.esc(deLabel('Händler', 'Merchant'))}<select name="merchantId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${merchantOptions}</select></label>
     <div class="tx-filter-range"><label>${ctx.esc(deLabel('Betrag ab', 'Minimum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="minAmount" value="${ctx.esc(params.get('minAmount') || '')}"></label><label>${ctx.esc(deLabel('Betrag bis', 'Maximum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="maxAmount" value="${ctx.esc(params.get('maxAmount') || '')}"></label></div>
     <label class="check"><input type="checkbox" name="transfersOnly"${params.get('transfersOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
     <label class="check"><input type="checkbox" name="ignoredOnly"${params.get('ignoredOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
@@ -163,7 +164,7 @@ async function openFilterSheet() {
 
   dlg.querySelector('[data-reset]').onclick = () => {
     const p = new URLSearchParams(location.search);
-    ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
+    ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
     ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
     txReplaceUrl(p); dlg.close(); renderTransactions(ctx);
   };
@@ -179,7 +180,8 @@ async function openFilterSheet() {
     setOrDel('from', fd.get('from')); setOrDel('to', fd.get('to'));
     const category = fd.get('category');
     if (category) { p.set('categoryId', category); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
-    setOrDel('merchant', fd.get('merchant'));
+    setOrDel('merchantId', fd.get('merchantId'));
+    if (fd.get('merchantId')) p.delete('merchant');
     setOrDel('minAmount', fd.get('minAmount')); setOrDel('maxAmount', fd.get('maxAmount'));
     for (const key of ['transfersOnly','ignoredOnly','refundOnly','hasReceipt']) {
       if (fd.get(key)) p.set(key, 'true'); else p.delete(key);
@@ -264,6 +266,7 @@ export async function renderTransactions(context) {
   const dir = params.get('direction') || '';
   const status = params.get('status') || '';
   const merchant = params.get('merchant') || '';
+  const merchantId = params.get('merchantId') || '';
   const minAmount = params.get('minAmount') || '';
   const maxAmount = params.get('maxAmount') || '';
   const transfersOnly = params.get('transfersOnly') === 'true';
@@ -275,7 +278,8 @@ export async function renderTransactions(context) {
   if (text) q.set('query', text);
   if (dir) q.set('direction', dir);
   if (status) q.set('status', status);
-  if (merchant) q.set('merchant', merchant);
+  if (merchantId) q.set('merchantId', merchantId);
+  else if (merchant) q.set('merchant', merchant);
   if (minAmount) q.set('minAmount', minAmount);
   if (maxAmount) q.set('maxAmount', maxAmount);
   if (transfersOnly) q.set('transfersOnly', 'true');
@@ -287,7 +291,7 @@ export async function renderTransactions(context) {
   if (categoryId) { q.set('categoryId', categoryId); if (includeDescendants) q.set('includeDescendants', 'true'); }
   if (fromDate) q.set('from', fromDate);
   if (toDate) q.set('to', toDate);
-  updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt });
+  updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, merchantId, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt });
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });

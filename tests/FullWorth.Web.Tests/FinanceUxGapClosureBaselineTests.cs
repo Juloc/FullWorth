@@ -78,6 +78,41 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
         Assert.Contains("periodRange", js);
     }
 
+
+    [Fact]
+    public async Task AnalyticsSeparatesPreviewActiveAndCompletedAverageWindows()
+    {
+        var kit = await GetAsync("/ui/ux-kit.js");
+        var js = await GetAsync("/features/analytics.js");
+        Assert.Contains("activeFrom", kit);
+        Assert.Contains("averageFrom", kit);
+        Assert.Contains("averageTo", kit);
+        Assert.Contains("completedAverageLabel", js);
+        Assert.Contains("averageOverview?.expenses", js);
+        Assert.DoesNotContain("avgPerBucket(o?.expenses", js);
+    }
+
+    [Fact]
+    public async Task CategoryOverviewUsesRootLevelAndMerchantDrillUsesStableIdentity()
+    {
+        var analytics = await GetAsync("/features/analytics.js");
+        var transactions = await GetAsync("/features/transactions.js");
+        Assert.Contains("cats.filter(category => !category.parentId)", analytics);
+        Assert.Contains("openCategoryDetail", analytics);
+        Assert.Contains("data-merchant-id", analytics);
+        Assert.Contains("merchantId=", analytics);
+        Assert.Contains("params.get('merchantId')", transactions);
+    }
+
+    [Fact]
+    public async Task MixedBudgetWindowsAreNotBlindlySummed()
+    {
+        var budgets = await GetAsync("/features/budgets.js");
+        Assert.Contains("const windows = new Set", budgets);
+        Assert.Contains("comparableWindow", budgets);
+        Assert.Contains("unterschiedliche aktive Zeiträume", budgets);
+    }
+
     [Fact]
     public async Task FinanceUxModulesArePrecachedAndTouchTargetsAreAccessible()
     {

@@ -167,9 +167,39 @@ export function cycleWindow(cycle, offset = 0, lang = 'de') {
     else if (cycle === 'year') end.setFullYear(end.getFullYear() + n - 1, 11, 31);
     else end.setMonth(end.getMonth() + n, 0);
   }
+  // Chart preview and comparison average are separate ranges. The preview ends at the selected
+  // bucket; the average uses the N completed buckets immediately BEFORE it. A running month therefore
+  // never dilutes its own 12-month comparison average.
+  const activeEnd = new Date(end);
+  const activeStart = new Date(activeEnd);
+  if (cycle === 'week') activeStart.setDate(activeEnd.getDate() - 6);
+  else if (cycle === 'quarter') activeStart.setMonth(Math.floor(activeEnd.getMonth() / 3) * 3, 1);
+  else if (cycle === 'year') activeStart.setMonth(0, 1);
+  else activeStart.setDate(1);
+
+  const averageEnd = new Date(activeStart);
+  averageEnd.setDate(averageEnd.getDate() - 1);
+  const averageStart = new Date(activeStart);
+  if (cycle === 'week') averageStart.setDate(averageStart.getDate() - n * 7);
+  else if (cycle === 'quarter') averageStart.setMonth(averageStart.getMonth() - n * 3);
+  else if (cycle === 'year') averageStart.setFullYear(averageStart.getFullYear() - n);
+  else averageStart.setMonth(averageStart.getMonth() - n);
+
+  const today = new Date(); today.setHours(12, 0, 0, 0);
   const label = cycle === 'week' ? (de ? `Letzte ${n} Wochen` : `Last ${n} weeks`)
     : cycle === 'month' ? (de ? `Letzte ${n} Monate` : `Last ${n} months`)
       : cycle === 'quarter' ? (de ? `Letzte ${n} Quartale` : `Last ${n} quarters`)
         : (de ? `Letzte ${n} Jahre` : `Last ${n} years`);
-  return { from: iso(start), to: iso(end), granularity: cycle, buckets: n, label: offset ? `${label} (${iso(start)} – ${iso(end)})` : label };
+  return {
+    from: iso(start),
+    to: iso(end),
+    granularity: cycle,
+    buckets: n,
+    label: offset ? `${label} (${iso(start)} – ${iso(end)})` : label,
+    activeFrom: iso(activeStart),
+    activeTo: iso(activeEnd),
+    averageFrom: iso(averageStart),
+    averageTo: iso(averageEnd),
+    isCurrent: today >= activeStart && today <= activeEnd
+  };
 }

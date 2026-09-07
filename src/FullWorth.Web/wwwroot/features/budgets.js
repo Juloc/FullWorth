@@ -19,15 +19,22 @@ export async function renderBudgets(context) {
   const status = await ctx.api('api/analytics/budget-status');
   const items = status.items || [];
 
-  const totalBudgeted = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const totalSpent = items.reduce((sum, item) => sum + Number(item.spent || 0), 0);
+  const windows = new Set(items.map(item => `${item.periodStart || ''}|${item.periodEnd || ''}`));
+  const comparableWindow = windows.size <= 1;
+  const totalBudgeted = comparableWindow ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
+  const totalSpent = comparableWindow ? items.reduce((sum, item) => sum + Number(item.spent || 0), 0) : null;
 
-  ctx.$('#budget-total').textContent = ctx.money(totalBudgeted, currency);
-  ctx.$('#budget-spent').textContent = ctx.money(totalSpent, currency);
-  ctx.$('#budget-remaining').textContent = ctx.money(totalBudgeted - totalSpent, currency);
+  ctx.$('#budget-total').textContent = totalBudgeted == null ? '—' : ctx.money(totalBudgeted, currency);
+  ctx.$('#budget-spent').textContent = totalSpent == null ? '—' : ctx.money(totalSpent, currency);
+  ctx.$('#budget-remaining').textContent = totalBudgeted == null ? '—' : ctx.money(totalBudgeted - totalSpent, currency);
 
   const root = ctx.$('#budgets-list');
   root.innerHTML = '';
+  if (!comparableWindow && items.length) {
+    root.insertAdjacentHTML('beforeend', `<div class="row-sub budget-period-note">${ctx.esc(document.documentElement.lang?.startsWith('en')
+      ? 'Budgets use different active periods, so no misleading combined total is shown.'
+      : 'Budgets haben unterschiedliche aktive Zeiträume – deshalb wird kein irreführender Gesamtwert addiert.')}</div>`);
+  }
   if (!items.length) {
     ctx.empty(root);
     return;

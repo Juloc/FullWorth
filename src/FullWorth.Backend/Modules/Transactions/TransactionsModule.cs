@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
@@ -218,6 +219,36 @@ public sealed class TransactionStore(FullWorthDbContext db)
         {
             var maximum = Math.Abs(request.MaxAmount.Value);
             q = q.Where(x => Math.Abs(x.Amount) <= maximum);
+        }
+
+        if (request.MerchantId.HasValue)
+        {
+            if (!fullWorthSpaceId.HasValue)
+            {
+                q = q.Where(_ => false);
+            }
+            else
+            {
+                var merchantId = request.MerchantId.Value;
+                var merchant = await db.Merchants.AsNoTracking()
+                    .Where(item => item.Id == merchantId && item.FullWorthSpaceId == fullWorthSpaceId.Value)
+                    .Select(item => new { item.NormalizedName })
+                    .SingleOrDefaultAsync(ct);
+                if (merchant is null)
+                {
+                    q = q.Where(_ => false);
+                }
+                else
+                {
+                    var keys = await db.MerchantAliases.AsNoTracking()
+                        .Where(alias => alias.FullWorthSpaceId == fullWorthSpaceId.Value && alias.MerchantId == merchantId)
+                        .Select(alias => alias.NormalizedAlias)
+                        .ToListAsync(ct);
+                    if (!string.IsNullOrWhiteSpace(merchant.NormalizedName)) keys.Add(merchant.NormalizedName);
+                    keys = keys.Where(key => !string.IsNullOrWhiteSpace(key)).Distinct(StringComparer.Ordinal).ToList();
+                    q = keys.Count == 0 ? q.Where(_ => false) : q.Where(MerchantIdentityPredicate(keys));
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(request.Merchant))
@@ -732,6 +763,24 @@ public sealed class TransactionStore(FullWorthDbContext db)
         return normalized;
     }
 
+    private static Expression<Func<FinanceTransaction, bool>> MerchantIdentityPredicate(IReadOnlyCollection<string> keys)
+    {
+        var transaction = Expression.Parameter(typeof(FinanceTransaction), "transaction");
+        var normalized = Expression.Property(transaction, nameof(FinanceTransaction.NormalizedCounterparty));
+        var notNull = Expression.NotEqual(normalized, Expression.Constant(null, typeof(string)));
+        var containsMethod = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) })
+            ?? throw new InvalidOperationException("string.Contains(string) was not found.");
+
+        Expression matches = Expression.Constant(false);
+        foreach (var key in keys)
+        {
+            var contains = Expression.Call(normalized, containsMethod, Expression.Constant(key));
+            matches = Expression.OrElse(matches, contains);
+        }
+
+        return Expression.Lambda<Func<FinanceTransaction, bool>>(Expression.AndAlso(notNull, matches), transaction);
+    }
+
     private IQueryable<FinanceTransaction> AccessibleTransactions(Guid userId, Guid? fullWorthSpaceId, bool requireOwner)
     {
         var query = db.Transactions.AsQueryable();
@@ -765,7 +814,8 @@ public sealed record TransactionQuery(
     bool? RefundOnly = null,
     bool? HasReceipt = null,
     string? Status = null,
-    bool? IgnoredOnly = null);
+    bool? IgnoredOnly = null,
+    Guid? MerchantId = null);
 public sealed record TransactionClassification(Guid? CategoryId, bool IsIgnored, bool IsTransfer, string? TransferPurpose = null, string? UserNote = null);
 public sealed record AllocationLine(Guid? CategoryId, decimal Amount, string? Note, Guid? PurchaseItemId = null);
 public sealed record RefundLink(Guid? OriginalTransactionId, Guid? RefundCategoryId = null);
@@ -795,6 +845,7 @@ public static class TransactionEndpoints
             Guid? accountGroupId,
             bool? includeDescendants,
             string? merchant,
+            Guid? merchantId,
             decimal? minAmount,
             decimal? maxAmount,
             bool? refundOnly,
@@ -808,7 +859,7 @@ public static class TransactionEndpoints
                 new TransactionQuery(
                     accountId, categoryId, from, to, direction, query, includeIgnored, transfersOnly,
                     sort, order, offset, limit, accountGroupId, includeDescendants, merchant,
-                    minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly), ct)));
+                    minAmount, maxAmount, refundOnly, hasReceipt, status, ignoredOnly, merchantId), ct)));
 
         group.MapGet("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TransactionStore store, CancellationToken ct) =>
         {

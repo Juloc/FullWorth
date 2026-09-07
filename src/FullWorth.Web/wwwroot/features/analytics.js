@@ -46,13 +46,12 @@ export async function renderAnalytics(context) {
   wireControls(view);
 
   const from = win.from, to = win.to, gran = win.granularity;
-  const prev = cycleWindow(cycle, offset - 1, lang);
   const cmp = '&comparison=previous-period';
 
-  // All card queries share the selected window. overviewPrev backs the income/spending trend badges.
-  const [overview, overviewPrev, history, categories, merchants, forecast, catList, importCompleteness] = await Promise.all([
+  // Preview includes the active bucket. Historical average uses completed buckets immediately before it.
+  const [overview, averageOverview, history, categories, merchants, forecast, catList, importCompleteness] = await Promise.all([
     ctx.api(`api/analytics/overview?from=${from}&to=${to}&granularity=${gran}`).catch(() => null),
-    ctx.api(`api/analytics/overview?from=${prev.from}&to=${prev.to}&granularity=${gran}`).catch(() => null),
+    ctx.api(`api/analytics/overview?from=${win.averageFrom}&to=${win.averageTo}&granularity=${gran}`).catch(() => null),
     ctx.api(`api/net-worth/history?from=${from}&to=${to}`).catch(() => []),
     ctx.api(`api/analytics/categories?from=${activeBucket.from}&to=${activeBucket.to}&granularity=${gran}${cmp}`).catch(() => null),
     ctx.api(`api/analytics/merchants?from=${activeBucket.from}&to=${activeBucket.to}&granularity=${gran}&top=10${cmp}`).catch(() => null),
@@ -71,8 +70,8 @@ export async function renderAnalytics(context) {
   if (completenessNotice) view.insertAdjacentHTML('afterbegin', completenessNotice);
 
   const cur = overview?.currency || history?.[0]?.currency || 'EUR';
-  fillSpending(ctx.$('#an-spending'), overview, overviewPrev);
-  fillInout(ctx.$('#an-inout'), overview, overviewPrev);
+  fillSpending(ctx.$('#an-spending'), overview, averageOverview);
+  fillInout(ctx.$('#an-inout'), overview);
   fillCategory(ctx.$('#an-category'), categories, catIcon);
   fillMerchant(ctx.$('#an-merchant'), merchants);
   fillNetWorth(ctx.$('#an-networth'), history, cur);
@@ -226,6 +225,13 @@ function perBucket() { const g = activeWindow?.granularity;
   return t({ week: '/ Woche', month: '/ Monat', quarter: '/ Quartal', year: '/ Jahr' }[g] || '/ Monat',
            { week: '/ week', month: '/ month', quarter: '/ quarter', year: '/ year' }[g] || '/ month'); }
 function avgPerBucket(total) { const n = activeWindow?.buckets || 12; return (Number(total) || 0) / Math.max(1, n); }
+function completedAverageLabel() {
+  const n = activeWindow?.buckets || 12;
+  const g = activeWindow?.granularity || 'month';
+  const de = { week: 'vorherige Wochen', month: 'vorherige Monate', quarter: 'vorherige Quartale', year: 'vorherige Jahre' }[g] || 'vorherige Monate';
+  const en = { week: 'previous weeks', month: 'previous months', quarter: 'previous quarters', year: 'previous years' }[g] || 'previous months';
+  return `${n} ${t(de, en)}`;
+}
 
 // The ACTIVE bucket = the concrete period the selector names (current month/quarter/… = the last bucket
 // of the preview window). Category/merchant/in-out KPIs are scoped to it (not the 12-bucket average); the
@@ -324,7 +330,7 @@ function bindPeriodDrills(el, rows, defaultDirection = '') {
       if (range.from) extra.set('from', range.from);
       if (range.to) extra.set('to', range.to);
       if (direction) extra.set('direction', direction);
-      window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(extra.toString()));
+      ctx.navScope('transactions', analyticsTxScope(extra.toString()));
     };
     target.addEventListener('click', event => { event.stopPropagation(); go(); });
     target.addEventListener('keydown', event => {
@@ -459,7 +465,7 @@ function bindBuilderScrubber(el, series, fmt, chartType) {
 }
 
 // 1) Spending development — expenses over the window as a line, with total + trend vs previous window.
-function fillSpending(el, o, oPrev) {
+function fillSpending(el, o, averageOverview) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
@@ -467,8 +473,9 @@ function fillSpending(el, o, oPrev) {
   // Trend = the active bucket vs the previous bucket (month-over-month), not window-over-window — with
   // one-bucket stepping the trailing windows overlap by all but one bucket, so a window delta is ~0.
   const trend = pct(Math.abs(Number(rows[rows.length - 1]?.expenses) || 0), Math.abs(Number(rows[rows.length - 2]?.expenses) || 0));
-  el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
-    `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(o?.expenses || 0), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}${trendBadge(trend, false)}</div>`;
+  const averageTotal = averageOverview?.expenses ?? 0;
+  el.innerHTML = fxMarker(!!(o?.incomplete || averageOverview?.incomplete)) + chart(() => spendingLine(rows)) +
+    `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(averageTotal), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket() + ' · ' + completedAverageLabel()))}${trendBadge(trend, false)}</div>`;
   bindSpendingScrubber(el, rows, cur);
   bindPeriodDrills(el, rows, 'expense');
 }
@@ -490,7 +497,7 @@ function spendingLine(rows) {
 }
 
 // 2) Income vs expenses — grouped bars per period, with income/expense/net numbers and both trends.
-function fillInout(el, o, oPrev) {
+function fillInout(el, o) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
@@ -536,7 +543,9 @@ function inoutBars(rows) {
 function fillCategory(el, result, catIcon) {
   if (!el) return;
   const cats = result?.categories || [];
-  const rows = cats.slice(0, 6);
+  // Parent rows already roll up descendants. The overview therefore shows only root/main categories,
+  // keeping the list, donut and total on one disjoint hierarchy level.
+  const rows = cats.filter(category => !category.parentId).slice(0, 6);
   const cur = result?.currency || 'EUR';
   if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
   const max = Math.max(1, ...rows.map(r => Math.abs(Number(r.current) || 0)));
@@ -560,10 +569,47 @@ function fillCategory(el, result, catIcon) {
   el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben', 'Spending')))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
-    const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`));
+    const item = cats.find(category => String(category.categoryId || '') === String(row.dataset.catId));
+    const hasChildren = !!item && cats.some(category => String(category.parentId || '') === String(item.categoryId || ''));
+    const go = () => {
+      if (hasChildren) return openCategoryDetail(result, item, catIcon);
+      ctx.navScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`));
+    };
     row.addEventListener('click', go);
     row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
+}
+
+function openCategoryDetail(result, root, catIcon) {
+  const cats = result?.categories || [];
+  const cur = result?.currency || 'EUR';
+  const children = cats
+    .filter(category => String(category.parentId || '') === String(root.categoryId || ''))
+    .sort((a, b) => Math.abs(Number(b.current) || 0) - Math.abs(Number(a.current) || 0));
+  const rootTotal = Math.abs(Number(root.current) || 0);
+  const rowHtml = (item, label, totalRow = false) => {
+    const value = Math.abs(Number(item.current) || 0);
+    const share = rootTotal > 0 ? Math.round(value / rootTotal * 100) : 0;
+    const icon = categoryIconInner(catIcon?.get(item.categoryId)) || '';
+    return `<button type="button" class="fw-row an-category-detail-row" data-category-id="${esc(item.categoryId || '')}">
+      <span class="tx-ident-slot fw-ident fw-ident-cat" aria-hidden="true">${icon}</span>
+      <span class="fw-row-main"><span class="fw-row-title">${esc(label)}</span><span class="fw-row-sub">${totalRow ? esc(t('inkl. Unterkategorien', 'including subcategories')) : share + ' %'}</span></span>
+      <span class="fw-row-amt amount">${ctx.money(value, cur)}</span>
+    </button>`;
+  };
+  const rows = rowHtml(root, t('Gesamt', 'Total'), true) + children.map(child => rowHtml(child, child.name)).join('');
+  const dlg = ctx.dialog(`<div class="dialog-card drawer an-category-detail">
+    <div class="panel-head"><div><h2>${esc(root.name)}</h2><div class="row-sub">${esc(activeBucket?.label || '')}</div></div><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
+    <div class="rows">${rows}</div>
+  </div>`);
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-category-id]').forEach(button => button.addEventListener('click', () => {
+    const id = button.dataset.categoryId;
+    if (!id) return;
+    dlg.close();
+    ctx.navScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(id)}&includeDescendants=true`));
+  }));
+  dlg.showModal();
 }
 
 // Soft category donut (screenshot parity): shares of the window's spend across ROOT categories only
@@ -594,15 +640,15 @@ function fillMerchant(el, result) {
   const cur = result?.currency || 'EUR';
   if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
   const total = rows.reduce((s, r) => s + Math.abs(Number(r.currentSpend) || 0), 0);
-  // Drill-down (UX rework §6): a merchant has no stored FK on transactions, so scope by the merchant name
-  // as a counterparty search (the tx list ILIKEs the counterparty) — the pragmatic equivalent of a
-  // merchant filter without a backend change.
-  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
+  // Canonical merchant identity is preferred; unresolved counterparties keep a text fallback.
+  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}" data-merchant-id="${esc(r.merchantId || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
   el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben', 'Spending')))}</div>`;
   el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
     const q = row.dataset.merchant;
-    if (!q) return;
-    const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&merchant=${encodeURIComponent(q)}`));
+    const merchantId = row.dataset.merchantId;
+    if (!q && !merchantId) return;
+    const filter = merchantId ? `merchantId=${encodeURIComponent(merchantId)}` : `merchant=${encodeURIComponent(q)}`;
+    const go = () => ctx.navScope('transactions', analyticsTxScope(`direction=expense&${filter}`));
     row.addEventListener('click', go);
     row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
