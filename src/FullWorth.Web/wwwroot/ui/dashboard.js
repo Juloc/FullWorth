@@ -4,7 +4,7 @@
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
 import { money, converted, maskIdentifier } from './money.js';
 import { isPrivate } from './privacy.js';
-import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from './ux-kit.js';
 import { bindChartScrubber } from './chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../features/data-completeness.js';
 
@@ -54,16 +54,16 @@ function normalizeCfg(type, cfg) {
 // today-relative {from,to} ISO range for a period preset ('all' → unbounded). Local-day serialized to
 // avoid the UTC off-by-one (same reason as analytics.js isoLocal).
 function periodToRange(period) {
+  // Shared grains use the exact same active-period semantics as Analytics.
+  if (period === 'month' || period === 'quarter' || period === 'year') {
+    const win = cycleWindow(period, 0, document.documentElement.lang?.startsWith('en') ? 'en' : 'de');
+    return { from: win.activeFrom, to: win.activeTo };
+  }
   const end = new Date();
   const start = new Date();
-  switch (period) {
-    case '7d': start.setDate(end.getDate() - 6); break;
-    case 'month': start.setDate(1); break;
-    case 'quarter': start.setMonth(Math.floor(end.getMonth() / 3) * 3, 1); break;
-    case 'year': start.setMonth(0, 1); break;
-    case '1y': start.setFullYear(end.getFullYear() - 1); break;
-    default: return { from: null, to: null };
-  }
+  if (period === '7d') start.setDate(end.getDate() - 6);
+  else if (period === '1y') start.setFullYear(end.getFullYear() - 1);
+  else return { from: null, to: null };
   const iso = z => `${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`;
   return { from: iso(start), to: iso(end) };
 }
@@ -245,8 +245,8 @@ const DASH_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" str
 // Muted drill affordance on grouped account headers (mirrors the reference overview's ">"): monochrome,
 // only signals the header opens the group's bookings — never a strong hue.
 const DASH_CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
-function bindDrill(el, queryFn) {
-  const go = () => window.fwNavScope && window.fwNavScope('transactions', queryFn());
+function bindDrill(ctx, el, queryFn) {
+  const go = () => ctx.navScope('transactions', queryFn());
   el.addEventListener('click', go);
   el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
 }
@@ -265,7 +265,7 @@ function renderWidget(type, ctx, body, data, cfg) {
     const changeBadge = hist.length > 1 && change !== 0
       ? `<span class="dash-nw-change ${changeCls}">${change > 0 ? '+' : '−'}${money(Math.abs(change), cur)}</span>` : '';
     body.innerHTML = `<div class="dash-nw" role="button" tabindex="0" aria-label="${ctx.esc(ctx.get('widgets.netWorth'))}"><div class="widget-metric dash-metric"><strong>${money(d.netWorth, cur)}</strong>${changeBadge}</div>${miniSparkline(hist)}<div class="widget-split dash-metric-split"><span>${ctx.esc(ctx.get('dashboard.assets'))}: ${money(d.assets, cur)}</span><span>${ctx.esc(ctx.get('dashboard.liabilities'))}: ${money(d.liabilities, cur)}</span></div>${d.incomplete ? `<div class="fx-incomplete">${ctx.esc(ctx.get('common.fxIncomplete'))}</div>` : ''}</div>`;
-    const nav = () => window.fwNavScope && window.fwNavScope('networth');
+    const nav = () => ctx.navScope('networth', '');
     const el = body.querySelector('.dash-nw');
     el?.addEventListener('click', nav);
     el?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nav(); } });
@@ -303,8 +303,8 @@ function renderWidget(type, ctx, body, data, cfg) {
       html = `<section class="dash-group">${a.map(acctRow).join('')}</section>`;
     }
     body.innerHTML = `<div class="dash-accounts">${html}</div>`;
-    body.querySelectorAll('[data-acct]').forEach(r => bindDrill(r, () => 'accountId=' + encodeURIComponent(r.dataset.acct)));
-    body.querySelectorAll('[data-group]').forEach(r => bindDrill(r, () => 'groupId=' + encodeURIComponent(r.dataset.group)));
+    body.querySelectorAll('[data-acct]').forEach(r => bindDrill(ctx, r, () => 'accountId=' + encodeURIComponent(r.dataset.acct)));
+    body.querySelectorAll('[data-group]').forEach(r => bindDrill(ctx, r, () => 'groupId=' + encodeURIComponent(r.dataset.group)));
     return;
   }
   if (type === 'income-expense') {
@@ -344,7 +344,7 @@ function renderWidget(type, ctx, body, data, cfg) {
         const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
         return `<div class="fw-row is-drillable" role="button" tabindex="0" data-recent-tx><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(name)}</div><div class="fw-row-sub">${ctx.date(x.bookingDate)} · ${ctx.esc(cat)}</div></div><div class="fw-row-amt amount ${x.amount < 0 ? 'negative' : 'positive'}">${money(x.amount, x.currency)}</div></div>`;
       }).join('') : emptyState(ctx);
-      body.querySelectorAll('[data-recent-tx]').forEach(r => bindDrill(r, () => ''));
+      body.querySelectorAll('[data-recent-tx]').forEach(r => bindDrill(ctx, r, () => ''));
     }).catch(() => { body.innerHTML = errorState(ctx); });
     return;
   }
