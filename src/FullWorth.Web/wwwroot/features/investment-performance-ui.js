@@ -29,6 +29,7 @@ function modal(title){
     {className:'fp-dialog ip-dialog',closeLabel:text('Schließen','Close')});
   dialog.addEventListener('close',()=>{if(active?.dialog===dialog)active=null},{once:true});
   dialog.showModal();
+  document.dispatchEvent(new CustomEvent('fullworth:investment-dialog-opened', { detail: { dialog } }));
   return dialog;
 }
 
