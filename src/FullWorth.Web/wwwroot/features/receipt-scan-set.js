@@ -1,3 +1,4 @@
+import { createDialog } from '../ui/dialog.js';
 // FullWorth receipt scan-set builder.
 //
 // One logical receipt may contain several independently captured photos or one/more PDFs. Files are
@@ -43,14 +44,15 @@ function createDraft(ctx) {
     promise: null
   };
   draft.promise = new Promise((resolve, reject) => { draft.resolve = resolve; draft.reject = reject; });
-  draft.dialog = document.createElement('dialog');
-  draft.dialog.className = 'receipt-set-dialog';
+  draft.dialog = createDialog('<div class="dialog-card receipt-set-card"></div>', {
+    className: 'receipt-set-dialog',
+    closeLabel: t('Schließen', 'Close')
+  });
   draft.dialog.addEventListener('cancel', event => {
     event.preventDefault();
     if (draft.state === 'collecting') cancelDraft(draft);
     else backgroundDraft(draft);
   });
-  document.body.appendChild(draft.dialog);
   ensureCss();
   draft.dialog.showModal();
   return draft;
@@ -218,7 +220,6 @@ function cancelDraft(draft) {
 function closeDialog(draft) {
   if (!draft.dialog) return;
   if (draft.dialog.open) draft.dialog.close();
-  draft.dialog.remove();
 }
 
 function setStatus(draft, text, error = false) {
