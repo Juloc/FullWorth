@@ -1,0 +1,81 @@
+dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min(92vw,560px);width:100%}dialog::backdrop{background:rgba(11,15,20,.42)}.dialog-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-menu);display:grid;gap:12px}.dialog-card h2{margin:0;font-size:18px}.bank-options{display:grid;gap:5px;max-height:420px;overflow:auto;padding-right:3px}.bank-options button{text-align:left;background:var(--surface);padding:10px 12px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.dialog-actions button{border:1px solid transparent;border-radius:var(--radius-pill);height:38px;padding:0 16px;font-weight:600;background:var(--surface-2);color:var(--text)}.dialog-actions button:hover{background:var(--surface-3)}.dialog-actions button[type=submit],.dialog-actions button[data-save],.dialog-actions button[data-confirm],.dialog-actions button[data-apply]{background:var(--cta);color:var(--cta-text)}.dialog-actions button[type=submit]:hover,.dialog-actions button[data-save]:hover,.dialog-actions button[data-confirm]:hover,.dialog-actions button[data-apply]:hover{background:var(--cta);opacity:.9}.dialog-actions .ghost{background:transparent;border-color:transparent;color:var(--muted)}.dialog-actions .ghost:hover{background:var(--surface-2);color:var(--text)}.dialog-actions .ghost.danger,.dialog-actions .danger{color:var(--negative)}.dialog-actions .ghost.danger:hover,.dialog-actions .danger:hover{background:var(--negative-soft);color:var(--negative)}
+.dialog-actions .btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+.dialog-actions .btn-primary:hover{background:var(--cta);color:var(--cta-text);opacity:.9}
+.dialog-actions .btn-secondary{background:var(--surface);color:var(--text);border-color:var(--line)}
+.dialog-actions .btn-secondary:hover{background:var(--surface-2);color:var(--text)}
+.dialog-actions .btn-danger{background:transparent;color:var(--negative);border-color:transparent}
+.dialog-actions .btn-danger:hover{background:var(--negative-soft);color:var(--negative)}
+
+.setup-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.setup-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.setup-choice:hover{background:var(--surface-2)}
+.setup-choice span{font-size:12px;color:var(--muted);line-height:1.45}
+.setup-meta{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2)}
+.setup-meta>div{display:grid;gap:2px;min-width:0}.setup-meta span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.setup-meta a{font-size:12px;overflow-wrap:anywhere}
+.setup-code{display:inline-block;margin-top:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:18px;font-weight:700;letter-spacing:.08em;user-select:all}
+.codex-login-action{display:grid;gap:8px}
+.setup-progress{font-size:12px;color:var(--muted);font-weight:700}
+.onboarding-dialog{max-width:620px}
+.onboarding-dialog h3{margin:0;font-size:20px}
+.ai-access-setup label{display:grid;gap:6px}
+@media(max-width:560px){.setup-choice-grid{grid-template-columns:1fr}.dialog-actions{flex-wrap:wrap}.dialog-actions button{flex:1 1 auto}}
+
+/* Shared dialog shell: every app dialog is normalized by ui/dialog.js. */
+dialog.fw-dialog{overscroll-behavior:contain}
+dialog.fw-dialog .fw-dialog-card{min-width:0}
+dialog.fw-dialog .fw-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+dialog.fw-dialog .fw-dialog-head>h2,
+dialog.fw-dialog .fw-dialog-head>h3,
+dialog.fw-dialog .fw-dialog-head>div{min-width:0;overflow-wrap:anywhere}
+dialog.fw-dialog .fw-dialog-head-minimal{justify-content:flex-end}
+dialog.fw-dialog .fw-dialog-close{
+  display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--text);cursor:pointer
+}
+dialog.fw-dialog .fw-dialog-close:hover{background:var(--surface-2)}
+dialog.fw-dialog .fw-dialog-close svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+dialog.fw-dialog .dialog-actions{min-width:0}
+
+/* Phone dialogs are one consistent full-screen surface, matching transaction details. */
+@media(max-width:767px){
+  dialog.fw-dialog:not(.fw-dialog--sheet){
+    inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:0;
+    overflow:hidden;background:var(--surface)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet)::backdrop{background:var(--surface)}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-card{
+    width:100%;max-width:none;height:100%;max-height:none;min-height:100%;
+    margin:0;padding:0 var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+    border:0;border-radius:0;box-shadow:none;overflow-y:auto;overflow-x:hidden;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;align-content:start
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-head{
+    position:sticky;top:0;z-index:6;
+    margin:0 calc(var(--s4) * -1);
+    padding:calc(var(--s3) + env(safe-area-inset-top)) var(--s4) var(--s3);
+    background:var(--surface);border-bottom:1px solid var(--line)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close{
+    width:48px;height:48px;margin:-6px -8px -6px 0
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:25px;height:25px;stroke-width:2.1}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .bank-options{max-height:none;overflow:visible}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .dialog-actions{
+    width:100%;padding-top:var(--s2)
+  }
+}
+
+/* Desktop/tablet: anchor non-drawer, non-sheet dialogs near the top instead of letting the
+   native dialog auto-center. Async content that grows after open then only extends downward,
+   never re-centering (jumping) the whole card. */
+@media(min-width:768px){
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet){
+    margin-top:max(var(--s8),10vh);
+    margin-bottom:auto;
+    max-height:calc(100dvh - 2 * var(--s8));
+  }
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet) .fw-dialog-card{
+    max-height:inherit;
+    overflow-y:auto;
+  }
+}
