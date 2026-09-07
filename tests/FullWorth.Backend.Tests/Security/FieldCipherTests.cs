@@ -71,6 +71,34 @@ public sealed class FieldCipherTests
     }
 
     [Fact]
+    public void MasterKeyDerivesStableEncryptionKey()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Security:MasterKey"] = "a-long-stable-random-master-secret-1234567890"
+            })
+            .Build();
+
+        var first = FieldCipher.FromConfiguration(config, new Env("Production"));
+        var second = FieldCipher.FromConfiguration(config, new Env("Production"));
+        var protectedValue = first.Protect("secret");
+
+        Assert.True(first.Enabled);
+        Assert.Equal("secret", second.Unprotect(protectedValue));
+    }
+
+    [Fact]
+    public void WeakMasterKeyIsRejected()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Security:MasterKey"] = "change-me" })
+            .Build();
+
+        Assert.Throws<InvalidOperationException>(() => FieldCipher.FromConfiguration(config, new Env("Production")));
+    }
+
+    [Fact]
     public void MissingKeyFailsClosedOnlyInProduction()
     {
         var empty = new ConfigurationBuilder().Build();
