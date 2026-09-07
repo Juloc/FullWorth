@@ -1155,6 +1155,106 @@ function sparkline(payments) {
   return `<div class="contract-trend"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${ctx.esc(ctx.get('contracts.trend'))}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>`;
 }
 
+
+function contractMonthKey(value) {
+  return String(value instanceof Date
+    ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
+    : value || '').slice(0, 7);
+}
+
+function contractAnalysisBars(months) {
+  const max = Math.max(1, ...months.map(month => month.value));
+  const width = 720, height = 180, baseline = 148;
+  const slot = width / Math.max(1, months.length);
+  const bars = months.map((month, index) => {
+    const barHeight = Math.max(2, (month.value / max) * 116);
+    const x = index * slot + slot * .18;
+    const barWidth = slot * .64;
+    const y = baseline - barHeight;
+    const label = new Intl.DateTimeFormat(lang() ? 'de-DE' : 'en-US', { month: 'short' })
+      .format(new Date(month.key + '-01T12:00:00'));
+    return `<g><rect class="contract-analysis-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5"></rect><text class="contract-analysis-axis" x="${(x + barWidth / 2).toFixed(1)}" y="172" text-anchor="middle">${ctx.esc(label)}</text></g>`;
+  }).join('');
+  return `<svg class="contract-analysis-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}"><line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" class="contract-analysis-zero"></line>${bars}</svg>`;
+}
+
+async function openContractAnalysis() {
+  const active = allContracts.filter(contract => contract.isActive);
+  const currency = (active.find(contract => contract.currency) || {}).currency || 'EUR';
+  const monthly = active.reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0);
+  const annual = active.reduce((sum, contract) => sum + (Number(contract.annualizedAmount) || 0), 0);
+  const reserve = active
+    .filter(contract => (contract.billingCycle || 'monthly') !== 'monthly')
+    .reduce((sum, contract) => sum + (Number(contract.monthlyEquivalent) || 0), 0);
+
+  const categories = new Map();
+  for (const contract of active) {
+    const label = categoryLabel(contract) || ctx.get('contracts.kind_' + (contract.kind || 'contract'));
+    categories.set(label, (categories.get(label) || 0) + (Number(contract.monthlyEquivalent) || 0));
+  }
+  const categoryRows = [...categories.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const dlg = ctx.dialog(`<div class="dialog-card contract-analysis-dialog">
+    <div class="panel-head"><h2>${ctx.esc(t('Vertragsanalyse', 'Contract analysis'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <div class="contract-analysis-loading">${ctx.esc(t('Buchungen werden ausgewertet …', 'Analyzing payments …'))}</div>
+  </div>`);
+  dlg.classList.add('contracts-analysis-dlg');
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.showModal();
+
+  const now = new Date();
+  const months = [];
+  const monthMap = new Map();
+  for (let offset = 11; offset >= 0; offset--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const key = contractMonthKey(date);
+    const month = { key, value: 0 };
+    months.push(month);
+    monthMap.set(key, month);
+  }
+
+  const activities = await Promise.allSettled(
+    active.slice(0, 60).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))
+  );
+  for (const result of activities) {
+    if (result.status !== 'fulfilled') continue;
+    for (const payment of result.value?.payments || []) {
+      const target = monthMap.get(contractMonthKey(payment.date));
+      if (target) target.value += Number(payment.amount) || 0;
+    }
+  }
+
+  const maxCategory = Math.max(1, ...categoryRows.map(row => row.value));
+  const categoriesHtml = categoryRows.map(row => `<div class="contract-analysis-category">
+    <strong>${ctx.esc(row.label)}</strong>
+    <span>${ctx.money(row.value, currency)}</span>
+    <progress max="${maxCategory}" value="${row.value}"></progress>
+  </div>`).join('');
+
+  const body = dlg.querySelector('.contract-analysis-dialog');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="panel-head"><h2>${ctx.esc(t('Vertragsanalyse', 'Contract analysis'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <section class="contract-analysis-card contract-analysis-summary">
+      <span>${ctx.esc(t('Durchschnittlich pro Monat', 'Average per month'))}</span>
+      <strong>${ctx.money(monthly, currency)}</strong>
+      <small>${ctx.money(annual, currency)} ${ctx.esc(t('pro Jahr', 'per year'))} · ${active.length} ${ctx.esc(t('aktive Verträge', 'active contracts'))}</small>
+    </section>
+    <section class="contract-analysis-card">
+      <h3>${ctx.esc(t('Verträge pro Kategorie', 'Contracts by category'))}</h3>
+      <div class="contract-analysis-categories">${categoriesHtml || `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`}</div>
+    </section>
+    <section class="contract-analysis-card">
+      <h3>${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}</h3>
+      <p>${ctx.esc(t('Erkannte Vertragszahlungen der letzten 12 Monate.', 'Detected contract payments over the last 12 months.'))}</p>
+      ${contractAnalysisBars(months)}
+      ${reserve > 0 ? `<div class="contract-analysis-tip"><strong>${ctx.esc(t('Tipp', 'Tip'))}</strong><span>${ctx.esc(t('Für nicht-monatliche Verträge monatlich zurücklegen:', 'Set aside monthly for non-monthly contracts:'))} ${ctx.money(reserve, currency)}</span></div>` : ''}
+    </section>`;
+  body.querySelector('[data-close]').onclick = () => dlg.close();
+}
+
 function contractToWrite(c) {
   return {
     name: c.name, providerName: c.providerName || null, kind: c.kind || 'contract',
