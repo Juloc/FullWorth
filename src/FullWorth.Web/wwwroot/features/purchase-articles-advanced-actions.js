@@ -1,12 +1,12 @@
+import { apiClient, jsonBody } from '../core/services.js';
+import { alertMessage, confirmMessage, promptMessage } from '../ui/confirm.js';
 // Advanced actions kept separate from the main purchase workspace renderer. This module deliberately
 // owns secondary workflows (tags, returns, document OCR, barcode/product maintenance and export) so the
 // primary receipt review screen stays readable and every destructive/long-running action remains explicit.
 
 const lang = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
 const text = (de, en) => lang() === 'de' ? de : en;
-const spaceId = () => localStorage.getItem('finance.space') || '';
-const bff = path => `/bff/backend/${String(path).replace(/^\//, '')}${String(path).includes('?') ? '&' : '?'}fullWorthSpaceId=${encodeURIComponent(spaceId())}`;
-const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const json = (method, body) => jsonBody(body, method);
 
 export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, money, fmtDate, showError }) {
   const head = panel?.querySelector('.panel-head');
@@ -38,7 +38,7 @@ export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, mon
     dlg.querySelector('[data-close]').onclick = () => dlg.close();
     dlg.querySelectorAll('[data-format]').forEach(link => {
       const format = link.dataset.format;
-      link.href = bff(`api/purchases/export?format=${encodeURIComponent(format)}&includeDocuments=${format === 'zip' ? 'true' : 'false'}`);
+      link.href = apiClient.backendUrl(`api/purchases/export?format=${encodeURIComponent(format)}&includeDocuments=${format === 'zip' ? 'true' : 'false'}`);
       link.target = '_blank';
       link.rel = 'noopener';
     });
@@ -84,7 +84,14 @@ async function mountTags({ dlg, purchase, writable, api, esc, showError, refresh
         catch (error) { showError(dlg, error.message); }
       });
       card.querySelector('[data-tag-create]')?.addEventListener('click', async () => {
-        const name = window.prompt(text('Name des neuen Tags', 'New tag name'))?.trim();
+        const name = (await promptMessage({
+          title: text('Neuer Tag', 'New tag'),
+          message: text('Name des neuen Tags', 'New tag name'),
+          confirmLabel: text('Anlegen', 'Create'),
+          cancelLabel: text('Abbrechen', 'Cancel'),
+          required: true,
+          maxLength: 120
+        }))?.trim();
         if (!name) return;
         try {
           const created = await api('api/tags', json('POST', { name }));
@@ -127,7 +134,13 @@ async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog,
     <label>${esc(text('Notiz', 'Note'))}<input name="note"></label><div class="dialog-actions"><button type="button" data-close>${esc(text('Schließen', 'Close'))}</button><button type="submit" ${remaining <= 0 ? 'disabled' : ''}>${esc(text('Retoure speichern', 'Save return'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
   dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelectorAll('[data-delete-return]').forEach(button => button.onclick = async () => {
-    if (!window.confirm(text('Retoure entfernen? Eine verknüpfte Refund-Zuordnung wird ebenfalls gelöst.', 'Remove return? A linked refund mapping will also be cleared.'))) return;
+    if (!await confirmMessage({
+      title: text('Retoure entfernen', 'Remove return'),
+      message: text('Retoure entfernen? Eine verknüpfte Refund-Zuordnung wird ebenfalls gelöst.', 'Remove return? A linked refund mapping will also be cleared.'),
+      confirmLabel: text('Entfernen', 'Remove'),
+      cancelLabel: text('Abbrechen', 'Cancel'),
+      destructive: true
+    })) return;
     try {
       await api(`api/purchases/${purchase.id}/items/${item.id}/returns/${button.dataset.deleteReturn}`, { method: 'DELETE' });
       dlg.close();
@@ -197,7 +210,13 @@ function mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showErr
       } catch (error) { showError(dlg, error.message); }
     });
     actions.querySelector('[data-document-delete]')?.addEventListener('click', async () => {
-      if (!window.confirm(text('Dokument wirklich löschen? Der Kauf und die Bankbuchung bleiben bestehen.', 'Delete this document? The purchase and bank transaction remain.'))) return;
+      if (!await confirmMessage({
+        title: text('Dokument löschen', 'Delete document'),
+        message: text('Dokument wirklich löschen? Der Kauf und die Bankbuchung bleiben bestehen.', 'Delete this document? The purchase and bank transaction remain.'),
+        confirmLabel: text('Löschen', 'Delete'),
+        cancelLabel: text('Abbrechen', 'Cancel'),
+        destructive: true
+      })) return;
       try { await api(`api/purchases/${purchase.id}/documents/${doc.id}`, { method: 'DELETE' }); await refresh(); }
       catch (error) { showError(dlg, error.message); }
     });
@@ -269,7 +288,13 @@ export async function mountProductAdvancedActions({ dlg, product, api, esc, make
     } catch (error) { showError(dlg, error.message); }
   };
   card.querySelector('[data-product-archive]').onclick = async () => {
-    if (!window.confirm(product.isArchived ? text('Produkt wiederherstellen?', 'Restore product?') : text('Produkt archivieren? Historische Käufe bleiben unverändert.', 'Archive product? Historical purchases remain unchanged.'))) return;
+    if (!await confirmMessage({
+      title: product.isArchived ? text('Produkt wiederherstellen', 'Restore product') : text('Produkt archivieren', 'Archive product'),
+      message: product.isArchived ? text('Produkt wiederherstellen?', 'Restore product?') : text('Produkt archivieren? Historische Käufe bleiben unverändert.', 'Archive product? Historical purchases remain unchanged.'),
+      confirmLabel: product.isArchived ? text('Wiederherstellen', 'Restore') : text('Archivieren', 'Archive'),
+      cancelLabel: text('Abbrechen', 'Cancel'),
+      destructive: !product.isArchived
+    })) return;
     try { await api(`api/products/${product.id}${product.isArchived ? '/restore' : ''}`, { method: product.isArchived ? 'POST' : 'DELETE' }); await reloadSelf(); }
     catch (error) { showError(dlg, error.message); }
   };
@@ -310,7 +335,13 @@ async function openProductMerge({ parent, product, api, esc, makeDialog, showErr
       const rows = (data.items || []).filter(x => x.id !== product.id);
       dlg.querySelector('[data-results]').innerHTML = rows.map(row => `<button type="button" class="pa-picker-row" data-target="${row.id}"><div><strong>${esc(row.canonicalName)}</strong><span>${esc(row.brand || '')}</span></div></button>`).join('') || `<div class="state-empty">${esc(text('Kein Zielprodukt gefunden.', 'No target product found.'))}</div>`;
       dlg.querySelectorAll('[data-target]').forEach(button => button.onclick = async () => {
-        if (!window.confirm(text('Produkte endgültig zusammenführen? Historische Käufe bleiben erhalten, die Produktidentität wird aber vereinheitlicht.', 'Merge products? Historical purchases remain, but product identity is unified.'))) return;
+        if (!await confirmMessage({
+          title: text('Produkte zusammenführen', 'Merge products'),
+          message: text('Produkte endgültig zusammenführen? Historische Käufe bleiben erhalten, die Produktidentität wird aber vereinheitlicht.', 'Merge products? Historical purchases remain, but product identity is unified.'),
+          confirmLabel: text('Zusammenführen', 'Merge'),
+          cancelLabel: text('Abbrechen', 'Cancel'),
+          destructive: true
+        })) return;
         try {
           await api('api/products/merge', json('POST', { sourceProductId: product.id, targetProductId: button.dataset.target, preferSourceName: false, preferSourceBrand: false, preferSourceCategory: false }));
           dlg.close(); parent.close(); await reload(button.dataset.target);
@@ -326,7 +357,11 @@ async function openProductMerge({ parent, product, api, esc, makeDialog, showErr
 
 export async function scanBarcode({ makeDialog, esc, showError }) {
   if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-    window.alert(text('Barcode-Scan wird von diesem Browser nicht unterstützt. Du kannst den Code weiterhin manuell eingeben.', 'Barcode scanning is not supported by this browser. You can still enter the code manually.'));
+    await alertMessage({
+      title: text('Barcode-Scan nicht verfügbar', 'Barcode scan unavailable'),
+      message: text('Barcode-Scan wird von diesem Browser nicht unterstützt. Du kannst den Code weiterhin manuell eingeben.', 'Barcode scanning is not supported by this browser. You can still enter the code manually.'),
+      confirmLabel: 'OK'
+    });
     return null;
   }
   let formats = [];
