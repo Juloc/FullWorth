@@ -90,12 +90,14 @@ public sealed class ResponsiveLayoutTests
         foreach (var action in actions)
             Assert.Contains($"[data-action=\"{action}\"]", allJs);
 
-        // Every nav view must be routed in loadCurrent (which lives in app.js), and dead nav entries are caught.
+        // Every nav view must be routed. loadCurrent (in app.js) used to dispatch through a switch/case;
+        // the architecture cleanup replaced that with the shared core/feature-registry.js, so each view
+        // is now wired via a `.register('view', ...)` call in app.js. Dead nav entries are still caught.
         var views = System.Text.RegularExpressions.Regex.Matches(html, "data-view=\"([^\"]+)\"")
             .Select(match => match.Groups[1].Value).Distinct().ToList();
         Assert.NotEmpty(views);
         foreach (var view in views)
-            Assert.Contains($"case'{view}'", appJs);
+            Assert.Contains($".register('{view}'", appJs);
     }
 
     private static string RepoRoot()

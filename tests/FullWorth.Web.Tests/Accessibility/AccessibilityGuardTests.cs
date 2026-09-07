@@ -43,7 +43,11 @@ public sealed class AccessibilityGuardTests
         var occurrences = System.Text.RegularExpressions.Regex.Matches(js, "aria-current").Count;
         Assert.True(occurrences >= 2, "aria-current must be set on both the desktop and bottom navigation.");
         Assert.Contains("#bottom-nav button[data-view]", js);
-        Assert.Contains("document.documentElement.lang", js);
+
+        // <html lang> tracking now lives in the shared i18n module (core/i18n.js) rather than app.js
+        // directly; the architecture cleanup extracted locale handling out of app.js.
+        var i18n = Www("core", "i18n.js");
+        Assert.Contains("document.documentElement.lang", i18n);
     }
 
     [Fact]

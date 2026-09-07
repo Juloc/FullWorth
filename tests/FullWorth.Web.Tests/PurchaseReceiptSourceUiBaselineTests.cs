@@ -12,7 +12,7 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     [Fact]
     public void Purchase_dialog_mounts_multi_page_source_review()
     {
-        var installer = Read("features", "purchase-articles-advanced-installer.js");
+        var installer = Read("features", "purchase-articles-advanced.js");
         var review = Read("features", "purchase-receipt-source-review.js");
 
         Assert.Contains("mountReceiptSourceReview", installer);

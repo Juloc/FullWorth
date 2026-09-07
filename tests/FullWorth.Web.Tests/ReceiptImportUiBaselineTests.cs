@@ -15,8 +15,10 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
         var normalScan = Read("features", "purchases-gpt-normal.js");
         var importer = Read("features", "receipt-imports.js");
 
-        Assert.Contains("import './receipt-imports.js'", normalScan);
-        Assert.Contains("import './receipt-import-batch-details.js'", normalScan);
+        // The purchases-gpt-normal.js entry point now imports named launcher/refresh functions from
+        // these modules (owned feature wiring) instead of bare side-effect imports.
+        Assert.Contains("import { ensureReceiptImportsLauncher } from './receipt-imports.js'", normalScan);
+        Assert.Contains("import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js'", normalScan);
         Assert.Contains("receipt-imports-launch", importer);
         Assert.Contains("Belege importieren", importer);
         Assert.Contains("type=\"file\" multiple", importer);

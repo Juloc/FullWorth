@@ -1070,7 +1070,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tax-brow-main{min-width:0}
 .tax-brow-main .row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tax-brow .amount{white-space:nowrap;text-align:right}
-.tax-view .tax-cases{margin-top:var(--s4)}
 @media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
 
 /* --- Gehalt & Benefits (compensation.js): hero + Cash-Brutto donut + rows --- */

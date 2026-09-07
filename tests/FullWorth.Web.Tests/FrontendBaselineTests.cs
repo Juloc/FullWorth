@@ -33,26 +33,32 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task BrowserApiCalls_UseBffRoutes_NotInternalServiceUrls()
     {
-        var js = await GetAsync("/app.js");
+        // The literal /bff/backend/ and /bff/banking/ URLs used to be built inline in app.js. The
+        // architecture cleanup moved URL construction into the single shared BFF client in
+        // core/api.js, which only ever builds /bff/<service>/... for the two known services.
+        var appJs = await GetAsync("/app.js");
+        var apiJs = await GetAsync("/core/api.js");
 
-        Assert.Contains("/bff/backend/", js);
-        Assert.Contains("/bff/banking/", js);
-        AssertNoInternalServiceUrl(js, "app.js");
+        Assert.Contains("`/bff/${service}/", apiJs);
+        Assert.Contains("service !== 'backend' && service !== 'banking'", apiJs);
+        AssertNoInternalServiceUrl(apiJs, "core/api.js");
+        AssertNoInternalServiceUrl(appJs, "app.js");
     }
 
     [Fact]
     public async Task ReceiptUpload_UsesFinanceWebBackendBff()
     {
-        // The receipt upload now lives in the purchases feature module and routes through the shared
-        // api() BFF helper in app.js; assert both the call site and the helper, and that neither leaks
-        // an internal service URL.
+        // The receipt upload lives in the purchases feature module and routes through ctx.api(), which
+        // app.js wires to the shared BFF client in core/api.js (via core/services.js). Assert the call
+        // site, the shared fetch call the client makes, and that neither leaks an internal service URL.
         var purchasesJs = await GetAsync("/features/purchases.js");
-        var appJs = await GetAsync("/app.js");
+        var apiJs = await GetAsync("/core/api.js");
 
-        Assert.Contains("api('api/purchases/receipt-scan'", purchasesJs);
-        Assert.Contains("fetch(`/bff/backend/", appJs);
+        Assert.Contains("ctx.api('api/purchases/receipt-scan'", purchasesJs);
+        Assert.Contains("fetchImpl(target,", apiJs);
+        Assert.Contains("`/bff/${service}/", apiJs);
         AssertNoInternalServiceUrl(purchasesJs, "features/purchases.js");
-        AssertNoInternalServiceUrl(appJs, "app.js");
+        AssertNoInternalServiceUrl(apiJs, "core/api.js");
     }
 
     [Fact]

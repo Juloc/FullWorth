@@ -65,7 +65,9 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
         Assert.Contains("brand-pack-file", html);
         Assert.Contains("brand-pack-import", html);
         Assert.Contains("contentBase64", html);
-        Assert.Contains("/api/intelligence/admin/brand-packs/custom", script);
+        // brand-packs.js now delegates through the shared BFF client (core/services.js -> core/api.js),
+        // which prefixes the path itself, so the literal path here has no leading slash.
+        Assert.Contains("api/intelligence/admin/brand-packs/custom", script);
         Assert.Contains("/enabled", script);
         Assert.Contains("method: 'DELETE'", script);
         Assert.Contains("20 * 1024 * 1024", script);
