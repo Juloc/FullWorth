@@ -17,7 +17,7 @@ import { renderMerchants, bindMerchants, newMerchant } from './features/merchant
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderSharing, bindSharing } from './features/sharing.js';
 import { createAccessSetup } from './features/access-setup.js';
-import { renderBudgets, newBudget } from './features/budgets.js';
+import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
 import { downloadWealthBackup } from './features/wealth-portability.js';
 import { createDialog } from './ui/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
@@ -281,7 +281,7 @@ function syncResponsiveSidebar(){
     const changed=document.body.classList.contains('nav-auto-collapsed');
     document.body.classList.remove('nav-auto-collapsed');
     syncNavToggle();
-    if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
+    if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
     return;
   }
   const desiredSidebar=Math.max(176,Number(localStorage.getItem(sidebarWidthKey()))||Number(localStorage.getItem('finance.sidebar.width'))||228);
@@ -294,7 +294,7 @@ function syncResponsiveSidebar(){
   syncNavToggle();
   if(changed)queueMicrotask(()=>window.fwClampCoachWidth?.());
 }
-window.fwSyncResponsiveSidebar=syncResponsiveSidebar;
+onAppEvent('layout:sync-sidebar',syncResponsiveSidebar);
 
 function layoutWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
 function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
@@ -376,7 +376,7 @@ function initResizableSidebar(){
   window.addEventListener('resize',()=>{if(!desktopMode()){syncResponsiveSidebar();return}apply(savedWidth());syncResponsiveSidebar()});
   window.addEventListener('fullworth:coach-resize',syncResponsiveSidebar);
   window.addEventListener('fullworth:layout-reset',()=>apply(defaultWidth()));
-  window.fwClampSidebarWidth=()=>apply(savedWidth());
+  onAppEvent('layout:clamp-sidebar',()=>apply(savedWidth()));
 }
 async function showView(view,opts={}){
   state.view=view;
@@ -434,6 +434,8 @@ function openMoreSheet(){
 installNavigation((view,options={})=>showView(view,options));
 onAppEvent('accounts:open-add',()=>openAddAccountDialog());
 onAppEvent('accounts:open-bank',()=>openBankDialog());
+onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
+onAppEvent('rules:new',()=>newRule(ctx));
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
