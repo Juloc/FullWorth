@@ -5,24 +5,33 @@ reconciliation. The individual plan/spec docs keep the full detail; this is the 
 together. Everything NOT listed here was verified as shipped.
 
 ## Structural (frontend architecture)
-Source: `FRONTEND_RESTRUCTURE_HANDOFF.md`, `FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md` (the doc's actual *Goal* — the
-UX-semantics part is done, this structural part is not started).
-- **Shrink `app.js`** (~1364 lines) to bootstrap/composition only — banking + account management are still inline.
-- **Router ownership**: `core/router.js` is a thin helper; no single navigation API. `window.fwNavScope` is a
-  global consumed across ~7 files. Introduce a real router + drop the global.
-- **Page lifecycle**: no `mount(ctx, route) -> cleanup()` contract; features bind without teardown.
-- **Feature dirs** (`features/<name>/{index,view,dialogs,state,css}`) and **`styles/` split**
-  (tokens/shell/components/responsive) — not created (CSS is flat).
+Source: `FRONTEND_RESTRUCTURE_HANDOFF.md`, `FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md`.
+
+> **The owner landed a large refactor of this area concurrent with the 2026-09-07 audit**
+> (commits `5a614be`…`9f9893f`: shared navigation + event core `core/navigation.js`/`core/event-bus.js`,
+> per-feature **activate/unmount lifecycle** in `core/feature-registry.js`, centralized route writes, and a
+> shared Dashboard↔Analytics period via `cycleWindow` `activeFrom`/`averageFrom`). Those are **done** and are
+> removed from the list below; re-verify against current `main` before acting.
+
+Still open:
+- **Shrink `app.js`** — still ~1366 lines; it still owns `showView` and has banking + account management inline
+  (~134 banking refs). Reduce it to bootstrap/composition.
+- **Finish the `window.fwNavScope` → `core/navigation.js` migration** — the shared nav API exists
+  (`installNavigation`/`navigate`) but 3 files still call the old global: `features/transactions.js`,
+  `features/coach-shell.js`, `features/accounts-ux.js` (accounts is frozen).
+- **Feature dirs** (`features/<name>/{index,view,dialogs,state,css}`) and the **`styles/` split**
+  (tokens/shell/components/responsive) — not created (features are flat `*.js`, CSS is flat top-level).
 - Create `docs/FRONTEND_ARCHITECTURE.md` (the Phase-1 "permanent contract") — never written.
 
 ## Behaviour / finance-model gaps
 - **Shared money-variant model** in `ui/money.js`: expose neutral/income/warning/danger/debt variants and use
   them centrally. Rows still choose the color class by sign (`amount < 0 ? 'negative' : 'positive'`). The red
   *alarm* is already neutralized in CSS, but the semantic model the spec asks for is missing.
-- **Budgets sum mixed cycles** into one headline (`features/budgets.js` reduces weekly+monthly+pay-cycle items
-  together) — evaluate each budget against its own period instead.
-- **Backend arbitrary-range category averages** are hardcoded `0m` (`CategoryAnalyticsService.cs` Average3/6/12),
-  so Week/Quarter/Year trailing averages are unsupported.
+- ~~Budgets sum mixed cycles into one headline~~ — **fixed by the owner**: `features/budgets.js` now gates the
+  headline on a comparable period window and shows "—" when budgets span different cycles.
+- **Backend arbitrary-range category averages**: the service moved to
+  `src/FullWorth.Backend/Modules/Analytics/Categories/CategoryAnalyticsService.cs`. Re-verify whether Average3/6/12
+  are still `0m` for arbitrary ranges after the owner's "complete period and grouping semantics" refactor.
 - **Canonical merchant identity**: analytics/drill key off counterparty *text* (`merchant=<name>`), not a
   `merchantId`, so an aggregate and its opened list can diverge.
 - **Category overview list** `slice(0,6)` can still mix parent+child rows (the *total* is already root-only).

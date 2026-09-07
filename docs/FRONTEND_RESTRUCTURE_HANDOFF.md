@@ -657,7 +657,7 @@ Tap the card/title/row to enter the corresponding detail with the same scope/per
 
 These are known issues in the current frontend and must not be preserved just because they exist on `main`.
 
-> Update: the analytics period semantics, the Dashboard net-worth preview and the normal-expense red-alarm have shipped (marked below). The structural refactor (shrinking `app.js`, retiring `window.fwNavScope`, per-page mount/unmount) and the remaining data/model gaps are still open.
+> Update: the analytics period semantics, the Dashboard net-worth preview and the normal-expense red-alarm have shipped (marked below). A later owner refactor (commits `5a614be`…`9f9893f`) also landed the shared navigation + event core, per-feature activate/unmount **lifecycle** (`core/feature-registry.js`), centralized route writes, the shared Dashboard↔Analytics period, and comparable-window budgets. Of the original structural goal, what remains is: **shrinking `app.js`** (still ~1366 lines with banking/accounts inline) and **finishing the `window.fwNavScope` → `core/navigation.js` migration** (3 callers left). The remaining data/model gaps (shared money-variant model, backend arbitrary-range averages, canonical merchant identity, category LIST slice) are still open. See `docs/OPEN_ITEMS.md`.
 
 ### Analytics — shipped
 
