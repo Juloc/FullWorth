@@ -81,7 +81,7 @@ function installShell() {
       <div class="coach-main">
         <article class="panel coach-hero">
           <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
-          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Deterministisch', 'Deterministic'))}</span></div>
+          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Lokale Auswertung', 'Local analysis'))}</span></div>
         </article>
         <article class="panel coach-chat-panel">
           <div id="coach-starters" class="coach-starters"></div>
@@ -604,7 +604,7 @@ async function loadModels() {
   const defaultLabel = modelCatalog?.defaultModel ? ` · ${modelCatalog.defaultModel}` : '';
   auto.textContent = modelCatalog?.configured
     ? `${tr('Automatisch', 'Automatic')}${defaultLabel}`
-    : tr('Deterministisch', 'Deterministic');
+    : tr('Lokale Auswertung', 'Local analysis');
   select.appendChild(auto);
 
   models.forEach(model => {
@@ -622,45 +622,81 @@ async function loadModels() {
   if (mode) {
     mode.textContent = modelCatalog?.configured
       ? `${tr('KI', 'AI')} · ${modelCatalog.provider || tr('konfiguriert', 'configured')}`
-      : tr('Deterministisch', 'Deterministic');
+      : tr('Lokale Auswertung', 'Local analysis');
   }
 }
 
-function starterQuestions(){
+function starterSuggestions(){
+  const local = [
+    { label: tr('Monat', 'Month'), text: tr('Was ist diesen Monat wichtig?', 'What matters this month?') },
+    { label: tr('Veränderungen', 'Changes'), text: tr('Was hat sich gegenüber dem letzten Zeitraum verändert?', 'What changed compared with the previous period?') },
+    { label: tr('Sparpotenzial', 'Savings'), text: tr('Wo könnte ich sinnvoll reduzieren?', 'Where could I reasonably cut back?') },
+    { label: tr('Vermögensziel', 'Wealth goal'), text: tr('Wann erreiche ich 100.000 €?', 'When could I reach €100,000?') }
+  ];
+  if (!modelCatalog?.configured) return local;
+
   const context=capturePageContext(),type=context?.entityType;
-  if(type==='transaction')return lang()==='de'
-    ? ['Ist diese Buchung ungewöhnlich?','Passt die Kategorie?','Wie wirkt sie sich auf mein Budget aus?']
-    : ['Is this transaction unusual?','Does the category fit?','How does it affect my budget?'];
-  if(type==='transactions')return lang()==='de'
-    ? ['Was fällt bei diesen Buchungen auf?','Welche davon sind vermeidbar?','Wie könnte ich sie sinnvoll gruppieren?']
-    : ['What stands out in these transactions?','Which of them may be avoidable?','How should I group them?'];
-  if(type==='contract')return lang()==='de'
-    ? ['Ist dieser Vertrag auffällig teuer?','Wie hoch sind die Jahreskosten?','Wo könnte ich sparen?']
-    : ['Is this contract unusually expensive?','What is the annual cost?','Where could I save?'];
-  if(type==='account')return lang()==='de'
-    ? ['Was fällt bei diesem Konto auf?','Wie entwickelt sich mein Geldfluss hier?','Welche Ausgaben stechen heraus?']
-    : ['What stands out for this account?','How is cash flow developing here?','Which expenses stand out?'];
-  if(type==='asset'||type==='liability')return lang()==='de'
-    ? ['Wie wirkt sich das auf mein Vermögen aus?','Was sollte ich dabei beobachten?','Wie hat sich der Wert entwickelt?']
-    : ['How does this affect my net worth?','What should I watch here?','How has the value developed?'];
-  if(type==='budget')return lang()==='de'
-    ? ['Bin ich bei diesem Budget auf Kurs?','Welche Ausgaben treiben dieses Budget?','Wie kann ich das Budget besser einhalten?']
-    : ['Am I on track with this budget?','Which expenses drive this budget?','How can I stay within this budget?'];
-  if(type==='portfolio')return lang()==='de'
-    ? ['Wie passt dieses Depot zu meinem Gesamtvermögen?','Was sollte ich bei diesem Depot beobachten?','Wie beeinflusst es meine Vermögensentwicklung?']
-    : ['How does this portfolio fit my overall net worth?','What should I watch in this portfolio?','How does it affect my wealth trend?'];
-  return lang()==='de'
-    ? ['Wo ist mein Geld hin?','Was habe ich bereut?','Was war es wert?','Was könnte ich reduzieren?','Wann erreiche ich 100.000 €?']
-    : ['Where did my money go?','What did I regret?','What was worth it?','What could I reduce?','When could I reach €100,000?'];
+  const pick = (label, text) => ({ label: tr(label[0], label[1]), text: tr(text[0], text[1]) });
+  if(type==='transaction')return [
+    pick(['Einordnen','Assess'],['Was ist an dieser Buchung auffällig?','What stands out about this transaction?']),
+    pick(['Kategorie','Category'],['Passt die Kategorie zu Händler und Buchung?','Does the category fit the merchant and transaction?']),
+    pick(['Auswirkung','Impact'],['Wie verändert diese Buchung meinen aktuellen Monat?','How does this transaction affect my current month?'])
+  ];
+  if(type==='transactions')return [
+    pick(['Muster','Patterns'],['Was fällt bei diesen Buchungen gemeinsam auf?','What patterns stand out across these transactions?']),
+    pick(['Sparpotenzial','Savings'],['Welche dieser Ausgaben wirken am ehesten vermeidbar?','Which of these expenses look most avoidable?']),
+    pick(['Struktur','Structure'],['Wie würdest du diese Buchungen sinnvoll einordnen?','How would you sensibly organize these transactions?'])
+  ];
+  if(type==='contract')return [
+    pick(['Kosten','Cost'],['Wie teuer ist dieser Vertrag auf ein Jahr gerechnet?','What does this contract cost over a year?']),
+    pick(['Einordnen','Assess'],['Ist dieser Vertrag für meine Finanzen auffällig?','Does this contract stand out in my finances?']),
+    pick(['Sparpotenzial','Savings'],['Welche realistischen Sparmöglichkeiten sehe ich bei diesem Vertrag?','What realistic savings options do I have for this contract?'])
+  ];
+  if(type==='account')return [
+    pick(['Geldfluss','Cash flow'],['Was fällt beim Geldfluss dieses Kontos auf?','What stands out in this account cash flow?']),
+    pick(['Ausgaben','Spending'],['Welche Ausgaben auf diesem Konto stechen heraus?','Which expenses on this account stand out?']),
+    pick(['Entwicklung','Trend'],['Wie hat sich dieses Konto zuletzt entwickelt?','How has this account developed recently?'])
+  ];
+  if(type==='budget')return [
+    pick(['Status','Status'],['Bin ich mit diesem Budget aktuell auf Kurs?','Am I currently on track with this budget?']),
+    pick(['Treiber','Drivers'],['Welche Ausgaben treiben dieses Budget am stärksten?','Which expenses are driving this budget most?']),
+    pick(['Anpassen','Adjust'],['Was wäre eine sinnvolle Anpassung für dieses Budget?','What would be a sensible adjustment for this budget?'])
+  ];
+  if(type==='asset'||type==='liability'||type==='portfolio')return [
+    pick(['Einordnung','Context'],['Wie passt das in mein Gesamtvermögen?','How does this fit into my overall net worth?']),
+    pick(['Entwicklung','Trend'],['Wie hat sich der Wert zuletzt entwickelt?','How has the value developed recently?']),
+    pick(['Beobachten','Watch'],['Was sollte ich hier finanziell im Blick behalten?','What should I keep an eye on financially here?'])
+  ];
+  return local;
 }
-function renderStarters() {
-  const starters=starterQuestions();
+function renderStarters(visible = true) {
+  const starters=starterSuggestions().slice(0, 3);
   all('#coach-starters,#coach-dock-starters').forEach(root => {
     root.innerHTML = '';
-    starters.forEach(text => {
-      const button = document.createElement('button'); button.type = 'button'; button.className = 'coach-chip'; button.textContent = text;
-      button.addEventListener('click', () => ask(text)); root.appendChild(button);
+    root.hidden = !visible;
+    if (!visible) return;
+
+    const head = document.createElement('div');
+    head.className = 'coach-starter-head';
+    const title = document.createElement('strong');
+    title.textContent = tr('Wobei soll ich helfen?', 'What should I help with?');
+    const sub = document.createElement('span');
+    sub.textContent = modelCatalog?.configured
+      ? tr('Fragen passend zu deinen FullWorth-Daten und dem aktuellen Kontext.', 'Questions based on your FullWorth data and current context.')
+      : tr('Lokale Auswertung direkt aus deinen FullWorth-Daten.', 'Local analysis directly from your FullWorth data.');
+    head.append(title, sub);
+
+    const list = document.createElement('div');
+    list.className = 'coach-suggestion-list';
+    starters.forEach(item => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'coach-suggestion';
+      button.innerHTML = `<span class="coach-suggestion-label">${esc(item.label)}</span><span class="coach-suggestion-text">${esc(item.text)}</span><span class="coach-suggestion-arrow" aria-hidden="true">→</span>`;
+      button.addEventListener('click', () => ask(item.text));
+      list.appendChild(button);
     });
+    root.append(head, list);
   });
 }
 
@@ -712,7 +748,7 @@ async function ask(text) {
     renderContextActions();
     const modeText = response.message.mode === 'Ai'
       ? `${tr('KI', 'AI')}${response.message.model ? ` · ${response.message.model}` : ''}`
-      : tr('Deterministisch', 'Deterministic');
+      : tr('Lokale Auswertung', 'Local analysis');
     if ($('#coach-mode')) $('#coach-mode').textContent = modeText;
     renderFollowUps(response.followUps || []);
     await loadReviews(false);
@@ -815,10 +851,8 @@ function setThinking(visible) {
 }
 
 function renderMessages(messages) {
-  messageRoots().forEach(root => {
-    root.innerHTML = '';
-    if (!messages.length) root.innerHTML = `<div class="coach-empty">${esc(tr('Noch keine Nachrichten.', 'No messages yet.'))}</div>`;
-  });
+  messageRoots().forEach(root => { root.innerHTML = ''; });
+  renderStarters(messages.length === 0);
   messages.forEach(appendMessage);
 }
 
@@ -866,6 +900,7 @@ function editAndResend(text) {
 }
 
 function appendMessage(message) {
+  all('#coach-starters,#coach-dock-starters').forEach(root => { root.hidden = true; });
   const role = String(message.role).toLowerCase() === 'user' ? 'user' : 'assistant';
   const messageText = String(message.text || '');
   messageRoots().forEach(root => {
@@ -957,9 +992,31 @@ function renderContextActions(){
 }
 
 function renderFollowUps(items) {
-  all('#coach-starters,#coach-dock-starters').forEach(root => {
-    root.innerHTML = '';
-    items.slice(0, 3).forEach(text => { const b = document.createElement('button'); b.type = 'button'; b.className = 'coach-chip'; b.textContent = text; b.addEventListener('click', () => ask(text)); root.appendChild(b); });
+  messageRoots().forEach(root => {
+    const article=[...root.querySelectorAll('.coach-message.assistant')].at(-1);
+    if(!article)return;
+    article.querySelector('.coach-followups')?.remove();
+    const followUps=(items||[]).slice(0,3);
+    if(!followUps.length)return;
+
+    const block=document.createElement('div');
+    block.className='coach-followups';
+    const label=document.createElement('span');
+    label.className='coach-followups-label';
+    label.textContent=tr('Weiterfragen','Ask next');
+    const list=document.createElement('div');
+    list.className='coach-followup-list';
+    followUps.forEach(text=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='coach-followup';
+      button.textContent=text;
+      button.addEventListener('click',()=>ask(text));
+      list.appendChild(button);
+    });
+    block.append(label,list);
+    const anchor=article.querySelector('.coach-message-tools,.coach-response-actions');
+    if(anchor)article.insertBefore(block,anchor);else article.appendChild(block);
   });
 }
 
