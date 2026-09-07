@@ -10,8 +10,26 @@
 @font-face{font-family:'Fredoka';font-style:normal;font-weight:300 700;font-stretch:75% 125%;font-display:swap;src:url("/fonts/Fredoka-Variable.ttf") format("truetype")}
 :root{
   --font-default:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-arial-narrow:'Arial Narrow','Aptos Narrow','Roboto Condensed',ui-sans-serif,system-ui,sans-serif;
+  --font-system:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-segoe:'Segoe UI',system-ui,sans-serif;
+  --font-aptos:'Aptos','Segoe UI',system-ui,sans-serif;
+  --font-helvetica:'Helvetica Neue',Helvetica,Arial,sans-serif;
+  --font-arial:Arial,Helvetica,sans-serif;
+  --font-verdana:Verdana,Geneva,sans-serif;
+  --font-tahoma:Tahoma,Verdana,sans-serif;
+  --font-trebuchet:'Trebuchet MS',Arial,sans-serif;
+  --font-century-gothic:'Century Gothic','Avenir Next',Avenir,ui-sans-serif,sans-serif;
   --font-fredoka:'Fredoka',ui-rounded,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-comic:'Comic Sans MS','Comic Sans',cursive;
+  --font-georgia:Georgia,'Times New Roman',serif;
+  --font-times:'Times New Roman',Times,serif;
+  --font-mono:'Courier New',Courier,ui-monospace,SFMono-Regular,Consolas,monospace;
   --font:var(--font-default);
+  --font-size-base:13px;
+  --font-weight-base:400;
+  --letter-spacing-base:0em;
+  --line-height-base:1.5;
   color-scheme:light;
   /* spacing scale (§4.1) */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
@@ -33,7 +51,21 @@
   /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
   --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
 }
+html[data-font="arial-narrow"]{--font:var(--font-arial-narrow)}
+html[data-font="system"]{--font:var(--font-system)}
+html[data-font="segoe"]{--font:var(--font-segoe)}
+html[data-font="aptos"]{--font:var(--font-aptos)}
+html[data-font="helvetica"]{--font:var(--font-helvetica)}
+html[data-font="arial"]{--font:var(--font-arial)}
+html[data-font="verdana"]{--font:var(--font-verdana)}
+html[data-font="tahoma"]{--font:var(--font-tahoma)}
+html[data-font="trebuchet"]{--font:var(--font-trebuchet)}
+html[data-font="century-gothic"]{--font:var(--font-century-gothic)}
 html[data-font="fredoka"]{--font:var(--font-fredoka)}
+html[data-font="comic"]{--font:var(--font-comic)}
+html[data-font="georgia"]{--font:var(--font-georgia)}
+html[data-font="times"]{--font:var(--font-times)}
+html[data-font="mono"]{--font:var(--font-mono)}
 html[data-theme="dark"]{
   color-scheme:dark;
   /* Neutral dark surfaces use visible elevation instead of near-black-on-near-black. */
@@ -45,7 +77,7 @@ html[data-theme="dark"]{
 }
 *{box-sizing:border-box}
 html,body{margin:0;max-width:100%;overflow-x:clip}
-body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:var(--font-size-base);font-weight:var(--font-weight-base);line-height:var(--line-height-base);letter-spacing:var(--letter-spacing-base);font-feature-settings:'tnum','lnum';-webkit-font-smoothing:antialiased}
 html.pwa-standalone,html.pwa-standalone body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html.pwa-standalone body{-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -1381,3 +1413,24 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
     min-height:44px;
   }
 }
+
+
+/* Typography playground: one shared appearance surface, persisted by ui/appearance.js. */
+.settings-typography{grid-column:1/-1;display:grid;gap:var(--s4);margin-top:var(--s2);padding-top:var(--s4);border-top:1px solid var(--line)}
+.settings-typography-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3)}
+.settings-typography-head>div{display:grid;gap:3px}
+.settings-typography-head strong{font-size:14px;font-weight:600}
+.settings-typography-head small{color:var(--muted);font-size:12px}
+.typography-reset{min-height:32px;padding:6px 11px;font-size:11px}
+.typography-controls{display:grid;grid-template-columns:minmax(190px,1.3fr) repeat(4,minmax(150px,1fr));gap:var(--s3);align-items:end}
+.typography-font,.typography-range{min-width:0;text-transform:none;letter-spacing:normal;color:var(--text)}
+.typography-range{gap:8px}
+.typography-range-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px}
+.typography-range-head output{color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.typography-range input[type="range"]{width:100%;height:28px;margin:0;padding:0;border:0;background:transparent;border-radius:0;accent-color:var(--cta);cursor:pointer}
+.typography-range input[type="range"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:transparent}
+.typography-preview{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface-2);overflow:hidden}
+.typography-preview strong{font-size:1.1em;font-weight:600}
+.typography-preview span{white-space:normal}
+@media(max-width:1100px){.typography-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.typography-font{grid-column:1/-1}}
+@media(max-width:620px){.settings-typography-head{align-items:stretch;flex-direction:column}.typography-reset{align-self:flex-start}.typography-controls{grid-template-columns:1fr}.typography-font{grid-column:auto}}
