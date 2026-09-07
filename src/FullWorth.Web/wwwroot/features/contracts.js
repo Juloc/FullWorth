@@ -1156,6 +1156,7 @@ function sparkline(payments) {
 }
 
 
+
 function contractMonthKey(value) {
   return String(value instanceof Date
     ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`
@@ -1176,6 +1177,25 @@ function contractAnalysisBars(months) {
     return `<g><rect class="contract-analysis-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="5"></rect><text class="contract-analysis-axis" x="${(x + barWidth / 2).toFixed(1)}" y="172" text-anchor="middle">${ctx.esc(label)}</text></g>`;
   }).join('');
   return `<svg class="contract-analysis-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}"><line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" class="contract-analysis-zero"></line>${bars}</svg>`;
+}
+
+function contractAnalysisDonut(rows, total) {
+  if (!rows.length || total <= 0) return '';
+  let offset = 0;
+  const segments = rows.slice(0, 8).map((row, index) => {
+    const share = Math.max(0, Math.min(100, row.value / total * 100));
+    const segment = `<circle class="contract-analysis-segment contract-analysis-seg-${index % 8}" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="${share} ${100 - share}" stroke-dashoffset="${-offset}" />`;
+    offset += share;
+    return segment;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" class="contract-analysis-donut" aria-hidden="true"><circle class="contract-analysis-donut-bg" cx="50" cy="50" r="40"/>${segments}</svg>`;
+}
+
+function contractDateParam(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 async function openContractAnalysis() {
@@ -1205,6 +1225,8 @@ async function openContractAnalysis() {
   dlg.showModal();
 
   const now = new Date();
+  const firstMonth = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const months = [];
   const monthMap = new Map();
   for (let offset = 11; offset >= 0; offset--) {
@@ -1215,9 +1237,11 @@ async function openContractAnalysis() {
     monthMap.set(key, month);
   }
 
-  const activities = await Promise.allSettled(
-    active.slice(0, 60).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))
-  );
+  const [activities, overview] = await Promise.all([
+    Promise.allSettled(active.slice(0, 60).map(contract => ctx.api(`api/contracts/${contract.id}/activity`))),
+    ctx.api(`api/analytics/overview?from=${contractDateParam(firstMonth)}&to=${contractDateParam(lastMonth)}&granularity=month`).catch(() => null)
+  ]);
+
   for (const result of activities) {
     if (result.status !== 'fulfilled') continue;
     for (const payment of result.value?.payments || []) {
@@ -1226,8 +1250,15 @@ async function openContractAnalysis() {
     }
   }
 
+  const periods = overview?.byPeriod || overview?.byMonth || [];
+  const incomeMonths = periods.map(period => Number(period.income) || 0).filter(value => value > 0);
+  const averageIncome = incomeMonths.length ? incomeMonths.reduce((sum, value) => sum + value, 0) / incomeMonths.length : null;
+  const available = averageIncome == null ? null : averageIncome - monthly;
+  const share = averageIncome && averageIncome > 0 ? Math.round(monthly / averageIncome * 100) : null;
+
   const maxCategory = Math.max(1, ...categoryRows.map(row => row.value));
-  const categoriesHtml = categoryRows.map(row => `<div class="contract-analysis-category">
+  const categoriesHtml = categoryRows.map((row, index) => `<div class="contract-analysis-category">
+    <span class="contract-analysis-category-dot contract-analysis-bg-${index % 8}"></span>
     <strong>${ctx.esc(row.label)}</strong>
     <span>${ctx.money(row.value, currency)}</span>
     <progress max="${maxCategory}" value="${row.value}"></progress>
@@ -1237,15 +1268,24 @@ async function openContractAnalysis() {
   if (!body) return;
   body.innerHTML = `
     <div class="panel-head"><h2>${ctx.esc(t('Vertragsanalyse', 'Contract analysis'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <section class="contract-analysis-card contract-analysis-summary">
-      <span>${ctx.esc(t('Durchschnittlich pro Monat', 'Average per month'))}</span>
-      <strong>${ctx.money(monthly, currency)}</strong>
-      <small>${ctx.money(annual, currency)} ${ctx.esc(t('pro Jahr', 'per year'))} · ${active.length} ${ctx.esc(t('aktive Verträge', 'active contracts'))}</small>
+
+    <section class="contract-analysis-card contract-analysis-balance">
+      <h3>${ctx.esc(t('Durchschnittlich pro Monat', 'Average per month'))}</h3>
+      ${averageIncome == null ? '' : `<div><span>${ctx.esc(t('Einnahmen', 'Income'))}</span><strong class="positive">${ctx.money(averageIncome, currency)}</strong></div>`}
+      <div><span>${ctx.esc(t('Verträge', 'Contracts'))}${share == null ? '' : ` <small>${share} %</small>`}</span><strong>−${ctx.money(monthly, currency)}</strong></div>
+      ${available == null ? '' : `<div class="contract-analysis-available"><span>${ctx.esc(t('Frei verfügbar', 'Available'))}</span><strong class="${available >= 0 ? 'positive' : 'negative'}">${ctx.money(available, currency)}</strong></div>`}
+      <small>${ctx.money(annual, currency)} ${ctx.esc(t('Vertragskosten pro Jahr', 'contract cost per year'))}</small>
     </section>
+
     <section class="contract-analysis-card">
       <h3>${ctx.esc(t('Verträge pro Kategorie', 'Contracts by category'))}</h3>
+      <div class="contract-analysis-donut-wrap">
+        ${contractAnalysisDonut(categoryRows, monthly)}
+        <div class="contract-analysis-donut-center"><strong>${ctx.money(monthly, currency)}</strong><span>${ctx.esc(t('monatlich', 'monthly'))}</span></div>
+      </div>
       <div class="contract-analysis-categories">${categoriesHtml || `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`}</div>
     </section>
+
     <section class="contract-analysis-card">
       <h3>${ctx.esc(t('Vertragskosten im Verlauf', 'Contract cost history'))}</h3>
       <p>${ctx.esc(t('Erkannte Vertragszahlungen der letzten 12 Monate.', 'Detected contract payments over the last 12 months.'))}</p>
