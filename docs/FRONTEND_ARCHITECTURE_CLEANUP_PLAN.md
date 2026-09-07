@@ -1,5 +1,7 @@
 # FullWorth Frontend Architecture Cleanup Plan
 
+Current continuation handoff: `docs/FRONTEND_ARCHITECTURE_HANDOFF.md`
+
 Status: approved architecture cleanup plan  
 Scope: FullWorth.Web frontend  
 Constraint: Accounts UI is frozen until explicit user approval.
