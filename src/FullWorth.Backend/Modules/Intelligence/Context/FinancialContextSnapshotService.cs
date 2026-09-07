@@ -135,7 +135,7 @@ public sealed class FinancialContextSnapshotService(CoachContextBuilder coachCon
         DateOnly? to,
         CancellationToken ct)
     {
-        var context = await coachContextBuilder.BuildAsync(userId, fullWorthSpaceId, from, to, ct);
+        var context = await coachContextBuilder.BuildForFinancialContextAsync(userId, fullWorthSpaceId, from, to, ct);
         return FromCoachContext(userId, fullWorthSpaceId, context, DateTimeOffset.UtcNow);
     }
 
