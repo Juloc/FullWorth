@@ -28,7 +28,6 @@ import {
   renderEnableBankingSettings
 } from './features/accounts.js';
 import { downloadWealthBackup } from './features/wealth-portability.js';
-import { createDialog } from './ui/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
@@ -38,6 +37,7 @@ import { openGlobalSearch } from './ui/global-search.js';
 import { bindCompensationNavigation } from './ui/compensation-navigation.js';
 import { createLayoutShell } from './ui/layout-shell.js';
 import { createShellPresentation } from './ui/shell-presentation.js';
+import { createViewHelpers } from './core/view-helpers.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
@@ -60,6 +60,7 @@ const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s
 const toastController=createToast($('#toast'));
 const toast=(text,duration)=>toastController.show(text,duration);
 const {initResizableSidebar,resetLayout,syncNavToggle,syncResponsiveSidebar,toggleSidebar}=createLayoutShell({get,toast});
+const {categoryOptions,date,dateTime,dialog,empty,esc,skeleton}=createViewHelpers({state,get,api});
 const shellPresentation=createShellPresentation({state,i18n,get,primaryAction:PRIMARY_ACTION,dialog:(html,options)=>dialog(html,options),navigate:(view,options)=>showView(view,options)});
 const {applyTheme,media,renderPageHeader,renderTranslations,renderUserBlock}=shellPresentation;
 const openMoreSheet=()=>shellPresentation.openMoreSheet(MORE_VIEWS,esc);
@@ -179,16 +180,6 @@ async function loadCurrent(){
     await refreshAccountPresentation(ctx);
   }catch(e){console.error(e);toast(get('common.error'))}
 }
-function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
-function dateTime(value){if(!value)return'—';const raw=String(value);if(!/[T ]\d{2}:\d{2}/.test(raw))return date(value);const parsed=new Date(raw);if(Number.isNaN(parsed.getTime()))return date(value);return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US',{dateStyle:'medium',timeStyle:'medium'}).format(parsed)}
-function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(message||get('common.empty'))}</div></div>`}
-function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar"></div><div class="skel-bar short"></div></div>`).join('')}
-function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function dialog(html,options={}){return createDialog(html,{closeLabel:get('common.close'),...options})}
-// §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a
-// category under multiple parents with the same name is still distinguishable at a glance.
-async function categoryOptions(selected){const categories=await api('api/categories');const byId=new Map(categories.map(c=>[c.id,c]));const path=c=>{const chain=[];let cur=c;while(cur){chain.unshift(cur.name);cur=cur.parentId?byId.get(cur.parentId):null}return chain.join(' › ')};return categories.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${esc(path(c))}</option>`).join('')}
-
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the
 // app's single api()/formatting/dialog path instead of duplicating it.
