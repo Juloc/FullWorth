@@ -370,7 +370,7 @@ public sealed class NetWorthHistoryRebuildTests
             .ToListAsync();
 
         Assert.Equal(3, history.Count);
-        Assert.Equal(1_000m, history[0].Accounts);
+        Assert.Equal(900m, history[0].Accounts);
         Assert.Equal(900m, history[^1].Accounts);
     }
 

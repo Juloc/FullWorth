@@ -302,12 +302,16 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         audit.Record(fullWorthSpaceId, userId, "finanzguru.account.linked_explicitly", "FinanceAccount", targetAccount.Id);
         await db.SaveChangesAsync(ct);
 
+        // Rows moved just now are already trusted for history (trustMovedHistory:true above), and
+        // importedRowsOnTarget only sees rows a PRIOR automatic reconcile had moved (its query runs
+        // before SaveChanges, so it cannot include the rows we just re-parented). The two sets are
+        // disjoint, so the trusted-for-history total is the sum.
         return new FinanzguruExplicitLinkResult(
             importedAccount.Id,
             targetAccount.Id,
             result.Moved,
             result.Merged,
-            importedRowsOnTarget.Count,
+            result.Moved + importedRowsOnTarget.Count,
             balanceAdded);
     }
 

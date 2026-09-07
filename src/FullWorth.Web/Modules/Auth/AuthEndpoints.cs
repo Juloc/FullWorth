@@ -84,9 +84,9 @@ public static class AuthEndpoints
         HttpContext context,
         SignInManager<AuthUser> signInManager,
         UserManager<AuthUser> userManager,
-        AuthSessionCoordinator sessions,
-        RegistrationService registration,
-        AccountDeletionService deletion,
+        [FromServices] AuthSessionCoordinator sessions,
+        [FromServices] RegistrationService registration,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
@@ -162,8 +162,8 @@ public static class AuthEndpoints
         TwoFactorCodeRequest request,
         SignInManager<AuthUser> signInManager,
         UserManager<AuthUser> userManager,
-        AuthSessionCoordinator sessions,
-        AccountDeletionService deletion,
+        [FromServices] AuthSessionCoordinator sessions,
+        [FromServices] AccountDeletionService deletion,
         CancellationToken ct)
     {
         var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);

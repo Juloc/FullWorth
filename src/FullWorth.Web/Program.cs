@@ -327,7 +327,7 @@ foreach (var route in new[]
 }
 
 var adminShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin", "index.html");
-foreach (var route in new[] { "/admin", "/admin/" })
+foreach (var route in new[] { "/admin" })
 {
     app.MapGet(route, async (
         HttpContext context,

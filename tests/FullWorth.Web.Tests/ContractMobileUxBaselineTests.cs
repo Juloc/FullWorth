@@ -17,7 +17,7 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
         Assert.Contains("DETECTED_BATCH_SIZE = 3", js);
         Assert.Contains("data-detected-more", js);
         Assert.DoesNotContain("ctx.get('contracts.confidence')", js);
-        Assert.DoesNotContain("data-detect", js);
+        Assert.DoesNotContain("data-detect-confidence", js);
     }
 
     [Fact]

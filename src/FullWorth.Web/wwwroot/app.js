@@ -159,7 +159,7 @@ async function openTwoFactorDialog(){
     <form class="dialog-card" id="two-factor-enable-form">
       <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
       <p class="row-sub">${get('twoFactor.setupHelp')}</p>
-      <div class="row"><div class="row-main"><div class="row-title">${get('twoFactor.sharedKey')}</div><div class="row-sub"><code style="user-select:all;word-break:break-all">${esc(setup.sharedKey)}</code></div></div></div>
+      <div class="row"><div class="row-main"><div class="row-title">${get('twoFactor.sharedKey')}</div><div class="row-sub"><code class="two-factor-key">${esc(setup.sharedKey)}</code></div></div></div>
       <label><span>${get('twoFactor.code')}</span><input id="two-factor-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
       <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit">${get('twoFactor.enable')}</button></div>
     </form>`);

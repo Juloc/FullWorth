@@ -27,9 +27,9 @@ public sealed class TwoFactorIntegrationTests
 
             Assert.True((await users.ResetAuthenticatorKeyAsync(user!)).Succeeded);
             Assert.True((await users.SetTwoFactorEnabledAsync(user!, true)).Succeeded);
-            currentCode = await users.GenerateTwoFactorTokenAsync(
-                user!,
-                TokenOptions.DefaultAuthenticatorProvider);
+            var sharedKey = await users.GetAuthenticatorKeyAsync(user!);
+            Assert.False(string.IsNullOrWhiteSpace(sharedKey));
+            currentCode = ComputeAuthenticatorCode(sharedKey!);
             Assert.False(string.IsNullOrWhiteSpace(currentCode));
         }
 
@@ -78,5 +78,46 @@ public sealed class TwoFactorIntegrationTests
         var created = await auth.CreateUserAsync(new CreateAuthUserRequest(Guid.NewGuid(), email, TestPassword));
         Assert.True(created.Succeeded);
         return (created.User!.Id, email);
+    }
+
+    // The authenticator token provider intentionally does not emit codes server-side:
+    // GenerateTwoFactorTokenAsync(..., DefaultAuthenticatorProvider) returns an empty string, so the
+    // test must derive the current 6-digit TOTP from the shared key exactly the way the provider
+    // validates it (RFC 6238: HMAC-SHA1 over a 30-second time step, dynamic truncation, no modifier).
+    private static string ComputeAuthenticatorCode(string base32Key)
+    {
+        var key = Base32Decode(base32Key);
+        var timestep = (long)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds / 30;
+        var counter = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(timestep));
+        var hash = System.Security.Cryptography.HMACSHA1.HashData(key, counter);
+        var offset = hash[^1] & 0x0f;
+        var binary = ((hash[offset] & 0x7f) << 24)
+            | ((hash[offset + 1] & 0xff) << 16)
+            | ((hash[offset + 2] & 0xff) << 8)
+            | (hash[offset + 3] & 0xff);
+        return (binary % 1_000_000).ToString("D6");
+    }
+
+    private static byte[] Base32Decode(string value)
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        var bytes = new List<byte>(value.Length * 5 / 8);
+        var bits = 0;
+        var accumulator = 0;
+        foreach (var c in value.TrimEnd('=').ToUpperInvariant())
+        {
+            var index = alphabet.IndexOf(c);
+            if (index < 0)
+                continue;
+            accumulator = (accumulator << 5) | index;
+            bits += 5;
+            if (bits >= 8)
+            {
+                bytes.Add((byte)((accumulator >> (bits - 8)) & 0xff));
+                bits -= 8;
+            }
+        }
+
+        return bytes.ToArray();
     }
 }
