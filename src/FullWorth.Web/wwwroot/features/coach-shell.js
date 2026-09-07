@@ -624,6 +624,7 @@ async function loadModels() {
       ? `${tr('KI', 'AI')} · ${modelCatalog.provider || tr('konfiguriert', 'configured')}`
       : tr('Lokale Auswertung', 'Local analysis');
   }
+  if (!messageRoots().some(root => root.querySelector('.coach-message'))) renderStarters(true);
 }
 
 function starterSuggestions(){
