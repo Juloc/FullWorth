@@ -1,3 +1,4 @@
+import { snapshotUploadFile } from '../security/secure-fetch.js';
 import { api as sharedApi } from '../core/services.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
@@ -14,7 +15,7 @@ setText('pdf-subtitle',t.subtitle);setText('pdf-back',t.back);setText('pdf-space
 async function api(path,options={}){return sharedApi(path,options)}
 function status(message){setText('pdf-status',message)}
 function fail(err){console.error(err);status(`${t.error} ${err?.message||''}`.trim())}
-async function formWithFile(file){const uploadFile=window.financeFileUpload?.snapshot?await window.financeFileUpload.snapshot(file):file;const body=new FormData();body.append('file',uploadFile,file.name);return body}
+async function formWithFile(file){const uploadFile=await snapshotUploadFile(file);const body=new FormData();body.append('file',uploadFile,file.name);return body}
 function metric(label,value){const article=document.createElement('article');article.className='metric';const span=document.createElement('span');span.textContent=label;const strong=document.createElement('strong');strong.textContent=String(value??0);article.append(span,strong);return article}
 function renderMetrics(id,values){const root=$(id);root.innerHTML='';for(const [label,value] of values)root.appendChild(metric(label,value))}
 function fillPortfolioSelect(){const select=$('pdf-portfolio');select.innerHTML='';for(const p of state.portfolios.filter(p=>!p.isArchived)){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;select.appendChild(option)}const add=document.createElement('option');add.value='__new__';add.textContent=t.newPortfolio;select.appendChild(add);if(!state.portfolios.some(p=>!p.isArchived))select.value='__new__'}
