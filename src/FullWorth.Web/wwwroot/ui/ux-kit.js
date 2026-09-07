@@ -170,5 +170,5 @@ export function cycleWindow(cycle, offset = 0, lang = 'de') {
     : cycle === 'month' ? (de ? `Letzte ${n} Monate` : `Last ${n} months`)
       : cycle === 'quarter' ? (de ? `Letzte ${n} Quartale` : `Last ${n} quarters`)
         : (de ? `Letzte ${n} Jahre` : `Last ${n} years`);
-  return { from: iso(start), to: iso(end), granularity: cycle, label: offset ? `${label} (${iso(start)} – ${iso(end)})` : label };
+  return { from: iso(start), to: iso(end), granularity: cycle, buckets: n, label: offset ? `${label} (${iso(start)} – ${iso(end)})` : label };
 }

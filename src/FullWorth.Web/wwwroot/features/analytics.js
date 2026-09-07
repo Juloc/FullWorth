@@ -217,6 +217,14 @@ function pct(cur, prev) { cur = Number(cur) || 0; prev = Number(prev) || 0; if (
 
 function kpi(valueHtml, label) { return `<div class="an-kpi"><span class="k">${valueHtml}</span><span class="l">${label}</span></div>`; }
 
+// The period selector names the ACTIVE bucket (month/week/…), while the chart shows the surrounding
+// history window. Summary KPIs must therefore be the average per bucket ("Ø 2.318 € / Monat"), never the
+// raw sum over the whole window shown under a "Monat" label (FRONTEND_RESTRUCTURE_HANDOFF period model).
+function perBucket() { const g = activeWindow?.granularity;
+  return t({ week: '/ Woche', month: '/ Monat', quarter: '/ Quartal', year: '/ Jahr' }[g] || '/ Monat',
+           { week: '/ week', month: '/ month', quarter: '/ quarter', year: '/ year' }[g] || '/ month'); }
+function avgPerBucket(total) { const n = activeWindow?.buckets || 12; return (Number(total) || 0) / Math.max(1, n); }
+
 function monthLabel(row) {
   if (row?.start) {
     const start = new Date(String(row.start).slice(0, 10) + 'T12:00:00');
@@ -431,7 +439,7 @@ function fillSpending(el, o, oPrev) {
   if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
   const trend = pct(Math.abs(o?.expenses || 0), Math.abs(oPrev?.expenses || 0));
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => spendingLine(rows)) +
-    `<div class="an-card-foot">${kpi(ctx.money(o?.expenses || 0, cur), esc(t('Ausgaben gesamt', 'Total spending')))}${trendBadge(trend, false)}</div>`;
+    `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(o?.expenses || 0), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}${trendBadge(trend, false)}</div>`;
   bindSpendingScrubber(el, rows, cur);
   bindPeriodDrills(el, rows, 'expense');
 }
@@ -464,9 +472,9 @@ function fillInout(el, o, oPrev) {
   const netCls = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
   el.innerHTML = fxMarker(o?.incomplete) + chart(() => inoutBars(rows)) +
     `<div class="an-card-foot"><div class="an-kpi-group">` +
-    kpi(ctx.money(o?.income || 0, cur), `${esc(ctx.get('transactions.income'))} ${trendBadge(incTrend, true)}`) +
-    kpi(ctx.money(o?.expenses || 0, cur), `${esc(ctx.get('transactions.expenses'))} ${trendBadge(expTrend, false)}`) +
-    `</div>` + kpi(`<span class="${netCls}">${ctx.money(net, cur)}</span>`, esc(ctx.get('analytics.net'))) + `</div>`;
+    kpi(ctx.money(avgPerBucket(o?.income || 0), cur), `Ø ${esc(ctx.get('transactions.income'))} ${esc(perBucket())} ${trendBadge(incTrend, true)}`) +
+    kpi(ctx.money(avgPerBucket(o?.expenses || 0), cur), `Ø ${esc(ctx.get('transactions.expenses'))} ${esc(perBucket())} ${trendBadge(expTrend, false)}`) +
+    `</div>` + kpi(`<span class="${netCls}">${ctx.money(avgPerBucket(net), cur)}</span>`, `Ø ${esc(ctx.get('analytics.net'))} ${esc(perBucket())}`) + `</div>`;
   bindInoutScrubber(el, rows, cur);
   bindPeriodDrills(el, rows);
 }
@@ -507,14 +515,14 @@ function fillCategory(el, result, catIcon) {
     const pctW = Math.round((Math.abs(Number(r.current) || 0) / max) * 100);
     const cat = categoryColorIndex(r.categoryId || r.name);
     const drill = r.categoryId ? ` data-cat-id="${esc(r.categoryId)}" role="button" tabindex="0"` : '';
-    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="tx-cat-ic" data-cat="${cat}">${categoryIconInner(catIcon?.get(r.categoryId)) || ''}</span>${esc(r.name)}</span><span class="amount">${ctx.money(r.current, cur)}</span>${trendBadge(r.trendPercent, false)}</div>
+    return `<div class="an-catrow${r.categoryId ? ' is-drillable' : ''}"${drill}><div class="an-catrow-head"><span class="row-title"><span class="tx-cat-ic" data-cat="${cat}">${categoryIconInner(catIcon?.get(r.categoryId)) || ''}</span>${esc(r.name)}</span><span class="amount">${ctx.money(avgPerBucket(r.current), cur)}</span>${trendBadge(r.trendPercent, false)}</div>
       <div class="progress"><span class="bar-fill" data-cat="${cat}" data-w="${pctW}"></span></div></div>`;
   }).join('');
   // Screenshot parity: a soft category donut sits above the list, sharing its per-category palette; the
   // list below doubles as the legend. Wrapped in chart() so privacy mode swaps its (leaking) geometry.
   const donutHtml = categoryDonut(cats, total, cur);
   const donut = donutHtml ? chart(() => donutHtml) : '';
-  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Ausgaben gesamt', 'Total spending')))}</div>`;
+  el.innerHTML = fxMarker(result?.incomplete) + donut + list + `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(total), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}</div>`;
   el.querySelectorAll('.bar-fill[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   el.querySelectorAll('.an-catrow[data-cat-id]').forEach(row => {
     const go = () => window.fwNavScope && window.fwNavScope('transactions', analyticsTxScope(`direction=expense&categoryId=${encodeURIComponent(row.dataset.catId)}&includeDescendants=true`));
@@ -541,7 +549,7 @@ function categoryDonut(cats, total, cur) {
     arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="16" stroke-linecap="round" class="donut-seg" data-cat="${s.cat}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
     offset += len;
   }
-  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(total, cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))}</span></div></div>`;
+  return `<div class="an-donut"><svg viewBox="0 0 160 160" class="an-donut-svg" role="img" aria-label="${esc(ctx.get('analytics.categories'))}">${arcs}</svg><div class="an-donut-center"><span class="k">${ctx.money(avgPerBucket(total), cur)}</span><span class="l">${esc(ctx.get('transactions.expenses'))} ${esc(perBucket())}</span></div></div>`;
 }
 
 // 4) Spend by merchant — top merchants with brand identity, count/average, spend + per-row trend.
@@ -554,8 +562,8 @@ function fillMerchant(el, result) {
   // Drill-down (UX rework §6): a merchant has no stored FK on transactions, so scope by the merchant name
   // as a counterparty search (the tx list ILIKEs the counterparty) — the pragmatic equivalent of a
   // merchant filter without a backend change.
-  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
-  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(total, cur), esc(t('Top-Ausgaben', 'Top spending')))}</div>`;
+  const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(avgPerBucket(r.currentSpend), cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
+  el.innerHTML = fxMarker(result?.incomplete) + list + `<div class="an-card-foot">${kpi(ctx.money(avgPerBucket(total), cur), esc(t('Ø Ausgaben', 'Ø spending') + ' ' + perBucket()))}</div>`;
   el.querySelectorAll('.an-mrow[data-merchant]').forEach(row => {
     const q = row.dataset.merchant;
     if (!q) return;
