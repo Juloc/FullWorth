@@ -117,7 +117,7 @@ public sealed class CoachContextBuilder(
 
         var savingsStart = today.AddDays(-90);
         var previousSavingsEnd = savingsStart.AddDays(-1);
-        var previousSavingsStart = previousSavingsEnd.AddDays(-89);
+        var previousSavingsStart = previousSavingsEnd.AddDays(-90);
         var savingsRows = await LoadRows(accessible.Where(x => x.BookingDate >= savingsStart && x.BookingDate <= today), fullWorthSpaceId, today, ct);
         var previousSavingsRows = await LoadRows(accessible.Where(x => x.BookingDate >= previousSavingsStart && x.BookingDate <= previousSavingsEnd), fullWorthSpaceId, previousSavingsEnd, ct);
         var savingsAccumulator = new FxAccumulator(await fx.PrepareAsync(currency, savingsStart, today, ct));
@@ -128,8 +128,7 @@ public sealed class CoachContextBuilder(
         var previousSavingsTotal = previousSavingsRows.Sum(x => x.Amount);
         decimal? averageMonthlySavings = savingsAccumulator.Incomplete ? null : savingsTotal / 3m;
         decimal? previousAverageMonthlySavings = previousSavingsAccumulator.Incomplete ? null : previousSavingsTotal / 3m;
-        var incomplete = periodAccumulator.Incomplete || reviewSummary.Incomplete || savingsAccumulator.Incomplete ||
-            previousSavingsAccumulator.Incomplete || wealthOverview?.IsComplete == false;
+        var incomplete = periodAccumulator.Incomplete || reviewSummary.Incomplete || savingsAccumulator.Incomplete || wealthOverview?.IsComplete == false;
 
         var positiveExamples = BuildExamples(currentRows, SpendingSentiment.Positive);
         var negativeExamples = BuildExamples(currentRows, SpendingSentiment.Negative);
@@ -182,8 +181,6 @@ public sealed class CoachContextBuilder(
         };
         if (averageMonthlySavings.HasValue)
             facts.Add(new("savings:monthly-average", "90-day average monthly cash surplus", FormatMoney(averageMonthlySavings.Value, currency)));
-        if (previousAverageMonthlySavings.HasValue)
-            facts.Add(new("savings:previous-monthly-average", "Previous 90-day average monthly cash surplus", FormatMoney(previousAverageMonthlySavings.Value, currency)));
         if (currentNetWorth.HasValue) facts.Add(new("networth:current", "Current net worth", FormatMoney(currentNetWorth.Value, currency)));
         if (liquidAccountBalance.HasValue) facts.Add(new("wealth:liquid-accounts", "Visible liquid account balance", FormatMoney(liquidAccountBalance.Value, currency)));
         if (totalDebt.HasValue) facts.Add(new("wealth:debt", "Total recorded debt", FormatMoney(totalDebt.Value, currency)));
