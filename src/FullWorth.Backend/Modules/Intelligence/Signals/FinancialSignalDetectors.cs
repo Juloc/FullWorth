@@ -273,7 +273,7 @@ public sealed class SavingsChangeSignalDetector : IFinancialSignalDetector
                 "savings-change",
                 "cashflow",
                 "90-day-surplus",
-                $"savings-change:90-day:{context.AsOf:yyyy-MM-dd}",
+                $"savings-change:90-day:{context.AsOf:yyyy-MM}",
                 severity,
                 .95m,
                 absDelta,
@@ -297,10 +297,10 @@ public sealed class DataQualitySignalDetector : IFinancialSignalDetector
 
     public IReadOnlyList<DetectedFinancialSignal> Detect(FinancialContextSnapshot context, DateTimeOffset now)
     {
-        var result = new List<DetectedFinancialSignal>();
-        if (!context.DataQuality.IsComplete)
-        {
-            result.Add(SpendingShiftSignalDetector.Create(
+        if (context.DataQuality.IsComplete) return [];
+        return
+        [
+            SpendingShiftSignalDetector.Create(
                 context,
                 "data-quality",
                 "financial-context",
@@ -312,21 +312,31 @@ public sealed class DataQualitySignalDetector : IFinancialSignalDetector
                 null,
                 "insights.data.incomplete",
                 new { context.DataQuality.SourceVersion },
-                now));
-        }
+                now)
+        ];
+    }
+}
 
+public sealed class ClassificationQualitySignalDetector : IFinancialSignalDetector
+{
+    public string Source => "detector:classification-quality";
+
+    public IReadOnlyList<DetectedFinancialSignal> Detect(FinancialContextSnapshot context, DateTimeOffset now)
+    {
         var recent = context.DataQuality.RecentTransactionCount;
         var uncategorized = context.DataQuality.UncategorizedRecentTransactionCount;
-        if (recent >= 5 && uncategorized >= 3 && (decimal)uncategorized / recent >= .15m)
-        {
-            var ratio = (decimal)uncategorized / recent;
-            var severity = ratio >= .30m ? FinancialSignalSeverities.Attention : FinancialSignalSeverities.Info;
-            result.Add(SpendingShiftSignalDetector.Create(
+        if (recent < 5 || uncategorized < 3 || (decimal)uncategorized / recent < .15m) return [];
+
+        var ratio = (decimal)uncategorized / recent;
+        var severity = ratio >= .30m ? FinancialSignalSeverities.Attention : FinancialSignalSeverities.Info;
+        return
+        [
+            SpendingShiftSignalDetector.Create(
                 context,
                 "classification-quality",
                 "recent-transactions",
                 "uncategorized",
-                $"classification-quality:uncategorized:{context.AsOf:yyyy-MM-dd}",
+                $"classification-quality:uncategorized:{context.AsOf:yyyy-MM}",
                 severity,
                 .9m,
                 null,
@@ -338,10 +348,8 @@ public sealed class DataQualitySignalDetector : IFinancialSignalDetector
                     uncategorizedRecentTransactionCount = uncategorized,
                     share = Math.Round(ratio * 100m, 1, MidpointRounding.AwayFromZero)
                 },
-                now));
-        }
-
-        return result;
+                now)
+        ];
     }
 }
 
