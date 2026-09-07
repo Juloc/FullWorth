@@ -56,9 +56,15 @@ public sealed class ContractDetectionService(
             .ToListAsync(ct);
 
         var result = new List<ContractCandidate>();
-        foreach (var group in rows.GroupBy(x => new { x.NormalizedCounterparty, x.Currency }))
+        // Normalize the provider identity before recurrence grouping. Bank/account changes often alter
+        // punctuation, German spelling or legal suffixes in the booking text; those must not create a
+        // second logical contract.
+        foreach (var group in rows
+                     .Select(row => new { Row = row, ProviderKey = CandidateProviderKey(row.NormalizedCounterparty!) })
+                     .Where(item => item.ProviderKey.Length > 0)
+                     .GroupBy(item => new { item.ProviderKey, item.Row.Currency }))
         {
-            var entries = group.OrderBy(x => x.Date).ToList();
+            var entries = group.Select(item => item.Row).OrderBy(x => x.Date).ToList();
             if (entries.Count < 3) continue;
 
             var gaps = entries.Zip(entries.Skip(1), (a, b) => b.Date.DayNumber - a.Date.DayNumber).Where(x => x > 0).Order().ToArray();
@@ -82,8 +88,15 @@ public sealed class ContractDetectionService(
             if (confidence < .68m) continue;
 
             var last = entries[^1];
+            var displayCounterparty = entries
+                .GroupBy(x => x.NormalizedCounterparty, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(x => x.Count())
+                .ThenByDescending(x => x.Max(entry => entry.Date))
+                .Select(x => x.Key)
+                .First()!;
+
             result.Add(new ContractCandidate(
-                group.Key.NormalizedCounterparty!,
+                displayCounterparty,
                 medianAmount,
                 group.Key.Currency,
                 cycle.Value.Cycle,
