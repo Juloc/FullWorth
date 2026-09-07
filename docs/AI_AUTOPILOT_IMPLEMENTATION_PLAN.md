@@ -1,6 +1,9 @@
 # FullWorth AI Autopilot — Implementation Plan
 
 Status: implementation plan  
+
+Deployment-by-deployment rollout: [AI_AUTOPILOT_DEPLOYABLE_ROLLOUT.md](AI_AUTOPILOT_DEPLOYABLE_ROLLOUT.md)
+
 Depends on: `docs/AI_AUTOPILOT_PLAN.md`  
 Phase A (Coach credibility): already implemented.
 
