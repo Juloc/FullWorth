@@ -54,7 +54,7 @@ public sealed class RegistrationService(
         if (passwordErrors.Count > 0)
             return new RegisterResultDto(false, "invalid_password", null, passwordErrors);
 
-        var (created, backendError) = await CreateFinanceUserAsync(email, displayName, registration, ct);
+        var (created, backendError) = await CreateFinanceUserAsync(email, displayName, registration, firstRegistration, ct);
         if (backendError is not null)
             return backendError == "unavailable" ? RegisterResultDto.Unavailable() : RegisterResultDto.Failed();
 
@@ -66,6 +66,14 @@ public sealed class RegistrationService(
         var authUser = await userManager.FindByEmailAsync(email);
         if (authUser is null)
             return RegisterResultDto.Failed();
+
+        if (firstRegistration)
+        {
+            authUser.IsAdmin = true;
+            var adminResult = await userManager.UpdateAsync(authUser);
+            if (!adminResult.Succeeded)
+                return new RegisterResultDto(false, "registration_failed", null, adminResult.Errors.Select(error => error.Description).ToArray());
+        }
 
         var agreement = await AddAgreementClaimsAsync(authUser);
         if (!agreement.Succeeded)
@@ -116,7 +124,7 @@ public sealed class RegistrationService(
             return new RegisterResultDto(false, "invalid_registration", null, userErrors);
 
         var displayName = ResolveDisplayName(login.Principal, email);
-        var (created, backendError) = await CreateFinanceUserAsync(email, displayName, registration, ct);
+        var (created, backendError) = await CreateFinanceUserAsync(email, displayName, registration, firstRegistration, ct);
         if (backendError is not null)
             return backendError == "unavailable" ? RegisterResultDto.Unavailable() : RegisterResultDto.Failed();
 
@@ -147,10 +155,12 @@ public sealed class RegistrationService(
         string email,
         string displayName,
         RegistrationOptions registration,
+        bool firstRegistration,
         CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient(FirstRunBootstrapper.BackendClientName);
-        using var backendRequest = new HttpRequestMessage(HttpMethod.Post, "api/bootstrap/register")
+        var endpoint = firstRegistration ? "api/bootstrap/first-admin" : "api/bootstrap/register";
+        using var backendRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = JsonContent.Create(new
             {
