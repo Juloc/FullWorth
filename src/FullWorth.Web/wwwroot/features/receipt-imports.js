@@ -1,3 +1,5 @@
+import { api as sharedApi, jsonBody } from '../core/services.js';
+import { createDialog } from '../ui/dialog.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
 // photos into one logical receipt.
@@ -9,23 +11,17 @@ let paperlessOptions = { tags: [], documentTypes: [], correspondents: [], storag
 let paperlessPresets = [];
 let activePaperlessPresetId = null;
 
-install();
-
-function install() {
-  const run = () => {
-    ensureCss();
-    const scan = document.getElementById('scan-receipt');
-    if (!scan || document.getElementById('receipt-imports-launch')) return;
-    const button = document.createElement('button');
-    button.id = 'receipt-imports-launch';
-    button.type = 'button';
-    button.className = 'ghost';
-    button.textContent = t('Belege importieren', 'Import receipts');
-    button.addEventListener('click', openDialog);
-    scan.insertAdjacentElement('afterend', button);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
-  else run();
+export function ensureReceiptImportsLauncher() {
+  ensureCss();
+  const scan = document.getElementById('scan-receipt');
+  if (!scan || document.getElementById('receipt-imports-launch')) return;
+  const button = document.createElement('button');
+  button.id = 'receipt-imports-launch';
+  button.type = 'button';
+  button.className = 'ghost';
+  button.textContent = t('Belege importieren', 'Import receipts');
+  button.addEventListener('click', openDialog);
+  scan.insertAdjacentElement('afterend', button);
 }
 
 function ensureCss() {
@@ -39,9 +35,7 @@ function ensureCss() {
 
 async function openDialog() {
   if (dialog?.isConnected) { dialog.showModal(); return; }
-  dialog = document.createElement('dialog');
-  dialog.className = 'receipt-import-dialog';
-  dialog.innerHTML = `<div class="receipt-import-shell">
+  dialog = createDialog(`<div class="dialog-card receipt-import-shell">
     <div class="panel-head receipt-import-head">
       <div><h2>${esc(t('Belege importieren', 'Import receipts'))}</h2><div class="row-sub">${esc(t('Große Belegarchive über Dateien, Paperless-ngx oder einen Importordner verarbeiten.', 'Process large receipt archives from files, Paperless-ngx or an import folder.'))}</div></div>
       <button type="button" class="icon-button" data-close aria-label="${esc(t('Schließen', 'Close'))}">×</button>
@@ -60,8 +54,7 @@ async function openDialog() {
         <div data-batches class="rows"><div class="row-sub">${esc(t('Lade …', 'Loading …'))}</div></div>
       </section>
     </div>
-  </div>`;
-  document.body.appendChild(dialog);
+  </div>`, { className:'receipt-import-dialog', closeLabel:t('Schließen','Close') });
   dialog.addEventListener('close', () => { clearInterval(pollTimer); pollTimer = 0; });
   dialog.querySelector('[data-close]').onclick = () => dialog.close();
   dialog.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => selectTab(button.dataset.tab)));
@@ -778,10 +771,15 @@ async function refreshBatches() {
   const el = dialog.querySelector('[data-batches]');
   try {
     const batches = await api('api/purchases/receipt-imports/batches?limit=10');
-    if (!batches?.length) { el.innerHTML = `<div class="row-sub">${esc(t('Noch keine Bulk-Importe.', 'No bulk imports yet.'))}</div>`; return; }
+    if (!batches?.length) {
+      el.innerHTML = `<div class="row-sub">${esc(t('Noch keine Bulk-Importe.', 'No bulk imports yet.'))}</div>`;
+      document.dispatchEvent(new CustomEvent('fullworth:receipt-imports-rendered', { detail:{dialog} }));
+      return;
+    }
     el.innerHTML = batches.map(renderBatch).join('');
     el.querySelectorAll('[data-start-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.startBatch, 'start-pending'));
     el.querySelectorAll('[data-retry-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.retryBatch, 'retry-failed'));
+    document.dispatchEvent(new CustomEvent('fullworth:receipt-imports-rendered', { detail:{dialog} }));
   } catch (error) { el.innerHTML = `<div class="row-sub">${esc(error.message)}</div>`; }
 }
 
@@ -797,7 +795,10 @@ function renderBatch(batch) {
 
 async function batchAction(id, action) {
   try { await api(`api/purchases/receipt-imports/batches/${id}/${action}`, { method: 'POST' }); await refreshBatches(); }
-  catch (error) { alert(error.message); }
+  catch (error) {
+    const toast=document.getElementById('toast');
+    if(toast){toast.textContent=error.message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3200);}
+  }
 }
 
 function renderBatchResult(selector, batch) {
@@ -813,25 +814,8 @@ function selectTab(name) {
 }
 
 function currentCurrency() { return document.getElementById('user-space-sub')?.textContent?.trim() || 'EUR'; }
-function spaceId() { return localStorage.getItem('finance.space'); }
-
-async function api(path, options = {}) {
-  const id = spaceId();
-  if (!id) throw new Error(t('Kein FullWorth Space ausgewählt.', 'No FullWorth Space selected.'));
-  const [base, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  if (!params.has('fullWorthSpaceId')) params.set('fullWorthSpaceId', id);
-  const response = await fetch(`/bff/backend/${base.replace(/^\//, '')}?${params}`, options);
-  if (!response.ok) {
-    let message = `${response.status}`;
-    try { const body = await response.json(); message = body.error || body.message || body.title || message; } catch {}
-    throw new Error(message);
-  }
-  if (response.status === 204) return null;
-  return response.json();
-}
-
-function json(body) { return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
+const api=(path,options={})=>sharedApi(path,options);
+const json=body=>jsonBody(body,'POST');
 function setBusy(selector, busy) { const button = dialog.querySelector(selector); if (button) button.disabled = busy; }
 function setBox(selector, message, kind = '') { const el = dialog.querySelector(selector); if (el) el.innerHTML = `<div class="receipt-import-message ${kind}">${esc(message)}</div>`; }
 function formatBytes(value) { const bytes = Number(value || 0); if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1024 ** 2).toFixed(1)} MB`; }
