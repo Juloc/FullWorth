@@ -323,8 +323,11 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
             state?.Feedback);
     }
 
-    private static JsonElement ParseJson(string json) =>
-        JsonDocument.Parse(json).RootElement.Clone();
+    private static JsonElement ParseJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
 
     private static bool JsonEquivalent(string left, string right)
     {
