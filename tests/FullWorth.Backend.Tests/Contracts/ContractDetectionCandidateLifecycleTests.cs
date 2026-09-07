@@ -179,6 +179,7 @@ public sealed class ContractDetectionCandidateLifecycleTests
         var candidate = Assert.Single(candidates!);
         Assert.Equal(9, candidate.GetProperty("samples").GetInt32());
         Assert.Equal(182m, candidate.GetProperty("typicalAmount").GetDecimal());
+        Assert.Equal(accounts[2], candidate.GetProperty("accountId").GetGuid());
     }
 
     [Fact]
