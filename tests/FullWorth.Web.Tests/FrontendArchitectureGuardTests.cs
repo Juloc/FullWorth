@@ -167,9 +167,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/accounts-ux.js",
 
             // Legacy patch-layer migration allow-list. This list may only shrink.
-            "features/wealth-investment-consolidation.js",
-            "features/wealth-specialized-assets-extra.js",
-            "features/wealth-specialized-assets.js",
             "features/advanced-transaction-bulk-ui.js",
             "features/capability-ui-guard.js",
             "features/compensation-nav.js",
