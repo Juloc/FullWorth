@@ -225,12 +225,12 @@ function bind(){
   bindTransactions(ctx);
   $('#add-account').addEventListener('click',openAddAccountDialog);
   $('#add-group')?.addEventListener('click',()=>openGroupDialog());
-  $('[data-action="new-budget"]').addEventListener('click',openBudgetDialog);
+  $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
   bindContracts(ctx);
   bindNetWorth(ctx);
   bindLoans(ctx);
   bindAnalytics(ctx);
-  $('[data-action="new-category"]').addEventListener('click',openCategoryDialog);
+  $('[data-action="new-category"]').addEventListener('click',()=>newCategory(ctx));
   bindCategories(ctx);
   bindRules(ctx);
   bindPurchases(ctx);
