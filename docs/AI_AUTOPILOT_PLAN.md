@@ -1,5 +1,9 @@
 # FullWorth AI Autopilot Plan
 
+Detailed execution plan: [AI_AUTOPILOT_IMPLEMENTATION_PLAN.md](AI_AUTOPILOT_IMPLEMENTATION_PLAN.md)
+
+Current status: Phase A (Coach credibility) is implemented. The next implementation target is the deterministic Financial Signal foundation.
+
 ## Product principle
 
 AI is not a separate chatbot feature. It is an intelligence layer over FullWorth.
