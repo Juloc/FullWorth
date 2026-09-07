@@ -16,9 +16,15 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
 
         Assert.Contains("finance.visualTheme", init);
         Assert.Contains("dataset.visualTheme", init);
-        Assert.Contains("/appearance.css", init);
         Assert.Contains("/ui/appearance.js", init);
         Assert.False(init.Contains("mascot", StringComparison.OrdinalIgnoreCase));
+
+        // appearance.css is now a render-blocking <link> in the shell <head> (loaded before app.js),
+        // so the visual theme is painted on the first frame instead of being injected by theme-init.js
+        // after boot. Assert it is referenced in the head rather than appended at runtime.
+        var head = await File.ReadAllTextAsync(Path.Combine(WwwrootDir(), "index.html"));
+        head = head[..head.IndexOf("</head>", StringComparison.Ordinal)];
+        Assert.Contains("/appearance.css", head);
     }
 
     [Fact]
