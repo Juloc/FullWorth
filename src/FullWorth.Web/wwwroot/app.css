@@ -517,7 +517,18 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .nw-manage-body{padding:0 var(--s4) var(--s4)}
 .nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
 .nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
-#nw-investments .panel-head{margin-bottom:var(--s3)}
+#nw-investments .panel-head{margin-bottom:var(--s3);display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;justify-content:stretch}
+#nw-investments .panel-head>h2{min-width:0}
+#nw-investments .panel-head>button{white-space:nowrap}
+@media(max-width:560px){
+  #nw-investments .panel-head{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+  #nw-investments .panel-head>h2{grid-column:1/-1}
+  #nw-investments .panel-head>button{width:100%;min-width:0;white-space:normal;line-height:1.2;padding-inline:8px}
+}
+@media(max-width:340px){
+  #nw-investments .panel-head{grid-template-columns:1fr}
+  #nw-investments .panel-head>h2{grid-column:auto}
+}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
 /* The global `label{display:grid}` (and other display rules) otherwise beat the UA [hidden] rule, so a
    `<label hidden>` (e.g. the transfer-purpose select on a non-transfer) leaked into view. Enforce it. */
@@ -922,8 +933,8 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .nw-booking-history-dot{width:8px;height:8px;border-radius:2px;background:var(--muted);opacity:.38;flex:0 0 auto;margin-top:3px}
 .nw-allocation .nw-alloc-chart{position:relative;width:min(260px,72%);margin:var(--s4) auto var(--s3);aspect-ratio:1/1}
 .nw-allocation .nw-donut{display:block;width:100%;height:auto;overflow:visible}
-.nw-allocation .nw-donut-track{fill:none;stroke:var(--surface-2);stroke-width:20}
-.nw-allocation .nw-donut-seg{fill:none;stroke-width:20;stroke-linecap:round}
+.nw-allocation .nw-donut-track{fill:none;stroke:var(--surface-2);stroke-width:18}
+.nw-allocation .nw-donut-seg{fill:none;stroke-width:18;stroke-linecap:butt}
 .nw-allocation .nw-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;pointer-events:none}
 .nw-allocation .nw-donut-value{font-size:22px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.15}
 .nw-allocation .nw-donut-label{font-size:12px;color:var(--muted)}
