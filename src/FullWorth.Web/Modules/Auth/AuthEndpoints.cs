@@ -58,6 +58,7 @@ public static class AuthEndpoints
         string provider,
         IAuthenticationSchemeProvider schemes,
         SignInManager<AuthUser> signInManager,
+        UserManager<AuthUser> userManager,
         IOptions<RegistrationOptions> registration)
     {
         if (context.User.Identity?.IsAuthenticated == true)
@@ -70,7 +71,9 @@ public static class AuthEndpoints
         var mode = string.Equals(context.Request.Query["mode"], "register", StringComparison.OrdinalIgnoreCase)
             ? "register"
             : "login";
-        if (mode == "register" && !registration.Value.Enabled)
+        if (mode == "register"
+            && !registration.Value.Enabled
+            && await userManager.Users.AnyAsync())
             return Results.Redirect("/auth/register?status=registration-disabled");
 
         var properties = signInManager.ConfigureExternalAuthenticationProperties(
