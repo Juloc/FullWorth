@@ -342,7 +342,7 @@ export async function renderTransactions(context) {
     body.appendChild(tr);
   }
   if (!items.length) {
-    const filtered = !!(text || dir || status || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
+    const filtered = !!(text || dir || status || merchantId || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
     body.innerHTML = txEmptyState(filtered);
   }
 }
@@ -460,7 +460,7 @@ async function renderScope(scope) {
   if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
   const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
   bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
-  bar.querySelector('[data-back]').onclick = () => { if (window.fwNavScope) window.fwNavScope(backTo, ''); };
+  bar.querySelector('[data-back]').onclick = () => ctx.navScope(backTo, '');
   const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 
