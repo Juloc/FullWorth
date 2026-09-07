@@ -28,7 +28,7 @@ public sealed class CloudContractBenchmarkContributionService(
             return 0;
 
         var contracts = await financeDb.Contracts.AsNoTracking()
-            .Where(x => x.IsActive && x.CategoryId != null && x.Amount != 0m)
+            .Where(x => x.IsActive && x.MergedIntoContractId == null && x.CategoryId != null && x.Amount != 0m)
             .Select(x => new
             {
                 x.Amount,

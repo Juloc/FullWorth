@@ -602,6 +602,7 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
     private IQueryable<FullWorth.Backend.Modules.Contracts.RecurringContract> VisibleContracts(Guid userId, Guid fullWorthSpaceId) =>
         db.Contracts.AsNoTracking().Where(contract =>
             contract.FullWorthSpaceId == fullWorthSpaceId &&
+            contract.MergedIntoContractId == null &&
             db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId) &&
             (contract.AccountId == null || db.AccountOwners.Any(owner => owner.AccountId == contract.AccountId.Value && owner.UserId == userId)));
 

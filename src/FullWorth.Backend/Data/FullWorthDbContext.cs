@@ -230,11 +230,13 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         {
             e.HasIndex(x => new { x.IsActive, x.NextDueDate });
             e.HasIndex(x => x.FullWorthSpaceId);
+            e.HasIndex(x => x.MergedIntoContractId);
             e.Property(x => x.Amount).HasPrecision(20, 8);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<FinanceCategory>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<RecurringContract>().WithMany().HasForeignKey(x => x.MergedIntoContractId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<Budget>(e =>
