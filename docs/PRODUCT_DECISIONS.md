@@ -21,7 +21,7 @@ These decisions are the default contract for the 1.0 implementation. Change them
 - PWA support is required.
 - Passkeys/WebAuthn are required as the preferred biometric unlock/sign-in option where the device/browser provides a platform authenticator (fingerprint/face/PIN).
 - Password login remains available as recovery/fallback unless explicitly disabled by the user.
-- TOTP/Authenticator-app support is planned and should be easy to enable later.
+- Shipped: TOTP/Authenticator-app support is implemented — users can set up, enable and disable an authenticator app (`TwoFactorService`, `/auth/two-factor/*`), and the second factor is enforced on both password and external sign-in.
 - Recovery codes and session/device revocation are required.
 - The public browser never receives Backend, Banking or database credentials.
 
@@ -54,8 +54,8 @@ Initial target order:
 5. Revolut
 
 - First import requests the maximum history practically/provider-available while respecting provider limits.
-- Scheduled sync target: three times per day: morning, midday and evening.
-- Automatic slots must be spaced safely above the provider background-fetch floor.
+- Scheduled sync is throttled to a minimum interval of at least 6 hours of provider access per bank connection (`MinimumBackgroundSyncIntervalMinutes` = 360, persisted per connection as `nextSyncAllowedAt`). The background worker only wakes periodically (every 5–60 min) to check eligibility and never adds provider requests beyond that floor. (An earlier fixed three-slot morning/midday/evening scheduler, `BankSyncScheduleService`, still exists in the codebase but is not the path wired into the running worker.)
+- Automatic sync must stay safely above the provider background-fetch floor.
 - A manual sync is allowed only when the same safety/cooldown policy permits it.
 - A manual sync shifts/skips an upcoming scheduled run if needed; automatic + manual runs must never stack into excess bank access.
 - Pending transactions are displayed.
@@ -141,6 +141,8 @@ Initial target order:
 
 ## Amazon
 
+> ⚠ Needs decision: This section says not to depend on browser scraping and to prefer manual / e-mail / export-file adapters. The shipped connector does the opposite: it is the only implemented Amazon path and it drives Playwright/Chromium browser automation against the user's real Amazon account. The user enters their Amazon email/password (submitted to Amazon's sign-in form server-side; password/OTP are not persisted) and FullWorth stores the resulting encrypted browser session (`AmazonConnections.EncryptedStorageState`) and reuses it for automatic 24h syncs. This conflicts with the "no primary browser scraping" and manual/email/export intent. Product/security call needed: accept and document the Playwright + stored-session path as the sanctioned 1.0 strategy, or hold it back in favour of the manual/e-mail/export adapters below. See `docs/AMAZON_IMPORT.md`.
+
 - Do not depend on browser scraping as the primary 1.0 strategy.
 - Support manual import.
 - Support e-mail/receipt/invoice based acquisition.
@@ -170,7 +172,8 @@ Initial target order:
 - Use both simple tables and richer data-grid behavior depending on the page/device.
 - Responsive desktop/tablet/mobile behavior is required.
 - Merchant/company logos may be shown for transactions/contracts when enabled; use category/account fallback icons and do not leak private transaction text through client-side third-party lookups.
-- A global anonymized/privacy mode is required and must mask financial values consistently across pages/charts/tooltips. A stricter share/screenshot mode additionally masks identifying/free-text data.
+- A global anonymized/privacy mode is required and must mask financial values consistently across pages/charts/tooltips. Shipped: an off/on privacy mode masks financial values via the shared money rendering path (`ui/privacy.js`).
+- Future scope (not yet implemented): a stricter share/screenshot mode that additionally masks identifying/free-text data. Only the off/on value-masking mode ships today.
 - The public marketing landing page is planned separately after the authenticated app experience has been implemented/tested.
 
 ## Notifications
@@ -193,6 +196,8 @@ Initial target order:
 
 ## External API / tool permissions
 
+Future scope (not yet implemented): there is currently no external-tool grant/permission system in the code. The bullets below remain the target design and stay on the backlog. (Note: the existing per-user AI-provider credential storage and the internal service-to-service auth are separate concerns and do not satisfy this.)
+
 - Follow least-privilege scopes rather than one universal API key.
 - Separate read, write, banking/ingest and administration capabilities.
 - External tools are read-only by default.
@@ -203,5 +208,5 @@ Initial target order:
 ## 1.0 scope
 
 - Target the full product described in the roadmap and the MVP UI contract in `docs/UI_UX_SPEC.md`.
-- Paperless remains out of scope for now.
+- Shipped: Paperless receipt import is implemented and in scope (connection with encrypted API token, manual and automatic import presets, and a scheduled auto-import worker; `FullWorth.Backend/Modules/Purchases/ReceiptImports`).
 - Investment/portfolio views are included when normalized investment data exists; unsupported broker connectivity can follow later without changing the core model.

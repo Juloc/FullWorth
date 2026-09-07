@@ -8,8 +8,14 @@ FullWorth is a self-hosted personal finance application for individuals and shar
 - Categories, rules, merchants, transfers and refunds
 - Budgets, contracts, loans, assets, liabilities and net worth
 - Purchases, receipts and data imports
+- Compensation (Gehalt & Benefits), payslips and salary comparison
+- Analytics, spending reviews and multi-currency (FX) conversion
+- Tax assistant with year reviews and tax export (Germany)
+- AI coach and intelligence suggestions, with optional cloud benchmarks
+- Notifications and web push
+- Data export and portable backups
 - Password and passkey sign-in, sessions, recovery codes and sharing
-- Optional Enable Banking connections and conservative background synchronisation
+- Optional Enable Banking and FinTS (ING) bank connections with conservative background synchronisation
 - Responsive, installable web application in German and English
 
 ## Current focus

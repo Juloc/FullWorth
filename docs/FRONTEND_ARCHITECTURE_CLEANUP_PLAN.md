@@ -2,7 +2,7 @@
 
 Current continuation handoff: `docs/FRONTEND_ARCHITECTURE_HANDOFF.md`
 
-Status: approved architecture cleanup plan  
+Status: approved architecture cleanup plan — in progress (shared `core/` + `ui/` primitives and the architecture guards are shipped; feature migration is ongoing and Phases 4, 5 and 8 are still open)  
 Scope: FullWorth.Web frontend  
 Constraint: Accounts visible UX remains stable; structural migration was explicitly approved on 2026-09-07.
 
@@ -76,20 +76,26 @@ wwwroot/
 
 Migration is incremental. No big-bang rewrite is required.
 
+Current status: `core/` (shipped as `api.js`, `router.js`, `state.js`, `i18n.js`, `feature-registry.js` plus an added `services.js`) and the `ui/` primitives are shipped as flat modules. The `styles/` split (Phase 8) and the per-feature `features/<name>/` directories (Phase 5) are still the target — features currently live as flat `features/*.js` files and shared CSS still lives in the monolithic top-level `*.css` files.
+
 ## Phase 1 — Architecture contract and guards
 
-- Add `docs/FRONTEND_ARCHITECTURE.md` as the permanent architecture contract.
-- Reference it from `docs/UI_UX_SPEC.md`.
-- Add architecture tests that fail on:
-  - direct `document.createElement('dialog')` outside the dialog module
-  - direct `/bff/backend` or `/bff/banking` access outside the API client
-  - `window.fetch =` monkey patches
-  - native `window.confirm`
-  - new feature-local action button variants instead of Primary/Secondary/Danger
-  - new global MutationObservers without an explicit allow-list
-  - polling-style repeated `setTimeout`
-  - new installer/final/parity patch modules
-- Existing violations may be temporarily allow-listed and removed phase by phase. The allow-list must only shrink.
+Guards: SHIPPED. Architecture tests live at `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs` (7 guards) and fail on:
+  - direct `document.createElement('dialog')` outside the dialog module — SHIPPED
+  - direct `/bff/backend` or `/bff/banking` access outside the API client — SHIPPED
+  - `window.fetch =` monkey patches — SHIPPED
+  - native `confirm` / `window.confirm` — SHIPPED
+  - new global MutationObservers without an explicit allow-list — SHIPPED
+  - new installer/final/parity/completion patch modules (by filename) — SHIPPED
+  - plus a guard that keeps the Accounts freeze contract intact (this doc's "BLOCKED" section + presence of `features/accounts-ux.js`) — SHIPPED
+
+Still open (originally listed here, not yet implemented as guards):
+  - a guard on new feature-local action button variants instead of Primary/Secondary/Danger
+  - a guard on polling-style repeated `setTimeout`
+
+Permanent contract doc: the standalone `docs/FRONTEND_ARCHITECTURE.md` was never created. The permanent rules currently live in this plan's "Non-negotiable rules" section together with the shipped guard tests, and `docs/UI_UX_SPEC.md` already references this plan (§ "The active cleanup/migration plan"). Extracting a separate contract doc is optional and no longer a blocker.
+
+Existing violations may be temporarily allow-listed and removed phase by phase. The allow-list must only shrink.
 
 ## Phase 2 — Shared core
 

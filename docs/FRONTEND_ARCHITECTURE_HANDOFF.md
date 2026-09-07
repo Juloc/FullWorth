@@ -60,7 +60,7 @@ The branch already contains substantial cleanup work. Among other things:
 - Receipt Scan Set uses the shared dialog primitive
 - unused legacy Receipt Scan AI layer removed
 - unreachable Tax patch layer removed
-- unreachable parity/final/mobile-review/bulk/switcher patch layers and their CSS removed
+- unreachable parity/final/mobile-review/bulk/switcher **JavaScript** patch layers removed (note: `parity-completion.css` is NOT removed — it is now loaded as an intentional render-blocking base stylesheet via `index.html` and cached in `sw.js`; see the decision note under "CSS cleanup")
 - Architecture regression tests added at `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs`
 - the architecture allow-lists have been reduced continuously as violations are removed
 
@@ -96,6 +96,11 @@ After each migration, remove the file from the relevant architecture allow-list.
 
 Open `FrontendArchitectureGuardTests.cs` and work through the remaining entries one by one.
 
+Two allow-list entries are already dead — the files no longer exist anywhere in the repo — and can simply be pruned now:
+
+- `features/capability-ui-guard.js` (in the `window.fetch =` monkey-patch guard)
+- `purchase-articles-advanced-installer.js` (in the installer/patch-layer filename guard)
+
 The allow-list must only shrink.
 
 ### 4. Continue reducing `app.js`
@@ -105,6 +110,8 @@ Move remaining feature-specific logic into the actual feature owner. `app.js` sh
 ### 5. CSS cleanup
 
 After behavioral architecture is stable, continue splitting monolithic shared CSS into shared component/layout CSS and feature-owned CSS. Do not use visual theme files as structural repair layers.
+
+⚠ Needs decision: `parity-completion.css` began as a parity/"final-UI" patch stylesheet but is now promoted to an intentional render-blocking base stylesheet (linked from `index.html`, cached in `sw.js`, and documented as intentional in `theme-init.js`). A human should decide whether it stays a permanent base stylesheet or is folded into the Phase 8 `styles/` split and the parity name retired. Until then it is intentionally live and must not be deleted as "dead parity CSS".
 
 ## Validation after every block
 

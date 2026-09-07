@@ -1,6 +1,6 @@
 # FullWorth simple finance-app UX rework plan
 
-Status: **implementation plan**  
+Status: **largely shipped** — Phases A, C and D are delivered; Phase B is delivered via a client-side brand catalog (see §4); Phase E polish is largely done and ongoing. Remaining gaps are called out inline and in §12.  
 Reference: the Finanzguru screenshots and interaction notes supplied on 2026-09-05.  
 Goal: make FullWorth feel like a simple consumer finance application first, while keeping FullWorth's own branding, data model and advanced features.
 
@@ -19,6 +19,8 @@ Current implementation findings:
 - Contracts currently expose only an archived toggle plus detect/add actions. There is no simple type/sort/filter model like subscription / insurance / loan / other, annual cost or next-due sorting.
 - Net worth currently leads with metric boxes and management panels. The information is available, but the main view is not yet a simple card-based story of trend, allocation and goals/reserve.
 - Bank connections and account-management controls are too close to the everyday account overview.
+
+**Update — shipped:** the findings above described the pre-rework state and are now largely addressed. Account/group drill-down to scoped bookings, date-grouped mobile transaction rows, identity icons, card-based active-period analyses and the trend/allocation/reserve net-worth hierarchy all shipped (Phases A/C/D — see §12). They are kept here as the historical baseline.
 
 ## 2. Target information architecture
 
@@ -145,40 +147,32 @@ Keep a dense list/table hybrid, but add the same identity column and visual hier
 
 ### Merchant/brand identity
 
-Resolution order:
+**Shipped.** The shared `identityIcon` helper (`wwwroot/ui/ux-kit.js`) renders the left identity with this resolution order:
 
-1. local/cached merchant brand icon when a normalized merchant is known
-2. category icon
-3. generic transaction icon
+1. brand logo when the counterparty/merchant name matches a known brand
+2. category icon (from `categoryIconKey`)
+3. category-tinted monogram (generic fallback)
 
-Special transaction types can override this:
+Special transaction types override this:
 
 - transfer -> transfer icon
 - savings-purpose transfer -> savings icon
 - refund -> refund marker while keeping merchant/category identity
 
-No client-side third-party logo lookup using private transaction text.
+No client-side third-party logo lookup using private transaction text. Brand logos come from a **client-side brand catalog**: `ensureOfficialBrandCatalog()` loads the catalog once from the app's own `GET /api/intelligence/brand-catalog` (served by the Intelligence brand-pack subsystem), and `brandLogoPath()` then matches the normalized counterparty name against the catalog aliases in the browser. The same helper is reused by bookings, contracts and the merchant analytics card.
 
-### Required merchant model work
+### Merchant model work
 
-The current Merchant registry has names and aliases but no visual identity. Add optional local metadata:
+Shipped on the transaction DTO (`TransactionListItem` in `Modules/Transactions/TransactionsModule.cs`): `merchantId`, `merchantDisplayName`, `categoryId`, `categoryName`, `categoryIconKey`. The frontend consumes these directly.
+
+Not shipped (live backlog): the Merchant registry still has names and aliases but no visual identity, and the transaction DTO does not carry `brandKey` / `logoAssetPath`. The originally-planned optional Merchant metadata remains open:
 
 - BrandKey
 - LogoAssetPath or equivalent local asset reference
 - optional AccentKey
 - user override / clear override
 
-The backend transaction DTO should expose resolved presentation metadata, for example:
-
-- merchantId
-- merchantDisplayName
-- brandKey
-- logoAssetPath
-- categoryId
-- categoryName
-- categoryIconKey
-
-Frontend should not independently repeat normalization logic.
+> ⚠ Needs decision: the plan called for the backend to resolve brand identity and expose `brandKey` / `logoAssetPath` on the transaction DTO so the frontend never repeats normalization logic. The shipped design instead resolves brand logos in the browser (name → alias match against the client-loaded Intelligence brand catalog), and there is no per-merchant brand override. Decide whether the client-side brand catalog is the accepted final architecture, or whether merchant brand resolution should still move server-side (Merchant visual metadata, per-merchant override, transaction-DTO `brandKey`/`logoAssetPath`, no client-side normalization).
 
 A small curated local brand pack is sufficient initially. Unknown brands must degrade cleanly to category icons.
 
@@ -466,8 +460,8 @@ In the current vanilla module structure these can initially be shared JS render 
   - filter/pagination support
 
 - Modules/Merchants/MerchantModule.cs
-  - merchant visual metadata
-  - alias -> merchant -> brand resolution
+  - alias -> merchant name resolution (shipped; feeds MerchantId/MerchantDisplayName on the transaction DTO)
+  - merchant visual metadata (BrandKey/LogoAssetPath) NOT added here — see §4 ⚠ Needs decision. Brand assets are served by Modules/Intelligence (brand packs, `GET /api/intelligence/brand-catalog`) and matched client-side
 
 - Modules/Analytics/AnalyticsModule.cs
   - granularity/scoped analytics query
@@ -484,6 +478,8 @@ In the current vanilla module structure these can initially be shared JS render 
 
 ### Phase A — navigation and drill-down
 
+**Status: Shipped.** Five-item mobile bottom nav (Übersicht / Verträge / Analysen / Vermögen / Mehr), account/group drill-down to scoped bookings via `window.fwNavScope`, `?accountId=`/`?groupId=` routes, and a date-grouped responsive transaction list. Backend `TransactionQuery.AccountGroupId` resolves inside the active Space.
+
 - new mobile bottom nav
 - account/group -> scoped bookings
 - all-bookings route
@@ -495,6 +491,8 @@ In the current vanilla module structure these can initially be shared JS render 
 
 ### Phase B — transaction identity
 
+**Status: Shipped via a client-side brand catalog.** The reusable `identityIcon` component is applied to bookings, contracts and the recent-booking / merchant widgets, and category-icon fallback works from the DTO's `categoryIconKey`. The one deviation from this plan: merchant brand metadata is resolved in the browser rather than as server-side Merchant metadata — see §4 (⚠ Needs decision) for the open architectural question.
+
 - merchant brand metadata
 - category icon metadata/fallback
 - reusable identity component
@@ -503,6 +501,8 @@ In the current vanilla module structure these can initially be shared JS render 
 **Acceptance:** every booking has a stable left-side identity without external client-side lookups.
 
 ### Phase C — simple analyses
+
+**Status: Shipped.** `features/analytics.js` renders a card-based home driven by one global Woche/Monat/Quartal/Jahr cycle with prev/next window navigation; every card (spending, income vs expenses, category, merchant, net worth, forecast) obeys the active period, card segments drill down to scoped bookings, and the custom chart builder is demoted into a collapsed "Erweitert / Eigene Analyse" disclosure. The old current-calendar-month-only behaviour for category/merchant is gone; the backend analytics endpoints take `from`/`to`/`granularity`.
 
 - W/M/Q/Y selector
 - analysis cards
@@ -515,6 +515,8 @@ In the current vanilla module structure these can initially be shared JS render 
 
 ### Phase D — contracts and net worth
 
+**Status: Shipped.** Contracts have a type/sort/filter sheet (kinds subscription/contract/insurance/loan/other; sorts due/monthly/annual/account/category/type/name) with URL-backed filter state and merchant/category identity; the DTO exposes `MonthlyEquivalent` and `AnnualizedAmount`. Net worth leads with the trend card ("Wie entwickelt sich dein Vermögen?"), the allocation card ("Verteilung deines Vermögens") and an optional Notgroschen/reserve card, with asset/liability/loan editors moved below.
+
 - contract summary + filters/sorts/grouping
 - wealth trend/allocation/reserve card hierarchy
 - move editing/management surfaces down one level
@@ -522,6 +524,8 @@ In the current vanilla module structure these can initially be shared JS render 
 **Acceptance:** the first viewport answers what is happening; editing remains available without dominating the screen.
 
 ### Phase E — polish
+
+**Status: Largely shipped; polish ongoing.** Light/dark parity, DE/EN, privacy-mode chart masking, empty/error states and FX-incomplete markers are in place across the reworked views; skeleton/loading, accessibility and large-dataset performance passes are ongoing.
 
 - light/dark parity
 - mobile/desktop spacing
@@ -548,3 +552,5 @@ The UX rework is done when:
 - advanced configuration still exists but is one level deeper
 - FullWorth branding remains distinct
 - privacy mode, DE/EN, light/dark and accessibility still pass
+
+**Status:** the functional criteria above are met in the shipped app. The only open item is architectural — where brand identity is resolved (client-side catalog vs. server-side merchant metadata / DTO fields), tracked as the ⚠ Needs decision note in §4 — not a user-visible gap.

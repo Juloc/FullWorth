@@ -430,7 +430,7 @@ history shown in the preview chart
 average/comparison value
 ```
 
-FullWorth currently mixes these concepts in several places. In particular, `cycleWindow()` currently maps:
+This model has since been implemented in Analytics (see "Current FullWorth mismatches to fix" → "Analytics — shipped"). For reference, `cycleWindow()` maps:
 
 ```text
 Woche    -> letzte 12 Wochen
@@ -439,7 +439,7 @@ Quartal  -> letzte 8 Quartale
 Jahr     -> letzte 5 Jahre
 ```
 
-and then several cards use the aggregate over that entire history window as the main number. This is the core semantics bug. The selector must describe the **active bucket**, while a chart may independently show surrounding/history buckets.
+That window is now used only as the chart's history preview, ending at the active bucket, rather than as the main number. The selector describes the **active bucket**, while the chart independently shows surrounding/history buckets. Any surface not yet migrated (e.g. Budgets) must adopt the same distinction.
 
 ### Canonical period model
 
@@ -473,7 +473,7 @@ Jahr: 2026 -> 2025 -> 2024
 Woche: KW 36 -> KW 35
 ```
 
-This matches the simple mental model used by Finanzfluss mobile detail views and avoids the current FullWorth interpretation of `Monat` as a 12-month aggregate.
+This matches the simple mental model used by Finanzfluss mobile detail views; Analytics now implements it (prev/next steps one bucket) instead of the earlier FullWorth interpretation of `Monat` as a 12-month aggregate.
 
 ### Development/trend cards
 
@@ -657,25 +657,33 @@ Tap the card/title/row to enter the corresponding detail with the same scope/per
 
 These are known issues in the current frontend and must not be preserved just because they exist on `main`.
 
-### Analytics
+> Update: the analytics period semantics, the Dashboard net-worth preview and the normal-expense red-alarm have shipped (marked below). The structural refactor (shrinking `app.js`, retiring `window.fwNavScope`, per-page mount/unmount) and the remaining data/model gaps are still open.
 
-- `ui/ux-kit.js::cycleWindow()` currently treats `month` as 12 months, `quarter` as 8 quarters and `year` as 5 years.
-- `features/analytics.js::fillSpending()` uses `overview.expenses` for the entire history window and labels it `Ausgaben gesamt`.
-- `fillInout()` likewise uses income/expense/net over the entire history window as its main KPI.
-- category and merchant cards currently receive the same broad history window; for the simple card view they should instead represent the active bucket, with history used only for comparison/trend.
-- the current global cycle therefore conflates **granularity**, **active period** and **preview history**.
+### Analytics — shipped
 
-Refactor these into separate concepts rather than patching labels.
+The selector now names the **active bucket** while the chart keeps the surrounding history window, so the KPIs no longer read as a 12-month aggregate:
+
+- `ui/ux-kit.js::cycleWindow()` still returns an N-bucket window (Woche→12 weeks, Monat→12 months, Quartal→8 quarters, Jahr→5 years), but that window is now explicitly the chart-history preview that always **ends at the active bucket**; `offset` moves the active bucket — and the whole trailing window — by ONE bucket (prev/next = one month/quarter/…), and the navigator names the active period.
+- `features/analytics.js::fillSpending()` no longer labels a window sum `Ausgaben gesamt`; its KPI is now `avgPerBucket()` rendered as `Ø Ausgaben / Monat` with a month-over-month trend.
+- `fillInout()` now takes income/expense/net from the active bucket (the last history row), not the window total; the bar chart still shows the surrounding history.
+- category and merchant cards now request the active-bucket range (`activeBucketRange`) for their totals/rows and use history only for comparison/trend.
+- drills open the exact active bucket (`analyticsTxScope` scopes to `activeBucket`).
+
+Still open here: the category overview LIST still slices the mixed parent+child list, and merchant grouping still keys off counterparty text — both tracked in the second-pass audit below.
 
 ### Dashboard
 
-- the net-worth widget currently shows only a number plus assets/liabilities; add the compact history/change preview.
-- the default income/expense widget uses the current month, but the period configuration has different semantics from Analytics. Both must use one shared PeriodState/PeriodPicker model.
-- dashboard cards must deep-link with period/scope instead of starting a fresh unrelated view.
+- SHIPPED: the net-worth widget is now a compact preview — current value + `miniSparkline` history + change over the range — that taps through to the full Wealth view (`ui/dashboard.js`).
+- STILL OPEN: the default income/expense widget uses the current month, but its period configuration still has different semantics from Analytics. Both must converge on one shared PeriodState/PeriodPicker model.
+- STILL OPEN: dashboard cards must deep-link with period/scope instead of starting a fresh unrelated view.
 
-### Normal debits/expenses are visually over-signalled
+### Normal debits/expenses are visually over-signalled — CSS default shipped
 
-Current FullWorth uses `negative` styling for many ordinary expense/debit values, including normal income/expense widgets and upcoming contract amounts.
+SHIPPED (central CSS): `.amount.negative` is now neutral (`color:var(--text)` in `app.css`) and the spending chart line/area use `--accent`, so ordinary outflow is no longer red; red is reserved for genuine problem states.
+
+STILL OPEN: this is enforced in CSS plus per-caller sign classes; there is still no shared money-variant model in `ui/money.js` (see "Ordinary-money color semantics need shared variants"), so callers keep picking `.negative`/`.positive` by sign. The remaining requirements below still hold as the target.
+
+Historically, FullWorth used `negative` styling for many ordinary expense/debit values, including normal income/expense widgets and upcoming contract amounts.
 
 For the consumer-finance default:
 
@@ -758,16 +766,18 @@ If fewer complete historical buckets exist, do not silently label the result as 
 
 Current backend behavior is inconsistent:
 
-- month-specific category analytics already has Average3/Average6/Average12
-- arbitrary-range category analytics currently returns those average fields as zero
+- month-specific category analytics already has Average3/Average6/Average12 (`CategoryAnalyticsService.CategorySpendForUserAsync`)
+- arbitrary-range category analytics currently returns those average fields as zero (`CategoryAnalyticsService.CategorySpendForRangeForUserAsync` hardcodes Average3/6/12 to `0m`) — still open
 - merchant arbitrary-range analytics compares with an equal-length previous range but has no trailing per-period average
 - analytics overview returns totals over the whole requested from/to range plus byPeriod
 
 Therefore Week/Quarter/Year averages and comparisons must be backend-supported. Do not compute financial averages ad hoc in analytics.js.
 
-### Category overview currently mixes hierarchy levels
+### Category overview still mixes hierarchy levels in the LIST
 
-The backend returns parent and child category rows. Current Analytics effectively takes the first top rows from the combined list, so a parent and one of its children can appear together. The donut/total logic already reasons about roots separately, making the card internally inconsistent.
+The backend returns parent and child category rows. The card's **total and donut are now root-only and disjoint** (`features/analytics.js::fillCategory` sums `cats.filter(c => !c.parentId)`, and `categoryDonut` renders roots only) — that part is fixed. But the visible **list** still takes `cats.slice(0, 6)` from the combined parent+child list, so a parent and one of its children can still appear together and the listed rows no longer sum to the donut/total. The card is therefore still internally inconsistent, now between its (root-only) total and its (mixed-level) rows.
+
+⚠ Needs decision: the shipped card pairs a root-only donut/total with a top-6 list that can mix parent and child rows. Either the overview list should be filtered to root categories only (matching the donut and the "Required flow" below), or the list is intentionally the largest individual categories at any level and the total/donut should be relabelled to match. This is a product call — do not silently pick one.
 
 Required flow:
 
@@ -813,24 +823,18 @@ These must converge on one shared period/scope contract. Dashboard cards are pre
 
 Drill-down from Dashboard should preserve active period and relevant scope.
 
-### Dashboard wealth preview is still incomplete
+### Dashboard wealth preview — shipped
 
 The full Wealth page already has a useful hierarchy: current net worth, history, allocation, liabilities, emergency fund and management/details.
 
-The Dashboard wealth card is still essentially:
+The Dashboard wealth card is now the intended compact preview (`ui/dashboard.js`):
 
     current net worth
-    assets
-    liabilities
-
-It should become:
-
-    current net worth
-    small sparkline/history
+    small sparkline/history (miniSparkline over api/net-worth/history)
     change over the preview range
     tap -> full Wealth
 
-Do not duplicate Wealth management controls into Dashboard.
+Wealth management controls are not duplicated into Dashboard.
 
 ### Mixed budget cycles must not be blindly added together
 
@@ -868,7 +872,7 @@ Liabilities/debt may remain visually distinct from assets. This is different fro
 
 ### Ordinary-money color semantics need shared variants
 
-Current FullWorth still applies negative/red styling broadly to normal expenses, upcoming contract costs, debit rows and analytical expense values.
+Partly addressed: the central CSS default no longer reds normal outflow (`.amount.negative` is neutral, charts use `--accent`). Still missing: a shared money display model. `ui/money.js` today only formats/masks values (`money`/`converted`/`percent`) — it has no variant concept, so callers and CSS still switch on sign (`.negative`/`.positive`) rather than intent, and some surfaces still lean on `negative` styling for ordinary expenses, contract costs and debit rows.
 
 Use a shared money display model such as:
 

@@ -1,6 +1,6 @@
 # FullWorth – Gehalt & Benefits / Compensation Analyzer
 
-Status: implemented and extended on `feature/compensation-history-timeline`; repository CI/build validation still requires the repository's manual `workflow_dispatch`.
+Status: implemented, extended, and merged to `main` via `Add compensation history and salary timeline (#51)`. Repository CI/build validation still runs through the repository's manual `workflow_dispatch`.
 
 ## Goal
 
@@ -164,6 +164,9 @@ Main files:
 - `CompensationInsights.cs`
 - `CompensationStore.cs`
 - `CompensationEndpoints.cs`
+- `CompensationHistoryModels.cs`
+- `CompensationHistoryStore.cs`
+- `CompensationHistoryEndpoints.cs`
 - `PayslipModels.cs`
 - `PayslipExtraction.cs`
 - `PayslipStore.cs`
@@ -226,6 +229,18 @@ Compensation data is intentionally private to the user even inside a shared fina
 - period
 - JSONB confirmed structured values
 - timestamps
+
+### `compensation_history`
+- UUID primary key
+- fullworth-space id
+- user id
+- effective date
+- sort order (tie-breaker within a date)
+- event type
+- title and optional note
+- JSONB merge-style patch of the fields changed at that event
+- timestamps
+- index on `(fullworth_space_id, user_id, effective_date, sort_order)`
 
 Storage always checks fullworth-space membership and queries/mutates by both `fullworth_space_id` and authenticated `user_id`.
 
@@ -329,7 +344,7 @@ Implemented:
 - [x] inflation-aware salary timeline
 - [x] annual compensation comparison and per-event deltas
 
-Remaining before merge:
-- [ ] run repository `CI` workflow (`workflow_dispatch`) on this branch
-- [ ] fix any compiler/test failures reported by CI
+Merge status:
+- [x] repository `CI` workflow (`workflow_dispatch`) run and merge completed via PR #51
+- [x] compiler/test failures reported by CI resolved before merge
 - [ ] optional UI/browser smoke pass against a running deployment
