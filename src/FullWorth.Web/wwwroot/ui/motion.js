@@ -11,8 +11,9 @@ const generations = new WeakMap();
 
 function numericTarget(node) {
   if (!(node instanceof Element)) return null;
-  if (node.matches('.amount,.metric strong,.widget-metric strong,.budget-detail .kv strong')) return node;
-  return node.closest?.('.amount,.metric strong,.widget-metric strong,.budget-detail .kv strong') || null;
+  if (node.closest('#transactions-body,.tx-detail,.refund-candidates,dialog,.fw-row')) return null;
+  if (node.matches('.metric strong,.widget-metric strong,.budget-detail .kv strong')) return node;
+  return node.closest('.metric strong,.widget-metric strong,.budget-detail .kv strong') || null;
 }
 
 function parseNumberText(text) {
@@ -111,25 +112,19 @@ function animateNumber(el) {
 function scan(root) {
   if (!(root instanceof Element) && root !== document) return;
   if (root instanceof Element) animateNumber(numericTarget(root));
-  root.querySelectorAll?.('.amount,.metric strong,.widget-metric strong,.budget-detail .kv strong').forEach(animateNumber);
+  root.querySelectorAll?.('.metric strong,.widget-metric strong,.budget-detail .kv strong').forEach(animateNumber);
 }
 
 function init() {
   scan(document);
   const observer = new MutationObserver(records => {
     for (const record of records) {
-      if (record.type === 'characterData') {
-        const el = numericTarget(record.target.parentElement);
-        if (el && !active.has(el)) animateNumber(el);
-        continue;
-      }
-      for (const node of record.addedNodes) {
-        if (node instanceof Element) scan(node);
-        else if (node.parentElement) {
-          const el = numericTarget(node.parentElement);
-          if (el && !active.has(el)) animateNumber(el);
-        }
-      }
+      if (record.type !== 'characterData') continue;
+      // Only a live characterData mutation of a node that already held a parsed value animates.
+      // Newly inserted elements (e.g. full re-renders that replace textContent) render at their
+      // final value immediately, so nothing pops in after first paint.
+      const el = numericTarget(record.target.parentElement);
+      if (el && !active.has(el)) animateNumber(el);
     }
   });
   observer.observe(document.body, { subtree: true, childList: true, characterData: true });
