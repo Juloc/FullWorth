@@ -1,3 +1,4 @@
+import { snapshotUploadFile } from '../security/secure-fetch.js';
 import { api as sharedApi } from '../core/services.js';
 import { confirmMessage } from '../ui/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
@@ -20,7 +21,7 @@ async function api(path,options={}){return sharedApi(path,options)}
 function status(kind,message){setText(`${kind}-status`,message);const el=$(`${kind}-status`);if(el){el.classList.toggle('is-busy',message===t.working);el.classList.toggle('is-done',message===t.done);el.classList.remove('is-error')}}
 function error(kind,err){console.error(err);status(kind,`${t.error} ${err?.message||''}`.trim());$(`${kind}-status`)?.classList.add('is-error')}
 function currentFile(kind){const input=$(kind==='tx'?'tx-file':'inv-file');return input.files?.[0]||null}
-async function formWithFile(file){const uploadFile=window.financeFileUpload?.snapshot?await window.financeFileUpload.snapshot(file):file;const body=new FormData();body.append('file',uploadFile,file.name);return body}
+async function formWithFile(file){const uploadFile=await snapshotUploadFile(file);const body=new FormData();body.append('file',uploadFile,file.name);return body}
 function normHeader(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')}
 function findHeader(headers,...aliases){const all=headers||[];for(const alias of aliases){const wanted=normHeader(alias);const match=all.find(header=>normHeader(header)===wanted);if(match)return match}return null}
 function headerValues(data,header){return (data?.preview||[]).map(row=>row?.[header]).filter(value=>String(value??'').trim().length>0)}
