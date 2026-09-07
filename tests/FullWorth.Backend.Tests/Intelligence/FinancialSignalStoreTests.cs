@@ -92,6 +92,29 @@ public sealed class FinancialSignalStoreTests
     }
 
     [Fact]
+    public async Task Resolved_signal_reopens_when_same_condition_returns()
+    {
+        await using var harness = await Harness.CreateAsync();
+        var store = new FinancialSignalStore(harness.Db);
+        var detected = Signal(rank: 10m);
+        var first = await store.UpsertAsync(detected, CancellationToken.None);
+        var resolvedAt = DateTimeOffset.UtcNow;
+
+        Assert.True(await store.ResolveAsync(
+            detected.UserId,
+            detected.FullWorthSpaceId,
+            detected.SemanticKey,
+            resolvedAt,
+            CancellationToken.None));
+
+        var reopened = await store.UpsertAsync(detected, CancellationToken.None);
+
+        Assert.Equal(first.Id, reopened.Id);
+        Assert.Equal(2, reopened.Version);
+        Assert.Null(reopened.ResolvedAt);
+    }
+
+    [Fact]
     public async Task Store_rejects_invalid_json_and_confidence()
     {
         await using var harness = await Harness.CreateAsync();
