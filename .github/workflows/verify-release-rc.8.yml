@@ -1,0 +1,119 @@
+name: Verify and publish 1.2.0-rc.8
+
+on:
+  push:
+    branches:
+      - 'release-verify/1.2.0-rc.8-r2'
+
+permissions:
+  contents: write
+
+env:
+  FULLWORTH_TEST_POSTGRES: Host=localhost;Port=5432;Username=fullworth_test;Password=fullworth_test_password;Command Timeout=120;Timeout=30
+
+jobs:
+  build:
+    name: Build (all projects)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build FullWorth.slnx --configuration Release
+
+  backend-tests:
+    name: Backend · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: purchases
+            filter: "FullyQualifiedName~.Purchases.|FullyQualifiedName~.Parity.|FullyQualifiedName~.Performance.|FullyQualifiedName~.Preferences."
+          - name: api
+            filter: "FullyQualifiedName~.Api."
+          - name: contracts
+            filter: "FullyQualifiedName~.Contracts.|FullyQualifiedName~.Loans.|FullyQualifiedName~.Import."
+          - name: intelligence
+            filter: "FullyQualifiedName~.Intelligence.|FullyQualifiedName~.Security.|FullyQualifiedName~.Tax.|FullyQualifiedName~.Budgets."
+          - name: portfolio
+            filter: "FullyQualifiedName~.Portfolio.|FullyQualifiedName~.Transactions."
+          - name: analytics
+            filter: "FullyQualifiedName~.Analytics.|FullyQualifiedName~.Categories.|FullyQualifiedName~.BankConnections."
+          - name: rest
+            filter: "FullyQualifiedName!~.Purchases.&FullyQualifiedName!~.Parity.&FullyQualifiedName!~.Performance.&FullyQualifiedName!~.Preferences.&FullyQualifiedName!~.Api.&FullyQualifiedName!~.Contracts.&FullyQualifiedName!~.Loans.&FullyQualifiedName!~.Import.&FullyQualifiedName!~.Intelligence.&FullyQualifiedName!~.Security.&FullyQualifiedName!~.Tax.&FullyQualifiedName!~.Budgets.&FullyQualifiedName!~.Portfolio.&FullyQualifiedName!~.Transactions.&FullyQualifiedName!~.Analytics.&FullyQualifiedName!~.Categories.&FullyQualifiedName!~.BankConnections."
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            if docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1; then
+              echo "PostgreSQL is ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time"; docker logs fullworth-postgres; exit 1
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Test ${{ matrix.name }}
+        run: dotnet test tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj --configuration Release --filter "${{ matrix.filter }}"
+
+  other-tests:
+    name: Web + Banking + FinTs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name fullworth-postgres \
+            -e POSTGRES_USER=fullworth_test \
+            -e POSTGRES_PASSWORD=fullworth_test_password \
+            -e POSTGRES_DB=fullworth_test \
+            -p 5432:5432 \
+            --shm-size=1g \
+            postgres:18 -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+          for i in $(seq 1 30); do
+            if docker exec fullworth-postgres pg_isready -U fullworth_test -d fullworth_test >/dev/null 2>&1; then
+              echo "PostgreSQL is ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time"; docker logs fullworth-postgres; exit 1
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release
+        name: Test Web
+      - run: dotnet test tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj --configuration Release
+        name: Test Banking
+      - run: dotnet test tests/FullWorth.FinTs.Tests/FullWorth.FinTs.Tests.csproj --configuration Release
+        name: Test FinTs
+
+  publish-tag:
+    name: Publish v1.2.0-rc.8 tag
+    needs: [build, backend-tests, other-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create prerelease tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view v1.2.0-rc.8 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.2.0-rc.8 already exists"
+            exit 0
+          fi
+          gh release create v1.2.0-rc.8 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "FullWorth 1.2.0-rc.8" \
+            --generate-notes \
+            --prerelease
