@@ -2,7 +2,6 @@ import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
-let scheduled = null;
 
 const TEXT = {
   de: {
@@ -68,9 +67,9 @@ function orderedAssets(assets) {
   ];
 }
 
-function scheduleEnhance() {
-  clearTimeout(scheduled);
-  scheduled = setTimeout(enhanceRows, 30);
+export async function refreshSpecializedAssets() {
+  ensureCss();
+  await enhanceRows();
 }
 
 async function enhanceRows() {
@@ -309,15 +308,3 @@ function bindFinancing(dlg, asset) {
     catch (error) { toast(error.message || t('invalid')); }
   });
 }
-
-function init() {
-  ensureCss();
-  const root = document.querySelector('#assets-list');
-  if (!root) { setTimeout(init, 100); return; }
-  new MutationObserver(scheduleEnhance).observe(root, { childList: true, subtree: true });
-  document.querySelector('#privacy-toggle')?.addEventListener('click', scheduleEnhance);
-  scheduleEnhance();
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
-else init();
