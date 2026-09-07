@@ -27,7 +27,7 @@ FULLWORTH_DOMAIN=finance.example.com
 FULLWORTH_SECRET=use-a-long-random-secret-from-your-password-manager
 ```
 
-Keep `FULLWORTH_SECRET` safe and stable. It protects the database connection, internal services and encrypted FullWorth data.
+Use a random value of at least 32 characters. Keep `FULLWORTH_SECRET` safe and stable; it protects the database connection, internal services and encrypted FullWorth data.
 
 Start FullWorth:
 
