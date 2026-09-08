@@ -7,6 +7,7 @@
 
 import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../ui/money.js';
+import { onAppEvent } from '../core/event-bus.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -201,6 +202,7 @@ function groupHead(label, items, cur) {
 export function bindContracts(context) {
   ctx = context;
   window.addEventListener('fullworth:open-contract', event => { if (event.detail?.id) openDetail(event.detail.id); });
+  onAppEvent('contract:open', detail => { if (detail?.id) openDetail(detail.id); });
 }
 function askCoachAboutContract(contract, activity = null) {
   window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
