@@ -182,7 +182,7 @@ function surface(ctx, selected, signals, loading) {
     const key = selected === 'current' ? 'insights.emptyCurrent' : selected === 'completed' ? 'insights.emptyCompleted' : 'insights.emptyHidden';
     body = '<div class="insights-empty"><strong>' + ctx.esc(tr(ctx, 'insights.emptyTitle', 'Nothing here')) + '</strong><span>' + ctx.esc(tr(ctx, key, 'No insights in this view.')) + '</span></div>';
   }
-  return '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div><article class="panel insights-panel"><div class="insights-head insights-view-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.title', 'Insights')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.subtitle', 'Deterministic signals from your FullWorth data.')) + '</span></div></div><div class="insights-tabs" role="group" aria-label="' + ctx.esc(tr(ctx, 'insights.filterLabel', 'Insight status')) + '">' + tabs + '</div><div class="insight-list">' + body + '</div></article></div>';
+  return '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div><article class="panel insights-panel"><div class="insights-head insights-view-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.title', 'Insights')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.subtitle', 'Insights directly from your FullWorth data.')) + '</span></div></div><div class="insights-tabs" role="group" aria-label="' + ctx.esc(tr(ctx, 'insights.filterLabel', 'Insight status')) + '">' + tabs + '</div><div class="insight-list">' + body + '</div></article></div>';
 }
 
 function targetView(signal) {
