@@ -20,6 +20,7 @@ function init(){
   $$('[data-extended-tab]').forEach(button=>button.addEventListener('click',()=>openExtendedTab(button.dataset.extendedTab)));
   $('#optimizer-run').addEventListener('click',()=>loadOptimizer().catch(showError));
   $('#payslip-extract').addEventListener('click',()=>extractPayslip().catch(showError));
+  $('#payslip-extract-batch').addEventListener('click',()=>extractBatch().catch(showError));
   $('#payslip-save').addEventListener('click',()=>savePayslip().catch(showError));
   $('#space-select').addEventListener('change',()=>loadPayslips().catch(showError));
 }
@@ -49,8 +50,9 @@ function payslipMarkup(){return `
     <div class="payslip-stack">
       <article class="panel comp-card">
         <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2><p>PDF oder Bild wird lokal im Backend verarbeitet. Die Originaldatei wird nicht gespeichert.</p></div></div>
-        <div class="upload-row"><input id="payslip-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="primary-action" type="button">Analysieren</button></div>
-        <div id="payslip-extraction-status" class="extended-note">Werte werden erst nach deiner Prüfung gespeichert.</div>
+        <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="primary-action" type="button">Analysieren</button><button id="payslip-extract-batch" type="button">Alle analysieren</button></div>
+        <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
+        <div id="payslip-batch" class="payslip-batch" hidden></div>
       </article>
       <article class="panel comp-card">
         <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p>Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
@@ -152,6 +154,67 @@ async function extractPayslip(){
 }
 
 function fillExtraction(x){set('ps-period',x.period||'');set('ps-gross',x.grossPay);set('ps-net',x.netPay);set('ps-payout',x.payout);set('ps-tax',x.wageTax);set('ps-soli',x.solidaritySurcharge);set('ps-church',x.churchTax);set('ps-rv',x.pensionInsurance);set('ps-av',x.unemploymentInsurance);set('ps-kv',x.healthInsurance);set('ps-pv',x.careInsurance);set('ps-car',x.companyCarTaxableBenefit);set('ps-bav',x.bavEmployee);set('ps-bav-ag',x.bavEmployer);set('ps-bonus',x.bonus)}
+
+let batchItems=[];
+async function extractBatch(){
+  const files=[...($('#payslip-file').files||[])];
+  if(!files.length)throw new Error('Bitte mindestens eine Lohnabrechnung auswählen.');
+  if(files.length>40)throw new Error('Höchstens 40 Abrechnungen pro Durchlauf.');
+  const data=new FormData();files.forEach(f=>data.append('files',f));
+  $('#payslip-extraction-status').textContent=`Analysiere ${files.length} Abrechnung(en) … mit Codex kann das etwas dauern.`;
+  const result=await api('api/compensation/payslips/extract-batch',{method:'POST',body:data});
+  batchItems=((result&&result.items)||[]).map(it=>({...it}));
+  renderBatch(batchItems);
+  const ok=batchItems.filter(it=>it.result).length;
+  $('#payslip-extraction-status').textContent=`${ok} von ${batchItems.length} Abrechnung(en) erkannt. Werte prüfen und speichern.`;
+}
+
+function renderBatch(items){
+  const root=$('#payslip-batch');if(!root)return;
+  if(!items.length){root.hidden=true;root.innerHTML='';return}
+  root.hidden=false;
+  root.innerHTML=`<div class="panel comp-card"><div class="panel-head"><div><h2>Mehrere Abrechnungen prüfen</h2><p>Jede Zeile wird als Monatswert gespeichert. Korrigiere bei Bedarf, dann speichern.</p></div><button id="payslip-save-all" class="primary-action" type="button">Alle speichern</button></div>`+
+    `<div class="payslip-batch-list">${items.map((it,i)=>batchRow(it,i)).join('')}</div></div>`;
+  root.querySelectorAll('[data-batch-save]').forEach(b=>b.addEventListener('click',()=>saveBatchRow(Number(b.dataset.batchSave)).catch(showError)));
+  $('#payslip-save-all')?.addEventListener('click',()=>saveAllBatch().catch(showError));
+}
+
+function batchRow(it,i){
+  if(it.error||!it.result)return `<div class="payslip-batch-row error"><div class="pb-file">${esc(it.fileName||'Datei')}</div><div class="pb-msg">${esc(it.error||'Nicht erkannt.')}</div></div>`;
+  const r=it.result;
+  return `<div class="payslip-batch-row" data-batch-index="${i}">`+
+    `<div class="pb-file" title="${esc(it.fileName||'')}"><span>${esc(it.fileName||'')}</span><small>${Number(r.confidencePercent||0).toLocaleString('de-DE')} %</small></div>`+
+    `<label>Monat<input data-pb="period" type="date" value="${esc(r.period||'')}"></label>`+
+    `<label>Brutto<input data-pb="gross" type="number" step="0.01" value="${pbn(r.grossPay)}"></label>`+
+    `<label>Netto<input data-pb="net" type="number" step="0.01" value="${pbn(r.netPay)}"></label>`+
+    `<label>Auszahlung<input data-pb="payout" type="number" step="0.01" value="${pbn(r.payout??r.netPay)}"></label>`+
+    `<button type="button" data-batch-save="${i}">Speichern</button>`+
+  `</div>`;
+}
+function pbn(v){const n=Number(v);return Number.isFinite(n)?n:''}
+
+function batchPayload(row,r){
+  const g=k=>{const el=row.querySelector(`[data-pb="${k}"]`);return el?el.value:''};
+  const num=k=>Number(g(k))||0;
+  return{period:g('period'),grossPay:num('gross'),netPay:num('net'),payout:num('payout'),wageTax:Number(r.wageTax)||0,solidaritySurcharge:Number(r.solidaritySurcharge)||0,churchTax:Number(r.churchTax)||0,pensionInsurance:Number(r.pensionInsurance)||0,unemploymentInsurance:Number(r.unemploymentInsurance)||0,healthInsurance:Number(r.healthInsurance)||0,careInsurance:Number(r.careInsurance)||0,companyCarTaxableBenefit:Number(r.companyCarTaxableBenefit)||0,bavEmployee:Number(r.bavEmployee)||0,bavEmployer:Number(r.bavEmployer)||0,bonus:Number(r.bonus)||0,note:null,source:'confirmed-ocr'};
+}
+
+async function saveBatchRow(i){
+  const space=spaceId();if(!space)throw new Error('Kein Finanzbereich ausgewählt.');
+  const row=$(`.payslip-batch-row[data-batch-index="${i}"]`),it=batchItems[i];
+  if(!row||!it||!it.result)return;
+  const payload=batchPayload(row,it.result);
+  if(!payload.period)throw new Error('Abrechnungsmonat fehlt.');
+  await api(`api/compensation/payslips?fullWorthSpaceId=${space}`,json('POST',payload));
+  row.classList.add('saved');const btn=row.querySelector('[data-batch-save]');if(btn){btn.textContent='Gespeichert';btn.disabled=true}
+  await loadPayslips();
+}
+
+async function saveAllBatch(){
+  const rows=$$('.payslip-batch-row[data-batch-index]');
+  for(const row of rows){if(row.classList.contains('saved'))continue;await saveBatchRow(Number(row.dataset.batchIndex)).catch(showError)}
+  showMessage('Geprüfte Abrechnungen gespeichert.');
+}
 
 async function savePayslip(){
   const space=spaceId();if(!space)throw new Error('Kein Finanzbereich ausgewählt.');if(!value('ps-period'))throw new Error('Abrechnungsdatum fehlt.');

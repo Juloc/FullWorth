@@ -13,6 +13,19 @@ public static partial class PayslipExtractor
 
     public static async Task<PayslipExtractionResult> ExtractAsync(IFormFile file, CancellationToken ct)
     {
+        var text = await OcrAsync(file, ct);
+        return string.IsNullOrWhiteSpace(text)
+            ? PayslipTextParser.Empty("OCR konnte keinen Text erkennen.")
+            : PayslipTextParser.Parse(text);
+    }
+
+    /// <summary>
+    /// Runs the local OCR pipeline (PDF first page → PNG via pdftoppm, then Tesseract deu+eng) and returns the
+    /// raw recognized text. The original file is never persisted. Shared by the deterministic regex parser and
+    /// the optional Codex structuring so a payslip is only OCR'd once per upload.
+    /// </summary>
+    public static async Task<string> OcrAsync(IFormFile file, CancellationToken ct)
+    {
         if (file.Length <= 0) throw new ArgumentException("Die Datei ist leer.");
         if (file.Length > MaxBytes) throw new ArgumentException("Die Datei darf höchstens 12 MB groß sein.");
 
@@ -36,11 +49,7 @@ public static partial class PayslipExtractor
                 if (!File.Exists(image)) throw new InvalidOperationException("Die erste PDF-Seite konnte nicht gerendert werden.");
             }
 
-            var text = await RunProcessAsync("tesseract", new[] { image, "stdout", "-l", "deu+eng", "--psm", "6" }, ct);
-            if (string.IsNullOrWhiteSpace(text))
-                return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
-
-            return PayslipTextParser.Parse(text);
+            return await RunProcessAsync("tesseract", new[] { image, "stdout", "-l", "deu+eng", "--psm", "6" }, ct);
         }
         finally
         {

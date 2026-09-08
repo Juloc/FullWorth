@@ -39,6 +39,13 @@ public sealed record PayslipRecordWrite(
     string? Note = null,
     string Source = "manual");
 
+public sealed record PayslipBatchItem(
+    string FileName,
+    PayslipExtractionResult? Result,
+    string? Error);
+
+public sealed record PayslipBatchResult(IReadOnlyList<PayslipBatchItem> Items);
+
 public sealed record PayslipRecordView(
     Guid Id,
     Guid FullWorthSpaceId,

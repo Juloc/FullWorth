@@ -193,6 +193,7 @@ public static class BackendApplication
         builder.Services.AddScoped<ReceiptScanJobStore>();
         builder.Services.AddScoped<ReceiptScanQueueService>();
         builder.Services.AddScoped<CodexReceiptBridgeClient>();
+        builder.Services.AddScoped<FullWorth.Backend.Modules.Compensation.PayslipCodexExtractor>();
         builder.Services.AddScoped<PurchaseWorkspaceService>();
         builder.Services.AddScoped<PurchaseDocumentService>();
         builder.Services.AddScoped<PurchaseLifecycleService>();

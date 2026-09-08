@@ -9,17 +9,47 @@ public static class PayslipEndpoints
     {
         var group = app.MapGroup("/api/compensation/payslips").WithTags("Compensation");
 
-        group.MapPost("/extract", async (IFormFile file, CurrentUserContext currentUser, CancellationToken ct) =>
+        group.MapPost("/extract", async (IFormFile file, CurrentUserContext currentUser, PayslipCodexExtractor codex, CancellationToken ct) =>
         {
-            _ = currentUser.RequireUserId();
+            var userId = currentUser.RequireUserId();
             try
             {
-                return Results.Ok(await PayslipExtractor.ExtractAsync(file, ct));
+                return Results.Ok(await ExtractOneAsync(file, userId, codex, ct));
             }
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
+        }).DisableAntiforgery();
+
+        group.MapPost("/extract-batch", async (HttpRequest request, CurrentUserContext currentUser, PayslipCodexExtractor codex, CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!request.HasFormContentType) return Results.BadRequest(new { error = "Formulardaten mit Dateien werden erwartet." });
+
+            var form = await request.ReadFormAsync(ct);
+            var files = form.Files;
+            if (files.Count == 0) return Results.BadRequest(new { error = "Keine Lohnabrechnungen ausgewählt." });
+            if (files.Count > 40) return Results.BadRequest(new { error = "Höchstens 40 Abrechnungen pro Durchlauf." });
+
+            var items = new List<PayslipBatchItem>(files.Count);
+            foreach (var file in files)
+            {
+                var name = Path.GetFileName(file.FileName);
+                try
+                {
+                    items.Add(new PayslipBatchItem(name, await ExtractOneAsync(file, userId, codex, ct), null));
+                }
+                catch (ArgumentException exception)
+                {
+                    items.Add(new PayslipBatchItem(name, null, exception.Message));
+                }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                {
+                    items.Add(new PayslipBatchItem(name, null, "Die Abrechnung konnte nicht verarbeitet werden."));
+                }
+            }
+            return Results.Ok(new PayslipBatchResult(items));
         }).DisableAntiforgery();
 
         group.MapGet("/", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
@@ -63,5 +93,16 @@ public static class PayslipEndpoints
         });
 
         return app;
+    }
+
+    // OCR once, then let Codex structure the text; fall back to the deterministic regex parser whenever Codex
+    // is unavailable or returns nothing usable, so a payslip is never partially interpreted as complete.
+    private static async Task<PayslipExtractionResult> ExtractOneAsync(
+        IFormFile file, Guid userId, PayslipCodexExtractor codex, CancellationToken ct)
+    {
+        var text = await PayslipExtractor.OcrAsync(file, ct);
+        if (string.IsNullOrWhiteSpace(text))
+            return PayslipTextParser.Empty("OCR konnte keinen Text erkennen.");
+        return await codex.TryStructureAsync(userId, text, ct) ?? PayslipTextParser.Parse(text);
     }
 }
