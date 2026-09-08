@@ -76,7 +76,7 @@ function buildOverlay() {
   const passkeyBtn = capability.hasPasskey
     ? `<button type="button" class="primary-action" data-lock="passkey">${ctx.esc(ctx.get('lock.unlockPasskey'))}</button>` : '';
   const pinToggle = capability.hasPin
-    ? `<button type="button" class="ghost" data-lock="pin-toggle">${ctx.esc(ctx.get('lock.usePin'))}</button>` : '';
+    ? `<button type="button" class="btn btn-secondary" data-lock="pin-toggle">${ctx.esc(ctx.get('lock.usePin'))}</button>` : '';
   overlay.innerHTML = `<div class="lock-card">
     <span class="lock-mark" aria-hidden="true">F</span>
     <h2 id="lock-title">${ctx.esc(ctx.get('lock.title'))}</h2>
@@ -88,7 +88,7 @@ function buildOverlay() {
       <button type="submit" class="primary-action">${ctx.esc(ctx.get('lock.unlock'))}</button>
     </form>
     <p class="lock-error" role="alert" hidden></p>
-    <button type="button" class="ghost danger" data-lock="logout">${ctx.esc(ctx.get('lock.logout'))}</button>
+    <button type="button" class="btn btn-danger" data-lock="logout">${ctx.esc(ctx.get('lock.logout'))}</button>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -184,7 +184,7 @@ export function openPinDialog(context) {
       <label>${ctx.esc(ctx.get('lock.newPin'))}<input name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="${ctx.esc(ctx.get('lock.pinPlaceholder'))}"></label>
       <p class="lock-error" role="alert" hidden></p>
       <div class="dialog-actions">
-        ${isSet ? `<button type="button" class="ghost danger" data-pin="remove">${ctx.esc(ctx.get('lock.removePin'))}</button>` : ''}
+        ${isSet ? `<button type="button" class="btn btn-danger" data-pin="remove">${ctx.esc(ctx.get('lock.removePin'))}</button>` : ''}
         <button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
         <button type="submit">${ctx.esc(ctx.get('common.save'))}</button>
       </div>
