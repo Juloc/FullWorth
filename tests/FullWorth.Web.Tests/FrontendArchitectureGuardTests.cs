@@ -159,6 +159,21 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
+    public void BootstrapLivesInApp_NotInFeatureOwners()
+    {
+        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts.js"));
+
+        Assert.Contains("initResizableSidebar();", app);
+        Assert.Contains("syncResponsiveSidebar();", app);
+        Assert.Contains("boot();", app);
+
+        Assert.DoesNotContain("initResizableSidebar();", accounts);
+        Assert.DoesNotContain("syncResponsiveSidebar();", accounts);
+        Assert.DoesNotContain("boot();", accounts);
+    }
+
+    [Fact]
     public void AccountsIntegrationUsesSharedCoreWithoutPatchObserverOrSyntheticNavigation()
     {
         var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts-ux.js"));
