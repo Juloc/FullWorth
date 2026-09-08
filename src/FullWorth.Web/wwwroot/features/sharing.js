@@ -54,7 +54,7 @@ export async function renderSharing(context) {
 function memberRow(member, isOwner) {
   const role = member.role === 'owner' ? ctx.get('sharing.roleOwner') : ctx.get('sharing.roleMember');
   const remove = isOwner
-    ? `<button type="button" class="ghost danger" data-remove-member="${ctx.esc(member.userId)}" data-name="${ctx.esc(member.displayName || member.email)}">${ctx.esc(ctx.get('sharing.remove'))}</button>`
+    ? `<button type="button" class="btn btn-danger" data-remove-member="${ctx.esc(member.userId)}" data-name="${ctx.esc(member.displayName || member.email)}">${ctx.esc(ctx.get('sharing.remove'))}</button>`
     : '';
   return `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(member.displayName || member.email)}</div><div class="row-sub">${ctx.esc(member.email)} · ${ctx.esc(role)}</div></div><div class="row-side">${remove}</div></div>`;
 }
@@ -62,7 +62,7 @@ function memberRow(member, isOwner) {
 function inviteRow(invite) {
   const role = invite.spaceRole === 'owner' ? ctx.get('sharing.roleOwner') : ctx.get('sharing.roleMember');
   const expires = ctx.get('sharing.expiresOn').replace('{date}', ctx.date(invite.expiresAt));
-  return `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(invite.email)}</div><div class="row-sub">${ctx.esc(role)} · ${ctx.esc(expires)}</div></div><div class="row-side"><button type="button" class="ghost danger" data-revoke="${ctx.esc(invite.id)}">${ctx.esc(ctx.get('sharing.revoke'))}</button></div></div>`;
+  return `<div class="row"><div class="row-main"><div class="row-title">${ctx.esc(invite.email)}</div><div class="row-sub">${ctx.esc(role)} · ${ctx.esc(expires)}</div></div><div class="row-side"><button type="button" class="btn btn-danger" data-revoke="${ctx.esc(invite.id)}">${ctx.esc(ctx.get('sharing.revoke'))}</button></div></div>`;
 }
 
 async function removeMember(sid, userId, name) {
@@ -106,7 +106,7 @@ async function openInviteDialog() {
     </select></span></label>
     ${accounts.length ? `<fieldset class="share-accounts"><legend>${ctx.esc(ctx.get('sharing.shareAccounts'))}</legend>${accountRows}</fieldset>` : ''}
     <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-send>${ctx.esc(ctx.get('sharing.invite'))}</button></div>
-    <div class="share-link-box" hidden><p class="row-sub">${ctx.esc(ctx.get('sharing.claimLink'))}</p><div class="field-inline"><input class="share-link" readonly><button type="button" class="ghost" data-copy>${ctx.esc(ctx.get('sharing.copyLink'))}</button></div></div>
+    <div class="share-link-box" hidden><p class="row-sub">${ctx.esc(ctx.get('sharing.claimLink'))}</p><div class="field-inline"><input class="share-link" readonly><button type="button" class="btn btn-secondary" data-copy>${ctx.esc(ctx.get('sharing.copyLink'))}</button></div></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
