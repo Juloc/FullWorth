@@ -15,6 +15,7 @@ import { renderPurchases, bindPurchases } from './features/purchases.js';
 import { renderTax, bindTax } from './features/tax.js';
 import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
 import { renderAudit, bindAudit } from './features/audit.js';
+import { renderDashboardInsights, mountInsights } from './features/insights.js';
 
 import { createAccessSetup } from './features/access-setup.js';
 import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderBankingSettings } from './features/accounts.js';
@@ -37,8 +38,8 @@ const get=path=>i18n.get(path);
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
 const MOBILE_PRIMARY=['dashboard','contracts','analytics','networth'];
-const ALL_VIEWS=['dashboard','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','categories','rules','notifications','merchants','audit','settings'];
-const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v));
+const ALL_VIEWS=['dashboard','insights','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','categories','rules','notifications','merchants','audit','settings'];
+const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v)&&v!=='insights');
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
 // any of these paths and the app resolves the view from location.pathname on boot.
@@ -345,6 +346,7 @@ const ctx={$,$,api,bankApi,get,esc,date,dateTime,toast,dialog,money,isPrivate,ca
 const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,status,options));
 const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
+  .register('insights',()=>mountInsights(ctx))
   .register('transactions',()=>renderTransactions(ctx))
   .register('accounts',()=>renderAccounts(ctx))
   .register('budgets',()=>renderBudgets(ctx))
@@ -359,7 +361,7 @@ const featureRegistry=createFeatureRegistry()
   .register('merchants',()=>renderMerchants(ctx))
   .register('audit',()=>renderAudit(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}));
-async function loadDashboard(){await renderDashboard(ctx)}
+async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
 initResizableSidebar();
