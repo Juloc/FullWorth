@@ -87,6 +87,10 @@
     "settings": {
       "title": "Settings",
       "subtitle": "Appearance, language, privacy and security"
+    },
+    "insights": {
+      "title": "Important for you",
+      "subtitle": "Detected changes and open items"
     }
   },
   "dashboard": {
@@ -1121,5 +1125,77 @@
     "disabled": "2FA disabled",
     "enabledToast": "2FA enabled",
     "invalidCode": "The code is not valid."
+  },
+  "insights": {
+    "title": "Important for you",
+    "subtitle": "Deterministic insights directly from your FullWorth data.",
+    "important": "Important for you",
+    "dashboardHint": "Changes and open items FullWorth noticed.",
+    "showAll": "Show all",
+    "generic": "Financial insight",
+    "filterLabel": "Insight status",
+    "tabs": {
+      "current": "Current",
+      "completed": "Completed",
+      "hidden": "Hidden"
+    },
+    "emptyTitle": "All clear",
+    "emptyCurrent": "Nothing needs your attention right now.",
+    "emptyCompleted": "No completed insights yet.",
+    "emptyHidden": "No hidden or snoozed insights.",
+    "unavailable": "Insights are currently disabled.",
+    "loadError": "Insights could not be loaded.",
+    "state": {
+      "dismissed": "Hidden",
+      "snoozed": "Snoozed",
+      "completed": "Completed",
+      "read": "Read",
+      "new": "New"
+    },
+    "detected": "Detected",
+    "manage": "Manage",
+    "markRead": "Mark as read",
+    "dismiss": "Hide",
+    "snooze": "Remind me later",
+    "snooze1": "1 day",
+    "snooze7": "7 days",
+    "snooze30": "30 days",
+    "feedback": "Was this insight useful?",
+    "useful": "Useful",
+    "irrelevant": "Not relevant",
+    "feedbackSaved": "Feedback saved.",
+    "openAffected": "Open affected area",
+    "impact": "Impact",
+    "uncategorizedCount": "{count} of {total} recent transactions are uncategorized.",
+    "accountChangeSummary": "The payment history probably continues on another account.",
+    "continuitySummary": "The non-overlapping payment histories look like one contract.",
+    "dataIncompleteSummary": "Some financial data is still incomplete.",
+    "spending": {
+      "totalIncreased": "Your spending increased significantly",
+      "totalDecreased": "Your spending decreased significantly",
+      "categoryIncreased": "A category increased significantly",
+      "merchantIncreased": "You are spending significantly more at one merchant"
+    },
+    "budget": {
+      "over": "A budget is over its limit",
+      "projectedOver": "A budget may exceed its limit"
+    },
+    "savings": {
+      "decreased": "Your monthly surplus decreased",
+      "increased": "Your monthly surplus increased"
+    },
+    "data": {
+      "incomplete": "Your financial data is not complete yet",
+      "uncategorizedRecent": "Several recent transactions are uncategorized"
+    },
+    "transfer": {
+      "candidate": "These transactions may be a transfer"
+    },
+    "contract": {
+      "paymentAccountChanged": "A contract may have moved to another payment account",
+      "possibleDuplicate": "Two contracts may actually be the same contract",
+      "priceIncreased": "A contract became more expensive",
+      "priceDecreased": "A contract became cheaper"
+    }
   }
 }
