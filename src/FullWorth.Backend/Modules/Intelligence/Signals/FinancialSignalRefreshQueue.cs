@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence.Signals;
 
@@ -13,7 +14,7 @@ public static class FinancialSignalJobTypes
 }
 
 public sealed class FinancialSignalRefreshQueue(
-    IntelligenceStore store,
+    IntelligenceDbContext db,
     AutopilotRolloutSettings rollout)
 {
     private static readonly TimeSpan DebounceWindow = TimeSpan.FromMinutes(5);
@@ -79,8 +80,35 @@ public sealed class FinancialSignalRefreshQueue(
         DateTimeOffset scheduledFor,
         string key,
         string payload,
-        CancellationToken ct) =>
-        await store.EnqueueJobAsync(type, scopeKey, scheduledFor, key, payload, ct);
+        CancellationToken ct)
+    {
+        var existing = await db.IntelligenceJobs.SingleOrDefaultAsync(x => x.IdempotencyKey == key, ct);
+        if (existing is not null) return existing;
+
+        var job = new IntelligenceJob
+        {
+            Type = type,
+            ScopeKey = scopeKey,
+            ScheduledFor = scheduledFor,
+            IdempotencyKey = key,
+            PayloadJson = payload
+        };
+        db.IntelligenceJobs.Add(job);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return job;
+        }
+        catch (DbUpdateException)
+        {
+            // Multiple replicas may enqueue the same debounce bucket. The unique key decides the winner.
+            db.ChangeTracker.Clear();
+            var winner = await db.IntelligenceJobs.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.IdempotencyKey == key, ct);
+            if (winner is not null) return winner;
+            throw;
+        }
+    }
 
     private static DateTimeOffset Bucket(DateTimeOffset now)
     {
