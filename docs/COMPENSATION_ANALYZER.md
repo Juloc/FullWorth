@@ -242,7 +242,39 @@ Compensation data is intentionally private to the user even inside a shared fina
 - timestamps
 - index on `(fullworth_space_id, user_id, effective_date, sort_order)`
 
+### `compensation_other_income`
+Regular income that is neither salary nor an employer benefit — a Halbwaisenrente being the
+motivating case. It is a separate track on purpose: nothing here ever reaches the salary
+calculator, and nothing here is added to any employer figure.
+- UUID primary key
+- fullworth-space id
+- user id
+- income type (an open set; the server slugifies whatever was entered) and an optional label
+- monthly amount `numeric(14,2)`
+- `valid_from` / nullable `valid_to` (null = open-ended)
+- `counts_toward_personal_income` — whether it counts toward the personally available total
+- optional note
+- timestamps
+- index on `(fullworth_space_id, user_id, valid_from)`
+- check constraints: `valid_to IS NULL OR valid_to >= valid_from`, `monthly_amount >= 0`
+
 Storage always checks fullworth-space membership and queries/mutates by both `fullworth_space_id` and authenticated `user_id`.
+
+## Reference data (not user data)
+
+Two datasets ship with the application rather than living in the database:
+
+- **`TaxYearTable`** (`Modules/Compensation/TaxYearParameters.cs`) — the statutory German payroll
+  parameters per calendar year from 2018 onwards: the §32a tariff, Solidaritätszuschlag, the social
+  insurance rates and ceilings, the average GKV-Zusatzbeitrag, allowances and the Vorsorgepauschale
+  phase-in. The calculator resolves one row per calculation from the profile's tax year, so a snapshot
+  is computed with its own year's law and cannot move when a later year is seeded. Each row names its
+  legal source.
+- **`salary-benchmarks-de.json`** (embedded resource) — salary reference data by Beruf × Bundesland ×
+  Jahr × Erfahrungsstufe. This is a **labelled estimate, not official data**: no quality level in the
+  file claims to be measured, derived values state how they were derived, and the file's `disclaimer`
+  and `verificationStatus` fields record what was and was not checked against the original sources.
+  Any UI showing these numbers must carry that labelling.
 
 The module currently uses idempotent schema initialization to avoid a large unrelated EF snapshot rewrite while the feature stabilizes. Canonical EF mapping/migration can be performed later without changing API contracts.
 
