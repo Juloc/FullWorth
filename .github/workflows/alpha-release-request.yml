@@ -32,12 +32,19 @@ jobs:
 
           git fetch --tags --force
           if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists; nothing to do."
+            echo "Tag $tag already exists; reusing it."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+          source_sha="$(git rev-list -n 1 "$tag" 2>/dev/null || true)"
+          if [[ -z "$source_sha" ]]; then
+            source_sha="$GITHUB_SHA"
+          fi
+
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
       - name: Create and push alpha tag
         if: steps.version.outputs.exists != 'true'
@@ -49,3 +56,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" "$GITHUB_SHA" -m "FullWorth ${TAG#v}"
           git push origin "$TAG"
+
+      - name: Dispatch release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SOURCE_SHA: ${{ steps.version.outputs.source_sha }}
+        shell: bash
+        run: |
+          gh workflow run release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f version="$TAG" \
+            -f source_sha="$SOURCE_SHA"
