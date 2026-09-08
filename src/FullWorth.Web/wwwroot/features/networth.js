@@ -575,7 +575,7 @@ async function openEmergencyFundDialog() {
     <label>${ctx.esc(t('emergencyTarget'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="target" value="${ctx.esc(pref.targetAmount || '')}" placeholder="0,00"></label>
     <label>${ctx.esc(t('emergencyScope'))}<select name="scope"><option value="">${ctx.esc(t('emergencyAll'))}</option><optgroup label="${ctx.esc(t('accounts'))}">${accountOptions}</optgroup><optgroup label="${ctx.esc(isDe() ? 'Kontogruppen' : 'Account groups')}">${groupOptions}</optgroup></select></label>
     <div class="row-sub" data-error hidden></div>
-    <div class="dialog-actions"><button type="button" class="ghost" data-close2>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.save'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-close2>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.save'))}</button></div>
   </form>`);
   const scope = dlg.querySelector('[name="scope"]'); if (scope) scope.value = scopeValue;
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -688,7 +688,7 @@ function askCoachAboutWealth(entityType, item, label, amount) {
 
 function wealthCoachButton(onclick) {
   const button = document.createElement('button');
-  button.type = 'button'; button.className = 'ghost nw-coach'; button.textContent = 'Coach';
+  button.type = 'button'; button.className='btn btn-secondary nw-coach'; button.textContent = 'Coach';
   button.onclick = onclick; return button;
 }
 
