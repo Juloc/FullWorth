@@ -1,6 +1,13 @@
 import { money, converted, maskIdentifier } from '../ui/money.js';
 import { state } from '../core/state.js';
-import { emitAppEvent, onAppEvent } from '../core/event-bus.js';
+import {
+  bindAccountsPresentation,
+  enhanceAccountsPresentation,
+  toggleAccountGroupEditing,
+  decorateManualAccountDialog,
+  applyManualAccountVisual,
+  editAccountVisualById
+} from './accounts-presentation.js';
 
 let ctx = null;
 let bound = false;
@@ -60,7 +67,7 @@ function openAccountActionsDialog(account, groups) {
         }
       }}));
     } else if (action === 'visual') {
-      emitAppEvent('accounts:edit-visual', { accountId: account.id });
+      editAccountVisualById(account.id).catch(console.error);
     } else if (action === 'move') {
       openMoveToGroupDialog(account, groups);
     } else if (action === 'rename') {
@@ -157,6 +164,7 @@ async function loadAccountsView(){
     conns.appendChild(row);
   }
   if(!(connections||[]).length)empty(conns);
+  await enhanceAccountsPresentation();
 }
 async function openSyncHistory(connection){
   let history;
@@ -293,12 +301,12 @@ function openManualAccountDialog(){
     if(!state.space){toast(get('common.error'));return}
     try{
       const created=await api('api/accounts',jsonBody({fullWorthSpaceId:state.space.id,bankConnectionId:null,displayName:fd.get('name'),currency:fd.get('currency'),includeInNetWorth:true,sortOrder:0,institutionName:fd.get('institution')||null,initialBalance:fd.get('balance')===''?null:Number(fd.get('balance'))}));
-      emitAppEvent('accounts:manual-created',{account:created});
-      dlg.close();toast(get('accounts.created'));await loadAccountsView();emitAppEvent('surface:rendered',{view:'accounts',path:location.pathname+location.search});
+      await applyManualAccountVisual(created);
+      dlg.close();toast(get('accounts.created'));await loadAccountsView();
     }catch(err){toast(err.message||get('common.error'))}
   };
   dlg.showModal();
-  emitAppEvent('accounts:manual-dialog-opened',{dialog:dlg});
+  decorateManualAccountDialog(dlg);
 }
 function openBalanceDialog(account){
   const current=account.latestBalance?account.latestBalance.amount:'';
@@ -974,10 +982,12 @@ export function bindAccounts(context) {
   use(context);
   if (bound) return;
   bound = true;
+  bindAccountsPresentation({
+    openAdd: () => openAddAccountDialog(),
+    openBank: () => openBankDialog()
+  });
   $('#add-account')?.addEventListener('click', () => openAddAccountDialog());
-  $('#add-group')?.addEventListener('click', () => emitAppEvent('accounts:toggle-groups'));
-  onAppEvent('accounts:open-add', () => openAddAccountDialog());
-  onAppEvent('accounts:open-bank', () => openBankDialog());
+  $('#add-group')?.addEventListener('click', () => toggleAccountGroupEditing().catch(console.error));
 }
 
 export async function renderAccounts(context) {
