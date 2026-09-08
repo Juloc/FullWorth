@@ -2,12 +2,18 @@ using Microsoft.Extensions.Options;
 
 namespace FullWorth.Banking.Services;
 
-public sealed class BankSyncWorker(IServiceScopeFactory scopes, IOptions<BankingSyncOptions> options, ILogger<BankSyncWorker> logger) : BackgroundService
+public sealed class BankSyncWorker(
+    IServiceScopeFactory scopes,
+    IOptions<BankingSyncOptions> options,
+    IHostApplicationLifetime lifetime,
+    ILogger<BankSyncWorker> logger) : BackgroundService
 {
     private readonly BankingSyncOptions _options = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await WaitForApplicationStartedAsync(lifetime, stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -30,5 +36,18 @@ public sealed class BankSyncWorker(IServiceScopeFactory scopes, IOptions<Banking
             var interval = TimeSpan.FromMinutes(Math.Clamp(_options.IntervalMinutes, 5, 60));
             await Task.Delay(interval, stoppingToken);
         }
+    }
+
+    private static async Task WaitForApplicationStartedAsync(
+        IHostApplicationLifetime lifetime,
+        CancellationToken cancellationToken)
+    {
+        if (lifetime.ApplicationStarted.IsCancellationRequested)
+            return;
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var startedRegistration = lifetime.ApplicationStarted.Register(() => started.TrySetResult());
+        using var cancelledRegistration = cancellationToken.Register(() => started.TrySetCanceled(cancellationToken));
+        await started.Task;
     }
 }

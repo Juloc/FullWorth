@@ -19,6 +19,10 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../FullWorth.Backend/FullWorth.Backend.csproj" />
+    <ProjectReference Include="../FullWorth.Banking/FullWorth.Banking.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="FullWorth.Web.Tests" />
   </ItemGroup>
 </Project>

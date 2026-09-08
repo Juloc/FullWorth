@@ -13,12 +13,14 @@ public sealed class AccountDeletionPurgeWorker(
     IServiceScopeFactory scopes,
     IOptions<AccountDeletionOptions> configuredOptions,
     TimeProvider timeProvider,
+    IHostApplicationLifetime lifetime,
     ILogger<AccountDeletionPurgeWorker> logger) : BackgroundService
 {
     private readonly AccountDeletionOptions options = Validate(configuredOptions.Value);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await WaitForApplicationStartedAsync(lifetime, stoppingToken);
         await RunOnceAsync(stoppingToken);
 
         using var timer = new PeriodicTimer(options.PurgeInterval);
@@ -102,6 +104,19 @@ public sealed class AccountDeletionPurgeWorker(
         await db.Users.Where(x => x.Id == authUserId).ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.DeletionLeaseUntil, (DateTimeOffset?)null)
             .SetProperty(x => x.DeletionLastError, error[..Math.Min(error.Length, 120)]), ct);
+    }
+
+    private static async Task WaitForApplicationStartedAsync(
+        IHostApplicationLifetime lifetime,
+        CancellationToken cancellationToken)
+    {
+        if (lifetime.ApplicationStarted.IsCancellationRequested)
+            return;
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var startedRegistration = lifetime.ApplicationStarted.Register(() => started.TrySetResult());
+        using var cancelledRegistration = cancellationToken.Register(() => started.TrySetCanceled(cancellationToken));
+        await started.Task;
     }
 
     private static AccountDeletionOptions Validate(AccountDeletionOptions value)

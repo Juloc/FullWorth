@@ -18,7 +18,86 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  fullworth:
+    image: ghcr.io/juloc/fullworth:${FULLWORTH_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      fullworth-postgres:
+        condition: service_healthy
+    environment:
+      FullWorthHost__Unified: "true"
+
+      ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+
+      Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:-}
+      Security__MasterKey: ${FULLWORTH_SECRET:-}
+
+      Services__BackendUrl: http://127.0.0.1:8080
+      Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Services__BankingUrl: http://127.0.0.1:8080
+      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      Backend__BaseUrl: http://127.0.0.1:8080
+      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+
+      PurchaseStorage__RootPath: /data/purchases
+      DataProtection__KeyPath: /data/dataprotection
+
+      CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
+      CodexTest__BaseUrl: http://fullworth-codex:8080
+      CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
+      AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
+      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
+
+      FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
+      EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
+      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}/connect/enable-banking/callback
+      EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
+      EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
+      EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
+      EnableBanking__TransientRetryCount: ${ENABLE_BANKING_TRANSIENT_RETRIES:-2}
+      Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-15}
+      Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-360}
+      Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-360}
+      Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
+      Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
+
+      FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
+      FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
+      FullWorthCloud__KnowledgePackPublicKeyPath: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_PATH:-}
+      FullWorthCloud__KnowledgePackId: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_ID:-fullworth-official}
+      FullWorthCloud__KnowledgePackRegion: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_REGION:-GLOBAL}
+
+      ReverseProxy__KnownProxies__0: ${FULLWORTH_KNOWN_PROXY:-}
+      ReverseProxy__KnownNetworks__0: ${FULLWORTH_KNOWN_PROXY_NETWORK:-172.16.0.0/12}
+      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
+      Passkeys__RelyingPartyName: FullWorth
+      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
+      Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
+      ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
+      ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
+      ExternalAuth__Apple__ServiceId: ${FULLWORTH_APPLE_SERVICE_ID:-}
+      ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
+      ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
+      ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
+      AllowedHosts: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env};127.0.0.1;localhost
+    ports:
+      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080"
+    volumes:
+      - fullworth-purchases-data:/data/purchases
+      - fullworth-web-dataprotection:/data/dataprotection
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
   fullworth-codex:
+    profiles: ["codex"]
     image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
     environment:
@@ -33,122 +112,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-
-  fullworth-backend:
-    image: ghcr.io/juloc/fullworth-backend:${FULLWORTH_VERSION:-latest}
-    restart: unless-stopped
-    depends_on:
-      fullworth-postgres:
-        condition: service_healthy
-    environment:
-      ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:-}
-      Security__MasterKey: ${FULLWORTH_SECRET:-}
-      PurchaseStorage__RootPath: /data/purchases
-      CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
-      CodexTest__BaseUrl: http://fullworth-codex:8080
-      CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
-      AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
-      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
-      FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
-      FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
-      FullWorthCloud__KnowledgePackPublicKeyPath: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_PATH:-}
-      FullWorthCloud__KnowledgePackId: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_ID:-fullworth-official}
-      FullWorthCloud__KnowledgePackRegion: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_REGION:-GLOBAL}
-    volumes:
-      - fullworth-purchases-data:/data/purchases
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 40s
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-
-  fullworth-banking:
-    image: ghcr.io/juloc/fullworth-banking:${FULLWORTH_VERSION:-latest}
-    restart: unless-stopped
-    depends_on:
-      fullworth-backend:
-        condition: service_healthy
-    environment:
-      FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
-      Backend__BaseUrl: http://fullworth-backend:8080
-      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
-      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}/connect/enable-banking/callback
-      EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
-      EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
-      EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
-      EnableBanking__TransientRetryCount: ${ENABLE_BANKING_TRANSIENT_RETRIES:-2}
-      Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-15}
-      Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-360}
-      Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-360}
-      Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
-      Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 40s
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-
-  fullworth-web:
-    image: ghcr.io/juloc/fullworth-web:${FULLWORTH_VERSION:-latest}
-    restart: unless-stopped
-    depends_on:
-      fullworth-postgres:
-        condition: service_healthy
-      fullworth-backend:
-        condition: service_healthy
-      fullworth-banking:
-        condition: service_healthy
-    environment:
-      ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      DataProtection__KeyPath: /data/dataprotection
-      ReverseProxy__KnownProxies__0: ${FULLWORTH_KNOWN_PROXY:-}
-      ReverseProxy__KnownNetworks__0: ${FULLWORTH_KNOWN_PROXY_NETWORK:-172.16.0.0/12}
-      Services__BackendUrl: http://fullworth-backend:8080
-      Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Services__BankingUrl: http://fullworth-banking:8080
-      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
-      Passkeys__RelyingPartyName: FullWorth
-      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
-      Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
-      ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
-      ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
-      ExternalAuth__Apple__ServiceId: ${FULLWORTH_APPLE_SERVICE_ID:-}
-      ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
-      ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
-      ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
-      AllowedHosts: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
-      Bootstrap__Email: ${FULLWORTH_BOOTSTRAP_EMAIL:-}
-      Bootstrap__Password: ${FULLWORTH_BOOTSTRAP_PASSWORD:-}
-      Bootstrap__DisplayName: ${FULLWORTH_BOOTSTRAP_DISPLAY_NAME:-}
-      Bootstrap__SpaceName: ${FULLWORTH_BOOTSTRAP_SPACE_NAME:-Household}
-      Bootstrap__BaseCurrency: ${FULLWORTH_BOOTSTRAP_BASE_CURRENCY:-EUR}
-    ports:
-      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080"
-    volumes:
-      - fullworth-web-dataprotection:/data/dataprotection
     security_opt:
       - no-new-privileges:true
     read_only: true
