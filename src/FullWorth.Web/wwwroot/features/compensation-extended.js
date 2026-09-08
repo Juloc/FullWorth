@@ -50,7 +50,7 @@ function payslipMarkup(){return `
     <div class="payslip-stack">
       <article class="panel comp-card">
         <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2><p>PDF oder Bild wird lokal im Backend verarbeitet. Die Originaldatei wird nicht gespeichert.</p></div></div>
-        <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="primary-action" type="button">Analysieren</button><button id="payslip-extract-batch" type="button">Alle analysieren</button></div>
+        <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button><button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button></div>
         <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
         <div id="payslip-batch" class="payslip-batch" hidden></div>
       </article>
@@ -173,7 +173,7 @@ function renderBatch(items){
   const root=$('#payslip-batch');if(!root)return;
   if(!items.length){root.hidden=true;root.innerHTML='';return}
   root.hidden=false;
-  root.innerHTML=`<div class="panel comp-card"><div class="panel-head"><div><h2>Mehrere Abrechnungen prüfen</h2><p>Jede Zeile wird als Monatswert gespeichert. Korrigiere bei Bedarf, dann speichern.</p></div><button id="payslip-save-all" class="primary-action" type="button">Alle speichern</button></div>`+
+  root.innerHTML=`<div class="panel comp-card"><div class="panel-head"><div><h2>Mehrere Abrechnungen prüfen</h2><p>Jede Zeile wird als Monatswert gespeichert. Korrigiere bei Bedarf, dann speichern.</p></div><button id="payslip-save-all" class="btn btn-primary" type="button">Alle speichern</button></div>`+
     `<div class="payslip-batch-list">${items.map((it,i)=>batchRow(it,i)).join('')}</div></div>`;
   root.querySelectorAll('[data-batch-save]').forEach(b=>b.addEventListener('click',()=>saveBatchRow(Number(b.dataset.batchSave)).catch(showError)));
   $('#payslip-save-all')?.addEventListener('click',()=>saveAllBatch().catch(showError));
@@ -188,7 +188,7 @@ function batchRow(it,i){
     `<label>Brutto<input data-pb="gross" type="number" step="0.01" value="${pbn(r.grossPay)}"></label>`+
     `<label>Netto<input data-pb="net" type="number" step="0.01" value="${pbn(r.netPay)}"></label>`+
     `<label>Auszahlung<input data-pb="payout" type="number" step="0.01" value="${pbn(r.payout??r.netPay)}"></label>`+
-    `<button type="button" data-batch-save="${i}">Speichern</button>`+
+    `<button type="button" class="btn btn-secondary" data-batch-save="${i}">Speichern</button>`+
   `</div>`;
 }
 function pbn(v){const n=Number(v);return Number.isFinite(n)?n:''}
