@@ -88,7 +88,6 @@ public sealed class FrontendArchitectureGuardTests
         {
             // Legacy migration allow-list. This list may only shrink.
             "admin/admin.js",
-            "features/access-setup.js",
             "features/compensation-extended.js",
             "features/compensation-history.js",
             "features/compensation.js",
