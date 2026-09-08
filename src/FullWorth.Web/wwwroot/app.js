@@ -31,6 +31,7 @@ import { installNavigation, navigate } from './core/navigation.js';
 import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './ui/toast.js';
 import { openGlobalSearch } from './ui/global-search.js';
+import { installTopbarMetrics } from './ui/topbar-metrics.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
@@ -336,6 +337,7 @@ function openMoreSheet(){
   dlg.showModal();
 }
 
+installTopbarMetrics();
 installNavigation((view,options={})=>showView(view,options));
 onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
 onAppEvent('rules:new',()=>newRule(ctx));

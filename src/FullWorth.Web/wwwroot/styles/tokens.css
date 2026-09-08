@@ -32,6 +32,7 @@
   --line-height-base:1.5;
   color-scheme:light;
   /* spacing scale (§4.1) */
+  --topbar-h:64px;
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
   --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
   /* Upper bound for the main content column so ultrawide/1440p screens keep a readable measure

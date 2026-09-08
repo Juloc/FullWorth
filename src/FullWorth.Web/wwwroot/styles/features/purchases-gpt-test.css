@@ -62,3 +62,4 @@
   .gpt-test-foot{margin:0 -12px -24px}
   .gpt-test-preview{min-height:220px}
 }
+@media(max-width:767px){.gpt-test-head [data-close]{width:44px;height:44px}}

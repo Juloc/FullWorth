@@ -113,7 +113,7 @@
   body.sidebar-resizing .shell,body.coach-dock-resizing .shell{transition:none}
 }
 @media(max-width:767px){
-  .tx-coach-selection{position:sticky;top:0;z-index:8;margin-inline:-4px;border-radius:10px}
+  .tx-coach-selection{position:sticky;top:var(--topbar-h);z-index:8;margin-inline:-4px;border-radius:10px}
   .tx-coach-selection>div{gap:6px}
   .tx-coach-selection button{min-height:38px}
   .tx-select-wrap{width:28px;height:28px;margin-right:2px}

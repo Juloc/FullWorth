@@ -54,12 +54,18 @@ label.check.inline{font-size:12px;color:var(--muted)}
 .cat-node{border-bottom:1px solid var(--line)}
 .cat-node:last-child{border-bottom:0}
 .cat-row{display:flex;align-items:center;gap:var(--s2);padding:9px 0;padding-left:calc(var(--depth,0) * 20px)}
-.cat-twist{width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.cat-twist{width:44px;height:44px;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer}
 .cat-twist:disabled{cursor:default;opacity:.4}
 .cat-name{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cat-actions{display:flex;gap:4px;opacity:0;transition:opacity .12s}
-.cat-row:hover .cat-actions,.cat-row:focus-within .cat-actions{opacity:1}
-.cat-actions .icon-button{width:30px;height:30px}
+.cat-actions{display:flex;gap:4px;transition:opacity .12s}
+/* Reveal-on-hover only where hovering exists. On a touch device there is no hover, so hiding these by
+   default made the edit/archive buttons permanently invisible with no hint that the row is actionable. */
+@media(hover:hover) and (pointer:fine){
+  .cat-actions{opacity:0}
+  .cat-row:hover .cat-actions,.cat-row:focus-within .cat-actions{opacity:1}
+  .cat-actions .icon-button{width:30px;height:30px}
+  .cat-twist{width:26px;height:26px}
+}
 .cat-archived{opacity:.6}
 /* Transactions list markers + clickable rows (§9.1) */
 .tx-row{cursor:pointer}
@@ -88,7 +94,7 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .tx-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
 .tx-logo{width:100%;height:100%;object-fit:cover}
 .tx-ident.tx-logo-failed{background:var(--surface-2)}
-.tx-date-head td{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+.tx-date-head td{position:sticky;top:var(--topbar-h);z-index:1;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
 .tx-date-head td>span{opacity:.85}
 /* Scope banner: account/group name + back path (UX rework §3) */
 .tx-scopebar{display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)}

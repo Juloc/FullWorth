@@ -18,3 +18,4 @@
 @keyframes receipt-set-spin{to{transform:rotate(360deg)}}
 @media(max-width:620px){.receipt-set-dialog{max-width:100vw;width:100%;margin:auto 0 0}.receipt-set-card{border-radius:1rem 1rem 0 0;max-height:92vh}.receipt-set-source{grid-template-columns:auto 48px minmax(0,1fr)}.receipt-set-thumb{width:48px;height:60px}.receipt-set-source-actions{grid-column:2/4;justify-content:flex-end}}
 @media(prefers-reduced-motion:reduce){.receipt-set-spinner{animation:none}}
+@media(max-width:620px){.receipt-set-source-actions button{min-height:44px}}

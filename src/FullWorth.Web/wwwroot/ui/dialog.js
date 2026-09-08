@@ -1,7 +1,11 @@
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 
 function ensureHeader(dlg, card, closeLabel) {
-  let head = card.querySelector(':scope > .panel-head') || card.querySelector('.panel-head');
+  // A dialog whose header is not a `.panel-head` can mark it with `data-dialog-head`. Without that, we
+  // would not find it, prepend a second (empty) header, and — since the generated one is sticky with a
+  // higher z-index — cover the real header's controls as soon as the dialog scrolls.
+  let head = card.querySelector(':scope > .panel-head, :scope > [data-dialog-head]')
+    || card.querySelector('.panel-head, [data-dialog-head]');
   if (!head) {
     head = document.createElement('div');
     head.className = 'panel-head';

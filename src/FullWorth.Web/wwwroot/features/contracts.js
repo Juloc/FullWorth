@@ -886,7 +886,7 @@ async function openDetail(id) {
   }).join('');
 
   const dlg = ctx.dialog(`<div class="dialog-card contract-detail contract-detail-v2">
-    <div class="contract-detail-topbar">
+    <div class="contract-detail-topbar" data-dialog-head>
       <button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button>
       <button type="button" data-edit-all aria-label="${ctx.esc(ctx.get('contracts.edit'))}">•••</button>
     </div>

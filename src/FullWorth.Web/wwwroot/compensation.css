@@ -3,11 +3,6 @@
 .comp-column{min-width:0;display:flex;flex-direction:column}
 /* shell.css gives every <main> the app's content max-width; this page manages its own width. */
 .comp-shell{max-width:none}
-/* On mobile the shared bottom nav is fixed, so the page must reserve room for it (responsive.css does
-   this for <main>, but this page's own .comp-shell padding would otherwise win and clip the last panel). */
-@media(max-width:767px){
-  .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-}
 .comp-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:12px clamp(16px,3vw,36px);background:color-mix(in srgb,var(--surface,#fff) 92%,transparent);backdrop-filter:blur(18px);border-bottom:1px solid var(--border,#e3e5e8)}
 .comp-brand{display:flex;align-items:center;gap:10px}.comp-brand>div{display:grid;gap:1px}.comp-brand small{color:var(--muted,#6d737c);font-size:.78rem}.comp-brand .beta-label{margin:0 0 1px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase}.comp-top-actions{margin-left:auto;display:flex;align-items:end;gap:10px}.comp-space-label{display:grid;gap:4px;font-size:.72rem;color:var(--muted,#6d737c)}
 .comp-shell{width:min(1480px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}.comp-hero{display:flex;justify-content:space-between;gap:24px;align-items:end;padding:18px 4px 24px}.comp-hero h1{margin:4px 0 8px;font-size:clamp(2rem,4vw,3.5rem);letter-spacing:-.045em}.comp-hero p{margin:0;color:var(--muted,#6d737c);max-width:760px}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.74rem;font-weight:700}.comp-hero-note{padding:10px 13px;border:1px solid var(--border,#e3e5e8);border-radius:999px;font-size:.78rem;color:var(--muted,#6d737c);white-space:nowrap}
@@ -32,4 +27,11 @@
 /* The mobile bottom nav is fixed, so the page toast must sit above it (responsive.css only lifts #toast). */
 @media(max-width:767px){
   .comp-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
+}
+
+/* Must stay LAST: .comp-shell is declared again further up with a `padding` shorthand at the same
+   specificity, so an earlier mobile override would be silently reset. The fixed mobile bottom nav needs
+   this clearance or the last panel is hidden behind it. */
+@media(max-width:767px){
+  .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 }
