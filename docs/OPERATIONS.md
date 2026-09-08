@@ -2,66 +2,95 @@
 
 ## Deploy
 
-FullWorth is designed for a reverse proxy that terminates HTTPS and forwards only to FullWorth.Web.
-Copy `.env.example` to `.env`, replace every placeholder with a unique value and set the public
-hostname in `FULLWORTH_ALLOWED_HOSTS`, `FULLWORTH_PASSKEY_RP_ID` and `FULLWORTH_PASSKEY_ORIGIN`.
+The canonical self-hosted deployment runs **two containers**:
 
-Required secrets include the database password, the three service credentials and the base64-encoded
-32-byte data-encryption key. Enable Banking itself is BYO by default: set the instance-wide
-`ENABLE_BANKING_REDIRECT_URL`, then let each FullWorth user verify and store their own Enable Banking
-application ID + RSA private key through the authenticated setup wizard. The RSA key is encrypted at
-rest with `Security:DataEncryptionKey` and is never returned to the browser after setup.
+- `fullworth` — Web, finance backend and banking modules in one ASP.NET process
+- `fullworth-postgres` — PostgreSQL
 
-A global Enable Banking key is legacy-only and is resolved only for already-existing bank connections with no profile id. It cannot be used to create a new user bank connection. To migrate a legacy application, the legitimate application owner explicitly enters the same Application ID and matching PEM in their own Enable Banking settings wizard. FullWorth verifies it through /application and stores the new user-scoped copy encrypted; it never auto-assigns a global key to another user. For old deployments either set
-`ENABLE_BANKING_APPLICATION_ID` plus `ENABLE_BANKING_PRIVATE_KEY_BASE64`, or keep the previous PEM
-mount by starting Compose with `docker-compose.enable-banking-legacy.yml`.
+The optional Codex / ChatGPT bridge is a third container only when the `codex` Compose profile is enabled.
+
+Copy `.env.example` to `.env` and set the two required values:
+
+```env
+FULLWORTH_DOMAIN=finance.example.com
+FULLWORTH_SECRET=use-a-long-random-secret-from-your-password-manager
+```
+
+Use a stable random secret of at least 32 characters. The normal deployment derives its database and
+internal module credentials from this master secret. Existing installations can keep separate
+credentials through the advanced compatibility overrides in `.env.example`.
+
+The public reverse proxy must terminate HTTPS and forward only to `127.0.0.1:8098`. Passkey origin,
+AllowedHosts and Enable Banking callback URLs are derived from `FULLWORTH_DOMAIN`.
 
 ```bash
 docker compose config
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Set the optional bootstrap user values only for the first start. Sign in, register a passkey, then
-remove the bootstrap email and password from `.env` and recreate the affected service.
+A fresh installation allows registration for exactly the first account. That account becomes the
+instance administrator; public registration then closes automatically.
+
+### Optional Codex bridge
+
+```bash
+docker compose --profile codex pull
+docker compose --profile codex up -d
+```
+
+## Enable Banking
+
+Enable Banking is BYO per user by default. Each FullWorth user verifies and stores their own
+Enable Banking application ID + RSA private key through the authenticated setup wizard. The key is
+encrypted at rest and is never returned to the browser after setup.
+
+A global Enable Banking key is legacy-only and is resolved only for pre-existing bank connections
+without a user profile. It cannot create a new user bank connection.
+
+Existing legacy deployments can either set:
+
+- `ENABLE_BANKING_APPLICATION_ID`
+- `ENABLE_BANKING_PRIVATE_KEY_BASE64`
+
+or continue using the PEM compatibility override:
+
+```bash
+mkdir -p secrets
+# place the existing key at:
+# secrets/enable-banking-private-key.pem
+docker compose -f docker-compose.yml -f docker-compose.enable-banking-legacy.yml up -d
+```
 
 ## Backup and restore
 
-Back up both PostgreSQL and purchase files. Artifacts belong under the ignored `backups/` directory.
+Back up PostgreSQL, purchase files, Data Protection keys and `.env`. If the optional Codex bridge
+is used, also back up its data volume.
 
 ```bash
 ops/backup/backup-all.sh
 ops/restore-test/verify-restore.sh
 ```
 
-Configure an offsite `rclone` remote with a dedicated, narrow-scope account. Restore verification
-uses an isolated database and must be run regularly. A live restore is destructive; first create a
-fresh backup, stop application services, and use the restore scripts only with their explicit
-`--force` option.
+Configure offsite backups with a dedicated, narrow-scope account. Restore verification uses an
+isolated database and should be run regularly. A live restore is destructive: create a fresh backup,
+stop FullWorth, and use the restore scripts only with their explicit `--force` option.
 
 ## Secret rotation
 
-Never commit a secret. Rotate paired service credentials on both sides before restarting the paired
-services: Backend/Banking ingest, Web/Banking API, and Web/Backend internal access. Verify health,
-login and a bank sync after rotation.
+Never commit a secret.
 
-Do not replace `Security:DataEncryptionKey` in place when encrypted data exists. Existing data must
-be decrypted with the old key and re-encrypted with the new one. Keep an old backup passphrase until
-all backups encrypted with it have expired or been re-encrypted.
+For the normal deployment, `FULLWORTH_SECRET` is intentionally stable because it also derives the
+field-encryption key. Do not replace it in place while encrypted data exists. A rotation requires a
+controlled re-encryption migration.
 
-
+Existing deployments that still use separate compatibility credentials may rotate those paired
+internal keys together. Verify health, login and a bank sync after rotation.
 
 ## Enable Banking private/restricted production
 
-For personal testing, each FullWorth user should create their own Enable Banking Production application,
-activate it by linking only their own accounts in the Enable Banking Control Panel, and then add that
-application to FullWorth. Do not share one restricted application between unrelated FullWorth users.
-Restricted production remains subject to Enable Banking's current Terms and linked-account rules.
-
-The normal deployment does not require any Enable Banking PEM file. Legacy PEM compatibility:
-
-```bash
-mkdir -p secrets
-# put the existing legacy RSA key here:
-# secrets/enable-banking-private-key.pem
-docker compose -f docker-compose.yml -f docker-compose.enable-banking-legacy.yml up -d
-```
+For personal testing, each FullWorth user should create their own Enable Banking Production
+application, activate it by linking only their own accounts in the Enable Banking Control Panel, and
+then add that application to FullWorth. Do not share one restricted application between unrelated
+FullWorth users. Restricted production remains subject to Enable Banking's current terms and
+linked-account rules.

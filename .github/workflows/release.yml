@@ -36,13 +36,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: backend
-            dockerfile: src/FullWorth.Backend/Dockerfile
-          - service: banking
-            dockerfile: src/FullWorth.Banking/Dockerfile
-          - service: web
+          - service: fullworth
+            image: fullworth
             dockerfile: src/FullWorth.Web/Dockerfile
           - service: codex
+            image: fullworth-codex
             dockerfile: src/FullWorth.CodexBridge/Dockerfile
 
     steps:
@@ -60,7 +58,7 @@ jobs:
             exit 1
           fi
 
-          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}"
           sha_tag="sha-${SOURCE_SHA::7}"
 
           {
@@ -102,8 +100,8 @@ jobs:
           platforms: linux/amd64
           provenance: false
           tags: ${{ steps.vars.outputs.tags }}
-          cache-from: type=gha,scope=fullworth-${{ matrix.service }}-amd64
-          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}-amd64
+          cache-from: type=gha,scope=${{ matrix.service }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-amd64
 
   build-arm64:
     name: ARM64 · ${{ matrix.service }}
@@ -112,13 +110,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: backend
-            dockerfile: src/FullWorth.Backend/Dockerfile
-          - service: banking
-            dockerfile: src/FullWorth.Banking/Dockerfile
-          - service: web
+          - service: fullworth
+            image: fullworth
             dockerfile: src/FullWorth.Web/Dockerfile
           - service: codex
+            image: fullworth-codex
             dockerfile: src/FullWorth.CodexBridge/Dockerfile
 
     steps:
@@ -136,7 +132,7 @@ jobs:
             exit 1
           fi
 
-          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}"
           sha_tag="sha-${SOURCE_SHA::7}"
 
           {
@@ -177,8 +173,8 @@ jobs:
           platforms: linux/arm64
           provenance: false
           tags: ${{ steps.vars.outputs.tags }}
-          cache-from: type=gha,scope=fullworth-${{ matrix.service }}-arm64
-          cache-to: type=gha,mode=max,scope=fullworth-${{ matrix.service }}-arm64
+          cache-from: type=gha,scope=${{ matrix.service }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-arm64
 
   github-release:
     name: GitHub Release
@@ -213,7 +209,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [backend, banking, web, codex]
+        include:
+          - service: fullworth
+            image: fullworth
+          - service: codex
+            image: fullworth-codex
 
     steps:
       - uses: docker/setup-buildx-action@v3
@@ -229,7 +229,7 @@ jobs:
         shell: bash
         run: |
           version="${RELEASE_TAG#v}"
-          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
+          image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}"
           sha_tag="sha-${SOURCE_SHA::7}"
 
           merge_tag() {

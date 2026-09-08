@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using FullWorth.Backend.Hosting;
+using FullWorth.Banking.Hosting;
 using FullWorth.Web.Data;
 using FullWorth.Web.Modules.Auth;
 using FullWorth.Web.Modules.Admin;
@@ -32,6 +34,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // P0.3: allow secrets to arrive as Docker secret files (evaluated at build time, before config reads).
 FullWorth.Shared.SecretBootstrap.AddSecretFiles(builder.Configuration);
+
+var unifiedHost = builder.Configuration.GetValue("FullWorthHost:Unified", false);
 
 var configuredAuth = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
 var bulkReceiptImportMaxRequestBytes = Math.Clamp(
@@ -130,6 +134,8 @@ builder.Services.AddSingleton(services => BackendContextOptions.Load(
     services.GetRequiredService<IHostEnvironment>()));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddProblemDetails();
+if (unifiedHost)
+    builder.Services.AddExceptionHandler<FullWorth.Backend.Validation.PurchasePaymentAllocationConflictExceptionHandler>();
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddTransient<BackendUserContextHandler>();
 builder.Services.AddTransient<BankingUserContextHandler>();
@@ -168,6 +174,12 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
         .SetApplicationName("FullWorth.Web");
 }
 
+if (unifiedHost)
+{
+    builder.AddFullWorthBackend(unifiedHost: true);
+    builder.AddFullWorthBanking(unifiedHost: true);
+}
+
 builder.Services.ConfigureApplicationCookie(cookie =>
 {
     var configuredSessions = builder.Configuration.GetSection("Sessions").Get<FinanceSessionOptions>() ?? new FinanceSessionOptions();
@@ -186,13 +198,16 @@ builder.Services.ConfigureApplicationCookie(cookie =>
 // Banking callback answering "Location: /?bankConnected=…") has to reach the BROWSER, which resolves
 // it against the public origin. With the default auto-follow the handler would chase "/" on the
 // internal service (a 404) and the user would never see the redirect.
+var defaultBackendUrl = unifiedHost ? "http://127.0.0.1:8080" : "http://fullworth-backend:8080";
+var defaultBankingUrl = unifiedHost ? "http://127.0.0.1:8080" : "http://fullworth-banking:8080";
+
 builder.Services.AddHttpClient("backend", client =>
 {
-    client.BaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? "http://fullworth-backend:8080").TrimEnd('/') + "/");
+    client.BaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? defaultBackendUrl).TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromMinutes(5);
 }).AddHttpMessageHandler<BackendUserContextHandler>()
   .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-var bankingBaseAddress = new Uri((builder.Configuration["Services:BankingUrl"] ?? "http://fullworth-banking:8080").TrimEnd('/') + "/");
+var bankingBaseAddress = new Uri((builder.Configuration["Services:BankingUrl"] ?? defaultBankingUrl).TrimEnd('/') + "/");
 builder.Services.AddHttpClient("banking", client =>
 {
     client.BaseAddress = bankingBaseAddress;
@@ -204,7 +219,7 @@ builder.Services.AddHttpClient("banking", client =>
     .AddHttpMessageHandler(() => new ServiceProxyGuardHandler(bankingBaseAddress, "X-FullWorth-Banking-Key", builder.Configuration["Services:BankingApiKey"]))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 // Internal-key-only client (no user context) used solely for first-run admin bootstrap.
-var bootstrapBackendBaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? "http://fullworth-backend:8080").TrimEnd('/') + "/");
+var bootstrapBackendBaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? defaultBackendUrl).TrimEnd('/') + "/");
 builder.Services.AddHttpClient(FirstRunBootstrapper.BackendClientName, client =>
 {
     client.BaseAddress = bootstrapBackendBaseAddress;
@@ -215,6 +230,12 @@ builder.Services.AddHttpClient(FirstRunBootstrapper.BackendClientName, client =>
 
 var app = builder.Build();
 _ = app.Services.GetRequiredService<BackendContextOptions>();
+
+if (unifiedHost)
+{
+    await app.InitializeFullWorthBackendAsync();
+    app.InitializeFullWorthBanking();
+}
 
 // P0.3 fail-closed + P1.2a host pinning, validated against the fully-merged configuration (Production only).
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "ConnectionStrings:AuthDatabase", FullWorth.Shared.SecretBootstrap.SecretKind.ConnectionString);
@@ -242,9 +263,27 @@ app.UseFinanceSecurityHeaders();
 if (app.Environment.IsProduction())
 {
     app.UseFinanceProductionHsts(app.Environment);
-    app.UseHttpsRedirection();
+    if (unifiedHost)
+    {
+        // Internal module calls stay on loopback HTTP inside the same Kestrel process. External
+        // traffic still goes through the normal HTTPS redirect path.
+        app.UseWhen(
+            context => context.Connection.RemoteIpAddress is not { } address || !IPAddress.IsLoopback(address),
+            branch => branch.UseHttpsRedirection());
+    }
+    else
+    {
+        app.UseHttpsRedirection();
+    }
 }
 app.UseRouting();
+
+if (unifiedHost)
+{
+    app.UseFullWorthBackend(unifiedHost: true);
+    app.UseFullWorthBanking(unifiedHost: true);
+}
+
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseMiddleware<PendingDeletionAccessMiddleware>();
@@ -290,7 +329,7 @@ app.UseStaticFiles();
 app.UseAuthorization();
 app.UseFullWorthAntiforgery();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "fullworth-web" })).AllowAnonymous();
+app.MapGet("/health", () => Results.Ok(new { status = "ok", service = unifiedHost ? "fullworth" : "fullworth-web" })).AllowAnonymous();
 
 var fredokaFontBase64Path = Path.Combine(
     app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"),
@@ -422,35 +461,38 @@ app.MapMethods("/bff/banking/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"
     .RequireAuthorization()
     .RequireRateLimiting(RateLimitPolicies.BrowserApi);
 
-app.MapGet("/connect/enable-banking/status-callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
+if (!unifiedHost)
 {
-    var client = factory.CreateClient("banking");
-    if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/status-callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/status-callback"], out var target))
-        return Results.BadRequest();
-    await ProxyAsync(context, client, target!, ct);
-    return Results.Empty;
-})
-    .AllowAnonymous();
-
-app.MapGet("/connect/enable-banking/setup-callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
-{
-    var client = factory.CreateClient("banking");
-    if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/setup-callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/setup-callback"], out var target))
-        return Results.BadRequest();
-    await ProxyAsync(context, client, target!, ct);
-    return Results.Empty;
-})
-    .AllowAnonymous();
-
-app.MapGet("/connect/enable-banking/callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
-{
-    var client = factory.CreateClient("banking");
-    if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/callback"], out var target))
-        return Results.BadRequest();
-    await ProxyAsync(context, client, target!, ct);
-    return Results.Empty;
-})
-    .AllowAnonymous();
+    app.MapGet("/connect/enable-banking/status-callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
+    {
+        var client = factory.CreateClient("banking");
+        if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/status-callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/status-callback"], out var target))
+            return Results.BadRequest();
+        await ProxyAsync(context, client, target!, ct);
+        return Results.Empty;
+    })
+        .AllowAnonymous();
+    
+    app.MapGet("/connect/enable-banking/setup-callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
+    {
+        var client = factory.CreateClient("banking");
+        if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/setup-callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/setup-callback"], out var target))
+            return Results.BadRequest();
+        await ProxyAsync(context, client, target!, ct);
+        return Results.Empty;
+    })
+        .AllowAnonymous();
+    
+    app.MapGet("/connect/enable-banking/callback", async (HttpContext context, IHttpClientFactory factory, CancellationToken ct) =>
+    {
+        var client = factory.CreateClient("banking");
+        if (!ProxyTargetValidator.TryBuildTarget(client.BaseAddress!, "connect/enable-banking/callback", context.Request.QueryString.Value ?? string.Empty, ["/connect/enable-banking/callback"], out var target))
+            return Results.BadRequest();
+        await ProxyAsync(context, client, target!, ct);
+        return Results.Empty;
+    })
+        .AllowAnonymous();
+}
 
 app.MapFallbackToFile("index.html").RequireAuthorization();
 app.Run();

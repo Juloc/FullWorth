@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Juloc/FullWorth?include_prereleases&sort=semver)](https://github.com/Juloc/FullWorth/releases)
 [![Release images](https://github.com/Juloc/FullWorth/actions/workflows/release.yml/badge.svg)](https://github.com/Juloc/FullWorth/actions/workflows/release.yml)
-[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://github.com/Juloc/FullWorth/pkgs/container/fullworth-web)
+[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://github.com/Juloc/FullWorth/pkgs/container/fullworth)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
 ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
@@ -12,6 +12,13 @@ FullWorth is a self-hosted personal finance app for accounts, transactions, budg
 
 ## Docker setup
 
+The normal FullWorth stack is only **2 containers**:
+
+- `fullworth` — Web, finance backend and banking in one application
+- `fullworth-postgres` — PostgreSQL
+
+The local Codex / ChatGPT bridge is optional and adds one extra container only when enabled.
+
 You need:
 
 - Docker + Docker Compose
@@ -20,14 +27,14 @@ You need:
 
 Download `docker-compose.yml` and copy `.env.example` to `.env`.
 
-For a normal installation you only need to fill in:
+For a normal installation you only need:
 
 ```env
 FULLWORTH_DOMAIN=finance.example.com
 FULLWORTH_SECRET=use-a-long-random-secret-from-your-password-manager
 ```
 
-Use a random value of at least 32 characters. Keep `FULLWORTH_SECRET` safe and stable; it protects the database connection, internal services and encrypted FullWorth data.
+Use a random value of at least 32 characters. Keep `FULLWORTH_SECRET` safe and stable; it protects the database connection, internal application boundaries and encrypted FullWorth data.
 
 Start FullWorth:
 
@@ -50,6 +57,19 @@ Open `https://finance.example.com`.
 
 On a fresh installation, registration is available for the **first account only**. That account becomes the instance administrator. After it is created, public registration closes automatically.
 
+## Optional Codex / ChatGPT bridge
+
+The normal stack does not start the Codex container.
+
+To enable local Codex / ChatGPT access:
+
+```bash
+docker compose --profile codex pull
+docker compose --profile codex up -d
+```
+
+Without that profile, FullWorth still works normally and can use other configured AI providers.
+
 ## Enable Banking
 
 Bank access is optional. FullWorth also works with manual accounts and imports.
@@ -71,14 +91,21 @@ https://finance.example.com/connect/enable-banking/callback
 
 ## Updates
 
-To update to the newest stable images:
+Update the normal 2-container stack with:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-To stay on a specific version, set for example:
+If you use Codex:
+
+```bash
+docker compose --profile codex pull
+docker compose --profile codex up -d
+```
+
+To stay on a specific version:
 
 ```env
 FULLWORTH_VERSION=1.4.0
@@ -88,14 +115,16 @@ Normal version tags automatically use the correct architecture on both **AMD64**
 
 ## Backup
 
-Back up these Docker volumes:
+Always back up:
 
 - `fullworth-postgres-data`
 - `fullworth-purchases-data`
 - `fullworth-web-dataprotection`
-- `fullworth-codex-data`
+- your `.env`
 
-Also back up your `.env`. Losing `FULLWORTH_SECRET` can make encrypted data inaccessible.
+If you use the optional Codex bridge, also back up `fullworth-codex-data`.
+
+Losing `FULLWORTH_SECRET` can make encrypted data inaccessible.
 
 ## License
 
