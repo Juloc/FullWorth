@@ -5,7 +5,7 @@ public sealed class TypographyAppearanceTests
     [Fact]
     public void AppCssUsesSharedTypographyTokensAndFontPresets()
     {
-        var css = File.ReadAllText(WebRootFile("app.css"));
+        var css = File.ReadAllText(WebRootFile("styles", "tokens.css")) + File.ReadAllText(WebRootFile("styles", "reset.css"));
 
         Assert.Contains("--font-size-base:13px", css);
         Assert.Contains("--font-weight-base:400", css);
