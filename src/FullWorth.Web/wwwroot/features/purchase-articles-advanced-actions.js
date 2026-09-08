@@ -4,11 +4,30 @@
 
 const lang = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
 const text = (de, en) => lang() === 'de' ? de : en;
-const spaceId = () => localStorage.getItem('finance.space') || '';
-const bff = path => `/bff/backend/${String(path).replace(/^\//, '')}${String(path).includes('?') ? '&' : '?'}fullWorthSpaceId=${encodeURIComponent(spaceId())}`;
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, money, fmtDate, showError }) {
+function promptText({ makeDialog, esc, title, label }) {
+  return new Promise(resolve => {
+    const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(title)}</h2><button type="button" data-close>×</button></div><label>${esc(label)}<input name="value" required autofocus></label><div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen','Cancel'))}</button><button type="submit">${esc(text('Anlegen','Create'))}</button></div></form>`);
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      if (dlg.open) dlg.close();
+    };
+    dlg.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => finish(null)));
+    dlg.querySelector('form').addEventListener('submit', event => {
+      event.preventDefault();
+      const value = String(new FormData(event.currentTarget).get('value') || '').trim();
+      if (value) finish(value);
+    });
+    dlg.addEventListener('close', () => finish(null), { once: true });
+    dlg.showModal();
+  });
+}
+
+export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, money, fmtDate, showError, bffUrl }) {
   const head = panel?.querySelector('.panel-head');
   if (!head || head.querySelector('[data-pa-secondary-actions]')) return;
   const actions = document.createElement('div');
@@ -38,7 +57,7 @@ export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, mon
     dlg.querySelector('[data-close]').onclick = () => dlg.close();
     dlg.querySelectorAll('[data-format]').forEach(link => {
       const format = link.dataset.format;
-      link.href = bff(`api/purchases/export?format=${encodeURIComponent(format)}&includeDocuments=${format === 'zip' ? 'true' : 'false'}`);
+      link.href = bffUrl(`api/purchases/export?format=${encodeURIComponent(format)}&includeDocuments=${format === 'zip' ? 'true' : 'false'}`);
       link.target = '_blank';
       link.rel = 'noopener';
     });
@@ -46,16 +65,16 @@ export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, mon
   };
 }
 
-export async function mountPurchaseAdvancedActions({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh }) {
+export async function mountPurchaseAdvancedActions({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh, confirmAction }) {
   if (!dlg || dlg.dataset.paAdvancedMounted === 'true') return;
   dlg.dataset.paAdvancedMounted = 'true';
 
   await mountTags({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh });
-  mountReturns({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh });
-  mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh });
+  mountReturns({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh, confirmAction });
+  mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh, confirmAction });
 }
 
-async function mountTags({ dlg, purchase, writable, api, esc, showError, refresh }) {
+async function mountTags({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh }) {
   const side = dlg.querySelector('.pa-work-side');
   if (!side) return;
   const card = document.createElement('div');
@@ -84,7 +103,7 @@ async function mountTags({ dlg, purchase, writable, api, esc, showError, refresh
         catch (error) { showError(dlg, error.message); }
       });
       card.querySelector('[data-tag-create]')?.addEventListener('click', async () => {
-        const name = window.prompt(text('Name des neuen Tags', 'New tag name'))?.trim();
+        const name = await promptText({ makeDialog, esc, title: text('Neuer Tag', 'New tag'), label: text('Name', 'Name') });
         if (!name) return;
         try {
           const created = await api('api/tags', json('POST', { name }));
@@ -97,7 +116,7 @@ async function mountTags({ dlg, purchase, writable, api, esc, showError, refresh
   await render();
 }
 
-function mountReturns({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh }) {
+function mountReturns({ dlg, purchase, writable, api, esc, makeDialog, money, fmtDate, showError, refresh, confirmAction }) {
   if (!writable) return;
   for (const item of purchase.items || []) {
     const row = dlg.querySelector(`[data-item-id="${item.id}"]`);
@@ -109,11 +128,11 @@ function mountReturns({ dlg, purchase, writable, api, esc, makeDialog, money, fm
     button.dataset.itemReturns = item.id;
     button.textContent = text('Retoure', 'Return');
     actionHost.prepend(button);
-    button.onclick = () => openReturnsDialog({ parent: dlg, purchase, item, api, esc, makeDialog, money, fmtDate, showError, refresh });
+    button.onclick = () => openReturnsDialog({ parent: dlg, purchase, item, api, esc, makeDialog, money, fmtDate, showError, refresh, confirmAction });
   }
 }
 
-async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog, money, fmtDate, showError, refresh }) {
+async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog, money, fmtDate, showError, refresh, confirmAction }) {
   const [returns, txData] = await Promise.all([
     api(`api/purchases/${purchase.id}/items/${item.id}/returns`),
     api('api/transactions?direction=income&limit=200').catch(() => ({ items: [] }))
@@ -127,7 +146,7 @@ async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog,
     <label>${esc(text('Notiz', 'Note'))}<input name="note"></label><div class="dialog-actions"><button type="button" data-close>${esc(text('Schließen', 'Close'))}</button><button type="submit" ${remaining <= 0 ? 'disabled' : ''}>${esc(text('Retoure speichern', 'Save return'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
   dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelectorAll('[data-delete-return]').forEach(button => button.onclick = async () => {
-    if (!window.confirm(text('Retoure entfernen? Eine verknüpfte Refund-Zuordnung wird ebenfalls gelöst.', 'Remove return? A linked refund mapping will also be cleared.'))) return;
+    if (!await confirmAction(text('Retoure entfernen? Eine verknüpfte Refund-Zuordnung wird ebenfalls gelöst.', 'Remove return? A linked refund mapping will also be cleared.'))) return;
     try {
       await api(`api/purchases/${purchase.id}/items/${item.id}/returns/${button.dataset.deleteReturn}`, { method: 'DELETE' });
       dlg.close();
@@ -152,7 +171,7 @@ async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog,
   dlg.showModal();
 }
 
-function mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh }) {
+function mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showError, refresh, confirmAction }) {
   const documentsHost = dlg.querySelector('[data-documents]');
   if (!documentsHost) return;
   const card = documentsHost.closest('.pa-card');
@@ -197,7 +216,7 @@ function mountDocuments({ dlg, purchase, writable, api, esc, makeDialog, showErr
       } catch (error) { showError(dlg, error.message); }
     });
     actions.querySelector('[data-document-delete]')?.addEventListener('click', async () => {
-      if (!window.confirm(text('Dokument wirklich löschen? Der Kauf und die Bankbuchung bleiben bestehen.', 'Delete this document? The purchase and bank transaction remain.'))) return;
+      if (!await confirmAction(text('Dokument wirklich löschen? Der Kauf und die Bankbuchung bleiben bestehen.', 'Delete this document? The purchase and bank transaction remain.'))) return;
       try { await api(`api/purchases/${purchase.id}/documents/${doc.id}`, { method: 'DELETE' }); await refresh(); }
       catch (error) { showError(dlg, error.message); }
     });
@@ -234,7 +253,7 @@ function openApplyExtraction({ runsDialog, parent, purchase, runId, api, esc, ma
   dlg.showModal();
 }
 
-export async function mountProductAdvancedActions({ dlg, product, api, esc, makeDialog, showError, reload }) {
+export async function mountProductAdvancedActions({ dlg, product, api, esc, makeDialog, showError, confirmAction, reload }) {
   if (!dlg || dlg.dataset.paProductAdvancedMounted === 'true') return;
   dlg.dataset.paProductAdvancedMounted = 'true';
   const root = dlg.querySelector('.pa-product-detail');
@@ -269,11 +288,11 @@ export async function mountProductAdvancedActions({ dlg, product, api, esc, make
     } catch (error) { showError(dlg, error.message); }
   };
   card.querySelector('[data-product-archive]').onclick = async () => {
-    if (!window.confirm(product.isArchived ? text('Produkt wiederherstellen?', 'Restore product?') : text('Produkt archivieren? Historische Käufe bleiben unverändert.', 'Archive product? Historical purchases remain unchanged.'))) return;
+    if (!await confirmAction(product.isArchived ? text('Produkt wiederherstellen?', 'Restore product?') : text('Produkt archivieren? Historische Käufe bleiben unverändert.', 'Archive product? Historical purchases remain unchanged.'))) return;
     try { await api(`api/products/${product.id}${product.isArchived ? '/restore' : ''}`, { method: product.isArchived ? 'POST' : 'DELETE' }); await reloadSelf(); }
     catch (error) { showError(dlg, error.message); }
   };
-  card.querySelector('[data-product-merge]').onclick = () => openProductMerge({ parent: dlg, product, api, esc, makeDialog, showError, reload });
+  card.querySelector('[data-product-merge]').onclick = () => openProductMerge({ parent: dlg, product, api, esc, makeDialog, showError, confirmAction, reload });
 
   aliases.querySelector('[data-alias-add]').onclick = async () => {
     const input = aliases.querySelector('[data-alias-new]'); const alias = input.value.trim(); if (!alias) return;
@@ -300,7 +319,7 @@ export async function mountProductAdvancedActions({ dlg, product, api, esc, make
   });
 }
 
-async function openProductMerge({ parent, product, api, esc, makeDialog, showError, reload }) {
+async function openProductMerge({ parent, product, api, esc, makeDialog, showError, confirmAction, reload }) {
   const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('Produkt zusammenführen', 'Merge product'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Der aktuelle Datensatz wird Quelle und danach archiviert. Historische Artikel, Preise, Barcodes und Aliase werden auf das Ziel umgehängt.', 'The current record is the source and is archived afterwards. Historical items, prices, barcodes and aliases are moved to the target.'))}</p><div class="pa-toolbar"><input type="search" data-query placeholder="${esc(text('Zielprodukt suchen…', 'Search target product…'))}"><button type="button" data-search>${esc(text('Suchen', 'Search'))}</button></div><div data-results class="pa-list"></div><div class="pa-dialog-error" data-error hidden></div></div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   const load = async () => {
@@ -310,7 +329,7 @@ async function openProductMerge({ parent, product, api, esc, makeDialog, showErr
       const rows = (data.items || []).filter(x => x.id !== product.id);
       dlg.querySelector('[data-results]').innerHTML = rows.map(row => `<button type="button" class="pa-picker-row" data-target="${row.id}"><div><strong>${esc(row.canonicalName)}</strong><span>${esc(row.brand || '')}</span></div></button>`).join('') || `<div class="state-empty">${esc(text('Kein Zielprodukt gefunden.', 'No target product found.'))}</div>`;
       dlg.querySelectorAll('[data-target]').forEach(button => button.onclick = async () => {
-        if (!window.confirm(text('Produkte endgültig zusammenführen? Historische Käufe bleiben erhalten, die Produktidentität wird aber vereinheitlicht.', 'Merge products? Historical purchases remain, but product identity is unified.'))) return;
+        if (!await confirmAction(text('Produkte endgültig zusammenführen? Historische Käufe bleiben erhalten, die Produktidentität wird aber vereinheitlicht.', 'Merge products? Historical purchases remain, but product identity is unified.'))) return;
         try {
           await api('api/products/merge', json('POST', { sourceProductId: product.id, targetProductId: button.dataset.target, preferSourceName: false, preferSourceBrand: false, preferSourceCategory: false }));
           dlg.close(); parent.close(); await reload(button.dataset.target);
@@ -326,7 +345,9 @@ async function openProductMerge({ parent, product, api, esc, makeDialog, showErr
 
 export async function scanBarcode({ makeDialog, esc, showError }) {
   if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-    window.alert(text('Barcode-Scan wird von diesem Browser nicht unterstützt. Du kannst den Code weiterhin manuell eingeben.', 'Barcode scanning is not supported by this browser. You can still enter the code manually.'));
+    const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('Barcode scannen', 'Scan barcode'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Barcode-Scan wird von diesem Browser nicht unterstützt. Du kannst den Code weiterhin manuell eingeben.', 'Barcode scanning is not supported by this browser. You can still enter the code manually.'))}</p></div>`);
+    dlg.querySelector('[data-close]').onclick = () => dlg.close();
+    dlg.showModal();
     return null;
   }
   let formats = [];
