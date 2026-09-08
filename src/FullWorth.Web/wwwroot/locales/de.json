@@ -202,7 +202,9 @@
     "bankDebtor": "Zahlender",
     "bankAccount": "Gegenkonto",
     "bankCode": "Bank-Buchungscode",
-    "bankRemittance": "Verwendungszweck"
+    "bankRemittance": "Verwendungszweck",
+    "directionLabel": "Richtung",
+    "flagsLabel": "Filter"
   },
   "purchases": {
     "title": "Käufe",
