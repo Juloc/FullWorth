@@ -6,6 +6,20 @@ import { isPrivate } from './privacy.js';
 let locale = 'de-DE';
 export function setMoneyLocale(lang) { locale = lang === 'en' ? 'en-US' : 'de-DE'; }
 
+export const MoneyVariant = Object.freeze({
+  Neutral: 'neutral',
+  Income: 'income',
+  Warning: 'warning',
+  Danger: 'danger',
+  Debt: 'debt',
+  Muted: 'muted'
+});
+
+export function moneyClass(variant = MoneyVariant.Neutral, extra = '') {
+  const resolved = Object.values(MoneyVariant).includes(variant) ? variant : MoneyVariant.Neutral;
+  return ['amount', `money-${resolved}`, extra].filter(Boolean).join(' ');
+}
+
 // A stable mask (not a CSS blur) per spec §5; keeps the currency symbol so layout stays stable.
 function currencySymbol(currency) {
   try {
