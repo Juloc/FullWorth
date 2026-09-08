@@ -1,8 +1,8 @@
 # FullWorth AI Autopilot — Deployable Step-by-Step Rollout
 
 Completed: **Deploy 0 — Baseline and guardrails**, **Deploy 1 — FinancialContext foundation**, **Deploy 2 — FinancialSignal schema and API**, **Deploy 3 — first deterministic detectors in shadow mode**, and **Deploy 4 — transfer and contract signals in shadow mode**.  
-Completed through: **Deploy 5 — read-only "Wichtig für dich" insights**.  
-Current implementation: **Deploy 6 — contract merge preview only**.
+Completed through: **Deploy 6 — contract merge preview only**.  
+Current implementation: **Deploy 7 — explicit contract merge execution**.
 
 This plan turns the AI Autopilot implementation into small releases that can be deployed between every major step.
 
