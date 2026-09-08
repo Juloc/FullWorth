@@ -107,9 +107,6 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            // Legacy patch-layer migration allow-list. This list may only shrink.
-            "features/compensation-nav.js",
-
             // Shared infrastructure observers are explicitly reviewed and scoped.
             "ui/accessibility-release.js",
             "ui/appearance.js",
