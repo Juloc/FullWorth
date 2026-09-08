@@ -4,6 +4,10 @@ namespace FullWorth.Backend.Modules.Compensation;
 /// The German payroll/net calculation. There is exactly one formula: every statutory figure it needs comes from
 /// <see cref="TaxYearParameters"/>, resolved once per calculation from <see cref="CompensationProfileInput.TaxYear"/>.
 /// A snapshot for 2019 is therefore computed with 2019 law and stays stable when later years change.
+/// The same single formula also covers a partial year: <see cref="CompensationProfileInput.EmploymentStart"/>
+/// and <see cref="CompensationProfileInput.EmploymentEnd"/> only decide how many of the twelve months it
+/// charges, they never fork into a second calculation. See <see cref="WageTaxForPaidMonths"/> for the wage-tax
+/// treatment of a partial year.
 /// </summary>
 public static class GermanCompensationCalculator
 {
@@ -20,8 +24,15 @@ public static class GermanCompensationCalculator
     {
         Validate(input);
         var year = TaxYearTable.Resolve(input);
-        var raw = CalculateRaw(input, year);
-        var plus100 = CalculateRaw(input with { AnnualGross = input.AnnualGross + 100m }, year);
+
+        // Beschäftigungszeitraum: how much of this calendar year the employment actually covers. A profile
+        // without a period yields exactly 12m, so it is calculated bit-for-bit as it was before this existed
+        // and every stored historical snapshot stays stable.
+        var monthsEmployed = EmployedMonthsInYear(input, year);
+        var employmentShare = monthsEmployed / 12m;
+
+        var raw = CalculateRaw(input, year, monthsEmployed);
+        var plus100 = CalculateRaw(input with { AnnualGross = input.AnnualGross + 100m }, year, monthsEmployed);
         var marginal = RoundMoney(plus100.CashNetAnnual - raw.CashNetAnnual);
 
         // "Netto normaler Monat" must reflect a single ordinary payslip: the regular monthly salary taxed on a
@@ -29,54 +40,72 @@ public static class GermanCompensationCalculator
         // that only move the yearly average, not a normal month). The regular monthly gross is the contractual
         // annual gross spread over the actual number of salary payments; twelve of those make the ordinary tax
         // year. Recurring monthly items (company car, bAV, benefits) are kept so they still count every month.
-        // This makes the regular-month net independent of the bonus and of the number of salary payments.
+        // This makes the regular-month net independent of the bonus and of the number of salary payments —
+        // and, by passing a full 12 months on purpose, also of the Beschäftigungszeitraum: a normal month is a
+        // normal month whether the year had four of them or twelve.
         var salaryPayments = input.SalaryPaymentsPerYear is >= 12 and <= 14 ? input.SalaryPaymentsPerYear : 12;
         var regularMonthlyBase = RoundMoney(input.AnnualGross * 12m / salaryPayments);
-        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m, OneOffPayments = null }, year);
+        var regularRaw = CalculateRaw(
+            input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m, OneOffPayments = null }, year, 12m);
         var regularMonthlyNet = RoundMoney(regularRaw.CashNetAnnual / 12m);
-        // "Ø Netto pro Monat" spreads the FULL annual net (bonus + every salary payment) evenly over 12 months.
-        var averageMonthlyNet = RoundMoney(raw.CashNetAnnual / 12m);
+        // "Ø Netto pro Monat" spreads the year's FULL net (bonus, every salary payment and every one-off) over
+        // the months actually employed — NOT over a fixed 12. Dividing a four-month apprenticeship year by
+        // twelve would report a monthly income that never existed; dividing by the four employed months answers
+        // the question the number is asked for ("what did I have per month back then"). For a full year the
+        // divisor is 12, so an ordinary profile is unchanged.
+        var averageMonthlyNet = monthsEmployed <= 0m ? 0m : RoundMoney(raw.CashNetAnnual / monthsEmployed);
 
         var noCarInput = input with { CompanyCar = (input.CompanyCar ?? new CompanyCarInput()) with { Enabled = false } };
-        var noCarRaw = CalculateRaw(noCarInput, year);
+        var noCarRaw = CalculateRaw(noCarInput, year, monthsEmployed);
         var carCashImpact = RoundMoney(noCarRaw.CashNetAnnual - raw.CashNetAnnual);
 
         var car = input.CompanyCar ?? new CompanyCarInput();
         var pension = input.OccupationalPension ?? new OccupationalPensionInput();
+        // Every "…Annual" figure below is a monthly amount multiplied by the months actually employed, so it
+        // reports what the year really carried instead of a full twelve months of it.
         var benefits = (input.Benefits ?? Array.Empty<CompensationBenefitInput>())
             .Select(b => new BenefitAnalysis(
                 b.Name.Trim(),
-                RoundMoney(b.EmployerCostMonthly * 12m),
-                RoundMoney(b.PersonalValueMonthly * 12m),
-                RoundMoney(b.TaxableBenefitMonthly * 12m),
-                RoundMoney(b.EmployeeCostMonthly * 12m)))
+                RoundMoney(b.EmployerCostMonthly * monthsEmployed),
+                RoundMoney(b.PersonalValueMonthly * monthsEmployed),
+                RoundMoney(b.TaxableBenefitMonthly * monthsEmployed),
+                RoundMoney(b.EmployeeCostMonthly * monthsEmployed)))
             .ToArray();
 
-        var carAlternative = car.Enabled ? Math.Max(0m, car.PrivateAlternativeCostMonthly * 12m) : 0m;
+        var carAlternative = car.Enabled ? Math.Max(0m, car.PrivateAlternativeCostMonthly * monthsEmployed) : 0m;
         var carEffectiveValue = car.Enabled ? Math.Max(0m, carAlternative - carCashImpact) : 0m;
         var carAnalysis = new CompanyCarAnalysis(
-            RoundMoney(raw.CarTaxableAnnual / 12m),
+            // The monthly geldwerter Vorteil of the car itself does not depend on how long the year was.
+            RoundMoney(CompanyCarTaxableBenefitAnnual(car) / 12m),
             RoundMoney(raw.CarTaxableAnnual),
             RoundMoney(raw.CarEmployeeCostAnnual),
-            RoundMoney(car.Enabled ? car.EmployerCostMonthly * 12m : 0m),
+            RoundMoney(car.Enabled ? car.EmployerCostMonthly * monthsEmployed : 0m),
             RoundMoney(carAlternative),
             RoundMoney(carCashImpact),
             RoundMoney(carEffectiveValue));
 
-        var bavEmployeeAnnual = Math.Max(0m, pension.EmployeeContributionMonthly * 12m);
-        var bavEmployerAnnual = Math.Max(0m, pension.EmployerContributionMonthly * 12m);
+        var bavEmployeeAnnual = Math.Max(0m, pension.EmployeeContributionMonthly * monthsEmployed);
+        var bavEmployerAnnual = Math.Max(0m, pension.EmployerContributionMonthly * monthsEmployed);
         var noBavRaw = CalculateRaw(input with
         {
             OccupationalPension = pension with { EmployeeContributionMonthly = 0m, EmployerContributionMonthly = 0m }
-        }, year);
+        }, year, monthsEmployed);
         var netSacrifice = Math.Max(0m, noBavRaw.CashNetAnnual - raw.CashNetAnnual);
         var totalInvested = bavEmployeeAnnual + bavEmployerAnnual;
-        var projected = ProjectRecurringAnnualContribution(totalInvested, pension.ProjectionYears, pension.ExpectedAnnualReturnPercent);
+        // The projection answers "what if I keep paying this every year", so it uses the full twelve-month
+        // contribution rather than a partial year's share of it.
+        var projected = ProjectRecurringAnnualContribution(
+            Math.Max(0m, (pension.EmployeeContributionMonthly + pension.EmployerContributionMonthly) * 12m),
+            pension.ProjectionYears,
+            pension.ExpectedAnnualReturnPercent);
         var pensionAnalysis = new OccupationalPensionAnalysis(
             RoundMoney(bavEmployeeAnnual),
             RoundMoney(bavEmployerAnnual),
-            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavTaxFreeLimit)),
-            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavSocialFreeLimit)),
+            // §3 Nr. 63 EStG / §1 SvEV limits are annual amounts that monthly payroll applies as 1/12 per
+            // month, so a partial year gets its proportional share of them — the same pro-rating the payroll
+            // base below uses.
+            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavTaxFreeLimit * employmentShare)),
+            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavSocialFreeLimit * employmentShare)),
             RoundMoney(netSacrifice),
             RoundMoney(totalInvested),
             netSacrifice <= 0m ? 0m : Math.Round(totalInvested / netSacrifice, 3),
@@ -88,18 +117,22 @@ public static class GermanCompensationCalculator
         var personalBenefits = benefits.Sum(b => b.PersonalValueAnnual) + carAlternative + totalInvested;
         var totalEmployerCost = raw.EmployerCostAnnual;
         var fullWorth = raw.CashNetAnnual + personalBenefits;
-        var workingHours = EstimateAnnualWorkingHours(input.WeeklyHours, input.VacationDays);
+        // Hours worked shrink with the employment period as well, so the €/hour figure stays comparable
+        // between a partial and a full year instead of collapsing.
+        var workingHours = EstimateAnnualWorkingHours(input.WeeklyHours, input.VacationDays) * employmentShare;
 
         return new CompensationCalculationResult(
             input.Name.Trim(),
+            Math.Round(monthsEmployed, 2, MidpointRounding.AwayFromZero),
+            Math.Round(salaryPayments * employmentShare, 2, MidpointRounding.AwayFromZero),
             RoundMoney(input.AnnualGross),
             RoundMoney(input.AnnualBonus),
-            RoundMoney(input.AnnualGross + input.AnnualBonus),
+            RoundMoney(raw.CashGrossAnnual),
             RoundMoney(raw.CashNetAnnual),
             regularMonthlyNet,
             averageMonthlyNet,
-            RoundMoney((input.AnnualGross + input.AnnualBonus) - raw.CashNetAnnual),
-            input.AnnualGross + input.AnnualBonus <= 0m ? 0m : Math.Round(raw.CashNetAnnual / (input.AnnualGross + input.AnnualBonus) * 100m, 2),
+            RoundMoney(raw.CashGrossAnnual - raw.CashNetAnnual),
+            raw.CashGrossAnnual <= 0m ? 0m : Math.Round(raw.CashNetAnnual / raw.CashGrossAnnual * 100m, 2),
             RoundMoney(totalEmployerCost),
             RoundMoney(personalBenefits),
             RoundMoney(fullWorth),
@@ -234,12 +267,24 @@ public static class GermanCompensationCalculator
         return RoundMoney(monthly * 12m);
     }
 
-    private static RawResult CalculateRaw(CompensationProfileInput input, TaxYearParameters year)
+    /// <summary>
+    /// The one and only payroll formula. Everything recurring is first expressed as the full twelve-month
+    /// ("hochgerechneter") year — which is the basis German monthly payroll actually taxes — and then reduced
+    /// to <paramref name="months"/>, the months of the calendar year actually paid. One-off special payments
+    /// are never reduced: they belong to the year in full.
+    /// </summary>
+    /// <param name="months">Paid months of the calendar year; 12 = the whole year (the default for a profile
+    /// without a Beschäftigungszeitraum), and at 12 every line below collapses to what it computed before.</param>
+    private static RawResult CalculateRaw(CompensationProfileInput input, TaxYearParameters year, decimal months)
     {
         var car = input.CompanyCar ?? new CompanyCarInput();
         var pension = input.OccupationalPension ?? new OccupationalPensionInput();
         var benefits = input.Benefits ?? Array.Empty<CompensationBenefitInput>();
 
+        var monthsPaid = Math.Clamp(months, 0m, 12m);
+        var share = monthsPaid / 12m;
+
+        // Full-year figures: what twelve months of this contract look like.
         var cashGross = Math.Max(0m, input.AnnualGross + input.AnnualBonus);
         var carTaxable = CompanyCarTaxableBenefitAnnual(car);
         var otherTaxableBenefits = benefits.Sum(b => Math.Max(0m, b.TaxableBenefitMonthly) * 12m);
@@ -249,28 +294,37 @@ public static class GermanCompensationCalculator
 
         // One-off special payments for the year (Weihnachtsgeld, Corona-Prämie, …). Each can be independently
         // tax-free and/or SV-free, so a tax- and SV-free payment reaches net in full while a normal one is
-        // taxed and charged like the rest of the cash gross.
+        // taxed and charged like the rest of the cash gross. They are a fixed amount for the year, so they are
+        // NOT pro-rated by the employment period.
         var oneOff = input.OneOffPayments ?? Array.Empty<OneOffPaymentInput>();
         var oneOffTotal = oneOff.Sum(p => Math.Max(0m, p.Amount));
         var oneOffTaxable = oneOff.Where(p => p.Taxable).Sum(p => Math.Max(0m, p.Amount));
         var oneOffSocial = oneOff.Where(p => p.SocialInsuranceLiable).Sum(p => Math.Max(0m, p.Amount));
 
-        var taxPayrollBase = Math.Max(0m, cashGross + oneOffTaxable + carTaxable + otherTaxableBenefits - taxExemptBav);
-        var socialPayrollBase = Math.Max(0m, cashGross + oneOffSocial + carTaxable + otherTaxableBenefits - socialExemptBav);
-        var social = SocialInsurance(socialPayrollBase, input, year);
-        var tax = WageTax(taxPayrollBase, input, year);
+        var recurringTaxBase = Math.Max(0m, cashGross + carTaxable + otherTaxableBenefits - taxExemptBav);
+        var recurringSocialBase = Math.Max(0m, cashGross + carTaxable + otherTaxableBenefits - socialExemptBav);
 
-        var carEmployeeCost = car.Enabled ? Math.Max(0m, car.EmployeeContributionMonthly * 12m) : 0m;
-        var otherEmployeeCosts = benefits.Sum(b => Math.Max(0m, b.EmployeeCostMonthly) * 12m);
-        var cashNet = cashGross + oneOffTotal - bavEmployee - carEmployeeCost - otherEmployeeCosts
+        // Social insurance is linear up to the Beitragsbemessungsgrenze, and payroll applies that ceiling per
+        // month (1/12 of the annual BBG). Scaling base AND ceiling by the same share therefore reproduces
+        // monthly payroll exactly: N paid months carry N/12 of a full year's contributions, and a one-off on
+        // top is charged against the remaining proportional ceiling.
+        var social = SocialInsurance(recurringSocialBase * share + oneOffSocial, input, year, monthsPaid);
+        var tax = WageTaxForPaidMonths(recurringTaxBase, oneOffTaxable, share, input, year);
+
+        var carEmployeeCost = (car.Enabled ? Math.Max(0m, car.EmployeeContributionMonthly * 12m) : 0m) * share;
+        var otherEmployeeCosts = benefits.Sum(b => Math.Max(0m, b.EmployeeCostMonthly) * 12m) * share;
+        var cashGrossPaid = cashGross * share;
+        var bavEmployeePaid = bavEmployee * share;
+        var cashNet = cashGrossPaid + oneOffTotal - bavEmployeePaid - carEmployeeCost - otherEmployeeCosts
             - social.TotalAnnual - tax.EstimatedIncomeTaxAnnual - tax.EstimatedSolidaritySurchargeAnnual - tax.EstimatedChurchTaxAnnual;
 
-        var employerBenefitCosts = benefits.Sum(b => Math.Max(0m, b.EmployerCostMonthly) * 12m);
-        var employerCarCost = car.Enabled ? Math.Max(0m, car.EmployerCostMonthly * 12m) : 0m;
-        var employerBav = Math.Max(0m, pension.EmployerContributionMonthly * 12m);
-        var employerCost = cashGross + oneOffTotal + social.EmployerTotalAnnual + employerBav + employerCarCost + employerBenefitCosts;
+        var employerBenefitCosts = benefits.Sum(b => Math.Max(0m, b.EmployerCostMonthly) * 12m) * share;
+        var employerCarCost = (car.Enabled ? Math.Max(0m, car.EmployerCostMonthly * 12m) : 0m) * share;
+        var employerBav = Math.Max(0m, pension.EmployerContributionMonthly * 12m) * share;
+        var employerCost = cashGrossPaid + oneOffTotal + social.EmployerTotalAnnual + employerBav + employerCarCost + employerBenefitCosts;
 
         return new RawResult(
+            RoundMoney(cashGrossPaid),
             RoundMoney(cashNet),
             RoundMoney(employerCost),
             tax.EstimatedTaxableIncomeAnnual,
@@ -278,8 +332,96 @@ public static class GermanCompensationCalculator
             tax.EstimatedSolidaritySurchargeAnnual,
             tax.EstimatedChurchTaxAnnual,
             social,
-            carTaxable,
-            carEmployeeCost);
+            RoundMoney(carTaxable * share),
+            RoundMoney(carEmployeeCost));
+    }
+
+    /// <summary>
+    /// The year's wage tax, split the way §39b EStG splits it — this is the part where a partial year is NOT
+    /// simply "the full-year tax scaled down by the annual amount earned":
+    /// <list type="bullet">
+    /// <item>Laufender Arbeitslohn (§39b Abs. 2): every paid month is taxed on an ANNUALISED basis — the
+    /// month's pay projected onto a full year, tax looked up there, one twelfth withheld. So N paid months
+    /// carry exactly N/12 of the wage tax of a full year at that salary, which is what
+    /// <c>recurring × share</c> below is. Taxing the part-year TOTAL as if it were the annual income (the
+    /// Einkommensteuer view) would be far cheaper — an apprentice earning 4 × 1.000 € would land under the
+    /// Grundfreibetrag — but that is not what the payslip does; the employee only gets that difference back
+    /// later through the Einkommensteuererklärung.</item>
+    /// <item>Sonstige Bezüge (§39b Abs. 3): a one-off payment is taxed as the difference between the year's
+    /// wage tax with and without it, on the wage expected in that calendar year — i.e. on the already
+    /// pro-rated base, not on the annualised one.</item>
+    /// </list>
+    /// IMPLEMENTED: the payroll-correct withholding view (monthly annualisation, proportional treatment of
+    /// annual allowances, NO Lohnsteuer-Jahresausgleich and no year-end assessment). DIRECTION OF ERROR for a
+    /// partial year: the reported tax is the tax actually withheld, which is HIGHER than the tax finally owed,
+    /// so the partial year's net is on the conservative (low) side by roughly the refund the tax return would
+    /// produce. Modelling that refund is an Einkommensteuer calculation, not a payslip, and would make the
+    /// figure incomparable to the payslips this profile is built from.
+    /// At <c>share == 1</c> both parts add up to exactly one <see cref="WageTax(decimal, CompensationProfileInput, TaxYearParameters)"/>
+    /// call on the whole base, so a full year — and therefore every stored snapshot — is bit-for-bit unchanged.
+    /// </summary>
+    private static TaxBreakdown WageTaxForPaidMonths(
+        decimal recurringAnnualBase,
+        decimal oneOffTaxable,
+        decimal share,
+        CompensationProfileInput input,
+        TaxYearParameters year)
+    {
+        var recurring = WageTax(recurringAnnualBase, input, year);
+        if (oneOffTaxable <= 0m)
+            return new TaxBreakdown(
+                RoundMoney(recurring.EstimatedIncomeTaxAnnual * share),
+                RoundMoney(recurring.EstimatedSolidaritySurchargeAnnual * share),
+                RoundMoney(recurring.EstimatedChurchTaxAnnual * share),
+                RoundMoney(recurring.EstimatedTaxableIncomeAnnual * share));
+
+        var paidBase = recurringAnnualBase * share;
+        var withOneOff = WageTax(paidBase + oneOffTaxable, input, year);
+        var withoutOneOff = WageTax(paidBase, input, year);
+        return new TaxBreakdown(
+            RoundMoney(recurring.EstimatedIncomeTaxAnnual * share
+                + withOneOff.EstimatedIncomeTaxAnnual - withoutOneOff.EstimatedIncomeTaxAnnual),
+            RoundMoney(recurring.EstimatedSolidaritySurchargeAnnual * share
+                + withOneOff.EstimatedSolidaritySurchargeAnnual - withoutOneOff.EstimatedSolidaritySurchargeAnnual),
+            RoundMoney(recurring.EstimatedChurchTaxAnnual * share
+                + withOneOff.EstimatedChurchTaxAnnual - withoutOneOff.EstimatedChurchTaxAnnual),
+            RoundMoney(recurring.EstimatedTaxableIncomeAnnual * share
+                + withOneOff.EstimatedTaxableIncomeAnnual - withoutOneOff.EstimatedTaxableIncomeAnnual));
+    }
+
+    /// <summary>
+    /// The months of the profile's calendar year covered by the Beschäftigungszeitraum. No period at all means
+    /// the whole year and returns exactly 12m, which keeps every existing profile and stored snapshot on its
+    /// current numbers. Partial months follow the German payroll convention of 30 SV-Tage per month, so a whole
+    /// month always counts 1 (February included) and an entry on the 16th counts 15/30.
+    /// </summary>
+    private static decimal EmployedMonthsInYear(CompensationProfileInput input, TaxYearParameters year)
+    {
+        if (input.EmploymentStart is null && input.EmploymentEnd is null) return 12m;
+
+        // The profile's own calendar year, not the (clamped) tariff year, so a period is always judged against
+        // the year it belongs to.
+        var calendarYear = input.TaxYear ?? year.Year;
+        var yearStart = new DateOnly(calendarYear, 1, 1);
+        var yearEnd = new DateOnly(calendarYear, 12, 31);
+        var from = input.EmploymentStart is { } start && start > yearStart ? start : yearStart;
+        var to = input.EmploymentEnd is { } end && end < yearEnd ? end : yearEnd;
+        if (to < from) return 0m;
+
+        var total = 0m;
+        for (var month = 1; month <= 12; month++)
+        {
+            var monthStart = new DateOnly(calendarYear, month, 1);
+            var monthEnd = new DateOnly(calendarYear, month, DateTime.DaysInMonth(calendarYear, month));
+            var first = from > monthStart ? from : monthStart;
+            var last = to < monthEnd ? to : monthEnd;
+            if (last < first) continue;
+            var firstDay = Math.Min(first.Day, 30);
+            var lastDay = last == monthEnd ? 30 : Math.Min(last.Day, 30);
+            var days = Math.Clamp(lastDay - firstDay + 1, 0, 30);
+            total += days == 30 ? 1m : days / 30m;
+        }
+        return Math.Clamp(total, 0m, 12m);
     }
 
     private static decimal ApplyTaxClass4Factor(decimal tax, CompensationProfileInput input)
@@ -346,10 +488,14 @@ public static class GermanCompensationCalculator
         return pension + healthCareBase * (healthRate + careRate);
     }
 
-    private static SocialInsuranceBreakdown SocialInsurance(decimal annualBase, CompensationProfileInput input, TaxYearParameters year)
+    /// <param name="monthsPaid">Paid months of the year (12 = full year). The Beitragsbemessungsgrenze is a
+    /// monthly ceiling in payroll, so a partial year is capped at its proportional share of the annual one.</param>
+    private static SocialInsuranceBreakdown SocialInsurance(
+        decimal annualBase, CompensationProfileInput input, TaxYearParameters year, decimal monthsPaid)
     {
-        var rvAvBase = Math.Min(Math.Max(0m, annualBase), year.PensionCeilingAnnual(input.StateCode));
-        var kvPvBase = Math.Min(Math.Max(0m, annualBase), year.HealthCareCeilingAnnual);
+        var ceilingShare = Math.Clamp(monthsPaid, 0m, 12m) / 12m;
+        var rvAvBase = Math.Min(Math.Max(0m, annualBase), year.PensionCeilingAnnual(input.StateCode) * ceilingShare);
+        var kvPvBase = Math.Min(Math.Max(0m, annualBase), year.HealthCareCeilingAnnual * ceilingShare);
         var employeeAdditional = AdditionalHealthEmployeeRate(input, year);
         var employerAdditional = AdditionalHealthRate(input, year) - employeeAdditional;
 
@@ -468,6 +614,12 @@ public static class GermanCompensationCalculator
         if (input.Age is < 0 or > 120) throw new ArgumentOutOfRangeException(nameof(input.Age));
         if (input.TaxYear is < 1900 or > 2200) throw new ArgumentOutOfRangeException(nameof(input.TaxYear));
         if (input.BirthDate is { Year: < 1900 or > 2200 }) throw new ArgumentOutOfRangeException(nameof(input.BirthDate));
+        if (input.EmploymentStart is { Year: < 1900 or > 2200 }) throw new ArgumentOutOfRangeException(nameof(input.EmploymentStart));
+        if (input.EmploymentEnd is { Year: < 1900 or > 2200 }) throw new ArgumentOutOfRangeException(nameof(input.EmploymentEnd));
+        if (input.EmploymentStart is { } employmentStart && input.EmploymentEnd is { } employmentEnd
+            && employmentEnd < employmentStart)
+            throw new ArgumentException(
+                "EmploymentEnd must not be before EmploymentStart.", nameof(input.EmploymentEnd));
         if (input.OneOffPayments is { } oneOff && oneOff.Any(p => p.Amount < 0m))
             throw new ArgumentOutOfRangeException(nameof(input.OneOffPayments));
         if (input.ChildrenUnder25 < 0) throw new ArgumentOutOfRangeException(nameof(input.ChildrenUnder25));
@@ -482,6 +634,7 @@ public static class GermanCompensationCalculator
     private static decimal RoundMoney(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private sealed record RawResult(
+        decimal CashGrossAnnual,
         decimal CashNetAnnual,
         decimal EmployerCostAnnual,
         decimal TaxableIncomeAnnual,

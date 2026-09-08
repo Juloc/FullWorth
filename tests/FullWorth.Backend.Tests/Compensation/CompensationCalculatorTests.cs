@@ -725,6 +725,263 @@ public sealed class CompensationCalculatorTests
         Assert.Equal(currentPinned.EstimatedCashNetAnnual, current.EstimatedCashNetAnnual);
     }
 
+    // ---------------------------------------------------------------------------------------------------
+    // Beschäftigungszeitraum: a calendar year that the employment only partly covers
+    // ---------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Apprenticeship_StartingInSeptember_PaysFourMonthsNotTwelveOrThirteen()
+    {
+        // The real case: the Ausbildung starts on 01.09.2020, so 2020 has four payslips — not twelve, and not
+        // thirteen just because the contract promises a 13th salary.
+        var apprenticeship = BasicProfile(12_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 9, 1)
+        };
+
+        var partialYear = GermanCompensationCalculator.Calculate(apprenticeship);
+        var asIfFullYear = GermanCompensationCalculator.Calculate(apprenticeship with { EmploymentStart = null });
+
+        Assert.Equal(4m, partialYear.MonthsEmployedInYear);
+        Assert.Equal(4m, partialYear.SalaryPaymentsInYear);
+        Assert.NotEqual(12m, partialYear.SalaryPaymentsInYear);
+        Assert.NotEqual(13m, partialYear.SalaryPaymentsInYear);
+        Assert.Equal(4_000m, partialYear.CashGrossAnnual);
+
+        // The contractual salary LEVEL is unchanged — only the year's figures shrink.
+        Assert.Equal(12_000m, partialYear.ContractualGrossAnnual);
+        Assert.Equal(12_000m, asIfFullYear.CashGrossAnnual);
+        Assert.Equal(12m, asIfFullYear.MonthsEmployedInYear);
+        Assert.InRange(partialYear.EstimatedCashNetAnnual, asIfFullYear.EstimatedCashNetAnnual / 3m - 0.05m,
+            asIfFullYear.EstimatedCashNetAnnual / 3m + 0.05m);
+
+        // A 13th salary is pro-rated with the months worked, it is not paid out whole for a third of a year.
+        var withThirteenth = GermanCompensationCalculator.Calculate(
+            apprenticeship with { SalaryPaymentsPerYear = 13 });
+        Assert.Equal(4.33m, withThirteenth.SalaryPaymentsInYear);
+    }
+
+    [Fact]
+    public void PartialYearIncomeTax_UsesMonthlyAnnualisation_NotTheTaxOnThePartYearTotal()
+    {
+        // This is the German wage-tax subtlety of a partial year. Each of the four payslips is taxed on an
+        // ANNUALISED basis (§39b Abs. 2 EStG: the month's pay × 12), so the year withholds exactly a third of
+        // a full year's Lohnsteuer at that salary.
+        var partial = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 9, 1)
+        });
+        var fullYear = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with { TaxYear = 2020 });
+
+        Assert.InRange(
+            partial.Taxes.EstimatedIncomeTaxAnnual,
+            fullYear.Taxes.EstimatedIncomeTaxAnnual / 3m - 0.05m,
+            fullYear.Taxes.EstimatedIncomeTaxAnnual / 3m + 0.05m);
+        Assert.True(partial.Taxes.EstimatedIncomeTaxAnnual > 0m);
+
+        // …and it is decidedly NOT the tax on the 10.000 € the year actually paid: as an annual income that
+        // stays under the Grundfreibetrag and costs nothing. That gap is the refund the Einkommensteuer-
+        // erklärung produces, which this payslip-based calculator deliberately does not anticipate.
+        var taxedAsAnnualIncome = GermanCompensationCalculator.Calculate(BasicProfile(10_000m) with { TaxYear = 2020 });
+        Assert.Equal(0m, taxedAsAnnualIncome.Taxes.EstimatedIncomeTaxAnnual);
+        Assert.True(partial.Taxes.EstimatedIncomeTaxAnnual > taxedAsAnnualIncome.Taxes.EstimatedIncomeTaxAnnual);
+    }
+
+    [Fact]
+    public void MidYearExit_ChargesOnlyTheMonthsWorked()
+    {
+        var leftInJune = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentEnd = new DateOnly(2020, 6, 30)
+        });
+
+        Assert.Equal(6m, leftInJune.MonthsEmployedInYear);
+        Assert.Equal(6m, leftInJune.SalaryPaymentsInYear);
+        Assert.Equal(15_000m, leftInJune.CashGrossAnnual);
+
+        // A start and an end in the same year describe a window, not two independent rules.
+        var window = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 4, 1),
+            EmploymentEnd = new DateOnly(2020, 9, 30)
+        });
+        Assert.Equal(6m, window.MonthsEmployedInYear);
+        Assert.Equal(leftInJune.EstimatedCashNetAnnual, window.EstimatedCashNetAnnual);
+    }
+
+    [Fact]
+    public void MidMonthStart_CountsTheThirtyDayPayrollMonthFraction()
+    {
+        // 2020 is a leap year and September has 30 days; German payroll counts 30 SV-Tage per month, so
+        // entering on the 16th is half a September.
+        var midMonth = GermanCompensationCalculator.Calculate(BasicProfile(24_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 9, 16)
+        });
+
+        Assert.Equal(3.5m, midMonth.MonthsEmployedInYear);
+        Assert.Equal(7_000m, midMonth.CashGrossAnnual);
+    }
+
+    [Fact]
+    public void FullYearEmploymentPeriod_IsIdenticalToNoPeriodAtAll()
+    {
+        // The whole safety net for historical snapshots: carrying a period that happens to cover the year must
+        // not move a single figure, so a stored snapshot can only ever change if its period is really partial.
+        var profile = BasicProfile(54_000m) with
+        {
+            TaxYear = 2020,
+            SalaryPaymentsPerYear = 13,
+            AnnualBonus = 3_000m,
+            OccupationalPension = new OccupationalPensionInput(EmployeeContributionMonthly: 150m, EmployerContributionMonthly: 50m),
+            CompanyCar = new CompanyCarInput(
+                Enabled: true, ListPrice: 40_000m, TaxableListPriceFactor: 1m,
+                OneWayCommuteKm: 20m, EmployerCostMonthly: 500m, PrivateAlternativeCostMonthly: 450m),
+            Benefits = new[] { new CompensationBenefitInput("Deutschlandticket", 49m, 49m, 49m) },
+            OneOffPayments = new[] { new OneOffPaymentInput("Weihnachtsgeld", 1_500m, Month: 11) }
+        };
+
+        var noPeriod = GermanCompensationCalculator.Calculate(profile);
+        var fullYearPeriod = GermanCompensationCalculator.Calculate(profile with
+        {
+            EmploymentStart = new DateOnly(2020, 1, 1),
+            EmploymentEnd = new DateOnly(2020, 12, 31)
+        });
+        var openEndedFromJanuary = GermanCompensationCalculator.Calculate(profile with
+        {
+            EmploymentStart = new DateOnly(2020, 1, 1)
+        });
+        var startedInAnEarlierYear = GermanCompensationCalculator.Calculate(profile with
+        {
+            EmploymentStart = new DateOnly(2018, 3, 15)
+        });
+
+        Assert.Equal(12m, noPeriod.MonthsEmployedInYear);
+        Assert.Equal(Serialize(noPeriod), Serialize(fullYearPeriod));
+        Assert.Equal(Serialize(noPeriod), Serialize(openEndedFromJanuary));
+        Assert.Equal(Serialize(noPeriod), Serialize(startedInAnEarlierYear));
+    }
+
+    [Fact]
+    public void RegularMonthNet_IsIndependentOfTheEmploymentPeriod()
+    {
+        var profile = BasicProfile(42_000m) with
+        {
+            TaxYear = 2020,
+            SalaryPaymentsPerYear = 13,
+            AnnualBonus = 2_000m,
+            OccupationalPension = new OccupationalPensionInput(EmployeeContributionMonthly: 100m)
+        };
+
+        var fullYear = GermanCompensationCalculator.Calculate(profile);
+        var fromSeptember = GermanCompensationCalculator.Calculate(
+            profile with { EmploymentStart = new DateOnly(2020, 9, 1) });
+        var untilMarch = GermanCompensationCalculator.Calculate(
+            profile with { EmploymentEnd = new DateOnly(2020, 3, 31) });
+
+        // A normal payslip is a normal payslip whether the year had three, four or twelve of them.
+        Assert.Equal(fullYear.EstimatedCashNetMonthly, fromSeptember.EstimatedCashNetMonthly);
+        Assert.Equal(fullYear.EstimatedCashNetMonthly, untilMarch.EstimatedCashNetMonthly);
+        // The year's figures, on the other hand, do shrink.
+        Assert.True(fromSeptember.EstimatedCashNetAnnual < fullYear.EstimatedCashNetAnnual);
+        Assert.True(untilMarch.EstimatedCashNetAnnual < fromSeptember.EstimatedCashNetAnnual);
+    }
+
+    [Fact]
+    public void AverageMonthlyNet_DividesByTheMonthsEmployed_NotByTwelve()
+    {
+        var partial = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 9, 1)
+        });
+
+        Assert.Equal(
+            Math.Round(partial.EstimatedCashNetAnnual / 4m, 2, MidpointRounding.AwayFromZero),
+            partial.EstimatedAverageCashNetMonthly);
+        Assert.NotEqual(
+            Math.Round(partial.EstimatedCashNetAnnual / 12m, 2, MidpointRounding.AwayFromZero),
+            partial.EstimatedAverageCashNetMonthly);
+        // Twelve equal payments and no bonus: the four employed months average out to an ordinary payslip.
+        Assert.InRange(
+            partial.EstimatedAverageCashNetMonthly,
+            partial.EstimatedCashNetMonthly - 0.05m,
+            partial.EstimatedCashNetMonthly + 0.05m);
+    }
+
+    [Fact]
+    public void OneOffPayment_StaysWholeInAPartialYear_AndOutOfTheRegularMonth()
+    {
+        var partial = BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2020, 9, 1)
+        };
+        var withCorona = partial with
+        {
+            OneOffPayments = new[]
+            {
+                new OneOffPaymentInput("Corona-Prämie", 500m, Month: 12, Taxable: false, SocialInsuranceLiable: false)
+            }
+        };
+        var withChristmasPay = partial with
+        {
+            OneOffPayments = new[] { new OneOffPaymentInput("Weihnachtsgeld", 1_000m, Month: 11) }
+        };
+
+        var baseline = GermanCompensationCalculator.Calculate(partial);
+        var corona = GermanCompensationCalculator.Calculate(withCorona);
+        var christmas = GermanCompensationCalculator.Calculate(withChristmasPay);
+
+        // A one-off is an amount for the year, so it is NOT pro-rated with the employment period.
+        Assert.Equal(baseline.EstimatedCashNetAnnual + 500m, corona.EstimatedCashNetAnnual);
+        var christmasGain = christmas.EstimatedCashNetAnnual - baseline.EstimatedCashNetAnnual;
+        Assert.True(christmasGain > 0m && christmasGain < 1_000m);
+        // …and it still never reaches a normal payslip.
+        Assert.Equal(baseline.EstimatedCashNetMonthly, corona.EstimatedCashNetMonthly);
+        Assert.Equal(baseline.EstimatedCashNetMonthly, christmas.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
+    public void EmploymentPeriodOutsideTheYear_LeavesTheYearEmptyButKeepsTheContract()
+    {
+        var notYetHired = GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            TaxYear = 2020,
+            EmploymentStart = new DateOnly(2021, 1, 1)
+        });
+
+        Assert.Equal(0m, notYetHired.MonthsEmployedInYear);
+        Assert.Equal(0m, notYetHired.SalaryPaymentsInYear);
+        Assert.Equal(0m, notYetHired.CashGrossAnnual);
+        Assert.Equal(0m, notYetHired.EstimatedCashNetAnnual);
+        Assert.Equal(0m, notYetHired.EstimatedAverageCashNetMonthly);
+        Assert.Equal(0m, notYetHired.SocialInsurance.TotalAnnual);
+        Assert.Equal(0m, notYetHired.Taxes.EstimatedIncomeTaxAnnual);
+        Assert.Equal(0m, notYetHired.EffectiveNetValuePerWorkingHour);
+        // The contract itself is still described, and a normal payslip under it is still computable.
+        Assert.Equal(30_000m, notYetHired.ContractualGrossAnnual);
+        Assert.True(notYetHired.EstimatedCashNetMonthly > 0m);
+    }
+
+    [Fact]
+    public void EmploymentEndBeforeStart_IsRejected()
+    {
+        Assert.Throws<ArgumentException>(() => GermanCompensationCalculator.Calculate(BasicProfile(30_000m) with
+        {
+            EmploymentStart = new DateOnly(2020, 9, 1),
+            EmploymentEnd = new DateOnly(2020, 3, 31)
+        }));
+    }
+
+    private static string Serialize(CompensationCalculationResult result) =>
+        System.Text.Json.JsonSerializer.Serialize(result);
+
     private static CompensationProfileInput BasicProfile(decimal annualGross) => new(
         Name: "Current",
         AnnualGross: annualGross,

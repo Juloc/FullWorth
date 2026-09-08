@@ -69,6 +69,13 @@ public sealed record CompensationProfileInput(
     // surcharge), so historical snapshots stay correct instead of using today's age.
     int? TaxYear = null,
     DateOnly? BirthDate = null,
+    // Beschäftigungszeitraum: the employment period these figures belong to. Both are optional and both
+    // default to null, which means "employed for the whole calendar year" — so every profile saved before
+    // this existed keeps producing exactly the same output. When a period is set, the year's figures cover
+    // only the months it actually covers: an apprenticeship starting 01.09.2020 is four paid months in 2020,
+    // not twelve or thirteen. EmploymentEnd = null means "still employed" (open end).
+    DateOnly? EmploymentStart = null,
+    DateOnly? EmploymentEnd = null,
     CompanyCarInput? CompanyCar = null,
     OccupationalPensionInput? OccupationalPension = null,
     IReadOnlyList<CompensationBenefitInput>? Benefits = null,
@@ -122,8 +129,19 @@ public sealed record BenefitAnalysis(
 
 public sealed record CompensationCalculationResult(
     string Name,
+    // How much of the calendar year the employment covered: 12 without a Beschäftigungszeitraum, 4 for an
+    // apprenticeship starting 01.09. A month entered or left mid-month counts its fraction (30-day payroll
+    // month), so this is a decimal.
+    decimal MonthsEmployedInYear,
+    // The salary payments actually received in that year: MonthsEmployedInYear regular payslips plus the
+    // pro-rata share of a contractual 13th/14th salary (12 × 4/12 = 4,00; 13 × 4/12 = 4,33).
+    decimal SalaryPaymentsInYear,
+    // Contractual, full-year figures — the salary LEVEL, independent of the employment period, so a salary
+    // timeline still shows what the contract was worth per year.
     decimal ContractualGrossAnnual,
     decimal BonusAnnual,
+    // Everything from here on is what the calendar year actually paid: for a partial year it is the
+    // contractual figure reduced to the months employed, plus the year's one-off payments in full.
     decimal CashGrossAnnual,
     decimal EstimatedCashNetAnnual,
     decimal EstimatedCashNetMonthly,
