@@ -30,7 +30,7 @@ public sealed class AccessibilityGuardTests
     [Fact]
     public void FocusVisibleAndReducedMotionStylesExist()
     {
-        var css = Www("app.css");
+        var css = string.Concat(Www("styles", "reset.css"), Www("styles", "shell.css"), Www("styles", "components.css"), Www("app.css"));
         Assert.Contains(":focus-visible", css);
         Assert.Contains("prefers-reduced-motion", css);
     }
