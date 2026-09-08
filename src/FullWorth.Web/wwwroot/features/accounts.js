@@ -6,7 +6,7 @@ import {
   invalidateAccountPresentation,
   persistAccountVisual,
   refreshAccountPresentation
-} from './accounts-ux.js';
+} from './accounts/presentation.js';
 
 let ctx=null;
 const $=s=>document.querySelector(s);
@@ -104,7 +104,7 @@ async function renderAccountsInternal(){
     const gid=g?g.id:'';const isCollapsed=collapsed.has(gid);
     const head=document.createElement('div');head.className='row group-head';head.dataset.groupId=gid;
     // The chevron only expands/collapses; the name is a separate drill-down that opens all bookings of
-    // the group's accounts (UX rework §3). The name keeps class `group-toggle` for accounts-ux decoration.
+    // the group's accounts (UX rework §3). The name keeps class `group-toggle` for account presentation decoration.
     const toggle=()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));rerenderAccounts();};
     head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${money(total(accts),baseCur)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
     head.querySelector('[data-toggle]').addEventListener('click',toggle);
