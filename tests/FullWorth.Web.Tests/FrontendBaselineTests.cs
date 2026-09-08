@@ -20,7 +20,7 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var html = await GetAsync("/");
         var js = await GetAsync("/app.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/tokens.css");
 
         Assert.Contains("data-theme-icon=\"system\"", html);
         Assert.Contains("data-theme-icon=\"light\"", html);
