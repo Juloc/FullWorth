@@ -353,6 +353,65 @@ public sealed class CompensationCalculatorTests
             result.EstimatedCashNetMonthly);
     }
 
+    [Fact]
+    public void OneOffTaxFreePayment_AddsToAnnualNetInFull_ButLeavesRegularMonthUnchanged()
+    {
+        var baseProfile = BasicProfile(42_000m);
+        var withCorona = baseProfile with
+        {
+            OneOffPayments = new[]
+            {
+                new OneOffPaymentInput("Corona-Prämie", 500m, Month: 12, Taxable: false, SocialInsuranceLiable: false)
+            }
+        };
+
+        var baseline = GermanCompensationCalculator.Calculate(baseProfile);
+        var result = GermanCompensationCalculator.Calculate(withCorona);
+
+        // A tax- and SV-free one-off reaches the yearly net in full…
+        Assert.Equal(baseline.EstimatedCashNetAnnual + 500m, result.EstimatedCashNetAnnual);
+        // …but a normal monthly payslip is unaffected.
+        Assert.Equal(baseline.EstimatedCashNetMonthly, result.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
+    public void OneOffTaxablePayment_AddsLessThanItsGross_AndLeavesRegularMonthUnchanged()
+    {
+        var baseProfile = BasicProfile(42_000m);
+        var withChristmasPay = baseProfile with
+        {
+            OneOffPayments = new[]
+            {
+                new OneOffPaymentInput("Weihnachtsgeld", 2_000m, Month: 11, Taxable: true, SocialInsuranceLiable: true)
+            }
+        };
+
+        var baseline = GermanCompensationCalculator.Calculate(baseProfile);
+        var result = GermanCompensationCalculator.Calculate(withChristmasPay);
+
+        var netGain = result.EstimatedCashNetAnnual - baseline.EstimatedCashNetAnnual;
+        Assert.True(netGain > 0m && netGain < 2_000m); // taxed and charged, so net gain is below the gross.
+        Assert.Equal(baseline.EstimatedCashNetMonthly, result.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
+    public void HistoricalAge_FromBirthDate_DrivesTheChildlessCareSurcharge()
+    {
+        // Born mid-2000: 20 in tax year 2020 (below 23 → no surcharge), 26 in 2026 (surcharge applies).
+        var profile = BasicProfile(30_000m) with
+        {
+            ChildrenUnder25 = 0,
+            ChildlessCareSurcharge = true,
+            Age = null,
+            BirthDate = new DateOnly(2000, 6, 1)
+        };
+
+        var young = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2020 });
+        var older = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2026 });
+
+        Assert.True(older.SocialInsurance.CareAnnual > young.SocialInsurance.CareAnnual);
+    }
+
     private static CompensationProfileInput BasicProfile(decimal annualGross) => new(
         Name: "Current",
         AnnualGross: annualGross,

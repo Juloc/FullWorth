@@ -28,6 +28,19 @@ public sealed record CompensationBenefitInput(
     decimal TaxableBenefitMonthly = 0m,
     decimal EmployeeCostMonthly = 0m);
 
+/// <summary>
+/// A one-off special payment for a specific year (Weihnachtsgeld, Urlaubsgeld, Corona-Prämie, one-time
+/// bonus, …). Unlike the recurring <see cref="CompensationProfileInput.AnnualBonus"/> it can be tax-free
+/// and/or social-insurance-free (e.g. the tax- and SV-free Corona-Prämie). It only ever affects the year's
+/// Jahresnetto / average, never the "Netto normaler Monat".
+/// </summary>
+public sealed record OneOffPaymentInput(
+    string Label,
+    decimal Amount,
+    int Month = 0,
+    bool Taxable = true,
+    bool SocialInsuranceLiable = true);
+
 public sealed record CompensationProfileInput(
     string Name,
     decimal AnnualGross,
@@ -49,9 +62,17 @@ public sealed record CompensationProfileInput(
     decimal WeeklyHours = 40m,
     int VacationDays = 30,
     decimal SpouseAnnualTaxableIncome = 0m,
+    // Optional year context: the calendar year these figures apply to and the employee's birth date. When both
+    // are set the calculator uses the age reached in that year (e.g. for the childless care-insurance
+    // surcharge), so historical snapshots stay correct instead of using today's age.
+    int? TaxYear = null,
+    DateOnly? BirthDate = null,
     CompanyCarInput? CompanyCar = null,
     OccupationalPensionInput? OccupationalPension = null,
-    IReadOnlyList<CompensationBenefitInput>? Benefits = null);
+    IReadOnlyList<CompensationBenefitInput>? Benefits = null,
+    // One-off special payments for this year (Weihnachtsgeld, Urlaubsgeld, Corona-Prämie, one-time bonus…).
+    // They move the yearly Jahresnetto / average only, never the "Netto normaler Monat".
+    IReadOnlyList<OneOffPaymentInput>? OneOffPayments = null);
 
 public sealed record TaxBreakdown(
     decimal EstimatedIncomeTaxAnnual,

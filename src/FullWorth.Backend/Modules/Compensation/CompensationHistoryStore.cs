@@ -227,7 +227,7 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         {
             var resolved = ResolveAtDate(rows, date);
             if (resolved is null) continue;
-            var calc = GermanCompensationCalculator.Calculate(resolved);
+            var calc = GermanCompensationCalculator.Calculate(WithEffectiveYear(resolved, date.Year));
             var source = rows.LastOrDefault(x => x.EffectiveDate <= date);
             rawPoints.Add((date, calc, source));
         }
@@ -292,7 +292,7 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         {
             state = ApplyPatch(state, row.Patch);
             var profile = DeserializeProfile(state);
-            var calculation = GermanCompensationCalculator.Calculate(profile);
+            var calculation = GermanCompensationCalculator.Calculate(WithEffectiveYear(profile, row.EffectiveDate.Year));
             var delta = previous is null ? null : HistoryDelta(previous, calculation);
             result.Add(new CompensationHistoryEntry(
                 row.Id, fullWorthSpaceId, row.EffectiveDate, row.Sequence,
@@ -316,6 +316,11 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
 
     private static CompensationProfileInput? ResolveAtInsertion(
         IReadOnlyList<RawHistoryRow> rows, DateOnly date) => ResolveAtDate(rows, date);
+
+    // Historical snapshots are calculated for the year they take effect, so age-dependent rules (e.g. the
+    // childless care-insurance surcharge) use the age at the time. An explicit TaxYear on the profile wins.
+    private static CompensationProfileInput WithEffectiveYear(CompensationProfileInput profile, int year) =>
+        profile.TaxYear is null ? profile with { TaxYear = year } : profile;
 
     private static JsonObject MergePatchObjects(JsonObject original, JsonObject edits)
     {

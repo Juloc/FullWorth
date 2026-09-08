@@ -31,7 +31,7 @@ public static class GermanCompensationCalculator
         // This makes the regular-month net independent of the bonus and of the number of salary payments.
         var salaryPayments = input.SalaryPaymentsPerYear is >= 12 and <= 14 ? input.SalaryPaymentsPerYear : 12;
         var regularMonthlyBase = RoundMoney(input.AnnualGross * 12m / salaryPayments);
-        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m });
+        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m, OneOffPayments = null });
         var regularMonthlyNet = RoundMoney(regularRaw.CashNetAnnual / 12m);
         // "Ø Netto pro Monat" spreads the FULL annual net (bonus + every salary payment) evenly over 12 months.
         var averageMonthlyNet = RoundMoney(raw.CashNetAnnual / 12m);
@@ -250,20 +250,28 @@ public static class GermanCompensationCalculator
         var taxExemptBav = Math.Min(bavEmployee, BavTaxFreeLimit2026);
         var socialExemptBav = Math.Min(bavEmployee, BavSocialFreeLimit2026);
 
-        var taxPayrollBase = Math.Max(0m, cashGross + carTaxable + otherTaxableBenefits - taxExemptBav);
-        var socialPayrollBase = Math.Max(0m, cashGross + carTaxable + otherTaxableBenefits - socialExemptBav);
+        // One-off special payments for the year (Weihnachtsgeld, Corona-Prämie, …). Each can be independently
+        // tax-free and/or SV-free, so a tax- and SV-free payment reaches net in full while a normal one is
+        // taxed and charged like the rest of the cash gross.
+        var oneOff = input.OneOffPayments ?? Array.Empty<OneOffPaymentInput>();
+        var oneOffTotal = oneOff.Sum(p => Math.Max(0m, p.Amount));
+        var oneOffTaxable = oneOff.Where(p => p.Taxable).Sum(p => Math.Max(0m, p.Amount));
+        var oneOffSocial = oneOff.Where(p => p.SocialInsuranceLiable).Sum(p => Math.Max(0m, p.Amount));
+
+        var taxPayrollBase = Math.Max(0m, cashGross + oneOffTaxable + carTaxable + otherTaxableBenefits - taxExemptBav);
+        var socialPayrollBase = Math.Max(0m, cashGross + oneOffSocial + carTaxable + otherTaxableBenefits - socialExemptBav);
         var social = SocialInsurance2026(socialPayrollBase, input);
         var tax = WageTax2026(taxPayrollBase, input);
 
         var carEmployeeCost = car.Enabled ? Math.Max(0m, car.EmployeeContributionMonthly * 12m) : 0m;
         var otherEmployeeCosts = benefits.Sum(b => Math.Max(0m, b.EmployeeCostMonthly) * 12m);
-        var cashNet = cashGross - bavEmployee - carEmployeeCost - otherEmployeeCosts
+        var cashNet = cashGross + oneOffTotal - bavEmployee - carEmployeeCost - otherEmployeeCosts
             - social.TotalAnnual - tax.EstimatedIncomeTaxAnnual - tax.EstimatedSolidaritySurchargeAnnual - tax.EstimatedChurchTaxAnnual;
 
         var employerBenefitCosts = benefits.Sum(b => Math.Max(0m, b.EmployerCostMonthly) * 12m);
         var employerCarCost = car.Enabled ? Math.Max(0m, car.EmployerCostMonthly * 12m) : 0m;
         var employerBav = Math.Max(0m, pension.EmployerContributionMonthly * 12m);
-        var employerCost = cashGross + social.EmployerTotalAnnual + employerBav + employerCarCost + employerBenefitCosts;
+        var employerCost = cashGross + oneOffTotal + social.EmployerTotalAnnual + employerBav + employerCarCost + employerBenefitCosts;
 
         return new RawResult(
             RoundMoney(cashNet),
@@ -363,11 +371,26 @@ public static class GermanCompensationCalculator
             RoundMoney(employerPension + employerUnemployment + employerHealth + employerCare));
     }
 
+    /// <summary>
+    /// The employee's age for the calculation. When a birth date and a tax year are known, this is the age
+    /// reached during that year, so historical snapshots (and e.g. the childless care-insurance surcharge that
+    /// starts at 23) use the age at the time rather than today's age. Falls back to the explicit Age input.
+    /// </summary>
+    private static int? EffectiveAge(CompensationProfileInput input)
+    {
+        if (input.BirthDate is { } birth)
+        {
+            var referenceYear = input.TaxYear ?? DateTimeOffset.UtcNow.Year;
+            return Math.Clamp(referenceYear - birth.Year, 0, 120);
+        }
+        return input.Age;
+    }
+
     private static decimal CareEmployeeRate(CompensationProfileInput input)
     {
         var saxony = input.StateCode.Trim().Equals("SN", StringComparison.OrdinalIgnoreCase);
         var rate = saxony ? 0.023m : 0.018m;
-        var age = input.Age ?? 23;
+        var age = EffectiveAge(input) ?? 23;
         if (age >= 23 && input.ChildrenUnder25 <= 0 && input.ChildlessCareSurcharge)
             rate += 0.006m;
         else if (input.ChildrenUnder25 > 1)
@@ -419,6 +442,10 @@ public static class GermanCompensationCalculator
         if (input.AnnualTaxAllowance < 0m) throw new ArgumentOutOfRangeException(nameof(input.AnnualTaxAllowance));
         if (input.ChildAllowanceUnits is < 0m) throw new ArgumentOutOfRangeException(nameof(input.ChildAllowanceUnits));
         if (input.Age is < 0 or > 120) throw new ArgumentOutOfRangeException(nameof(input.Age));
+        if (input.TaxYear is < 1900 or > 2200) throw new ArgumentOutOfRangeException(nameof(input.TaxYear));
+        if (input.BirthDate is { Year: < 1900 or > 2200 }) throw new ArgumentOutOfRangeException(nameof(input.BirthDate));
+        if (input.OneOffPayments is { } oneOff && oneOff.Any(p => p.Amount < 0m))
+            throw new ArgumentOutOfRangeException(nameof(input.OneOffPayments));
         if (input.ChildrenUnder25 < 0) throw new ArgumentOutOfRangeException(nameof(input.ChildrenUnder25));
         if (input.WeeklyHours <= 0m) throw new ArgumentOutOfRangeException(nameof(input.WeeklyHours));
         if (input.CompanyCar is { } car && (car.ListPrice < 0m || car.OneWayCommuteKm < 0m || car.EmployeeContributionMonthly < 0m
