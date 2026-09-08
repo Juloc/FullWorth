@@ -15,7 +15,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public void AccountsUx_IsLoadedBeforeApp_AndIncludedInPwaShell()
+    public void AccountsPresentation_IsOwnedByAccountsModule_AndIncludedInPwaShell()
     {
         // Read the shipped app shell directly. The served "/" is behind RequireAuthorization, so an
         // unauthenticated test client is redirected to the auth shell instead of index.html; the static
@@ -23,13 +23,14 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         var html = ReadAsset("index.html");
         var sw = ReadAsset("sw.js");
 
-        var uxIndex = html.IndexOf("/features/accounts-ux.js", StringComparison.Ordinal);
-        var appIndex = html.IndexOf("/app.js", StringComparison.Ordinal);
-        Assert.True(uxIndex >= 0 && appIndex > uxIndex, "Accounts UX must load before app.js so deep links are captured before boot.");
+        var accounts = ReadAsset("features", "accounts.js");
+        Assert.DoesNotContain("/features/accounts-ux.js", html);
+        Assert.Contains("/features/accounts.css", html);
+        Assert.Contains("from './accounts-presentation.js'", accounts);
 
         Assert.Contains("/features/accounts.js", sw);
-        Assert.Contains("/features/accounts-ux.js", sw);
-        Assert.Contains("/features/accounts-ux.css", sw);
+        Assert.Contains("/features/accounts-presentation.js", sw);
+        Assert.Contains("/features/accounts.css", sw);
     }
 
     private string ReadAsset(params string[] path)
@@ -39,9 +40,9 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task AccountsUx_UsesSharedApiAndPersistentAccountGroupApis()
+    public async Task AccountsPresentation_UsesSharedApiAndPersistentAccountGroupApis()
     {
-        var js = await GetAsync("/features/accounts-ux.js");
+        var js = await GetAsync("/features/accounts-presentation.js");
 
         Assert.DoesNotContain("/bff/", js);
         Assert.Contains("apiClient.backend", js);
@@ -60,7 +61,8 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain(".click()", js);
         Assert.DoesNotContain("fwNavScope", js);
         Assert.Contains("navigate(", js);
-        Assert.Contains("onAppEvent(", js);
+        Assert.Contains("bindAccountsPresentation", js);
+        Assert.DoesNotContain("onAppEvent(", js);
     }
 
     [Fact]
@@ -72,7 +74,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("hasVisualOverride", js);
         Assert.Contains("restoreDefault", js);
         Assert.Contains("delete S.prefs.accounts[a.id]", js);
-        Assert.Contains("root.querySelectorAll('[data-acct]')", js);
+        Assert.DoesNotContain("data-acct", js);
         Assert.Contains("bankDefault=!!a.bankConnectionId||!!lg", js);
     }
 
@@ -80,7 +82,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     public void BankPicker_UsesOnlyNativeAppLogoRenderer()
     {
         var accounts = ReadAsset("features", "accounts.js");
-        var ux = ReadAsset("features", "accounts-ux.js");
+        var ux = ReadAsset("features", "accounts-presentation.js");
 
         Assert.Contains("logo.className='bank-option-logo'", accounts);
         Assert.DoesNotContain("decorateBankPicker", ux);
@@ -88,9 +90,9 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
-    public async Task AccountsUx_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
+    public async Task AccountsStyles_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
     {
-        var css = await GetAsync("/features/accounts-ux.css");
+        var css = await GetAsync("/features/accounts.css");
 
         Assert.Contains("transform: none !important", css);
         Assert.Contains(".panel:hover", css);
@@ -109,7 +111,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
 
         Assert.Contains("data-account-more", accounts);
         Assert.Contains("openAccountActionsDialog", accounts);
-        Assert.Contains("accounts:edit-visual", accounts);
+        Assert.Contains("editAccountVisualById", accounts);
         Assert.Contains("#accounts-view-list .account-more", css);
         Assert.Contains("[data-rename-account]", css);
         Assert.Contains(".account-coach-button", css);
