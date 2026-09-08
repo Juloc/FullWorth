@@ -129,7 +129,7 @@ function openMergeDialog(m, all) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('merchants.mergeTitle').replace('{name}', () => m.name))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <label>${ctx.esc(ctx.get('merchants.mergeTarget'))}<select name="target">${options}</select></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="danger">${ctx.esc(ctx.get('merchants.merge'))}</button></div>
+    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-danger">${ctx.esc(ctx.get('merchants.merge'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
