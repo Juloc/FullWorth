@@ -102,6 +102,20 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     [Fact]
+    public async Task MobileAccountsUseCompactOverflowActions()
+    {
+        var accounts = await GetAsync("/features/accounts.js");
+        var css = await GetAsync("/features/accounts-ux.css");
+
+        Assert.Contains("data-account-more", accounts);
+        Assert.Contains("openAccountActionsDialog", accounts);
+        Assert.Contains("accounts:edit-visual", accounts);
+        Assert.Contains("#accounts-view-list .account-more", css);
+        Assert.Contains("[data-rename-account]", css);
+        Assert.Contains(".account-coach-button", css);
+    }
+
+    [Fact]
     public async Task BankLogoCsp_ExtendsImagesOnly()
     {
         using var response = await _client.GetAsync("/");
