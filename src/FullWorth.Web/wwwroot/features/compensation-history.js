@@ -6,7 +6,27 @@ import {
 } from './compensation-shared.js';
 // The history view intentionally shows one decimal on percentages (the calculator allows two).
 const hpct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} %`;
-const hstate={entries:[],timeline:null,editing:null};
+
+// Time windows in months, mirroring the Vermögen view. 0 = all available history.
+const HISTORY_WINDOWS=[{m:6,label:'6 M'},{m:12,label:'1 J'},{m:24,label:'2 J'},{m:60,label:'5 J'},{m:120,label:'10 J'},{m:0,label:'Max'}];
+
+const HISTORY_SERIES=[
+  ['contractualGrossAnnual','gross','Brutto'],
+  ['estimatedCashNetAnnual','net','Netto'],
+  ['purchasingPowerMaintenanceGrossAnnual','inflation','Kaufkrafterhalt'],
+  ['fullWorthCompensationValueAnnual','total','Gesamtwert'],
+  ['companyCarNetCashImpactAnnual','car','Firmenwagen']
+];
+
+const hstate={
+  entries:[],timeline:null,editing:null,
+  windowMonths:0,
+  scope:'single',
+  // Firmenwagen is off by default: it is a small, often negative line that would otherwise flatten the scale.
+  series:{gross:true,net:true,inflation:true,total:true,car:false}
+};
+
+const enabledSeries=()=>HISTORY_SERIES.filter(([,cls])=>hstate.series[cls]);
 
 initHistory();
 
@@ -19,11 +39,41 @@ function initHistory(){
   if(stack)stack.insertAdjacentHTML('afterbegin',historyEditMarkup());
   H$$('[data-history-tab]').forEach(b=>b.addEventListener('click',()=>openHistory()));
   H$('#history-save').addEventListener('click',()=>createHistoryEvent().catch(herror));
-  H$('#history-range').addEventListener('change',()=>loadHistory().catch(herror));
   H$('#history-edit-save').addEventListener('click',()=>saveEditedEvent().catch(herror));
   H$('#history-edit-cancel').addEventListener('click',cancelEdit);
   H$('#space-select').addEventListener('change',()=>{if(H$('#tab-history')?.classList.contains('active'))loadHistory().catch(herror)});
   H$('#history-date').value=localIsoDate();
+
+  // One delegated handler for the time window, the single/joint scope and the curve toggles.
+  H$('#tab-history')?.addEventListener('click',event=>{
+    const win=event.target.closest('[data-history-window]');
+    if(win){hstate.windowMonths=Number(win.dataset.historyWindow)||0;syncHistoryControls();loadHistory().catch(herror);return}
+    const scope=event.target.closest('[data-history-scope]');
+    if(scope){hstate.scope=scope.dataset.historyScope==='joint'?'joint':'single';syncHistoryControls();loadHistory().catch(herror);return}
+    const serie=event.target.closest('[data-history-series]');
+    if(serie){
+      const key=serie.dataset.historySeries;
+      hstate.series[key]=!hstate.series[key];
+      syncHistoryControls();
+      renderHistoryChart(hstate.timeline);
+    }
+  });
+  syncHistoryControls();
+}
+
+function syncHistoryControls(){
+  H$$('[data-history-window]').forEach(b=>{
+    const on=Number(b.dataset.historyWindow)===hstate.windowMonths;
+    b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');
+  });
+  H$$('[data-history-scope]').forEach(b=>{
+    const on=b.dataset.historyScope===hstate.scope;
+    b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');
+  });
+  H$$('[data-history-series]').forEach(b=>{
+    const on=!!hstate.series[b.dataset.historySeries];
+    b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false');
+  });
 }
 
 function historyMarkup(){return `
@@ -45,11 +95,16 @@ function historyMarkup(){return `
   </article>
   <div id="history-summary" class="metric-grid history-summary"></div>
   <article class="panel history-chart-card">
-    <div class="history-chart-head"><div><h2>Gehalt, Netto und Kaufkraft</h2><small>Alle Werte jährlich. Die Inflationslinie zeigt, welches Brutto für die Kaufkraft des Startpunkts nötig wäre.</small></div>
-      <select id="history-range"><option value="all">Gesamt</option><option value="1">1 Jahr</option><option value="3">3 Jahre</option><option value="5">5 Jahre</option></select>
+    <div class="history-chart-head">
+      <div><h2>Gehalt, Netto und Kaufkraft</h2><small>Alle Werte jährlich. Die Inflationslinie zeigt, welches Brutto für die Kaufkraft des Startpunkts nötig wäre.</small></div>
+      <div class="fw-cycle history-scope" role="tablist" aria-label="Umfang">
+        <button type="button" role="tab" data-history-scope="single">Einzeln</button>
+        <button type="button" role="tab" data-history-scope="joint">Gemeinsam</button>
+      </div>
     </div>
+    <div class="fw-cycle history-windows" role="tablist" aria-label="Zeitraum">${HISTORY_WINDOWS.map(x=>`<button type="button" role="tab" data-history-window="${x.m}">${x.label}</button>`).join('')}</div>
     <div id="history-chart"></div>
-    <div class="history-legend"><span><i class="history-key history-key-gross"></i>Brutto</span><span><i class="history-key history-key-net"></i>Netto</span><span><i class="history-key history-key-inflation"></i>Kaufkrafterhalt</span><span><i class="history-key history-key-total"></i>Gesamtwert</span></div>
+    <div class="history-legend" aria-label="Kurven ein- und ausblenden">${HISTORY_SERIES.map(([,cls,label])=>`<button type="button" class="history-series-toggle" data-history-series="${cls}"><i class="history-key history-key-${cls}"></i>${label}</button>`).join('')}</div>
   </article>
   <article class="panel history-years-card"><h2>Jahresvergleich</h2><div id="history-years"></div></article>
   <div id="history-list" class="history-list"></div>
@@ -78,9 +133,9 @@ async function openHistory(){
 
 async function loadHistory(){
   const space=spaceId();if(!space)return;
-  const range=H$('#history-range')?.value||'all';
   const query=new URLSearchParams({fullWorthSpaceId:space});
-  if(range!=='all')query.set('from',subtractYears(localIsoDate(),Number(range)));
+  if(hstate.windowMonths>0)query.set('from',subtractMonths(localIsoDate(),hstate.windowMonths));
+  if(hstate.scope==='joint')query.set('scope','joint');
   const [entries,timeline]=await Promise.all([
     hapi(`api/compensation/history?fullWorthSpaceId=${encodeURIComponent(space)}`),
     hapi(`api/compensation/timeline?${query}`)
@@ -111,25 +166,21 @@ function renderHistorySummary(summary){
     <article class="metric"><span>Gesamtwert aktuell</span><strong>${heuro.format(summary.currentFullWorthValueAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} / Jahr</small></article>`;
 }
 
-const HISTORY_SERIES=[
-  ['contractualGrossAnnual','gross','Brutto'],
-  ['estimatedCashNetAnnual','net','Netto'],
-  ['purchasingPowerMaintenanceGrossAnnual','inflation','Kaufkrafterhalt'],
-  ['fullWorthCompensationValueAnnual','total','Gesamtwert']
-];
-
 function renderHistoryChart(timeline){
   const root=H$('#history-chart'),points=timeline?.points||[];
   if(points.length<1){root.innerHTML='<div class="history-empty">Noch keine Daten für den Verlauf.</div>';return}
   const w=960,h=330,left=62,right=18,top=18,bottom=42;
-  const values=points.flatMap(p=>HISTORY_SERIES.map(([key])=>Number(p[key]))).map(Number);
-  const max=Math.max(...values,1)*1.08,min=0;
+  const shown=enabledSeries();
+  if(!shown.length){root.innerHTML='<div class="history-empty">Keine Kurve ausgewählt. Wähle oben mindestens einen Wert.</div>';return}
+  const values=points.flatMap(p=>shown.map(([key])=>Number(p[key])||0));
+  // The Firmenwagen line can be negative, so the scale must be able to go below zero.
+  const max=Math.max(...values,1)*1.08,min=Math.min(0,...values);
   const dates=points.map(p=>new Date(`${p.date}T12:00:00`).getTime()),d0=Math.min(...dates),d1=Math.max(...dates);
   const x=t=>left+(d1===d0?0.5:(t-d0)/(d1-d0))*(w-left-right);
   const y=v=>top+(max-v)/(max-min)*(h-top-bottom);
   const series=(key,cls)=>`<polyline class="history-line ${cls}" points="${points.map((p,i)=>`${x(dates[i]).toFixed(1)},${y(Number(p[key])||0).toFixed(1)}`).join(' ')}"/>`;
   const dots=(key,cls)=>points.map((p,i)=>`<circle class="history-dot ${cls}" cx="${x(dates[i]).toFixed(1)}" cy="${y(Number(p[key])||0).toFixed(1)}" r="2.4"/>`).join('');
-  const yTicks=[0,.25,.5,.75,1].map(f=>{const v=max*(1-f),yy=top+f*(h-top-bottom);return `<line class="history-grid" x1="${left}" x2="${w-right}" y1="${yy}" y2="${yy}"/><text class="history-axis" x="${left-8}" y="${yy+3}" text-anchor="end">${shortMoney(v)}</text>`}).join('');
+  const yTicks=[0,.25,.5,.75,1].map(f=>{const v=max-(max-min)*f,yy=top+f*(h-top-bottom);return `<line class="history-grid" x1="${left}" x2="${w-right}" y1="${yy}" y2="${yy}"/><text class="history-axis" x="${left-8}" y="${yy+3}" text-anchor="end">${shortMoney(v)}</text>`}).join('');
   const markerDates=[...new Set((timeline.events||[]).map(e=>e.effectiveDate))].map(d=>new Date(`${d}T12:00:00`).getTime()).filter(t=>t>=d0&&t<=d1);
   const markers=markerDates.map(t=>`<line class="history-event-line" x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${h-bottom}"/>`).join('');
   const first=points[0],last=points[points.length-1];
@@ -137,8 +188,8 @@ function renderHistoryChart(timeline){
     `<svg class="history-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Gehaltsverlauf mit Inflation, Werte per Mauszeiger">`+
       `${yTicks}${markers}`+
       `<line class="history-crosshair" x1="0" x2="0" y1="${top}" y2="${h-bottom}" style="display:none"/>`+
-      HISTORY_SERIES.map(([key,cls])=>series(key,`history-line-${cls}`)).join('')+
-      HISTORY_SERIES.map(([key,cls])=>dots(key,`history-dot-${cls}`)).join('')+
+      shown.map(([key,cls])=>series(key,`history-line-${cls}`)).join('')+
+      shown.map(([key,cls])=>dots(key,`history-dot-${cls}`)).join('')+
       `<g class="history-hover-dots"></g>`+
       `<rect class="history-hit" x="${left}" y="${top}" width="${(w-left-right).toFixed(1)}" height="${(h-top-bottom).toFixed(1)}" fill="transparent"/>`+
       `<text class="history-axis" x="${left}" y="${h-12}">${fmtDate(first.date)}</text><text class="history-axis" x="${w-right}" y="${h-12}" text-anchor="end">${fmtDate(last.date)}</text>`+
@@ -146,10 +197,10 @@ function renderHistoryChart(timeline){
     `<div class="history-chart-tip" hidden></div>`+
   `</div>`;
   const eventByDate=new Map();(timeline.events||[]).forEach(e=>{if(!eventByDate.has(e.effectiveDate))eventByDate.set(e.effectiveDate,e.title)});
-  wireChartHover(root,points,dates,{x,y,w},eventByDate);
+  wireChartHover(root,points,dates,{x,y,w},eventByDate,shown);
 }
 
-function wireChartHover(root,points,dates,geo,eventByDate){
+function wireChartHover(root,points,dates,geo,eventByDate,shown){
   const wrap=root.querySelector('.history-chart-wrap'),svg=root.querySelector('svg.history-chart');
   const tip=root.querySelector('.history-chart-tip'),cross=svg?.querySelector('.history-crosshair'),hoverG=svg?.querySelector('.history-hover-dots');
   if(!wrap||!svg||!tip||!cross||!hoverG)return;
@@ -160,10 +211,10 @@ function wireChartHover(root,points,dates,geo,eventByDate){
     for(let i=0;i<points.length;i++){const d=Math.abs(geo.x(dates[i])-vbx);if(d<best){best=d;idx=i}}
     const p=points[idx],px=geo.x(dates[idx]);
     cross.setAttribute('x1',px.toFixed(1));cross.setAttribute('x2',px.toFixed(1));cross.style.display='';
-    hoverG.innerHTML=HISTORY_SERIES.map(([key,cls])=>`<circle class="history-dot-active history-dot-${cls}" cx="${px.toFixed(1)}" cy="${geo.y(Number(p[key])||0).toFixed(1)}" r="4.2"/>`).join('');
+    hoverG.innerHTML=shown.map(([key,cls])=>`<circle class="history-dot-active history-dot-${cls}" cx="${px.toFixed(1)}" cy="${geo.y(Number(p[key])||0).toFixed(1)}" r="4.2"/>`).join('');
     const ev=eventByDate.get(p.date);
     tip.innerHTML=`<div class="tip-date">${fmtDate(p.date)}${ev?` · <span class="tip-event">${esc(ev)}</span>`:''}</div>`+
-      HISTORY_SERIES.map(([key,cls,label])=>`<div class="tip-row"><span class="tip-key"><i class="history-key history-key-${cls}"></i>${label}</span><span class="tip-val">${heuro.format(Number(p[key])||0)}</span></div>`).join('')+
+      shown.map(([key,cls,label])=>`<div class="tip-row"><span class="tip-key"><i class="history-key history-key-${cls}"></i>${label}</span><span class="tip-val">${heuro.format(Number(p[key])||0)}</span></div>`).join('')+
       `<div class="tip-row tip-sub"><span class="tip-key">Steuern</span><span class="tip-val">${heuro.format(p.taxesAnnual)}</span></div>`+
       `<div class="tip-row tip-sub"><span class="tip-key">Sozialabgaben</span><span class="tip-val">${heuro.format(p.socialInsuranceAnnual)}</span></div>`+
       `<div class="tip-row tip-sub"><span class="tip-key">AG-Kosten</span><span class="tip-val">${heuro.format(p.employerTotalCostAnnual)}</span></div>`+
@@ -244,5 +295,5 @@ function fieldLabel(path){const map={annualGross:'Brutto',annualBonus:'Bonus',ta
 function eventLabel(t){return ({salary:'Gehalt',tax:'Steuer',marriage:'Heirat',child:'Kind',family:'Familie',worktime:'Arbeitszeit',benefit:'Benefit','company-car':'Firmenwagen',pension:'bAV',insurance:'Versicherung',job:'Jobwechsel',combined:'Mehrere Änderungen',other:'Sonstiges'})[t]||t}
 function signedPct(v){const n=Number(v||0);return `${n>=0?'+':'−'}${hpct(Math.abs(n))}`}
 function shortMoney(v){const n=Number(v||0);return n>=1000?`${(n/1000).toLocaleString('de-DE',{maximumFractionDigits:0})}k €`:heuro.format(n)}
-function subtractYears(date,years){const d=new Date(`${date}T12:00:00`);d.setFullYear(d.getFullYear()-years);return localIsoDate(d)}
+function subtractMonths(date,months){const d=new Date(`${date}T12:00:00`);d.setMonth(d.getMonth()-months);return localIsoDate(d)}
 function herror(e){console.error(e);hmessage(e?.message||'Unbekannter Fehler.')}

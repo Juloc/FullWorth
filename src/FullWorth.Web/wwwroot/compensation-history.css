@@ -21,6 +21,20 @@
 .history-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.72rem;color:var(--muted,#6d737c)}
 .history-legend span{display:flex;align-items:center;gap:6px}.history-key{width:18px;height:3px;border-radius:2px}
 .history-key-gross{background:var(--accent,#4a75ff)}.history-key-net{background:var(--positive,#13834b)}.history-key-inflation{background:#a3681d}.history-key-total{background:#7c5ac7}
+/* Time window + scope use the shared .fw-cycle segmented control (same as the Vermögen view). */
+.history-windows,.history-scope{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.history-windows::-webkit-scrollbar,.history-scope::-webkit-scrollbar{display:none}
+.history-windows{margin:0 0 12px}
+.history-windows button,.history-scope button{flex:0 0 auto}
+/* The legend doubles as the curve filter. */
+.history-series-toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border,#e3e5e8);background:var(--surface,#fff);border-radius:999px;padding:5px 10px;font:inherit;font-size:.72rem;color:var(--muted,#6d737c);cursor:pointer}
+.history-series-toggle .history-key{opacity:.35}
+.history-series-toggle.on{color:var(--text);border-color:color-mix(in srgb,var(--accent,#4a75ff) 40%,var(--border,#e3e5e8))}
+.history-series-toggle.on .history-key{opacity:1}
+.history-line-car{stroke:#2f8f8f;stroke-dasharray:2 4}
+.history-dot-car{stroke:#2f8f8f}
+.history-dot-active.history-dot-car{fill:#2f8f8f}
+.history-key-car{background:#2f8f8f}
 .history-chart-wrap{position:relative}
 /* The chart is meant to be hovered to read values, so it must never lift/jump like a clickable card. */
 .history-chart-card:hover{transform:none!important;box-shadow:none!important}

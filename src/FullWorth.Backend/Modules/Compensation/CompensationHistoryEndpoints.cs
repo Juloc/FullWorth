@@ -85,15 +85,19 @@ public static class CompensationHistoryEndpoints
             Guid fullWorthSpaceId,
             DateOnly? from,
             DateOnly? to,
+            string? scope,
             CurrentUserContext currentUser,
             FullWorthDbContext db,
             CancellationToken ct) =>
         {
             try
             {
+                // scope=joint sums every space member's timeline (household view for partners/spouses);
+                // anything else stays the caller's own timeline.
+                var joint = string.Equals(scope?.Trim(), "joint", StringComparison.OrdinalIgnoreCase);
                 var store = new CompensationHistoryStore(db);
                 var timeline = await store.TimelineAsync(
-                    currentUser.RequireUserId(), fullWorthSpaceId, from, to, ct);
+                    currentUser.RequireUserId(), fullWorthSpaceId, from, to, joint, ct);
                 return timeline is null ? Results.NotFound() : Results.Ok(timeline);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)

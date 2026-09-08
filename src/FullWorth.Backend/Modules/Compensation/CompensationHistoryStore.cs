@@ -204,60 +204,88 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
     }
 
     public async Task<CompensationTimelineResult?> TimelineAsync(
-        Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CancellationToken ct)
+        Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, bool joint, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         await EnsureSchemaAsync(ct);
 
         var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var rows = await LoadRowsAsync(userId, fullWorthSpaceId, end, ct);
-        if (rows.Count == 0)
+
+        // A joint (household) timeline adds up every space member's own timeline — married couples cannot read
+        // one partner's figures in isolation because the tax classes only make sense together. Each member's
+        // history is its OWN patch chain, so the chains must stay separate and only the resolved yearly
+        // figures per date are summed.
+        var memberIds = joint
+            ? await db.FullWorthSpaceMembers.AsNoTracking()
+                .Where(x => x.FullWorthSpaceId == fullWorthSpaceId)
+                .Select(x => x.UserId)
+                .ToListAsync(ct)
+            : [userId];
+
+        var chains = new List<IReadOnlyList<RawHistoryRow>>();
+        foreach (var memberId in memberIds.Distinct())
+        {
+            var memberRows = await LoadRowsAsync(memberId, fullWorthSpaceId, end, ct);
+            if (memberRows.Count > 0) chains.Add(memberRows);
+        }
+        if (chains.Count == 0)
             return new CompensationTimelineResult(from ?? end.AddYears(-1), end, [], [], null);
 
-        var start = from ?? rows[0].EffectiveDate;
-        if (start > end) throw new ArgumentException("Timeline start cannot be after end.");
-
-        var entries = BuildEntries(rows, fullWorthSpaceId)
-            .Where(x => x.EffectiveDate >= start && x.EffectiveDate <= end)
+        var allRows = chains.SelectMany(x => x)
+            .OrderBy(x => x.EffectiveDate).ThenBy(x => x.Sequence).ThenBy(x => x.CreatedAt)
             .ToArray();
 
-        var dates = BuildTimelineDates(start, end, rows);
-        var rawPoints = new List<(DateOnly Date, CompensationCalculationResult Calc, RawHistoryRow? Source)>();
+        var start = from ?? allRows[0].EffectiveDate;
+        if (start > end) throw new ArgumentException("Timeline start cannot be after end.");
+
+        var entries = chains
+            .SelectMany(chain => BuildEntries(chain, fullWorthSpaceId))
+            .Where(x => x.EffectiveDate >= start && x.EffectiveDate <= end)
+            .OrderBy(x => x.EffectiveDate).ThenBy(x => x.Sequence)
+            .ToArray();
+
+        var dates = BuildTimelineDates(start, end, allRows);
+        var rawPoints = new List<(DateOnly Date, TimelineTotals Totals, RawHistoryRow? Source)>();
         foreach (var date in dates)
         {
-            var resolved = ResolveAtDate(rows, date);
-            if (resolved is null) continue;
-            var calc = GermanCompensationCalculator.Calculate(WithEffectiveYear(resolved, date.Year));
-            var source = rows.LastOrDefault(x => x.EffectiveDate <= date);
-            rawPoints.Add((date, calc, source));
+            var totals = TimelineTotals.Zero;
+            var covered = false;
+            foreach (var chain in chains)
+            {
+                var resolved = ResolveAtDate(chain, date);
+                if (resolved is null) continue;
+                totals = totals.Add(GermanCompensationCalculator.Calculate(WithEffectiveYear(resolved, date.Year)));
+                covered = true;
+            }
+            if (!covered) continue;
+            rawPoints.Add((date, totals, allRows.LastOrDefault(x => x.EffectiveDate <= date)));
         }
 
         if (rawPoints.Count == 0)
             return new CompensationTimelineResult(start, end, entries, [], null);
 
         var baseline = rawPoints[0];
-        var baselineGross = baseline.Calc.ContractualGrossAnnual;
+        var baselineGross = RoundMoney(baseline.Totals.Gross);
         var points = rawPoints.Select(point =>
         {
             var maintenance = InflationIndex.AdjustForPurchasingPower(
                 baselineGross, baseline.Date, point.Date);
-            var nominal = PercentChange(baselineGross, point.Calc.ContractualGrossAnnual);
+            var gross = RoundMoney(point.Totals.Gross);
+            var nominal = PercentChange(baselineGross, gross);
             var inflation = PercentChange(baselineGross, maintenance);
-            var real = maintenance <= 0m
-                ? 0m
-                : (point.Calc.ContractualGrossAnnual / maintenance - 1m) * 100m;
+            var real = maintenance <= 0m ? 0m : (gross / maintenance - 1m) * 100m;
             return new CompensationTimelinePoint(
                 point.Date,
-                point.Calc.ContractualGrossAnnual,
-                point.Calc.EstimatedCashNetAnnual,
-                point.Calc.FullWorthCompensationValueAnnual,
-                point.Calc.EmployerTotalCostAnnual,
-                point.Calc.EffectiveNetValuePerWorkingHour,
-                point.Calc.MarginalNetFromNext100Gross,
-                TotalTaxes(point.Calc),
-                point.Calc.SocialInsurance.TotalAnnual,
-                point.Calc.PersonalBenefitsValueAnnual,
-                point.Calc.CompanyCar.EstimatedNetCashImpactAnnual,
+                gross,
+                RoundMoney(point.Totals.Net),
+                RoundMoney(point.Totals.FullWorth),
+                RoundMoney(point.Totals.EmployerCost),
+                RoundMoney(point.Totals.HourlyValue),
+                RoundMoney(point.Totals.Marginal),
+                RoundMoney(point.Totals.Taxes),
+                RoundMoney(point.Totals.Social),
+                RoundMoney(point.Totals.Benefits),
+                RoundMoney(point.Totals.CarImpact),
                 maintenance,
                 RoundPercent(nominal),
                 RoundPercent(inflation),
@@ -621,6 +649,38 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         parameter.ParameterName = name;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    /// <summary>
+    /// Yearly figures summed over the timelines being shown: one member for the individual view, every space
+    /// member for the joint household view. Only additive money amounts are meaningful here; the hourly and
+    /// marginal rates are carried along for shape compatibility and are not surfaced in the history UI.
+    /// </summary>
+    private readonly record struct TimelineTotals(
+        decimal Gross,
+        decimal Net,
+        decimal FullWorth,
+        decimal EmployerCost,
+        decimal HourlyValue,
+        decimal Marginal,
+        decimal Taxes,
+        decimal Social,
+        decimal Benefits,
+        decimal CarImpact)
+    {
+        public static TimelineTotals Zero => default;
+
+        public TimelineTotals Add(CompensationCalculationResult c) => new(
+            Gross + c.ContractualGrossAnnual,
+            Net + c.EstimatedCashNetAnnual,
+            FullWorth + c.FullWorthCompensationValueAnnual,
+            EmployerCost + c.EmployerTotalCostAnnual,
+            HourlyValue + c.EffectiveNetValuePerWorkingHour,
+            Marginal + c.MarginalNetFromNext100Gross,
+            Taxes + TotalTaxes(c),
+            Social + c.SocialInsurance.TotalAnnual,
+            Benefits + c.PersonalBenefitsValueAnnual,
+            CarImpact + c.CompanyCar.EstimatedNetCashImpactAnnual);
     }
 
     private sealed record RawHistoryRow(
