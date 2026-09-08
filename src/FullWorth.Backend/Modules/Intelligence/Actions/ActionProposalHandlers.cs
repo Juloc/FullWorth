@@ -298,15 +298,25 @@ public sealed class TransferLinkActionHandler(
                 x.TransferGroupId?.ToString("N") ?? string.Empty,
                 x.IsTransfer)));
 
-        object Leg(dynamic x) => new
+        var firstPreview = new
         {
-            x.Id,
-            x.AccountId,
-            x.Account,
-            date = x.BookingDate ?? x.ValueDate,
-            x.Amount,
-            x.Currency,
-            label = string.IsNullOrWhiteSpace((string?)x.Counterparty) ? x.Description : x.Counterparty
+            first.Id,
+            first.AccountId,
+            first.Account,
+            date = first.BookingDate ?? first.ValueDate,
+            first.Amount,
+            first.Currency,
+            label = string.IsNullOrWhiteSpace(first.Counterparty) ? first.Description : first.Counterparty
+        };
+        var secondPreview = new
+        {
+            second.Id,
+            second.AccountId,
+            second.Account,
+            date = second.BookingDate ?? second.ValueDate,
+            second.Amount,
+            second.Currency,
+            label = string.IsNullOrWhiteSpace(second.Counterparty) ? second.Description : second.Counterparty
         };
 
         return new(
@@ -314,8 +324,8 @@ public sealed class TransferLinkActionHandler(
             new
             {
                 type = Name,
-                first = Leg(first),
-                second = Leg(second)
+                first = firstPreview,
+                second = secondPreview
             },
             fingerprint,
             AlreadyApplied: sameExistingGroup);
@@ -488,8 +498,7 @@ public sealed class CategorizationRuleUpsertActionHandler(
         {
             CategoryMutationResult.Success when outcome.Value is not null => new(
                 ActionHandlerResult.Success,
-                new { ruleId = outcome.Value.Id },
-                AlreadyApplied: request.RuleId is null && outcome.Value.Id == context.ProposalId),
+                new { ruleId = outcome.Value.Id }),
             CategoryMutationResult.NotFound => new(ActionHandlerResult.NotFound),
             CategoryMutationResult.Forbidden => new(ActionHandlerResult.Forbidden),
             CategoryMutationResult.Invalid => new(ActionHandlerResult.Invalid, Error: outcome.Error),
