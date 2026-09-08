@@ -1,53 +1,63 @@
 # Open items — to clarify & decide
 
-A single index of the genuinely-unimplemented / decision-needed items surfaced by the 2026-09-07 doc↔code
-reconciliation. The individual plan/spec docs keep the full detail; this is the short list to work through
-together. Everything NOT listed here was verified as shipped.
+This file lists only work that is still materially open. Shipped items should not remain here as speculative gaps.
 
-## Structural (frontend architecture)
-Source: `FRONTEND_RESTRUCTURE_HANDOFF.md`, `FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md`.
+## Structural frontend work
 
-> **Largely completed by the owner during/right after the 2026-09-07 audit** (commits `5a614be`…`9f2d97c`).
-> Verified on `main`: shared navigation + event core (`core/navigation.js`/`core/event-bus.js`), per-feature
-> activate/unmount **lifecycle** (`core/feature-registry.js`), centralized route writes, shared
-> Dashboard↔Analytics period (`cycleWindow` `activeFrom`/`averageFrom`), **comparable-window budgets**, and
-> **`app.js` reduced 1366 → 464 lines** (banking/accounts extracted, `window.fwNavScope` fully removed — 0
-> callers). This section is essentially resolved.
+Shipped:
 
-Possibly-remaining (verify against `main`):
-- **Feature dirs** (`features/<name>/{index,view,dialogs,state,css}`) and the **`styles/` split**
-  (tokens/shell/components/responsive) — may still be flat.
-- `docs/FRONTEND_ARCHITECTURE.md` (the Phase-1 "permanent contract") — was never written.
+- shared core API/state/router/navigation/event bus/i18n
+- feature activate/unmount lifecycle foundation
+- centralized route writes
+- permanent contract at `docs/FRONTEND_ARCHITECTURE.md`
+- Accounts/banking owner extracted to `features/accounts.js`
+- Settings/security owner extracted to `features/settings.js`
+- Accounts MutationObserver/polling/synthetic-navigation integration removed
+- Accounts no longer patches Dashboard/Wealth DOM
+- Purchase advanced helpers no longer construct direct BFF URLs or use native confirms
+- semantic money variants shipped in `ui/money.js`
 
-## Behaviour / finance-model gaps
-- **Shared money-variant model** in `ui/money.js`: expose neutral/income/warning/danger/debt variants and use
-  them centrally. Rows still choose the color class by sign (`amount < 0 ? 'negative' : 'positive'`). The red
-  *alarm* is already neutralized in CSS, but the semantic model the spec asks for is missing.
-- ~~Budgets sum mixed cycles into one headline~~ — **fixed by the owner**: `features/budgets.js` now gates the
-  headline on a comparable period window and shows "—" when budgets span different cycles.
-- **Backend arbitrary-range category averages**: the service moved to
-  `src/FullWorth.Backend/Modules/Analytics/Categories/CategoryAnalyticsService.cs`. Re-verify whether Average3/6/12
-  are still `0m` for arbitrary ranges after the owner's "complete period and grouping semantics" refactor.
-- **Canonical merchant identity**: analytics/drill key off counterparty *text* (`merchant=<name>`), not a
-  `merchantId`, so an aggregate and its opened list can diverge.
-- **Category overview list** `slice(0,6)` can still mix parent+child rows (the *total* is already root-only).
-- **Analytics prev/next** now steps one bucket, but there is no shared PeriodState class unifying Dashboard +
-  Analytics (low priority — they are conceptually aligned already).
+Still open:
 
-## UI_UX_SPEC MVP items still mandated but absent
-- Strict share/screenshot mode (§5), Alerts & actions widget (§8.6), portfolio-trend widget (§8.9), widget
-  height presets + scope/visualization/forecast config (§6.2/§7), Dashboard & navigation settings incl.
-  shared/separate layouts, bottom-nav slots, merchant-logo toggle (§6.3/§21). "Available until next income"
-  (§8.3) currently echoes the account total — needs the real forecast calc.
+- complete CSS split into tokens/shell/components/responsive + feature-owned styles
+- reduce remaining same-domain post-render Accounts UX decoration by merging it into the Accounts owner/shared identity components
+- consolidate the remaining layered Purchase/Wealth helper modules where this reduces ownership ambiguity
+- continue shrinking legacy architecture-test allow-lists
 
-## ⚠ Decisions needed (product/security)
-- **Amazon import uses Playwright browser automation with stored Amazon credentials**, which conflicts with the
-  `PRODUCT_DECISIONS.md` rule that the browser never receives third-party credentials. Decide: accept the
-  Playwright path (and amend the security decision) **or** switch to manual/email-invoice/export adapters.
-- **External-tool least-privilege permission model** and the stricter share/screenshot mode: implement or file
-  as explicit future scope.
+## Finance / behavior
 
-## Known visual bug (frozen area)
-- **Accounts, mobile 375px**: account-row actions (Coach · chat · balance · folder · edit · ± · delete) overflow
-  the viewport and the delete icon is clipped on every row. Fix = collapse row actions into a `⋯` overflow menu
-  on mobile. Left untouched because Accounts (`features/accounts-ux.js`) is frozen pending owner approval.
+Shipped:
+
+- mixed-cycle budgets are not summed into a misleading headline
+- canonical merchantId analytics -> transaction drill-down
+- root-only category overview + child drill-down
+- completed prior-period category Average3/Average6/Average12 for range analytics
+- active period separated from preview history and trailing average
+- normal debit/spending/contract values default to neutral rather than danger red
+- Dashboard/Analytics share active-period semantics
+
+Still open / worth tightening:
+
+- move more existing callers from legacy sign classes to the semantic money variants where intent is known
+- add broader backend numerical coverage for week/quarter/year completed-period averages and comparisons
+- converge remaining period controls onto one explicit reusable PeriodState/PeriodPicker API rather than only shared semantics
+- verify every Dashboard drill-down preserves its configured period/scope where applicable
+- ensure all transfer/refund/pending/ignored drill-down lists reconcile exactly with their KPI scope
+
+## UI_UX_SPEC items not yet fully implemented
+
+- strict share/screenshot mode (§5)
+- Alerts & actions widget (§8.6)
+- portfolio-trend widget (§8.9)
+- widget height presets and richer scope/visualization/forecast config (§6.2/§7)
+- Dashboard/navigation customization: layouts, bottom-nav slots, merchant-logo preference (§6.3/§21)
+- “Available until next income” needs a real forecast calculation rather than simply echoing account total
+
+## Product/security decisions
+
+- Amazon import currently uses browser automation/stored Amazon credentials, which conflicts with the existing product decision that third-party credentials should not reach the browser flow. Decide whether to keep that model and amend the security decision or move to manual/email/export adapters.
+- external-tool least-privilege permissions and stricter share/screenshot mode still need explicit product scope.
+
+## Known Accounts mobile issue
+
+At ~375 px, the current account-row action cluster can overflow. Accounts structural migration is now approved, so this is no longer blocked by the old “frozen Accounts” rule. Fix it within the established visible UX, preferably with a compact overflow action menu rather than adding another patch layer.
