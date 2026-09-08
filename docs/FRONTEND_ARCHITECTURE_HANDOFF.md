@@ -1,126 +1,84 @@
 # Frontend Architecture Cleanup — Handoff
 
-Branch: `refactor/frontend-architecture-cleanup`
+Branch: `main`  
+Status: active incremental cleanup; do not restart or create a parallel frontend stack.
 
-Continue the existing frontend architecture cleanup. Do **not** restart the work or create a new cleanup branch.
+Permanent contract:
 
-## First step
-
-Before changing anything, merge the current `main` into `refactor/frontend-architecture-cleanup`. Keep doing this regularly while the cleanup runs.
-
-## Important constraint
-
-**Accounts are frozen for this cleanup until explicit approval.**
-
-A separate agent is working on the desired Accounts UX. Do not restructure, visually redesign, remove or replace `features/accounts-ux.js` until the final Accounts direction is approved. Shared infrastructure may be prepared, but user-visible Accounts behavior must not be changed as part of this cleanup.
-
-## Architecture goal
-
-The permanent rules are documented in:
-
+- `docs/FRONTEND_ARCHITECTURE.md`
 - `docs/FRONTEND_ARCHITECTURE_CLEANUP_PLAN.md`
-- `docs/UI_UX_SPEC.md`
+- `docs/FRONTEND_RESTRUCTURE_HANDOFF.md`
 
-Core rule: a feature owns its own DOM. Do not add another post-render repair layer.
+## Current architecture
+
+The shipped frontend already has:
+
+- shared API/services/state/router/i18n core
+- module navigation in `core/navigation.js`
+- explicit app events in `core/event-bus.js`
+- feature activation/unmount support in `core/feature-registry.js`
+- shared dialog/confirm/button/toast/money primitives
+- semantic money variants: neutral / income / warning / danger / debt / muted
+- centralized route writes; feature navigation no longer depends on `window.fw*`
+- Accounts + banking owner extracted to `features/accounts.js`
+- Settings/security owner extracted to `features/settings.js`
+- `app.js` reduced to shell/bootstrap/composition responsibilities
+- Accounts observer/polling/synthetic-click integration removed
+- Accounts UX no longer decorates Dashboard or Wealth DOM
+- Purchase advanced helpers use shared BFF URL + confirm/dialog infrastructure
+- PWA shell includes extracted Accounts and Settings owners
+
+Accounts structural migration is approved. Preserve the established visible Accounts UX unless a separate UX change is requested.
+
+## Finance semantics already fixed
+
+Do not regress these:
+
+- selected period is distinct from chart history
+- completed trailing averages exclude the active/running bucket
+- arbitrary-range category analytics now returns real Average3/6/12 values
+- category overview is root-only and drills root -> children -> transactions
+- merchant analytics uses canonical merchantId where available
+- transaction merchant filtering accepts merchantId and resolves aliases server-side
+- mixed-cycle budgets are not blindly summed
+- normal spending/debit/contract amounts are neutral, not danger-red
+- Dashboard and Analytics use the same active-period semantics
+- net worth remains point-in-time and owns its own account drill-down
+
+## Architecture rules
 
 Do not introduce:
 
+- direct `/bff/backend` or `/bff/banking` URLs in feature modules
 - feature-local native dialog factories
-- direct `/bff/backend` or `/bff/banking` calls
-- global fetch monkey patches
-- MutationObserver-based feature repair
-- polling with `setTimeout` to wait for another renderer
-- synthetic clicks to integrate features
-- Resource Timing / DOM scraping to rediscover entity IDs
-- new `*-installer.js`, `*-final-ui.js`, `*-parity-ui.js` or equivalent patch layers
 - native `confirm()` for normal app flows
+- global MutationObserver repair/decorator layers
+- synthetic `.click()` navigation
+- polling to discover another feature's freshly-created DOM/entity
+- `window.fw*` integration APIs
+- direct feature-owned history writes
+- new installer/final/parity/completion patch layers
 
-Use shared infrastructure under `core/` and `ui/`.
+The architecture guard allow-lists may only shrink.
 
-## Work already completed on the cleanup branch
+## Remaining structural work
 
-The branch already contains substantial cleanup work. Among other things:
+1. Continue shrinking remaining architecture allow-lists, especially legacy native-confirm and observer exceptions.
+2. Continue moving shell concerns out of `app.js` only when there is a clear owner; do not turn this into another big-bang rewrite.
+3. Shrink `features/accounts-ux.js` by moving same-domain presentation logic into the Accounts owner/shared account identity primitives. Do not reintroduce cross-feature decoration.
+4. Consolidate Purchase/Wealth layered helper modules into explicit feature submodules where useful.
+5. Split monolithic CSS into `styles/tokens.css`, shell/components/responsive and feature-owned styles after behavioral architecture is stable.
+6. Retire the historical `parity-completion.css` name by folding its live rules into the final styles split rather than deleting live behavior.
 
-- shared frontend core for API, state, router, feature registry and i18n
-- shared dialog, confirm, button and toast primitives
-- GET request deduplication moved into `core/api.js`
-- global `window.fetch` monkey patch removed from `app.js`
-- Budgets extracted from `app.js` into an owned feature module
-- global search extracted from `app.js`
-- category creation moved into the Categories owner
-- portable export patch replaced by a direct owned action
-- multiple local BFF clients migrated to shared API infrastructure
-- dead category patch layers removed
-- Investment/Wealth dialog and API workarounds migrated to shared infrastructure
-- Wealth MutationObservers replaced with explicit Networth lifecycle refreshes
-- Purchase workspace given explicit lifecycle and stable entity IDs
-- Purchase Resource Timing lookup, synthetic clicks and timing-based reopen workarounds removed
-- Purchase observers replaced by explicit refresh hooks
-- Receipt Import migrated toward shared API/dialog lifecycle
-- Receipt Scan Set uses the shared dialog primitive
-- unused legacy Receipt Scan AI layer removed
-- unreachable Tax patch layer removed
-- unreachable parity/final/mobile-review/bulk/switcher **JavaScript** patch layers removed (note: `parity-completion.css` is NOT removed — it is now loaded as an intentional render-blocking base stylesheet via `index.html` and cached in `sw.js`; see the decision note under "CSS cleanup")
-- Architecture regression tests added at `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs`
-- the architecture allow-lists have been reduced continuously as violations are removed
+## Validation
 
-## Next work
+After each block:
 
-Continue with the remaining allow-list violations, preferably in small blocks.
+- syntax-check changed JS modules
+- keep `sw.js` shell dependencies current
+- shrink architecture guard allow-lists when violations are removed
+- preserve URL-backed scope/deep links
+- add numerical backend tests for finance semantics
+- add web architecture/behavior guards for ownership boundaries
 
-### 1. Finish the remaining Purchase helpers
-
-`features/purchase-articles-advanced-actions.js`
-
-- remove direct BFF URL construction
-- replace native `confirm()`
-- replace remaining native `alert()` where practical
-- use shared API / confirm / dialog / button primitives
-
-`features/purchase-discount-actions.js`
-
-- replace native `confirm()`
-- use shared destructive action semantics
-
-`features/purchase-receipt-source-review.js`
-
-- replace direct BFF URL construction with the shared API URL builder
-
-After each migration, remove the file from the relevant architecture allow-list.
-
-### 2. Transactions
-
-`features/transactions.js` remains an important direct-BFF exception. Move its direct BFF access onto the shared API client without changing transaction UX.
-
-### 3. Remaining allow-list entries
-
-Open `FrontendArchitectureGuardTests.cs` and work through the remaining entries one by one.
-
-Two allow-list entries are already dead — the files no longer exist anywhere in the repo — and can simply be pruned now:
-
-- `features/capability-ui-guard.js` (in the `window.fetch =` monkey-patch guard)
-- `purchase-articles-advanced-installer.js` (in the installer/patch-layer filename guard)
-
-The allow-list must only shrink.
-
-### 4. Continue reducing `app.js`
-
-Move remaining feature-specific logic into the actual feature owner. `app.js` should end as bootstrapping/composition only.
-
-### 5. CSS cleanup
-
-After behavioral architecture is stable, continue splitting monolithic shared CSS into shared component/layout CSS and feature-owned CSS. Do not use visual theme files as structural repair layers.
-
-⚠ Needs decision: `parity-completion.css` began as a parity/"final-UI" patch stylesheet but is now promoted to an intentional render-blocking base stylesheet (linked from `index.html`, cached in `sw.js`, and documented as intentional in `theme-init.js`). A human should decide whether it stays a permanent base stylesheet or is folded into the Phase 8 `styles/` split and the parity name retired. Until then it is intentionally live and must not be deleted as "dead parity CSS".
-
-## Validation after every block
-
-- syntax-check changed JavaScript modules
-- update architecture guard allow-lists immediately
-- verify no new direct dialogs/BFF calls/observers/native confirms were introduced
-- keep service-worker shell entries in sync when modules are renamed/removed
-- check whether `main` moved; merge it into the cleanup branch before the next larger block
-
-## Do not do yet
-
-Do not perform the final Accounts migration until the user explicitly approves it after the separate Accounts UX work is finished.
+CI remains manual by repository policy (`workflow_dispatch`). Do not add push/PR triggers merely to obtain a run.
