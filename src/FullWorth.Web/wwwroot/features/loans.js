@@ -160,7 +160,7 @@ async function openLoanDialog(existing) {
     </div>
     <label>${ctx.esc(ctx.get('contracts.account'))}<select name="account"><option value="">—</option>${accountOpts}</select></label>
     <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${categories}</select></label>
-    <div class="dialog-actions">${existing ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('common.delete'))}</button>` : ''}<button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
+    <div class="dialog-actions">${existing ? `<button type="button" class="btn btn-danger" data-delete>${ctx.esc(ctx.get('common.delete'))}</button>` : ''}<button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
