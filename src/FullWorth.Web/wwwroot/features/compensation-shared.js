@@ -19,6 +19,8 @@ export const numAttr = v => { const n = Number(v); return Number.isFinite(n) ? S
 
 export const val = id => $(`#${id}`)?.value ?? '';
 export const num = id => Number(val(id)) || 0;
+// Empty means "not specified" rather than zero — the backend then applies its own year-based default.
+export const numOrNull = id => { const raw = val(id); return raw === "" || raw === null || raw === undefined ? null : (Number(raw) || 0); };
 export const setVal = (id, v) => { const el = $(`#${id}`); if (el) el.value = v ?? ''; };
 export const checked = id => !!$(`#${id}`)?.checked;
 export const setChecked = (id, v) => { const el = $(`#${id}`); if (el) el.checked = !!v; };
@@ -238,7 +240,7 @@ export function readProfile() {
     childlessCareSurcharge: checked('childless-surcharge'),
     pensionInsuranceEnabled: checked('pension-insurance'),
     unemploymentInsuranceEnabled: checked('unemployment-insurance'),
-    healthInsuranceAdditionalRatePercent: num('health-addon'),
+    healthInsuranceAdditionalRatePercent: numOrNull('health-addon'),
     weeklyHours: num('weekly-hours'),
     vacationDays: Math.round(num('vacation-days')),
     spouseAnnualTaxableIncome: 0,
@@ -290,7 +292,7 @@ export function fillProfile(profile) {
   setChecked('childless-surcharge', p.childlessCareSurcharge !== false);
   setChecked('pension-insurance', p.pensionInsuranceEnabled !== false);
   setChecked('unemployment-insurance', p.unemploymentInsuranceEnabled !== false);
-  setVal('health-addon', p.healthInsuranceAdditionalRatePercent ?? 2.9);
+  setVal('health-addon', p.healthInsuranceAdditionalRatePercent ?? '');
   setVal('weekly-hours', p.weeklyHours ?? 40);
   setVal('vacation-days', p.vacationDays ?? 30);
   const car = p.companyCar || {};

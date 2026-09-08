@@ -58,7 +58,9 @@ public sealed record CompensationProfileInput(
     bool ChildlessCareSurcharge = true,
     bool? PensionInsuranceEnabled = null,
     bool? UnemploymentInsuranceEnabled = null,
-    decimal HealthInsuranceAdditionalRatePercent = 2.9m,
+    // null = use the tax year's statutory average Zusatzbeitrag. Pinning a number here would make every
+    // historical snapshot compute with today's rate (1,0 % in 2018 versus 2,9 % in 2026).
+    decimal? HealthInsuranceAdditionalRatePercent = null,
     decimal WeeklyHours = 40m,
     int VacationDays = 30,
     decimal SpouseAnnualTaxableIncome = 0m,

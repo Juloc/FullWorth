@@ -697,6 +697,34 @@ public sealed class CompensationCalculatorTests
         Assert.InRange(adjusted, 38_000m, 38_800m);
     }
 
+    [Fact]
+    public void UnsetHealthAdditionalRate_UsesTheTaxYearsAverageNotTodays()
+    {
+        // The average Zusatzbeitrag nearly tripled between 2018 (1,0 %) and 2026 (2,9 %). A snapshot that
+        // does not name a fund rate must use its own year's average, or every historical net is too low.
+        var profile = BasicProfile(40_000m) with { HealthInsuranceAdditionalRatePercent = null };
+
+        var old = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2018 });
+        var pinnedToTodaysRate = GermanCompensationCalculator.Calculate(
+            profile with { TaxYear = 2018, HealthInsuranceAdditionalRatePercent = 2.9m });
+
+        // 2018 carried the Zusatzbeitrag employee-only, so a 1,0 % year is markedly cheaper than 2,9 %.
+        Assert.True(
+            old.SocialInsurance.HealthAnnual < pinnedToTodaysRate.SocialInsurance.HealthAnnual,
+            "the 2018 average (1,0 %) must cost the employee less than today's 2,9 %");
+
+        // An explicitly named rate still wins over the year's average.
+        var named = GermanCompensationCalculator.Calculate(
+            profile with { TaxYear = 2018, HealthInsuranceAdditionalRatePercent = 0m });
+        Assert.True(named.SocialInsurance.HealthAnnual < old.SocialInsurance.HealthAnnual);
+
+        // For the current year the fallback is a no-op: the seeded average IS 2,9 %.
+        var current = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2026 });
+        var currentPinned = GermanCompensationCalculator.Calculate(
+            profile with { TaxYear = 2026, HealthInsuranceAdditionalRatePercent = 2.9m });
+        Assert.Equal(currentPinned.EstimatedCashNetAnnual, current.EstimatedCashNetAnnual);
+    }
+
     private static CompensationProfileInput BasicProfile(decimal annualGross) => new(
         Name: "Current",
         AnnualGross: annualGross,

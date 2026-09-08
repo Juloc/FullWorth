@@ -351,7 +351,7 @@ public static class GermanCompensationCalculator
         var rvAvBase = Math.Min(Math.Max(0m, annualBase), year.PensionCeilingAnnual(input.StateCode));
         var kvPvBase = Math.Min(Math.Max(0m, annualBase), year.HealthCareCeilingAnnual);
         var employeeAdditional = AdditionalHealthEmployeeRate(input, year);
-        var employerAdditional = AdditionalHealthRate(input) - employeeAdditional;
+        var employerAdditional = AdditionalHealthRate(input, year) - employeeAdditional;
 
         var pension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * year.PensionEmployeeRate;
         var unemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * year.UnemploymentEmployeeRate;
@@ -392,16 +392,22 @@ public static class GermanCompensationCalculator
         return input.Age;
     }
 
-    /// <summary>The fund-specific additional health contribution (Zusatzbeitrag) as a rate.</summary>
-    private static decimal AdditionalHealthRate(CompensationProfileInput input) =>
-        Math.Clamp(input.HealthInsuranceAdditionalRatePercent, 0m, 10m) / 100m;
+    /// <summary>
+    /// The fund-specific additional health contribution (Zusatzbeitrag) as a rate. When the profile does
+    /// not name one, the tax year's statutory average applies, so a historical snapshot uses that year's
+    /// rate instead of today's.
+    /// </summary>
+    private static decimal AdditionalHealthRate(CompensationProfileInput input, TaxYearParameters year) =>
+        input.HealthInsuranceAdditionalRatePercent is { } percent
+            ? Math.Clamp(percent, 0m, 10m) / 100m
+            : year.AverageHealthAdditionalRate;
 
     /// <summary>
     /// The employee's part of the Zusatzbeitrag. Shared 50/50 with the employer since the
     /// GKV-Versichertenentlastungsgesetz took effect in 2019; before that the employee carried it alone.
     /// </summary>
     private static decimal AdditionalHealthEmployeeRate(CompensationProfileInput input, TaxYearParameters year) =>
-        AdditionalHealthRate(input) * year.HealthAdditionalRateEmployeeShare;
+        AdditionalHealthRate(input, year) * year.HealthAdditionalRateEmployeeShare;
 
     private static decimal CareEmployeeRate(CompensationProfileInput input, TaxYearParameters year)
     {
