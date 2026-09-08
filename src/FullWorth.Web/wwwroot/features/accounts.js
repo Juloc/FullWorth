@@ -27,6 +27,52 @@ const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 const ACCT_TRASH='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
 const ACCT_EDIT='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
 const ACCT_FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4Z"/></svg>';
+
+function openAccountActionsDialog(account, groups) {
+  const isManual = account.provider === 'manual' && !account.bankConnectionId;
+  const actions = [
+    ['coach', get('accounts.askCoach'), false],
+    ['visual', get('accounts.editVisual'), false],
+    ...(groups || []).length ? [['move', get('accounts.moveToGroup'), false]] : [],
+    ['rename', get('accounts.rename'), false],
+    ...(isManual ? [['balance', get('accounts.updateBalance'), false], ['delete', get('accounts.delete'), true]] : [])
+  ];
+
+  const dlg = dialog(`<div class="dialog-card more-sheet account-actions-sheet">
+    <div class="panel-head"><div><h2>${esc(account.displayName || account.institutionName)}</h2><div class="row-sub">${esc(account.institutionName || '')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div>
+    <div class="more-list">${actions.map(([key, label, danger]) => `<button type="button" data-account-action="${key}" class="${danger ? 'danger' : ''}"><span>${esc(label)}</span></button>`).join('')}</div>
+  </div>`, { mobileMode: 'sheet' });
+
+  dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());
+  dlg.querySelectorAll('[data-account-action]').forEach(button => button.addEventListener('click', () => {
+    const action = button.dataset.accountAction;
+    dlg.close();
+
+    if (action === 'coach') {
+      window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
+        entityType: 'account',
+        entityId: account.id,
+        entityLabel: account.displayName || account.institutionName || get('accounts.title'),
+        details: {
+          balance: String(account.latestBalance?.amount ?? ''),
+          currency: account.latestBalance?.currency || account.currency || '',
+          kind: account.accountType || account.product || ''
+        }
+      }}));
+    } else if (action === 'visual') {
+      emitAppEvent('accounts:edit-visual', { accountId: account.id });
+    } else if (action === 'move') {
+      openMoveToGroupDialog(account, groups);
+    } else if (action === 'rename') {
+      openAccountNameDialog(account);
+    } else if (action === 'balance') {
+      openBalanceDialog(account);
+    } else if (action === 'delete') {
+      deleteAccount(account);
+    }
+  }));
+  dlg.showModal();
+}
 function accountRow(x,groups){
   const isManual=x.provider==='manual'&&!x.bankConnectionId;
   const kind=[x.product||x.accountType,isManual?get('accounts.manual'):null].filter(Boolean).join(' · ');
@@ -42,7 +88,9 @@ function accountRow(x,groups){
   const renameBtn=`<button type="button" class="icon-button" data-rename-account title="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}" aria-label="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}">${ACCT_EDIT}</button>`;
   const balanceBtn=isManual?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}</div>`;
+  const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
+  row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
   row.querySelector('[data-edit-balance]')?.addEventListener('click',()=>openBalanceDialog(x));
