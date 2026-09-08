@@ -61,7 +61,7 @@ jobs:
           fi
 
           image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
-          sha_tag="sha-${GITHUB_SHA::7}"
+          sha_tag="sha-${SOURCE_SHA::7}"
 
           {
             echo 'tags<<EOF'
@@ -137,7 +137,7 @@ jobs:
           fi
 
           image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
-          sha_tag="sha-${GITHUB_SHA::7}"
+          sha_tag="sha-${SOURCE_SHA::7}"
 
           {
             echo 'tags<<EOF'
@@ -192,7 +192,7 @@ jobs:
         shell: bash
         run: |
           version="${RELEASE_TAG#v}"
-          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes --verify-tag)
 
           if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
@@ -230,7 +230,7 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
-          sha_tag="sha-${GITHUB_SHA::7}"
+          sha_tag="sha-${SOURCE_SHA::7}"
 
           merge_tag() {
             tag="$1"
