@@ -22,6 +22,7 @@ using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Import;
 using FullWorth.Backend.Modules.Ingestion;
 using FullWorth.Backend.Modules.Intelligence;
+using FullWorth.Backend.Modules.Intelligence.Actions;
 using FullWorth.Backend.Modules.Intelligence.Context;
 using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Modules.Loans;
@@ -157,6 +158,11 @@ public static class BackendApplication
         builder.Services.AddScoped<FinancialSignalDetectionService>();
         builder.Services.AddScoped<FinancialDomainSignalDetectionService>();
         builder.Services.AddScoped<FinancialSignalJobProcessor>();
+        builder.Services.AddScoped<IActionProposalHandler, TransactionCategoryChangeActionHandler>();
+        builder.Services.AddScoped<IActionProposalHandler, CategorizationRuleUpsertActionHandler>();
+        builder.Services.AddScoped<IActionProposalHandler, TransferLinkActionHandler>();
+        builder.Services.AddScoped<ActionProposalHandlerRegistry>();
+        builder.Services.AddScoped<ActionProposalService>();
         builder.Services.AddSingleton<DeterministicCoachEngine>();
         builder.Services.AddScoped<CoachAiAccessResolver>();
         builder.Services.AddScoped<CoachModelCatalogService>();
@@ -393,6 +399,7 @@ public static class BackendApplication
         endpoints.MapAiUserAccessEndpoints();
         endpoints.MapIntelligenceSuggestionEndpoints();
         endpoints.MapFinancialSignalEndpoints();
+        endpoints.MapActionProposalEndpoints();
         
         // Main feature-parity surfaces remain available. Product/review endpoints are compatibility facades
         // over the canonical purchase stack rather than parallel storage models.
