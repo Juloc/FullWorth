@@ -71,6 +71,112 @@ public sealed class FinancialDomainSignalDetectionTests
     }
 
     [Fact]
+    public async Task Accepted_contract_on_old_account_emits_account_change_when_recurrence_moves()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var oldAccountId = Guid.NewGuid();
+        var newAccountId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = userId,
+                EmailNormalized = $"{userId:N}@EXAMPLE.COM".ToUpperInvariant(),
+                DisplayName = "Account change owner",
+                IsActive = true
+            });
+            db.FullWorthSpaces.Add(new FullWorthSpace
+            {
+                Id = spaceId,
+                Name = "Account change",
+                BaseCurrency = "EUR"
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = spaceId,
+                UserId = userId,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            db.Accounts.AddRange(
+                Account(oldAccountId, spaceId, "Old payment"),
+                Account(newAccountId, spaceId, "New payment"));
+            db.AccountOwners.AddRange(Owner(oldAccountId, userId), Owner(newAccountId, userId));
+            db.Contracts.Add(new RecurringContract
+            {
+                Id = contractId,
+                FullWorthSpaceId = spaceId,
+                Name = "NETFLIX",
+                ProviderName = "NETFLIX",
+                AccountId = oldAccountId,
+                Amount = 12.99m,
+                Currency = "EUR",
+                BillingCycle = "monthly",
+                Interval = 1,
+                AutoDetected = true,
+                IsActive = true
+            });
+
+            for (var monthsBack = 4; monthsBack >= 1; monthsBack--)
+            {
+                db.Transactions.Add(new FinanceTransaction
+                {
+                    AccountId = oldAccountId,
+                    ExternalKey = $"netflix-old-{monthsBack}",
+                    Amount = -12.99m,
+                    Currency = "EUR",
+                    BookingDate = today.AddMonths(-monthsBack),
+                    Counterparty = "NETFLIX",
+                    NormalizedCounterparty = "netflix",
+                    CategorizationSource = "none",
+                    RawJson = "{}"
+                });
+            }
+            db.Transactions.Add(new FinanceTransaction
+            {
+                AccountId = newAccountId,
+                ExternalKey = "netflix-new-account",
+                Amount = -12.99m,
+                Currency = "EUR",
+                BookingDate = today,
+                Counterparty = "NETFLIX",
+                NormalizedCounterparty = "netflix",
+                CategorizationSource = "none",
+                RawJson = "{}"
+            });
+            await db.SaveChangesAsync();
+        });
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<FinancialDomainSignalDetectionService>();
+        await service.DetectAndPersistAsync(userId, spaceId, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        var intelligenceDb = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
+        var signal = Assert.Single(await intelligenceDb.FinancialSignals.AsNoTracking()
+            .Where(x => x.UserId == userId &&
+                        x.FullWorthSpaceId == spaceId &&
+                        x.Source == "detector:contract-account-change")
+            .ToListAsync());
+
+        Assert.Equal(contractId.ToString("N"), signal.SubjectId);
+        Assert.Equal("insights.contract.paymentAccountChanged", signal.TitleKey);
+        Assert.Equal(FinancialSignalSeverities.Attention, signal.Severity);
+
+        await factory.SeedAsync(async db =>
+        {
+            var contract = await db.Contracts.AsNoTracking().SingleAsync(x => x.Id == contractId);
+            Assert.Equal(oldAccountId, contract.AccountId);
+            Assert.Empty(await db.Contracts.AsNoTracking()
+                .Where(x => x.MergedIntoContractId == contractId)
+                .ToListAsync());
+        });
+    }
+
+    [Fact]
     public async Task Linking_transfer_resolves_its_shadow_signal_on_next_detection()
     {
         using var factory = new BackendWebApplicationFactory();
@@ -198,7 +304,19 @@ public sealed class FinancialDomainSignalDetectionTests
                     RawJson = "{}"
                 },
                 PriceTransaction(scenario.ContractAccount, "price-old", new DateOnly(2026, 7, 5), 10m),
-                PriceTransaction(scenario.ContractAccount, "price-new", new DateOnly(2026, 8, 5), 12m));
+                PriceTransaction(scenario.ContractAccount, "price-new", new DateOnly(2026, 8, 5), 12m),
+                new FinanceTransaction
+                {
+                    AccountId = scenario.ContractAccount,
+                    ExternalKey = "unrelated-newer-debit",
+                    Amount = -99m,
+                    Currency = "EUR",
+                    BookingDate = new DateOnly(2026, 9, 6),
+                    Counterparty = "OTHER SHOP",
+                    NormalizedCounterparty = "OTHER SHOP",
+                    CategorizationSource = "none",
+                    RawJson = "{}"
+                });
 
             await db.SaveChangesAsync();
         });
