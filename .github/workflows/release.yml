@@ -179,14 +179,15 @@ jobs:
         shell: bash
         run: |
           version="${FULLWORTH_RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
-          args=(release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
+          release_tag="v$version"
+          args=(release create "$release_tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "FullWorth $version" --generate-notes)
 
           if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
           fi
 
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists."
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $release_tag already exists."
           else
             gh "${args[@]}"
           fi
