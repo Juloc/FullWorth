@@ -1,0 +1,77 @@
+/* Finance/FullWorth app shell + component styles (UI_UX_SPEC §4 tokens, §3 shell, §5 privacy, §24 states).
+   Tokens follow the canonical "FullWorth Design System": Barlow Condensed by default with Fredoka as an optional preview font,
+   monochrome and line-driven (no accent hue), a single dark-grey CTA colour, and colour ONLY where it
+   carries meaning — green income, amber "getting close", red overage. Persistent navigation shows its
+   active state as a plain grey fill (never the CTA colour) so colour stays reserved for money statements.
+   Components consume semantic tokens only, so themes restyle without touching markup/logic. */
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:optional;src:url("/fonts/BarlowCondensed-400.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:optional;src:url("/fonts/BarlowCondensed-500.woff2") format("woff2")}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:optional;src:url("/fonts/BarlowCondensed-600.woff2") format("woff2")}
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:300 700;font-stretch:75% 125%;font-display:swap;src:url("/fonts/Fredoka-Variable.ttf") format("truetype")}
+:root{
+  --font-default:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-arial-narrow:'Arial Narrow','Aptos Narrow','Roboto Condensed',ui-sans-serif,system-ui,sans-serif;
+  --font-system:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-segoe:'Segoe UI',system-ui,sans-serif;
+  --font-aptos:'Aptos','Segoe UI',system-ui,sans-serif;
+  --font-helvetica:'Helvetica Neue',Helvetica,Arial,sans-serif;
+  --font-arial:Arial,Helvetica,sans-serif;
+  --font-verdana:Verdana,Geneva,sans-serif;
+  --font-tahoma:Tahoma,Verdana,sans-serif;
+  --font-trebuchet:'Trebuchet MS',Arial,sans-serif;
+  --font-century-gothic:'Century Gothic','Avenir Next',Avenir,ui-sans-serif,sans-serif;
+  --font-fredoka:'Fredoka',ui-rounded,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-comic:'Comic Sans MS','Comic Sans',cursive;
+  --font-georgia:Georgia,'Times New Roman',serif;
+  --font-times:'Times New Roman',Times,serif;
+  --font-mono:'Courier New',Courier,ui-monospace,SFMono-Regular,Consolas,monospace;
+  --font:var(--font-default);
+  --font-size-base:13px;
+  --font-weight-base:400;
+  --letter-spacing-base:0em;
+  --line-height-base:1.5;
+  color-scheme:light;
+  /* spacing scale (§4.1) */
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
+  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
+  /* Upper bound for the main content column so ultrawide/1440p screens keep a readable measure
+     instead of stretching cards and tables across the whole width; centered inside the shell column. */
+  --content-max:1520px;
+  /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
+  --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
+  /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
+  --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
+  /* Category identity palette (§13): one strong base tone per super-category; deeper levels are
+     derived via color-mix with white. Brand hues — the same in light and dark. */
+  --cat-1:#5b47e0;--cat-2:#1878f0;--cat-3:#10c7a5;--cat-4:#ff8a0f;--cat-5:#e23fa8;--cat-6:#ffc91e;--cat-7:#66c61c;--cat-8:#8b95a6;
+  /* interactive: a single dark-grey call-to-action colour, no accent hue */
+  --cta:#272727;--cta-text:#ffffff;--accent:#272727;--accent-soft:#f7f7f7;
+  /* semantic tokens (§4.3) with matching soft backgrounds */
+  --positive:#17b45c;--positive-soft:#e6f8ec;--negative:#e03131;--negative-soft:#fdeaea;--warning:#f9891f;--warning-soft:#fdf1e3;
+  /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
+  --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
+}
+html[data-font="arial-narrow"]{--font:var(--font-arial-narrow)}
+html[data-font="system"]{--font:var(--font-system)}
+html[data-font="segoe"]{--font:var(--font-segoe)}
+html[data-font="aptos"]{--font:var(--font-aptos)}
+html[data-font="helvetica"]{--font:var(--font-helvetica)}
+html[data-font="arial"]{--font:var(--font-arial)}
+html[data-font="verdana"]{--font:var(--font-verdana)}
+html[data-font="tahoma"]{--font:var(--font-tahoma)}
+html[data-font="trebuchet"]{--font:var(--font-trebuchet)}
+html[data-font="century-gothic"]{--font:var(--font-century-gothic)}
+html[data-font="fredoka"]{--font:var(--font-fredoka)}
+html[data-font="comic"]{--font:var(--font-comic)}
+html[data-font="georgia"]{--font:var(--font-georgia)}
+html[data-font="times"]{--font:var(--font-times)}
+html[data-font="mono"]{--font:var(--font-mono)}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  /* Neutral dark surfaces use visible elevation instead of near-black-on-near-black. */
+  --bg:#121416;--surface:#191b1e;--surface-2:#22252a;--surface-3:#2d3137;--text:#f3f4f5;--muted:#aeb3ba;--line:#30343a;
+  --k1:#f3f4f5;--k2:#d2d5d9;--k3:#aeb3ba;--k4:#7e858d;--k5:#50565e;
+  --cta:#dfe2e5;--cta-text:#151719;--accent:#dfe2e5;--accent-soft:#25282d;
+  --positive:#55df8e;--positive-soft:#163523;--negative:#ff756a;--negative-soft:#351d1d;--warning:#ffb866;--warning-soft:#372716;
+  --shadow:none;
+}
