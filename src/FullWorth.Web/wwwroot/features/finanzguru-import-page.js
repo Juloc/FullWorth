@@ -1,4 +1,5 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
+import { snapshotUploadFile } from '../security/secure-fetch.js';
 import { confirmMessage } from '../ui/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const text={
@@ -273,7 +274,7 @@ form.addEventListener('submit',async event=>{
   if(!await confirmMessage({message:text.confirm,title:text.heading,confirmLabel:text.submit,cancelLabel:text.cancel}))return;
   submit.disabled=true;fileInput.disabled=true;status.textContent=text.working;result.hidden=true;result.innerHTML='';
   try{
-    const uploadFile=window.financeFileUpload?.snapshot?await window.financeFileUpload.snapshot(file):file;
+    const uploadFile=await snapshotUploadFile(file);
     const body=new FormData();body.append('file',uploadFile,uploadFile.name);
     const data=await sharedApi(`api/import/finanzguru?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST',body});
     const rows=[
