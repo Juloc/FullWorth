@@ -134,6 +134,23 @@ public sealed class ContractMergeTests
         Assert.Equal(2, rowsAfter!.Count);
     }
 
+    [Fact]
+    public void MergePreviewService_RemainsReadOnly()
+    {
+        var path = Path.Combine(
+            Root(),
+            "src",
+            "FullWorth.Backend",
+            "Modules",
+            "Contracts",
+            "ContractMergePreviewService.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.DoesNotContain("SaveChanges", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("MergeForUserAsync", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("MergedIntoContractId =", content, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG", "WEG AM KÖNIGSTRÄßLE 1 5 VERTR D PPG")]
     [InlineData("MÜLLER GMBH", "MUELLER GMBH")]
@@ -282,4 +299,13 @@ public sealed class ContractMergeTests
         Guid AccountB,
         Guid Target,
         Guid Source);
+
+    private static string Root()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
+    }
 }
