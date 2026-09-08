@@ -1,5 +1,6 @@
 import { emitAppEvent } from '../core/event-bus.js';
 import { confirmDialog } from '../ui/confirm.js';
+import { mountTransferActionProposal } from './action-proposals.js';
 
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
 let dashboardRenderVersion = 0;
@@ -321,6 +322,9 @@ function openDetail(ctx, initialSignal, refresh) {
     (signal.subjectType === 'contract-pair'
       ? '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.mergePreview.section', 'Merge preview')) + '</span><div data-merge-preview></div></div>'
       : '') +
+    (signal.subjectType === 'transaction-pair'
+      ? '<div class="insight-detail-section" data-action-proposal-section><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.actionProposal.section', 'Suggested action')) + '</span><div data-action-proposal></div></div>'
+      : '') +
     '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.feedback', 'Was this useful?')) + '</span><div class="insight-feedback"><button type="button" class="ghost ' + (signal.feedback === 'useful' ? 'active' : '') + '" data-feedback="useful" aria-pressed="' + (signal.feedback === 'useful') + '">' + ctx.esc(tr(ctx, 'insights.useful', 'Useful')) + '</button><button type="button" class="ghost ' + (signal.feedback === 'irrelevant' ? 'active' : '') + '" data-feedback="irrelevant" aria-pressed="' + (signal.feedback === 'irrelevant') + '">' + ctx.esc(tr(ctx, 'insights.irrelevant', 'Not relevant')) + '</button></div></div>' +
     '<button type="button" class="insight-open-target" data-open-target>' + ctx.esc(tr(ctx, 'insights.openAffected', 'Open affected area')) + '<span aria-hidden="true">›</span></button></form>';
   const dlg = ctx.dialog(html, { mobileMode: 'sheet' });
@@ -374,4 +378,6 @@ function openDetail(ctx, initialSignal, refresh) {
   dlg.showModal();
   if (signal.subjectType === 'contract-pair')
     loadMergePreview(ctx, signal, dlg.querySelector('[data-merge-preview]'), dlg, refresh);
+  if (signal.subjectType === 'transaction-pair')
+    mountTransferActionProposal(ctx, signal, dlg.querySelector('[data-action-proposal]'), dlg, refresh);
 }
