@@ -58,6 +58,7 @@ public sealed class AutopilotArchitectureGuardTests
         {
             "IIntelligenceProvider",
             "IntelligenceProviderRegistry",
+            "IntelligenceStore",
             "AiCredential",
             "AiInstanceSettings",
             "OpenAiIntelligenceProvider",
