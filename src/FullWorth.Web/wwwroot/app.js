@@ -1,5 +1,5 @@
 import { money, setMoneyLocale } from './ui/money.js';
-import { isPrivate, togglePrivacy, onPrivacyChange, setPrivacyDefault } from './ui/privacy.js';
+import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault, setPrivacyDefault } from './ui/privacy.js';
 import { confirmDialog } from './ui/confirm.js';
 import { initLock } from './ui/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
