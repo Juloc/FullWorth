@@ -230,7 +230,7 @@ Presentation / privacy:
 
 PWA:
 
-- [ ] service-worker v96 installs successfully
+- [ ] service-worker v97 installs successfully
 - [ ] `features/insights.js` is present in the static shell cache
 - [ ] no `/api/insights` response is cached by the service worker
 
@@ -247,3 +247,36 @@ If deterministic generation must also stop, set:
 `Autopilot__Features__signals=off`
 
 Then roll back the image normally. There is no Deploy-5 schema change and no finance mutation to undo.
+
+
+## Deploy 6 smoke additions
+
+Deploy 6 adds **no database migration**, **no required environment variable**, and **no automatic merge execution**.
+
+Contract duplicate insight:
+
+- [ ] opening a `contract-pair` insight loads a merge preview
+- [ ] preview names the proposed canonical/main contract
+- [ ] preview lists the source contract history that would be folded into it
+- [ ] preview shows combined matched-payment count and recent combined payments
+- [ ] preview shows the number of payment accounts involved
+- [ ] provider/cycle/amount differences appear as warnings
+- [ ] monetary preview values respect Privacy mode
+- [ ] there is no merge/confirm/execute button in the Insight surface
+
+Backend safety:
+
+- [ ] `POST /api/contracts/merge-preview` accepts at least two visible contract IDs
+- [ ] same-currency contracts produce a deterministic canonical proposal
+- [ ] latest matched payment wins canonical selection before stable tie-breakers
+- [ ] mixed-currency preview is rejected
+- [ ] preview does not write `MergedIntoContractId`
+- [ ] preview does not call `SaveChanges`
+- [ ] preview does not call `ContractStore.MergeForUserAsync`
+- [ ] existing `/api/contract-parity/merge` behavior is unchanged
+
+### Deploy 6 rollback
+
+Roll back the application image. Deploy 6 has no schema change and no new persisted state.
+
+The existing duplicate insight remains useful without the preview; no finance data needs reversal.

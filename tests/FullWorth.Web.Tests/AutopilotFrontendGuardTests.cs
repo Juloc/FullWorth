@@ -76,7 +76,8 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("emitAppEvent('contract:open'", feature);
         Assert.Contains("emitAppEvent('budget:open'", feature);
 
-        Assert.DoesNotContain("api/contracts/", feature, StringComparison.Ordinal);
+        Assert.Contains("api/contracts/merge-preview", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/contracts/", feature.Replace("api/contracts/merge-preview", string.Empty), StringComparison.Ordinal);
         Assert.DoesNotContain("api/transactions/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/budgets/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
@@ -87,6 +88,22 @@ public sealed class AutopilotFrontendGuardTests
 
         Assert.Contains("'/features/insights.js'", serviceWorker);
         Assert.Contains("'/styles/features/insights.css'", serviceWorker);
+    }
+
+    [Fact]
+    public void Deploy6ContractMergePreviewHasNoExecutionPath()
+    {
+        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "features", "insights.js"));
+        var css = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "features", "insights.css"));
+
+        Assert.Contains("contractPairIds", feature);
+        Assert.Contains("api/contracts/merge-preview", feature);
+        Assert.Contains("data-merge-preview", feature);
+        Assert.Contains("insight-merge-preview", css);
+
+        Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-merge-execute", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("executeMerge", feature, StringComparison.Ordinal);
     }
 
     [Fact]

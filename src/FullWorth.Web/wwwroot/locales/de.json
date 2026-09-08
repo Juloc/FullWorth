@@ -1197,6 +1197,23 @@
       "priceIncreased": "Ein Vertrag ist teurer geworden",
       "priceDecreased": "Ein Vertrag ist günstiger geworden"
     },
-    "restore": "Wieder anzeigen"
+    "restore": "Wieder anzeigen",
+    "mergePreview": {
+      "section": "Zusammenführung",
+      "title": "Vorschau der Zusammenführung",
+      "readOnly": "Nur Vorschau – es wird noch nichts geändert",
+      "keep": "Als Hauptvertrag behalten",
+      "combine": "Verlauf übernehmen von",
+      "accounts": "{count} Zahlungskonten",
+      "payments": "{count} erkannte Zahlungen",
+      "loading": "Vorschau wird erstellt …",
+      "error": "Vorschau konnte nicht geladen werden.",
+      "warning": {
+        "provider-identity-differs": "Anbieternamen unterscheiden sich",
+        "billing-cycle-differs": "Zahlungsrhythmus unterscheidet sich",
+        "amount-differs": "Beträge unterscheiden sich deutlich",
+        "no-payment-history": "Keine Zahlungshistorie gefunden"
+      }
+    }
   }
 }

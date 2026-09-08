@@ -672,6 +672,27 @@ public static class ContractEndpoints
             return sources is null ? Results.NotFound() : Results.Ok(sources);
         });
 
+        group.MapPost("/merge-preview", async (
+            Guid fullWorthSpaceId,
+            ContractMergePreviewRequest request,
+            CurrentUserContext currentUser,
+            ContractMergePreviewService previewService,
+            CancellationToken ct) =>
+        {
+            var outcome = await previewService.PreviewAsync(
+                currentUser.RequireUserId(),
+                fullWorthSpaceId,
+                request,
+                ct);
+            return outcome.Result switch
+            {
+                ContractMergePreviewResult.Success => Results.Ok(outcome.Preview),
+                ContractMergePreviewResult.NotFound => Results.NotFound(),
+                ContractMergePreviewResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge preview." }),
+                _ => Results.StatusCode(StatusCodes.Status409Conflict)
+            };
+        });
+
         group.MapPost("/", async (Guid fullWorthSpaceId, ContractWrite request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
             ToResult(await store.CreateForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
 

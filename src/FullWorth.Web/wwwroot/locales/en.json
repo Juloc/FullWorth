@@ -1197,6 +1197,23 @@
       "priceIncreased": "A contract became more expensive",
       "priceDecreased": "A contract became cheaper"
     },
-    "restore": "Show again"
+    "restore": "Show again",
+    "mergePreview": {
+      "section": "Merge preview",
+      "title": "Merge preview",
+      "readOnly": "Preview only — nothing will be changed yet",
+      "keep": "Keep as main contract",
+      "combine": "Combine history from",
+      "accounts": "{count} payment accounts",
+      "payments": "{count} matched payments",
+      "loading": "Preparing preview …",
+      "error": "Preview could not be loaded.",
+      "warning": {
+        "provider-identity-differs": "Provider names differ",
+        "billing-cycle-differs": "Billing cycles differ",
+        "amount-differs": "Amounts differ significantly",
+        "no-payment-history": "No payment history found"
+      }
+    }
   }
 }

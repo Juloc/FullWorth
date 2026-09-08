@@ -8,11 +8,100 @@ using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Tests.Contracts;
 
 public sealed class ContractMergeTests
 {
+    [Fact]
+    public async Task MergePreview_SelectsLatestPaymentAsCanonical_AndDoesNotMutateContracts()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var preview = json.RootElement;
+
+        Assert.Equal(s.Source, preview.GetProperty("canonicalContractId").GetGuid());
+        Assert.False(preview.GetProperty("executionEnabled").GetBoolean());
+        Assert.Equal(2, preview.GetProperty("combinedPaymentCount").GetInt32());
+        Assert.Equal(2, preview.GetProperty("accountIds").GetArrayLength());
+        Assert.Equal(2, preview.GetProperty("contracts").GetArrayLength());
+        Assert.Contains(
+            preview.GetProperty("canonicalFields").EnumerateArray(),
+            field => field.GetProperty("field").GetString() == "accountId" &&
+                     field.GetProperty("sourceContractId").GetGuid() == s.Source);
+
+        using var listResponse = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts?fullWorthSpaceId={s.Space}",
+            s.Owner));
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var contracts = await listResponse.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.Equal(2, contracts!.Count);
+
+        using var targetSources = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts/{s.Target}/merged-sources?fullWorthSpaceId={s.Space}",
+            s.Owner));
+        using var sourceSources = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts/{s.Source}/merged-sources?fullWorthSpaceId={s.Space}",
+            s.Owner));
+        Assert.Equal(HttpStatusCode.OK, targetSources.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sourceSources.StatusCode);
+        Assert.Empty((await targetSources.Content.ReadFromJsonAsync<List<JsonElement>>())!);
+        Assert.Empty((await sourceSources.Content.ReadFromJsonAsync<List<JsonElement>>())!);
+    }
+
+    [Fact]
+    public async Task MergePreview_RejectsMixedCurrencies()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await factory.SeedAsync(async db =>
+        {
+            var source = await db.Contracts.SingleAsync(contract => contract.Id == s.Source);
+            source.Currency = "USD";
+            await db.SaveChangesAsync();
+        });
+
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MergePreview_RejectsSingleContract()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target } }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task Merge_HidesDuplicateButKeepsAccountAndPaymentHistory_AndCanBeUndone()
     {
@@ -67,6 +156,23 @@ public sealed class ContractMergeTests
         Assert.Equal(HttpStatusCode.OK, listAfter.StatusCode);
         var rowsAfter = await listAfter.Content.ReadFromJsonAsync<List<JsonElement>>();
         Assert.Equal(2, rowsAfter!.Count);
+    }
+
+    [Fact]
+    public void MergePreviewService_RemainsReadOnly()
+    {
+        var path = Path.Combine(
+            Root(),
+            "src",
+            "FullWorth.Backend",
+            "Modules",
+            "Contracts",
+            "ContractMergePreviewService.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.DoesNotContain("SaveChanges", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("MergeForUserAsync", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("MergedIntoContractId =", content, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -217,4 +323,13 @@ public sealed class ContractMergeTests
         Guid AccountB,
         Guid Target,
         Guid Source);
+
+    private static string Root()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
+    }
 }
