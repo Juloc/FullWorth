@@ -6,6 +6,7 @@
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
 import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
+import { MoneyVariant, moneyClass } from '../ui/money.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -1270,7 +1271,7 @@ async function openContractAnalysis() {
       <h3>${ctx.esc(t('Durchschnittlich pro Monat', 'Average per month'))}</h3>
       ${averageIncome == null ? '' : `<div><span>${ctx.esc(t('Einnahmen', 'Income'))}</span><strong class="positive">${ctx.money(averageIncome, currency)}</strong></div>`}
       <div><span>${ctx.esc(t('Verträge', 'Contracts'))}${share == null ? '' : ` <small>${share} %</small>`}</span><strong>−${ctx.money(monthly, currency)}</strong></div>
-      ${available == null ? '' : `<div class="contract-analysis-available"><span>${ctx.esc(t('Frei verfügbar', 'Available'))}</span><strong class="${available >= 0 ? 'positive' : 'negative'}">${ctx.money(available, currency)}</strong></div>`}
+      ${available == null ? '' : `<div class="contract-analysis-available"><span>${ctx.esc(t('Frei verfügbar', 'Available'))}</span><strong class="${moneyClass(available < 0 ? MoneyVariant.Danger : MoneyVariant.Neutral)}">${ctx.money(available, currency)}</strong></div>`}
       <small>${ctx.money(annual, currency)} ${ctx.esc(t('Vertragskosten pro Jahr', 'contract cost per year'))}</small>
     </section>
 
