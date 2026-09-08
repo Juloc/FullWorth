@@ -750,7 +750,11 @@
     "syncRunning": "A sync is already running.",
     "syncCooldown": "The bank hit its rate limit. Please try again later.",
     "syncReauth": "The consent has expired. Please reconnect the bank.",
-    "reconnect": "Reconnect"
+    "reconnect": "Reconnect",
+    "moreActions": "More actions",
+    "askCoach": "Ask Coach",
+    "editVisual": "Icon & appearance",
+    "rename": "Rename account"
   },
   "a11y": {
     "skipToContent": "Skip to content"
