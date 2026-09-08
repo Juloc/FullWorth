@@ -11,6 +11,56 @@ export function createAccessSetup(ctx, openBankingWizard) {
   const modeLabel = mode =>
     get('aiAccess.mode_' + String(mode || 'none').replaceAll('-', '_'));
 
+  // Populates the Codex model picker from the bridge's own model catalog and saves the choice.
+  // An empty value keeps "automatic", i.e. Codex decides.
+  async function wireCodexModel(step, status) {
+    const select = step.querySelector('[data-codex-model]');
+    const custom = step.querySelector('[data-codex-model-custom]');
+    const save = step.querySelector('[data-codex-model-save]');
+    const note = step.querySelector('[data-codex-model-status]');
+    if (!select || !custom || !save) return;
+
+    const current = String(status?.textModel || '');
+    try {
+      const catalog = await api('api/intelligence/access/codex/models');
+      const names = codexModelNames(catalog);
+      select.insertAdjacentHTML('beforeend', names
+        .map(name => '<option value="' + esc(name) + '">' + esc(name) + '</option>')
+        .join(''));
+      if (current && !names.includes(current)) custom.value = current;
+      else select.value = current;
+      if (!names.length && note) note.textContent = 'Keine Modell-Liste von Codex erhalten — Freitext nutzen.';
+    } catch {
+      // The bridge may be offline or not logged in; the free-text field still lets the user set a model.
+      if (current) custom.value = current;
+      if (note) note.textContent = 'Modell-Liste nicht verfügbar — Freitext nutzen.';
+    }
+
+    save.onclick = async () => {
+      save.disabled = true;
+      try {
+        const model = String(custom.value || '').trim() || String(select.value || '');
+        const saved = await api('api/intelligence/access/codex/model', putJson({ model: model || null }));
+        if (note) note.textContent = saved?.model ? 'Modell: ' + saved.model : 'Modell: Automatisch';
+        toast('Modell gespeichert.');
+      } catch (error) {
+        if (note) note.textContent = error?.message || 'Modell konnte nicht gespeichert werden.';
+      } finally {
+        save.disabled = false;
+      }
+    };
+  }
+
+  // The bridge returns `codex debug models` output, whose exact shape depends on the CLI version.
+  function codexModelNames(catalog) {
+    const raw = catalog?.models ?? catalog;
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.models) ? raw.models : [];
+    return [...new Set(list
+      .map(entry => typeof entry === 'string' ? entry : entry?.id || entry?.name || entry?.model)
+      .filter(name => typeof name === 'string' && name.trim())
+      .map(name => name.trim()))];
+  }
+
   async function renderAiAccessSettings() {
     const row = document.querySelector('#ai-access-settings');
     const sub = document.querySelector('#ai-access-status');
@@ -93,10 +143,22 @@ export function createAccessSetup(ctx, openBankingWizard) {
         detail = get('aiAccess.fingerprint').replace('{value}', status.credential.secretFingerprint);
       }
 
+      // Codex previously offered no model choice at all ("automatic" only). The list is loaded from the
+      // bridge below; the free-text field covers a model the bridge does not advertise yet.
+      const codexModelBlock = status.mode === 'codex'
+        ? '<div class="ai-codex-model">' +
+            '<label>Modell<select data-codex-model><option value="">Automatisch</option></select></label>' +
+            '<label>Anderes Modell<input data-codex-model-custom placeholder="z. B. 5.6 luna"></label>' +
+            '<button type="button" data-codex-model-save>Modell speichern</button>' +
+            '<span class="row-sub" data-codex-model-status></span>' +
+          '</div>'
+        : '';
+
       step.innerHTML =
         '<div class="row"><div class="row-main"><div class="row-title">' + esc(modeLabel(status.mode)) + '</div>' +
           '<div class="row-sub">' + esc(detail) + '</div></div></div>' +
         '<p class="row-sub">' + esc(get('aiAccess.secretHidden')) + '</p>' +
+        codexModelBlock +
         '<div class="dialog-actions">' +
           '<button type="button" class="ghost danger" data-remove>' + esc(get('aiAccess.remove')) + '</button>' +
           '<button type="button" data-test>' + esc(get('aiAccess.test')) + '</button>' +
@@ -106,6 +168,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
       step.querySelector('[data-done]').onclick = () => dlg.close();
       step.querySelector('[data-change]').onclick = showChoices;
+      if (status.mode === 'codex') wireCodexModel(step, status);
       step.querySelector('[data-test]').onclick = async event => {
         const button = event.currentTarget;
         button.disabled = true;

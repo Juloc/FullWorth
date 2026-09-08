@@ -14,6 +14,7 @@ namespace FullWorth.Backend.Modules.Compensation;
 public sealed class PayslipCodexExtractor(
     IConfiguration configuration,
     IHttpClientFactory clients,
+    FullWorth.Backend.Modules.Intelligence.CodexModelResolver models,
     ILogger<PayslipCodexExtractor> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -40,12 +41,13 @@ public sealed class PayslipCodexExtractor(
         // Cap the OCR text: a payslip is one page; anything larger is almost certainly noise.
         var text = ocrText.Length <= 24_000 ? ocrText : ocrText[..24_000];
 
+        // Honor the model the user picked in the AI-access settings; null means "automatic".
         var body = JsonSerializer.Serialize(new
         {
             systemInstruction = SystemInstruction,
             inputJson = JsonSerializer.Serialize(new { payslipText = text }, Json),
             jsonSchema = SchemaJson,
-            model = (string?)null
+            model = await models.ResolveAsync(userId, ct)
         }, Json);
 
         try

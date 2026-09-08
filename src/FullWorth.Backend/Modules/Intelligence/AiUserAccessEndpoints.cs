@@ -19,6 +19,9 @@ public sealed record UpdateCustomAiAccessRequest(
     string? TextModel,
     string? VisionModel);
 
+/// <summary>Model selection for the Codex provider. An empty value means "automatic".</summary>
+public sealed record CodexModelRequest(string? Model);
+
 public static class AiUserAccessEndpoints
 {
     private const string DefaultOpenAiModel = "gpt-5.6-terra";
@@ -250,6 +253,49 @@ public static class AiUserAccessEndpoints
 
             return Results.Content(result.Body, "application/json", Encoding.UTF8, result.StatusCode);
         });
+
+        // Stores the Codex model the user picked. Empty means "automatic": no model is sent to the bridge
+        // and Codex chooses, which stays the default. Applies to every Codex-backed feature.
+        group.MapPut("/codex/model", async (
+            CodexModelRequest request,
+            CurrentUserContext currentUser,
+            IntelligenceDbContext db,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            var model = request.Model?.Trim();
+            if (!string.IsNullOrEmpty(model) &&
+                (model.Length > 120 ||
+                 !model.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or ':')))
+                return Results.BadRequest(new { error = "invalid_model" });
+
+            var settings = await db.AiUserSettings.SingleOrDefaultAsync(x => x.UserId == userId, ct);
+            if (settings is null)
+            {
+                settings = new AiUserSettings { UserId = userId };
+                db.AiUserSettings.Add(settings);
+            }
+            settings.TextModel = string.IsNullOrEmpty(model) ? null : model;
+            settings.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { model = settings.TextModel });
+        });
+
+        // Lists the models this user's Codex login can actually use, so the UI can offer a real choice
+        // instead of only "automatic". The bridge stays the source of truth; nothing is cached here.
+        group.MapGet("/codex/models", async (
+            CurrentUserContext currentUser,
+            IConfiguration configuration,
+            IHttpClientFactory clients,
+            CancellationToken ct) =>
+            await ForwardCodexAsync(
+                HttpMethod.Get,
+                "/models",
+                currentUser.RequireUserId(),
+                null,
+                configuration,
+                clients,
+                ct));
 
         group.MapPost("/codex/logout", async (
             CurrentUserContext currentUser,

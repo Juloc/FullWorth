@@ -80,3 +80,8 @@ dialog.fw-dialog .dialog-actions{min-width:0}
     overflow-y:auto;
   }
 }
+/* Codex model picker in the AI-access dialog. */
+.ai-codex-model{display:grid;grid-template-columns:1fr 1fr auto;gap:var(--s2);align-items:end;margin:var(--s3) 0}
+.ai-codex-model label{display:grid;gap:4px}
+.ai-codex-model [data-codex-model-status]{grid-column:1/-1}
+@media(max-width:640px){.ai-codex-model{grid-template-columns:1fr}}
