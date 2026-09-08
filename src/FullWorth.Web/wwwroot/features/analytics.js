@@ -189,7 +189,7 @@ function advancedHtml() {
     <summary>${esc(t('Erweitert / Eigene Analyse', 'Advanced / Custom analysis'))}</summary>
     <p class="fw-card-sub">${esc(ctx.get('analytics.builder.title'))}</p>
     ${controls}
-    <div class="an-builder-actions"><button type="button" id="an-save" class="ghost">${esc(ctx.get('analytics.builder.save'))}</button><button type="button" id="an-run">${esc(ctx.get('analytics.builder.run'))}</button></div>
+    <div class="an-builder-actions"><button type="button" id="an-save" class="btn btn-secondary">${esc(ctx.get('analytics.builder.save'))}</button><button type="button" id="an-run">${esc(ctx.get('analytics.builder.run'))}</button></div>
     <div id="an-builder-chart" class="chart-empty"></div>
     <div id="an-saved" class="rows"></div>
   </details>`;
@@ -834,7 +834,7 @@ async function loadSavedAnalyses(context) {
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = `<button type="button" class="ghost saved-open" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="ghost danger" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
+    row.innerHTML = `<button type="button" class="btn btn-secondary saved-open" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="btn btn-danger" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
     row.querySelector('.saved-open').addEventListener('click', () => { applyBuilderConfig(it.config || {}); runBuilder(ctx); });
     row.querySelector('[data-del]').addEventListener('click', () => deleteSaved(it.id));
     el.appendChild(row);
