@@ -76,23 +76,23 @@ function renderDraft(draft) {
       <div class="receipt-set-thumb">${image}</div>
       <div class="receipt-set-source-main"><strong>${esc(file.name || t('Foto', 'Photo'))}</strong><small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small></div>
       <div class="receipt-set-source-actions">
-        <button type="button" class="ghost" data-up="${index}" ${index === 0 ? 'disabled' : ''} aria-label="${t('Nach oben', 'Move up')}">↑</button>
-        <button type="button" class="ghost" data-down="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="${t('Nach unten', 'Move down')}">↓</button>
-        <button type="button" class="ghost" data-remove="${index}" aria-label="${t('Entfernen', 'Remove')}">×</button>
+        <button type="button" class="btn btn-secondary" data-up="${index}" ${index === 0 ? 'disabled' : ''} aria-label="${t('Nach oben', 'Move up')}">↑</button>
+        <button type="button" class="btn btn-secondary" data-down="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="${t('Nach unten', 'Move down')}">↓</button>
+        <button type="button" class="btn btn-secondary" data-remove="${index}" aria-label="${t('Entfernen', 'Remove')}">×</button>
       </div>
     </li>`;
   }).join('');
 
   dialog.innerHTML = `<div class="dialog-card receipt-set-card">
-    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${t('Ein Beleg · mehrere Seiten', 'One receipt · multiple pages')}</h2></div><button type="button" class="ghost" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
+    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${t('Ein Beleg · mehrere Seiten', 'One receipt · multiple pages')}</h2></div><button type="button" class="btn btn-secondary" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
     <p>${t('Fotografiere einen langen Bon abschnittsweise. Alle Bilder und alle PDF-Seiten werden gemeinsam als ein Einkauf analysiert.', 'Photograph a long receipt section by section. All images and every PDF page are analyzed together as one purchase.')}</p>
     <ol class="receipt-set-sources">${rows || `<li class="receipt-set-empty">${t('Noch keine Seite ausgewählt.', 'No page selected yet.')}</li>`}</ol>
     <div class="receipt-set-add-row">
-      <button type="button" class="ghost" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
+      <button type="button" class="btn btn-secondary" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
       <span class="row-sub">${files.length}/${MAX_FILES} ${t('Dateien', 'files')}</span>
     </div>
     <div class="dialog-actions receipt-set-actions">
-      <button type="button" class="ghost" data-cancel>${t('Abbrechen', 'Cancel')}</button>
+      <button type="button" class="btn btn-secondary" data-cancel>${t('Abbrechen', 'Cancel')}</button>
       <button type="button" data-start ${files.length ? '' : 'disabled'}>${files.length === 1 ? t('Beleg analysieren', 'Analyze receipt') : t(`${files.length} Dateien als einen Beleg analysieren`, `Analyze ${files.length} files as one receipt`)}</button>
     </div>
   </div>`;
@@ -194,7 +194,7 @@ function renderProgress(draft) {
   if (!dialog?.isConnected) return;
   const sourceNames = draft.files.map((file, index) => `<li><span>${index + 1}</span>${esc(file.name)}</li>`).join('');
   dialog.innerHTML = `<div class="dialog-card receipt-set-card">
-    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${t('Ein Beleg wird verarbeitet', 'Processing one receipt')}</h2></div><button type="button" class="ghost" data-background>${t('Im Hintergrund', 'Background')}</button></div>
+    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${t('Ein Beleg wird verarbeitet', 'Processing one receipt')}</h2></div><button type="button" class="btn btn-secondary" data-background>${t('Im Hintergrund', 'Background')}</button></div>
     <p data-meta>${t(`${draft.files.length} Dateien werden gemeinsam verarbeitet.`, `${draft.files.length} files are processed together.`)}</p>
     <ol class="receipt-set-sources compact">${sourceNames}</ol>
     <div class="receipt-set-progress"><span class="receipt-set-spinner" aria-hidden="true"></span><strong data-status>${t('Vorbereitung …', 'Preparing …')}</strong></div>
