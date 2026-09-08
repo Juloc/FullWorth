@@ -115,8 +115,15 @@ public sealed class ResponsiveLayoutTests
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "src", "FullWorth.Web", "wwwroot", "app.css");
-        Assert.True(File.Exists(path), $"app.css not found: {path}");
-        return File.ReadAllText(path);
+        var root = Path.Combine(dir!.FullName, "src", "FullWorth.Web", "wwwroot");
+        var paths = new[]
+        {
+            Path.Combine(root, "styles", "reset.css"),
+            Path.Combine(root, "styles", "shell.css"),
+            Path.Combine(root, "styles", "components.css"),
+            Path.Combine(root, "app.css")
+        };
+        foreach (var path in paths) Assert.True(File.Exists(path), $"css layer not found: {path}");
+        return string.Concat(paths.Select(File.ReadAllText));
     }
 }
