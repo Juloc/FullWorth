@@ -248,7 +248,7 @@ public sealed class ContractMergeTests
         var preview = json.RootElement;
 
         Assert.Equal(s.Source, preview.GetProperty("canonicalContractId").GetGuid());
-        Assert.False(preview.GetProperty("executionEnabled").GetBoolean());
+        Assert.True(preview.GetProperty("executionEnabled").GetBoolean());
         Assert.Equal(2, preview.GetProperty("combinedPaymentCount").GetInt32());
         Assert.Equal(2, preview.GetProperty("accountIds").GetArrayLength());
         Assert.Equal(2, preview.GetProperty("contracts").GetArrayLength());
