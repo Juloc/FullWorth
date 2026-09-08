@@ -164,6 +164,45 @@ public sealed class ActionProposalApiTests
     }
 
     [Fact]
+    public async Task ReadOnlyMemberCannotCreateTransactionActionProposal()
+    {
+        using var factory = ActionsOnFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+        var viewer = Guid.NewGuid();
+
+        await factory.SeedFullWorthUserAsync(viewer);
+        await factory.SeedAsync(async db =>
+        {
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = s.Space,
+                UserId = viewer,
+                Role = FullWorthSpaceRoles.Member
+            });
+            db.AccountOwners.Add(new AccountOwner
+            {
+                AccountId = s.AccountA,
+                UserId = viewer,
+                OwnershipType = AccountOwnershipTypes.Viewer
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/action-proposals?fullWorthSpaceId={s.Space}",
+            viewer,
+            new
+            {
+                handler = ActionProposalHandlerNames.TransactionCategoryChange,
+                payload = new { transactionId = s.Expense, categoryId = s.FoodCategory }
+            }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ActionsKillSwitchHidesProposalApi()
     {
         using var factory = new BackendWebApplicationFactory(new Dictionary<string, string?>
