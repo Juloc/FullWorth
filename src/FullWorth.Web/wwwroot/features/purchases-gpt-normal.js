@@ -45,7 +45,7 @@ function refreshImportReviewNavigation() {
     if (!actions || reviewCount <= 0 || actions.querySelector('[data-review-import]')) return;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className='btn btn-secondary';
     button.dataset.reviewImport = 'true';
     button.textContent = t('Prüfen', 'Review');
     actions.prepend(button);
