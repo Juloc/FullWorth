@@ -131,7 +131,7 @@ async function renderAccountsInternal(){
     const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
     const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
     const row=document.createElement('div');row.className='row';
-    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="btn btn-secondary" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${warn?`<button type="button" class="btn btn-secondary" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="btn btn-danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
     row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
     row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
     row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
@@ -228,7 +228,7 @@ async function disconnectConnection(connection,button){
     <p class="row-sub">${esc(get('accounts.disconnectProviderHint'))}</p>
     <label class="check"><input type="radio" name="policy" value="keep" checked> <span>${esc(get('accounts.disconnectKeep'))}</span></label>
     <label class="check"><input type="radio" name="policy" value="delete"> <span>${esc(get('accounts.disconnectDelete'))}</span></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="danger">${esc(get('accounts.disconnect'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="btn btn-danger">${esc(get('accounts.disconnect'))}</button></div></form>`);
   const form=dlg.querySelector('form');
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   form.onsubmit=async e=>{
@@ -411,7 +411,7 @@ export function openEnableBankingWizard(initialStatus,options={},context=ctx){us
       ? `<button type="button" data-retry>${esc(get('bankingSetup.retryVerification'))}</button>`
       : `<button type="button" data-again>${esc(get('bankingSetup.tryAgain'))}</button>`;
     step.innerHTML=`<p>${esc(registration?.status==='expired'?get('bankingSetup.autoExpired'):get('bankingSetup.autoFailed'))}</p>
-      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
+      <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
     step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     step.querySelector('[data-again]')?.addEventListener('click',()=>{cancelAutoRegistration();showAutomatic()});
     step.querySelector('[data-retry]')?.addEventListener('click',async e=>{
@@ -464,7 +464,7 @@ export function openEnableBankingWizard(initialStatus,options={},context=ctx){us
         <div><span>${esc(get('bankingSetup.privacyUrl'))}</span><a href="${esc(started.privacyUrl||'https://fullworth.de/privacy/')}" target="_blank" rel="noopener">${esc(started.privacyUrl||'https://fullworth.de/privacy/')} ↗</a></div>
         <div><span>${esc(get('bankingSetup.termsUrl'))}</span><a href="${esc(started.termsUrl||'https://fullworth.de/terms/')}" target="_blank" rel="noopener">${esc(started.termsUrl||'https://fullworth.de/terms/')} ↗</a></div>
       </div>
-      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
     step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     autoPoll=setTimeout(()=>pollAutomatic(started.id),800);
   };
@@ -504,7 +504,7 @@ export function openEnableBankingWizard(initialStatus,options={},context=ctx){us
       <div class="row-sub">${esc(p.environment)} · ${ready?esc(get('bankingSetup.active')):esc(get('bankingSetup.inactive'))}</div></div></div>
       <p class="row-sub">${esc(ready?get('bankingSetup.complete'):get('bankingSetup.activateRestricted'))}</p>
       ${!ready&&p.environment==='PRODUCTION'?`<p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.activateAccounts'))} ↗</a> · <a href="${ENABLE_BANKING_LINKED}" target="_blank" rel="noopener">${esc(get('bankingSetup.instructions'))} ↗</a></p>`:''}
-      <div class="dialog-actions"><button type="button" class="ghost danger" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" data-done>${esc(get('common.close'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="btn btn-danger" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" data-done>${esc(get('common.close'))}</button></div>`;
     step.querySelector('[data-done]').onclick=()=>dlg.close();
     step.querySelector('[data-recheck]').onclick=async e=>{
       e.currentTarget.disabled=true;
