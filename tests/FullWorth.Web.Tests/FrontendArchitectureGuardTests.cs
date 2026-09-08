@@ -57,10 +57,13 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void NoNewFeatureMayCallBffDirectly()
     {
-        var allowed = new HashSet<string>(StringComparer.Ordinal);
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "core/api.js"
+        };
 
         AssertNoNewViolations(
-            new Regex(@"/bff/(backend|banking)/", RegexOptions.Compiled),
+            new Regex(@"/bff/(backend|banking)(?:/|\b)", RegexOptions.Compiled),
             allowed,
             "New BFF calls must go through core/api.js.");
     }
