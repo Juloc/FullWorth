@@ -4,12 +4,7 @@
 
 const text = (de, en) => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? de : en;
 
-function bffContentUrl(contentUrl) {
-  if (!contentUrl) return '';
-  return `/bff/backend/${String(contentUrl).replace(/^\//, '')}`;
-}
-
-export async function mountReceiptSourceReview({ dlg, purchase, api, esc, showError }) {
+export async function mountReceiptSourceReview({ dlg, purchase, api, esc, showError, bffUrl }) {
   if (!dlg || dlg.dataset.paReceiptSourcesMounted === 'true') return;
   dlg.dataset.paReceiptSourcesMounted = 'true';
 
@@ -61,7 +56,7 @@ export async function mountReceiptSourceReview({ dlg, purchase, api, esc, showEr
     if (!source) return;
     section.querySelectorAll('[data-source-index]').forEach((button, buttonIndex) => button.setAttribute('aria-selected', String(buttonIndex === index)));
     const preview = section.querySelector('[data-source-preview]');
-    const url = bffContentUrl(source.contentUrl);
+    const url = source.contentUrl ? bffUrl(String(source.contentUrl).replace(/^\//, '')) : '';
     if (!url) {
       preview.innerHTML = `<div class="state-empty">${esc(text('Quelldatei nicht mehr verfügbar.', 'Source file is no longer available.'))}</div>`;
     } else if (String(source.mimeType || '').toLowerCase() === 'application/pdf') {
