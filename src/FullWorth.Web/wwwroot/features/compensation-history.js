@@ -91,7 +91,7 @@ function historyMarkup(){return `
     </select></label>
     <label class="history-title">Bezeichnung<input id="history-title" placeholder="z. B. Gehaltserhöhung auf 62.000 €"></label>
     <label class="history-title">Notiz<input id="history-note" maxlength="1000" placeholder="optional"></label>
-    <button id="history-save" class="primary-action" type="button">Aktuellen Rechnerstand ab Datum speichern</button>
+    <button id="history-save" class="btn btn-primary" type="button">Aktuellen Rechnerstand ab Datum speichern</button>
   </article>
   <div id="history-summary" class="metric-grid history-summary"></div>
   <article class="panel history-chart-card">
@@ -120,8 +120,8 @@ function historyEditMarkup(){return `
     </select></label>
     <label>Titel<input id="history-edit-title"></label>
     <label>Notiz<input id="history-edit-note" maxlength="1000"></label>
-    <button id="history-edit-save" class="primary-action" type="button">Änderung aktualisieren</button>
-    <button id="history-edit-cancel" type="button">Abbrechen</button>
+    <button id="history-edit-save" class="btn btn-primary" type="button">Änderung aktualisieren</button>
+    <button id="history-edit-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
   </div>
 </div>`}
 
@@ -255,7 +255,7 @@ function renderHistoryList(){
     <article class="panel history-entry" data-history-id="${e.id}">
       <div class="history-entry-date">${fmtDate(e.effectiveDate)}</div>
       <div class="history-entry-main"><div><span class="history-event-badge">${eventLabel(e.eventType)}</span></div><h3>${esc(e.title)}</h3>${e.note?`<p>${esc(e.note)}</p>`:''}<div class="history-changes">${(e.changedFields||[]).slice(0,8).map(f=>`<span class="history-change">${esc(fieldLabel(f))}</span>`).join('')}${(e.changedFields||[]).length>8?`<span class="history-change">+${e.changedFields.length-8}</span>`:''}</div>${historyDeltaHtml(e.deltaFromPrevious)}</div>
-      <div class="history-entry-actions"><button type="button" data-history-edit>Bearbeiten</button><button type="button" data-history-delete>Löschen</button></div>
+      <div class="history-entry-actions"><button type="button" class="btn btn-secondary" data-history-edit>Bearbeiten</button><button type="button" class="btn btn-danger" data-history-delete>Löschen</button></div>
     </article>`).join('');
   root.querySelectorAll('[data-history-id]').forEach(card=>{
     const entry=hstate.entries.find(x=>x.id===card.dataset.historyId);

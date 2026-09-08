@@ -37,7 +37,7 @@ function optimizerMarkup(){return `
   <article class="panel comp-card extended-intro">
     <div><h2>Was lohnt sich mehr?</h2><p>Vergleicht Gehaltserhöhungen, Teilzeit und den Einsatz eines festen Arbeitgeberbudgets auf Basis der aktuellen Rechnerdaten.</p></div>
     <label>Arbeitgeberbudget / Monat<input id="optimizer-budget" type="number" min="0" step="25" value="300"></label>
-    <button id="optimizer-run" class="primary-action" type="button">Vergleichen</button>
+    <button id="optimizer-run" class="btn btn-primary" type="button">Vergleichen</button>
   </article>
   <div class="optimizer-section"><h2>Gehaltserhöhung</h2><div id="optimizer-raises" class="optimizer-grid"></div></div>
   <div class="optimizer-section"><h2>Teilzeit</h2><div id="optimizer-parttime" class="optimizer-grid"></div></div>
@@ -74,7 +74,7 @@ function payslipMarkup(){return `
           <label>Bonus / Sonderzahlung<input id="ps-bonus" type="number" min="0" step="0.01"></label>
           <label>Notiz<input id="ps-note" maxlength="500"></label>
         </div>
-        <button id="payslip-save" class="primary-action comp-calculate" type="button">Bestätigte Werte speichern</button>
+        <button id="payslip-save" class="btn btn-primary comp-calculate" type="button">Bestätigte Werte speichern</button>
       </article>
     </div>
     <aside class="payslip-stack">
@@ -104,7 +104,7 @@ function renderOptions(selector,options,ranked=false){
       <span>AG-Kosten <strong>${signedEuro(option.employerCostDeltaAnnual)}</strong></span>
       <span>Neues Netto <strong>${euro0.format(option.calculation.estimatedCashNetAnnual)}</strong></span>
     </div>
-    <button type="button" data-load-profile>In Rechner übernehmen</button>
+    <button type="button" class="btn btn-secondary" data-load-profile>In Rechner übernehmen</button>
   </article>`).join('');
   root.querySelectorAll('[data-load-profile]').forEach((button,index)=>button.addEventListener('click',()=>loadProfileIntoCalculator(options[index].profile)));
 }
@@ -199,7 +199,7 @@ async function loadPayslips(){
   const space=spaceId();if(!space)return;
   const list=await api(`api/compensation/payslips?fullWorthSpaceId=${space}`);
   const root=$('#payslip-list');if(!root)return;
-  root.innerHTML=(list||[]).length?(list||[]).map(item=>`<div class="payslip-row"><div><strong>${month(item.payslip.period)}</strong><small>${euro.format(item.payslip.grossPay)} brutto · ${euro.format(item.payslip.netPay)} netto</small></div><div><strong>${euro.format(item.payslip.payout)}</strong><button type="button" data-delete-payslip="${item.id}">×</button></div></div>`).join(''):'<p class="extended-note">Noch keine Lohnabrechnungen gespeichert.</p>';
+  root.innerHTML=(list||[]).length?(list||[]).map(item=>`<div class="payslip-row"><div><strong>${month(item.payslip.period)}</strong><small>${euro.format(item.payslip.grossPay)} brutto · ${euro.format(item.payslip.netPay)} netto</small></div><div><strong>${euro.format(item.payslip.payout)}</strong><button type="button" class="btn btn-danger" data-delete-payslip="${item.id}">×</button></div></div>`).join(''):'<p class="extended-note">Noch keine Lohnabrechnungen gespeichert.</p>';
   root.querySelectorAll('[data-delete-payslip]').forEach(button=>button.addEventListener('click',()=>deletePayslip(button.dataset.deletePayslip).catch(showError)));
   const delta=await api(`api/compensation/payslips/latest-delta?fullWorthSpaceId=${space}`,{},true);
   renderDelta(delta);

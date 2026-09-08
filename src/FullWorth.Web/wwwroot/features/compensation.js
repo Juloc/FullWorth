@@ -220,9 +220,9 @@ function renderScenarios(){
       <div class="scenario-value">${money.format(s.profile.annualGross+s.profile.annualBonus)}</div>
       <small>Brutto pro Jahr · aktualisiert ${date(s.updatedAt)}</small>
       <div class="scenario-card-actions">
-        <button type="button" data-action="load">Laden</button>
-        <button type="button" data-action="compare">${state.selected.includes(s.id)?'Ausgewählt':'Vergleichen'}</button>
-        <button type="button" data-action="delete">Löschen</button>
+        <button type="button" class="btn btn-secondary" data-action="load">Laden</button>
+        <button type="button" class="btn btn-secondary" data-action="compare">${state.selected.includes(s.id)?'Ausgewählt':'Vergleichen'}</button>
+        <button type="button" class="btn btn-danger" data-action="delete">Löschen</button>
       </div>
     </article>`).join('');
   root.querySelectorAll('[data-scenario]').forEach(card=>{
