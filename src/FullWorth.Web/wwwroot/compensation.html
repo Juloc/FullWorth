@@ -11,15 +11,23 @@
   <script src="/theme-init.js"></script>
   <link rel="stylesheet" href="/styles/tokens.css">
   <link rel="stylesheet" href="/styles/reset.css">
+  <link rel="stylesheet" href="/appearance.css">
+  <link rel="stylesheet" href="/styles/shell.css">
   <link rel="stylesheet" href="/styles/components.css">
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/design-depth.css">
   <link rel="stylesheet" href="/compensation.css">
   <link rel="stylesheet" href="/compensation-history.css">
 </head>
 <body class="comp-body">
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <div class="shell">
+    <!-- Filled by features/compensation-nav.js from the shared nav definition, so the app's primary
+         navigation stays visible here instead of a one-off back button. -->
+    <aside class="sidebar" aria-label="Primary" data-app-sidebar></aside>
+    <div class="comp-column">
   <header class="comp-topbar">
-    <a class="comp-back" href="/" aria-label="Zurück zu FullWorth">←</a>
     <div class="comp-brand"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="26" height="26"><div><strong>FullWorth</strong><small>Gehalt & Benefits</small></div></div>
     <div class="comp-top-actions">
       <label class="comp-space-label">Finanzbereich <select id="space-select"></select></label>
@@ -27,7 +35,7 @@
     </div>
   </header>
 
-  <main class="comp-shell">
+  <main id="main" class="comp-shell">
     <section class="comp-hero">
       <div>
         <p class="eyebrow">Vergütung verstehen</p>
@@ -212,8 +220,12 @@
 
     <div id="comp-error" class="comp-toast" role="status" aria-live="polite"></div>
   </main>
+    </div>
+  </div>
+  <nav id="bottom-nav" aria-label="Primary mobile" data-app-bottom-nav></nav>
 
   <script src="/security/browser-fetch.js"></script>
+  <script type="module" src="/features/compensation-nav.js"></script>
   <script type="module" src="/features/compensation.js"></script>
   <script type="module" src="/features/compensation-extended.js"></script>
   <script type="module" src="/features/compensation-history.js"></script>
