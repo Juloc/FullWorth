@@ -50,7 +50,7 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
 
     public async Task<TransferDetectionOutcome> DetectForSpaceAsync(Guid fullWorthSpaceId, bool apply, CancellationToken ct)
     {
-        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, ct);
+        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, from: null, ct);
         var pairs = FindAutomaticPairs(candidates, WindowDays);
 
         if (apply && pairs.Count > 0)
@@ -59,7 +59,24 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
         return new(TransferDetectionResult.Success, new TransferDetectionSummary(candidates.Count, pairs.Count, apply));
     }
 
-    public async Task<TransferCandidatesOutcome> CandidatesForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
+    public Task<TransferCandidatesOutcome> CandidatesForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        CancellationToken ct) =>
+        CandidatesForUserCoreAsync(userId, fullWorthSpaceId, from: null, ct);
+
+    public Task<TransferCandidatesOutcome> CandidatesForUserSinceAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly from,
+        CancellationToken ct) =>
+        CandidatesForUserCoreAsync(userId, fullWorthSpaceId, from, ct);
+
+    private async Task<TransferCandidatesOutcome> CandidatesForUserCoreAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        DateOnly? from,
+        CancellationToken ct)
     {
         var role = await db.FullWorthSpaceMembers.AsNoTracking()
             .Where(x => x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId)
@@ -68,7 +85,7 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
         if (role is null) return new(TransferDetectionResult.NotFound, null);
         if (role != FullWorthSpaceRoles.Owner) return new(TransferDetectionResult.Forbidden, null);
 
-        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, ct);
+        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, from, ct);
         var pairs = FindMutualUniquePairs(candidates, WindowDays);
         if (pairs.Count == 0) return new(TransferDetectionResult.Success, []);
 
@@ -172,10 +189,18 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
         return pairs;
     }
 
-    private async Task<List<TransferCandidate>> LoadCandidatesAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    private async Task<List<TransferCandidate>> LoadCandidatesAsync(
+        Guid fullWorthSpaceId,
+        DateOnly? from,
+        CancellationToken ct)
     {
         var rows = await db.Transactions.AsNoTracking()
-            .Where(t => t.TransferGroupId == null && !t.IsIgnored && t.Amount != 0m && t.BookingDate != null)
+            .Where(t =>
+                t.TransferGroupId == null &&
+                !t.IsIgnored &&
+                t.Amount != 0m &&
+                t.BookingDate != null &&
+                (!from.HasValue || t.BookingDate >= from.Value))
             .Join(
                 db.Accounts.AsNoTracking().Where(a => a.FullWorthSpaceId == fullWorthSpaceId),
                 transaction => transaction.AccountId,
