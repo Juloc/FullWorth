@@ -59,14 +59,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void NoNewFeatureMayCallBffDirectly()
     {
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
-        {
-            // Transitional shell/client.
-            // Legacy migration allow-list. This list may only shrink.
-            "features/purchase-articles-advanced-actions.js",
-            "features/purchase-receipt-source-review.js",
-            "features/transactions.js",
-        };
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
 
         AssertNoNewViolations(
             new Regex(@"/bff/(backend|banking)/", RegexOptions.Compiled),
@@ -99,8 +92,6 @@ public sealed class FrontendArchitectureGuardTests
             "features/compensation-extended.js",
             "features/compensation-history.js",
             "features/compensation.js",
-            "features/purchase-articles-advanced-actions.js",
-            "features/purchase-discount-actions.js",
             "intelligence/brand-packs.js",
             "intelligence/intelligence.js",
             "passkeys/passkeys.js"
@@ -136,10 +127,7 @@ public sealed class FrontendArchitectureGuardTests
     public void NoNewPatchLayerFileNames()
     {
         var featureRoot = Path.Combine(WwwRoot(), "features");
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "purchase-articles-advanced-installer.js"
-        };
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
 
         var offenders = Directory.EnumerateFiles(featureRoot, "*.js", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
