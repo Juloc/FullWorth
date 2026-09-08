@@ -4,17 +4,29 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag, for example v1.3.0-alpha.1
+        required: true
+        type: string
+      source_sha:
+        description: Exact commit SHA to build and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
   packages: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
   cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
 
 jobs:
   build-amd64:
@@ -35,14 +47,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
 
       - name: Validate version and prepare tags
         id: vars
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+            echo "Invalid release tag: $RELEASE_TAG" >&2
             exit 1
           fi
 
@@ -109,14 +123,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_SHA }}
 
       - name: Validate version and prepare ARM tags
         id: vars
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+            echo "Invalid release tag: $RELEASE_TAG" >&2
             exit 1
           fi
 
@@ -175,15 +191,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          args=(release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
+          version="${RELEASE_TAG#v}"
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
 
           if [[ "$version" == *-* ]]; then
             args+=(--prerelease)
           fi
 
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists."
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
           else
             gh "${args[@]}"
           fi
@@ -212,7 +228,7 @@ jobs:
       - name: Publish multi-architecture manifests
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
           sha_tag="sha-${GITHUB_SHA::7}"
 
