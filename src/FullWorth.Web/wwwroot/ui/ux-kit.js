@@ -1,3 +1,5 @@
+import { apiClient } from '../core/services.js';
+
 // Shared UX-rework render helpers (UX rework §10). Framework-free; consumed by transactions, contracts,
 // analytics and net-worth so the same identity, card, cycle and trend primitives look identical everywhere.
 // All colours/spacing come from the app.css design tokens and the `.fw-*` classes defined there.
@@ -51,7 +53,7 @@ let officialBrandCatalogLoadedAt = 0;
 export function installOfficialBrandCatalog(catalog) {
   const resolveAssetPath = x => {
     const path = x?.assetPath || x?.dataUri || '';
-    return path.startsWith('/api/') ? `/bff/backend${path}` : path;
+    return path.startsWith('/api/') ? apiClient.backendUrl(path) : path;
   };
   const assets = new Map((catalog?.assets || []).map(x => [String(x.brandKey || '').toLowerCase(), resolveAssetPath(x)]));
   OFFICIAL_BRAND_LOGOS = (catalog?.aliases || [])
