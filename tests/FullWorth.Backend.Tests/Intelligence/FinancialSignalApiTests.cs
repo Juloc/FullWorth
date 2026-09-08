@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,7 @@ public sealed class FinancialSignalApiTests
     [Fact]
     public async Task Insights_are_user_scoped_and_dismissal_moves_them_to_hidden()
     {
-        using var factory = new BackendWebApplicationFactory();
+        using var factory = InsightsOnFactory();
         using var client = factory.CreateClient();
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
@@ -97,7 +98,7 @@ public sealed class FinancialSignalApiTests
     [Fact]
     public async Task Non_member_cannot_query_a_space()
     {
-        using var factory = new BackendWebApplicationFactory();
+        using var factory = InsightsOnFactory();
         using var client = factory.CreateClient();
         var userId = Guid.NewGuid();
         await factory.SeedFullWorthUserAsync(userId);
@@ -110,6 +111,52 @@ public sealed class FinancialSignalApiTests
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Insights_api_is_hidden_while_signals_run_in_shadow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var userId = Guid.NewGuid();
+        await SeedMemberAsync(factory, userId);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<FinancialSignalStore>();
+            await store.UpsertAsync(new DetectedFinancialSignal(
+                FullWorthSpaceDefaults.LegacyId,
+                userId,
+                "data-quality",
+                "financial-context",
+                FullWorthSpaceDefaults.LegacyId.ToString("N"),
+                "data-quality:incomplete",
+                "detector:data-quality",
+                FinancialSignalSeverities.Info,
+                1m,
+                null,
+                null,
+                "insights.data.incomplete",
+                "{}",
+                "{}",
+                30m,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(7)), CancellationToken.None);
+        }
+
+        using var request = UserRequest(
+            HttpMethod.Get,
+            $"/api/insights?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}",
+            userId);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static BackendWebApplicationFactory InsightsOnFactory() =>
+        new(new Dictionary<string, string?>
+        {
+            [$"{AutopilotRolloutSettings.SectionName}:{AutopilotFeatures.Insights}"] = "on"
+        });
 
     private static async Task SeedMemberAsync(BackendWebApplicationFactory factory, Guid userId)
     {

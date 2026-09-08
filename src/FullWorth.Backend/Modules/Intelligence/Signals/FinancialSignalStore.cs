@@ -71,6 +71,7 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
         }
 
         var meaningfulChange =
+            row.ResolvedAt.HasValue ||
             !string.Equals(row.Type, detected.Type.Trim(), StringComparison.Ordinal) ||
             !string.Equals(row.SubjectType, detected.SubjectType.Trim(), StringComparison.Ordinal) ||
             !string.Equals(row.SubjectId, detected.SubjectId.Trim(), StringComparison.Ordinal) ||
@@ -115,6 +116,35 @@ public sealed class FinancialSignalStore(IntelligenceDbContext db)
         row.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         return row;
+    }
+
+    public async Task<int> ResolveMissingBySourceAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        string source,
+        IReadOnlySet<string> activeSemanticKeys,
+        DateTimeOffset resolvedAt,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(source)) throw new ArgumentException("Signal source is required.", nameof(source));
+        var normalizedSource = source.Trim();
+        var rows = await db.FinancialSignals.Where(x =>
+            x.UserId == userId &&
+            x.FullWorthSpaceId == fullWorthSpaceId &&
+            x.Source == normalizedSource &&
+            x.ResolvedAt == null).ToListAsync(ct);
+
+        var changed = 0;
+        foreach (var row in rows)
+        {
+            if (activeSemanticKeys.Contains(row.SemanticKey)) continue;
+            row.ResolvedAt = resolvedAt;
+            row.UpdatedAt = resolvedAt;
+            changed++;
+        }
+
+        if (changed > 0) await db.SaveChangesAsync(ct);
+        return changed;
     }
 
     public async Task<bool> ResolveAsync(

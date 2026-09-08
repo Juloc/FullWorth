@@ -20,7 +20,8 @@ public sealed record FinancialWealthSnapshot(
     decimal? NetWorth,
     decimal? LiquidAccountBalance,
     decimal? TotalDebt,
-    decimal? AverageMonthlySavings);
+    decimal? AverageMonthlySavings,
+    decimal? PreviousAverageMonthlySavings);
 
 public sealed record FinancialCategorySnapshot(
     Guid? CategoryId,
@@ -95,6 +96,8 @@ public sealed record FinancialReviewSnapshot(
 
 public sealed record FinancialDataQualitySnapshot(
     bool IsComplete,
+    int RecentTransactionCount,
+    int UncategorizedRecentTransactionCount,
     string SourceVersion);
 
 public sealed record FinancialContextSnapshot(
@@ -132,7 +135,7 @@ public sealed class FinancialContextSnapshotService(CoachContextBuilder coachCon
         DateOnly? to,
         CancellationToken ct)
     {
-        var context = await coachContextBuilder.BuildAsync(userId, fullWorthSpaceId, from, to, ct);
+        var context = await coachContextBuilder.BuildForFinancialContextAsync(userId, fullWorthSpaceId, from, to, ct);
         return FromCoachContext(userId, fullWorthSpaceId, context, DateTimeOffset.UtcNow);
     }
 
@@ -161,7 +164,8 @@ public sealed class FinancialContextSnapshotService(CoachContextBuilder coachCon
                 context.CurrentNetWorth,
                 context.LiquidAccountBalance,
                 context.TotalDebt,
-                context.AverageMonthlySavings),
+                context.AverageMonthlySavings,
+                context.PreviousAverageMonthlySavings),
             context.Categories.Select(x => new FinancialCategorySnapshot(
                 x.CategoryId,
                 x.Name,
@@ -228,6 +232,9 @@ public sealed class FinancialContextSnapshotService(CoachContextBuilder coachCon
                 context.Reviews.ReviewedTransactions),
             new FinancialDataQualitySnapshot(
                 IsComplete: !context.Incomplete,
+                RecentTransactionCount: context.RecentTransactions.Count,
+                UncategorizedRecentTransactionCount: context.RecentTransactions.Count(x =>
+                    string.Equals(x.Category, "Uncategorized", StringComparison.OrdinalIgnoreCase)),
                 SourceVersion));
     }
 }

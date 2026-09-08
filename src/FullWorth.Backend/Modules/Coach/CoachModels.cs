@@ -222,6 +222,8 @@ public sealed record CoachContext(
 {
     public decimal? LiquidAccountBalance { get; init; }
     public decimal? TotalDebt { get; init; }
+    [JsonIgnore]
+    public decimal? PreviousAverageMonthlySavings { get; init; }
     public IReadOnlyList<CoachBudgetFact> Budgets { get; init; } = [];
     public IReadOnlyList<CoachReviewExample> PositiveExamples { get; init; } = [];
     public IReadOnlyList<CoachReviewExample> NegativeExamples { get; init; } = [];

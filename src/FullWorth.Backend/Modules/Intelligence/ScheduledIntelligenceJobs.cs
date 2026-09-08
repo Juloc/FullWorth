@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Intelligence.Signals;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
@@ -42,11 +43,15 @@ public sealed class IntelligenceSchedulePlannerService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
         var store = scope.ServiceProvider.GetRequiredService<IntelligenceStore>();
+        var now = DateTimeOffset.UtcNow;
+
+        // Deterministic Autopilot signals are independent from AI configuration and credentials.
+        var signalQueue = scope.ServiceProvider.GetRequiredService<FinancialSignalRefreshQueue>();
+        await signalQueue.EnqueueDailyFallbackAsync(now, ct);
+
         var settings = await db.AiInstanceSettings.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ScopeKey == AiInstanceSettings.InstanceScopeKey, ct);
         if (settings is null || !settings.Enabled) return;
-
-        var now = DateTimeOffset.UtcNow;
         if (settings.DailyScanEnabled)
         {
             var key = $"scheduled:{ScheduledIntelligenceJobTypes.DailyIncremental}:{now:yyyy-MM-dd}";
@@ -184,7 +189,8 @@ public sealed class ScheduledIntelligenceJobProcessor(
     AiCostEstimator costEstimator,
     ScheduledDomainIntelligenceAdapters domainAdapters,
     IntelligenceDigestService digests,
-    ILogger<ScheduledIntelligenceJobProcessor> logger)
+    ILogger<ScheduledIntelligenceJobProcessor> logger,
+    FinancialSignalJobProcessor? signalProcessor = null)
 {
     private const int DailyCandidateLimitPerSpace = 30;
     private const int DeepCandidateLimitPerSpace = 60;
@@ -226,6 +232,17 @@ Return only JSON matching the supplied schema. Do not invent merchants that are 
     {
         try
         {
+            if (FinancialSignalJobTypes.IsSupported(job.Type))
+            {
+                if (signalProcessor is null)
+                {
+                    await FailAsync(job, "signal_processor_missing", ct);
+                    return;
+                }
+                await signalProcessor.ProcessAsync(job, ct);
+                return;
+            }
+
             if (job.Type is not (ScheduledIntelligenceJobTypes.DailyIncremental or ScheduledIntelligenceJobTypes.WeeklyDeep or ScheduledIntelligenceJobTypes.MonthlyReview))
             {
                 await FailAsync(job, "unsupported_scheduled_job", ct);
