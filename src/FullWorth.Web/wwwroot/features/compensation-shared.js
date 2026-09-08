@@ -24,6 +24,7 @@ export const checked = id => !!$(`#${id}`)?.checked;
 export const setChecked = (id, v) => { const el = $(`#${id}`); if (el) el.checked = !!v; };
 export const spaceId = () => $('#space-select')?.value || '';
 
+export const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('de-DE', { month: 'long' }).format(new Date(2021, i, 1)));
 export const monthLabel = v => v ? new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(new Date(`${String(v).slice(0, 10)}T12:00:00`)) : '—';
 export const fmtDate = v => v ? new Intl.DateTimeFormat('de-DE').format(new Date(`${String(v).slice(0, 10)}T12:00:00`)) : '—';
 export const localIsoDate = (d = new Date()) => { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
@@ -92,11 +93,132 @@ export function readBenefits() {
   });
 }
 
+// ── Steuerjahr / Geburtsdatum ────────────────────────────────────────────────────────────────────────
+// The profile carries an optional tax year (which year's law to compute with) and an optional birth date.
+// Leaving the year on "Automatisch" keeps it null, so historical snapshots stay stamped with the year they
+// took effect in (the backend only fills an unset year). The age derivation mirrors the backend's
+// EffectiveAge: age reached during the reference year, clamped to 0…120.
+
+/** The explicitly chosen tax year, or null for "automatisch" (newest law). */
+export function selectedTaxYear() {
+  const raw = val('tax-year');
+  const year = Math.round(Number(raw));
+  return raw === '' || !Number.isFinite(year) ? null : Math.min(2200, Math.max(1900, year));
+}
+
+/** The reference year the age is derived for: the chosen tax year, else the current one. */
+export const ageReferenceYear = () => selectedTaxYear() ?? new Date().getFullYear();
+
+/** Age derived from the birth date for the reference year, or null when no birth date is set. */
+export function derivedAge() {
+  const birth = val('birth-date');
+  const birthYear = Math.round(Number(String(birth).slice(0, 4)));
+  if (!birth || !Number.isFinite(birthYear)) return null;
+  return Math.min(120, Math.max(0, ageReferenceYear() - birthYear));
+}
+
+/**
+ * A birth date makes the manual age entry redundant: the field then shows the derived age read-only.
+ * Without a birth date the manual field keeps working exactly as before (older saved profiles only have it).
+ */
+export function syncAgeFields() {
+  const input = $('#employee-age');
+  if (!input) return;
+  const help = $('#employee-age-help');
+  const age = derivedAge();
+  input.disabled = age !== null;
+  if (age !== null) input.value = age;
+  if (help) {
+    help.textContent = age === null
+      ? 'Relevant für den Pflegeversicherungs-Zuschlag. Mit Geburtsdatum wird das Alter automatisch berechnet.'
+      : `Automatisch aus dem Geburtsdatum: ${age} Jahre im Steuerjahr ${ageReferenceYear()}.`;
+  }
+}
+
+// ── Einmalige Sonderzahlungen ────────────────────────────────────────────────────────────────────────
+// Same row mechanism as the benefit rows above. Each payment can be taxable and/or social-insurance-liable
+// independently, so all four German combinations are expressible. The presets only prefill label, month and
+// the two flags — the checkboxes stay visible and editable.
+export const ONE_OFF_PRESETS = [
+  { label: 'Eigene Sonderzahlung', payment: { taxable: true, socialInsuranceLiable: true } },
+  { label: 'Weihnachtsgeld', payment: { label: 'Weihnachtsgeld', month: 11, taxable: true, socialInsuranceLiable: true } },
+  { label: 'Urlaubsgeld', payment: { label: 'Urlaubsgeld', month: 6, taxable: true, socialInsuranceLiable: true } },
+  { label: 'Einmalprämie / Bonus', payment: { label: 'Einmalprämie', taxable: true, socialInsuranceLiable: true } },
+  { label: 'Inflationsausgleichsprämie (steuer- & SV-frei)', payment: { label: 'Inflationsausgleichsprämie', taxable: false, socialInsuranceLiable: false } },
+  { label: 'Corona-Prämie (steuer- & SV-frei)', payment: { label: 'Corona-Prämie', taxable: false, socialInsuranceLiable: false } },
+  { label: 'Energiepreispauschale (steuerpflichtig, SV-frei)', payment: { label: 'Energiepreispauschale', month: 9, taxable: true, socialInsuranceLiable: false } },
+];
+
+export const oneOffHint = (taxable, social) => {
+  if (!taxable && !social) return 'Steuer- und SV-frei: wird voll ausgezahlt (z. B. Corona-Prämie, Inflationsausgleichsprämie).';
+  if (taxable && !social) return 'Steuerpflichtig, aber SV-frei (z. B. Energiepreispauschale).';
+  if (!taxable && social) return 'Steuerfrei, aber SV-pflichtig.';
+  return 'Voll steuer- und SV-pflichtig (z. B. Weihnachtsgeld, Urlaubsgeld).';
+};
+
+function syncOneOffRow(row) {
+  const flag = name => !!row.querySelector(`[data-oneoff="${name}"]`)?.checked;
+  const hint = row.querySelector('[data-oneoff="hint"]');
+  if (hint) hint.textContent = oneOffHint(flag('taxable'), flag('socialInsuranceLiable'));
+}
+
+export function addOneOffRow(payment = {}) {
+  const row = document.createElement('div');
+  row.className = 'oneoff-row';
+  const months = MONTH_NAMES
+    .map((name, i) => `<option value="${i + 1}"${Math.round(Number(payment.month)) === i + 1 ? ' selected' : ''}>${name}</option>`)
+    .join('');
+  row.innerHTML = `
+    <label>Bezeichnung<input data-oneoff="label" value="${attr(payment.label || '')}" placeholder="z. B. Weihnachtsgeld"></label>
+    <label>Betrag<input data-oneoff="amount" type="number" min="0" step="50" value="${numAttr(payment.amount)}"></label>
+    <label>Monat<select data-oneoff="month"><option value="0">ohne Monat</option>${months}</select></label>
+    <button type="button" class="btn btn-danger" aria-label="Sonderzahlung entfernen">×</button>
+    <div class="oneoff-flags">
+      <label class="check"><input data-oneoff="taxable" type="checkbox"${payment.taxable === false ? '' : ' checked'}> steuerpflichtig</label>
+      <label class="check"><input data-oneoff="socialInsuranceLiable" type="checkbox"${payment.socialInsuranceLiable === false ? '' : ' checked'}> SV-pflichtig</label>
+    </div>
+    <small class="field-help oneoff-hint" data-oneoff="hint"></small>`;
+  row.querySelector('button').addEventListener('click', () => row.remove());
+  row.addEventListener('change', () => syncOneOffRow(row));
+  syncOneOffRow(row);
+  $('#oneoff-list')?.appendChild(row);
+}
+
+export function readOneOffPayments() {
+  return $$('.oneoff-row').map(row => {
+    const field = name => row.querySelector(`[data-oneoff="${name}"]`);
+    return {
+      label: field('label').value.trim() || 'Sonderzahlung',
+      amount: Math.max(0, Number(field('amount').value) || 0),
+      month: Math.min(12, Math.max(0, Math.round(Number(field('month').value) || 0))),
+      taxable: !!field('taxable').checked,
+      socialInsuranceLiable: !!field('socialInsuranceLiable').checked,
+    };
+  });
+}
+
+/** Fills the preset picker once; the markup ships an empty <select> so the list stays in this module. */
+export function fillOneOffPresets() {
+  const select = $('#oneoff-preset');
+  if (!select || select.options.length) return;
+  select.innerHTML = ONE_OFF_PRESETS.map((preset, index) => `<option value="${index}">${esc(preset.label)}</option>`).join('');
+}
+
+export function addOneOffFromPreset() {
+  const index = Math.round(Number(val('oneoff-preset')));
+  const preset = ONE_OFF_PRESETS[Number.isFinite(index) ? index : 0] || ONE_OFF_PRESETS[0];
+  addOneOffRow({ ...preset.payment });
+}
+
 // The calculator form is the single input surface; every view reads/writes it through these two functions.
 export function readProfile() {
   const payments = Math.min(14, Math.max(12, Math.round(num('salary-payments') || 12)));
   const mode = val('gross-period') === 'monthly' ? 'monthly' : 'annual';
   const taxClass = Math.round(num('tax-class'));
+  // A birth date wins over the manual age (same precedence as the backend), but the manual field stays the
+  // fallback so profiles saved before the birth-date field existed keep calculating identically.
+  const birthDate = val('birth-date') || null;
+  const manualAge = val('employee-age') === '' ? null : Math.max(0, Math.round(num('employee-age')));
   return {
     name: val('profile-name') || 'Aktuelles Gehalt',
     annualGross: mode === 'monthly' ? num('gross-input') * payments : num('gross-input'),
@@ -110,7 +232,9 @@ export function readProfile() {
     stateCode: val('state-code'),
     churchTax: checked('church-tax'),
     childrenUnder25: Math.max(0, Math.round(num('children'))),
-    age: val('employee-age') === '' ? null : Math.max(0, Math.round(num('employee-age'))),
+    age: birthDate ? derivedAge() : manualAge,
+    taxYear: selectedTaxYear(),
+    birthDate,
     childlessCareSurcharge: checked('childless-surcharge'),
     pensionInsuranceEnabled: checked('pension-insurance'),
     unemploymentInsuranceEnabled: checked('unemployment-insurance'),
@@ -140,6 +264,7 @@ export function readProfile() {
       expectedAnnualReturnPercent: num('bav-return'),
     },
     benefits: readBenefits(),
+    oneOffPayments: readOneOffPayments(),
   };
 }
 
@@ -159,6 +284,8 @@ export function fillProfile(profile) {
   setVal('state-code', p.stateCode || 'BW');
   setChecked('church-tax', p.churchTax);
   setVal('children', p.childrenUnder25 ?? 0);
+  setVal('tax-year', p.taxYear ?? '');
+  setVal('birth-date', p.birthDate ? String(p.birthDate).slice(0, 10) : '');
   setVal('employee-age', p.age ?? '');
   setChecked('childless-surcharge', p.childlessCareSurcharge !== false);
   setChecked('pension-insurance', p.pensionInsuranceEnabled !== false);
@@ -186,7 +313,10 @@ export function fillProfile(profile) {
   setVal('bav-years', bav.projectionYears ?? 30);
   setVal('bav-return', bav.expectedAnnualReturnPercent ?? 3);
   const list = $('#benefits-list');
-  if (list) { list.innerHTML = ''; (p.benefits || []).forEach(addBenefitRow); }
+  if (list) { list.innerHTML = ''; (p.benefits || []).forEach(benefit => addBenefitRow(benefit)); }
+  const oneOffList = $('#oneoff-list');
+  if (oneOffList) { oneOffList.innerHTML = ''; (p.oneOffPayments || []).forEach(payment => addOneOffRow(payment)); }
+  syncAgeFields();
   // Trigger the calculator's bound sync handlers (conditional field visibility) without importing them.
   ['gross-period', 'salary-payments', 'tax-class', 'car-enabled', 'car-vehicle-type', 'car-commute-method']
     .forEach(id => $(`#${id}`)?.dispatchEvent(new Event('change')));

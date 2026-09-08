@@ -42,7 +42,7 @@
         <h1>Was ist dein Gehalt wirklich wert?</h1>
         <p>Netto, Arbeitgeberkosten, Firmenwagen, bAV, Benefits und Kaufkraft in einer Rechnung.</p>
       </div>
-      <div class="comp-hero-note">Planungsrechnung für Deutschland · Steuerjahr 2026</div>
+      <div id="comp-hero-note" class="comp-hero-note">Planungsrechnung für Deutschland</div>
     </section>
 
     <nav class="comp-tabs" aria-label="Bereiche">
@@ -82,6 +82,21 @@
               <label>Bundesland<select id="state-code">
                 <option value="BW">Baden-Württemberg</option><option value="BY">Bayern</option><option value="BE">Berlin</option><option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option><option value="HE">Hessen</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Niedersachsen</option><option value="NW">Nordrhein-Westfalen</option><option value="RP">Rheinland-Pfalz</option><option value="SL">Saarland</option><option value="SN">Sachsen</option><option value="ST">Sachsen-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thüringen</option>
               </select></label>
+              <label>Steuerjahr
+                <select id="tax-year">
+                  <option value="">Automatisch (neuestes Recht)</option>
+                  <option value="2026">2026</option>
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                  <option value="2021">2021</option>
+                  <option value="2020">2020</option>
+                  <option value="2019">2019</option>
+                  <option value="2018">2018</option>
+                </select>
+                <small class="field-help">Rechtsstand der Berechnung. „Automatisch“ nutzt das neueste hinterlegte Jahr und lässt gespeicherte Verlaufsstände im jeweiligen Jahr rechnen.</small>
+              </label>
               <label>Kinder unter 25<input id="children" type="number" min="0" max="10" step="1" value="0"></label>
             </div>
             <div class="check-row">
@@ -94,7 +109,8 @@
                 <label>GKV-Zusatzbeitrag %<input id="health-addon" type="number" min="0" max="10" step="0.1" value="2.9"><small class="field-help">Nur ändern, wenn du den Zusatzbeitrag deiner Krankenkasse kennst.</small></label>
                 <label>Jährlicher ELStAM-Freibetrag<input id="annual-tax-allowance" type="number" min="0" step="100" value="0"><small class="field-help">Nur eintragen, wenn ein Freibetrag in deinen ELStAM hinterlegt ist.</small></label>
                 <label>Kinderfreibetrag laut ELStAM<input id="child-allowance-units" type="number" min="0" max="10" step="0.5" placeholder="automatisch"><small class="field-help">Leer lassen = aus Kinderzahl und Steuerklasse ableiten.</small></label>
-                <label>Alter<input id="employee-age" type="number" min="0" max="120" step="1" placeholder="optional"><small class="field-help">Relevant für den Pflegeversicherungs-Zuschlag.</small></label>
+                <label>Geburtsdatum<input id="birth-date" type="date"><small class="field-help">Daraus wird das Alter im gewählten Steuerjahr berechnet – wichtig für den Pflegeversicherungs-Zuschlag und historische Jahre.</small></label>
+                <label>Alter<input id="employee-age" type="number" min="0" max="120" step="1" placeholder="optional"><small id="employee-age-help" class="field-help">Relevant für den Pflegeversicherungs-Zuschlag. Mit Geburtsdatum wird das Alter automatisch berechnet.</small></label>
                 <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
                 <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
               </div>
@@ -107,7 +123,18 @@
           </article>
 
           <article class="panel comp-card">
-            <div class="panel-head"><div><span class="step">2</span><h2>Firmenwagen</h2></div><label class="switch-row"><input id="car-enabled" type="checkbox"> aktiv</label></div>
+            <div class="panel-head">
+              <div><span class="step">2</span><h2>Einmalige Sonderzahlungen</h2><p>Weihnachtsgeld, Urlaubsgeld oder Prämien. Sie verändern nur das Jahresnetto, nicht das Netto im normalen Monat.</p></div>
+              <div class="oneoff-add">
+                <label>Vorlage<select id="oneoff-preset"></select></label>
+                <button id="add-oneoff" class="btn btn-secondary" type="button">Hinzufügen</button>
+              </div>
+            </div>
+            <div id="oneoff-list" class="oneoff-list"></div>
+          </article>
+
+          <article class="panel comp-card">
+            <div class="panel-head"><div><span class="step">3</span><h2>Firmenwagen</h2></div><label class="switch-row"><input id="car-enabled" type="checkbox"> aktiv</label></div>
             <div id="car-fields" class="form-grid muted-fields">
               <label>Fahrzeugart
                 <select id="car-vehicle-type"><option value="combustion">Verbrenner</option><option value="electric">Elektroauto</option><option value="hybrid">Plug-in-Hybrid</option><option value="manual">Regel manuell wählen</option></select>
@@ -131,7 +158,7 @@
           </article>
 
           <article class="panel comp-card">
-            <div class="panel-head"><div><span class="step">3</span><h2>Betriebliche Altersvorsorge</h2></div></div>
+            <div class="panel-head"><div><span class="step">4</span><h2>Betriebliche Altersvorsorge</h2></div></div>
             <div class="form-grid">
               <label>Eigener Beitrag / Monat<input id="bav-employee" type="number" min="0" step="10" value="0"></label>
               <label>Arbeitgeber / Monat<input id="bav-employer" type="number" min="0" step="10" value="0"></label>

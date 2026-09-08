@@ -3,7 +3,8 @@ import {
   $, $$, euro as money, euro2 as money2, pct, signedEuro as signedMoney, signedPct,
   esc, attr, val as value, num as number, setVal as set, fmtDate as date, localIsoDate,
   api, json, notify, readProfile, fillProfile, deriveCarFactor, hybridMinimumRange,
-  addBenefitRow as addBenefit, readBenefits
+  addBenefitRow as addBenefit, readBenefits,
+  addOneOffFromPreset as addOneOff, fillOneOffPresets, syncAgeFields
 } from './compensation-shared.js';
 const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
 
@@ -41,11 +42,15 @@ function bind(){
   $('#calculate').addEventListener('click',()=>calculate().catch(handle));
   $('#save-profile').addEventListener('click',()=>saveProfile().catch(handle));
   $('#add-benefit').addEventListener('click',()=>addBenefit());
+  fillOneOffPresets();
+  $('#add-oneoff').addEventListener('click',()=>addOneOff());
+  // The derived age depends on both the birth date and the selected tax year.
+  ['birth-date','tax-year'].forEach(id=>$(`#${id}`)?.addEventListener('change',syncAgeFields));
   $('#analyze-negotiation').addEventListener('click',()=>analyzeNegotiation().catch(handle));
   $('#save-scenario').addEventListener('click',()=>saveScenario().catch(handle));
   $('#clear-comparison').addEventListener('click',()=>{state.selected=[];renderScenarios();renderComparison()});
   $('#children').addEventListener('change',()=>{if(number('children')>0)$('#childless-surcharge').checked=false});
-  syncGrossFields();syncTaxFactor();syncCarRuleFields();syncCarCommuteFields();
+  syncGrossFields();syncTaxFactor();syncCarRuleFields();syncCarCommuteFields();syncAgeFields();
 }
 
 function showTab(name){
@@ -154,13 +159,19 @@ function renderResult(result){
     `<div class="comp-donut-legend">${legendItem('net','Netto',money.format(net))}${legendItem('tax','Steuern',money.format(taxTotal))}${legendItem('social','Sozialabgaben',money.format(socialTotal))}</div></div>`+
     `<div class="comp-dedu-rows">${dedRows}${compLine('Summe Abzüge',money.format(totalDeductions),'total',null)}</div>`;
   const car=result.companyCar,pension=result.occupationalPension;
+  const profile=readProfile();
   const summary=[];
+  const oneOffTotal=(profile.oneOffPayments||[]).reduce((sum,payment)=>sum+(Number(payment.amount)||0),0);
+  if(oneOffTotal>0)summary.push(['Sonderzahlungen (nur im Jahresnetto)',money.format(oneOffTotal),'pos']);
   if(car.taxableBenefitAnnual>0||car.estimatedEffectivePersonalValueAnnual>0){summary.push(['Firmenwagen: geldwerter Vorteil',money.format(car.taxableBenefitAnnual),'']);summary.push(['Firmenwagen: geschätzter persönlicher Wert',money.format(car.estimatedEffectivePersonalValueAnnual),'pos'])}
-  if(pension.totalInvestedAnnual>0){summary.push(['bAV: investiert / Jahr',money.format(pension.totalInvestedAnnual),'']);summary.push(['bAV: heutiger Nettoverzicht',money.format(pension.estimatedCurrentNetSacrificeAnnual),'']);summary.push([`bAV: Projektion ${readProfile().occupationalPension.projectionYears} Jahre`,money.format(pension.projectedValue),'pos'])}
+  if(pension.totalInvestedAnnual>0){summary.push(['bAV: investiert / Jahr',money.format(pension.totalInvestedAnnual),'']);summary.push(['bAV: heutiger Nettoverzicht',money.format(pension.estimatedCurrentNetSacrificeAnnual),'']);summary.push([`bAV: Projektion ${profile.occupationalPension.projectionYears} Jahre`,money.format(pension.projectedValue),'pos'])}
   result.benefits.forEach((b,i)=>summary.push([b.name,money.format(b.personalValueAnnual),`cat${(i%8)+1}`]));
   if(!summary.length)summary.push(['Weitere Benefits','Keine erfasst','muted']);
   $('#benefit-summary').innerHTML=summary.map(([label,val,tone])=>benefitLine(label,val,tone)).join('');
   const a=result.assumptions;
+  // The tax year comes from the calculation, so the badge always matches the law that was actually applied.
+  const note=$('#comp-hero-note');
+  if(note)note.textContent=`Planungsrechnung für Deutschland · Steuerjahr ${a.taxYear}`;
   $('#assumptions').textContent=`${a.calculationKind}. ${a.taxSource}. ${a.socialInsuranceSource}. Stand ${a.dataAsOf}. ${a.disclaimer}`;
 }
 

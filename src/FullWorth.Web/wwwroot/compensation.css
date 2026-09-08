@@ -11,10 +11,35 @@
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.form-grid label{display:grid;gap:6px;font-size:.78rem;color:var(--muted,#6d737c)}.form-grid input,.form-grid select,.comp-space-label select,.scenario-toolbar input{width:100%;box-sizing:border-box}.check-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;font-size:.85rem}.switch-row{display:flex!important;align-items:center;gap:7px!important;margin-left:auto}.muted-fields{opacity:.48;pointer-events:none}.muted-fields.enabled{opacity:1;pointer-events:auto}.comp-calculate{width:100%;min-height:48px}
 .comp-result-primary{display:grid;gap:4px;padding:22px}.comp-result-primary>span{color:var(--muted,#6d737c);font-size:.8rem}.comp-result-primary>strong{font-size:clamp(2rem,4vw,3rem);letter-spacing:-.04em}.comp-result-primary>small{color:var(--muted,#6d737c)}.comp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comp-metrics .metric{min-height:90px}.comp-breakdown,.comp-assumptions{padding:18px}.comp-breakdown h2,.comp-assumptions h2{margin:0 0 12px;font-size:1rem}.result-rows{display:grid;gap:8px}.result-row{display:flex;justify-content:space-between;gap:20px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--border,#e3e5e8) 70%,transparent);font-size:.84rem}.result-row:last-child{border-bottom:0}.result-row span{color:var(--muted,#6d737c)}.comp-assumptions p{margin:0;color:var(--muted,#6d737c);font-size:.78rem;line-height:1.5}
 .benefits-list{display:grid;gap:10px;margin-top:16px}.benefit-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr) auto;gap:8px;align-items:end;padding:14px;border:1px solid var(--border,#e3e5e8);border-radius:13px}.benefit-row label{display:grid;gap:5px;font-size:.72rem;color:var(--muted,#6d737c)}.benefit-row button{height:39px}.negotiation-layout{grid-template-columns:minmax(0,1fr) minmax(340px,.8fr)}.neg-explanation{display:grid;gap:10px;font-size:.9rem;line-height:1.5}.neg-line{padding:11px;border-radius:11px;background:var(--surface-2,#f0f2f4)}
+/* Einmalige Sonderzahlungen: same row mechanism/look as .benefit-row, plus the two tax/SV flags and the
+   hint line that spells out what the chosen combination means. */
+.oneoff-list{display:grid;gap:10px;margin-top:16px}
+/* The form column is ~600 px wide even on a 1280 px screen, so the row wraps by design: name on its own
+   line, then Betrag / Monat / entfernen, then the two flags and the hint. No breakpoint needed for that. */
+.oneoff-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:13px}
+.oneoff-row>label:first-child,.oneoff-flags{grid-column:1/-1}
+/* Only the field labels stack; the two flag labels keep the shared inline `label.check` role. */
+.oneoff-row>label{display:grid;gap:5px;font-size:.72rem;color:var(--muted)}
+.oneoff-row input,.oneoff-row select{width:100%;box-sizing:border-box}
+.oneoff-flags{display:flex;flex-wrap:wrap;align-items:center;gap:2px 16px;min-width:190px}
+.oneoff-flags label.check{min-height:44px;color:var(--text);font-size:.8rem}
+.oneoff-flags input[type=checkbox]{width:20px;height:20px;flex:0 0 auto}
+.oneoff-row>button{justify-self:end;min-width:44px;min-height:44px}
+.oneoff-hint{grid-column:1/-1;margin:0}
+.panel-head .oneoff-add{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-left:auto}
+.panel-head .oneoff-add label{display:grid;gap:5px;font-size:.72rem;color:var(--muted)}
+/* min-width:0 keeps the long preset names from pushing the select past its column. */
+.panel-head .oneoff-add select{width:100%;min-width:0;box-sizing:border-box}
 .scenario-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px;margin-bottom:14px}.scenario-toolbar h2,.scenario-toolbar p{margin:0}.scenario-toolbar p{margin-top:4px;color:var(--muted,#6d737c);font-size:.84rem}.scenario-toolbar>div:last-child{display:flex;gap:8px}.scenario-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.scenario-card{padding:17px}.scenario-card h3{margin:0}.scenario-card .scenario-value{font-size:1.55rem;font-weight:800;margin:12px 0 2px}.scenario-card small{color:var(--muted,#6d737c)}.scenario-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.scenario-card.selected{outline:2px solid var(--accent,#4a75ff);outline-offset:-2px}.scenario-comparison{margin-top:14px;padding:18px}.comparison-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.comparison-cell{padding:13px;border-radius:12px;background:var(--surface-2,#f0f2f4)}.comparison-cell span{display:block;color:var(--muted,#6d737c);font-size:.75rem;margin-bottom:5px}.comparison-cell strong{font-size:1.15rem}.positive{color:var(--positive,#13834b)}.negative{color:var(--negative,#b52e36)}
 .comp-toast{position:fixed;right:18px;bottom:18px;max-width:min(440px,calc(100vw - 36px));padding:11px 14px;border-radius:12px;background:#202226;color:#fff;box-shadow:0 10px 30px #0003;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.comp-toast.show{opacity:1;transform:none}
 @media(max-width:980px){.comp-layout,.negotiation-layout{grid-template-columns:1fr}.comp-results{position:static}.scenario-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.comp-hero{align-items:start;flex-direction:column}.comp-hero-note{white-space:normal}.benefit-row{grid-template-columns:repeat(2,minmax(0,1fr))}.benefit-row label:first-child{grid-column:1/-1}}
-@media(max-width:640px){.comp-topbar{align-items:flex-start;flex-wrap:wrap}.comp-top-actions{width:100%;align-items:stretch}.comp-space-label{flex:1}.comp-shell{width:min(100% - 20px,1480px);padding-top:18px}.form-grid,.comp-metrics,.scenario-grid,.comparison-grid{grid-template-columns:1fr}.scenario-toolbar,.scenario-toolbar>div:last-child{align-items:stretch;flex-direction:column}.benefit-row{grid-template-columns:1fr}.benefit-row label:first-child{grid-column:auto}.comp-tabs{position:static}.comp-card{padding:15px}}
+@media(max-width:640px){.comp-topbar{align-items:flex-start;flex-wrap:wrap}.comp-top-actions{width:100%;align-items:stretch}.comp-space-label{flex:1}.comp-shell{width:min(100% - 20px,1480px);padding-top:18px}.form-grid,.comp-metrics,.scenario-grid,.comparison-grid{grid-template-columns:1fr}.scenario-toolbar,.scenario-toolbar>div:last-child{align-items:stretch;flex-direction:column}.benefit-row{grid-template-columns:1fr}.benefit-row label:first-child{grid-column:auto}.oneoff-row{grid-template-columns:repeat(2,minmax(0,1fr))}.oneoff-row>button{grid-column:1/-1}.panel-head .oneoff-add{width:100%}.panel-head .oneoff-add label{flex:1;min-width:140px}.comp-tabs{position:static}.comp-card{padding:15px}}
+
+/* Phone touch targets (Pixel 8 Pro PWA and smaller): every control on this page reaches 44 px. */
+@media(max-width:767px){
+  .comp-shell input:not([type=checkbox]),.comp-shell select,.comp-shell button{min-height:44px}
+  .comp-shell input[type=checkbox]{width:20px;height:20px}
+}
 
 .field-help{display:block;color:var(--muted,#6d737c);font-size:.7rem;line-height:1.35}
 .field-summary{grid-column:1/-1;padding:10px 12px;border-radius:10px;background:var(--surface-2,#f0f2f4);color:var(--muted,#6d737c);font-size:.76rem;line-height:1.4}

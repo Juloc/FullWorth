@@ -44,6 +44,9 @@ input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="tr
 input[type=search]{border-radius:var(--radius-pill);background:var(--surface-2)}
 input[type=number],input[inputmode=decimal]{text-align:right;font-variant-numeric:tabular-nums}
 button:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
+/* A disabled field is a derived/read-only value (e.g. an age computed from a birth date), so it must read
+   as inactive instead of looking like an editable field. */
+input:disabled,select:disabled,textarea:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
 .panel button:not(.icon-button),.dialog-card button:not(.icon-button):not([data-close]){cursor:pointer}
 .panel-head button{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:var(--radius-pill);font-weight:600}
 .panel-head button:hover{background:var(--surface-2)}
