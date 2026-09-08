@@ -104,6 +104,7 @@ public sealed record CompensationCalculationResult(
     decimal CashGrossAnnual,
     decimal EstimatedCashNetAnnual,
     decimal EstimatedCashNetMonthly,
+    decimal EstimatedAverageCashNetMonthly,
     decimal EstimatedTotalDeductionsAnnual,
     decimal EstimatedNetRatioPercent,
     decimal EmployerTotalCostAnnual,

@@ -296,6 +296,63 @@ public sealed class CompensationCalculatorTests
         Assert.True(result.FullWorthValueDeltaAnnual > result.CashNetDeltaAnnual);
     }
 
+    [Fact]
+    public void RegularMonthNet_IsIndependentOfBonusAndSalaryCount()
+    {
+        const decimal monthly = 3_240m;
+        var profile = BasicProfile(monthly * 13m) with
+        {
+            SalaryPaymentsPerYear = 13,
+            AnnualBonus = 4_000m,
+            OccupationalPension = new OccupationalPensionInput(EmployeeContributionMonthly: 210.43m),
+            CompanyCar = new CompanyCarInput(Enabled: true, ListPrice: 45_000m, TaxableListPriceFactor: 1m, OneWayCommuteKm: 20m)
+        };
+
+        var withBonus = GermanCompensationCalculator.Calculate(profile);
+        var noBonus = GermanCompensationCalculator.Calculate(profile with { AnnualBonus = 0m });
+        var moreSalaries = GermanCompensationCalculator.Calculate(profile with { SalaryPaymentsPerYear = 14, AnnualGross = monthly * 14m });
+
+        // A normal month must not move when only the bonus or the number of salary payments changes.
+        Assert.Equal(withBonus.EstimatedCashNetMonthly, noBonus.EstimatedCashNetMonthly);
+        Assert.Equal(withBonus.EstimatedCashNetMonthly, moreSalaries.EstimatedCashNetMonthly);
+
+        // The yearly average, however, DOES move: the bonus and the extra salary raise the annual net.
+        Assert.True(withBonus.EstimatedAverageCashNetMonthly > noBonus.EstimatedAverageCashNetMonthly);
+        Assert.True(moreSalaries.EstimatedAverageCashNetMonthly > withBonus.EstimatedAverageCashNetMonthly);
+    }
+
+    [Fact]
+    public void RegularMonthNet_ExcludesTheBonusThatTheYearlyAverageIncludes()
+    {
+        var result = GermanCompensationCalculator.Calculate(
+            BasicProfile(42_120m) with { SalaryPaymentsPerYear = 13, AnnualBonus = 4_000m });
+
+        // The normal month is taxed on the regular salary only (42.120 × 12/13 = 38.880 a year), so it is a
+        // smaller, bonus-free figure. The yearly average spreads the 13th salary and the bonus over 12 months
+        // and is therefore higher — the whole point of keeping the two numbers separate.
+        Assert.True(result.EstimatedAverageCashNetMonthly > result.EstimatedCashNetMonthly);
+        Assert.Equal(
+            Math.Round(result.EstimatedCashNetAnnual / 12m, 2, MidpointRounding.AwayFromZero),
+            result.EstimatedAverageCashNetMonthly);
+
+        // The normal month must equal the net of a bonus-free, 12-payment year over twelve months.
+        var regularOnly = GermanCompensationCalculator.Calculate(
+            BasicProfile(38_880m) with { SalaryPaymentsPerYear = 12, AnnualBonus = 0m });
+        Assert.Equal(regularOnly.EstimatedCashNetMonthly, result.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
+    public void SimpleSalary_RegularMonthEqualsAverageMonth()
+    {
+        var result = GermanCompensationCalculator.Calculate(BasicProfile(60_000m));
+
+        // Twelve equal payments, no bonus: the normal month and the yearly average are the same value.
+        Assert.Equal(result.EstimatedAverageCashNetMonthly, result.EstimatedCashNetMonthly);
+        Assert.Equal(
+            Math.Round(result.EstimatedCashNetAnnual / 12m, 2, MidpointRounding.AwayFromZero),
+            result.EstimatedCashNetMonthly);
+    }
+
     private static CompensationProfileInput BasicProfile(decimal annualGross) => new(
         Name: "Current",
         AnnualGross: annualGross,

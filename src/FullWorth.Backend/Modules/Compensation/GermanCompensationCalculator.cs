@@ -23,6 +23,19 @@ public static class GermanCompensationCalculator
         var plus100 = CalculateRaw(input with { AnnualGross = input.AnnualGross + 100m });
         var marginal = RoundMoney(plus100.CashNetAnnual - raw.CashNetAnnual);
 
+        // "Netto normaler Monat" must reflect a single ordinary payslip: the regular monthly salary taxed on a
+        // 12-month basis, WITHOUT the 13th/14th salary or the annual bonus (those are one-off "sonstige Bezüge"
+        // that only move the yearly average, not a normal month). The regular monthly gross is the contractual
+        // annual gross spread over the actual number of salary payments; twelve of those make the ordinary tax
+        // year. Recurring monthly items (company car, bAV, benefits) are kept so they still count every month.
+        // This makes the regular-month net independent of the bonus and of the number of salary payments.
+        var salaryPayments = input.SalaryPaymentsPerYear is >= 12 and <= 14 ? input.SalaryPaymentsPerYear : 12;
+        var regularMonthlyBase = RoundMoney(input.AnnualGross * 12m / salaryPayments);
+        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m });
+        var regularMonthlyNet = RoundMoney(regularRaw.CashNetAnnual / 12m);
+        // "Ø Netto pro Monat" spreads the FULL annual net (bonus + every salary payment) evenly over 12 months.
+        var averageMonthlyNet = RoundMoney(raw.CashNetAnnual / 12m);
+
         var noCarInput = input with { CompanyCar = (input.CompanyCar ?? new CompanyCarInput()) with { Enabled = false } };
         var noCarRaw = CalculateRaw(noCarInput);
         var carCashImpact = RoundMoney(noCarRaw.CashNetAnnual - raw.CashNetAnnual);
@@ -82,7 +95,8 @@ public static class GermanCompensationCalculator
             RoundMoney(input.AnnualBonus),
             RoundMoney(input.AnnualGross + input.AnnualBonus),
             RoundMoney(raw.CashNetAnnual),
-            RoundMoney(raw.CashNetAnnual / 12m),
+            regularMonthlyNet,
+            averageMonthlyNet,
             RoundMoney((input.AnnualGross + input.AnnualBonus) - raw.CashNetAnnual),
             input.AnnualGross + input.AnnualBonus <= 0m ? 0m : Math.Round(raw.CashNetAnnual / (input.AnnualGross + input.AnnualBonus) * 100m, 2),
             RoundMoney(totalEmployerCost),
