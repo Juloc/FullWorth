@@ -131,6 +131,34 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
+    public void MainShellDoesNotLoadDeletedPatchModules()
+    {
+        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
+        Assert.DoesNotContain("/features/accounts-ux.js", html);
+        Assert.DoesNotContain("/features/compensation-nav.js", html);
+        Assert.DoesNotContain("/parity-completion.css", html);
+    }
+
+    [Fact]
+    public void SharedCssLayersAreExplicitAndOrdered()
+    {
+        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
+        var tokens = html.IndexOf("/styles/tokens.css", StringComparison.Ordinal);
+        var reset = html.IndexOf("/styles/reset.css", StringComparison.Ordinal);
+        var appearance = html.IndexOf("/appearance.css", StringComparison.Ordinal);
+        var shell = html.IndexOf("/styles/shell.css", StringComparison.Ordinal);
+        var components = html.IndexOf("/styles/components.css", StringComparison.Ordinal);
+        var featureBase = html.IndexOf("/app.css", StringComparison.Ordinal);
+
+        Assert.True(tokens >= 0 && reset > tokens && appearance > reset && shell > appearance && components > shell && featureBase > components);
+        Assert.True(File.Exists(Path.Combine(WwwRoot(), "styles", "tokens.css")));
+        Assert.True(File.Exists(Path.Combine(WwwRoot(), "styles", "reset.css")));
+        Assert.True(File.Exists(Path.Combine(WwwRoot(), "styles", "shell.css")));
+        Assert.True(File.Exists(Path.Combine(WwwRoot(), "styles", "components.css")));
+        Assert.False(File.Exists(Path.Combine(WwwRoot(), "parity-completion.css")));
+    }
+
+    [Fact]
     public void SettingsWorkflowsStayOutOfAppBootstrap()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
@@ -174,6 +202,11 @@ public sealed class FrontendArchitectureGuardTests
         Assert.Contains("navigate(", accounts);
         Assert.Contains("bindAccountsPresentation", accounts);
         Assert.DoesNotContain("onAppEvent(", accounts);
+        Assert.DoesNotContain("pools(", accounts);
+        Assert.DoesNotContain("groupFromHead", accounts);
+        Assert.Contains("[data-account-id]", accounts);
+        Assert.Contains("[data-connection-id]", accounts);
+        Assert.Contains("[data-group-id]", accounts);
     }
 
     [Fact]
