@@ -108,6 +108,8 @@ public static class CompensationEndpoints
         });
 
         app.MapCompensationHistoryEndpoints();
+        app.MapCompensationOtherIncomeEndpoints();
+        app.MapCompensationBenchmarkEndpoints();
         app.MapCompensationPayslipEndpoints();
         return app;
     }
