@@ -1,0 +1,51 @@
+name: Alpha Release Request
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/release-request.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  create-alpha-tag:
+    name: Create alpha release tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Read and validate requested version
+        id: version
+        shell: bash
+        run: |
+          tag="$(tr -d '[:space:]' < ops/release-request.txt)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]; then
+            echo "Invalid alpha release tag: $tag" >&2
+            exit 1
+          fi
+
+          git fetch --tags --force
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; nothing to do."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push alpha tag
+        if: steps.version.outputs.exists != 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "FullWorth ${TAG#v}"
+          git push origin "$TAG"
