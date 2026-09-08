@@ -185,6 +185,58 @@ function surface(ctx, selected, signals, loading) {
   return '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div><article class="panel insights-panel"><div class="insights-head insights-view-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.title', 'Insights')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.subtitle', 'Insights directly from your FullWorth data.')) + '</span></div></div><div class="insights-tabs" role="group" aria-label="' + ctx.esc(tr(ctx, 'insights.filterLabel', 'Insight status')) + '">' + tabs + '</div><div class="insight-list">' + body + '</div></article></div>';
 }
 
+function contractPairIds(signal) {
+  if (signal.subjectType !== 'contract-pair') return [];
+  const evidence = signal.evidence || {};
+  const ids = [
+    pick(evidence, 'olderContractId', 'OlderContractId'),
+    pick(evidence, 'newerContractId', 'NewerContractId')
+  ].filter(Boolean);
+  if (ids.length === 2) return [...new Set(ids.map(String))];
+  return [...new Set(String(signal.subjectId || '').split(':').map(value => value.trim()).filter(Boolean))].slice(0, 2);
+}
+
+function mergePreviewHtml(ctx, preview) {
+  if (!preview) return '';
+  const canonical = (preview.contracts || []).find(contract => contract.id === preview.canonicalContractId);
+  const sources = (preview.contracts || []).filter(contract => contract.id !== preview.canonicalContractId);
+  const payments = (preview.combinedPayments || []).slice(0, 4);
+  const paymentRows = payments.map(payment =>
+    '<div class="insight-merge-payment"><span>' + ctx.esc(ctx.date(payment.date)) + '</span><strong>' +
+    ctx.esc(amount(ctx, payment.amount, payment.currency)) + '</strong></div>'
+  ).join('');
+  const sourceNames = sources.map(contract => contract.name).filter(Boolean).join(' · ');
+  const warningText = (preview.warnings || []).map(warning =>
+    tr(ctx, 'insights.mergePreview.warning.' + warning, warning)
+  ).join(' · ');
+
+  return '<div class="insight-merge-preview">' +
+    '<div class="insight-merge-preview-head"><strong>' + ctx.esc(tr(ctx, 'insights.mergePreview.title', 'Merge preview')) + '</strong><span>' +
+    ctx.esc(tr(ctx, 'insights.mergePreview.readOnly', 'Preview only — nothing will be changed')) + '</span></div>' +
+    '<div class="insight-merge-canonical"><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.keep', 'Keep as main contract')) + '</span><strong>' +
+    ctx.esc(canonical?.name || '—') + '</strong></div>' +
+    (sourceNames ? '<div class="insight-merge-canonical"><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.combine', 'Combine history from')) + '</span><strong>' + ctx.esc(sourceNames) + '</strong></div>' : '') +
+    '<div class="insight-merge-stats"><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.accounts', '{count} payment accounts').replace('{count}', String((preview.accountIds || []).length))) +
+    '</span><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.payments', '{count} matched payments').replace('{count}', String(preview.combinedPaymentCount || 0))) + '</span></div>' +
+    (paymentRows ? '<div class="insight-merge-payments">' + paymentRows + '</div>' : '') +
+    (warningText ? '<div class="insight-merge-warning">' + ctx.esc(warningText) + '</div>' : '') +
+    '</div>';
+}
+
+async function loadMergePreview(ctx, signal, target) {
+  const ids = contractPairIds(signal);
+  if (ids.length !== 2 || !target) return;
+  target.innerHTML = '<div class="row-sub">' + ctx.esc(tr(ctx, 'insights.mergePreview.loading', 'Preparing merge preview…')) + '</div>';
+  try {
+    const preview = await ctx.api('api/contracts/merge-preview', ctx.jsonBody({ contractIds: ids }));
+    if (!target.isConnected) return;
+    target.innerHTML = mergePreviewHtml(ctx, preview);
+  } catch (error) {
+    if (!target.isConnected) return;
+    target.innerHTML = '<div class="row-sub">' + ctx.esc(tr(ctx, 'insights.mergePreview.error', 'Merge preview could not be loaded.')) + '</div>';
+  }
+}
+
 function targetView(signal) {
   if (signal.subjectType === 'contract' || signal.subjectType === 'contract-pair') return 'contracts';
   if (signal.subjectType === 'budget') return 'budgets';
@@ -212,6 +264,9 @@ function openDetail(ctx, initialSignal, refresh) {
     (s ? '<p class="insight-detail-summary">' + ctx.esc(s) + '</p>' : '') +
     '<div class="insight-detail-meta"><span>' + ctx.esc(tr(ctx, 'insights.detected', 'Detected')) + '</span><strong>' + ctx.esc(ctx.dateTime(signal.detectedAt)) + '</strong></div>' +
     manage +
+    (signal.subjectType === 'contract-pair'
+      ? '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.mergePreview.section', 'Merge preview')) + '</span><div data-merge-preview></div></div>'
+      : '') +
     '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.feedback', 'Was this useful?')) + '</span><div class="insight-feedback"><button type="button" class="ghost ' + (signal.feedback === 'useful' ? 'active' : '') + '" data-feedback="useful" aria-pressed="' + (signal.feedback === 'useful') + '">' + ctx.esc(tr(ctx, 'insights.useful', 'Useful')) + '</button><button type="button" class="ghost ' + (signal.feedback === 'irrelevant' ? 'active' : '') + '" data-feedback="irrelevant" aria-pressed="' + (signal.feedback === 'irrelevant') + '">' + ctx.esc(tr(ctx, 'insights.irrelevant', 'Not relevant')) + '</button></div></div>' +
     '<button type="button" class="insight-open-target" data-open-target>' + ctx.esc(tr(ctx, 'insights.openAffected', 'Open affected area')) + '<span aria-hidden="true">›</span></button></form>';
   const dlg = ctx.dialog(html, { mobileMode: 'sheet' });
@@ -263,4 +318,6 @@ function openDetail(ctx, initialSignal, refresh) {
     ctx.toast(tr(ctx, 'insights.feedbackSaved', 'Feedback saved.'));
   }));
   dlg.showModal();
+  if (signal.subjectType === 'contract-pair')
+    loadMergePreview(ctx, signal, dlg.querySelector('[data-merge-preview]'));
 }
