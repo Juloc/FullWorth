@@ -147,6 +147,13 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return canWriteAccount ? ContractAccessLevel.Write : ContractAccessLevel.Read;
     }
 
+    public Task<ContractAccessLevel> GetRecordAccessForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid contractId,
+        CancellationToken ct) =>
+        GetRecordAccessAsync(userId, fullWorthSpaceId, contractId, ct);
+
     public async Task<ContractMutationOutcome> CreateForUserAsync(Guid userId, Guid fullWorthSpaceId, ContractWrite request, CancellationToken ct)
     {
         var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
