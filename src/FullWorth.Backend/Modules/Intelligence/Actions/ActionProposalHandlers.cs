@@ -38,6 +38,7 @@ public sealed record ActionProposalHandlerContext(
 public interface IActionProposalHandler
 {
     string Name { get; }
+    string? NormalizePayload(JsonElement payload);
 
     Task<ActionHandlerPreviewOutcome> PreviewAsync(
         ActionProposalHandlerContext context,
@@ -62,6 +63,12 @@ internal static class ActionPayload
         try { return JsonSerializer.Deserialize<T>(payload.GetRawText(), Options); }
         catch (JsonException) { return default; }
     }
+
+    public static string? Normalize<T>(JsonElement payload)
+    {
+        var value = Read<T>(payload);
+        return value is null ? null : JsonSerializer.Serialize(value, Options);
+    }
 }
 
 public sealed record TransactionCategoryChangePayload(Guid TransactionId, Guid? CategoryId);
@@ -71,6 +78,8 @@ public sealed class TransactionCategoryChangeActionHandler(
     TransactionStore transactions) : IActionProposalHandler
 {
     public string Name => ActionProposalHandlerNames.TransactionCategoryChange;
+
+    public string? NormalizePayload(JsonElement payload) => ActionPayload.Normalize<TransactionCategoryChangePayload>(payload);
 
     public async Task<ActionHandlerPreviewOutcome> PreviewAsync(
         ActionProposalHandlerContext context,
@@ -228,6 +237,8 @@ public sealed class TransferLinkActionHandler(
 {
     public string Name => ActionProposalHandlerNames.TransferLink;
 
+    public string? NormalizePayload(JsonElement payload) => ActionPayload.Normalize<TransferLinkActionPayload>(payload);
+
     public async Task<ActionHandlerPreviewOutcome> PreviewAsync(
         ActionProposalHandlerContext context,
         JsonElement payload,
@@ -383,6 +394,8 @@ public sealed class CategorizationRuleUpsertActionHandler(
     CategoryStore categories) : IActionProposalHandler
 {
     public string Name => ActionProposalHandlerNames.CategorizationRuleUpsert;
+
+    public string? NormalizePayload(JsonElement payload) => ActionPayload.Normalize<CategorizationRuleUpsertActionPayload>(payload);
 
     public async Task<ActionHandlerPreviewOutcome> PreviewAsync(
         ActionProposalHandlerContext context,
