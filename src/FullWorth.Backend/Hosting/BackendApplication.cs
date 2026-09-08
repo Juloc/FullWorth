@@ -165,6 +165,7 @@ public static class BackendApplication
         builder.Services.AddScoped<CategoryStore>();
         builder.Services.AddScoped<ContractStore>();
         builder.Services.AddScoped<ContractMergePreviewService>();
+        builder.Services.AddScoped<ContractMergeExecutionService>();
         builder.Services.AddScoped<ContractDetectionService>();
         builder.Services.AddScoped<ContractContinuityDetectionService>();
         builder.Services.AddScoped<ContractCandidateReviewStore>();
