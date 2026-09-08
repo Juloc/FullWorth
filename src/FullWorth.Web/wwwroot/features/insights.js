@@ -1,4 +1,5 @@
 import { emitAppEvent } from '../core/event-bus.js';
+import { confirmDialog } from '../ui/confirm.js';
 
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
 let dashboardRenderVersion = 0;
@@ -212,7 +213,9 @@ function mergePreviewHtml(ctx, preview) {
 
   return '<div class="insight-merge-preview">' +
     '<div class="insight-merge-preview-head"><strong>' + ctx.esc(tr(ctx, 'insights.mergePreview.title', 'Merge preview')) + '</strong><span>' +
-    ctx.esc(tr(ctx, 'insights.mergePreview.readOnly', 'Preview only — nothing will be changed')) + '</span></div>' +
+    ctx.esc(preview.executionEnabled
+      ? tr(ctx, 'insights.mergePreview.ready', 'Review the result before confirming')
+      : tr(ctx, 'insights.mergePreview.readOnly', 'Preview only — nothing will be changed')) + '</span></div>' +
     '<div class="insight-merge-canonical"><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.keep', 'Keep as main contract')) + '</span><strong>' +
     ctx.esc(canonical?.name || '—') + '</strong></div>' +
     (sourceNames ? '<div class="insight-merge-canonical"><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.combine', 'Combine history from')) + '</span><strong>' + ctx.esc(sourceNames) + '</strong></div>' : '') +
@@ -220,10 +223,13 @@ function mergePreviewHtml(ctx, preview) {
     '</span><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.payments', '{count} matched payments').replace('{count}', String(preview.combinedPaymentCount || 0))) + '</span></div>' +
     (paymentRows ? '<div class="insight-merge-payments">' + paymentRows + '</div>' : '') +
     (warningText ? '<div class="insight-merge-warning">' + ctx.esc(warningText) + '</div>' : '') +
+    (preview.executionEnabled
+      ? '<button type="button" class="btn btn-primary insight-merge-execute" data-merge-execute>' + ctx.esc(tr(ctx, 'insights.mergePreview.execute', 'Merge contracts')) + '</button>'
+      : '') +
     '</div>';
 }
 
-async function loadMergePreview(ctx, signal, target) {
+async function loadMergePreview(ctx, signal, target, detailDialog, refresh) {
   const ids = contractPairIds(signal);
   if (ids.length !== 2 || !target) return;
   target.innerHTML = '<div class="row-sub">' + ctx.esc(tr(ctx, 'insights.mergePreview.loading', 'Preparing merge preview…')) + '</div>';
@@ -231,6 +237,54 @@ async function loadMergePreview(ctx, signal, target) {
     const preview = await ctx.api('api/contracts/merge-preview', ctx.jsonBody({ contractIds: ids }));
     if (!target.isConnected) return;
     target.innerHTML = mergePreviewHtml(ctx, preview);
+    const execute = target.querySelector('[data-merge-execute]');
+    if (!execute || !preview.executionEnabled) return;
+
+    execute.addEventListener('click', async () => {
+      const canonical = (preview.contracts || []).find(contract => contract.id === preview.canonicalContractId);
+      const sourceNames = (preview.contracts || [])
+        .filter(contract => contract.id !== preview.canonicalContractId)
+        .map(contract => contract.name)
+        .filter(Boolean)
+        .join(', ');
+      const message = tr(
+        ctx,
+        'insights.mergePreview.confirmMessage',
+        'Keep {canonical} as the main contract and combine the history from {sources}?'
+      ).replace('{canonical}', canonical?.name || '—').replace('{sources}', sourceNames || '—');
+
+      const confirmed = await confirmDialog(ctx, message, {
+        title: tr(ctx, 'insights.mergePreview.confirmTitle', 'Merge contracts?'),
+        confirmLabel: tr(ctx, 'insights.mergePreview.confirm', 'Merge')
+      });
+      if (!confirmed || !target.isConnected) return;
+
+      execute.disabled = true;
+      try {
+        await ctx.api('api/contracts/merge-execute', ctx.jsonBody({
+          contractIds: ids,
+          canonicalContractId: preview.canonicalContractId,
+          previewToken: preview.previewToken
+        }));
+        await ctx.api('api/insights/' + encodeURIComponent(signal.id) + '/dismiss', { method: 'POST' }).catch(() => {});
+        ctx.toast(tr(ctx, 'insights.mergePreview.success', 'Contracts merged.'));
+        if (detailDialog?.open) detailDialog.close();
+        await refresh();
+      } catch (error) {
+        execute.disabled = false;
+        if (error?.status === 409) {
+          target.innerHTML = '<div class="insight-merge-stale"><strong>' +
+            ctx.esc(tr(ctx, 'insights.mergePreview.staleTitle', 'Preview is outdated')) +
+            '</strong><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.stale', 'Contract data changed. Open a fresh preview before merging.')) +
+            '</span><button type="button" class="ghost" data-merge-reload>' +
+            ctx.esc(tr(ctx, 'insights.mergePreview.reload', 'Refresh preview')) + '</button></div>';
+          target.querySelector('[data-merge-reload]')?.addEventListener('click', () =>
+            loadMergePreview(ctx, signal, target, detailDialog, refresh));
+          return;
+        }
+        ctx.toast(error?.message || tr(ctx, 'common.error', 'Could not save changes'));
+      }
+    });
   } catch (error) {
     if (!target.isConnected) return;
     target.innerHTML = '<div class="row-sub">' + ctx.esc(tr(ctx, 'insights.mergePreview.error', 'Merge preview could not be loaded.')) + '</div>';
@@ -319,5 +373,5 @@ function openDetail(ctx, initialSignal, refresh) {
   }));
   dlg.showModal();
   if (signal.subjectType === 'contract-pair')
-    loadMergePreview(ctx, signal, dlg.querySelector('[data-merge-preview]'));
+    loadMergePreview(ctx, signal, dlg.querySelector('[data-merge-preview]'), dlg, refresh);
 }
