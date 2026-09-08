@@ -49,7 +49,8 @@ public sealed class FinancialDomainSignalDetectionService(
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var outcome = await transfers.CandidatesForUserAsync(userId, fullWorthSpaceId, ct);
+        var from = DateOnly.FromDateTime(now.UtcDateTime.AddDays(-60));
+        var outcome = await transfers.CandidatesForUserSinceAsync(userId, fullWorthSpaceId, from, ct);
         if (outcome.Result != TransferDetectionResult.Success || outcome.Pairs is null) return [];
 
         return outcome.Pairs
