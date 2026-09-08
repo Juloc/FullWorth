@@ -67,7 +67,7 @@ export async function renderNotifications(context) {
         <div class="row-title">${ctx.esc(ctx.get('notifications.push'))}</div>
         <div class="row-sub notif-push-status"><span class="notif-dot" aria-hidden="true"></span><span data-push-status>${ctx.esc(ctx.get('notifications.pushOff'))}</span></div>
       </div>
-      <button type="button" class="ghost" data-push-toggle>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
+      <button type="button" class="btn btn-secondary" data-push-toggle>${ctx.esc(ctx.get('notifications.pushEnable'))}</button>
     </div>
     <h3 class="notif-h">${ctx.esc(ctx.get('notifications.typesHeading'))}</h3>
     <div class="rows notif-types">
