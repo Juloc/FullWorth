@@ -20,8 +20,12 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
         {
+            if (!rollout.IsOn(AutopilotFeatures.Insights))
+                return Results.NotFound();
+
             var userId = currentUser.RequireUserId();
             if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
@@ -49,8 +53,12 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
         {
+            if (!rollout.IsOn(AutopilotFeatures.Insights))
+                return Results.NotFound();
+
             var userId = currentUser.RequireUserId();
             if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
@@ -65,6 +73,7 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
             await StateMutationAsync(
                 currentUser.RequireUserId(),
@@ -79,6 +88,7 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
             await StateMutationAsync(
                 currentUser.RequireUserId(),
@@ -94,8 +104,12 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
         {
+            if (!rollout.IsOn(AutopilotFeatures.Insights))
+                return Results.NotFound();
+
             var userId = currentUser.RequireUserId();
             if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
@@ -119,8 +133,12 @@ public static class FinancialSignalEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             FinancialSignalStore store,
+            AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
         {
+            if (!rollout.IsOn(AutopilotFeatures.Insights))
+                return Results.NotFound();
+
             var userId = currentUser.RequireUserId();
             if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
