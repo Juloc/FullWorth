@@ -55,9 +55,5 @@ Still open / worth tightening:
 
 ## Product/security decisions
 
-- Amazon import currently uses browser automation/stored Amazon credentials, which conflicts with the existing product decision that third-party credentials should not reach the browser flow. Decide whether to keep that model and amend the security decision or move to manual/email/export adapters.
+- Decided (shipped): Amazon import intentionally uses server-side browser automation with an encrypted stored session, running automatic ~24h syncs. Credentials/OTP are submitted only to Amazon server-side, never persisted, never returned to the browser — consistent with the bank-credential rule. Documented in `PRODUCT_DECISIONS.md` and `SECURITY_ARCHITECTURE.md`. Manual/e-mail/export stay as complementary adapters.
 - external-tool least-privilege permissions and stricter share/screenshot mode still need explicit product scope.
-
-## Known Accounts mobile issue
-
-At ~375 px, the current account-row action cluster can overflow. Accounts structural migration is now approved, so this is no longer blocked by the old “frozen Accounts” rule. Fix it within the established visible UX, preferably with a compact overflow action menu rather than adding another patch layer.

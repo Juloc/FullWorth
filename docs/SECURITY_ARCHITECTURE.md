@@ -67,6 +67,12 @@ Banking keeps its own conservative synchronization, retry and provider-rate poli
 User-supplied bank credentials enter only the guarded Banking module path, are never returned to the
 browser, and are persisted encrypted through the finance backend module.
 
+The Amazon connector follows the same rule. Its sanctioned acquisition path is server-side browser
+automation (see [Product decisions](PRODUCT_DECISIONS.md)): the user's Amazon email/password and any
+OTP are submitted only to Amazon's sign-in form inside the backend's isolated Playwright/Chromium
+runtime, are never persisted and never returned to the browser. Only the resulting encrypted browser
+session state is stored, and it is reused for automatic order syncs.
+
 ## Transport, uploads and PWA
 
 Production requires HTTPS, host allow-listing, HSTS, CSP, restrictive response headers and rate

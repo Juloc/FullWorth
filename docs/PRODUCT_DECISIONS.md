@@ -141,12 +141,22 @@ Initial target order:
 
 ## Amazon
 
-> ⚠ Needs decision: This section says not to depend on browser scraping and to prefer manual / e-mail / export-file adapters. The shipped connector does the opposite: it is the only implemented Amazon path and it drives Playwright/Chromium browser automation against the user's real Amazon account. The user enters their Amazon email/password (submitted to Amazon's sign-in form server-side; password/OTP are not persisted) and FullWorth stores the resulting encrypted browser session (`AmazonConnections.EncryptedStorageState`) and reuses it for automatic 24h syncs. This conflicts with the "no primary browser scraping" and manual/email/export intent. Product/security call needed: accept and document the Playwright + stored-session path as the sanctioned 1.0 strategy, or hold it back in favour of the manual/e-mail/export adapters below. See `docs/AMAZON_IMPORT.md`.
+Decision (accepted): the sanctioned 1.0 Amazon acquisition path is server-side browser automation.
+FullWorth drives Playwright/Chromium against the user's own Amazon account and stores the resulting
+encrypted browser session (`AmazonConnections.EncryptedStorageState`) to run automatic ~24h order
+syncs (`AmazonSyncWorker`). This is a deliberate exception to a pure API/import model because Amazon
+exposes no customer-authorized buyer-order-history API for personal accounts.
 
-- Do not depend on browser scraping as the primary 1.0 strategy.
-- Support manual import.
-- Support e-mail/receipt/invoice based acquisition.
+Security posture — this mirrors the bank-credential rule in [Security Architecture](SECURITY_ARCHITECTURE.md):
+the user's Amazon email/password and any OTP are submitted only to Amazon's sign-in form, server-side,
+inside the backend's isolated Playwright/Chromium runtime; they are never persisted and never returned
+to the browser. Only the encrypted session state is stored and reused. See `docs/AMAZON_IMPORT.md`.
+
+- Browser automation is the primary 1.0 acquisition path; it runs automatically once the user connects their account.
+- Support manual import as a complementary adapter.
+- Support e-mail/receipt/invoice based acquisition as a complementary adapter.
 - Support export-file acquisition when Amazon exposes a usable customer export.
+- Prefer a customer-authorized Amazon export/API over browser automation if and when one becomes available.
 - Treat Amazon selling-partner/vendor APIs as unsuitable for ordinary personal buyer-order history unless Amazon provides a customer-authorized API for that use case.
 - Model orders, individual items, multiple charges, deliveries and refunds independently of the acquisition adapter.
 - Refunds/returns link back to the original order/item and corresponding finance transaction where possible.
