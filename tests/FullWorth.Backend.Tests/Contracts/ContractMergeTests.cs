@@ -187,6 +187,58 @@ public sealed class ContractMergeTests
     }
 
     [Fact]
+    public async Task MergeExecute_RejectsNewPaymentAfterPreview()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var previewResponse = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        using var previewJson = JsonDocument.Parse(await previewResponse.Content.ReadAsStringAsync());
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Transactions.Add(new FinanceTransaction
+            {
+                AccountId = s.AccountB,
+                ExternalKey = "new-weg-after-preview",
+                Amount = -182m,
+                Currency = "EUR",
+                Counterparty = "WEG AM KÖNIGSTRÄßLE 1 5 VERTR D PPG",
+                NormalizedCounterparty = "weg am königsträßle 1 5 vertr d ppg",
+                BookingDate = new DateOnly(2026, 9, 1),
+                CategorizationSource = "none"
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var execute = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new
+            {
+                contractIds = new[] { s.Target, s.Source },
+                canonicalContractId = previewJson.RootElement.GetProperty("canonicalContractId").GetGuid(),
+                previewToken = previewJson.RootElement.GetProperty("previewToken").GetString()
+            }));
+
+        Assert.Equal(HttpStatusCode.Conflict, execute.StatusCode);
+
+        using var listResponse = await client.SendAsync(Request(
+            HttpMethod.Get,
+            $"/api/contracts?fullWorthSpaceId={s.Space}",
+            s.Owner));
+        var rows = await listResponse.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.Equal(2, rows!.Count);
+    }
+
+    [Fact]
     public async Task MergeExecute_IsForbiddenForReadOnlyMember()
     {
         using var factory = new BackendWebApplicationFactory();
