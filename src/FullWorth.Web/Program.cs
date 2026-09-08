@@ -251,9 +251,20 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await authDb.Database.MigrateAsync();
-    await FirstRunBootstrapper.TryRunAsync(scope.ServiceProvider, app.Logger, CancellationToken.None);
     await InstanceAdminBootstrapper.EnsureAsync(scope.ServiceProvider, app.Logger, CancellationToken.None);
 }
+
+// The first-run bootstrap creates the initial login by calling the backend's own internal-key-guarded
+// endpoint over HTTP. In unified mode that endpoint is served by THIS process, so the call can only
+// succeed once Kestrel is listening: running it before app.Run() is refused by the not-yet-bound socket,
+// and a fresh unified deployment then starts with no admin login at all. ApplicationStarted fires after
+// the server is bound, which keeps one single bootstrap code path working for both topologies.
+// TryRunAsync never throws — it logs and lets the app run — so this is safe to leave unawaited.
+app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await FirstRunBootstrapper.TryRunAsync(scope.ServiceProvider, app.Logger, app.Lifetime.ApplicationStopping);
+}));
 
 // First in the pipeline: shape any unhandled exception as problem+json without leaking internals.
 app.UseExceptionHandler();
