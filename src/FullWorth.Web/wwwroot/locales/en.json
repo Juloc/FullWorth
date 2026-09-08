@@ -202,7 +202,9 @@
     "bankDebtor": "Debtor",
     "bankAccount": "Counterparty account",
     "bankCode": "Bank transaction code",
-    "bankRemittance": "Remittance information"
+    "bankRemittance": "Remittance information",
+    "directionLabel": "Direction",
+    "flagsLabel": "Filters"
   },
   "purchases": {
     "title": "Purchases",
