@@ -230,7 +230,7 @@ Presentation / privacy:
 
 PWA:
 
-- [ ] service-worker v95 installs successfully
+- [ ] service-worker v96 installs successfully
 - [ ] `features/insights.js` is present in the static shell cache
 - [ ] no `/api/insights` response is cached by the service worker
 
