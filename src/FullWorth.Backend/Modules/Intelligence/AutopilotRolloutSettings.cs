@@ -14,6 +14,7 @@ public static class AutopilotFeatures
     public const string Signals = "signals";
     public const string Insights = "insights";
     public const string Actions = "actions";
+    public const string ContractMergeExecution = "contract-merge-execution";
     public const string AutomationRules = "automation-rules";
     public const string Scenarios = "scenarios";
     public const string ProactiveAiExplanations = "proactive-ai-explanations";
@@ -24,6 +25,7 @@ public static class AutopilotFeatures
         Signals,
         Insights,
         Actions,
+        ContractMergeExecution,
         AutomationRules,
         Scenarios,
         ProactiveAiExplanations,
@@ -73,6 +75,7 @@ public sealed class AutopilotRolloutSettings
     {
         AutopilotFeatures.Signals => AutopilotRolloutState.On,
         AutopilotFeatures.Insights => AutopilotRolloutState.On,
+        AutopilotFeatures.ContractMergeExecution => AutopilotRolloutState.On,
         _ => AutopilotRolloutState.Off
     };
 
