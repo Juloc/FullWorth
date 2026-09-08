@@ -68,7 +68,7 @@ The architecture guard allow-lists may only shrink.
 3. Shrink `features/accounts-presentation.js` by moving same-domain presentation logic into the Accounts owner/shared account identity primitives. Do not reintroduce cross-feature decoration.
 4. Consolidate Purchase/Wealth layered helper modules into explicit feature submodules where useful.
 5. Split monolithic CSS into `styles/tokens.css`, shell/components/responsive and feature-owned styles after behavioral architecture is stable.
-6. Retire the historical `parity-completion.css` name by folding its live rules into the final styles split rather than deleting live behavior.
+6. Continue the shared CSS split. The historical `parity-completion.css` file has been removed after verifying its selectors were no longer referenced.
 
 ## Validation
 
