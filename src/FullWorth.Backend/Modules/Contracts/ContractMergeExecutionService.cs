@@ -1,4 +1,5 @@
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Intelligence;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Contracts;
@@ -34,7 +35,8 @@ public sealed record ContractMergeExecuteOutcome(
 public sealed class ContractMergeExecutionService(
     FullWorthDbContext db,
     ContractStore store,
-    ContractMergePreviewService previews)
+    ContractMergePreviewService previews,
+    AutopilotRolloutSettings rollout)
 {
     public async Task<ContractMergeExecuteOutcome> ExecuteAsync(
         Guid userId,
@@ -42,6 +44,9 @@ public sealed class ContractMergeExecutionService(
         ContractMergeExecuteRequest request,
         CancellationToken ct)
     {
+        if (!rollout.IsOn(AutopilotFeatures.ContractMergeExecution))
+            return new(ContractMergeExecuteResult.Forbidden, Error: "Contract merge execution is disabled.");
+
         var ids = (request.ContractIds ?? Array.Empty<Guid>())
             .Where(id => id != Guid.Empty)
             .Distinct()
