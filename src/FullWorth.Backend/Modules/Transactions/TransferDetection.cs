@@ -50,7 +50,7 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
 
     public async Task<TransferDetectionOutcome> DetectForSpaceAsync(Guid fullWorthSpaceId, bool apply, CancellationToken ct)
     {
-        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, from: null, ct);
+        var candidates = await LoadCandidatesAsync(fullWorthSpaceId, from: null, ct: ct);
         var pairs = FindAutomaticPairs(candidates, WindowDays);
 
         if (apply && pairs.Count > 0)
@@ -63,7 +63,7 @@ public sealed class TransferDetectionService(FullWorthDbContext db, FieldCipher?
         Guid userId,
         Guid fullWorthSpaceId,
         CancellationToken ct) =>
-        CandidatesForUserCoreAsync(userId, fullWorthSpaceId, from: null, ct);
+        CandidatesForUserCoreAsync(userId, fullWorthSpaceId, from: null, ct: ct);
 
     public Task<TransferCandidatesOutcome> CandidatesForUserSinceAsync(
         Guid userId,
