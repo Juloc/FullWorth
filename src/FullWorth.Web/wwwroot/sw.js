@@ -15,6 +15,7 @@ const APP_SHELL = [
   '/styles/features/insights.css',
   '/styles/components.css',
   '/app.css',
+  '/styles/responsive.css',
   '/appearance.css',
   '/design-depth.css',
   '/dialogs.css',

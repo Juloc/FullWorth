@@ -121,7 +121,8 @@ public sealed class ResponsiveLayoutTests
             Path.Combine(root, "styles", "reset.css"),
             Path.Combine(root, "styles", "shell.css"),
             Path.Combine(root, "styles", "components.css"),
-            Path.Combine(root, "app.css")
+            Path.Combine(root, "app.css"),
+            Path.Combine(root, "styles", "responsive.css")
         };
         foreach (var path in paths) Assert.True(File.Exists(path), $"css layer not found: {path}");
         return string.Concat(paths.Select(File.ReadAllText));

@@ -117,18 +117,6 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 /* Mobile and tablet: the desktop transaction table becomes identity cards, never a compressed table (UX rework §4).
    Below 1024px the content column (~530px next to the sidebar) cannot fit the 760px table, so the card
    layout applies there too instead of forcing a horizontal scroll inside the panel. */
-@media(max-width:1023px){
-  #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
-  #view-transactions table{min-width:0;width:100%}
-  #view-transactions thead{display:none}
-  #view-transactions .tx-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
-  #view-transactions .tx-row>td{display:none;border:0;padding:0}
-  #view-transactions .tx-row>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
-  #view-transactions .tx-row>td.amount{display:block;flex:0 0 auto;font-size:15px}
-  #view-transactions .tx-cp-main{display:flex;min-width:0}
-  #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px}
-}
 /* ---- Shared UX-rework kit (ui/ux-kit.js): identity, cards, trend, period cycle, summary ---- */
 .fw-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
 .fw-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
@@ -166,7 +154,6 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .fw-summary-label{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
 /* AnalysisCard grid */
 .fw-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start}
-@media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
 /* Identity list row (contracts, merchant lists, upcoming widgets) */
 .fw-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .fw-row:last-child{border-bottom:0}
@@ -274,7 +261,6 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .nw-custom-range-fields input{min-width:140px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:7px 9px;font:inherit}
 .nw-custom-range-fields button{min-height:34px}
 .nw-range-error{color:var(--negative);flex-basis:100%}
-@media(max-width:560px){.nw-custom-range-fields label{flex:1 1 130px}.nw-custom-range-fields input{width:100%;min-width:0}}
 .nw-chart{margin:var(--s2) 0}
 .nw-chart svg{display:block;width:100%;height:140px}
 .nw-chart-line{stroke:var(--cta);fill:none}
@@ -291,7 +277,6 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .data-completeness-copy span{font-size:12px;color:var(--muted);line-height:1.4}
 .data-completeness-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;text-decoration:none;white-space:nowrap}
 #dashboard-data-completeness{grid-column:1/-1}
-@media(max-width:560px){.data-completeness-warning{align-items:flex-start;flex-direction:column}.data-completeness-action{width:100%}}
 .nw-alloc-block{margin:var(--s2) 0 var(--s3)}
 .nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
 .nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
@@ -314,15 +299,6 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 #nw-investments .panel-head{margin-bottom:var(--s3);display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;justify-content:stretch}
 #nw-investments .panel-head>h2{min-width:0}
 #nw-investments .panel-head>button{white-space:nowrap}
-@media(max-width:560px){
-  #nw-investments .panel-head{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
-  #nw-investments .panel-head>h2{grid-column:1/-1}
-  #nw-investments .panel-head>button{width:100%;min-width:0;white-space:normal;line-height:1.2;padding-inline:8px}
-}
-@media(max-width:340px){
-  #nw-investments .panel-head{grid-template-columns:1fr}
-  #nw-investments .panel-head>h2{grid-column:auto}
-}
 /* Transaction detail: right-side drawer on desktop, full-screen sheet on mobile (§9.3) */
 /* The global `label{display:grid}` (and other display rules) otherwise beat the UA [hidden] rule, so a
    `<label hidden>` (e.g. the transfer-purpose select on a non-transfer) leaked into view. Enforce it. */
@@ -369,7 +345,6 @@ dialog.drawer .dialog-card{width:100%;height:100%;max-height:100vh;max-height:10
    SVG block-level so the ✕ sits dead-centre. */
 .tx-close{padding:0}
 .tx-close svg{display:block}
-@media(max-width:767px){dialog.drawer{margin:0;width:100vw;max-width:100vw}dialog.drawer .dialog-card{border-left:0}.tx-detail{width:100%}}
 /* Toggle switch (Umbuchung / exclude-from-stats): calm pill; on-state is the dark CTA (per user pref). */
 .fw-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);cursor:pointer;color:var(--text);font-size:14px;font-weight:400;text-transform:none;letter-spacing:normal}
 .fw-toggle{position:relative;flex:0 0 auto;width:44px;height:26px}
@@ -430,12 +405,10 @@ body.locked{overflow:hidden}
 .bank-status-tools a{white-space:nowrap}
 .bank-status-tools button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius-pill);padding:5px 10px;font:inherit}
 .bank-status-tools button:hover{background:var(--surface-2)}
-@media(max-width:560px){.bank-status-chip{padding:3px 7px;font-size:10px}}
 .bank-status-warning{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12px}
 .bank-status-warning.possible strong{color:var(--warning)}
 .bank-status-warning.major strong{color:var(--negative)}
 .bank-status-warning span{color:var(--muted)}
-@media(max-width:560px){.bank-status-warning{grid-template-columns:1fr}.bank-status-warning a{justify-self:start}}
 
 /* More sheet + search */
 .more-sheet .more-list{display:grid;gap:2px;margin-top:var(--s2)}
@@ -443,11 +416,6 @@ body.locked{overflow:hidden}
 .more-sheet .more-list button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
 .more-sheet .more-list button.active{background:var(--surface-2);color:var(--text)}
 .more-sheet .more-list button.active svg{color:var(--text)}
-@media(max-width:1023px){
-  dialog.more-sheet-dialog{width:100%;max-width:100vw;max-height:100dvh;margin:auto auto 0;padding:0}
-  dialog.more-sheet-dialog .more-sheet{width:100%;max-width:none;max-height:min(82dvh,720px);grid-template-rows:auto minmax(0,1fr);overflow:hidden;border-radius:18px 18px 0 0;padding:var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom))}
-  dialog.more-sheet-dialog .more-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:var(--s1)}
-}
 .search-dialog{width:min(560px,94vw)}
 .search-dialog input[type=search]{width:100%;margin-bottom:var(--s2)}
 .search-group{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:var(--s2)}
@@ -468,49 +436,8 @@ body.locked{overflow:hidden}
 /* Mobile bottom nav (§3.2) — hidden on desktop */
 #bottom-nav{display:none}
 
-@media(min-width:768px) and (max-width:1023px){
-  main{padding:0 var(--s4) var(--s8)}
-  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .content-grid{grid-template-columns:1fr}
-  .span-2{grid-column:auto}
-  .dashboard-grid{grid-template-columns:1fr}
-  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
-}
 
 /* Mobile only: below 768px the desktop sidebars give way to the app-style bottom navigation. */
-@media(max-width:767px){
-  .shell{display:block;width:100%;min-width:0}
-  .sidebar{display:none}
-  main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom));max-width:none}
-  #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
-  #bottom-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
-  #bottom-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-  #bottom-nav button span{font-size:10px;line-height:1}
-  #bottom-nav button.active{color:var(--text);background:var(--surface-2);border-radius:10px}
-  .metric-grid{grid-template-columns:repeat(2,1fr)}
-  #toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
-}
-@media(max-width:767px){
-  .topbar{padding-top:var(--s4);align-items:flex-start}
-  .topbar-title h1{font-size:24px;overflow-wrap:anywhere}
-  .topbar-actions{flex-wrap:wrap;justify-content:flex-end;gap:6px}
-  .topbar-actions .primary-action{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .content-grid{grid-template-columns:1fr}
-  .dashboard-grid{grid-template-columns:1fr}
-  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
-  .span-2{grid-column:auto}
-  .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
-  .metric strong{font-size:20px}
-  select,input,textarea{min-height:44px;font-size:16px}
-  .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
-  .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button,.btn{min-height:44px}
-  label.check input{min-height:0}
-  .toolbar input[type=search]{min-width:100%}
-  .panel-head{align-items:flex-start;flex-wrap:wrap}
-  .panel-head-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end}
-  .purchase-item{grid-template-columns:1fr 72px 92px}
-  .purchase-item .item-category{grid-column:1/-1}
-}
 /* Rules (§11) */
 .ghost{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:var(--radius-pill);font-weight:600}
 .ghost:hover{background:var(--surface-2)}
@@ -564,7 +491,6 @@ button.danger:hover{background:var(--surface-2)}
 .contract-trend{margin:var(--s2) 0}
 .contract-trend svg{width:100%;height:90px;color:var(--accent,currentColor)}
 .contract-trend.private{color:var(--muted)}
-@media (max-width:768px){.contract-detail .detail-grid{grid-template-columns:1fr}}
 /* Net worth (§14) */
 .row-group{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:10px 0 4px}
 .nw-item.nw-excluded{opacity:.6}
@@ -610,14 +536,12 @@ button.danger:hover{background:var(--surface-2)}
 .reconcile-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3)}
 .reconcile-link{margin-top:var(--s3)}
 .purchase-merchants{margin-top:var(--s3)}
-@media (max-width:768px){.reconcile-grid{grid-template-columns:1fr}}
 /* Transaction splits (§9.5) */
 .split-lines{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s2) 0}
 .split-line{display:grid;grid-template-columns:96px 1fr 1fr auto;gap:var(--s2);align-items:center}
 .split-remaining{margin-top:var(--s2);font-weight:600}
 .split-remaining.ok{color:var(--positive)}
 .split-remaining.warn{color:var(--negative)}
-@media (max-width:768px){.split-line{grid-template-columns:1fr 1fr;gap:6px}.split-line .split-note{grid-column:1/-1}}
 .tx-refund{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2);margin-top:var(--s2)}
 .refund-candidates{display:flex;flex-direction:column;max-height:50vh;overflow:auto}
 .candidate-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
@@ -630,8 +554,6 @@ button.danger:hover{background:var(--surface-2)}
 .loan-split-principal{background:var(--cta)}
 .loan-split-interest{background:var(--k4)}
 .loan-chart svg{width:100%;height:120px;color:var(--k2)}
-@media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
 /* ============================================================================
    Round 4 — Finanzguru-style page polish (per-page workflow). Each block is
@@ -752,7 +674,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .purchase-stat-k{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 .purchase-stat-v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .purchase-stat--review .purchase-stat-v{color:var(--warning)}
-@media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
 .purchase-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--s3)}
 .purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
 .purchase-title{display:flex;align-items:center;gap:var(--s2);min-width:0}
@@ -791,21 +712,12 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tx-sk-amt{display:inline-block}
 .tx-sk-avatar,.tx-sk-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:tx-sk-shimmer 1.4s ease infinite}
 @keyframes tx-sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
-@media(prefers-reduced-motion:reduce){.tx-sk-avatar,.tx-sk-line{animation:none}}
 .tx-empty{text-align:center}
 .tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s7,32px) var(--s4);color:var(--muted)}
 .tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
 .tx-empty-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .tx-empty-title{color:var(--text);font-weight:600;font-size:14px}
 .tx-empty-hint{font-size:12px;max-width:34ch;line-height:1.4}
-@media(max-width:767px){
-  #view-transactions .tx-summary{padding:var(--s3)}
-  #view-transactions .tx-skeleton{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
-  #view-transactions .tx-skeleton>td{display:none;border:0;padding:0}
-  #view-transactions .tx-skeleton>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
-  #view-transactions .tx-skeleton>td.amount{display:block;flex:0 0 auto}
-  #view-transactions .tx-skeleton .tx-sk-avatar{margin-right:0}
-}
 
 /* ---- Buchungen DESKTOP table (per reference): category chip, account icon, row chevron, airier rows.
    The mobile card view (≤767px) hides these cells and keeps the compact identity+amount layout. ---- */
@@ -838,10 +750,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tx-go-caret{color:var(--muted);font-size:18px;line-height:1;opacity:.5}
 .tx-row:hover .tx-go-caret{opacity:1;color:var(--text)}
 /* Mobile card view: the soft-green income pill (desktop uses plain green text). */
-@media(max-width:767px){
-  #view-transactions .tx-row>td.tx-cat,#view-transactions .tx-row>td.tx-acct,#view-transactions .tx-row>td.tx-go{display:none}
-  #view-transactions .tx-row:not(.tx-is-transfer) td.amount.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
-}
 
 /* ============================================================================
    Round 4b — remaining pages (tax / compensation / coach / categories / rules /
@@ -876,7 +784,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tax-brow-main{min-width:0}
 .tax-brow-main .row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tax-brow .amount{white-space:nowrap;text-align:right}
-@media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
 
 /* --- Gehalt & Benefits (compensation.js): hero + Cash-Brutto donut + rows --- */
 .comp-result-primary .comp-hero-sub{display:block}
@@ -921,7 +828,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .comp-dot-cat6{background:var(--cat-6)}
 .comp-dot-cat7{background:var(--cat-7)}
 .comp-dot-cat8{background:var(--cat-8)}
-@media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}
 
 /* --- Coach (coach-shell.js): status-tinted metrics + calm insight/review cards --- */
 #coach-summary .coach-metric strong{letter-spacing:-.01em}
@@ -1005,7 +911,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .merchants-sk-line.short{width:120px;margin-top:var(--s2)}
 .merchant-skeleton .fw-ident,.merchants-sk-line{animation:merchants-sk-pulse 1.2s ease-in-out infinite}
 @keyframes merchants-sk-pulse{0%,100%{opacity:1}50%{opacity:.5}}
-@media (prefers-reduced-motion:reduce){.merchant-skeleton .fw-ident,.merchants-sk-line{animation:none}}
 
 /* --- Prüfprotokoll (audit.js): monochrome timeline --- */
 #audit-list .audit-row{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;column-gap:var(--s3);padding:var(--s3) 0;border-bottom:0}
@@ -1101,32 +1006,13 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .ic-polish .import-status.is-done::before{content:"\2713";font-weight:700}
 .ic-polish .import-status.is-error{color:var(--negative)}
 @keyframes ic-spin{to{transform:rotate(360deg)}}
-@media(max-width:620px){
-  .ic-polish .import-metrics{grid-template-columns:1fr}
-  .ic-polish .ic-map-row{grid-template-columns:1fr}
-  .ic-polish .ic-map-row .account-map-select{min-width:0;width:100%}
-}
-@media(prefers-reduced-motion:reduce){
-  .ic-polish .import-provider{transition:none}
-  .ic-polish .import-status.is-busy::before{animation-duration:1.6s}
-}
 
 /* A non-interactive dashboard widget row (e.g. upcoming contracts) keeps the default cursor. */
 .fw-row-plain{cursor:default}
 
 
-@media(max-width:560px){
-  .rule-dialog .rule-grid,.tx-filter-range{grid-template-columns:1fr}
-  .detected-row,.notif-push,.tx-refund{grid-template-columns:1fr}
-  .detected-row .row-side,.tx-refund .row-side{justify-content:flex-start;flex-wrap:wrap}
-  .budget-detail-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
 
 /* Resizable app chrome polish */
-@media(min-width:768px){
-  .shell{transition:grid-template-columns .16s ease}
-  body.sidebar-resizing .shell,body.coach-dock-resizing .shell{transition:none}
-}
 .settings-layout-reset{display:grid;gap:2px;text-align:left;justify-items:start;padding:10px 12px}
 .settings-layout-reset small{color:var(--muted);font-weight:400}
 
@@ -1142,25 +1028,8 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .contract-coach svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .fw-dialog-card{transition:transform .16s ease}
 .fw-dialog-card.fw-dialog-swiping{transition:none}
-@media(max-width:767px){
-  .tx-coach-selection{position:sticky;top:0;z-index:8;margin-inline:-4px;border-radius:10px}
-  .tx-coach-selection>div{gap:6px}
-  .tx-coach-selection button{min-height:38px}
-  .tx-select-wrap{width:28px;height:28px;margin-right:2px}
-  .account-coach-button,.nw-coach{min-height:34px}
-}
 
-@media(max-width:560px){
-  .contracts-listcard{padding-left:var(--s3);padding-right:var(--s3)}
-  .detected-panel{padding:var(--s3)}
-  .detected-row .detected-side{justify-content:space-between;flex-wrap:nowrap;width:100%}
-  .detected-actions{margin-left:auto}
-  .contract-row .fw-row-amt{margin-left:auto}
-}
 
-@media(max-width:767px){
-  .contracts-list{padding-bottom:56px}
-}
 
 
 /* Finance UX gap-closure accessibility: chart drill targets are keyboard visible and mobile controls
@@ -1170,15 +1039,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
   outline:none;
   stroke:var(--cta);
   stroke-width:4;
-}
-@media(max-width:767px){
-  .fw-cycle button,
-  .fw-chip,
-  .contracts-sortbar,
-  .tx-filter-btn,
-  .contracts-filter-open{
-    min-height:44px;
-  }
 }
 
 
@@ -1199,8 +1059,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .typography-preview{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface-2);overflow:hidden}
 .typography-preview strong{font-size:1.1em;font-weight:600}
 .typography-preview span{white-space:normal}
-@media(max-width:1100px){.typography-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.typography-font{grid-column:1/-1}}
-@media(max-width:620px){.settings-typography-head{align-items:stretch;flex-direction:column}.typography-reset{align-self:flex-start}.typography-controls{grid-template-columns:1fr}.typography-font{grid-column:auto}}
 
 
 /* Contracts UX overhaul: focused list, mobile-first detail and analysis surfaces. */
@@ -1317,14 +1175,6 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));max-height:92v
 .contract-edit-more summary{cursor:pointer;font-weight:700;margin-bottom:10px}
 .contract-edit-more[open]{display:grid;gap:10px}
 
-@media(max-width:620px){
-  .contracts-summary-open{padding:17px}
-  .contracts-summary-value{font-size:24px}
-  .contracts-summary-meta{display:none}
-  dialog.contracts-detail-dlg,dialog.contracts-analysis-dlg{width:100%;max-width:100vw;max-height:96vh;margin:auto auto 0}
-  .contract-detail-v2,.contract-analysis-dialog{max-height:94vh;border-radius:18px 18px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
-  .contract-analysis-dialog{border-radius:18px 18px 0 0}
-}
 
 .contract-analysis-balance{gap:0}
 .contract-analysis-balance h3{margin-bottom:8px}
