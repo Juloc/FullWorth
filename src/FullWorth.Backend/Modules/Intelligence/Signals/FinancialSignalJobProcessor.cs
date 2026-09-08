@@ -10,6 +10,7 @@ public sealed class FinancialSignalJobProcessor(
     FullWorthDbContext financeDb,
     FinancialContextSnapshotService contextSnapshots,
     FinancialSignalDetectionService detection,
+    FinancialDomainSignalDetectionService domainDetection,
     AutopilotRolloutSettings rollout,
     ILogger<FinancialSignalJobProcessor> logger)
 {
@@ -37,7 +38,13 @@ public sealed class FinancialSignalJobProcessor(
                         from: null,
                         to: null,
                         ct: ct);
-                    await detection.DetectAndPersistAsync(snapshot, DateTimeOffset.UtcNow, ct);
+                    var detectedAt = DateTimeOffset.UtcNow;
+                    await detection.DetectAndPersistAsync(snapshot, detectedAt, ct);
+                    await domainDetection.DetectAndPersistAsync(
+                        target.UserId,
+                        target.FullWorthSpaceId,
+                        detectedAt,
+                        ct);
                 }
                 catch (KeyNotFoundException)
                 {
