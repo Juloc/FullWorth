@@ -6,15 +6,18 @@ namespace FullWorth.Backend.Tests.Intelligence;
 public sealed class AutopilotArchitectureGuardTests
 {
     [Fact]
-    public void Deploy5DefaultsDeterministicSignalsAndReadOnlyInsightsToOn()
+    public void Deploy7DefaultsSignalsInsightsAndContractMergeExecutionToOn()
     {
         var configuration = new ConfigurationBuilder().Build();
         var settings = new AutopilotRolloutSettings(configuration);
 
         Assert.Equal(AutopilotRolloutState.On, settings.Get(AutopilotFeatures.Signals));
         Assert.Equal(AutopilotRolloutState.On, settings.Get(AutopilotFeatures.Insights));
+        Assert.Equal(AutopilotRolloutState.On, settings.Get(AutopilotFeatures.ContractMergeExecution));
         foreach (var feature in AutopilotFeatures.All.Where(x =>
-                     x != AutopilotFeatures.Signals && x != AutopilotFeatures.Insights))
+                     x != AutopilotFeatures.Signals &&
+                     x != AutopilotFeatures.Insights &&
+                     x != AutopilotFeatures.ContractMergeExecution))
             Assert.Equal(AutopilotRolloutState.Off, settings.Get(feature));
     }
 
@@ -36,6 +39,23 @@ public sealed class AutopilotArchitectureGuardTests
         Assert.False(settings.IsOn(AutopilotFeatures.Signals));
         Assert.True(settings.IsShadowOrOn(AutopilotFeatures.Signals));
         Assert.True(settings.IsOn(AutopilotFeatures.Insights));
+        Assert.Equal(AutopilotRolloutState.Off, settings.Get(AutopilotFeatures.Actions));
+    }
+
+    [Fact]
+    public void ContractMergeExecutionCanBeDisabledWithoutDisablingInsights()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{AutopilotRolloutSettings.SectionName}:{AutopilotFeatures.ContractMergeExecution}"] = "off"
+            })
+            .Build();
+
+        var settings = new AutopilotRolloutSettings(configuration);
+
+        Assert.True(settings.IsOn(AutopilotFeatures.Insights));
+        Assert.False(settings.IsOn(AutopilotFeatures.ContractMergeExecution));
         Assert.Equal(AutopilotRolloutState.Off, settings.Get(AutopilotFeatures.Actions));
     }
 

@@ -73,3 +73,9 @@
   .insight-merge-canonical{grid-template-columns:1fr;gap:3px}
   .insight-merge-canonical strong{text-align:left}
 }
+
+.insight-merge-execute{width:100%;justify-content:center;margin-top:2px}
+.insight-merge-stale{display:grid;gap:8px;padding:12px;border:1px solid var(--warning);border-radius:var(--radius-input);background:var(--warning-soft)}
+.insight-merge-stale strong{font-size:13px}
+.insight-merge-stale span{font-size:12px;color:var(--muted)}
+.insight-merge-stale button{justify-self:start}

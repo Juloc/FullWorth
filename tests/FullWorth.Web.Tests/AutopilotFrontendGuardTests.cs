@@ -77,7 +77,11 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("emitAppEvent('budget:open'", feature);
 
         Assert.Contains("api/contracts/merge-preview", feature, StringComparison.Ordinal);
-        Assert.DoesNotContain("api/contracts/", feature.Replace("api/contracts/merge-preview", string.Empty), StringComparison.Ordinal);
+        Assert.Contains("api/contracts/merge-execute", feature, StringComparison.Ordinal);
+        var featureWithoutAllowedContractActions = feature
+            .Replace("api/contracts/merge-preview", string.Empty, StringComparison.Ordinal)
+            .Replace("api/contracts/merge-execute", string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/contracts/", featureWithoutAllowedContractActions, StringComparison.Ordinal);
         Assert.DoesNotContain("api/transactions/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/budgets/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
@@ -91,19 +95,25 @@ public sealed class AutopilotFrontendGuardTests
     }
 
     [Fact]
-    public void Deploy6ContractMergePreviewHasNoExecutionPath()
+    public void Deploy7ContractMergeExecutionRequiresPreviewTokenAndExplicitConfirmation()
     {
         var feature = File.ReadAllText(Path.Combine(WwwRoot(), "features", "insights.js"));
         var css = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "features", "insights.css"));
 
         Assert.Contains("contractPairIds", feature);
         Assert.Contains("api/contracts/merge-preview", feature);
-        Assert.Contains("data-merge-preview", feature);
+        Assert.Contains("api/contracts/merge-execute", feature);
+        Assert.Contains("preview.previewToken", feature);
+        Assert.Contains("canonicalContractId: preview.canonicalContractId", feature);
+        Assert.Contains("confirmDialog(ctx", feature);
+        Assert.Contains("data-merge-execute", feature);
+        Assert.Contains("data-merge-reload", feature);
         Assert.Contains("insight-merge-preview", css);
+        Assert.Contains("insight-merge-stale", css);
 
         Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
-        Assert.DoesNotContain("data-merge-execute", feature, StringComparison.Ordinal);
-        Assert.DoesNotContain("executeMerge", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("window.confirm", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("fetch(", feature, StringComparison.Ordinal);
     }
 
     [Fact]

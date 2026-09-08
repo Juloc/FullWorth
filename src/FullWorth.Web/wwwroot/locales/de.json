@@ -1213,7 +1213,16 @@
         "billing-cycle-differs": "Zahlungsrhythmus unterscheidet sich",
         "amount-differs": "Beträge unterscheiden sich deutlich",
         "no-payment-history": "Keine Zahlungshistorie gefunden"
-      }
+      },
+      "ready": "Prüfe die Vorschau und bestätige erst dann.",
+      "execute": "Verträge zusammenführen",
+      "confirmTitle": "Verträge zusammenführen?",
+      "confirm": "Zusammenführen",
+      "confirmMessage": "{canonical} als Hauptvertrag behalten und den Verlauf von {sources} übernehmen?",
+      "success": "Verträge wurden zusammengeführt.",
+      "staleTitle": "Vorschau ist veraltet",
+      "stale": "Vertragsdaten haben sich geändert. Lade vor dem Zusammenführen eine neue Vorschau.",
+      "reload": "Vorschau aktualisieren"
     }
   }
 }

@@ -147,6 +147,13 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return canWriteAccount ? ContractAccessLevel.Write : ContractAccessLevel.Read;
     }
 
+    public Task<ContractAccessLevel> GetRecordAccessForUserAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid contractId,
+        CancellationToken ct) =>
+        GetRecordAccessAsync(userId, fullWorthSpaceId, contractId, ct);
+
     public async Task<ContractMutationOutcome> CreateForUserAsync(Guid userId, Guid fullWorthSpaceId, ContractWrite request, CancellationToken ct)
     {
         var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
@@ -689,6 +696,29 @@ public static class ContractEndpoints
                 ContractMergePreviewResult.Success => Results.Ok(outcome.Preview),
                 ContractMergePreviewResult.NotFound => Results.NotFound(),
                 ContractMergePreviewResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge preview." }),
+                _ => Results.StatusCode(StatusCodes.Status409Conflict)
+            };
+        });
+
+        group.MapPost("/merge-execute", async (
+            Guid fullWorthSpaceId,
+            ContractMergeExecuteRequest request,
+            CurrentUserContext currentUser,
+            ContractMergeExecutionService executionService,
+            CancellationToken ct) =>
+        {
+            var outcome = await executionService.ExecuteAsync(
+                currentUser.RequireUserId(),
+                fullWorthSpaceId,
+                request,
+                ct);
+            return outcome.Result switch
+            {
+                ContractMergeExecuteResult.Success => Results.Ok(outcome.ResultView),
+                ContractMergeExecuteResult.NotFound => Results.NotFound(),
+                ContractMergeExecuteResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                ContractMergeExecuteResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge confirmation." }),
+                ContractMergeExecuteResult.Conflict => Results.Conflict(new { error = outcome.Error ?? "Contract state changed. Open a new preview." }),
                 _ => Results.StatusCode(StatusCodes.Status409Conflict)
             };
         });
