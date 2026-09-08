@@ -126,7 +126,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                  })
             Assert.Contains(asset, sw);
 
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/components.css") + await GetAsync("/app.css");
         Assert.Contains(".an-period-hit:focus-visible", css);
         Assert.Contains("min-height:44px", css);
         Assert.Contains(".fw-cycle button", css);
