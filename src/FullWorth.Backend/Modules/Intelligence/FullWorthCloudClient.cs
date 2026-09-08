@@ -115,6 +115,18 @@ public interface IFullWorthCloudClient
         string packId,
         string version,
         CancellationToken ct);
+    /// <summary>
+    /// Fetches a transport-only delta from <paramref name="baseVersion"/> to <paramref name="version"/>, or
+    /// null when the server has no delta (unknown/too-old base) and the client should do a full download.
+    /// Optional: the default returns null so clients/test doubles that predate deltas simply skip the fast path.
+    /// </summary>
+    Task<KnowledgePackDelta?> DownloadKnowledgePackDeltaAsync(
+        string instanceCredential,
+        string packId,
+        string version,
+        string baseVersion,
+        CancellationToken ct) =>
+        Task.FromResult<KnowledgePackDelta?>(null);
     Task<byte[]> DownloadKnowledgePackBrandAssetAsync(
         string instanceCredential,
         string contentSha256,
@@ -400,6 +412,31 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
             output.Write(buffer, 0, read);
         }
         return output.ToArray();
+    }
+
+    public async Task<KnowledgePackDelta?> DownloadKnowledgePackDeltaAsync(
+        string instanceCredential,
+        string packId,
+        string version,
+        string baseVersion,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(packId) ||
+            string.IsNullOrWhiteSpace(version) ||
+            string.IsNullOrWhiteSpace(baseVersion))
+            return null;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"v1/knowledge-packs/{Uri.EscapeDataString(packId.Trim())}/{Uri.EscapeDataString(version.Trim())}/delta" +
+            $"?base={Uri.EscapeDataString(baseVersion.Trim())}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        // 204 = no delta available; the caller falls back to a full download.
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        if (response.Content.Headers.ContentLength is > MaximumKnowledgePackBytes)
+            throw new FullWorthCloudException("knowledge_pack_size_invalid", response.StatusCode);
+        return await DeserializeAsync<KnowledgePackDelta>(response, ct);
     }
 
     public async Task<byte[]> DownloadKnowledgePackBrandAssetAsync(

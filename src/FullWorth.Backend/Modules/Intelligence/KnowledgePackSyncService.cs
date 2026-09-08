@@ -71,15 +71,31 @@ public sealed class KnowledgePackSyncService(
                 !IsStrictlyNewerVersion(manifest.Version, installation.Version))
                 throw new KnowledgePackVerificationException("knowledge_pack_downgrade_rejected");
 
-            var payloadBytes = await cloud.DownloadKnowledgePackAsync(
-                secret,
-                manifest.PackId,
-                manifest.Version,
-                ct);
+            // Fast path: reconstruct the full pack from the one we already hold plus a small delta. The
+            // reconstruction is a bandwidth optimization only — it is re-verified against the signed manifest
+            // below, and any mismatch transparently falls back to the authoritative full download.
+            var reconstructed = await TryDownloadViaDeltaAsync(secret, manifest, installation, ct);
+            var payloadBytes = reconstructed
+                ?? await cloud.DownloadKnowledgePackAsync(secret, manifest.PackId, manifest.Version, ct);
             if (payloadBytes.Length is <= 0 or > MaximumPackBytes)
                 throw new KnowledgePackVerificationException("knowledge_pack_size_invalid");
 
-            VerifyPayloadBytes(manifest, payloadBytes);
+            try
+            {
+                VerifyPayloadBytes(manifest, payloadBytes);
+            }
+            catch (KnowledgePackVerificationException) when (reconstructed is not null)
+            {
+                // A delta must never be trusted on its own: if the reconstructed bytes fail the signed-hash /
+                // signature gate, discard them and fetch the full signed pack instead, then re-verify.
+                logger.LogWarning(
+                    "FullWorth Cloud knowledge-pack delta failed verification; falling back to a full download.");
+                payloadBytes = await cloud.DownloadKnowledgePackAsync(secret, manifest.PackId, manifest.Version, ct);
+                if (payloadBytes.Length is <= 0 or > MaximumPackBytes)
+                    throw new KnowledgePackVerificationException("knowledge_pack_size_invalid");
+                VerifyPayloadBytes(manifest, payloadBytes);
+            }
+
             var payload = DeserializeAndValidatePayload(manifest, payloadBytes);
 
             var ontology = ProjectOntology(payload);
@@ -240,6 +256,81 @@ public sealed class KnowledgePackSyncService(
             logger.LogWarning(ex, "FullWorth Cloud knowledge-pack sync failed; previous verified pack stays active.");
             return await FailAsync(installation, state, "knowledge_pack_sync_failed", CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// Attempts to reconstruct the target pack bytes from the pack we currently hold plus a server-supplied
+    /// binary delta. Returns the reconstructed FULL bytes, or null to signal "just do a full download". This is
+    /// deliberately failure-tolerant: any problem (no archived base, transport error, malformed/oversized delta)
+    /// returns null rather than throwing, because the caller re-verifies the result against the signature and a
+    /// full download is always a safe fallback.
+    /// </summary>
+    private async Task<byte[]?> TryDownloadViaDeltaAsync(
+        string secret,
+        KnowledgePackManifest manifest,
+        KnowledgePackInstallation? installation,
+        CancellationToken ct)
+    {
+        if (installation is null ||
+            string.IsNullOrWhiteSpace(installation.Version) ||
+            !string.Equals(installation.PackId, manifest.PackId, StringComparison.Ordinal))
+            return null;
+
+        // We can only reconstruct from a base whose EXACT bytes we archived when it was installed.
+        var baseArchive = await db.KnowledgePackArchives.AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.PackId == manifest.PackId && x.Version == installation.Version, ct);
+        if (baseArchive is null) return null;
+
+        byte[] baseBytes;
+        try { baseBytes = Convert.FromBase64String(baseArchive.PayloadBase64); }
+        catch (FormatException) { return null; }
+
+        KnowledgePackDelta? delta;
+        try
+        {
+            delta = await cloud.DownloadKnowledgePackDeltaAsync(
+                secret, manifest.PackId, manifest.Version, installation.Version, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "FullWorth Cloud knowledge-pack delta unavailable; using a full download.");
+            return null;
+        }
+        if (delta is null) return null;
+
+        // Cheap sanity checks. None of these are security-critical (the signature gate is), they only avoid
+        // wasting work on a delta that clearly does not apply to the base we hold.
+        if (!string.Equals(delta.PackId, manifest.PackId, StringComparison.Ordinal) ||
+            !string.Equals(delta.Version, manifest.Version, StringComparison.Ordinal) ||
+            !string.Equals(delta.BaseVersion, installation.Version, StringComparison.Ordinal))
+            return null;
+        if (!string.IsNullOrWhiteSpace(delta.BaseContentSha256) &&
+            !string.Equals(delta.BaseContentSha256, baseArchive.ContentSha256, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (delta.PrefixLength < 0 || delta.SuffixLength < 0 ||
+            (long)delta.PrefixLength + delta.SuffixLength > baseBytes.Length)
+            return null;
+
+        byte[] middle;
+        try { middle = Convert.FromBase64String(delta.MiddleBase64 ?? string.Empty); }
+        catch (FormatException) { return null; }
+
+        var resultLength = (long)delta.PrefixLength + middle.Length + delta.SuffixLength;
+        if (resultLength is <= 0 or > MaximumPackBytes) return null;
+
+        var result = new byte[resultLength];
+        Buffer.BlockCopy(baseBytes, 0, result, 0, delta.PrefixLength);
+        Buffer.BlockCopy(middle, 0, result, delta.PrefixLength, middle.Length);
+        Buffer.BlockCopy(
+            baseBytes, baseBytes.Length - delta.SuffixLength,
+            result, delta.PrefixLength + middle.Length, delta.SuffixLength);
+        return result;
     }
 
     private async Task<string?> EnsureCredentialAsync(Guid instanceId, CancellationToken ct)

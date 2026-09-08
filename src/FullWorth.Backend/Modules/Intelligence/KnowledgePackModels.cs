@@ -23,6 +23,22 @@ public sealed record KnowledgePackManifest(
     string SignatureBase64,
     string? MinimumClientVersion);
 
+/// <summary>
+/// Transport-only binary delta from a base pack the client already holds to a newer target pack. The client
+/// reconstructs the full target bytes as <c>base[0..PrefixLength] + Middle + base[^SuffixLength..]</c> and then
+/// runs the UNCHANGED signed-hash + RSA-PSS verification against the target manifest. A wrong/malicious delta
+/// simply fails that verification and the client falls back to a full download, so this carries no new trust.
+/// </summary>
+public sealed record KnowledgePackDelta(
+    string PackId,
+    string Version,
+    string BaseVersion,
+    string BaseContentSha256,
+    string ContentSha256,
+    int PrefixLength,
+    int SuffixLength,
+    string MiddleBase64);
+
 public sealed record KnowledgePackMerchantPayload(
     string AliasKey,
     string Direction,

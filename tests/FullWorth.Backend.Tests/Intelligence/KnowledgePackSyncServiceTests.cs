@@ -566,6 +566,87 @@ public sealed class KnowledgePackSyncServiceTests
         Assert.Equal("REWE", (await fixture.Db.OfficialMerchantMappings.SingleAsync()).AliasKey);
     }
 
+    [Fact]
+    public async Task Delta_reconstructs_and_installs_the_newer_pack_without_a_full_download()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var first = BuildPack(rsa, "2026.09.06-1", "REWE", "food.groceries");
+        var cloud = new FakeCloudClient(first.Manifest, first.Payload);
+        var service = fixture.CreateService(cloud, rsa);
+
+        Assert.Equal("installed", (await service.SyncOnceAsync(CancellationToken.None)).Status);
+        var fullDownloadsAfterBase = cloud.FullDownloadCount;
+
+        var second = BuildPack(rsa, "2026.09.06-2", "EDEKA", "food.groceries");
+        cloud.SetPack(second.Manifest, second.Payload);
+        cloud.SetDelta(BuildDelta(second.Manifest, first.Manifest, first.Payload, second.Payload));
+
+        var result = await service.SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("installed", result.Status);
+        Assert.Equal("2026.09.06-2", result.Version);
+        // The delta carried the whole update: no additional full pack download happened.
+        Assert.Equal(fullDownloadsAfterBase, cloud.FullDownloadCount);
+        Assert.Equal("EDEKA", (await fixture.Db.OfficialMerchantMappings.SingleAsync()).AliasKey);
+        Assert.Equal("2026.09.06-2", (await fixture.Db.KnowledgePackInstallations.SingleAsync()).Version);
+    }
+
+    [Fact]
+    public async Task Corrupt_delta_is_rejected_and_falls_back_to_a_full_download()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var first = BuildPack(rsa, "2026.09.06-1", "REWE", "food.groceries");
+        var cloud = new FakeCloudClient(first.Manifest, first.Payload);
+        var service = fixture.CreateService(cloud, rsa);
+
+        Assert.Equal("installed", (await service.SyncOnceAsync(CancellationToken.None)).Status);
+        var fullDownloadsAfterBase = cloud.FullDownloadCount;
+
+        var second = BuildPack(rsa, "2026.09.06-2", "EDEKA", "food.groceries");
+        cloud.SetPack(second.Manifest, second.Payload);
+        // A delta whose middle bytes are tampered: reconstruction cannot match the signed hash.
+        var honest = BuildDelta(second.Manifest, first.Manifest, first.Payload, second.Payload);
+        var tampered = Convert.FromBase64String(honest.MiddleBase64);
+        tampered[^1] ^= 0xFF;
+        cloud.SetDelta(honest with { MiddleBase64 = Convert.ToBase64String(tampered) });
+
+        var result = await service.SyncOnceAsync(CancellationToken.None);
+
+        // The bad delta is discarded and the authoritative full pack is fetched and installed instead.
+        Assert.Equal("installed", result.Status);
+        Assert.Equal("2026.09.06-2", result.Version);
+        Assert.Equal(fullDownloadsAfterBase + 1, cloud.FullDownloadCount);
+        Assert.Equal("EDEKA", (await fixture.Db.OfficialMerchantMappings.SingleAsync()).AliasKey);
+    }
+
+    private static KnowledgePackDelta BuildDelta(
+        KnowledgePackManifest targetManifest,
+        KnowledgePackManifest baseManifest,
+        byte[] baseBytes,
+        byte[] targetBytes)
+    {
+        var max = Math.Min(baseBytes.Length, targetBytes.Length);
+        var prefix = 0;
+        while (prefix < max && baseBytes[prefix] == targetBytes[prefix]) prefix++;
+        var suffix = 0;
+        var suffixMax = max - prefix;
+        while (suffix < suffixMax &&
+               baseBytes[^(suffix + 1)] == targetBytes[^(suffix + 1)]) suffix++;
+
+        var middle = targetBytes[prefix..(targetBytes.Length - suffix)];
+        return new KnowledgePackDelta(
+            targetManifest.PackId,
+            targetManifest.Version,
+            baseManifest.Version,
+            baseManifest.ContentSha256,
+            targetManifest.ContentSha256,
+            prefix,
+            suffix,
+            Convert.ToBase64String(middle));
+    }
+
     private static PackData BuildPack(
         RSA rsa,
         string version,
@@ -707,10 +788,12 @@ public sealed class KnowledgePackSyncServiceTests
     {
         private KnowledgePackManifest currentManifest = manifest;
         private byte[] currentPayload = payload;
+        private KnowledgePackDelta? nextDelta;
         private readonly IReadOnlyDictionary<string, byte[]> brandAssets =
             brandAssets ?? new Dictionary<string, byte[]>();
 
         public int BrandAssetDownloadCount { get; private set; }
+        public int FullDownloadCount { get; private set; }
 
         public Uri BaseUri => new("https://cloud.test/");
 
@@ -719,6 +802,8 @@ public sealed class KnowledgePackSyncServiceTests
             currentManifest = nextManifest;
             currentPayload = nextPayload;
         }
+
+        public void SetDelta(KnowledgePackDelta? delta) => nextDelta = delta;
 
         public Task<FullWorthCloudRegistrationResult> RegisterAsync(
             Guid instanceId,
@@ -771,12 +856,28 @@ public sealed class KnowledgePackSyncServiceTests
                     ? null
                     : currentManifest);
 
+        public Task<KnowledgePackDelta?> DownloadKnowledgePackDeltaAsync(
+            string instanceCredential,
+            string packId,
+            string version,
+            string baseVersion,
+            CancellationToken ct) =>
+            Task.FromResult(
+                nextDelta is not null &&
+                string.Equals(nextDelta.Version, version, StringComparison.Ordinal) &&
+                string.Equals(nextDelta.BaseVersion, baseVersion, StringComparison.Ordinal)
+                    ? nextDelta
+                    : null);
+
         public Task<byte[]> DownloadKnowledgePackAsync(
             string instanceCredential,
             string packId,
             string version,
-            CancellationToken ct) =>
-            Task.FromResult(currentPayload);
+            CancellationToken ct)
+        {
+            FullDownloadCount++;
+            return Task.FromResult(currentPayload);
+        }
 
         public Task<byte[]> DownloadKnowledgePackBrandAssetAsync(
             string instanceCredential,
