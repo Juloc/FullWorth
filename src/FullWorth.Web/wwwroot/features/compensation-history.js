@@ -1,8 +1,10 @@
-import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
 import { confirmMessage } from '../ui/confirm.js';
-const H$=s=>document.querySelector(s);
-const H$$=s=>[...document.querySelectorAll(s)];
-const heuro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+import {
+  $ as H$, $$ as H$$, euro as heuro, esc, attr, val as hval, num as hnum, setVal as hset,
+  spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,
+  signedEuro0 as signedMoney, readProfile as readHistoryProfile, fillProfile as fillHistoryProfile
+} from './compensation-shared.js';
+// The history view intentionally shows one decimal on percentages (the calculator allows two).
 const hpct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} %`;
 const hstate={entries:[],timeline:null,editing:null};
 
@@ -21,7 +23,7 @@ function initHistory(){
   H$('#history-edit-save').addEventListener('click',()=>saveEditedEvent().catch(herror));
   H$('#history-edit-cancel').addEventListener('click',cancelEdit);
   H$('#space-select').addEventListener('change',()=>{if(H$('#tab-history')?.classList.contains('active'))loadHistory().catch(herror)});
-  H$('#history-date').value=localDate();
+  H$('#history-date').value=localIsoDate();
 }
 
 function historyMarkup(){return `
@@ -78,7 +80,7 @@ async function loadHistory(){
   const space=spaceId();if(!space)return;
   const range=H$('#history-range')?.value||'all';
   const query=new URLSearchParams({fullWorthSpaceId:space});
-  if(range!=='all')query.set('from',subtractYears(localDate(),Number(range)));
+  if(range!=='all')query.set('from',subtractYears(localIsoDate(),Number(range)));
   const [entries,timeline]=await Promise.all([
     hapi(`api/compensation/history?fullWorthSpaceId=${encodeURIComponent(space)}`),
     hapi(`api/compensation/timeline?${query}`)
@@ -212,7 +214,7 @@ function renderHistoryList(){
 }
 
 function beginEdit(entry){
-  hstate.editing=entry;fillHistoryProfile(entry.resolvedProfile);
+  hstate.editing=entry;fillHistoryProfile(entry.resolvedProfile);H$('#calculate')?.click();
   H$('#history-edit-date').value=entry.effectiveDate;H$('#history-edit-type').value=entry.eventType;
   H$('#history-edit-title').value=entry.title;H$('#history-edit-note').value=entry.note||'';
   H$('#history-edit-changes').textContent=`${(entry.changedFields||[]).length} geänderte Felder`;
@@ -238,53 +240,9 @@ async function deleteEvent(entry){
   await loadHistory();hmessage('Änderung gelöscht.');
 }
 
-function readHistoryProfile(){
-  const payments=Math.min(14,Math.max(12,Math.round(hnum('salary-payments')||12))),mode=hval('gross-period')==='monthly'?'monthly':'annual',taxClass=Math.round(hnum('tax-class'));
-  return{name:hval('profile-name')||'Aktuelles Gehalt',annualGross:mode==='monthly'?hnum('gross-input')*payments:hnum('gross-input'),annualBonus:hnum('annual-bonus'),grossInputMode:mode,salaryPaymentsPerYear:payments,taxClass,taxClass4Factor:taxClass===4?Math.min(1,Math.max(.001,hnum('tax-class4-factor')||1)):1,annualTaxAllowance:Math.max(0,hnum('annual-tax-allowance')),childAllowanceUnits:hval('child-allowance-units')===''?null:Math.max(0,hnum('child-allowance-units')),stateCode:hval('state-code'),churchTax:H$('#church-tax').checked,childrenUnder25:Math.max(0,Math.round(hnum('children'))),age:hval('employee-age')===''?null:Math.max(0,Math.round(hnum('employee-age'))),childlessCareSurcharge:H$('#childless-surcharge').checked,pensionInsuranceEnabled:H$('#pension-insurance').checked,unemploymentInsuranceEnabled:H$('#unemployment-insurance').checked,healthInsuranceAdditionalRatePercent:hnum('health-addon'),weeklyHours:hnum('weekly-hours'),vacationDays:Math.round(hnum('vacation-days')),spouseAnnualTaxableIncome:0,companyCar:{enabled:H$('#car-enabled').checked,listPrice:hnum('car-list-price'),taxableListPriceFactor:historyCarFactor(),vehicleType:hval('car-vehicle-type')||'manual',acquisitionDate:hval('car-acquisition-date')||null,electricRangeKm:hnum('car-electric-range'),co2GramsPerKm:hnum('car-co2'),oneWayCommuteKm:hnum('car-commute'),commuteMethod:hval('car-commute-method')||'monthly',commuteDaysPerMonth:Math.max(0,Math.min(31,Math.round(hnum('car-commute-days')))),employeeContributionMonthly:hnum('car-contribution'),employerCostMonthly:hnum('car-employer-cost'),privateAlternativeCostMonthly:hnum('car-private-cost')},occupationalPension:{employeeContributionMonthly:hnum('bav-employee'),employerContributionMonthly:hnum('bav-employer'),projectionYears:Math.round(hnum('bav-years')),expectedAnnualReturnPercent:hnum('bav-return')},benefits:H$$('.benefit-row').map(row=>{const g=x=>row.querySelector(`[data-benefit="${x}"]`);return{name:g('name').value.trim()||'Benefit',employerCostMonthly:Number(g('employerCostMonthly').value)||0,personalValueMonthly:Number(g('personalValueMonthly').value)||0,taxableBenefitMonthly:Number(g('taxableBenefitMonthly').value)||0,employeeCostMonthly:Number(g('employeeCostMonthly').value)||0}})};
-}
-
-function fillHistoryProfile(p){
-  hset('profile-name',p.name);const mode=p.grossInputMode==='monthly'?'monthly':'annual',payments=Math.min(14,Math.max(12,Number(p.salaryPaymentsPerYear)||12));
-  hset('gross-period',mode);hset('salary-payments',payments);hset('gross-input',mode==='monthly'?(Number(p.annualGross)||0)/payments:p.annualGross);hset('annual-bonus',p.annualBonus);
-  hset('tax-class',p.taxClass||1);hset('tax-class4-factor',p.taxClass4Factor||1);hset('annual-tax-allowance',p.annualTaxAllowance??0);hset('child-allowance-units',p.childAllowanceUnits??'');hset('state-code',p.stateCode||'BW');
-  H$('#church-tax').checked=!!p.churchTax;hset('children',p.childrenUnder25??0);hset('employee-age',p.age??'');H$('#childless-surcharge').checked=p.childlessCareSurcharge!==false;H$('#pension-insurance').checked=p.pensionInsuranceEnabled!==false;H$('#unemployment-insurance').checked=p.unemploymentInsuranceEnabled!==false;
-  hset('health-addon',p.healthInsuranceAdditionalRatePercent??2.9);hset('weekly-hours',p.weeklyHours??40);hset('vacation-days',p.vacationDays??30);
-  const car=p.companyCar||{};H$('#car-enabled').checked=!!car.enabled;hset('car-list-price',car.listPrice??50000);hset('car-factor',car.taxableListPriceFactor??1);hset('car-vehicle-type',car.vehicleType||'manual');hset('car-acquisition-date',car.acquisitionDate||'2026-01-01');hset('car-electric-range',car.electricRangeKm??80);hset('car-co2',car.co2GramsPerKm??50);hset('car-commute',car.oneWayCommuteKm??0);hset('car-commute-method',car.commuteMethod||'monthly');hset('car-commute-days',car.commuteDaysPerMonth??10);hset('car-contribution',car.employeeContributionMonthly??0);hset('car-employer-cost',car.employerCostMonthly??0);hset('car-private-cost',car.privateAlternativeCostMonthly??0);
-  const bav=p.occupationalPension||{};hset('bav-employee',bav.employeeContributionMonthly??0);hset('bav-employer',bav.employerContributionMonthly??0);hset('bav-years',bav.projectionYears??30);hset('bav-return',bav.expectedAnnualReturnPercent??3);
-  const list=H$('#benefits-list');list.innerHTML='';(p.benefits||[]).forEach(addHistoryBenefit);
-  ['gross-period','tax-class','car-enabled','car-vehicle-type','car-commute-method'].forEach(id=>H$('#'+id)?.dispatchEvent(new Event('change')));
-  H$('#calculate')?.click();
-}
-
-function addHistoryBenefit(b={}){
-  const row=document.createElement('div');row.className='benefit-row';
-  row.innerHTML=`<label>Name<input data-benefit="name" value="${attr(b.name||'')}"></label><label>AG-Kosten / Monat<input data-benefit="employerCostMonthly" type="number" min="0" value="${hn(b.employerCostMonthly)}"></label><label>Dein Wert / Monat<input data-benefit="personalValueMonthly" type="number" min="0" value="${hn(b.personalValueMonthly)}"></label><label>Steuerpflichtig / Monat<input data-benefit="taxableBenefitMonthly" type="number" min="0" value="${hn(b.taxableBenefitMonthly)}"></label><label>Eigenkosten / Monat<input data-benefit="employeeCostMonthly" type="number" min="0" value="${hn(b.employeeCostMonthly)}"></label><button type="button">×</button>`;
-  row.querySelector('button').addEventListener('click',()=>row.remove());H$('#benefits-list').appendChild(row);
-}
-
-function historyCarFactor(){
-  const type=hval('car-vehicle-type')||'manual';if(type==='manual')return hnum('car-factor')||1;if(type==='combustion')return 1;
-  const price=hnum('car-list-price'),date=hval('car-acquisition-date')||'2026-01-01';
-  if(type==='electric'){const limit=date>='2025-07-01'?100000:(date>='2024-01-01'?70000:60000);return price<=limit?.25:.5}
-  if(type==='hybrid'){const min=date>='2025-01-01'?80:(date>='2022-01-01'?60:40),co2=hnum('car-co2');return hnum('car-electric-range')>=min||(co2>0&&co2<=50)?.5:1}
-  return 1;
-}
-
 function fieldLabel(path){const map={annualGross:'Brutto',annualBonus:'Bonus',taxClass:'Steuerklasse',taxClass4Factor:'Faktor',annualTaxAllowance:'Freibetrag',childAllowanceUnits:'Kinderfreibetrag',childrenUnder25:'Kinder',age:'Alter',churchTax:'Kirchensteuer',weeklyHours:'Wochenstunden',vacationDays:'Urlaub',healthInsuranceAdditionalRatePercent:'GKV-Zusatzbeitrag','companyCar.enabled':'Firmenwagen','companyCar.listPrice':'Listenpreis','companyCar.oneWayCommuteKm':'Arbeitsweg','occupationalPension.employeeContributionMonthly':'bAV eigener Beitrag','occupationalPension.employerContributionMonthly':'bAV Arbeitgeber',benefits:'Benefits'};return map[path]||path.replaceAll('.',' › ')}
 function eventLabel(t){return ({salary:'Gehalt',tax:'Steuer',marriage:'Heirat',child:'Kind',family:'Familie',worktime:'Arbeitszeit',benefit:'Benefit','company-car':'Firmenwagen',pension:'bAV',insurance:'Versicherung',job:'Jobwechsel',combined:'Mehrere Änderungen',other:'Sonstiges'})[t]||t}
 function signedPct(v){const n=Number(v||0);return `${n>=0?'+':'−'}${hpct(Math.abs(n))}`}
-function signedMoney(v){const n=Number(v||0);return `${n>=0?'+':'−'}${heuro.format(Math.abs(n))}`}
 function shortMoney(v){const n=Number(v||0);return n>=1000?`${(n/1000).toLocaleString('de-DE',{maximumFractionDigits:0})}k €`:heuro.format(n)}
-function localDate(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
-function subtractYears(date,years){const d=new Date(`${date}T12:00:00`);d.setFullYear(d.getFullYear()-years);return localIso(d)}
-function localIso(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
-function fmtDate(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE').format(new Date(`${String(v).slice(0,10)}T12:00:00`))}
-function spaceId(){return H$('#space-select')?.value||''}
-function hval(id){return H$('#'+id)?.value??''}function hnum(id){return Number(hval(id))||0}function hset(id,v){const e=H$('#'+id);if(e)e.value=v??''}
-function hn(v){const n=Number(v);return Number.isFinite(n)?n:0}
-function hjson(method,body){return sharedJsonBody(body,method)}
-async function hapi(path,options={}){return sharedApi(path,options)}
-function hmessage(t){const e=H$('#comp-error');e.textContent=t;e.classList.add('show');clearTimeout(hmessage.timer);hmessage.timer=setTimeout(()=>e.classList.remove('show'),3200)}
+function subtractYears(date,years){const d=new Date(`${date}T12:00:00`);d.setFullYear(d.getFullYear()-years);return localIsoDate(d)}
 function herror(e){console.error(e);hmessage(e?.message||'Unbekannter Fehler.')}
-function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function attr(v){return esc(v)}

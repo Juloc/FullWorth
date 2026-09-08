@@ -1,9 +1,9 @@
-import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
 import { confirmMessage } from '../ui/confirm.js';
-const $=s=>document.querySelector(s);
-const $$=s=>[...document.querySelectorAll(s)];
-const euro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2});
-const euro0=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+import {
+  $, $$, euro2 as euro, euro as euro0, esc, attr, val as value, num as number, setVal as set,
+  spaceId, monthLabel as month, signedEuro, api, json, notify as showMessage,
+  readProfile, fillProfile
+} from './compensation-shared.js';
 
 init();
 
@@ -110,38 +110,10 @@ function renderOptions(selector,options,ranked=false){
 }
 
 function loadProfileIntoCalculator(profile){
-  set('profile-name',profile.name);
-  const mode=profile.grossInputMode==='monthly'?'monthly':'annual';const payments=Math.min(14,Math.max(12,Number(profile.salaryPaymentsPerYear)||12));
-  set('gross-period',mode);set('salary-payments',payments);set('gross-input',mode==='monthly'?(Number(profile.annualGross)||0)/payments:profile.annualGross);
-  set('annual-bonus',profile.annualBonus);set('tax-class',profile.taxClass||1);set('tax-class4-factor',profile.taxClass4Factor||1);set('annual-tax-allowance',profile.annualTaxAllowance??0);set('child-allowance-units',profile.childAllowanceUnits??'');set('state-code',profile.stateCode||'BW');
-  $('#church-tax').checked=!!profile.churchTax;set('children',profile.childrenUnder25??0);set('employee-age',profile.age??'');$('#childless-surcharge').checked=profile.childlessCareSurcharge!==false;$('#pension-insurance').checked=profile.pensionInsuranceEnabled!==false;$('#unemployment-insurance').checked=profile.unemploymentInsuranceEnabled!==false;set('health-addon',profile.healthInsuranceAdditionalRatePercent??2.9);set('weekly-hours',profile.weeklyHours??40);set('vacation-days',profile.vacationDays??30);
-  const car=profile.companyCar||{};$('#car-enabled').checked=!!car.enabled;set('car-list-price',car.listPrice??0);set('car-factor',car.taxableListPriceFactor??1);set('car-vehicle-type',car.vehicleType||'manual');set('car-acquisition-date',car.acquisitionDate||'2026-01-01');set('car-electric-range',car.electricRangeKm??80);set('car-co2',car.co2GramsPerKm??50);set('car-commute',car.oneWayCommuteKm??0);set('car-commute-method',car.commuteMethod||'monthly');set('car-commute-days',car.commuteDaysPerMonth??10);set('car-contribution',car.employeeContributionMonthly??0);set('car-employer-cost',car.employerCostMonthly??0);set('car-private-cost',car.privateAlternativeCostMonthly??0);
-  const bav=profile.occupationalPension||{};set('bav-employee',bav.employeeContributionMonthly??0);set('bav-employer',bav.employerContributionMonthly??0);set('bav-years',bav.projectionYears??30);set('bav-return',bav.expectedAnnualReturnPercent??3);
-  const list=$('#benefits-list');list.innerHTML='';(profile.benefits||[]).forEach(addBenefitRow);
-  $$('.comp-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab==='calculator'));$$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id==='tab-calculator'));
-  $('#car-fields').classList.toggle('enabled',!!car.enabled);
-  $('#gross-period').dispatchEvent(new Event('change'));$('#tax-class').dispatchEvent(new Event('change'));$('#car-vehicle-type').dispatchEvent(new Event('change'));$('#car-commute-method').dispatchEvent(new Event('change'));
+  fillProfile(profile);
+  $$('.comp-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab==='calculator'));
+  $$('.comp-tab').forEach(tab=>tab.classList.toggle('active',tab.id==='tab-calculator'));
   $('#calculate').click();
-}
-
-function addBenefitRow(benefit){
-  const row=document.createElement('div');row.className='benefit-row';
-  row.innerHTML=`<label>Name<input data-benefit="name" value="${attr(benefit.name||'')}"></label><label>AG-Kosten / Monat<input data-benefit="employerCostMonthly" type="number" min="0" value="${n(benefit.employerCostMonthly)}"></label><label>Dein Wert / Monat<input data-benefit="personalValueMonthly" type="number" min="0" value="${n(benefit.personalValueMonthly)}"></label><label>Steuerpflichtig / Monat<input data-benefit="taxableBenefitMonthly" type="number" min="0" value="${n(benefit.taxableBenefitMonthly)}"></label><label>Eigenkosten / Monat<input data-benefit="employeeCostMonthly" type="number" min="0" value="${n(benefit.employeeCostMonthly)}"></label><button type="button">×</button>`;
-  row.querySelector('button').addEventListener('click',()=>row.remove());$('#benefits-list').appendChild(row);
-}
-
-function readProfile(){
-  const payments=Math.min(14,Math.max(12,Math.round(number('salary-payments')||12)));const mode=value('gross-period')==='monthly'?'monthly':'annual';const taxClass=Math.round(number('tax-class'));const type=value('car-vehicle-type')||'manual';
-  const factor=deriveCarFactor();
-  return{name:value('profile-name')||'Aktuelles Gehalt',annualGross:mode==='monthly'?number('gross-input')*payments:number('gross-input'),annualBonus:number('annual-bonus'),grossInputMode:mode,salaryPaymentsPerYear:payments,taxClass,taxClass4Factor:taxClass===4?Math.min(1,Math.max(.001,number('tax-class4-factor')||1)):1,annualTaxAllowance:Math.max(0,number('annual-tax-allowance')),childAllowanceUnits:value('child-allowance-units')===''?null:Math.max(0,number('child-allowance-units')),stateCode:value('state-code'),churchTax:$('#church-tax').checked,childrenUnder25:Math.max(0,Math.round(number('children'))),age:value('employee-age')===''?null:Math.max(0,Math.round(number('employee-age'))),childlessCareSurcharge:$('#childless-surcharge').checked,pensionInsuranceEnabled:$('#pension-insurance').checked,unemploymentInsuranceEnabled:$('#unemployment-insurance').checked,healthInsuranceAdditionalRatePercent:number('health-addon'),weeklyHours:number('weekly-hours'),vacationDays:Math.round(number('vacation-days')),spouseAnnualTaxableIncome:0,companyCar:{enabled:$('#car-enabled').checked,listPrice:number('car-list-price'),taxableListPriceFactor:factor,vehicleType:type,acquisitionDate:value('car-acquisition-date')||null,electricRangeKm:number('car-electric-range'),co2GramsPerKm:number('car-co2'),oneWayCommuteKm:number('car-commute'),commuteMethod:value('car-commute-method')||'monthly',commuteDaysPerMonth:Math.max(0,Math.min(31,Math.round(number('car-commute-days')))),employeeContributionMonthly:number('car-contribution'),employerCostMonthly:number('car-employer-cost'),privateAlternativeCostMonthly:number('car-private-cost')},occupationalPension:{employeeContributionMonthly:number('bav-employee'),employerContributionMonthly:number('bav-employer'),projectionYears:Math.round(number('bav-years')),expectedAnnualReturnPercent:number('bav-return')},benefits:$$('.benefit-row').map(row=>{const g=x=>row.querySelector(`[data-benefit="${x}"]`);return{name:g('name').value.trim()||'Benefit',employerCostMonthly:Number(g('employerCostMonthly').value)||0,personalValueMonthly:Number(g('personalValueMonthly').value)||0,taxableBenefitMonthly:Number(g('taxableBenefitMonthly').value)||0,employeeCostMonthly:Number(g('employeeCostMonthly').value)||0}})};
-}
-
-function deriveCarFactor(){
-  const type=value('car-vehicle-type')||'manual';if(type==='manual')return number('car-factor')||1;if(type==='combustion')return 1;
-  const price=number('car-list-price'),date=value('car-acquisition-date')||'2026-01-01';
-  if(type==='electric'){const limit=date>='2025-07-01'?100000:(date>='2024-01-01'?70000:60000);return price<=limit?.25:.5}
-  if(type==='hybrid'){const min=date>='2025-01-01'?80:(date>='2022-01-01'?60:40);const co2=number('car-co2');return number('car-electric-range')>=min||(co2>0&&co2<=50)?.5:1}
-  return 1;
 }
 
 async function extractPayslip(){
@@ -244,16 +216,4 @@ async function deletePayslip(id){
   await api(`api/compensation/payslips/${id}?fullWorthSpaceId=${spaceId()}`,{method:'DELETE'});await loadPayslips();
 }
 
-function spaceId(){return $('#space-select')?.value||''}
-function value(id){return $(`#${id}`)?.value??''}
-function number(id){return Number(value(id))||0}
-function set(id,v){const el=$(`#${id}`);if(el)el.value=v??''}
-function json(method,body){return sharedJsonBody(body,method)}
-async function api(path,options={},allow204=false){return sharedApi(path,options)}
-function month(v){if(!v)return'—';return new Intl.DateTimeFormat('de-DE',{month:'long',year:'numeric'}).format(new Date(`${String(v).slice(0,10)}T12:00:00`))}
-function signedEuro(v){const x=Number(v||0);return `${x>=0?'+':'−'}${euro.format(Math.abs(x))}`}
-function showMessage(text){const toast=$('#comp-error');toast.textContent=text;toast.classList.add('show');clearTimeout(showMessage.timer);showMessage.timer=setTimeout(()=>toast.classList.remove('show'),3200)}
 function showError(error){console.error(error);showMessage(error?.message||'Unbekannter Fehler.')}
-function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function attr(v){return esc(v)}
-function n(v){const x=Number(v);return Number.isFinite(x)?x:0}
