@@ -103,7 +103,7 @@ function gateHtml(settings, profile, loadError) {
     <p class="tax-setting-copy">${esc(spaceOff ? tr().spaceOff : tr().spaceOn)}</p>
     <label class="check"><input id="tax-personal-enabled" type="checkbox" ${profile?.assistantEnabled ? 'checked' : ''}><span>${esc(tr().personal)}</span></label>
     <div class="tax-setting-copy">${esc(tr().personalHint)}</div>
-    ${spaceOff ? `<button type="button" id="tax-space-enable" class="ghost">${esc(tr().enableSpace)}</button>` : ''}`;
+    ${spaceOff ? `<button type="button" id="tax-space-enable" class="btn btn-secondary">${esc(tr().enableSpace)}</button>` : ''}`;
   return sectionCard(tr().title, body, { className: 'tax-summary tax-gate' });
 }
 
@@ -163,7 +163,7 @@ function viewHtml(reviewOnly) {
         <button type="button" class="${reviewOnly ? 'active' : ''}" data-tax-tab="review">${esc(tr().review)}</button>
       </div>
       <label class="tax-year"><span>${esc(tr().year)}</span><select id="tax-year">${yearOptionsHtml()}</select></label>
-      <button type="button" class="ghost" data-tax-settings>${esc(tr().settingsBtn)}</button>
+      <button type="button" class="btn btn-secondary" data-tax-settings>${esc(tr().settingsBtn)}</button>
       <button type="button" id="tax-analyze" class="primary-action">${esc(tr().analyze)}</button>
     </div>
     <article class="fw-card tax-hero">
@@ -289,7 +289,7 @@ function drawCandidates(host, items) {
         ${Number(c.eligiblePercentage) !== 100 ? `<div class="row-sub">${esc(tr().eligible)}: ${esc(c.eligiblePercentage)}% · ${ctx.money(c.grossAmount, c.currency)} → ${ctx.money(c.eligibleAmount, c.currency)}</div>` : ''}
       </div>
       <div class="tax-case-actions">
-        ${!final ? `<button type="button" class="ghost" data-share>${esc(tr().edit)}</button><button type="button" class="ghost" data-reject>${esc(tr().reject)}</button><button type="button" data-confirm>${esc(tr().confirm)}</button>` : ''}
+        ${!final ? `<button type="button" class="btn btn-secondary" data-share>${esc(tr().edit)}</button><button type="button" class="btn btn-secondary" data-reject>${esc(tr().reject)}</button><button type="button" data-confirm>${esc(tr().confirm)}</button>` : ''}
       </div>`;
     row.querySelector('[data-confirm]')?.addEventListener('click', () => decide(c.id, 'confirm'));
     row.querySelector('[data-reject]')?.addEventListener('click', () => decide(c.id, 'reject'));
