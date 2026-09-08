@@ -124,11 +124,35 @@ public sealed class ContractMergeExecutionService(
             new ContractMergeRequest(sourceIds),
             ct);
 
+        if (outcome.Result == ContractMutationResult.Success)
+        {
+            return new(
+                ContractMergeExecuteResult.Success,
+                new ContractMergeExecuteView(request.CanonicalContractId, sourceIds, AlreadyApplied: false));
+        }
+
+        // A second confirmation can race with the first one after both validated the same preview.
+        // Re-read the merge graph before surfacing an error; if the intended state is already present,
+        // treat the retry as the same successful operation.
+        if (outcome.Result is ContractMutationResult.NotFound or ContractMutationResult.Invalid)
+        {
+            var after = await db.Contracts.AsNoTracking()
+                .Where(contract =>
+                    contract.FullWorthSpaceId == fullWorthSpaceId &&
+                    sourceIds.Contains(contract.Id))
+                .Select(contract => new { contract.Id, contract.MergedIntoContractId })
+                .ToListAsync(ct);
+            if (after.Count == sourceIds.Length &&
+                after.All(contract => contract.MergedIntoContractId == request.CanonicalContractId))
+            {
+                return new(
+                    ContractMergeExecuteResult.Success,
+                    new ContractMergeExecuteView(request.CanonicalContractId, sourceIds, AlreadyApplied: true));
+            }
+        }
+
         return outcome.Result switch
         {
-            ContractMutationResult.Success => new(
-                ContractMergeExecuteResult.Success,
-                new ContractMergeExecuteView(request.CanonicalContractId, sourceIds, AlreadyApplied: false)),
             ContractMutationResult.NotFound => new(ContractMergeExecuteResult.NotFound),
             ContractMutationResult.Forbidden => new(ContractMergeExecuteResult.Forbidden),
             ContractMutationResult.Invalid => new(ContractMergeExecuteResult.Invalid, Error: outcome.Error),
