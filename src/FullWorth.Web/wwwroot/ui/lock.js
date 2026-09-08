@@ -1,4 +1,5 @@
 import { assertPasskey, isPasskeySupported, passkeyErrorKey } from '../passkeys/passkeys.js';
+import { secureFetch } from '../security/secure-fetch.js';
 
 // Inactivity lock (§ security): after LOCK_AFTER of no interaction the app covers itself with an
 // opaque lock screen. Unlocking is primarily a passkey (WebAuthn) and falls back to a PIN. The
@@ -18,9 +19,8 @@ const now = () => Date.now();
 const lockConfigured = () => capability.hasPin || capability.hasPasskey;
 const isLocked = () => Boolean(overlay) && !overlay.hidden;
 
-// /auth/* endpoints are not proxied through /bff/backend, so call them with plain fetch; the shared
-// browser-fetch wrapper still attaches credentials and the antiforgery header.
-const authFetch = (url, options = {}) => fetch(url, {
+// /auth/* endpoints are not proxied through the backend BFF; secureFetch owns credentials + antiforgery.
+const authFetch = (url, options = {}) => secureFetch(url, {
   credentials: 'same-origin',
   cache: 'no-store',
   headers: { Accept: 'application/json', ...(options.headers || {}) },
