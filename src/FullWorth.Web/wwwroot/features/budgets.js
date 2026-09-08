@@ -1,5 +1,6 @@
 import { state } from '../core/state.js';
 import { ButtonRole, buttonClass } from '../ui/buttons.js';
+import { MoneyVariant, moneyClass } from '../ui/money.js';
 
 let ctx;
 
@@ -141,7 +142,7 @@ export async function openBudgetDetail(context, id) {
       </div>
       <div class="kv">
         <span>${ctx.esc(ctx.get(projectedOverUnder > 0 ? 'budgets.projectedOver' : 'budgets.projectedUnder'))}</span>
-        <strong class="amount ${projectedOverUnder > 0 ? 'negative' : 'positive'}">${ctx.money(Math.abs(projectedOverUnder), currency)}</strong>
+        <strong class="${moneyClass(projectedOverUnder > 0 ? MoneyVariant.Danger : MoneyVariant.Neutral)}">${ctx.money(Math.abs(projectedOverUnder), currency)}</strong>
       </div>
     </div>`;
 
@@ -151,7 +152,7 @@ export async function openBudgetDetail(context, id) {
         <div class="row-title">${ctx.esc(transaction.counterparty || '—')}</div>
         <div class="row-sub">${transaction.bookingDate ? ctx.date(transaction.bookingDate) : ''}${transaction.category ? ` · ${ctx.esc(transaction.category)}` : ''}</div>
       </div>
-      <div class="amount negative">${ctx.money(-Math.abs(Number(transaction.amount || 0)), transaction.currency || currency)}</div>
+      <div class="${moneyClass(MoneyVariant.Neutral)}">${ctx.money(-Math.abs(Number(transaction.amount || 0)), transaction.currency || currency)}</div>
     </div>`).join('');
 
   const cycleLabel = budgetStatus.period && budgetStatus.period !== 'monthly'
@@ -174,7 +175,7 @@ export async function openBudgetDetail(context, id) {
     <div class="budget-detail-stats">
       <div class="kv"><span>${ctx.esc(ctx.get('budgets.spent'))}</span><strong class="amount">${ctx.money(budgetStatus.spent, currency)}</strong></div>
       <div class="kv"><span>${ctx.esc(ctx.get('budgets.budget'))}</span><strong class="amount">${ctx.money(budgetStatus.budgetAmount, currency)}</strong></div>
-      <div class="kv"><span>${ctx.esc(ctx.get('budgets.remaining'))}</span><strong class="amount${Number(budgetStatus.remaining) < 0 ? ' negative' : ''}">${ctx.money(budgetStatus.remaining, currency)}</strong></div>
+      <div class="kv"><span>${ctx.esc(ctx.get('budgets.remaining'))}</span><strong class="${moneyClass(Number(budgetStatus.remaining) < 0 ? MoneyVariant.Danger : MoneyVariant.Neutral)}">${ctx.money(budgetStatus.remaining, currency)}</strong></div>
     </div>
     <div class="progress ${barStatus}">
       <span data-w="${clamped}"></span>
