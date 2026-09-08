@@ -100,6 +100,10 @@ button.is-loading::before{content:"";width:14px;height:14px;border:2px solid cur
   .auth-main{place-items:start center;padding:var(--s2) 0}
   .auth-card{padding:var(--s4)}
   .auth-form input,.auth-primary,.auth-secondary{min-height:44px}
+  /* Same 44px touch floor as the fields above — these three were missed. */
+  .password-toggle{width:44px;height:44px}
+  .auth-util-btn{min-height:44px;min-width:44px;justify-content:center}
+  .auth-links a{display:inline-flex;align-items:center;min-height:44px}
   .recovery-codes{grid-template-columns:1fr}
 }
 @media(max-height:620px){
