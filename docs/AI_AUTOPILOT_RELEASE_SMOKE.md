@@ -143,6 +143,8 @@ Deploy 3 adds no new migration.
 - [ ] signal jobs complete with no `AiInstanceSettings`, AI credential, or provider configured
 - [ ] no `AiRun` row is created by deterministic signal processing
 - [ ] shadow detectors can persist spending, budget, savings, data-quality, and classification-quality signals
+- [ ] `/api/insights` stays hidden (404) while `insights=off`, even when shadow signals exist
+- [ ] daily/space/user refresh skips inactive or tombstoned users
 - [ ] no new dashboard section or navigation item is visible yet
 - [ ] setting `Autopilot__Features__signals=off` makes queued signal jobs a safe no-op
 
