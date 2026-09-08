@@ -30,7 +30,7 @@ function ensureCss() {
   const link = document.createElement('link');
   link.id = 'receipt-imports-css';
   link.rel = 'stylesheet';
-  link.href = '/features/receipt-imports.css';
+  link.href = '/styles/features/receipt-imports.css';
   document.head.appendChild(link);
 }
 

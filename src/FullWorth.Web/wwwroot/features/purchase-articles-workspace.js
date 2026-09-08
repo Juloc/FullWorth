@@ -87,7 +87,7 @@ function ensureStyle() {
   const link = document.createElement('link');
   link.id = 'purchase-articles-style';
   link.rel = 'stylesheet';
-  link.href = '/features/purchase-articles-workspace.css';
+  link.href = '/styles/features/purchase-articles-workspace.css';
   document.head.appendChild(link);
 }
 

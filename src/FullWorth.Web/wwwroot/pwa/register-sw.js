@@ -15,7 +15,7 @@ function loadCoachExtension() {
   if (!document.querySelector('link[data-fullworth-coach]')) {
     const stylesheet = document.createElement('link');
     stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/features/coach.css';
+    stylesheet.href = '/styles/features/coach.css';
     stylesheet.dataset.fullworthCoach = '1';
     document.head.appendChild(stylesheet);
   }

@@ -12,7 +12,7 @@ public static class FinanzguruImportPageEndpoints
   <title>Finanzguru Import</title>
   <script src="/theme-init.js"></script>
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/features/finanzguru-import-page.css">
+  <link rel="stylesheet" href="/styles/features/finanzguru-import-page.css">
 </head>
 <body>
   <main id="main" class="import-page" tabindex="-1">

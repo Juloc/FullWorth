@@ -85,7 +85,7 @@ function ensureStyles() {
   if (document.querySelector('link[data-wealth-assets-css]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/wealth-assets.css';
+  link.href = '/styles/features/wealth-assets.css';
   link.dataset.wealthAssetsCss = '1';
   document.head.appendChild(link);
 }

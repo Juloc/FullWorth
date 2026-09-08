@@ -120,7 +120,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var wrapper = await GetAsync("/features/wealth-real-estate.js");
         var js = await GetAsync("/features/wealth-specialized-assets.js");
-        var css = await GetAsync("/features/wealth-specialized-assets.css");
+        var css = await GetAsync("/styles/features/wealth-specialized-assets.css");
 
         Assert.Contains("wealth-specialized-assets.js", wrapper);
         Assert.Contains("api/assets/${asset.id}/vehicle", js);
@@ -164,7 +164,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var wrapper = await GetAsync("/features/wealth-real-estate.js");
         var adapter = await GetAsync("/features/wealth-investment-consolidation.js");
         var portfolioUi = await GetAsync("/features/investment-performance-ui.js");
-        var css = await GetAsync("/features/wealth-investment-consolidation.css");
+        var css = await GetAsync("/styles/features/wealth-investment-consolidation.css");
 
         Assert.Contains("wealth-investment-consolidation.js", wrapper);
         Assert.Contains("investment-performance-ui.js", adapter);
@@ -229,12 +229,12 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         foreach (var path in new[]
                  {
-                     "/features/wealth-assets.css",
-                     "/features/wealth-real-estate.css",
-                     "/features/wealth-real-estate-operations.css",
-                     "/features/wealth-real-estate-advanced.css",
-                     "/features/wealth-specialized-assets.css",
-                     "/features/wealth-investment-consolidation.css"
+                     "/styles/features/wealth-assets.css",
+                     "/styles/features/wealth-real-estate.css",
+                     "/styles/features/wealth-real-estate-operations.css",
+                     "/styles/features/wealth-real-estate-advanced.css",
+                     "/styles/features/wealth-specialized-assets.css",
+                     "/styles/features/wealth-investment-consolidation.css"
                  })
         {
             var css = await GetAsync(path);
@@ -246,14 +246,14 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         foreach (var path in new[]
                  {
-                     "'/features/networth.js'", "'/features/wealth-assets.css'",
+                     "'/features/networth.js'", "'/styles/features/wealth-assets.css'",
                      "'/features/wealth-real-estate.js'", "'/features/wealth-real-estate-core.js'",
                      "'/features/wealth-real-estate-operations.js'", "'/features/wealth-real-estate-advanced.js'",
-                     "'/features/wealth-real-estate.css'", "'/features/wealth-real-estate-operations.css'",
+                     "'/styles/features/wealth-real-estate.css'", "'/styles/features/wealth-real-estate-operations.css'",
                      "'/features/wealth-specialized-assets.js'", "'/features/wealth-specialized-assets-extra.js'",
-                     "'/features/wealth-specialized-assets.css'",
+                     "'/styles/features/wealth-specialized-assets.css'",
                      "'/features/wealth-investment-consolidation.js'",
-                     "'/features/wealth-investment-consolidation.css'",
+                     "'/styles/features/wealth-investment-consolidation.css'",
                      "'/features/wealth-portability.js'",
                      "'/features/investment-performance-ui.js'",
                      "'/investment-performance.css'",

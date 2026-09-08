@@ -41,7 +41,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task CoachShellExposesEvidenceAndDeterministicModeWithoutMandatoryAi()
     {
         var shell = await GetAsync("/features/coach-shell.js");
-        var coachCss = await GetAsync("/features/coach.css");
+        var coachCss = await GetAsync("/styles/features/coach.css");
         Assert.Contains("Lokale Auswertung", shell);
         Assert.Contains("Verwendete Fakten", shell);
         Assert.Contains("FullWorth-Daten im sicheren Kontext", shell);
@@ -103,7 +103,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var transactions = await GetAsync("/features/transactions.js");
         var contracts = await GetAsync("/features/contracts.js");
         var networth = await GetAsync("/features/networth.js");
-        var accounts = await GetAsync("/features/accounts-ux.js");
+        var accounts = await GetAsync("/features/accounts-presentation.js");
         var coach = await GetAsync("/features/coach-shell.js");
         var dialogs = await GetAsync("/ui/dialog.js");
 

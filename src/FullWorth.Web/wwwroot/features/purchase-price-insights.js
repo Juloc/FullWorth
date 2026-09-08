@@ -23,7 +23,7 @@ function ensureStyle() {
   if (document.querySelector('link[data-feature-css="purchase-price-insights"]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/purchase-price-insights.css';
+  link.href = '/styles/features/purchase-price-insights.css';
   link.dataset.featureCss = 'purchase-price-insights';
   document.head.appendChild(link);
 }

@@ -51,7 +51,7 @@ function ensureStyles() {
   if (document.querySelector('link[data-wealth-real-estate-operations-css]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/wealth-real-estate-operations.css';
+  link.href = '/styles/features/wealth-real-estate-operations.css';
   link.dataset.wealthRealEstateOperationsCss = '1';
   document.head.appendChild(link);
 }

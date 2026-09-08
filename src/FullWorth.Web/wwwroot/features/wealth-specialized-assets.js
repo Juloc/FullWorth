@@ -51,7 +51,7 @@ function ensureCss() {
   if (document.querySelector('link[data-specialized-wealth-css]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/wealth-specialized-assets.css';
+  link.href = '/styles/features/wealth-specialized-assets.css';
   link.dataset.specializedWealthCss = '1';
   document.head.appendChild(link);
 }

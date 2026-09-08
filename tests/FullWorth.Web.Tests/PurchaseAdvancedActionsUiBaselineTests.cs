@@ -69,7 +69,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     public void Payment_picker_never_relabels_foreign_currency_transactions()
     {
         var js = Read("features", "purchase-articles-advanced.js");
-        var css = Read("features", "purchase-articles-workspace.css");
+        var css = Read("styles", "features", "purchase-articles-workspace.css");
 
         Assert.Contains("mountCurrencySafePaymentPicker", js);
         Assert.Contains("FX-Konvertierung erforderlich", js);
@@ -92,7 +92,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Advanced_styles_never_use_hover_transforms()
     {
-        var css = Read("features", "purchase-articles-workspace.css");
+        var css = Read("styles", "features", "purchase-articles-workspace.css");
         Assert.Contains(".pa-export-actions .button:hover{transform:none!important", css);
         Assert.Contains(".pa-chip-remove:hover{transform:none!important", css);
         Assert.Contains(".pa-fx-blocked:hover{transform:none!important", css);
@@ -104,7 +104,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         var sw = Read("sw.js");
 
         Assert.Contains("/features/purchase-articles-workspace.js", sw);
-        Assert.Contains("/features/purchase-articles-workspace.css", sw);
+        Assert.Contains("/styles/features/purchase-articles-workspace.css", sw);
         Assert.Contains("/features/purchase-articles-advanced.js", sw);
         Assert.Contains("/features/purchase-articles-advanced-actions.js", sw);
         // REGRESSION (reported, not weakened): receipt-scan-ai.js was deleted, and the branch's later
@@ -115,7 +115,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         // currently breaks service-worker install entirely. Needs a source fix in
         // src/FullWorth.Web/wwwroot/sw.js: replace '/features/receipt-scan-local-builder.js' and
         // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/features/receipt-scan-set.js'
-        // and '/features/receipt-scan-set.css'.
+        // and '/styles/features/receipt-scan-set.css'.
         Assert.Contains("/features/receipt-scan-set.js", sw);
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }

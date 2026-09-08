@@ -25,12 +25,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
 
         var accounts = ReadAsset("features", "accounts.js");
         Assert.DoesNotContain("/features/accounts-ux.js", html);
-        Assert.Contains("/features/accounts.css", html);
+        Assert.Contains("/styles/features/accounts.css", html);
         Assert.Contains("from './accounts-presentation.js'", accounts);
 
         Assert.Contains("/features/accounts.js", sw);
         Assert.Contains("/features/accounts-presentation.js", sw);
-        Assert.Contains("/features/accounts.css", sw);
+        Assert.Contains("/styles/features/accounts.css", sw);
     }
 
     private string ReadAsset(params string[] path)
@@ -92,7 +92,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccountsStyles_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
     {
-        var css = await GetAsync("/features/accounts.css");
+        var css = await GetAsync("/styles/features/accounts.css");
 
         Assert.Contains("transform: none !important", css);
         Assert.Contains(".panel:hover", css);
@@ -107,7 +107,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task MobileAccountsUseCompactOverflowActions()
     {
         var accounts = await GetAsync("/features/accounts.js");
-        var css = await GetAsync("/features/accounts.css");
+        var css = await GetAsync("/styles/features/accounts.css");
 
         Assert.Contains("data-account-more", accounts);
         Assert.Contains("openAccountActionsDialog", accounts);

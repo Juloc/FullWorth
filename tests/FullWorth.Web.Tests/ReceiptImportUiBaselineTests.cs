@@ -72,7 +72,7 @@ public sealed class ReceiptImportUiBaselineTests : IClassFixture<FullWorthWebFac
     public void Batch_details_support_status_source_filters_and_individual_receipt_links()
     {
         var details = Read("features", "receipt-import-batch-details.js");
-        var css = Read("features", "receipt-imports.css");
+        var css = Read("styles", "features", "receipt-imports.css");
         var sw = Read("sw.js");
 
         Assert.Contains("data-import-batch-details", details);

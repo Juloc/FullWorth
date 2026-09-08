@@ -12,7 +12,7 @@ public static class ImportCenterPageEndpoints
   <title>Daten importieren · FullWorth</title>
   <script src="/theme-init.js"></script>
   <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/features/import-center-page.css">
+  <link rel="stylesheet" href="/styles/features/import-center-page.css">
 </head>
 <body>
   <main id="main" class="import-center" tabindex="-1">

@@ -53,7 +53,7 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
         Assert.Contains("/features/purchase-receipt-source-review.js", sw);
         Assert.Contains("/features/receipt-imports.js", sw);
         Assert.Contains("/features/receipt-import-batch-details.js", sw);
-        Assert.Contains("/features/receipt-imports.css", sw);
+        Assert.Contains("/styles/features/receipt-imports.css", sw);
         Assert.Contains("url.pathname.startsWith('/share')", sw);
         Assert.Contains("url.pathname.startsWith('/bff')", sw);
     }

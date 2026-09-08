@@ -259,7 +259,7 @@ function ensureCss() {
   if (document.querySelector('link[data-feature-css="receipt-scan-set"]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/receipt-scan-set.css';
+  link.href = '/styles/features/receipt-scan-set.css';
   link.dataset.featureCss = 'receipt-scan-set';
   document.head.appendChild(link);
 }

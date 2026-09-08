@@ -27,7 +27,7 @@ function toast(message) {
 function ensureCss() {
   if ($('link[data-wealth-investments-css]')) return;
   const link = document.createElement('link');
-  link.rel = 'stylesheet'; link.href = '/features/wealth-investment-consolidation.css'; link.dataset.wealthInvestmentsCss = '1';
+  link.rel = 'stylesheet'; link.href = '/styles/features/wealth-investment-consolidation.css'; link.dataset.wealthInvestmentsCss = '1';
   document.head.appendChild(link);
 }
 

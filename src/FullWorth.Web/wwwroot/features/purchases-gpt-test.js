@@ -29,7 +29,7 @@ function ensureStylesheet() {
   const link = document.createElement('link');
   link.id = 'gpt-receipt-test-stylesheet';
   link.rel = 'stylesheet';
-  link.href = '/features/purchases-gpt-test.css';
+  link.href = '/styles/features/purchases-gpt-test.css';
   document.head.appendChild(link);
 }
 

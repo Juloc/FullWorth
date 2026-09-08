@@ -69,7 +69,7 @@ function ensureStyles() {
   if (document.querySelector('link[data-wealth-real-estate-css]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/features/wealth-real-estate.css';
+  link.href = '/styles/features/wealth-real-estate.css';
   link.dataset.wealthRealEstateCss = '1';
   document.head.appendChild(link);
 }
