@@ -1,0 +1,47 @@
+/* Marktvergleich (salary benchmarks) inside the Gehaltsgespräch tab.
+   Every figure of the dataset is an estimate, so the "Schätzwert" marker is part of the layout, not an
+   afterthought: it sits in the heading, on the result and above the numbers. Tokens only. */
+
+.bench-card{margin-top:14px}
+.bench-result{display:grid;gap:14px;margin-top:14px}
+.bench-detail{display:grid;gap:12px}
+.bench-filters{margin-top:16px}
+.bench-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.bench-actions .btn{min-height:44px}
+
+.bench-disclaimer{margin:6px 0 0;color:var(--muted);font-size:.74rem;line-height:1.45}
+.bench-badges{display:flex;flex-wrap:wrap;gap:6px}
+.bench-badge{display:inline-block;padding:3px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:.66rem;font-weight:700;white-space:nowrap}
+.bench-badge-estimate{background:var(--warning-soft);color:var(--warning)}
+
+.bench-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bench-metrics .metric{min-height:88px}
+.bench-metrics small{display:block;margin-top:5px;color:var(--muted);font-size:.68rem;line-height:1.3}
+.bench-metric-median strong{letter-spacing:-.02em}
+
+.bench-compare{display:grid;gap:6px;padding:12px 14px;border-radius:var(--radius-input);background:var(--surface-2)}
+.bench-compare-row{display:flex;justify-content:space-between;gap:16px;font-size:.8rem}
+.bench-compare-row span{color:var(--muted)}
+.bench-compare-row strong{font-variant-numeric:tabular-nums}
+
+.bench-explain{margin:0;color:var(--muted);font-size:.74rem;line-height:1.5}
+.bench-notes h3,.bench-details h3{margin:12px 0 6px;font-size:.8rem}
+.bench-notes ul,.bench-notes-list{margin:0;padding-left:18px;color:var(--muted);font-size:.74rem;line-height:1.55}
+.bench-sources{margin:0;color:var(--muted);font-size:.72rem;line-height:1.45}
+.bench-source-links{margin:0;padding-left:18px;font-size:.72rem;line-height:1.6;color:var(--muted)}
+
+.bench-details summary{cursor:pointer;font-size:.78rem;font-weight:700;color:var(--muted);min-height:44px;display:flex;align-items:center}
+.bench-years{width:100%;border-collapse:collapse;font-size:.74rem}
+.bench-years th,.bench-years td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.bench-years th:first-child,.bench-years td:first-child,.bench-years th:last-child,.bench-years td:last-child{text-align:left}
+.bench-years th{color:var(--muted);font-weight:700}
+/* The table is the only wide element here; it scrolls inside the card instead of widening the page. */
+.bench-details{overflow-x:auto}
+
+@media(max-width:980px){.bench-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.bench-metrics{grid-template-columns:1fr}.bench-actions .btn{flex:1 1 auto}}
+/* Phone: the source links are the only remaining tap targets, so give them a full 44 px row. */
+@media(max-width:767px){
+  .bench-source-links{padding-left:0;list-style:none}
+  .bench-source-links a{display:inline-flex;align-items:center;min-height:44px}
+}

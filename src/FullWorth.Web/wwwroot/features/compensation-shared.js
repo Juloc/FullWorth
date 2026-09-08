@@ -212,6 +212,116 @@ export function addOneOffFromPreset() {
   addOneOffRow({ ...preset.payment });
 }
 
+// ── Sonstige regelmäßige Einkünfte ───────────────────────────────────────────────────────────────────
+// A SEPARATE income track next to the salary (Halbwaisenrente is the canonical case). It is deliberately
+// not part of the profile: the backend never feeds it into the salary calculation, so it is neither salary
+// nor an employer benefit and must never show up inside the Arbeitgeber-Gesamtpaket.
+// Records are stored one by one (`/api/compensation/other-income`), so the row below is an editable record
+// rather than a form field group — but it reuses the exact row mechanism of the benefit / one-off rows.
+
+export const isoDay = v => (v ? String(v).slice(0, 10) : '');
+
+let otherIncomeTypeCache = null;
+
+/** Suggestions for the Art picker. The stored type is an open set, so the input stays free text. */
+export async function loadOtherIncomeTypes() {
+  if (otherIncomeTypeCache) return otherIncomeTypeCache;
+  try {
+    const list = await api('api/compensation/other-income/types');
+    otherIncomeTypeCache = Array.isArray(list) ? list : [];
+  } catch {
+    // Suggestions are a convenience only — a failed lookup must not block entering free text.
+    otherIncomeTypeCache = [];
+  }
+  return otherIncomeTypeCache;
+}
+
+export const otherIncomeTypeOptions = () => otherIncomeTypeCache || [];
+
+/** Fills the shared <datalist> that every Art input points at. */
+export function fillOtherIncomeTypeList(options = otherIncomeTypeOptions()) {
+  const list = $('#other-income-types');
+  if (list) list.innerHTML = (options || []).map(option => `<option value="${attr(option.label)}"></option>`).join('');
+}
+
+/** Turns a stored slug back into something readable ("private-rente" → "Private Rente"). */
+export function otherIncomeTypeLabel(type, options = otherIncomeTypeOptions()) {
+  const slug = String(type || '').trim();
+  if (!slug) return 'Sonstige Einkünfte';
+  const known = (options || []).find(option => option.type === slug);
+  if (known) return known.label;
+  return slug.split('-').filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
+/** Display name of one record: its own label wins, otherwise the type. */
+export const otherIncomeName = (entry, options = otherIncomeTypeOptions()) =>
+  String(entry?.label || '').trim() || otherIncomeTypeLabel(entry?.type, options);
+
+/** Inclusive on both ends; an empty validTo means open-ended (mirrors CompensationOtherIncome.IsActiveOn). */
+export function otherIncomeActiveOn(entry, day = localIsoDate()) {
+  const from = isoDay(entry?.validFrom);
+  const to = isoDay(entry?.validTo);
+  return !!from && from <= day && (!to || to >= day);
+}
+
+/**
+ * Sums the records valid on one day. "Counted" only adds the records flagged as part of the personally
+ * available income — the same split the timeline draws as otherRegularIncome* / personallyAvailable*.
+ */
+export function otherIncomeAmountsOn(entries, day = localIsoDate()) {
+  let monthlyTotal = 0;
+  let monthlyCounted = 0;
+  let activeCount = 0;
+  for (const entry of entries || []) {
+    if (!otherIncomeActiveOn(entry, day)) continue;
+    activeCount += 1;
+    const monthly = Number(entry.monthlyAmount) || 0;
+    monthlyTotal += monthly;
+    if (entry.countsTowardPersonalIncome) monthlyCounted += monthly;
+  }
+  return { activeCount, monthlyTotal, monthlyCounted, annualTotal: monthlyTotal * 12, annualCounted: monthlyCounted * 12 };
+}
+
+/** One editable record row; same mechanism as addBenefitRow / addOneOffRow. Returns the row element. */
+export function addOtherIncomeRow(entry = {}, options = otherIncomeTypeOptions()) {
+  const host = $('#other-income-list');
+  if (!host) return null;
+  const saved = !!entry.id;
+  const row = document.createElement('div');
+  row.className = saved ? 'income-row' : 'income-row income-draft';
+  if (saved) row.dataset.incomeId = entry.id;
+  row.innerHTML = `
+    <label>Art<input data-income="type" list="other-income-types" maxlength="60" value="${attr(saved ? otherIncomeTypeLabel(entry.type, options) : (entry.type || ''))}" placeholder="z. B. Halbwaisenrente"><small class="field-help">Vorschläge oder eigener Text.</small></label>
+    <label>Bezeichnung<input data-income="label" maxlength="120" value="${attr(entry.label || '')}" placeholder="optional"></label>
+    <label>Betrag / Monat<input data-income="monthlyAmount" type="number" min="0" step="0.01" value="${numAttr(entry.monthlyAmount)}"></label>
+    <label>Gültig ab<input data-income="validFrom" type="date" value="${attr(isoDay(entry.validFrom) || localIsoDate())}"></label>
+    <label>Gültig bis<input data-income="validTo" type="date" value="${attr(isoDay(entry.validTo))}"><small class="field-help">Leer = unbefristet.</small></label>
+    <label>Notiz<input data-income="note" maxlength="1000" value="${attr(entry.note || '')}" placeholder="optional"></label>
+    <label class="check income-counts"><input data-income="countsTowardPersonalIncome" type="checkbox"${entry.countsTowardPersonalIncome === false ? '' : ' checked'}> <span>Zählt zum persönlich verfügbaren Einkommen</span></label>
+    <div class="income-row-actions">
+      <span class="income-annual">${saved ? `${euro2.format(Number(entry.annualAmount) || 0)} pro Jahr` : 'Noch nicht gespeichert'}</span>
+      <button type="button" class="btn btn-primary" data-income-save>${saved ? 'Speichern' : 'Hinzufügen'}</button>
+      <button type="button" class="btn btn-danger" data-income-delete aria-label="Einkunft entfernen">Löschen</button>
+    </div>`;
+  host.appendChild(row);
+  return row;
+}
+
+/** Reads one row into the API write body ({type,label,monthlyAmount,validFrom,validTo,…}). */
+export function readOtherIncomeRow(row) {
+  const field = name => row.querySelector(`[data-income="${name}"]`);
+  const text = name => String(field(name)?.value ?? '').trim();
+  return {
+    type: text('type'),
+    label: text('label') || null,
+    monthlyAmount: Math.max(0, Number(field('monthlyAmount')?.value) || 0),
+    validFrom: text('validFrom'),
+    validTo: text('validTo') || null,
+    countsTowardPersonalIncome: !!field('countsTowardPersonalIncome')?.checked,
+    note: text('note') || null,
+  };
+}
+
 // The calculator form is the single input surface; every view reads/writes it through these two functions.
 export function readProfile() {
   const payments = Math.min(14, Math.max(12, Math.round(num('salary-payments') || 12)));

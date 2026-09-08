@@ -53,6 +53,7 @@ public static class SalaryBenchmarkDataset
             data.ProjectedYears,
             data.NationalStateKey,
             data.Disclaimer,
+            data.VerificationStatus,
             data.Method,
             data.Sources,
             data.QualityLevels,

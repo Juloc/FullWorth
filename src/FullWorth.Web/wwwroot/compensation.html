@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="/design-depth.css">
   <link rel="stylesheet" href="/compensation.css">
   <link rel="stylesheet" href="/compensation-history.css">
+  <link rel="stylesheet" href="/styles/features/compensation-other-income.css">
+  <link rel="stylesheet" href="/styles/features/compensation-benchmarks.css">
 </head>
 <body class="comp-body">
   <a class="skip-link" href="#main">Zum Inhalt springen</a>
@@ -256,5 +258,9 @@
   <script type="module" src="/features/compensation.js"></script>
   <script type="module" src="/features/compensation-extended.js"></script>
   <script type="module" src="/features/compensation-history.js"></script>
+  <!-- Loaded after compensation.js on purpose: it binds its tab handlers to the buttons that exist at
+       that moment, so these modules own their own tab buttons. -->
+  <script type="module" src="/features/compensation-other-income.js"></script>
+  <script type="module" src="/features/compensation-benchmarks.js"></script>
 </body>
 </html>

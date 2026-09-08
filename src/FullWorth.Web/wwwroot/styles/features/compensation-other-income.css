@@ -1,0 +1,37 @@
+/* Sonstige regelmäßige Einkünfte (Gehalt page, own tab).
+   Same record-row look as .benefit-row / .oneoff-row in compensation.css — tokens only, no own button
+   styling: the rows use the shared .btn roles. */
+
+.income-intro{margin-bottom:14px}
+.income-separate{margin:14px 0 0;padding:11px 13px;border-radius:var(--radius-input);background:var(--surface-2);color:var(--muted);font-size:.78rem;line-height:1.45}
+.income-separate strong{color:var(--text)}
+.income-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
+.income-summary .metric{min-height:86px}
+.income-summary small{display:block;margin-top:5px;color:var(--muted);font-size:.7rem;line-height:1.3}
+
+.income-list{display:grid;gap:10px;margin-top:16px}
+.income-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:13px}
+.income-row>label{display:grid;gap:5px;font-size:.72rem;color:var(--muted)}
+.income-row input{width:100%;box-sizing:border-box}
+/* A row that was added but not saved yet, and a record whose von/bis window does not contain today. */
+.income-draft{border-style:dashed}
+.income-inactive{background:var(--surface-2)}
+/* The per-record "counts toward the personally available income" flag: always visible, always editable. */
+/* Selector must outrank `.income-row>label` above (that one would make the flag a grid and push the
+   checkbox onto its own line). */
+.income-row>label.income-counts{grid-column:1/-1;display:flex;align-items:center;gap:var(--s2);min-height:44px;color:var(--text);font-size:.8rem}
+.income-counts input[type=checkbox]{width:20px;height:20px;flex:0 0 auto}
+.income-row-actions{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.income-row-actions .btn{min-width:44px;min-height:44px}
+.income-annual{margin-right:auto;font-size:.74rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.income-empty{padding:26px;text-align:center;color:var(--muted);font-size:.82rem}
+
+@media(max-width:980px){
+  .income-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .income-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .income-summary{grid-template-columns:1fr}
+  .income-row{grid-template-columns:1fr}
+  .income-row-actions .btn{flex:1 1 auto}
+}

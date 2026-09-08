@@ -528,4 +528,20 @@ public sealed class SalaryBenchmarkDatasetTests
 
         Assert.True(checked_ > 10_000, $"expected a broad sweep, only checked {checked_}");
     }
+
+    [Fact]
+    public void MetadataCarriesTheDisclaimerAndTheVerificationStatus()
+    {
+        // Both exist to keep the UI honest about what this data is. A field that is present in the JSON
+        // but missing from the DTO is dropped silently at deserialization and can never be shown - which
+        // is exactly what happened to VerificationStatus.
+        var metadata = SalaryBenchmarkDataset.Metadata();
+
+        Assert.False(string.IsNullOrWhiteSpace(metadata.Disclaimer));
+        Assert.False(
+            string.IsNullOrWhiteSpace(metadata.VerificationStatus),
+            "the dataset's verification status must reach the API, or the UI cannot state which anchors " +
+            "were actually checked against their sources");
+        Assert.Contains("nicht", metadata.VerificationStatus!, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -93,6 +93,8 @@ public sealed record SalaryBenchmarkFile(
     IReadOnlyList<int> ProjectedYears,
     string NationalStateKey,
     string Disclaimer,
+    // Records what was and was not checked against the original sources; the UI must be able to show it.
+    string? VerificationStatus,
     SalaryBenchmarkMethod Method,
     IReadOnlyList<SalaryBenchmarkSource> Sources,
     IReadOnlyList<SalaryBenchmarkSourceSet> SourceSets,
@@ -194,6 +196,7 @@ public sealed record SalaryBenchmarkMetadata(
     IReadOnlyList<int> ProjectedYears,
     string NationalStateKey,
     string Disclaimer,
+    string? VerificationStatus,
     SalaryBenchmarkMethod Method,
     IReadOnlyList<SalaryBenchmarkSource> Sources,
     IReadOnlyList<SalaryBenchmarkQualityLevel> QualityLevels,

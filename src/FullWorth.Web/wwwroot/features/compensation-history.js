@@ -1,8 +1,9 @@
 import { confirmMessage } from '../ui/confirm.js';
 import {
-  $ as H$, $$ as H$$, euro as heuro, esc, attr, val as hval, num as hnum, setVal as hset,
+  $ as H$, $$ as H$$, euro as heuro, euro2 as heuro2, esc, attr, val as hval, num as hnum, setVal as hset,
   spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,
-  signedEuro0 as signedMoney, readProfile as readHistoryProfile, fillProfile as fillHistoryProfile
+  signedEuro0 as signedMoney, readProfile as readHistoryProfile, fillProfile as fillHistoryProfile,
+  loadOtherIncomeTypes, otherIncomeTypeOptions, otherIncomeName, otherIncomeActiveOn
 } from './compensation-shared.js';
 // The history view intentionally shows one decimal on percentages (the calculator allows two).
 const hpct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} %`;
@@ -10,12 +11,17 @@ const hpct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,ma
 // Time windows in months, mirroring the Vermögen view. 0 = all available history.
 const HISTORY_WINDOWS=[{m:6,label:'6 M'},{m:12,label:'1 J'},{m:24,label:'2 J'},{m:60,label:'5 J'},{m:120,label:'10 J'},{m:0,label:'Max'}];
 
+// All series are ANNUAL values, so they share one scale. The last three come from the separate
+// other-income track (sonstige regelmäßige Einkünfte) and are NOT employer figures.
 const HISTORY_SERIES=[
   ['contractualGrossAnnual','gross','Brutto'],
   ['estimatedCashNetAnnual','net','Netto'],
   ['purchasingPowerMaintenanceGrossAnnual','inflation','Kaufkrafterhalt'],
   ['fullWorthCompensationValueAnnual','total','Gesamtwert'],
-  ['companyCarNetCashImpactAnnual','car','Firmenwagen']
+  ['companyCarNetCashImpactAnnual','car','Firmenwagen'],
+  ['otherRegularIncomeAnnual','other','Sonstige Einkünfte'],
+  ['otherRegularIncomeCountedAnnual','other-counted','Sonstige angerechnet'],
+  ['personallyAvailableTotalIncomeAnnual','personal','Persönlich verfügbar']
 ];
 
 const hstate={
@@ -23,7 +29,10 @@ const hstate={
   windowMonths:0,
   scope:'single',
   // Firmenwagen is off by default: it is a small, often negative line that would otherwise flatten the scale.
-  series:{gross:true,net:true,inflation:true,total:true,car:false}
+  // The three other-income curves start off too and are switched on once (see loadHistory) as soon as the
+  // timeline actually reports such records — without any they would just duplicate the Netto line.
+  series:{gross:true,net:true,inflation:true,total:true,car:false,other:false,'other-counted':false,personal:false},
+  otherSeriesPrimed:false
 };
 
 const enabledSeries=()=>HISTORY_SERIES.filter(([,cls])=>hstate.series[cls]);
@@ -105,6 +114,7 @@ function historyMarkup(){return `
     <div class="fw-cycle history-windows" role="tablist" aria-label="Zeitraum">${HISTORY_WINDOWS.map(x=>`<button type="button" role="tab" data-history-window="${x.m}">${x.label}</button>`).join('')}</div>
     <div id="history-chart"></div>
     <div class="history-legend" aria-label="Kurven ein- und ausblenden">${HISTORY_SERIES.map(([,cls,label])=>`<button type="button" class="history-series-toggle" data-history-series="${cls}"><i class="history-key history-key-${cls}"></i>${label}</button>`).join('')}</div>
+    <div id="history-other-income" class="history-track" hidden></div>
   </article>
   <article class="panel history-years-card"><h2>Jahresvergleich</h2><div id="history-years"></div></article>
   <div id="history-list" class="history-list"></div>
@@ -141,10 +151,37 @@ async function loadHistory(){
     hapi(`api/compensation/timeline?${query}`)
   ]);
   hstate.entries=entries||[];hstate.timeline=timeline;
-  renderHistorySummary(timeline?.summary);
+  // Only once: the first timeline that carries other income turns its curves on, afterwards the user's
+  // own legend choice is respected (including switching them off again).
+  if(!hstate.otherSeriesPrimed&&hasOtherIncome(timeline)){
+    hstate.otherSeriesPrimed=true;
+    hstate.series.other=true;hstate.series.personal=true;
+    syncHistoryControls();
+  }
+  if(hasOtherIncome(timeline))await loadOtherIncomeTypes();
+  renderHistorySummary(timeline?.summary,timeline);
   renderHistoryChart(timeline);
+  renderOtherIncomeTrack(timeline);
   renderHistoryYears(timeline);
   renderHistoryList();
+}
+
+const hasOtherIncome=timeline=>
+  (timeline?.otherIncome||[]).length>0||Number(timeline?.summary?.currentOtherRegularIncomeAnnual||0)>0;
+
+// A static caption under the legend: which records the „Sonstige Einkünfte“ curve is actually made of.
+// Static on purpose — the hover tip must stay the only thing that changes while the mouse moves.
+function renderOtherIncomeTrack(timeline){
+  const root=H$('#history-other-income');if(!root)return;
+  const records=timeline?.otherIncome||[];
+  if(!records.length){root.hidden=true;root.innerHTML='';return}
+  const options=otherIncomeTypeOptions();
+  root.hidden=false;
+  root.innerHTML=`<span class="history-track-label">Sonstige Einkünfte (nicht Teil des Arbeitgeber-Gesamtpakets):</span>`+
+    records.map(record=>`<span class="history-track-item${record.countsTowardPersonalIncome?' counted':''}">`+
+      `${esc(otherIncomeName(record,options))} · ${esc(heuro2.format(Number(record.monthlyAmount)||0))} / Monat`+
+      `${record.countsTowardPersonalIncome?' · angerechnet':' · nicht angerechnet'}`+
+      `${otherIncomeActiveOn(record)?'':' · aktuell inaktiv'}</span>`).join('');
 }
 
 async function createHistoryEvent(){
@@ -156,14 +193,19 @@ async function createHistoryEvent(){
   await loadHistory();hmessage('Änderung gespeichert.');
 }
 
-function renderHistorySummary(summary){
+function renderHistorySummary(summary,timeline){
   const root=H$('#history-summary');
   if(!summary){root.innerHTML='<article class="panel history-empty">Noch keine Historie. Stelle den Rechner auf einen Stand und speichere ihn mit einem Datum.</article>';return}
+  // The two other-income metrics only appear when such records exist, so a pure salary history keeps
+  // its four cards.
+  const otherIncome=hasOtherIncome(timeline)?`
+    <article class="metric"><span>Sonstige Einkünfte</span><strong>${heuro.format(summary.currentOtherRegularIncomeAnnual)}</strong><small>${heuro2.format((Number(summary.currentOtherRegularIncomeAnnual)||0)/12)} / Monat · kein Arbeitgeber-Bestandteil</small></article>
+    <article class="metric"><span>Persönlich verfügbar</span><strong>${heuro.format(summary.currentPersonallyAvailableTotalIncomeAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} + angerechnete sonstige Einkünfte</small></article>`:'';
   root.innerHTML=`
     <article class="metric"><span>Brutto aktuell</span><strong>${heuro.format(summary.currentGrossAnnual)}</strong><small>seit Start ${signedPct(summary.nominalChangePercent)} nominal</small></article>
     <article class="metric"><span>Kaufkrafterhalt</span><strong>${heuro.format(summary.purchasingPowerMaintenanceGrossAnnual)}</strong><small>Inflation seit Start ${signedPct(summary.inflationPercent)}</small></article>
     <article class="metric"><span>Reale Gehaltsänderung</span><strong class="${summary.realChangePercent>=0?'positive':'negative'}">${signedPct(summary.realChangePercent)}</strong><small>Brutto nach Inflation</small></article>
-    <article class="metric"><span>Gesamtwert aktuell</span><strong>${heuro.format(summary.currentFullWorthValueAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} / Jahr</small></article>`;
+    <article class="metric"><span>Gesamtwert aktuell</span><strong>${heuro.format(summary.currentFullWorthValueAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} / Jahr</small></article>${otherIncome}`;
 }
 
 function renderHistoryChart(timeline){
@@ -200,8 +242,13 @@ function renderHistoryChart(timeline){
   wireChartHover(root,points,dates,{x,y,w},eventByDate,shown);
 }
 
+// The hover readout is an ABSOLUTELY positioned box inside .history-chart-wrap: showing, hiding, moving
+// or regrowing it can never reflow the card or the page — and the card itself must not react to :hover at
+// all (see the transform:none guard in compensation-history.css). With all eight curves on, the tip can be
+// taller than the plot area, so it is clamped against the whole card instead of just the plot rectangle.
 function wireChartHover(root,points,dates,geo,eventByDate,shown){
   const wrap=root.querySelector('.history-chart-wrap'),svg=root.querySelector('svg.history-chart');
+  const card=root.closest('.history-chart-card');
   const tip=root.querySelector('.history-chart-tip'),cross=svg?.querySelector('.history-crosshair'),hoverG=svg?.querySelector('.history-hover-dots');
   if(!wrap||!svg||!tip||!cross||!hoverG)return;
   function move(evt){
@@ -215,6 +262,7 @@ function wireChartHover(root,points,dates,geo,eventByDate,shown){
     const ev=eventByDate.get(p.date);
     tip.innerHTML=`<div class="tip-date">${fmtDate(p.date)}${ev?` · <span class="tip-event">${esc(ev)}</span>`:''}</div>`+
       shown.map(([key,cls,label])=>`<div class="tip-row"><span class="tip-key"><i class="history-key history-key-${cls}"></i>${label}</span><span class="tip-val">${heuro.format(Number(p[key])||0)}</span></div>`).join('')+
+      (hstate.series.personal?`<div class="tip-row tip-sub"><span class="tip-key">Persönlich verfügbar / Monat</span><span class="tip-val">${heuro2.format((Number(p.personallyAvailableTotalIncomeAnnual)||0)/12)}</span></div>`:'')+
       `<div class="tip-row tip-sub"><span class="tip-key">Steuern</span><span class="tip-val">${heuro.format(p.taxesAnnual)}</span></div>`+
       `<div class="tip-row tip-sub"><span class="tip-key">Sozialabgaben</span><span class="tip-val">${heuro.format(p.socialInsuranceAnnual)}</span></div>`+
       `<div class="tip-row tip-sub"><span class="tip-key">AG-Kosten</span><span class="tip-val">${heuro.format(p.employerTotalCostAnnual)}</span></div>`+
@@ -222,8 +270,12 @@ function wireChartHover(root,points,dates,geo,eventByDate,shown){
     tip.hidden=false;
     const wr=wrap.getBoundingClientRect(),tw=tip.offsetWidth||200,th=tip.offsetHeight||150;
     let lx=evt.clientX-wr.left+16;if(lx+tw>wr.width)lx=evt.clientX-wr.left-tw-16;
+    // Vertical bounds are the card's, so a tall tip stays fully readable instead of being cut off at the
+    // plot edge — and still never leaves the card.
+    const box=card?card.getBoundingClientRect():wr;
+    const minY=Math.min(4,box.top-wr.top+8),maxY=box.bottom-wr.top-th-8;
     let ly=evt.clientY-wr.top-th/2;
-    tip.style.left=`${Math.max(4,lx)}px`;tip.style.top=`${Math.max(4,Math.min(ly,wr.height-th-4))}px`;
+    tip.style.left=`${Math.max(4,lx)}px`;tip.style.top=`${Math.min(Math.max(minY,ly),Math.max(minY,maxY))}px`;
   }
   svg.addEventListener('mousemove',move);
   svg.addEventListener('mouseleave',()=>{tip.hidden=true;cross.style.display='none';hoverG.innerHTML=''});
@@ -235,7 +287,11 @@ function renderHistoryYears(timeline){
   const byYear=new Map();
   for(const point of points)byYear.set(Number(String(point.date).slice(0,4)),point);
   const rows=[...byYear.entries()].sort((a,b)=>b[0]-a[0]);
-  root.innerHTML=`<table class="history-years"><thead><tr><th>Jahr</th><th>Brutto</th><th>Netto</th><th>Steuern</th><th>Sozialabgaben</th><th>AG-Kosten</th><th>Gesamtwert</th><th>Real seit Start</th></tr></thead><tbody>${rows.map(([year,p])=>`<tr><td>${year}</td><td>${heuro.format(p.contractualGrossAnnual)}</td><td>${heuro.format(p.estimatedCashNetAnnual)}</td><td>${heuro.format(p.taxesAnnual)}</td><td>${heuro.format(p.socialInsuranceAnnual)}</td><td>${heuro.format(p.employerTotalCostAnnual)}</td><td>${heuro.format(p.fullWorthCompensationValueAnnual)}</td><td class="${p.realChangeFromBaselinePercent>=0?'positive':'negative'}">${signedPct(p.realChangeFromBaselinePercent)}</td></tr>`).join('')}</tbody></table>`;
+  // The two income columns are added only when the space actually has other-income records.
+  const withOther=hasOtherIncome(timeline);
+  const extraHead=withOther?'<th>Sonstige Einkünfte</th><th>Persönlich verfügbar</th>':'';
+  const extraCells=p=>withOther?`<td>${heuro.format(p.otherRegularIncomeAnnual)}</td><td>${heuro.format(p.personallyAvailableTotalIncomeAnnual)}</td>`:'';
+  root.innerHTML=`<table class="history-years"><thead><tr><th>Jahr</th><th>Brutto</th><th>Netto</th><th>Steuern</th><th>Sozialabgaben</th><th>AG-Kosten</th><th>Gesamtwert</th>${extraHead}<th>Real seit Start</th></tr></thead><tbody>${rows.map(([year,p])=>`<tr><td>${year}</td><td>${heuro.format(p.contractualGrossAnnual)}</td><td>${heuro.format(p.estimatedCashNetAnnual)}</td><td>${heuro.format(p.taxesAnnual)}</td><td>${heuro.format(p.socialInsuranceAnnual)}</td><td>${heuro.format(p.employerTotalCostAnnual)}</td><td>${heuro.format(p.fullWorthCompensationValueAnnual)}</td>${extraCells(p)}<td class="${p.realChangeFromBaselinePercent>=0?'positive':'negative'}">${signedPct(p.realChangeFromBaselinePercent)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function historyDeltaHtml(delta){
