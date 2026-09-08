@@ -45,9 +45,7 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "ui/dialog.js",
-            // Legacy migration allow-list. This list may only shrink.
-            "features/wealth-specialized-assets.js"
+            "ui/dialog.js"
         };
 
         AssertNoNewViolations(
