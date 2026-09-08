@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using FullWorth.Backend.Modules.Intelligence;
 
 namespace FullWorth.Backend.Modules.Contracts;
 
@@ -57,7 +58,7 @@ public sealed record ContractMergePreviewOutcome(
 /// Read-only deterministic preview for an existing ContractStore merge. This service never changes
 /// contract rows, links, transactions, or MergedIntoContractId.
 /// </summary>
-public sealed class ContractMergePreviewService(ContractStore store)
+public sealed class ContractMergePreviewService(ContractStore store, AutopilotRolloutSettings rollout)
 {
     public async Task<ContractMergePreviewOutcome> PreviewAsync(
         Guid userId,
@@ -73,7 +74,7 @@ public sealed class ContractMergePreviewService(ContractStore store)
             return new(ContractMergePreviewResult.Invalid, Error: "Select at least two contracts.");
 
         var contracts = new List<(ContractView Contract, ContractActivity? Activity)>();
-        var executionEnabled = true;
+        var executionEnabled = rollout.IsOn(AutopilotFeatures.ContractMergeExecution);
         foreach (var id in ids)
         {
             var contract = await store.GetForUserAsync(userId, fullWorthSpaceId, id, ct);
