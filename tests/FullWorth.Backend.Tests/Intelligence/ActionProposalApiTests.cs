@@ -136,6 +136,12 @@ public sealed class ActionProposalApiTests
                    new { handler = "arbitrary-url-handler", payload = new { url = "/api/transactions" } })))
             Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
 
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var intelligenceDb = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
+            Assert.Empty(await intelligenceDb.ActionProposals.AsNoTracking().ToListAsync());
+        }
+
         var created = await CreateProposalAsync(client, s, new
         {
             handler = ActionProposalHandlerNames.TransactionCategoryChange,
