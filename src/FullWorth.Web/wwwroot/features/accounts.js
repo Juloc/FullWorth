@@ -921,10 +921,6 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   await loadCountry();
 }
 
-if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
-initResizableSidebar();
-syncResponsiveSidebar();
-boot();
 
 export function bindAccounts(context) {
   use(context);
