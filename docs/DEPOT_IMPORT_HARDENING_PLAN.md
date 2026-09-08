@@ -1,6 +1,6 @@
 # Depot Import Hardening Plan
 
-Status: implementation branch `feat/depot-import-hardening`
+Status: merged to main (PR #27 "Harden depot imports with rollback and reconciliation" + follow-ups). Sections 1–5 — import history/exact rollback, portfolio reconciliation, transaction/corporate-action semantics, review UX and regression coverage — are shipped; regression tests live in `tests/FullWorth.Backend.Tests/Api/InvestmentImportRegressionTests.cs`. Retained as the design reference.
 
 ## Goal
 

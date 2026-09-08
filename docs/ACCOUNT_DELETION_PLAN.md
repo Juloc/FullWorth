@@ -1,6 +1,6 @@
 # Account deletion and recovery plan
 
-Status: planned
+Status: implemented on main — 7-day pending-deletion flow, reactivation, scheduled final purge worker, finance-data purge rules and the purge-manifest safety guard are all shipped (`src/FullWorth.Web/Modules/Auth/AccountDeletionService.cs`, `AccountDeletionPurgeWorker.cs`, `src/FullWorth.Backend/Modules/Users/AccountPurgeService.cs` + `PersonalDataPurgeManifest.cs`). This document is retained as the design reference.
 Scope: generic FullWorth core feature. No hosted-operator identity or private deployment data belongs here.
 
 ## Goal
