@@ -1,9 +1,9 @@
 import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
-import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
+import { sectionCard, trendBadge, esc, identityIcon } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
-import { MoneyVariant, moneyClass } from '../ui/money.js';
+import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?"), an allocation card
@@ -651,9 +651,21 @@ function renderAccounts(accounts) {
   for (const [institution, list] of groups) {
     const head = document.createElement('div'); head.className = 'row-group'; head.textContent = institution; frag.appendChild(head);
     for (const account of list) {
-      const row = document.createElement('div'); row.className = 'row';
+      const row = document.createElement('div'); row.className = 'row is-drillable';
+      row.dataset.accountId = account.id;
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
       const balance = account.latestBalance ? ctx.money(account.latestBalance.amount, account.latestBalance.currency) : '—';
-      row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div></div><div class="amount">${balance}</div>`;
+      const sub = [account.product || account.accountType || '', maskIdentifier(account.ibanLast4)].filter(Boolean).join(' · ');
+      row.innerHTML = `<span class="tx-ident-slot">${identityIcon(account.displayName || account.institutionName, {})}</span><div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div>${sub ? `<div class="row-sub">${ctx.esc(sub)}</div>` : ''}</div><div class="${moneyClass(MoneyVariant.Neutral)}">${balance}</div>`;
+      const open = event => {
+        if (event?.target?.closest?.('button,a,input,select')) return;
+        ctx.navScope('transactions', 'accountId=' + encodeURIComponent(account.id));
+      };
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); }
+      });
       frag.appendChild(row);
     }
   }
