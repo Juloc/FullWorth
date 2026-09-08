@@ -9,7 +9,6 @@ namespace FullWorth.Backend.Modules.Intelligence.Signals;
 public sealed class FinancialDomainSignalDetectionService(
     TransferDetectionService transfers,
     ContractDetectionService contracts,
-    ContractStore contractStore,
     ContractContinuityDetectionService continuity,
     PriceChangeStore priceChanges,
     IOptions<PriceChangeDetectionOptions> priceChangeOptions,
@@ -31,10 +30,17 @@ public sealed class FinancialDomainSignalDetectionService(
         var transferSignals = await DetectTransfersAsync(userId, fullWorthSpaceId, now, ct);
         total += await PersistSourceAsync(userId, fullWorthSpaceId, TransferSource, transferSignals, now, ct);
 
-        var accountChangeSignals = await DetectContractAccountChangesAsync(userId, fullWorthSpaceId, now, ct);
+        var recurrenceCandidates = await contracts.DetectForUserAsync(userId, fullWorthSpaceId, ct) ?? [];
+        var relationships = await continuity.DetectRelationshipsForUserAsync(
+            userId,
+            fullWorthSpaceId,
+            recurrenceCandidates,
+            ct);
+
+        var accountChangeSignals = MapContractAccountChanges(userId, fullWorthSpaceId, relationships.AccountChanges, now);
         total += await PersistSourceAsync(userId, fullWorthSpaceId, ContractAccountChangeSource, accountChangeSignals, now, ct);
 
-        var continuitySignals = await DetectContractContinuityAsync(userId, fullWorthSpaceId, now, ct);
+        var continuitySignals = MapContractContinuity(userId, fullWorthSpaceId, relationships.Continuity, now);
         total += await PersistSourceAsync(userId, fullWorthSpaceId, ContractContinuitySource, continuitySignals, now, ct);
 
         var priceSignals = await DetectPriceChangesAsync(userId, fullWorthSpaceId, now, ct);
@@ -109,99 +115,48 @@ public sealed class FinancialDomainSignalDetectionService(
             .ToList();
     }
 
-    private async Task<IReadOnlyList<DetectedFinancialSignal>> DetectContractAccountChangesAsync(
+    private static IReadOnlyList<DetectedFinancialSignal> MapContractAccountChanges(
         Guid userId,
         Guid fullWorthSpaceId,
-        DateTimeOffset now,
-        CancellationToken ct)
-    {
-        var candidates = await contracts.DetectForUserAsync(userId, fullWorthSpaceId, ct);
-        if (candidates is null || candidates.Count == 0) return [];
+        IReadOnlyList<ContractPaymentAccountChangeCandidate> candidates,
+        DateTimeOffset now) =>
+        candidates.Select(candidate => Create(
+            userId,
+            fullWorthSpaceId,
+            "contract-account-change",
+            "contract",
+            candidate.ContractId.ToString("N"),
+            $"contract-account-change:{candidate.ContractId:N}:{candidate.NewerAccountId:N}",
+            ContractAccountChangeSource,
+            FinancialSignalSeverities.Attention,
+            candidate.Confidence,
+            null,
+            candidate.Currency,
+            "insights.contract.paymentAccountChanged",
+            new
+            {
+                contractId = candidate.ContractId,
+                provider = candidate.Provider,
+                oldAccountId = candidate.OlderAccountId,
+                newAccountId = candidate.NewerAccountId,
+                candidate.OlderLastPayment,
+                candidate.NewerFirstPayment,
+                candidate.OlderAmount,
+                candidate.NewerAmount,
+                candidate.Currency,
+                candidate.BillingCycle,
+                candidate.Interval,
+                candidate.Confidence
+            },
+            now,
+            now.AddDays(45))).ToList();
 
-        var existing = await contractStore.ListForUserAsync(userId, fullWorthSpaceId, ct);
-        if (existing.Count == 0) return [];
-
-        var result = new List<DetectedFinancialSignal>();
-        foreach (var candidate in candidates
-                     .Where(x => x.AccountId.HasValue)
-                     .OrderByDescending(x => x.Confidence)
-                     .ThenByDescending(x => x.LastPaymentDate))
-        {
-            var identity = ContractIdentity.Normalize(candidate.Counterparty);
-            var currency = candidate.Currency.Trim().ToUpperInvariant();
-
-            // If a root contract already exists on the newly observed account, this is the duplicate-row
-            // case handled by ContractContinuityDetectionService instead of an account-change proposal.
-            var alreadyOnNewAccount = existing.Any(contract =>
-                contract.AccountId == candidate.AccountId &&
-                string.Equals(contract.Currency, currency, StringComparison.OrdinalIgnoreCase) &&
-                ContractIdentity.Normalize(contract.ProviderName ?? contract.Name) == identity);
-            if (alreadyOnNewAccount) continue;
-
-            var match = existing
-                .Where(contract =>
-                    contract.AccountId.HasValue &&
-                    contract.AccountId != candidate.AccountId &&
-                    string.Equals(contract.Currency, currency, StringComparison.OrdinalIgnoreCase) &&
-                    ContractIdentity.Normalize(contract.ProviderName ?? contract.Name) == identity &&
-                    string.Equals(
-                        (contract.BillingCycle ?? "monthly").Trim(),
-                        candidate.BillingCycle.Trim(),
-                        StringComparison.OrdinalIgnoreCase) &&
-                    Math.Max(1, contract.Interval) == Math.Max(1, candidate.Interval) &&
-                    AmountsCompatible(contract.Amount, candidate.TypicalAmount))
-                .OrderBy(contract => contract.CreatedAt)
-                .FirstOrDefault();
-            if (match is null) continue;
-
-            result.Add(Create(
-                userId,
-                fullWorthSpaceId,
-                "contract-account-change",
-                "contract",
-                match.Id.ToString("N"),
-                $"contract-account-change:{match.Id:N}:{candidate.AccountId!.Value:N}",
-                ContractAccountChangeSource,
-                FinancialSignalSeverities.Attention,
-                Math.Max(.80m, candidate.Confidence),
-                null,
-                currency,
-                "insights.contract.paymentAccountChanged",
-                new
-                {
-                    contractId = match.Id,
-                    contractName = match.Name,
-                    provider = candidate.Counterparty,
-                    oldAccountId = match.AccountId,
-                    newAccountId = candidate.AccountId,
-                    candidate.TypicalAmount,
-                    candidate.Currency,
-                    candidate.BillingCycle,
-                    candidate.Interval,
-                    candidate.LastPaymentDate,
-                    candidate.NextDueDate,
-                    candidate.Samples,
-                    candidate.Confidence
-                },
-                now,
-                now.AddDays(45)));
-        }
-
-        return result
-            .GroupBy(x => x.SemanticKey, StringComparer.Ordinal)
-            .Select(group => group.OrderByDescending(x => x.Confidence).First())
-            .Take(20)
-            .ToList();
-    }
-
-    private async Task<IReadOnlyList<DetectedFinancialSignal>> DetectContractContinuityAsync(
+    private static IReadOnlyList<DetectedFinancialSignal> MapContractContinuity(
         Guid userId,
         Guid fullWorthSpaceId,
-        DateTimeOffset now,
-        CancellationToken ct)
-    {
-        var candidates = await continuity.DetectForUserAsync(userId, fullWorthSpaceId, ct);
-        return candidates.Select(candidate =>
+        IReadOnlyList<ContractContinuityCandidate> candidates,
+        DateTimeOffset now) =>
+        candidates.Select(candidate =>
         {
             var first = candidate.OlderContractId.CompareTo(candidate.NewerContractId) <= 0
                 ? candidate.OlderContractId
@@ -242,7 +197,6 @@ public sealed class FinancialDomainSignalDetectionService(
                 now,
                 now.AddDays(60));
         }).ToList();
-    }
 
     private async Task<IReadOnlyList<DetectedFinancialSignal>> DetectPriceChangesAsync(
         Guid userId,
@@ -293,14 +247,6 @@ public sealed class FinancialDomainSignalDetectionService(
                 now,
                 now.AddDays(45));
         }).ToList();
-    }
-
-    private static bool AmountsCompatible(decimal left, decimal right)
-    {
-        var a = Math.Abs(left);
-        var b = Math.Abs(right);
-        var baseline = Math.Max(a, b);
-        return baseline > 0m && Math.Abs(a - b) / baseline <= .20m;
     }
 
     private async Task<int> PersistSourceAsync(
