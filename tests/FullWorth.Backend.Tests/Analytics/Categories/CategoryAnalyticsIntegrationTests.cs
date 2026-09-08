@@ -71,6 +71,28 @@ public sealed class CategoryAnalyticsIntegrationTests
     }
 
     [Fact]
+    public async Task ExactMonthRangeUsesCompletedPriorMonthsForAverages()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/categories?fullWorthSpaceId={scenario.Space}&from=2026-08-01&to=2026-08-31&granularity=month", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var groceries = json.RootElement.GetProperty("categories").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "Groceries");
+
+        Assert.Equal(100m, groceries.GetProperty("current").GetDecimal());
+        Assert.Equal(60m, groceries.GetProperty("previous").GetDecimal());
+        Assert.Equal(40m, groceries.GetProperty("average3").GetDecimal());
+        Assert.Equal(20m, groceries.GetProperty("average6").GetDecimal());
+        Assert.Equal(10m, groceries.GetProperty("average12").GetDecimal());
+    }
+
+    [Fact]
     public async Task SpaceMemberWithoutAccountOwnership_SeesNoSpend()
     {
         using var factory = new BackendWebApplicationFactory();
