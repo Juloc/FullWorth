@@ -1,4 +1,7 @@
+import { emitAppEvent } from '../core/event-bus.js';
+
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
+let dashboardRenderVersion = 0;
 
 function pick(value, ...keys) {
   if (!value || typeof value !== 'object') return undefined;
@@ -102,6 +105,7 @@ function unavailable(ctx, isError) {
 }
 
 export async function renderDashboardInsights(ctx) {
+  const renderVersion = ++dashboardRenderVersion;
   const root = ctx.$('#dashboard-insights');
   if (!root) return;
   root.hidden = false;
@@ -109,7 +113,9 @@ export async function renderDashboardInsights(ctx) {
   let signals;
   try {
     signals = await load(ctx, 'current', 3);
+    if (renderVersion !== dashboardRenderVersion) return;
   } catch (error) {
+    if (renderVersion !== dashboardRenderVersion) return;
     if (error?.status === 404) {
       root.hidden = true; root.innerHTML = ''; root.onclick = null; return;
     }
@@ -135,14 +141,18 @@ export async function mountInsights(ctx) {
   if (!root) return;
   const controller = new AbortController();
   let view = 'current', signals = [];
+  let renderVersion = 0;
 
   const render = async () => {
+    const version = ++renderVersion;
     root.innerHTML = surface(ctx, view, null, true);
     try {
-      signals = await load(ctx, view, 100, controller.signal);
-      if (!controller.signal.aborted) root.innerHTML = surface(ctx, view, signals, false);
+      const result = await load(ctx, view, 100, controller.signal);
+      if (controller.signal.aborted || version !== renderVersion) return;
+      signals = result;
+      root.innerHTML = surface(ctx, view, signals, false);
     } catch (error) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || version !== renderVersion) return;
       root.innerHTML = '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div>' + unavailable(ctx, error?.status !== 404) + '</div>';
     }
   };
@@ -214,7 +224,13 @@ function openDetail(ctx, initialSignal, refresh) {
     }
   };
 
-  dlg.querySelector('[data-open-target]')?.addEventListener('click', () => { dlg.close(); ctx.showView(targetView(signal)); });
+  dlg.querySelector('[data-open-target]')?.addEventListener('click', async () => {
+    dlg.close();
+    const view = targetView(signal);
+    await ctx.showView(view, { query: '' });
+    if (signal.subjectType === 'contract') emitAppEvent('contract:open', { id: signal.subjectId });
+    if (signal.subjectType === 'budget') emitAppEvent('budget:open', { id: signal.subjectId });
+  });
   dlg.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
     const action = button.dataset.action;
     let payload;
