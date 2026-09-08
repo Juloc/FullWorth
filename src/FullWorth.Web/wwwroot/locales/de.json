@@ -750,7 +750,11 @@
     "syncRunning": "Eine Synchronisierung läuft bereits.",
     "syncCooldown": "Die Bank hat das Limit erreicht. Bitte später erneut versuchen.",
     "syncReauth": "Die Freigabe ist abgelaufen. Bitte verbinde die Bank neu.",
-    "reconnect": "Neu verbinden"
+    "reconnect": "Neu verbinden",
+    "moreActions": "Weitere Aktionen",
+    "askCoach": "Coach fragen",
+    "editVisual": "Icon & Darstellung",
+    "rename": "Konto umbenennen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
