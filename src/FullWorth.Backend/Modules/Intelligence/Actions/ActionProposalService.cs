@@ -105,6 +105,20 @@ public sealed class ActionProposalService(
         if (mapped is not null) return mapped;
 
         ApplyPreview(proposal, preview);
+        if (preview.AlreadyApplied)
+        {
+            MarkExecuted(proposal, new { alreadyApplied = true });
+            intelligenceDb.ActionProposals.Add(proposal);
+            IntelligenceAuditWriter.Record(
+                intelligenceDb,
+                userId,
+                "action_proposal.reconciled",
+                nameof(ActionProposal),
+                proposal.Id);
+            await intelligenceDb.SaveChangesAsync(ct);
+            return new(ActionProposalOperationResult.Success, ToView(proposal), AlreadyApplied: true);
+        }
+
         intelligenceDb.ActionProposals.Add(proposal);
         IntelligenceAuditWriter.Record(
             intelligenceDb,
@@ -186,6 +200,19 @@ public sealed class ActionProposalService(
         if (mapped is not null) return mapped;
 
         ApplyPreview(proposal, preview);
+        if (preview.AlreadyApplied)
+        {
+            MarkExecuted(proposal, new { alreadyApplied = true });
+            IntelligenceAuditWriter.Record(
+                intelligenceDb,
+                userId,
+                "action_proposal.reconciled",
+                nameof(ActionProposal),
+                proposal.Id);
+            await intelligenceDb.SaveChangesAsync(ct);
+            return new(ActionProposalOperationResult.Success, ToView(proposal), AlreadyApplied: true);
+        }
+
         proposal.UpdatedAt = DateTimeOffset.UtcNow;
         proposal.Version++;
         IntelligenceAuditWriter.Record(
@@ -195,7 +222,7 @@ public sealed class ActionProposalService(
             nameof(ActionProposal),
             proposal.Id);
         await intelligenceDb.SaveChangesAsync(ct);
-        return new(ActionProposalOperationResult.Success, ToView(proposal), preview.AlreadyApplied);
+        return new(ActionProposalOperationResult.Success, ToView(proposal));
     }
 
     public async Task<ActionProposalOperationOutcome> ExecuteAsync(
