@@ -16,7 +16,7 @@ const TYPES = [
   ['other', 'Sonstiger Rabatt', 'Other discount']
 ];
 
-export async function mountPurchaseDiscountActions({ dlg, purchase, writable, api, esc, makeDialog, money, showError, refresh }) {
+export async function mountPurchaseDiscountActions({ dlg, purchase, writable, api, esc, makeDialog, money, showError, refresh, confirmAction }) {
   const side = dlg?.querySelector('.pa-work-side');
   if (!side || side.querySelector('[data-pa-discounts-card]')) return;
 
@@ -52,7 +52,7 @@ export async function mountPurchaseDiscountActions({ dlg, purchase, writable, ap
     card.querySelectorAll('[data-discount-edit]').forEach(button => button.addEventListener('click', () =>
       openEditor(rows.find(row => String(row.id) === button.dataset.discountEdit) || null)));
     card.querySelectorAll('[data-discount-delete]').forEach(button => button.addEventListener('click', async () => {
-      if (!window.confirm(text('Rabatt wirklich löschen? Der Kauf wird wieder auf „Zu prüfen“ gesetzt.', 'Delete this discount? The purchase will return to needs-review.'))) return;
+      if (!await confirmAction(text('Rabatt wirklich löschen? Der Kauf wird wieder auf „Zu prüfen“ gesetzt.', 'Delete this discount? The purchase will return to needs-review.'))) return;
       try {
         await api(`api/purchases/${purchase.id}/discounts/${button.dataset.discountDelete}`, { method: 'DELETE' });
         await refresh();
