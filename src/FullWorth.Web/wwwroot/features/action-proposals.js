@@ -133,7 +133,7 @@ export async function mountTransferActionProposal(ctx, signal, target, detailDia
       } catch (error) {
         if (!target.isConnected) return;
         if (error?.status === 409) {
-          const bodyProposal = error?.body?.proposal || error?.data?.proposal;
+          const bodyProposal = error?.detail?.proposal;
           if (bodyProposal) proposal = bodyProposal;
           target.innerHTML = staleHtml(ctx);
           target.querySelector('[data-action-proposal-review]')?.addEventListener('click', async () => {
