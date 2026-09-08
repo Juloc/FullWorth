@@ -87,6 +87,10 @@
     "settings": {
       "title": "Einstellungen",
       "subtitle": "Darstellung, Sprache, Privatsphäre und Sicherheit"
+    },
+    "insights": {
+      "title": "Wichtig für dich",
+      "subtitle": "Erkannte Veränderungen und offene Punkte"
     }
   },
   "dashboard": {
@@ -1117,5 +1121,77 @@
     "disabled": "2FA deaktiviert",
     "enabledToast": "2FA aktiviert",
     "invalidCode": "Der Code ist nicht gültig."
+  },
+  "insights": {
+    "title": "Wichtig für dich",
+    "subtitle": "Deterministische Hinweise direkt aus deinen FullWorth-Daten.",
+    "important": "Wichtig für dich",
+    "dashboardHint": "Veränderungen und offene Punkte, die FullWorth erkannt hat.",
+    "showAll": "Alle anzeigen",
+    "generic": "Finanzhinweis",
+    "filterLabel": "Status der Hinweise",
+    "tabs": {
+      "current": "Aktuell",
+      "completed": "Erledigt",
+      "hidden": "Ausgeblendet"
+    },
+    "emptyTitle": "Alles im Blick",
+    "emptyCurrent": "Gerade gibt es nichts, das deine Aufmerksamkeit braucht.",
+    "emptyCompleted": "Noch keine erledigten Hinweise.",
+    "emptyHidden": "Keine ausgeblendeten oder pausierten Hinweise.",
+    "unavailable": "Hinweise sind derzeit deaktiviert.",
+    "loadError": "Hinweise konnten nicht geladen werden.",
+    "state": {
+      "dismissed": "Ausgeblendet",
+      "snoozed": "Pausiert",
+      "completed": "Erledigt",
+      "read": "Gelesen",
+      "new": "Neu"
+    },
+    "detected": "Erkannt",
+    "manage": "Verwalten",
+    "markRead": "Als gelesen markieren",
+    "dismiss": "Ausblenden",
+    "snooze": "Später erinnern",
+    "snooze1": "1 Tag",
+    "snooze7": "7 Tage",
+    "snooze30": "30 Tage",
+    "feedback": "War dieser Hinweis hilfreich?",
+    "useful": "Hilfreich",
+    "irrelevant": "Nicht relevant",
+    "feedbackSaved": "Feedback gespeichert.",
+    "openAffected": "Betroffenen Bereich öffnen",
+    "impact": "Auswirkung",
+    "uncategorizedCount": "{count} von {total} letzten Buchungen sind nicht kategorisiert.",
+    "accountChangeSummary": "Der Zahlungsverlauf setzt sich wahrscheinlich auf einem anderen Konto fort.",
+    "continuitySummary": "Die nicht überlappenden Zahlungsverläufe sehen wie ein Vertrag aus.",
+    "dataIncompleteSummary": "Einige Finanzdaten sind noch nicht vollständig.",
+    "spending": {
+      "totalIncreased": "Deine Ausgaben sind deutlich gestiegen",
+      "totalDecreased": "Deine Ausgaben sind deutlich gesunken",
+      "categoryIncreased": "Eine Kategorie ist deutlich gestiegen",
+      "merchantIncreased": "Bei einem Händler gibst du deutlich mehr aus"
+    },
+    "budget": {
+      "over": "Ein Budget ist überschritten",
+      "projectedOver": "Ein Budget könnte überschritten werden"
+    },
+    "savings": {
+      "decreased": "Dein monatlicher Überschuss ist gesunken",
+      "increased": "Dein monatlicher Überschuss ist gestiegen"
+    },
+    "data": {
+      "incomplete": "Deine Finanzdaten sind noch nicht vollständig",
+      "uncategorizedRecent": "Mehrere neue Buchungen sind nicht kategorisiert"
+    },
+    "transfer": {
+      "candidate": "Diese Buchungen könnten eine Umbuchung sein"
+    },
+    "contract": {
+      "paymentAccountChanged": "Ein Vertrag scheint das Zahlungskonto gewechselt zu haben",
+      "possibleDuplicate": "Zwei Verträge könnten derselbe Vertrag sein",
+      "priceIncreased": "Ein Vertrag ist teurer geworden",
+      "priceDecreased": "Ein Vertrag ist günstiger geworden"
+    }
   }
 }
