@@ -172,7 +172,8 @@ public sealed class FrontendArchitectureGuardTests
         Assert.DoesNotContain("fwNavScope", accounts);
         Assert.Contains("apiClient.backend", accounts);
         Assert.Contains("navigate(", accounts);
-        Assert.Contains("onAppEvent(", accounts);
+        Assert.Contains("bindAccountsPresentation", accounts);
+        Assert.DoesNotContain("onAppEvent(", accounts);
     }
 
     [Fact]
