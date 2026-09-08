@@ -105,7 +105,7 @@ jobs:
 
   build-arm64:
     name: ARM64 · ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
@@ -150,10 +150,6 @@ jobs:
             fi
             echo EOF
           } >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - uses: docker/setup-buildx-action@v3
 
