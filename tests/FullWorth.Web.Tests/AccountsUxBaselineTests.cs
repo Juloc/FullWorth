@@ -27,6 +27,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         var appIndex = html.IndexOf("/app.js", StringComparison.Ordinal);
         Assert.True(uxIndex >= 0 && appIndex > uxIndex, "Accounts UX must load before app.js so deep links are captured before boot.");
 
+        Assert.Contains("/features/accounts.js", sw);
         Assert.Contains("/features/accounts-ux.js", sw);
         Assert.Contains("/features/accounts-ux.css", sw);
     }
