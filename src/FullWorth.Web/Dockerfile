@@ -13,7 +13,7 @@ COPY src/FullWorth.Backend/ src/FullWorth.Backend/
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
-RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -o /app --no-restore -m:1 /p:BuildInParallel=false /p:UseAppHost=false
+RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -o /app --no-restore /p:UseAppHost=false
 
 # The unified image includes the backend's browser/OCR runtime so Amazon, receipt and PDF features
 # keep working after Web + Backend + Banking move into one process.
