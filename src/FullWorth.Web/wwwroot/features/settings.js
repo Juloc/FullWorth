@@ -1,4 +1,5 @@
 import { state } from '../core/state.js';
+import { secureFetch } from '../security/secure-fetch.js';
 import { createDialog } from '../ui/dialog.js';
 import { openPinDialog } from '../ui/lock.js';
 import { privacyDefault, setPrivacyDefault } from '../ui/privacy.js';
@@ -39,7 +40,7 @@ async function openDeleteAccountDialog(ctx) {
     submit.disabled = true;
     error.hidden = true;
     try {
-      const response = await fetch('/auth/account-deletion/request', {
+      const response = await secureFetch('/auth/account-deletion/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword: password })
@@ -66,7 +67,7 @@ async function openDeleteAccountDialog(ctx) {
 async function openTwoFactorDialog(ctx) {
   let status;
   try {
-    status = await fetch('/auth/two-factor/status', { cache: 'no-store' })
+    status = await secureFetch('/auth/two-factor/status', { cache: 'no-store' })
       .then(response => response.ok ? response.json() : Promise.reject());
   } catch {
     ctx.toast(ctx.get('common.error'));
@@ -85,7 +86,7 @@ async function openTwoFactorDialog(ctx) {
     dlg.querySelector('form').addEventListener('submit', async event => {
       event.preventDefault();
       const code = dlg.querySelector('#two-factor-disable-code').value;
-      const response = await fetch('/auth/two-factor/disable', {
+      const response = await secureFetch('/auth/two-factor/disable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
@@ -104,7 +105,7 @@ async function openTwoFactorDialog(ctx) {
 
   let setup;
   try {
-    const response = await fetch('/auth/two-factor/setup', { method: 'POST' });
+    const response = await secureFetch('/auth/two-factor/setup', { method: 'POST' });
     if (!response.ok) throw new Error();
     setup = await response.json();
   } catch {
@@ -124,7 +125,7 @@ async function openTwoFactorDialog(ctx) {
   dlg.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
     const code = dlg.querySelector('#two-factor-enable-code').value;
-    const response = await fetch('/auth/two-factor/enable', {
+    const response = await secureFetch('/auth/two-factor/enable', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code })
