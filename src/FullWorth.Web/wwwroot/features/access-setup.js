@@ -98,7 +98,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '<div class="row-sub">' + esc(detail) + '</div></div></div>' +
         '<p class="row-sub">' + esc(get('aiAccess.secretHidden')) + '</p>' +
         '<div class="dialog-actions">' +
-          '<button type="button" class="ghost danger" data-remove>' + esc(get('aiAccess.remove')) + '</button>' +
+          '<button type="button" class="btn btn-danger" data-remove>' + esc(get('aiAccess.remove')) + '</button>' +
           '<button type="button" data-test>' + esc(get('aiAccess.test')) + '</button>' +
           '<button type="button" data-change>' + esc(get('aiAccess.change')) + '</button>' +
           '<button type="button" data-done>' + esc(get('common.close')) + '</button>' +
@@ -427,7 +427,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
             : get('onboarding.notConfigured')) +
         '</div>' +
         '<div class="dialog-actions">' +
-          '<button type="button" class="ghost" data-setup>' +
+          '<button type="button" class="btn btn-secondary" data-setup>' +
             esc(ai?.configured ? get('aiAccess.change') : get('onboarding.configure')) +
           '</button>' +
           '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
@@ -457,7 +457,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '</div>' +
         '<div class="dialog-actions">' +
           '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
-          '<button type="button" class="ghost" data-setup>' +
+          '<button type="button" class="btn btn-secondary" data-setup>' +
             esc(configured ? get('bankingSetup.manage') : get('onboarding.configure')) +
           '</button>' +
           '<button type="button" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
