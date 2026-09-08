@@ -115,7 +115,11 @@ public sealed class FinancialSignalApiTests
     [Fact]
     public async Task Insights_api_is_hidden_while_signals_run_in_shadow()
     {
-        using var factory = new BackendWebApplicationFactory();
+        using var factory = new BackendWebApplicationFactory(new Dictionary<string, string?>
+        {
+            [$"{AutopilotRolloutSettings.SectionName}:{AutopilotFeatures.Signals}"] = "shadow",
+            [$"{AutopilotRolloutSettings.SectionName}:{AutopilotFeatures.Insights}"] = "off"
+        });
         using var client = factory.CreateClient();
         var userId = Guid.NewGuid();
         await SeedMemberAsync(factory, userId);
