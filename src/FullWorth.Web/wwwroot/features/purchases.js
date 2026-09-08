@@ -169,7 +169,7 @@ async function openDetail(id) {
   const dlg = ctx.dialog(`<form class="dialog-card purchase-detail">
     <div class="panel-head"><h2>${ctx.esc(purchase.merchant || ctx.get('purchases.title'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="row-sub">${ctx.esc(ctx.date(purchase.purchaseDate))} · ${ctx.money(purchase.totalAmount, purchase.currency)}${purchase.externalOrderId ? ` · ${ctx.esc(purchase.externalOrderId)}` : ''}</div>
-    ${purchase.hasReceipt ? `<div class="reconcile-link"><button type="button" class="ghost" data-view-receipt>${ctx.esc(ctx.get('purchases.viewReceipt'))}</button></div>` : ''}
+    ${purchase.hasReceipt ? `<div class="reconcile-link"><button type="button" class="btn btn-secondary" data-view-receipt>${ctx.esc(ctx.get('purchases.viewReceipt'))}</button></div>` : ''}
     <div class="reconcile" data-reconcile></div>
     ${amazonBlock}
     <h3 class="notif-h">${ctx.esc(ctx.get('purchases.lineItems'))}</h3>
@@ -306,23 +306,23 @@ function amazonDetailsHtml(purchase, amazon) {
     const bankAmount = Math.abs(Number(p.amount || 0));
     const shared = Math.abs(allocation - bankAmount) > 0.01 ? ` · ${t('von', 'of')} ${ctx.money(bankAmount, purchase.currency)}` : '';
     const confidence = p.matchConfidence == null ? t('manuell', 'manual') : Math.round(Number(p.matchConfidence) * 100) + '%';
-    return `<div class="row" data-amazon-payment="${p.transactionId}"><div class="row-main"><div class="row-title">${ctx.esc(p.counterparty || 'Amazon')}</div><div class="row-sub">${ctx.esc(ctx.date(p.bookingDate))} · ${confidence}${shared}</div></div><div class="row-side"><span class="amount">${ctx.money(allocation, purchase.currency)}</span><button type="button" class="ghost" data-unlink-amazon-payment>${t('Lösen', 'Unlink')}</button></div></div>`;
+    return `<div class="row" data-amazon-payment="${p.transactionId}"><div class="row-main"><div class="row-title">${ctx.esc(p.counterparty || 'Amazon')}</div><div class="row-sub">${ctx.esc(ctx.date(p.bookingDate))} · ${confidence}${shared}</div></div><div class="row-side"><span class="amount">${ctx.money(allocation, purchase.currency)}</span><button type="button" class="btn btn-secondary" data-unlink-amazon-payment>${t('Lösen', 'Unlink')}</button></div></div>`;
   }).join('') : `<div class="row-sub">${t('Noch keine Bankbuchung zugeordnet.', 'No bank transaction linked yet.')}</div>`;
   const nonBank = Number(amazon.nonBankPaymentAmount || 0);
   const nonBankSource = amazon.nonBankPaymentSource === 'manual' ? t('manuell', 'manual') : t('Amazon erkannt', 'detected by Amazon');
   const refundRows = refunds.length ? refunds.map(r => {
     const confidence = r.matchConfidence == null ? '' : ` · ${Math.round(Number(r.matchConfidence) * 100)}%`;
     const action = r.transactionId
-      ? `<button type="button" class="ghost" data-unlink-amazon-refund>${t('Lösen', 'Unlink')}</button>`
-      : `<button type="button" class="ghost" data-link-amazon-refund>${t('Buchung verknüpfen', 'Link transaction')}</button>`;
+      ? `<button type="button" class="btn btn-secondary" data-unlink-amazon-refund>${t('Lösen', 'Unlink')}</button>`
+      : `<button type="button" class="btn btn-secondary" data-link-amazon-refund>${t('Buchung verknüpfen', 'Link transaction')}</button>`;
     return `<div data-amazon-refund="${r.id}"><div class="row"><div class="row-main"><div class="row-title">${ctx.esc(r.description || t('Amazon-Erstattung', 'Amazon refund'))}</div><div class="row-sub">${ctx.esc(ctx.date(r.refundDate))} · ${r.transactionId ? t('Bankbuchung verknüpft', 'Bank transaction linked') : t('Noch nicht verknüpft', 'Not linked yet')}${confidence}</div></div><div class="row-side"><span class="amount">${ctx.money(Number(r.amount || 0), r.currency || purchase.currency)}</span>${action}</div></div><div data-amazon-refund-candidates></div></div>`;
   }).join('') : `<div class="row-sub">${t('Keine Retouren oder Erstattungen erkannt.', 'No returns or refunds detected.')}</div>`;
   return `<section class="purchase-amazon" data-amazon-details>
     <h3 class="notif-h">Amazon</h3>
-    <div class="row"><div class="row-main"><div class="row-title">${ctx.esc(status)}</div><div class="row-sub">${ctx.esc(purchase.externalOrderId || '')}</div></div>${purchase.sourceReference ? `<a class="ghost" href="${ctx.esc(purchase.sourceReference)}" target="_blank" rel="noopener noreferrer">Amazon</a>` : ''}</div>
+    <div class="row"><div class="row-main"><div class="row-title">${ctx.esc(status)}</div><div class="row-sub">${ctx.esc(purchase.externalOrderId || '')}</div></div>${purchase.sourceReference ? `<a class="btn btn-secondary" href="${ctx.esc(purchase.sourceReference)}" target="_blank" rel="noopener noreferrer">Amazon</a>` : ''}</div>
     <div class="row-group">${t('Zahlungen', 'Payments')}</div>${paymentRows}
-    <div class="reconcile-link"><button type="button" class="ghost" data-add-amazon-payment>${t('Weitere Buchung verknüpfen', 'Link another transaction')}</button><div data-amazon-candidates></div></div>
-    <div class="row"><div class="row-main"><div class="row-title">${t('Guthaben / Geschenkgutschein', 'Balance / gift card')}</div><div class="row-sub">${nonBankSource}</div></div><div class="row-side"><input data-amazon-nonbank type="number" min="0" max="${Number(purchase.totalAmount || 0)}" step="0.01" value="${nonBank.toFixed(2)}"><button type="button" class="ghost" data-save-amazon-nonbank>${t('Speichern', 'Save')}</button></div></div>
+    <div class="reconcile-link"><button type="button" class="btn btn-secondary" data-add-amazon-payment>${t('Weitere Buchung verknüpfen', 'Link another transaction')}</button><div data-amazon-candidates></div></div>
+    <div class="row"><div class="row-main"><div class="row-title">${t('Guthaben / Geschenkgutschein', 'Balance / gift card')}</div><div class="row-sub">${nonBankSource}</div></div><div class="row-side"><input data-amazon-nonbank type="number" min="0" max="${Number(purchase.totalAmount || 0)}" step="0.01" value="${nonBank.toFixed(2)}"><button type="button" class="btn btn-secondary" data-save-amazon-nonbank>${t('Speichern', 'Save')}</button></div></div>
     <div class="row-group">${t('Retouren / Erstattungen', 'Returns / refunds')}</div>${refundRows}
   </section>`;
 }
@@ -345,7 +345,7 @@ function bindAmazonDetails(dlg, purchase) {
     try { candidates = (await ctx.api(`api/purchases/${purchase.id}/amazon-payment-candidates`)) || []; }
     catch (err) { box.innerHTML = `<div class="row-sub">${ctx.esc(err.message || ctx.get('common.error'))}</div>`; return; }
     if (!candidates.length) { box.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('purchases.noCandidates'))}</div>`; return; }
-    box.innerHTML = candidates.map((c, i) => `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round(Number(c.confidence || 0) * 100)}% · ${t('verfügbar', 'available')} ${ctx.money(c.availableAmount, purchase.currency)}</div></div><div class="row-side"><input data-allocation type="number" min="0.01" max="${Number(c.availableAmount || 0)}" step="0.01" value="${Number(c.suggestedAllocation || 0).toFixed(2)}"><button type="button" class="ghost" data-link-amazon-payment>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
+    box.innerHTML = candidates.map((c, i) => `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round(Number(c.confidence || 0) * 100)}% · ${t('verfügbar', 'available')} ${ctx.money(c.availableAmount, purchase.currency)}</div></div><div class="row-side"><input data-allocation type="number" min="0.01" max="${Number(c.availableAmount || 0)}" step="0.01" value="${Number(c.suggestedAllocation || 0).toFixed(2)}"><button type="button" class="btn btn-secondary" data-link-amazon-payment>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
     box.querySelectorAll('.candidate-row').forEach(row => row.querySelector('[data-link-amazon-payment]').addEventListener('click', async () => {
       const candidate = candidates[Number(row.dataset.i)];
       const allocatedAmount = Number(row.querySelector('[data-allocation]')?.value || 0);
@@ -373,7 +373,7 @@ function bindAmazonDetails(dlg, purchase) {
       try { candidates = (await ctx.api(`api/purchases/${purchase.id}/amazon-refunds/${refundId}/candidates`)) || []; }
       catch (err) { box.innerHTML = `<div class="row-sub">${ctx.esc(err.message || ctx.get('common.error'))}</div>`; return; }
       if (!candidates.length) { box.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('purchases.noCandidates'))}</div>`; return; }
-      box.innerHTML = candidates.map((c, i) => `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round(Number(c.confidence || 0) * 100)}%</div></div><div class="row-side"><span class="amount">${ctx.money(c.amount, purchase.currency)}</span><button type="button" class="ghost" data-confirm-amazon-refund>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
+      box.innerHTML = candidates.map((c, i) => `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round(Number(c.confidence || 0) * 100)}%</div></div><div class="row-side"><span class="amount">${ctx.money(c.amount, purchase.currency)}</span><button type="button" class="btn btn-secondary" data-confirm-amazon-refund>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
       box.querySelectorAll('.candidate-row').forEach(row => row.querySelector('[data-confirm-amazon-refund]').addEventListener('click', async () => {
         const candidate = candidates[Number(row.dataset.i)];
         try {
@@ -409,7 +409,7 @@ function renderReconcile(box, purchase, rec, dlg) {
 
   if (!purchase.transactionId && purchase.source !== 'amazon') {
     const linkBox = box.querySelector('[data-link]');
-    linkBox.innerHTML = `<button type="button" class="ghost" data-auto-link>${ctx.esc(ctx.get('purchases.autoLink'))}</button> <button type="button" class="ghost" data-load-candidates>${ctx.esc(ctx.get('purchases.linkTransaction'))}</button>`;
+    linkBox.innerHTML = `<button type="button" class="btn btn-secondary" data-auto-link>${ctx.esc(ctx.get('purchases.autoLink'))}</button> <button type="button" class="btn btn-secondary" data-load-candidates>${ctx.esc(ctx.get('purchases.linkTransaction'))}</button>`;
     linkBox.querySelector('[data-auto-link]').addEventListener('click', async () => {
       try {
         const res = await ctx.api(`api/purchases/${purchase.id}/auto-link`, { method: 'POST' });
@@ -424,7 +424,7 @@ function renderReconcile(box, purchase, rec, dlg) {
       catch (err) { linkBox.innerHTML = `<div class="row-sub">${ctx.esc(err.message || ctx.get('common.error'))}</div>`; return; }
       if (!candidates.length) { linkBox.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('purchases.noCandidates'))}</div>`; return; }
       linkBox.innerHTML = `<div class="row-group">${ctx.esc(ctx.get('purchases.candidates'))}</div>` + candidates.map((c, i) =>
-        `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round((c.confidence || 0) * 100)}%</div></div><div class="row-side"><span class="amount">${ctx.money(c.amount, cur)}</span><button type="button" class="ghost" data-link-btn>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
+        `<div class="row candidate-row" data-i="${i}"><div class="row-main"><div class="row-title">${ctx.esc(c.counterparty || c.description || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(c.bookingDate))} · ${Math.round((c.confidence || 0) * 100)}%</div></div><div class="row-side"><span class="amount">${ctx.money(c.amount, cur)}</span><button type="button" class="btn btn-secondary" data-link-btn>${ctx.esc(ctx.get('purchases.link'))}</button></div></div>`).join('');
       linkBox.querySelectorAll('.candidate-row').forEach(row => row.querySelector('[data-link-btn]').addEventListener('click', async () => {
         const c = candidates[Number(row.dataset.i)];
         try {
@@ -466,7 +466,7 @@ function renderAmazonConnectionBody(dlg, status) {
     const last = status.lastSuccessfulSyncAt ? new Date(status.lastSuccessfulSyncAt).toLocaleString() : t('Noch nie', 'Never');
     body.innerHTML = `<div class="row-sub">${t('Verbunden. Letzte erfolgreiche Synchronisierung:', 'Connected. Last successful sync:')} ${ctx.esc(last)}</div>
       ${status.lastError ? `<div class="row-sub negative">${ctx.esc(status.lastError)}</div>` : ''}
-      <div class="dialog-actions"><button type="button" class="ghost" data-disconnect>${t('Trennen', 'Disconnect')}</button><button type="button" class="ghost" data-sync-days="365">${t('1 Jahr', '1 year')}</button><button type="button" class="ghost" data-sync-days="36500">${t('Alle', 'All')}</button><button type="button" data-sync-days="90">${t('90 Tage synchronisieren', 'Sync 90 days')}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-disconnect>${t('Trennen', 'Disconnect')}</button><button type="button" class="btn btn-secondary" data-sync-days="365">${t('1 Jahr', '1 year')}</button><button type="button" class="btn btn-secondary" data-sync-days="36500">${t('Alle', 'All')}</button><button type="button" data-sync-days="90">${t('90 Tage synchronisieren', 'Sync 90 days')}</button></div>`;
     body.querySelectorAll('[data-sync-days]').forEach(button => button.addEventListener('click', () => runAmazonSync(dlg, Number(button.dataset.syncDays))));
     body.querySelector('[data-disconnect]').addEventListener('click', async () => {
       try { await ctx.api('api/purchases/amazon/connection', { method: 'DELETE' }); dlg.close(); await refreshAmazonButton(); }
