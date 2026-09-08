@@ -231,6 +231,39 @@ public sealed class ContractMergeTests
     }
 
     [Fact]
+    public async Task MergeExecutionKillSwitchHidesActionAndRejectsExecute()
+    {
+        using var factory = new BackendWebApplicationFactory(new Dictionary<string, string?>
+        {
+            [$"{FullWorth.Backend.Modules.Intelligence.AutopilotRolloutSettings.SectionName}:{FullWorth.Backend.Modules.Intelligence.AutopilotFeatures.ContractMergeExecution}"] = "off"
+        });
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var previewResponse = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        using var previewJson = JsonDocument.Parse(await previewResponse.Content.ReadAsStringAsync());
+        Assert.False(previewJson.RootElement.GetProperty("executionEnabled").GetBoolean());
+
+        using var execute = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new
+            {
+                contractIds = new[] { s.Target, s.Source },
+                canonicalContractId = previewJson.RootElement.GetProperty("canonicalContractId").GetGuid(),
+                previewToken = previewJson.RootElement.GetProperty("previewToken").GetString()
+            }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, execute.StatusCode);
+    }
+
+    [Fact]
     public async Task MergePreview_SelectsLatestPaymentAsCanonical_AndDoesNotMutateContracts()
     {
         using var factory = new BackendWebApplicationFactory();
