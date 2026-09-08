@@ -1223,6 +1223,24 @@
       "staleTitle": "Vorschau ist veraltet",
       "stale": "Vertragsdaten haben sich geändert. Lade vor dem Zusammenführen eine neue Vorschau.",
       "reload": "Vorschau aktualisieren"
+    },
+    "actionProposal": {
+      "section": "Vorgeschlagene Aktion",
+      "loading": "Aktion wird geprüft …",
+      "error": "Aktionsvorschau konnte nicht geladen werden.",
+      "staleTitle": "Vorschau ist veraltet",
+      "stale": "Die zugrunde liegenden Finanzdaten haben sich geändert. Prüfe die aktualisierte Vorschau.",
+      "review": "Aktualisierte Vorschau prüfen"
+    },
+    "transferAction": {
+      "title": "Mögliche Umbuchung",
+      "preview": "Beide Buchungen würden als eine interne Umbuchung verknüpft.",
+      "done": "Diese Buchungen sind bereits als Umbuchung verknüpft.",
+      "execute": "Als Umbuchung verknüpfen",
+      "confirmTitle": "Als Umbuchung verknüpfen?",
+      "confirm": "Umbuchung verknüpfen",
+      "confirmMessage": "Die Buchungen auf {first} und {second} als eine interne Umbuchung verknüpfen?",
+      "success": "Buchungen wurden als Umbuchung verknüpft."
     }
   }
 }
