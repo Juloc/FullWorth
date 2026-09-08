@@ -117,6 +117,35 @@ public sealed class AutopilotFrontendGuardTests
     }
 
     [Fact]
+    public void Deploy8TransferActionUsesOnlyGenericProposalApiAndSharedConfirmation()
+    {
+        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
+        var feature = File.ReadAllText(Path.Combine(WwwRoot(), "features", "action-proposals.js"));
+        var insights = File.ReadAllText(Path.Combine(WwwRoot(), "features", "insights.js"));
+        var cssPath = Path.Combine(WwwRoot(), "styles", "features", "action-proposals.css");
+        var serviceWorker = File.ReadAllText(Path.Combine(WwwRoot(), "sw.js"));
+
+        Assert.True(File.Exists(cssPath));
+        Assert.Contains("/styles/features/action-proposals.css", html);
+        Assert.Contains("mountTransferActionProposal", insights);
+        Assert.Contains("api/action-proposals", feature);
+        Assert.Contains("/execute", feature);
+        Assert.Contains("/preview", feature);
+        Assert.Contains("previewToken: proposal.previewToken", feature);
+        Assert.Contains("confirmDialog(ctx", feature);
+        Assert.Contains("handler: 'transfer-link'", feature);
+
+        Assert.DoesNotContain("api/transactions/", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("transfer-link", feature.Replace("handler: 'transfer-link'", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.DoesNotContain("/api/contract-parity/merge", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("window.confirm", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("fetch(", feature, StringComparison.Ordinal);
+
+        Assert.Contains("'/features/action-proposals.js'", serviceWorker);
+        Assert.Contains("'/styles/features/action-proposals.css'", serviceWorker);
+    }
+
+    [Fact]
     public void InsightFeatureDoesNotAppearInMoreOrPersistentNavigation()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
