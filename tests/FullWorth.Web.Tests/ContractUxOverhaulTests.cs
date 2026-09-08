@@ -40,7 +40,7 @@ public sealed class ContractUxOverhaulTests : IClassFixture<FullWorthWebFactory>
     public async Task ContractAnalysis_ContainsBudgetContextCategoriesAndHistory()
     {
         var js = await GetAsync("/features/contracts.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/components.css") + await GetAsync("/app.css");
 
         Assert.Contains("api/analytics/overview", js);
         Assert.Contains("contractAnalysisDonut", js);
