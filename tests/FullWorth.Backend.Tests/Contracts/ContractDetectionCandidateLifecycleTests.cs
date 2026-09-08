@@ -38,6 +38,70 @@ public sealed class ContractDetectionCandidateLifecycleTests
     }
 
     [Fact]
+    public async Task AcceptedCandidate_ReappearsWhenSameProviderMovesToNewPaymentAccount()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+        var path = $"/api/contracts/detection?fullWorthSpaceId={s.Space}";
+
+        using var before = await client.SendAsync(Request(HttpMethod.Get, path, s.Owner));
+        before.EnsureSuccessStatusCode();
+        var initial = await before.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var initialCandidate = Assert.Single(initial!);
+
+        using (var accept = Request(HttpMethod.Post, $"/api/contracts/detection/accept?fullWorthSpaceId={s.Space}", s.Owner))
+        {
+            accept.Content = JsonContent.Create(initialCandidate);
+            using var accepted = await client.SendAsync(accept);
+            Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        }
+
+        var newAccount = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await factory.SeedAsync(async db =>
+        {
+            db.Accounts.Add(new FinanceAccount
+            {
+                Id = newAccount,
+                FullWorthSpaceId = s.Space,
+                BankConnectionId = s.Connection,
+                Provider = "test",
+                IdentificationHash = $"detect-switch-{newAccount:N}",
+                ProviderAccountId = $"provider-{newAccount:N}",
+                InstitutionName = "Test Bank",
+                DisplayName = "Replacement account",
+                Currency = "EUR"
+            });
+            db.AccountOwners.Add(new AccountOwner
+            {
+                AccountId = newAccount,
+                UserId = s.Owner,
+                OwnershipType = AccountOwnershipTypes.Owner
+            });
+            db.Transactions.Add(new FinanceTransaction
+            {
+                AccountId = newAccount,
+                ExternalKey = "netflix-new-account",
+                Amount = -12.99m,
+                Currency = "EUR",
+                Counterparty = "NETFLIX",
+                NormalizedCounterparty = "netflix",
+                BookingDate = today,
+                CategorizationSource = "none"
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var after = await client.SendAsync(Request(HttpMethod.Get, path, s.Owner));
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var candidates = await after.Content.ReadFromJsonAsync<List<JsonElement>>();
+        var candidate = Assert.Single(candidates!);
+        Assert.Equal(newAccount, candidate.GetProperty("accountId").GetGuid());
+        Assert.Equal("netflix", candidate.GetProperty("counterparty").GetString());
+    }
+
+    [Fact]
     public async Task EquivalentProviderLegalSuffixes_AreShownAsOneCandidate()
     {
         using var factory = new BackendWebApplicationFactory();
