@@ -1,5 +1,6 @@
 import '../security/browser-fetch.js';
 import { decodeBase64Url, encodeBase64Url } from './base64url.js';
+import { confirmMessage } from '../ui/confirm.js';
 
 const endpoints = {
   loginBegin: '/auth/passkeys/login/begin',
@@ -184,7 +185,7 @@ export function initializePasskeyManagement({ root, message, locale = 'de' }) {
         remove.addEventListener('click', async event => {
           const button = event.currentTarget;
           const managementId = button.dataset.managementId;
-          if (!managementId || !window.confirm(message('passkeys.removeConfirm'))) return;
+          if (!managementId || !await confirmMessage({message:message('passkeys.removeConfirm'),title:message('passkeys.title'),confirmLabel:message('passkeys.remove'),cancelLabel:message('common.cancel'),destructive:true})) return;
           button.disabled = true;
           try {
             await requestJson(`${endpoints.credentials}/${encodeURIComponent(managementId)}`, { method: 'DELETE' });
