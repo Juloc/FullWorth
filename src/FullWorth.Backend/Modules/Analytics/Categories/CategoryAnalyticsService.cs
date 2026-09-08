@@ -136,9 +136,10 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
         currency = NormalizeCurrency(currency);
         granularity = NormalizeGranularity(granularity);
 
-        var periodDays = Math.Max(1, to.DayNumber - from.DayNumber + 1);
-        var previousFrom = from.AddDays(-periodDays);
-        var previousTo = from.AddDays(-1);
+        var windows = Enumerable.Range(0, 13)
+            .Select(offset => ShiftWindow(from, to, granularity, offset))
+            .ToArray();
+        var historyStart = windows[^1].From;
 
         var rows = await db.Transactions.AsNoTracking()
             .Where(transaction =>
@@ -147,7 +148,7 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
                 !transaction.IsTransfer &&
                 transaction.Status != "PDNG" &&
                 transaction.BookingDate != null &&
-                transaction.BookingDate >= previousFrom &&
+                transaction.BookingDate >= historyStart &&
                 transaction.BookingDate <= to &&
                 db.Accounts.Any(account =>
                     account.Id == transaction.AccountId &&
@@ -171,19 +172,23 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
             rows.Select(row => new ExpenseTx(row.Id, row.Amount, row.CategoryId, row.Currency, row.Date)).ToList(),
             fx, currency, ct);
 
-        var current = new Dictionary<Guid, decimal>();
-        var previous = new Dictionary<Guid, decimal>();
+        // bucket[0] is the selected active window; bucket[1..12] are completed predecessor windows.
+        // Average3/6/12 therefore never include a running current bucket.
+        var spendByWindow = Enumerable.Range(0, 13)
+            .Select(_ => new Dictionary<Guid, decimal>())
+            .ToArray();
         var itemBreakdownCurrent = new HashSet<Guid>();
+
         foreach (var allocation in allocations)
         {
             if (!dateByTransaction.TryGetValue(allocation.TransactionId, out var date)) continue;
+            var index = Array.FindIndex(windows, window => date >= window.From && date <= window.To);
+            if (index < 0) continue;
+
             var key = allocation.CategoryId ?? Uncategorized;
-            var target = date >= from && date <= to ? current
-                : date >= previousFrom && date <= previousTo ? previous
-                : null;
-            if (target is null) continue;
+            var target = spendByWindow[index];
             target[key] = target.GetValueOrDefault(key) + allocation.Amount;
-            if (ReferenceEquals(target, current) && allocation.FromPurchaseItem)
+            if (index == 0 && allocation.FromPurchaseItem)
                 itemBreakdownCurrent.Add(key);
         }
 
@@ -200,49 +205,90 @@ public sealed class CategoryAnalyticsService(FullWorthDbContext db, FullWorth.Ba
         decimal Rollup(IReadOnlyCollection<Guid> subtree, Dictionary<Guid, decimal> source) =>
             subtree.Sum(categoryId => source.GetValueOrDefault(categoryId));
 
-        var items = new List<CategoryAnalyticsItem>();
-        foreach (var category in categories)
+        decimal Average(IReadOnlyCollection<Guid> subtree, int periods)
         {
-            var subtree = Subtree(category.Id, childrenByParent);
-            var currentSpend = Rollup(subtree, current);
-            var previousSpend = Rollup(subtree, previous);
-            if (currentSpend == 0m && previousSpend == 0m) continue;
+            var total = 0m;
+            for (var index = 1; index <= periods; index++)
+                total += Rollup(subtree, spendByWindow[index]);
+            return total / periods;
+        }
+
+        CategoryAnalyticsItem? BuildRangeItem(Guid? categoryId, string name, Guid? parentId, IReadOnlyCollection<Guid> subtree)
+        {
+            var currentSpend = Rollup(subtree, spendByWindow[0]);
+            var previousSpend = Rollup(subtree, spendByWindow[1]);
+            var average3 = Average(subtree, 3);
+            var average6 = Average(subtree, 6);
+            var average12 = Average(subtree, 12);
+
+            if (currentSpend == 0m && previousSpend == 0m && average3 == 0m && average6 == 0m && average12 == 0m)
+                return null;
+
             var trend = currentSpend - previousSpend;
             var trendPercent = previousSpend == 0m
                 ? (currentSpend == 0m ? 0m : 100m)
                 : trend / previousSpend * 100m;
-            items.Add(new CategoryAnalyticsItem(
-                category.Id,
-                category.Name,
-                parentById[category.Id],
+
+            return new CategoryAnalyticsItem(
+                categoryId,
+                name,
+                parentId,
                 Round(currentSpend),
                 Round(previousSpend),
-                0m,
-                0m,
-                0m,
+                Round(average3),
+                Round(average6),
+                Round(average12),
                 Round(trend),
                 Round(trendPercent),
-                subtree.Any(itemBreakdownCurrent.Contains)));
+                subtree.Any(itemBreakdownCurrent.Contains));
         }
 
-        var uncategorizedCurrent = current.GetValueOrDefault(Uncategorized);
-        var uncategorizedPrevious = previous.GetValueOrDefault(Uncategorized);
-        if (uncategorizedCurrent != 0m || uncategorizedPrevious != 0m)
+        var items = new List<CategoryAnalyticsItem>();
+        foreach (var category in categories)
         {
-            var trend = uncategorizedCurrent - uncategorizedPrevious;
-            var trendPercent = uncategorizedPrevious == 0m
-                ? (uncategorizedCurrent == 0m ? 0m : 100m)
-                : trend / uncategorizedPrevious * 100m;
-            items.Add(new CategoryAnalyticsItem(
-                null, "Uncategorized", null,
-                Round(uncategorizedCurrent), Round(uncategorizedPrevious),
-                0m, 0m, 0m,
-                Round(trend), Round(trendPercent),
-                itemBreakdownCurrent.Contains(Uncategorized)));
+            var subtree = Subtree(category.Id, childrenByParent);
+            var item = BuildRangeItem(category.Id, category.Name, parentById[category.Id], subtree);
+            if (item is not null) items.Add(item);
         }
+
+        var uncategorized = BuildRangeItem(null, "Uncategorized", null, [Uncategorized]);
+        if (uncategorized is not null) items.Add(uncategorized);
 
         items = items.OrderByDescending(item => item.Current).ThenBy(item => item.Name).ToList();
         return new CategoryAnalyticsResult(from.Year, from.Month, currency, items, incomplete, from, to, granularity);
+    }
+
+    private static (DateOnly From, DateOnly To) ShiftWindow(DateOnly from, DateOnly to, string granularity, int offset)
+    {
+        if (offset == 0) return (from, to);
+
+        var exactMonth = granularity == "month" &&
+            from.Day == 1 &&
+            to == from.AddMonths(1).AddDays(-1);
+        var exactQuarter = granularity == "quarter" &&
+            from.Day == 1 &&
+            (from.Month - 1) % 3 == 0 &&
+            to == from.AddMonths(3).AddDays(-1);
+        var exactYear = granularity == "year" &&
+            from.Month == 1 && from.Day == 1 &&
+            to == from.AddYears(1).AddDays(-1);
+        var exactWeek = granularity == "week" &&
+            to.DayNumber - from.DayNumber == 6;
+
+        if (exactWeek)
+            return (from.AddDays(-7 * offset), to.AddDays(-7 * offset));
+        if (exactMonth)
+            return (from.AddMonths(-offset), to.AddMonths(-offset));
+        if (exactQuarter)
+            return (from.AddMonths(-3 * offset), to.AddMonths(-3 * offset));
+        if (exactYear)
+            return (from.AddYears(-offset), to.AddYears(-offset));
+
+        // For genuinely arbitrary ranges keep the existing equal-length-window contract.
+        var days = Math.Max(1, to.DayNumber - from.DayNumber + 1);
+        var shiftedTo = from.AddDays(-(days * (offset - 1)) - 1);
+        var shiftedFrom = shiftedTo.AddDays(-(days - 1));
+        return (shiftedFrom, shiftedTo);
     }
 
     private static string NormalizeGranularity(string? granularity)
