@@ -315,6 +315,29 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
             await db.SaveChangesAsync(ct);
             return new(CategoryMutationResult.Success, entity);
         }
+        catch (DbUpdateException) when (isNew)
+        {
+            db.Entry(entity!).State = EntityState.Detached;
+            var existing = await db.CategorizationRules.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Id == proposalRuleId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+            if (existing is not null &&
+                existing.Name == request.Name.Trim() &&
+                existing.IsEnabled == request.IsEnabled &&
+                existing.Priority == request.Priority &&
+                existing.Target == (string.IsNullOrWhiteSpace(request.Target) ? "transaction" : request.Target.Trim().ToLowerInvariant()) &&
+                existing.MatchField == request.MatchField.Trim().ToLowerInvariant() &&
+                existing.MatchMode == request.MatchMode.Trim().ToLowerInvariant() &&
+                existing.Pattern == request.Pattern.Trim() &&
+                existing.Direction == request.Direction.Trim().ToLowerInvariant() &&
+                existing.MinAmount == request.MinAmount &&
+                existing.MaxAmount == request.MaxAmount &&
+                existing.MerchantCategoryCode == request.MerchantCategoryCode?.Trim() &&
+                existing.CategoryId == request.CategoryId &&
+                existing.MarkAsTransfer == request.MarkAsTransfer &&
+                existing.StopProcessing == request.StopProcessing)
+                return new(CategoryMutationResult.Success, existing);
+            return new(CategoryMutationResult.Invalid, Error: "Proposal rule id is already in use.");
+        }
         catch (ArgumentException exception)
         {
             return new(CategoryMutationResult.Invalid, Error: exception.Message);
