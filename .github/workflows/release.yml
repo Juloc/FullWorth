@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'release/1.2.0-rc.9'
 
 permissions:
   contents: write
@@ -15,6 +17,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
+  FULLWORTH_RELEASE_VERSION: "1.2.0-rc.9"
 
 jobs:
   build-amd64:
@@ -40,7 +43,7 @@ jobs:
         id: vars
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${FULLWORTH_RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
@@ -114,7 +117,7 @@ jobs:
         id: vars
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${FULLWORTH_RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
@@ -175,7 +178,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${FULLWORTH_RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           args=(release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "FullWorth $version" --generate-notes)
 
           if [[ "$version" == *-* ]]; then
@@ -212,7 +215,7 @@ jobs:
       - name: Publish multi-architecture manifests
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${FULLWORTH_RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/fullworth-${{ matrix.service }}"
           sha_tag="sha-${GITHUB_SHA::7}"
 
