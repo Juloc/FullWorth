@@ -45,6 +45,17 @@ public sealed class PriceChangeDetectionOptions
     public PriceChangeAutoRefreshPolicy AutoRefreshPolicy { get; set; } = PriceChangeAutoRefreshPolicy.AutoDetectedContracts;
 }
 
+public sealed record PriceChangePreviewView(
+    Guid ContractId,
+    string ContractName,
+    decimal OldAmount,
+    decimal NewAmount,
+    decimal PercentChange,
+    string Currency,
+    Guid EvidenceTransactionId,
+    DateOnly EvidenceTransactionDate,
+    bool AutoDetected);
+
 public sealed record PriceChangeSuggestionView(
     Guid Id,
     Guid ContractId,
@@ -81,6 +92,64 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
         return await Project(OwnerScopedSuggestions(userId, fullWorthSpaceId)
             .OrderByDescending(suggestion => suggestion.DetectedOn)
             .ThenBy(suggestion => suggestion.Id)).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PriceChangePreviewView>> PreviewForOwnerAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        PriceChangeDetectionOptions options,
+        CancellationToken ct)
+    {
+        if (!await IsOwnerAsync(userId, fullWorthSpaceId, ct)) return [];
+        ValidateOptions(options);
+
+        var contracts = await OwnerScopedContracts(userId, fullWorthSpaceId)
+            .Where(contract => contract.IsActive && contract.AccountId != null)
+            .OrderBy(contract => contract.Id)
+            .ToListAsync(ct);
+        if (contracts.Count == 0) return [];
+
+        var accountIds = contracts.Select(contract => contract.AccountId!.Value).Distinct().ToArray();
+        var transactions = await db.Transactions.AsNoTracking()
+            .Where(transaction =>
+                accountIds.Contains(transaction.AccountId) &&
+                transaction.Amount < 0m &&
+                !transaction.IsIgnored &&
+                !transaction.IsTransfer &&
+                transaction.BookingDate != null)
+            .Select(transaction => new PriceChangePreviewEvidence(
+                transaction.Id,
+                transaction.AccountId,
+                transaction.Currency,
+                transaction.BookingDate!.Value,
+                transaction.Amount,
+                transaction.Counterparty,
+                transaction.NormalizedCounterparty))
+            .ToListAsync(ct);
+
+        var result = new List<PriceChangePreviewView>();
+        foreach (var contract in contracts)
+        {
+            var candidate = FindPreviewCandidate(contract, transactions);
+            if (candidate is null || !MeetsThreshold(candidate, options)) continue;
+
+            result.Add(new PriceChangePreviewView(
+                contract.Id,
+                contract.Name,
+                candidate.OldAmount,
+                candidate.NewAmount,
+                candidate.PercentChange,
+                contract.Currency,
+                candidate.EvidenceTransactionId,
+                candidate.EvidenceDate,
+                contract.AutoDetected));
+        }
+
+        return result
+            .OrderByDescending(x => Math.Abs(x.PercentChange))
+            .ThenByDescending(x => Math.Abs(x.NewAmount - x.OldAmount))
+            .Take(30)
+            .ToList();
     }
 
     public async Task<PriceChangeDetectionOutcome> DetectAsync(
@@ -246,6 +315,42 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
             : db.AccountOwners.AsNoTracking().AnyAsync(owner =>
                 owner.AccountId == contract.AccountId.Value && owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner, ct);
 
+    private static PriceChangeCandidate? FindPreviewCandidate(
+        RecurringContract contract,
+        IReadOnlyList<PriceChangePreviewEvidence> transactions)
+    {
+        if (!contract.AccountId.HasValue) return null;
+        var identity = ContractIdentity.Normalize(contract.ProviderName ?? contract.Name);
+        if (identity.Length < 4) return null;
+
+        var groups = transactions
+            .Where(transaction =>
+                transaction.AccountId == contract.AccountId.Value &&
+                string.Equals(transaction.Currency, contract.Currency, StringComparison.OrdinalIgnoreCase) &&
+                (ContractIdentity.Matches(identity, transaction.NormalizedCounterparty) ||
+                 ContractIdentity.Matches(identity, transaction.Counterparty)))
+            .Select(transaction => transaction with { Amount = Round(Math.Abs(transaction.Amount)) })
+            .GroupBy(transaction => transaction.Amount)
+            .Select(group => new
+            {
+                Amount = group.Key,
+                Evidence = group.OrderByDescending(item => item.BookingDate).ThenByDescending(item => item.Id).First()
+            })
+            .OrderByDescending(group => group.Evidence.BookingDate)
+            .ThenByDescending(group => group.Evidence.Id)
+            .ToList();
+        if (groups.Count == 0) return null;
+
+        var oldAmount = Round(Math.Abs(contract.Amount));
+        var newest = groups[0];
+        if (newest.Amount == oldAmount) return null;
+
+        var percent = oldAmount == 0m
+            ? 0m
+            : Round((newest.Amount - oldAmount) / oldAmount * 100m);
+        return new(oldAmount, newest.Amount, percent, newest.Evidence.Id, newest.Evidence.BookingDate);
+    }
+
     private static PriceChangeCandidate? FindCandidate(RecurringContract contract, IReadOnlyList<PriceChangeEvidence> transactions)
     {
         if (!contract.AccountId.HasValue) return null;
@@ -292,6 +397,14 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private sealed record PriceChangeEvidence(Guid Id, Guid AccountId, string Currency, DateOnly BookingDate, decimal Amount);
+    private sealed record PriceChangePreviewEvidence(
+        Guid Id,
+        Guid AccountId,
+        string Currency,
+        DateOnly BookingDate,
+        decimal Amount,
+        string? Counterparty,
+        string? NormalizedCounterparty);
     private sealed record PriceChangeCandidate(decimal OldAmount, decimal NewAmount, decimal PercentChange, Guid EvidenceTransactionId, DateOnly EvidenceDate);
 }
 
