@@ -280,3 +280,53 @@ Backend safety:
 Roll back the application image. Deploy 6 has no schema change and no new persisted state.
 
 The existing duplicate insight remains useful without the preview; no finance data needs reversal.
+
+
+## Deploy 7 smoke additions
+
+Deploy 7 enables one narrowly scoped write action: **explicitly confirmed contract merge**.
+
+Rollout:
+
+- [ ] `contract-merge-execution=on` by default
+- [ ] generic `actions=off` remains unchanged
+- [ ] `Autopilot__Features__contract-merge-execution=off` hides the merge button
+- [ ] the same flag makes `POST /api/contracts/merge-execute` return 403
+
+Confirmation flow:
+
+- [ ] duplicate-contract insight loads the current merge preview first
+- [ ] merge button is visible only when the current user has write access
+- [ ] clicking merge opens the shared confirmation dialog
+- [ ] execute request sends contract IDs, canonical contract ID and exact preview token
+- [ ] no Insight code calls `/api/contract-parity/merge` directly
+- [ ] successful merge dismisses the handled insight and refreshes the surface
+
+State safety:
+
+- [ ] changed contract data after preview returns 409
+- [ ] changed payment history after preview changes the token and returns 409
+- [ ] a source already merged elsewhere returns 409
+- [ ] retrying the same successful merge returns 200 with `alreadyApplied=true`
+- [ ] an idempotent retry still requires write access
+- [ ] read-only members see the preview but cannot execute
+- [ ] mixed currencies still cannot be merged
+- [ ] existing merged source history remains accessible through the canonical contract
+- [ ] existing manual contract merge endpoint behavior remains unchanged
+
+UX:
+
+- [ ] confirmation names the canonical/main contract and source contract(s)
+- [ ] no automatic merge occurs from detection, background jobs, Coach or AI
+- [ ] stale preview shows an inline refresh action instead of retrying blindly
+- [ ] monetary values remain masked in Privacy mode
+
+### Deploy 7 rollback
+
+Immediate action rollback:
+
+`Autopilot__Features__contract-merge-execution=off`
+
+This leaves Insights and deterministic signals running while disabling new merge execution.
+
+Application rollback is safe because `MergedIntoContractId`, merged-source history and unmerge support already existed before Deploy 7. Do not perform a schema rollback.
