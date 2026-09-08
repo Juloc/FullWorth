@@ -193,6 +193,12 @@ main:focus{outline:none}
    (overdraft, budget exceeded, failed sync, loss) which use their own selectors, not .amount.negative. */
 .amount.negative{color:var(--text)}
 .amount.positive{color:var(--positive)}
+.money-neutral{color:var(--text)}
+.money-income{color:var(--positive)}
+.money-warning{color:var(--warning)}
+.money-danger{color:var(--negative)}
+.money-debt{color:var(--negative)}
+.money-muted{color:var(--muted)}
 button,input,select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-input);padding:9px 11px}
 /* Shared action button variants. Feature code should use only these three visual roles. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 14px;border-radius:var(--radius-pill);font-weight:600;line-height:1.1;white-space:nowrap;cursor:pointer}
