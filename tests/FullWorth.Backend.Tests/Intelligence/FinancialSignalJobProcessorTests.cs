@@ -75,6 +75,51 @@ public sealed class FinancialSignalJobProcessorTests
     }
 
     [Fact]
+    public async Task Inactive_user_is_skipped_by_user_refresh()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var userId = Guid.NewGuid();
+        await factory.SeedFullWorthUserAsync(userId, isActive: false);
+        await factory.SeedAsync(async db =>
+        {
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                UserId = userId,
+                Role = FullWorthSpaceRoles.Member
+            });
+            await db.SaveChangesAsync();
+        });
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var intelligenceDb = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
+        var job = new IntelligenceJob
+        {
+            Type = FinancialSignalJobTypes.RefreshUser,
+            ScopeKey = $"user:{userId:N}",
+            IdempotencyKey = $"test:signals-inactive:{Guid.NewGuid():N}",
+            ScheduledFor = DateTimeOffset.UtcNow,
+            Status = IntelligenceJobStatuses.Running,
+            StartedAt = DateTimeOffset.UtcNow,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                userId,
+                fullWorthSpaceId = FullWorthSpaceDefaults.LegacyId
+            })
+        };
+        intelligenceDb.IntelligenceJobs.Add(job);
+        await intelligenceDb.SaveChangesAsync();
+
+        var processor = scope.ServiceProvider.GetRequiredService<ScheduledIntelligenceJobProcessor>();
+        await processor.ProcessAsync(job, CancellationToken.None);
+
+        Assert.Equal(
+            IntelligenceJobStatuses.Succeeded,
+            (await intelligenceDb.IntelligenceJobs.AsNoTracking().SingleAsync(x => x.Id == job.Id)).Status);
+        Assert.Empty(await intelligenceDb.FinancialSignals.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
     public async Task Signal_job_is_a_noop_when_signals_are_explicitly_off()
     {
         var overrides = new Dictionary<string, string?>
