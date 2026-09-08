@@ -22,6 +22,8 @@
 .history-legend span{display:flex;align-items:center;gap:6px}.history-key{width:18px;height:3px;border-radius:2px}
 .history-key-gross{background:var(--accent,#4a75ff)}.history-key-net{background:var(--positive,#13834b)}.history-key-inflation{background:#a3681d}.history-key-total{background:#7c5ac7}
 .history-chart-wrap{position:relative}
+/* The chart is meant to be hovered to read values, so it must never lift/jump like a clickable card. */
+.history-chart-card:hover{transform:none!important;box-shadow:none!important}
 .history-hit{cursor:crosshair}
 .history-dot{fill:var(--surface,#fff);stroke-width:1.3;opacity:.5}
 .history-dot-gross{stroke:var(--accent,#4a75ff)}.history-dot-net{stroke:var(--positive,#13834b)}.history-dot-inflation{stroke:#a3681d}.history-dot-total{stroke:#7c5ac7}
