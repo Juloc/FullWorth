@@ -1128,7 +1128,7 @@
   },
   "insights": {
     "title": "Important for you",
-    "subtitle": "Deterministic insights directly from your FullWorth data.",
+    "subtitle": "Insights directly from your FullWorth data.",
     "important": "Important for you",
     "dashboardHint": "Changes and open items FullWorth noticed.",
     "showAll": "Show all",
@@ -1196,6 +1196,7 @@
       "possibleDuplicate": "Two contracts may actually be the same contract",
       "priceIncreased": "A contract became more expensive",
       "priceDecreased": "A contract became cheaper"
-    }
+    },
+    "restore": "Show again"
   }
 }
