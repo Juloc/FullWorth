@@ -19,7 +19,7 @@ export function ensureReceiptImportsLauncher() {
   const button = document.createElement('button');
   button.id = 'receipt-imports-launch';
   button.type = 'button';
-  button.className = 'ghost';
+  button.className='btn btn-secondary';
   button.textContent = t('Belege importieren', 'Import receipts');
   button.addEventListener('click', openDialog);
   scan.insertAdjacentElement('afterend', button);
@@ -51,7 +51,7 @@ async function openDialog() {
       <section data-pane="paperless" hidden>${paperlessPane()}</section>
       <section data-pane="folder" hidden>${folderPane()}</section>
       <section class="receipt-import-batches">
-        <div class="panel-head"><h3>${esc(t('Letzte Importe', 'Recent imports'))}</h3><button type="button" class="ghost" data-refresh>${esc(t('Aktualisieren', 'Refresh'))}</button></div>
+        <div class="panel-head"><h3>${esc(t('Letzte Importe', 'Recent imports'))}</h3><button type="button" class="btn btn-secondary" data-refresh>${esc(t('Aktualisieren', 'Refresh'))}</button></div>
         <div data-batches class="rows"><div class="row-sub">${esc(t('Lade …', 'Loading …'))}</div></div>
       </section>
     </div>
@@ -89,7 +89,7 @@ function paperlessPane() {
         <div class="receipt-import-step-title"><span>1</span><h3>${esc(t('Paperless-ngx verbinden', 'Connect Paperless-ngx'))}</h3></div>
         <div class="row-sub" data-paperless-state>${esc(t('Verbindung wird geprüft …', 'Checking connection …'))}</div>
       </div>
-      <button type="button" class="ghost" data-paperless-test hidden>${esc(t('Testen', 'Test'))}</button>
+      <button type="button" class="btn btn-secondary" data-paperless-test hidden>${esc(t('Testen', 'Test'))}</button>
     </div>
     <div data-paperless-connection-form>
       <div class="receipt-import-grid">
@@ -99,9 +99,9 @@ function paperlessPane() {
       <div data-paperless-connection-result></div>
     </div>
     <div class="receipt-import-actions">
-      <button type="button" class="ghost" data-paperless-edit hidden>${esc(t('Verbindung ändern', 'Edit connection'))}</button>
+      <button type="button" class="btn btn-secondary" data-paperless-edit hidden>${esc(t('Verbindung ändern', 'Edit connection'))}</button>
       <button type="button" data-paperless-save>${esc(t('Verbinden', 'Connect'))}</button>
-      <button type="button" class="danger ghost" data-paperless-delete hidden>${esc(t('Trennen', 'Disconnect'))}</button>
+      <button type="button" class="btn btn-danger" data-paperless-delete hidden>${esc(t('Trennen', 'Disconnect'))}</button>
     </div>
   </div>
   <div class="receipt-import-card receipt-import-step" data-paperless-selection hidden>
@@ -110,8 +110,8 @@ function paperlessPane() {
     <div class="paperless-preset-bar">
       <label><span>${esc(t('Vorlage', 'Preset'))}</span><select data-paperless-preset><option value="">${esc(t('Neue Vorlage', 'New preset'))}</option></select></label>
       <label><span>${esc(t('Name', 'Name'))}</span><input data-paperless-preset-name type="text" maxlength="100" placeholder="${esc(t('z. B. Kassenbons', 'e.g. Receipts'))}"></label>
-      <button type="button" class="ghost" data-paperless-preset-save>${esc(t('Vorlage speichern', 'Save preset'))}</button>
-      <button type="button" class="danger ghost" data-paperless-preset-delete hidden>${esc(t('Löschen', 'Delete'))}</button>
+      <button type="button" class="btn btn-secondary" data-paperless-preset-save>${esc(t('Vorlage speichern', 'Save preset'))}</button>
+      <button type="button" class="btn btn-danger" data-paperless-preset-delete hidden>${esc(t('Löschen', 'Delete'))}</button>
     </div>
 
     <div class="paperless-auto-row">
@@ -127,7 +127,7 @@ function paperlessPane() {
             <option value="OR">${esc(t('Eine reicht (ODER)', 'Any may match (OR)'))}</option>
           </select>
         </label>
-        <button type="button" class="ghost" data-paperless-add-filter>+ ${esc(t('Filter', 'Filter'))}</button>
+        <button type="button" class="btn btn-secondary" data-paperless-add-filter>+ ${esc(t('Filter', 'Filter'))}</button>
         <label class="check inline paperless-advanced-toggle"><input data-paperless-advanced-toggle type="checkbox"> ${esc(t('Erweitert', 'Advanced'))}</label>
         <span class="row-sub" data-paperless-options-state></span>
       </div>
@@ -143,7 +143,7 @@ function paperlessPane() {
     </div>
 
     <div class="receipt-import-actions">
-      <button type="button" class="ghost" data-paperless-preview>${esc(t('Vorschau', 'Preview'))}</button>
+      <button type="button" class="btn btn-secondary" data-paperless-preview>${esc(t('Vorschau', 'Preview'))}</button>
       <label class="check inline"><input data-paperless-auto type="checkbox" checked> ${esc(t('Direkt analysieren', 'Analyze immediately'))}</label>
       <button type="button" data-paperless-import>${esc(t('Neue importieren', 'Import new'))}</button>
     </div>
@@ -153,7 +153,7 @@ function paperlessPane() {
 
 function folderPane() {
   return `<div class="receipt-import-card">
-    <div class="panel-head"><div><h3>${esc(t('Server-/NAS-Importordner', 'Server/NAS import folder'))}</h3><div class="row-sub" data-folder-state>${esc(t('Status wird geprüft …', 'Checking status …'))}</div></div><button type="button" class="ghost" data-folder-preview>${esc(t('Vorschau', 'Preview'))}</button></div>
+    <div class="panel-head"><div><h3>${esc(t('Server-/NAS-Importordner', 'Server/NAS import folder'))}</h3><div class="row-sub" data-folder-state>${esc(t('Status wird geprüft …', 'Checking status …'))}</div></div><button type="button" class="btn btn-secondary" data-folder-preview>${esc(t('Vorschau', 'Preview'))}</button></div>
     <p class="row-sub">${esc(t('Der Pfad wird ausschließlich serverseitig konfiguriert. FullWorth kann keinen beliebigen Serverpfad aus dem Browser öffnen.', 'The path is configured only on the server. FullWorth cannot open arbitrary server paths from the browser.'))}</p>
     <div class="receipt-import-actions"><label class="check inline"><input data-folder-auto type="checkbox" checked> ${esc(t('Direkt analysieren', 'Analyze immediately'))}</label><button type="button" data-folder-import>${esc(t('Ordner importieren', 'Import folder'))}</button></div>
     <div data-folder-preview-result class="receipt-import-preview"></div>
@@ -790,7 +790,7 @@ function renderBatch(batch) {
   return `<div class="receipt-import-batch">
     <div class="receipt-import-batch-main"><strong>${esc(source)}</strong><span>${formatDate(b.createdAt)}</span></div>
     <div class="receipt-import-stats"><span>${batch.total || 0} ${esc(t('gesamt', 'total'))}</span><span>${batch.processing || 0} ${esc(t('läuft', 'processing'))}</span><span>${batch.completed || 0} ${esc(t('fertig', 'done'))}</span><span>${batch.needsReview || 0} ${esc(t('prüfen', 'review'))}</span><span>${batch.skippedDuplicates || 0} ${esc(t('Duplikate', 'duplicates'))}</span><span>${batch.failed || 0} ${esc(t('Fehler', 'failed'))}</span></div>
-    <div class="receipt-import-actions compact">${batch.queued ? `<button type="button" class="ghost" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="ghost" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}</div>
+    <div class="receipt-import-actions compact">${batch.queued ? `<button type="button" class="btn btn-secondary" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="btn btn-secondary" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}</div>
   </div>`;
 }
 
