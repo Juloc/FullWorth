@@ -370,26 +370,14 @@ export function refreshAppearanceUi() {
   refreshSettingsValues();
 }
 
-let mutationScheduled = false;
-function scheduleRefresh() {
-  if (mutationScheduled) return;
-  mutationScheduled = true;
-  requestAnimationFrame(() => {
-    mutationScheduled = false;
-    ensureSettingsControls();
-    refreshSettingsValues();
-  });
-}
-
 export function initAppearance() {
   applyAppearance(getAppearance(), { persist: false });
   ensureSettingsControls();
 
-  const observer = new MutationObserver(scheduleRefresh);
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  const langObserver = new MutationObserver(() => ensureSettingsControls(true));
-  langObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  window.addEventListener('fullworth:languagechange', () => {
+    ensureSettingsControls(true);
+    refreshSettingsValues();
+  });
 
   window.addEventListener('storage', event => {
     if (Object.values(STORAGE).includes(event.key)) {
