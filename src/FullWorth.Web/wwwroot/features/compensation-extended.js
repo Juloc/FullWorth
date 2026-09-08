@@ -1,4 +1,5 @@
 import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const euro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2});
@@ -176,7 +177,7 @@ function renderDelta(delta){
 }
 
 async function deletePayslip(id){
-  if(!confirm('Gespeicherte Lohnabrechnung löschen?'))return;
+  if(!await confirmMessage({message:'Gespeicherte Lohnabrechnung löschen?',title:'Lohnabrechnung löschen',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true}))return;
   await api(`api/compensation/payslips/${id}?fullWorthSpaceId=${spaceId()}`,{method:'DELETE'});await loadPayslips();
 }
 
