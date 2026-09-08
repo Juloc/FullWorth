@@ -77,7 +77,11 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("emitAppEvent('budget:open'", feature);
 
         Assert.Contains("api/contracts/merge-preview", feature, StringComparison.Ordinal);
-        Assert.DoesNotContain("api/contracts/", feature.Replace("api/contracts/merge-preview", string.Empty), StringComparison.Ordinal);
+        Assert.Contains("api/contracts/merge-execute", feature, StringComparison.Ordinal);
+        var featureWithoutAllowedContractActions = feature
+            .Replace("api/contracts/merge-preview", string.Empty, StringComparison.Ordinal)
+            .Replace("api/contracts/merge-execute", string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/contracts/", featureWithoutAllowedContractActions, StringComparison.Ordinal);
         Assert.DoesNotContain("api/transactions/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/budgets/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
