@@ -1213,7 +1213,16 @@
         "billing-cycle-differs": "Billing cycles differ",
         "amount-differs": "Amounts differ significantly",
         "no-payment-history": "No payment history found"
-      }
+      },
+      "ready": "Review the preview before confirming.",
+      "execute": "Merge contracts",
+      "confirmTitle": "Merge contracts?",
+      "confirm": "Merge",
+      "confirmMessage": "Keep {canonical} as the main contract and combine the history from {sources}?",
+      "success": "Contracts merged.",
+      "staleTitle": "Preview is outdated",
+      "stale": "Contract data changed. Load a fresh preview before merging.",
+      "reload": "Refresh preview"
     }
   }
 }
