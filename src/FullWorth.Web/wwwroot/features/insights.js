@@ -196,13 +196,22 @@ function targetView(signal) {
 function openDetail(ctx, initialSignal, refresh) {
   let signal = initialSignal;
   const s = summary(ctx, signal);
+  const hidden = signal.state === 'dismissed' || signal.state === 'snoozed';
+  const manage = signal.resolvedAt ? '' :
+    '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.manage', 'Manage')) + '</span><div class="insight-detail-actions">' +
+    (hidden
+      ? '<button type="button" class="ghost" data-action="read">' + ctx.esc(tr(ctx, 'insights.restore', 'Show again')) + '</button>'
+      : signal.state !== 'read'
+        ? '<button type="button" class="ghost" data-action="read">' + ctx.esc(tr(ctx, 'insights.markRead', 'Mark as read')) + '</button>'
+        : '') +
+    (!hidden ? '<button type="button" class="ghost" data-action="dismiss">' + ctx.esc(tr(ctx, 'insights.dismiss', 'Hide')) + '</button>' : '') +
+    '</div>' +
+    (!hidden ? '<div class="insight-snooze"><select data-snooze-days aria-label="' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '"><option value="1">' + ctx.esc(tr(ctx, 'insights.snooze1', '1 day')) + '</option><option value="7" selected>' + ctx.esc(tr(ctx, 'insights.snooze7', '7 days')) + '</option><option value="30">' + ctx.esc(tr(ctx, 'insights.snooze30', '30 days')) + '</option></select><button type="button" class="ghost" data-action="snooze">' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '</button></div>' : '') +
+    '</div>';
   const html = '<form method="dialog" class="dialog-card insight-detail"><div class="panel-head"><div><h2>' + ctx.esc(title(ctx, signal)) + '</h2><div class="row-sub">' + ctx.esc(stateLabel(ctx, signal)) + '</div></div><button value="cancel" data-close aria-label="' + ctx.esc(tr(ctx, 'common.close', 'Close')) + '">×</button></div>' +
     (s ? '<p class="insight-detail-summary">' + ctx.esc(s) + '</p>' : '') +
     '<div class="insight-detail-meta"><span>' + ctx.esc(tr(ctx, 'insights.detected', 'Detected')) + '</span><strong>' + ctx.esc(ctx.dateTime(signal.detectedAt)) + '</strong></div>' +
-    '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.manage', 'Manage')) + '</span><div class="insight-detail-actions">' +
-    (signal.state !== 'read' ? '<button type="button" class="ghost" data-action="read">' + ctx.esc(tr(ctx, 'insights.markRead', 'Mark as read')) + '</button>' : '') +
-    (signal.state !== 'dismissed' ? '<button type="button" class="ghost" data-action="dismiss">' + ctx.esc(tr(ctx, 'insights.dismiss', 'Hide')) + '</button>' : '') +
-    '</div><div class="insight-snooze"><select data-snooze-days aria-label="' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '"><option value="1">' + ctx.esc(tr(ctx, 'insights.snooze1', '1 day')) + '</option><option value="7" selected>' + ctx.esc(tr(ctx, 'insights.snooze7', '7 days')) + '</option><option value="30">' + ctx.esc(tr(ctx, 'insights.snooze30', '30 days')) + '</option></select><button type="button" class="ghost" data-action="snooze">' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '</button></div></div>' +
+    manage +
     '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.feedback', 'Was this useful?')) + '</span><div class="insight-feedback"><button type="button" class="ghost ' + (signal.feedback === 'useful' ? 'active' : '') + '" data-feedback="useful" aria-pressed="' + (signal.feedback === 'useful') + '">' + ctx.esc(tr(ctx, 'insights.useful', 'Useful')) + '</button><button type="button" class="ghost ' + (signal.feedback === 'irrelevant' ? 'active' : '') + '" data-feedback="irrelevant" aria-pressed="' + (signal.feedback === 'irrelevant') + '">' + ctx.esc(tr(ctx, 'insights.irrelevant', 'Not relevant')) + '</button></div></div>' +
     '<button type="button" class="insight-open-target" data-open-target>' + ctx.esc(tr(ctx, 'insights.openAffected', 'Open affected area')) + '<span aria-hidden="true">›</span></button></form>';
   const dlg = ctx.dialog(html, { mobileMode: 'sheet' });
