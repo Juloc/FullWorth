@@ -82,17 +82,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void NoNewNativeConfirmCalls()
     {
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
-        {
-            // Legacy migration allow-list. This list may only shrink.
-            "admin/admin.js",
-            "features/compensation-extended.js",
-            "features/compensation-history.js",
-            "features/compensation.js",
-            "intelligence/brand-packs.js",
-            "intelligence/intelligence.js",
-            "passkeys/passkeys.js"
-        };
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
 
         AssertNoNewViolations(
             new Regex(@"(?<![\.\w])confirm\s*\(|window\.confirm\s*\(", RegexOptions.Compiled),
