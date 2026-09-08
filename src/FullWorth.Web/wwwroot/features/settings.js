@@ -36,8 +36,8 @@ async function openDeleteAccountDialog(){
       </div>
       <p id="delete-account-error" class="row-sub" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="ghost" data-close>${get('common.cancel')}</button>
-        <button type="submit" class="danger">${get('settings.deleteAccountAction')}</button>
+        <button type="button" class="btn btn-secondary" data-close>${get('common.cancel')}</button>
+        <button type="submit" class="btn btn-danger">${get('settings.deleteAccountAction')}</button>
       </div>
     </form>`,{closeLabel:get('common.close')});
   const form=dlg.querySelector('#delete-account-form');
@@ -79,7 +79,7 @@ async function openTwoFactorDialog(){
         <div class="panel-head"><h2>${get('twoFactor.title')}</h2></div>
         <p class="row-sub">${get('twoFactor.enabled')}</p>
         <label><span>${get('twoFactor.code')}</span><input id="two-factor-disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-        <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit" class="danger">${get('twoFactor.disable')}</button></div>
+        <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-close>${get('common.cancel')}</button><button type="submit" class="btn btn-danger">${get('twoFactor.disable')}</button></div>
       </form>`);
     dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
     dlg.querySelector('form').addEventListener('submit',async e=>{
@@ -105,7 +105,7 @@ async function openTwoFactorDialog(){
       <p class="row-sub">${get('twoFactor.setupHelp')}</p>
       <div class="row"><div class="row-main"><div class="row-title">${get('twoFactor.sharedKey')}</div><div class="row-sub"><code class="two-factor-key">${esc(setup.sharedKey)}</code></div></div></div>
       <label><span>${get('twoFactor.code')}</span><input id="two-factor-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-      <div class="dialog-actions"><button type="button" class="ghost" data-close>${get('common.cancel')}</button><button type="submit">${get('twoFactor.enable')}</button></div>
+      <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-close>${get('common.cancel')}</button><button type="submit">${get('twoFactor.enable')}</button></div>
     </form>`);
   dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
   dlg.querySelector('form').addEventListener('submit',async e=>{
