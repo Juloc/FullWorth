@@ -55,9 +55,12 @@ public sealed class ActionProposalService(
         if (request.Payload.ValueKind != JsonValueKind.Object)
             return new(ActionProposalOperationResult.Invalid, Error: "Action payload must be an object.");
 
-        var payloadJson = request.Payload.GetRawText();
-        if (Encoding.UTF8.GetByteCount(payloadJson) > 64 * 1024)
+        var rawPayloadJson = request.Payload.GetRawText();
+        if (Encoding.UTF8.GetByteCount(rawPayloadJson) > 64 * 1024)
             return new(ActionProposalOperationResult.Invalid, Error: "Action payload is too large.");
+        var payloadJson = handler.NormalizePayload(request.Payload);
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return new(ActionProposalOperationResult.Invalid, Error: "Action payload is invalid.");
 
         var source = NormalizeSource(request.Source);
         if (source is null)
