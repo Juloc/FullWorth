@@ -36,9 +36,9 @@ public static class AutopilotFeatures
 /// <summary>
 /// Central rollout switchboard for the AI Autopilot migration.
 ///
-/// Defaults follow the currently deployed rollout stage. Deploy 7 enables deterministic Signals,
-/// read-only Insights, and only the explicitly confirmed contract-merge execution path. Generic
-/// actions and all later write-capable Autopilot features remain Off. Configuration is optional and
+/// Defaults follow the currently deployed rollout stage. Deploy 8 enables deterministic Signals,
+/// read-only Insights, explicitly confirmed contract merge execution, and the fixed-registry generic
+/// ActionProposal path. Later automation/scenario/AI-write features remain Off. Configuration is optional and
 /// therefore does not add a required
 /// environment variable to normal FullWorth installations. A feature can later be moved through
 /// Off -> Shadow -> On independently while main remains deployable.
@@ -76,6 +76,7 @@ public sealed class AutopilotRolloutSettings
     {
         AutopilotFeatures.Signals => AutopilotRolloutState.On,
         AutopilotFeatures.Insights => AutopilotRolloutState.On,
+        AutopilotFeatures.Actions => AutopilotRolloutState.On,
         AutopilotFeatures.ContractMergeExecution => AutopilotRolloutState.On,
         _ => AutopilotRolloutState.Off
     };
