@@ -132,7 +132,7 @@ Accounts structural migration is approved. The visible account/group model stays
 Current direction:
 
 - `features/accounts.js` owns account/banking workflows and rendering.
-- `features/accounts-ux.js` is transitional presentation/editing behavior and must continue shrinking.
+- `features/accounts-presentation.js` is owned presentation/editing submodule and must continue shrinking.
 - Accounts UX must not decorate Dashboard/Wealth DOM.
 - Future account presentation logic should move into the Accounts owner or a shared account-identity primitive, not another observer/patch layer.
 
