@@ -50,7 +50,7 @@ try {
   applyThemeChrome(actualTheme);
 }
 
-// appearance.css and parity-completion.css are loaded as render-blocking <link>s in index.html so the
+// appearance.css and the shared base styles are loaded as render-blocking <link>s in index.html so the
 // page paints once in its final style (no post-load restyle flash). They are intentionally not injected
 // here anymore.
 
