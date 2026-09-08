@@ -215,27 +215,43 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         // one partner's figures in isolation because the tax classes only make sense together. Each member's
         // history is its OWN patch chain, so the chains must stay separate and only the resolved yearly
         // figures per date are summed.
-        var memberIds = joint
+        var memberIds = (joint
             ? await db.FullWorthSpaceMembers.AsNoTracking()
                 .Where(x => x.FullWorthSpaceId == fullWorthSpaceId)
                 .Select(x => x.UserId)
                 .ToListAsync(ct)
-            : [userId];
+            : [userId]).Distinct().ToArray();
 
         var chains = new List<IReadOnlyList<RawHistoryRow>>();
-        foreach (var memberId in memberIds.Distinct())
+        foreach (var memberId in memberIds)
         {
             var memberRows = await LoadRowsAsync(memberId, fullWorthSpaceId, end, ct);
             if (memberRows.Count > 0) chains.Add(memberRows);
         }
-        if (chains.Count == 0)
-            return new CompensationTimelineResult(from ?? end.AddYears(-1), end, [], [], null);
+
+        // "Sonstige regelmäßige Einkünfte" form their own additive track. They are loaded for exactly the
+        // same member set as the history chains, so the joint household view sums every member's records
+        // the same way it sums their salaries. They are NEVER fed into GermanCompensationCalculator and
+        // they deliberately do not contribute breakpoints to the date grid, so every employer/salary
+        // figure on every point is identical whether or not such records exist.
+        var otherIncome = await new CompensationOtherIncomeStore(db)
+            .LoadForTimelineAsync(fullWorthSpaceId, memberIds, end, ct);
+
+        if (chains.Count == 0 && otherIncome.Count == 0)
+            return new CompensationTimelineResult(from ?? end.AddYears(-1), end, [], [], null, otherIncome);
 
         var allRows = chains.SelectMany(x => x)
             .OrderBy(x => x.EffectiveDate).ThenBy(x => x.Sequence).ThenBy(x => x.CreatedAt)
             .ToArray();
 
-        var start = from ?? allRows[0].EffectiveDate;
+        // With salary history present this is allRows[0] exactly as before; the other-income fallback only
+        // kicks in for someone who records other income but no salary at all.
+        var earliest = allRows.Length > 0
+            ? allRows[0].EffectiveDate
+            : otherIncome.Min(x => x.ValidFrom);
+        if (earliest > end) earliest = end;
+
+        var start = from ?? earliest;
         if (start > end) throw new ArgumentException("Timeline start cannot be after end.");
 
         var entries = chains
@@ -245,7 +261,11 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             .ToArray();
 
         var dates = BuildTimelineDates(start, end, allRows);
-        var rawPoints = new List<(DateOnly Date, TimelineTotals Totals, RawHistoryRow? Source)>();
+        var rawPoints = new List<(
+            DateOnly Date,
+            TimelineTotals Totals,
+            CompensationOtherIncomeAmounts Other,
+            RawHistoryRow? Source)>();
         foreach (var date in dates)
         {
             var totals = TimelineTotals.Zero;
@@ -257,12 +277,18 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                 totals = totals.Add(GermanCompensationCalculator.Calculate(WithEffectiveYear(resolved, date.Year)));
                 covered = true;
             }
-            if (!covered) continue;
-            rawPoints.Add((date, totals, allRows.LastOrDefault(x => x.EffectiveDate <= date)));
+            // Unchanged whenever any salary history exists; only an other-income-only timeline emits
+            // points that no salary chain covers.
+            if (!covered && chains.Count > 0) continue;
+            rawPoints.Add((
+                date,
+                totals,
+                CompensationOtherIncome.AmountsOn(otherIncome, date),
+                allRows.LastOrDefault(x => x.EffectiveDate <= date)));
         }
 
         if (rawPoints.Count == 0)
-            return new CompensationTimelineResult(start, end, entries, [], null);
+            return new CompensationTimelineResult(start, end, entries, [], null, otherIncome);
 
         var baseline = rawPoints[0];
         var baselineGross = RoundMoney(baseline.Totals.Gross);
@@ -274,10 +300,11 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             var nominal = PercentChange(baselineGross, gross);
             var inflation = PercentChange(baselineGross, maintenance);
             var real = maintenance <= 0m ? 0m : (gross / maintenance - 1m) * 100m;
+            var net = RoundMoney(point.Totals.Net);
             return new CompensationTimelinePoint(
                 point.Date,
                 gross,
-                RoundMoney(point.Totals.Net),
+                net,
                 RoundMoney(point.Totals.FullWorth),
                 RoundMoney(point.Totals.EmployerCost),
                 RoundMoney(point.Totals.HourlyValue),
@@ -290,6 +317,9 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                 RoundPercent(nominal),
                 RoundPercent(inflation),
                 RoundPercent(real),
+                point.Other.AnnualTotal,
+                point.Other.AnnualCounted,
+                RoundMoney(net + point.Other.AnnualCounted),
                 point.Source?.Id,
                 point.Source?.Title);
         }).ToArray();
@@ -305,9 +335,11 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             current.PurchasingPowerMaintenanceGrossAnnual,
             current.NominalChangeFromBaselinePercent,
             current.InflationFromBaselinePercent,
-            current.RealChangeFromBaselinePercent);
+            current.RealChangeFromBaselinePercent,
+            current.OtherRegularIncomeAnnual,
+            current.PersonallyAvailableTotalIncomeAnnual);
 
-        return new CompensationTimelineResult(start, end, entries, points, summary);
+        return new CompensationTimelineResult(start, end, entries, points, summary, otherIncome);
     }
 
     private static IReadOnlyList<CompensationHistoryEntry> BuildEntries(

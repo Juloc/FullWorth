@@ -47,6 +47,12 @@ public sealed record CompensationTimelinePoint(
     decimal NominalChangeFromBaselinePercent,
     decimal InflationFromBaselinePercent,
     decimal RealChangeFromBaselinePercent,
+    // Separate income track: "sonstige regelmäßige Einkünfte" (e.g. Halbwaisenrente). Deliberately NOT
+    // part of any employer figure above — those come straight from the untouched salary calculator.
+    decimal OtherRegularIncomeAnnual,
+    decimal OtherRegularIncomeCountedAnnual,
+    // Net salary plus only the other income flagged as "counts toward personally available income".
+    decimal PersonallyAvailableTotalIncomeAnnual,
     Guid? SourceEventId,
     string? SourceEventTitle);
 
@@ -60,11 +66,16 @@ public sealed record CompensationTimelineSummary(
     decimal PurchasingPowerMaintenanceGrossAnnual,
     decimal NominalChangePercent,
     decimal InflationPercent,
-    decimal RealChangePercent);
+    decimal RealChangePercent,
+    decimal CurrentOtherRegularIncomeAnnual,
+    decimal CurrentPersonallyAvailableTotalIncomeAnnual);
 
 public sealed record CompensationTimelineResult(
     DateOnly From,
     DateOnly To,
     IReadOnlyList<CompensationHistoryEntry> Events,
     IReadOnlyList<CompensationTimelinePoint> Points,
-    CompensationTimelineSummary? Summary);
+    CompensationTimelineSummary? Summary,
+    // The raw other-income records behind the OtherRegularIncome* series, so the chart can label the
+    // track and draw per-type sub-series without a second round trip.
+    IReadOnlyList<CompensationOtherIncomeEntry> OtherIncome);
