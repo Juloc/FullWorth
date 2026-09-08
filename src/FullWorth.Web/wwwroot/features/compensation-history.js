@@ -1,4 +1,5 @@
 import { api as sharedApi, jsonBody as sharedJsonBody } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const H$=s=>document.querySelector(s);
 const H$$=s=>[...document.querySelectorAll(s)];
 const heuro=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
@@ -182,7 +183,7 @@ async function saveEditedEvent(){
 function cancelEdit(){hstate.editing=null;if(H$('#history-edit-bar'))H$('#history-edit-bar').hidden=true}
 
 async function deleteEvent(entry){
-  if(!confirm(`Änderung „${entry.title}“ vom ${fmtDate(entry.effectiveDate)} löschen?`))return;
+  if(!await confirmMessage({message:`Änderung „${entry.title}“ vom ${fmtDate(entry.effectiveDate)} löschen?`,title:'Änderung löschen',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true}))return;
   await hapi(`api/compensation/history/${entry.id}?fullWorthSpaceId=${encodeURIComponent(spaceId())}`,{method:'DELETE'});
   await loadHistory();hmessage('Änderung gelöscht.');
 }
