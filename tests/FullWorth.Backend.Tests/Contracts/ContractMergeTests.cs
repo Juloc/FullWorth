@@ -83,6 +83,64 @@ public sealed class ContractMergeTests
     }
 
     [Fact]
+    public async Task MergeExecute_IdempotentRetryStillRequiresWriteAccess()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+        var viewer = Guid.NewGuid();
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = viewer,
+                EmailNormalized = $"{viewer:N}@EXAMPLE.COM".ToUpperInvariant(),
+                DisplayName = "Merge retry viewer",
+                IsActive = true
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = s.Space,
+                UserId = viewer,
+                Role = "member"
+            });
+            db.AccountOwners.AddRange(
+                new AccountOwner { AccountId = s.AccountA, UserId = viewer, OwnershipType = AccountOwnershipTypes.Viewer },
+                new AccountOwner { AccountId = s.AccountB, UserId = viewer, OwnershipType = AccountOwnershipTypes.Viewer });
+            await db.SaveChangesAsync();
+        });
+
+        using var previewResponse = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+        using var previewJson = JsonDocument.Parse(await previewResponse.Content.ReadAsStringAsync());
+        var body = new
+        {
+            contractIds = new[] { s.Target, s.Source },
+            canonicalContractId = previewJson.RootElement.GetProperty("canonicalContractId").GetGuid(),
+            previewToken = previewJson.RootElement.GetProperty("previewToken").GetString()
+        };
+
+        using var ownerExecute = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            body));
+        Assert.Equal(HttpStatusCode.OK, ownerExecute.StatusCode);
+
+        using var viewerRetry = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
+            viewer,
+            body));
+
+        Assert.Equal(HttpStatusCode.Forbidden, viewerRetry.StatusCode);
+    }
+
+    [Fact]
     public async Task MergeExecute_RejectsChangedStateAfterPreview()
     {
         using var factory = new BackendWebApplicationFactory();
