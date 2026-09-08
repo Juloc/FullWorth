@@ -13,7 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../FullWorth.FinTs/FullWorth.FinTs.csproj" />
+    <!-- FullWorth.Web references this project with AdditionalProperties="FullWorthUnifiedReference=true".
+         Global properties propagate down the reference chain, so without dropping it here FinTs exists as
+         two distinct project instances that build concurrently and both write
+         FullWorth.FinTs/bin/.../FullWorth.FinTs.deps.json - which fails the release with
+         "GenerateDepsFile task failed unexpectedly: the process cannot access the file". FinTs does not
+         read the flag, so removing it collapses the two instances into one and keeps the publish parallel. -->
+    <ProjectReference Include="../FullWorth.FinTs/FullWorth.FinTs.csproj" GlobalPropertiesToRemove="FullWorthUnifiedReference" />
   </ItemGroup>
 
   <ItemGroup>
