@@ -116,6 +116,30 @@ public sealed class AutopilotArchitectureGuardTests
     }
 
     [Fact]
+    public void ActionProposalHandlersAreFixedAndCannotDispatchArbitraryEndpointsOrProviders()
+    {
+        var root = Path.Combine(Root(), "src", "FullWorth.Backend", "Modules", "Intelligence", "Actions");
+        var models = File.ReadAllText(Path.Combine(root, "ActionProposalModels.cs"));
+        var handlers = File.ReadAllText(Path.Combine(root, "ActionProposalHandlers.cs"));
+        var service = File.ReadAllText(Path.Combine(root, "ActionProposalService.cs"));
+
+        Assert.Contains("transaction-category-change", models);
+        Assert.Contains("categorization-rule-upsert", models);
+        Assert.Contains("transfer-link", models);
+        Assert.Contains("ActionProposalHandlerNames.All.SetEquals", handlers);
+
+        foreach (var content in new[] { handlers, service })
+        {
+            Assert.DoesNotContain("IIntelligenceProvider", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("IntelligenceProviderRegistry", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("HttpClient", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("Activator.CreateInstance", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("Type.GetType", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("/bff/", content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void ProviderFacingAutopilotLayersMayNotReachFinanceDbDirectly()
     {
         // Explanations and natural-language compilation receive bounded DTOs/services. They may prepare
