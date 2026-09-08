@@ -12,7 +12,7 @@ public sealed class ThemeParityTests
     [Fact]
     public void LightAndDarkPalettesDefineTheSameVariables()
     {
-        var css = File.ReadAllText(AppCss());
+        var css = File.ReadAllText(TokensCss());
         var light = Variables(css, ":root{");
         var dark = Variables(css, "html[data-theme=\"dark\"]{");
 
@@ -47,14 +47,14 @@ public sealed class ThemeParityTests
         return new SortedSet<string>(names, StringComparer.Ordinal);
     }
 
-    private static string AppCss()
+    private static string TokensCss()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "src", "FullWorth.Web", "wwwroot", "app.css");
-        Assert.True(File.Exists(path), $"app.css not found: {path}");
+        var path = Path.Combine(dir!.FullName, "src", "FullWorth.Web", "wwwroot", "styles", "tokens.css");
+        Assert.True(File.Exists(path), $"tokens.css not found: {path}");
         return path;
     }
 }
