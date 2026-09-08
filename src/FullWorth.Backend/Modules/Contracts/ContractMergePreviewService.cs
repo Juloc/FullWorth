@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace FullWorth.Backend.Modules.Contracts;
 
 public sealed record ContractMergePreviewRequest(IReadOnlyList<Guid> ContractIds);
@@ -35,6 +38,7 @@ public sealed record ContractMergePreview(
     IReadOnlyList<Guid> AccountIds,
     IReadOnlyList<string> ProviderAliases,
     IReadOnlyList<string> Warnings,
+    string PreviewToken,
     bool ExecutionEnabled);
 
 public enum ContractMergePreviewResult
@@ -69,12 +73,15 @@ public sealed class ContractMergePreviewService(ContractStore store)
             return new(ContractMergePreviewResult.Invalid, Error: "Select at least two contracts.");
 
         var contracts = new List<(ContractView Contract, ContractActivity? Activity)>();
+        var executionEnabled = true;
         foreach (var id in ids)
         {
             var contract = await store.GetForUserAsync(userId, fullWorthSpaceId, id, ct);
             if (contract is null) return new(ContractMergePreviewResult.NotFound);
             var activity = await store.GetActivityForUserAsync(userId, fullWorthSpaceId, id, ct);
             contracts.Add((contract, activity));
+            if (await store.GetAccessAsync(userId, fullWorthSpaceId, id, ct) != ContractAccessLevel.Write)
+                executionEnabled = false;
         }
 
         if (contracts.Select(x => x.Contract.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
@@ -145,6 +152,8 @@ public sealed class ContractMergePreviewService(ContractStore store)
             .ThenBy(x => x.Id)
             .ToArray();
 
+        var previewToken = CreatePreviewToken(canonical.Contract.Id, previewContracts, allPayments);
+
         return new(
             ContractMergePreviewResult.Success,
             new ContractMergePreview(
@@ -157,7 +166,44 @@ public sealed class ContractMergePreviewService(ContractStore store)
                 accountIds,
                 aliases,
                 warnings,
-                ExecutionEnabled: false));
+                previewToken,
+                executionEnabled));
+    }
+
+    private static string CreatePreviewToken(
+        Guid canonicalContractId,
+        IReadOnlyList<ContractMergePreviewContract> contracts,
+        IReadOnlyList<ContractPayment> payments)
+    {
+        var parts = new List<string> { canonicalContractId.ToString("N") };
+        parts.AddRange(contracts
+            .OrderBy(contract => contract.Id)
+            .Select(contract => string.Join("|",
+                contract.Id.ToString("N"),
+                contract.Name,
+                contract.ProviderName ?? string.Empty,
+                contract.AccountId?.ToString("N") ?? string.Empty,
+                contract.CategoryId?.ToString("N") ?? string.Empty,
+                contract.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                contract.Currency,
+                contract.BillingCycle,
+                contract.Interval,
+                contract.AutoDetected,
+                contract.IsActive,
+                contract.CreatedAt.ToUniversalTime().ToString("O"),
+                contract.UpdatedAt.ToUniversalTime().ToString("O"),
+                contract.LastPayment?.ToString("yyyy-MM-dd") ?? string.Empty,
+                contract.MatchedPaymentCount)));
+        parts.AddRange(payments
+            .OrderBy(payment => payment.Id)
+            .Select(payment => string.Join("|",
+                payment.Id.ToString("N"),
+                payment.Date?.ToString("yyyy-MM-dd") ?? string.Empty,
+                payment.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                payment.Currency)));
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", parts)));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static IReadOnlyList<ContractMergePreviewField> BuildCanonicalFields(ContractView contract) =>
