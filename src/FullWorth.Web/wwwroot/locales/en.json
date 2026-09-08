@@ -1223,6 +1223,24 @@
       "staleTitle": "Preview is outdated",
       "stale": "Contract data changed. Load a fresh preview before merging.",
       "reload": "Refresh preview"
+    },
+    "actionProposal": {
+      "section": "Suggested action",
+      "loading": "Checking action …",
+      "error": "Action preview could not be loaded.",
+      "staleTitle": "Preview is outdated",
+      "stale": "The underlying finance data changed. Review the updated preview.",
+      "review": "Review updated preview"
+    },
+    "transferAction": {
+      "title": "Possible transfer",
+      "preview": "Both bookings would be linked as one internal transfer.",
+      "done": "These bookings are already linked as a transfer.",
+      "execute": "Link as transfer",
+      "confirmTitle": "Link as transfer?",
+      "confirm": "Link transfer",
+      "confirmMessage": "Link the bookings on {first} and {second} as one internal transfer?",
+      "success": "Bookings linked as transfer."
     }
   }
 }
