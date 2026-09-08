@@ -1,4 +1,5 @@
 import { api as sharedApi } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const $ = id => document.getElementById(id);
 
 let overview = null;
@@ -353,7 +354,7 @@ async function testCredential(id) {
 }
 
 async function deleteCredential(id) {
-  if (!confirm('Credential wirklich löschen?')) return;
+  if (!await confirmMessage({message:'Credential wirklich löschen?',title:'Credential löschen',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true})) return;
   try {
     await api(`/credentials/${id}`, { method: 'DELETE' });
     credentials = await api('/credentials');
