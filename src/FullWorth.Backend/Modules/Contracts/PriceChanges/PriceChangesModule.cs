@@ -110,13 +110,15 @@ public sealed class PriceChangeStore(FullWorthDbContext db)
         if (contracts.Count == 0) return [];
 
         var accountIds = contracts.Select(contract => contract.AccountId!.Value).Distinct().ToArray();
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-180));
         var transactions = await db.Transactions.AsNoTracking()
             .Where(transaction =>
                 accountIds.Contains(transaction.AccountId) &&
                 transaction.Amount < 0m &&
                 !transaction.IsIgnored &&
                 !transaction.IsTransfer &&
-                transaction.BookingDate != null)
+                transaction.BookingDate != null &&
+                transaction.BookingDate >= from)
             .Select(transaction => new PriceChangePreviewEvidence(
                 transaction.Id,
                 transaction.AccountId,
