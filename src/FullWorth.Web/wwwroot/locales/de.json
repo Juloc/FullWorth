@@ -1128,7 +1128,7 @@
   },
   "insights": {
     "title": "Wichtig für dich",
-    "subtitle": "Deterministische Hinweise direkt aus deinen FullWorth-Daten.",
+    "subtitle": "Hinweise direkt aus deinen FullWorth-Daten.",
     "important": "Wichtig für dich",
     "dashboardHint": "Veränderungen und offene Punkte, die FullWorth erkannt hat.",
     "showAll": "Alle anzeigen",
@@ -1196,6 +1196,7 @@
       "possibleDuplicate": "Zwei Verträge könnten derselbe Vertrag sein",
       "priceIncreased": "Ein Vertrag ist teurer geworden",
       "priceDecreased": "Ein Vertrag ist günstiger geworden"
-    }
+    },
+    "restore": "Wieder anzeigen"
   }
 }
