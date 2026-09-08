@@ -16,6 +16,7 @@ export function createI18n({ state, fetchImpl } = {}) {
     state.messages = await response.json();
     state.lang = language;
     document.documentElement.lang = language;
+    window.dispatchEvent(new CustomEvent('fullworth:languagechange', { detail: { language } }));
     return state.messages;
   }
 
@@ -28,6 +29,9 @@ export function createI18n({ state, fetchImpl } = {}) {
     });
     root.querySelectorAll?.('[data-i18n-title]').forEach(element => {
       element.title = get(element.dataset.i18nTitle);
+    });
+    root.querySelectorAll?.('[data-i18n-aria-label]').forEach(element => {
+      element.setAttribute('aria-label', get(element.dataset.i18nAriaLabel));
     });
   }
 
