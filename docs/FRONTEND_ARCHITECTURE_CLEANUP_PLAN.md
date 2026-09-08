@@ -328,7 +328,7 @@ Completed structural steps:
 - Mobile account actions collapse into an owned overflow sheet instead of overflowing the row.
 - Account/group transaction drill-down behavior is preserved.
 
-Remaining Accounts work is consolidation: move the remaining same-domain visual/group-edit decoration from `accounts-ux.js` into the Accounts owner/shared account identity primitives, then retire the transitional file without changing the established UX.
+Remaining Accounts work is consolidation: move the remaining same-domain visual/group-edit decoration from `accounts-presentation.js` into the Accounts owner/shared account identity primitives, then retire the presentation submodule without changing the established UX.
 
 ## Delivery order
 
