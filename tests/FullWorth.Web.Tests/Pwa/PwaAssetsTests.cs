@@ -56,6 +56,54 @@ public sealed class PwaAssetsTests
         Assert.Contains("request.method !== 'GET'", sw);
     }
 
+
+    [Fact]
+    public void ServiceWorkerShellEntriesExistOnDisk()
+    {
+        var sw = File.ReadAllText(Asset("sw.js"));
+        var shell = Between(sw, "const APP_SHELL = [", "];");
+        var entries = Regex.Matches(
+                shell,
+                @"['""](?<path>/[^'""]+)['""]",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(1))
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(entries);
+        foreach (var entry in entries)
+        {
+            var relative = entry.TrimStart('/');
+            Assert.True(
+                File.Exists(AssetPath(relative)),
+                $"service worker shell references missing asset: {entry}");
+        }
+    }
+
+    [Fact]
+    public void IndexStaticAssetReferencesExistOnDisk()
+    {
+        var index = File.ReadAllText(Asset("index.html"));
+        var references = Regex.Matches(
+                index,
+                @"(?:src|href)=""(?<path>/[^""?#]+\.(?:js|mjs|css|json|svg|png|woff2?))(?:[?#][^""]*)?""",
+                RegexOptions.IgnoreCase,
+                TimeSpan.FromSeconds(1))
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(references);
+        foreach (var reference in references)
+        {
+            var relative = reference.TrimStart('/');
+            Assert.True(
+                File.Exists(AssetPath(relative)),
+                $"index.html references missing static asset: {reference}");
+        }
+    }
+
     [Fact]
     public void IndexRegistersServiceWorkerAndManifest()
     {
@@ -82,12 +130,22 @@ public sealed class PwaAssetsTests
 
     private static string Asset(string relative)
     {
+        var path = AssetPath(relative);
+        Assert.True(File.Exists(path), $"asset not found: {path}");
+        return path;
+    }
+
+    private static string AssetPath(string relative)
+    {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FullWorth.slnx")))
             directory = directory.Parent;
         Assert.NotNull(directory);
-        var path = Path.Combine(directory!.FullName, "src", "FullWorth.Web", "wwwroot", relative.Replace('/', Path.DirectorySeparatorChar));
-        Assert.True(File.Exists(path), $"asset not found: {path}");
-        return path;
+        return Path.Combine(
+            directory!.FullName,
+            "src",
+            "FullWorth.Web",
+            "wwwroot",
+            relative.Replace('/', Path.DirectorySeparatorChar));
     }
 }
