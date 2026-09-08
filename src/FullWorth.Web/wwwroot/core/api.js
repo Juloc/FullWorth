@@ -1,3 +1,5 @@
+import { secureFetch } from '../security/secure-fetch.js';
+
 // Shared BFF client for FullWorth.Web.
 //
 // This module is the single target for authenticated finance/banking API access.
@@ -15,7 +17,7 @@ export function jsonBody(data, method = 'POST') {
 
 export function createApiClient(options = {}) {
   const getSpaceId = options.getSpaceId || (() => '');
-  const fetchImpl = options.fetchImpl || ((input, init) => window.fetch(input, init));
+  const fetchImpl = options.fetchImpl || secureFetch;
   const getTtlMs = Number.isFinite(options.getTtlMs) ? options.getTtlMs : DEFAULT_GET_TTL_MS;
   const pendingGets = new Map();
 
