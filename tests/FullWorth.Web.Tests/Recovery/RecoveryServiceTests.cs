@@ -281,15 +281,39 @@ public sealed class RecoveryServiceTests
     }
 
     [Fact]
-    public void FinanceWebAssembly_HasNoFinanceBackendOrBankingDependency()
+    public void OnlyTheCompositionRootReachesIntoBackendOrBankingTypes()
     {
-        var referencedAssemblies = typeof(RecoveryService).Assembly
-            .GetReferencedAssemblies()
-            .Select(assembly => assembly.Name)
+        // This used to assert that the FullWorth.Web assembly referenced neither FullWorth.Backend nor
+        // FullWorth.Banking. Since the app ships as one unified container the host composes both modules
+        // in-process, so that assembly reference now exists by design and the check could only ever fail.
+        //
+        // The boundary it protected is still real and still worth pinning, one level lower: the auth,
+        // passkey, recovery and security code must not reach into backend or banking domain types. Only
+        // Program.cs, the composition root, may - it is what wires the modules together.
+        var root = Root();
+        var offenders = Directory
+            .EnumerateFiles(Path.Combine(root, "src", "FullWorth.Web"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                        && !path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            .Where(path => File.ReadAllText(path).Contains("FullWorth.Backend", StringComparison.Ordinal)
+                        || File.ReadAllText(path).Contains("FullWorth.Banking", StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(root, path))
+            .Where(relative => relative != Path.Combine("src", "FullWorth.Web", "Program.cs"))
+            .OrderBy(relative => relative, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.DoesNotContain("FullWorth.Backend", referencedAssemblies);
-        Assert.DoesNotContain("FullWorth.Banking", referencedAssemblies);
+        Assert.True(
+            offenders.Length == 0,
+            "Only the composition root may depend on the backend or banking modules; the auth and " +
+            "security layers must go through the BFF. Unexpected: " + string.Join(", ", offenders));
+    }
+
+    private static string Root()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FullWorth.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     [Fact]

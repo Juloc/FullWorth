@@ -29,8 +29,14 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     {
         var review = Read("features", "purchase-receipt-source-review.js");
 
-        Assert.Contains("/bff/backend/", review);
+        // Receipt documents must only ever be loaded through the authenticated BFF, never from an
+        // absolute URL. The module no longer spells out "/bff/backend/" itself - it receives the
+        // injected bffUrl helper, which resolves to exactly that (core/api.js builds "/bff/<service>/").
+        // So the invariant to pin is that every document URL goes through that helper.
+        Assert.Contains("bffUrl", review);
+        Assert.Contains("bffUrl(", review);
         Assert.DoesNotContain("fetch('http", review, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("src=\"http", review, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

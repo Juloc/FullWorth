@@ -30,7 +30,19 @@ public sealed class AccessibilityGuardTests
     [Fact]
     public void FocusVisibleAndReducedMotionStylesExist()
     {
-        var css = string.Concat(Www("styles", "reset.css"), Www("styles", "shell.css"), Www("styles", "components.css"), Www("app.css"));
+        // Checked against every stylesheet the app shell actually loads, not a hand-picked four: the
+        // reduced-motion handling lives in appearance.css, design-depth.css and styles/responsive.css,
+        // so naming individual files made the guard depend on where the rules happen to sit today.
+        var html = Www("index.html");
+        var hrefs = System.Text.RegularExpressions.Regex
+            .Matches(html, "<link[^>]+rel=\"stylesheet\"[^>]+href=\"/([^\"]+\\.css)\"")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(hrefs);
+        var css = string.Concat(hrefs.Select(href => Www(href.Split('/'))));
+
         Assert.Contains(":focus-visible", css);
         Assert.Contains("prefers-reduced-motion", css);
     }

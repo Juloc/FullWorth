@@ -173,15 +173,15 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
             using var response = await client.GetAsync(path);
             response.EnsureSuccessStatusCode();
             var js = await response.Content.ReadAsStringAsync();
-            // REGRESSION (reported, not weakened): the investment-import-ui.js -> import-center-page.js
-            // merge dropped the window.financeFileUpload.snapshot() TOCTOU protection for CSV/XLSX
-            // uploads. import-center-page.js's formWithFile() appends the live File straight to
-            // FormData for both the transactions and investment flows. Needs a source fix in
-            // src/FullWorth.Web/wwwroot/features/import-center-page.js: snapshot the file via
-            // window.financeFileUpload?.snapshot before building the upload FormData, the same way
-            // finanzguru-import-page.js does (features/broker-pdf-import-page.js has the identical gap
-            // but is outside this test's scope).
-            Assert.Contains("financeFileUpload?.snapshot", js);
+            // An upload must never append the live File to FormData: the picked file can change on disk
+            // between validation and upload (TOCTOU), so it is copied to an immutable snapshot first.
+            // The regression this used to flag is fixed, and fixed better than it was reported - the
+            // protection is no longer a window.financeFileUpload global but the snapshotUploadFile
+            // export of security/secure-fetch.js, imported as a module and applied inside formWithFile.
+            // broker-pdf-import-page.js, named as having the same gap, does it the same way now too.
+            Assert.Contains("snapshotUploadFile", js);
+            Assert.Contains("security/secure-fetch.js", js);
+            Assert.Matches(@"snapshotUploadFile\(file\)[\s\S]{0,200}new FormData\(\)", js);
             if (path.EndsWith("import-center-page.js", StringComparison.Ordinal))
             {
                 Assert.Contains("Trade Republic", js);

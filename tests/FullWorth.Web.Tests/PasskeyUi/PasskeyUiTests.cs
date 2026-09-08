@@ -268,8 +268,13 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task CredentialRemoval_RequiresExplicitConfirmation()
     {
+        // Removing a credential must still require an explicit confirmation, but no longer through
+        // window.confirm: it goes through the shared confirm dialog, marked destructive and with
+        // localized labels, which is the app's own component rather than a native browser prompt.
         var js = await GetAsync("/passkeys/passkeys.js");
-        Assert.Contains("window.confirm(message('passkeys.removeConfirm'))", js);
+        Assert.Contains("confirmMessage", js);
+        Assert.Contains("passkeys.removeConfirm", js);
+        Assert.Contains("destructive:true", js);
     }
 
     [Fact]
@@ -287,14 +292,19 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AntiforgeryIntegration_UsesSingleD3BrowserFetchContract()
     {
+        // The passkey page must fetch through the one shared, antiforgery-aware wrapper rather than
+        // calling fetch itself. That wrapper is security/secure-fetch.js, which the page imports as a
+        // module; the antiforgery contract and the ban on client-side token storage are asserted against
+        // the module that is actually used.
         var js = await GetAsync("/passkeys/passkeys.js");
-        var browserFetch = await GetAsync("/security/browser-fetch.js");
-        Assert.Contains("import '../security/browser-fetch.js'", js);
-        Assert.Contains("/auth/antiforgery", browserFetch);
-        Assert.Contains("X-CSRF-TOKEN", browserFetch);
-        AssertNotContains(browserFetch, "localStorage");
-        AssertNotContains(browserFetch, "sessionStorage");
-        AssertNotContains(browserFetch, "document.cookie");
+        var secureFetch = await GetAsync("/security/secure-fetch.js");
+        Assert.Contains("../security/secure-fetch.js", js);
+        Assert.Contains("secureFetch", js);
+        Assert.Contains("/auth/antiforgery", secureFetch);
+        Assert.Contains("X-CSRF-TOKEN", secureFetch);
+        AssertNotContains(secureFetch, "localStorage");
+        AssertNotContains(secureFetch, "sessionStorage");
+        AssertNotContains(secureFetch, "document.cookie");
     }
 
     [Fact]
