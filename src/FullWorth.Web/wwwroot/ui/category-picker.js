@@ -46,7 +46,7 @@ export async function openCategoryPicker(ctx, onSelect, selectEl = null) {
     <input type="search" data-search placeholder="${ctx.esc(ctx.get('categories.pickSearch'))}">
     <div class="refund-candidates" data-list></div>
     <form data-new-form hidden><label>${ctx.esc(ctx.get('categories.new'))}<input name="name" maxlength="120"></label><div class="dialog-actions"><button type="submit">${ctx.esc(ctx.get('common.create'))}</button></div></form>
-    <button type="button" class="ghost" data-toggle-new>${ctx.esc(ctx.get('categories.new'))}</button>
+    <button type="button" class="btn btn-secondary" data-toggle-new>${ctx.esc(ctx.get('categories.new'))}</button>
   </div>`);
 
   const select = id => { onSelect(id); dlg.close(); };
