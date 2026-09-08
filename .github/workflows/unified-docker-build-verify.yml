@@ -1,0 +1,16 @@
+name: unified-docker-build-verify
+
+on:
+  push:
+    branches: [fix/unified-docker-build-race]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build unified FullWorth image
+        run: docker build -f src/FullWorth.Web/Dockerfile -t fullworth:verify .
