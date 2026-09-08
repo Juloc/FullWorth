@@ -148,7 +148,7 @@ async function renderArticles() {
       <select data-pa-review><option value="">${esc(t('all'))}</option><option value="needs_review">${esc(t('review'))}</option><option value="confirmed">${esc(t('confirmed'))}</option></select>
       <select data-pa-linked><option value="">${esc(t('all'))}</option><option value="true">${esc(t('linked'))}</option><option value="false">${esc(t('unlinked'))}</option></select>
       <label class="check inline"><input type="checkbox" data-pa-bookmark> ${esc(t('bookmarked'))}</label>
-      <button type="button" class="ghost" data-pa-refresh>${esc(t('refresh'))}</button>
+      <button type="button" class="btn btn-secondary" data-pa-refresh>${esc(t('refresh'))}</button>
     </div><div data-pa-article-list class="pa-list"></div>`;
 
   const load = async () => {
@@ -217,8 +217,8 @@ export async function openPurchaseWorkspace(id) {
   const writable = workspace.access === 'write';
   const categoryOptions = `<option value="">—</option>${categoryOptionsHtml(categories)}`;
   const itemRows = (purchase.items || []).map(item => itemEditor(item, categoryOptions, writable)).join('');
-  const paymentRows = (purchase.payments || []).map(payment => `<div class="pa-payment-row"><div><strong>${esc(money(payment.amount, payment.currency))}</strong><span>${esc(payment.linkSource)}${payment.confidence != null ? ` · ${Math.round(Number(payment.confidence) * 100)}%` : ''}</span></div>${writable ? `<button type="button" class="ghost" data-remove-payment="${payment.id}">${esc(t('remove'))}</button>` : ''}</div>`).join('');
-  const documentRows = (purchase.documents || []).map(doc => `<div class="pa-document-row"><div><strong>${esc(doc.originalFileName)}</strong><span>${esc(doc.documentType)} · ${esc(doc.status)}</span></div><button type="button" class="ghost" data-view-document="${doc.id}">${esc(t('details'))}</button></div>`).join('');
+  const paymentRows = (purchase.payments || []).map(payment => `<div class="pa-payment-row"><div><strong>${esc(money(payment.amount, payment.currency))}</strong><span>${esc(payment.linkSource)}${payment.confidence != null ? ` · ${Math.round(Number(payment.confidence) * 100)}%` : ''}</span></div>${writable ? `<button type="button" class="btn btn-secondary" data-remove-payment="${payment.id}">${esc(t('remove'))}</button>` : ''}</div>`).join('');
+  const documentRows = (purchase.documents || []).map(doc => `<div class="pa-document-row"><div><strong>${esc(doc.originalFileName)}</strong><span>${esc(doc.documentType)} · ${esc(doc.status)}</span></div><button type="button" class="btn btn-secondary" data-view-document="${doc.id}">${esc(t('details'))}</button></div>`).join('');
 
   const dlg = makeDialog(`<div class="pa-dialog-card pa-workspace">
     <div class="panel-head"><div><h2>${esc(purchase.merchant || t('articles'))}</h2><div class="row-sub">${esc(fmtDate(purchase.purchaseDate))} · ${esc(purchase.source)} · ${esc(purchase.reviewState)}</div></div><div class="panel-head-actions">${workspace.access !== 'write' ? `<span class="pa-chip">${esc(t('readonly'))}</span>` : ''}<button type="button" data-close>×</button></div></div>
@@ -243,13 +243,13 @@ export async function openPurchaseWorkspace(id) {
           ${writable ? `<div class="pa-inline-actions"><label>${esc(t('visibility'))}<select data-visibility><option value="space"${purchase.visibility === 'space' ? ' selected' : ''}>${esc(t('shared'))}</option><option value="private"${purchase.visibility === 'private' ? ' selected' : ''}>${esc(t('private'))}</option></select></label><label class="check inline"><input type="checkbox" data-bookmark ${purchase.isBookmarked ? 'checked' : ''}> ${esc(t('bookmark'))}</label><button type="button" data-save-summary>${esc(t('save'))}</button></div>` : ''}
         </div>
 
-        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('lineItems'))}</h3>${writable ? `<button type="button" class="ghost" data-add-item>${esc(t('add'))}</button>` : ''}</div><div class="pa-items" data-items>${itemRows || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>
+        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('lineItems'))}</h3>${writable ? `<button type="button" class="btn btn-secondary" data-add-item>${esc(t('add'))}</button>` : ''}</div><div class="pa-items" data-items>${itemRows || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>
       </section>
       <aside class="pa-work-side">
         ${reconcileHtml(rec, purchase.currency, writable)}
-        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('payments'))}</h3>${writable ? `<button type="button" class="ghost" data-add-payment>${esc(t('addPayment'))}</button>` : ''}</div><div data-payments>${paymentRows || `<div class="row-sub">${esc(t('noData'))}</div>`}</div></div>
-        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('documents'))}</h3>${writable ? `<button type="button" class="ghost" data-upload-document>${esc(t('uploadDocument'))}</button>` : ''}</div><div data-documents>${documentRows || `<div class="row-sub">${esc(t('noData'))}</div>`}</div><input type="file" data-document-file accept="image/*,.pdf" hidden></div>
-        ${writable ? `<div class="pa-card pa-confirm-card"><button type="button" data-confirm class="primary-action">${esc(t('confirm'))}</button><button type="button" class="ghost danger" data-delete-purchase>${esc(t('deletePurchase'))}</button></div>` : ''}
+        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('payments'))}</h3>${writable ? `<button type="button" class="btn btn-secondary" data-add-payment>${esc(t('addPayment'))}</button>` : ''}</div><div data-payments>${paymentRows || `<div class="row-sub">${esc(t('noData'))}</div>`}</div></div>
+        <div class="pa-card"><div class="pa-card-head"><h3>${esc(t('documents'))}</h3>${writable ? `<button type="button" class="btn btn-secondary" data-upload-document>${esc(t('uploadDocument'))}</button>` : ''}</div><div data-documents>${documentRows || `<div class="row-sub">${esc(t('noData'))}</div>`}</div><input type="file" data-document-file accept="image/*,.pdf" hidden></div>
+        ${writable ? `<div class="pa-card pa-confirm-card"><button type="button" data-confirm class="primary-action">${esc(t('confirm'))}</button><button type="button" class="btn btn-danger" data-delete-purchase>${esc(t('deletePurchase'))}</button></div>` : ''}
       </aside>
     </div>
     <div class="pa-dialog-error" data-error hidden></div>
@@ -297,7 +297,7 @@ function itemEditor(item, categoryOptions, writable) {
       <label>${esc(t('returnUntil'))}<input data-f="returnDeadline" type="date" value="${esc(item.returnDeadline || '')}" ${disabled}></label>
       <label>${esc(t('serial'))}<input data-f="serialNumber" value="${esc(item.serialNumber || '')}" ${disabled}></label>
     </div>
-    <div class="pa-item-product">${item.productId ? `<span>${esc(t('product'))}: ${esc(item.productId)}</span>` : `<span class="row-sub">${esc(t('product'))}: —</span>`}${writable ? `<div><button type="button" class="ghost" data-choose-product>${esc(t('chooseProduct'))}</button>${item.productId ? `<button type="button" class="ghost" data-unlink-product>${esc(t('unlinkProduct'))}</button>` : ''}<button type="button" data-save-item>${esc(t('save'))}</button><button type="button" class="ghost danger" data-delete-item>${esc(t('remove'))}</button></div>` : ''}</div>
+    <div class="pa-item-product">${item.productId ? `<span>${esc(t('product'))}: ${esc(item.productId)}</span>` : `<span class="row-sub">${esc(t('product'))}: —</span>`}${writable ? `<div><button type="button" class="btn btn-secondary" data-choose-product>${esc(t('chooseProduct'))}</button>${item.productId ? `<button type="button" class="btn btn-secondary" data-unlink-product>${esc(t('unlinkProduct'))}</button>` : ''}<button type="button" data-save-item>${esc(t('save'))}</button><button type="button" class="btn btn-danger" data-delete-item>${esc(t('remove'))}</button></div>` : ''}</div>
   </div>`;
 }
 
@@ -396,7 +396,7 @@ function reconcileHtml(rec, currency, writable) {
       <span>${esc(t('paymentTotal'))}<strong>${esc(money(rec.linkedPaymentTotal, currency))}</strong></span>
       <span>${esc(t('itemDifference'))}<strong class="${Math.abs(itemDiff) > Number(rec.tolerance || .01) ? 'warn-text' : ''}">${esc(money(itemDiff, currency))}</strong></span>
       <span>${esc(t('paymentDifference'))}<strong class="${paymentLinked && Math.abs(paymentDiff) > Number(rec.tolerance || .01) ? 'warn-text' : ''}">${esc(money(paymentDiff, currency))}</strong></span>
-    </div>${writable && !rec.itemsReconciled ? `<button type="button" class="ghost" data-accept-items>${esc(t('acceptDifference'))}</button>` : ''}${writable && paymentLinked && !rec.paymentsReconciled ? `<button type="button" class="ghost" data-accept-payments>${esc(t('acceptDifference'))}</button>` : ''}</div>`;
+    </div>${writable && !rec.itemsReconciled ? `<button type="button" class="btn btn-secondary" data-accept-items>${esc(t('acceptDifference'))}</button>` : ''}${writable && paymentLinked && !rec.paymentsReconciled ? `<button type="button" class="btn btn-secondary" data-accept-payments>${esc(t('acceptDifference'))}</button>` : ''}</div>`;
 }
 
 async function acceptDifference(dlg, id, kind) {
@@ -459,7 +459,7 @@ async function refreshWorkspace(oldDialog, id) {
 
 async function chooseProduct(parent, purchaseId, itemId, itemRow) {
   const initial = itemRow.querySelector('[data-f="name"]')?.value || '';
-  const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(t('chooseProduct'))}</h2><button type="button" data-close>×</button></div><div class="pa-toolbar"><input type="search" data-product-query value="${esc(initial)}" placeholder="${esc(t('search'))}"><button type="button" data-product-search>${esc(t('search'))}</button><button type="button" class="ghost" data-product-create>${esc(t('newProduct'))}</button></div><div data-product-results class="pa-list"></div></div>`);
+  const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(t('chooseProduct'))}</h2><button type="button" data-close>×</button></div><div class="pa-toolbar"><input type="search" data-product-query value="${esc(initial)}" placeholder="${esc(t('search'))}"><button type="button" data-product-search>${esc(t('search'))}</button><button type="button" class="btn btn-secondary" data-product-create>${esc(t('newProduct'))}</button></div><div data-product-results class="pa-list"></div></div>`);
   const load = async () => {
     const q = dlg.querySelector('[data-product-query]').value.trim();
     const data = await api(`api/products?limit=80${q ? `&query=${encodeURIComponent(q)}` : ''}`);
@@ -537,7 +537,7 @@ async function renderAnalytics() {
     api('api/purchase-analytics/by-brand'),
     api('api/purchase-analytics/price-changes')
   ]);
-  advancedPanel.innerHTML = `<div class="panel-head"><div><h2>${esc(t('analytics'))}</h2><div class="row-sub">Artikel-, Produkt- und Händlerdaten aus bestätigten Käufen</div></div><button type="button" class="ghost" data-refresh-analytics>${esc(t('refresh'))}</button></div>
+  advancedPanel.innerHTML = `<div class="panel-head"><div><h2>${esc(t('analytics'))}</h2><div class="row-sub">Artikel-, Produkt- und Händlerdaten aus bestätigten Käufen</div></div><button type="button" class="btn btn-secondary" data-refresh-analytics>${esc(t('refresh'))}</button></div>
     <div class="pa-metrics"><div><span>${esc(t('spend'))}</span><strong>${esc(money(overview.totalSpend, overview.baseCurrency))}</strong></div><div><span>${esc(t('purchaseCount'))}</span><strong>${overview.purchaseCount}</strong></div><div><span>${esc(t('articles'))}</span><strong>${overview.itemCount}</strong></div><div class="${overview.needsReview ? 'warn' : ''}"><span>${esc(t('needsReview'))}</span><strong>${overview.needsReview}</strong></div></div>
     <div class="pa-analytics-grid">${analyticsCard(t('topCategories'), categories.items, categories.currency)}${analyticsCard(t('topProducts'), products.items, products.currency)}${analyticsCard(t('topBrands'), brands.items, brands.currency)}<div class="pa-card"><div class="pa-card-head"><h3>${esc(t('priceChanges'))}</h3></div>${(changes.items || []).slice(0, 12).map(row => `<div class="pa-analytics-row"><div><strong>${esc(row.productName)}</strong><span>${esc(row.current?.merchant || '')}</span></div><div>${row.comparison?.basePriceChangePercent == null ? '—' : `${row.comparison.basePriceChangePercent}%`}${row.comparison?.possibleShrinkflation ? `<span class="warn-text"> ${esc(t('shrinkflation'))}</span>` : ''}</div></div>`).join('') || `<div class="state-empty">${esc(t('noData'))}</div>`}</div></div>`;
   advancedPanel.querySelector('[data-refresh-analytics]').onclick = renderAnalytics;
