@@ -1,5 +1,5 @@
 import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
-import { sectionCard, trendBadge, esc } from '../ui/ux-kit.js';
+import { sectionCard, trendBadge, esc, identityIcon } from '../ui/ux-kit.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
@@ -648,7 +648,7 @@ function renderAccounts(accounts) {
     for (const account of list) {
       const row = document.createElement('div'); row.className = 'row';
       const balance = account.latestBalance ? ctx.money(account.latestBalance.amount, account.latestBalance.currency) : '—';
-      row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div></div><div class="amount">${balance}</div>`;
+      row.innerHTML = `<span class="tx-ident-slot">${identityIcon(account.displayName || account.institutionName, {})}</span><div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div></div><div class="amount">${balance}</div>`;
       frag.appendChild(row);
     }
   }
