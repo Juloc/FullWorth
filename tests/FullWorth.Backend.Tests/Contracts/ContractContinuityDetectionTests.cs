@@ -45,6 +45,79 @@ public sealed class ContractContinuityDetectionTests
         Assert.Empty(candidates);
     }
 
+    [Fact]
+    public async Task Parallel_account_history_is_not_treated_as_payment_account_change()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var userId = Guid.NewGuid();
+        var spaceId = Guid.NewGuid();
+        var oldAccountId = Guid.NewGuid();
+        var newAccountId = Guid.NewGuid();
+        var contractId = Guid.NewGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await factory.SeedAsync(async db =>
+        {
+            db.Users.Add(new FullWorthUser
+            {
+                Id = userId,
+                EmailNormalized = $"{userId:N}@EXAMPLE.COM".ToUpperInvariant(),
+                DisplayName = "Parallel owner",
+                IsActive = true
+            });
+            db.FullWorthSpaces.Add(new FullWorthSpace
+            {
+                Id = spaceId,
+                Name = "Parallel",
+                BaseCurrency = "EUR"
+            });
+            db.FullWorthSpaceMembers.Add(new FullWorthSpaceMember
+            {
+                FullWorthSpaceId = spaceId,
+                UserId = userId,
+                Role = FullWorthSpaceRoles.Owner
+            });
+            db.Accounts.AddRange(
+                Account(oldAccountId, spaceId, "Old"),
+                Account(newAccountId, spaceId, "New"));
+            db.AccountOwners.AddRange(
+                new AccountOwner { AccountId = oldAccountId, UserId = userId, OwnershipType = AccountOwnershipTypes.Owner },
+                new AccountOwner { AccountId = newAccountId, UserId = userId, OwnershipType = AccountOwnershipTypes.Owner });
+            db.Contracts.Add(Contract(contractId, spaceId, oldAccountId, "NETFLIX"));
+
+            foreach (var monthsBack in new[] { 4, 3, 2, 1 })
+                db.Transactions.Add(Transaction(oldAccountId, today.AddMonths(-monthsBack), "NETFLIX"));
+            foreach (var monthsBack in new[] { 2, 1, 0 })
+                db.Transactions.Add(Transaction(newAccountId, today.AddMonths(-monthsBack), "NETFLIX"));
+
+            await db.SaveChangesAsync();
+        });
+
+        var candidate = new ContractCandidate(
+            "NETFLIX",
+            49.99m,
+            "EUR",
+            "monthly",
+            1,
+            today,
+            today.AddMonths(1),
+            null,
+            newAccountId,
+            7,
+            0m,
+            .95m);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<ContractContinuityDetectionService>();
+        var result = await service.DetectRelationshipsForUserAsync(
+            userId,
+            spaceId,
+            [candidate],
+            CancellationToken.None);
+
+        Assert.Empty(result.AccountChanges);
+    }
+
     private static async Task<Scenario> SeedAsync(BackendWebApplicationFactory factory, bool overlap)
     {
         var scenario = new Scenario(
