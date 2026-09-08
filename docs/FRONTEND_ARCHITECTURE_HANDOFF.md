@@ -65,7 +65,7 @@ The architecture guard allow-lists may only shrink.
 
 1. Continue shrinking remaining architecture allow-lists, especially legacy native-confirm and observer exceptions.
 2. Continue moving shell concerns out of `app.js` only when there is a clear owner; do not turn this into another big-bang rewrite.
-3. Shrink `features/accounts-ux.js` by moving same-domain presentation logic into the Accounts owner/shared account identity primitives. Do not reintroduce cross-feature decoration.
+3. Shrink `features/accounts-presentation.js` by moving same-domain presentation logic into the Accounts owner/shared account identity primitives. Do not reintroduce cross-feature decoration.
 4. Consolidate Purchase/Wealth layered helper modules into explicit feature submodules where useful.
 5. Split monolithic CSS into `styles/tokens.css`, shell/components/responsive and feature-owned styles after behavioral architecture is stable.
 6. Retire the historical `parity-completion.css` name by folding its live rules into the final styles split rather than deleting live behavior.
