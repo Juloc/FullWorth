@@ -68,7 +68,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ConnectedAccounts_DefaultToBankLogo_AndVisualOverrideCanBeReset()
     {
-        var js = await GetAsync("/features/accounts-ux.js");
+        var js = await GetAsync("/features/accounts-presentation.js");
 
         Assert.Contains("bankForAccount", js);
         Assert.Contains("hasVisualOverride", js);
@@ -107,7 +107,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task MobileAccountsUseCompactOverflowActions()
     {
         var accounts = await GetAsync("/features/accounts.js");
-        var css = await GetAsync("/features/accounts-ux.css");
+        var css = await GetAsync("/features/accounts.css");
 
         Assert.Contains("data-account-more", accounts);
         Assert.Contains("openAccountActionsDialog", accounts);
