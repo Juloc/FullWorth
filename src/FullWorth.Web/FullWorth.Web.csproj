@@ -20,7 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FullWorth.Backend/FullWorth.Backend.csproj" />
-    <ProjectReference Include="../FullWorth.Banking/FullWorth.Banking.csproj" AdditionalProperties="FullWorthUnifiedReference=true" />
+    <ProjectReference Include="../FullWorth.Banking/FullWorth.Banking.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="FullWorth.Web.Tests" />
