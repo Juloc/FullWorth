@@ -5,8 +5,9 @@ import {
 } from './purchase-articles-advanced-actions.js';
 import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';
 import { mountReceiptSourceReview } from './purchase-receipt-source-review.js';
-import { api as sharedApi } from '../core/services.js';
+import { api as sharedApi, apiClient } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { confirmMessage } from '../ui/confirm.js';
 import { openPurchaseWorkspace, openProduct } from './purchase-articles-workspace.js';
 
 // Adapter between the existing purchase workspace and the secondary advanced-actions module. It avoids
@@ -23,6 +24,16 @@ function makeDialog(html) {
   const normalized = html.replace(/class="pa-dialog-card\b/, 'class="dialog-card pa-dialog-card');
   return createDialog(normalized,{className:'pa-dialog',closeLabel:text('Schließen','Close')});
 }
+
+const bffUrl = path => apiClient.backendUrl(path);
+const confirmAction = (message, options = {}) => confirmMessage({
+  message,
+  title: options.title || text('Bestätigen', 'Confirm'),
+  confirmLabel: options.confirmLabel || text('Bestätigen', 'Confirm'),
+  cancelLabel: options.cancelLabel || text('Abbrechen', 'Cancel'),
+  destructive: options.destructive !== false,
+  create: html => createDialog(html, { className: 'pa-dialog', closeLabel: text('Schließen', 'Close') })
+});
 
 function showError(dlg, message) {
   let box = dlg.querySelector('[data-error]');
@@ -130,7 +141,8 @@ async function mountPurchaseDialog(dialog) {
       money,
       fmtDate,
       showError,
-      refresh
+      refresh,
+      confirmAction
     });
     await mountPurchaseDiscountActions({
       dlg: dialog,
@@ -141,9 +153,10 @@ async function mountPurchaseDialog(dialog) {
       makeDialog,
       money,
       showError,
-      refresh
+      refresh,
+      confirmAction
     });
-    await mountReceiptSourceReview({ dlg: dialog, purchase, api, esc, showError });
+    await mountReceiptSourceReview({ dlg: dialog, purchase, api, esc, showError, bffUrl });
     mountCurrencySafePaymentPicker(dialog, purchase, writable);
   } catch (error) {
     showError(dialog, error.message);
@@ -167,6 +180,7 @@ async function mountProductDialog(dialog) {
       esc,
       makeDialog,
       showError,
+      confirmAction,
       reload: async targetId => reopenProduct(targetId, dialog)
     });
   } catch (error) {
@@ -180,7 +194,7 @@ export async function refreshPurchaseAdvancedInstaller(detail = {}) {
   const advancedPanel = document.querySelector('.purchase-advanced-panel:not([hidden])');
   const activeTab = detail.tab || document.querySelector('[data-pa-tab].active')?.dataset.paTab;
   if (advancedPanel && activeTab === 'articles') {
-    mountExportAndWarrantyActions(advancedPanel, { api, esc, makeDialog, money, fmtDate, showError });
+    mountExportAndWarrantyActions(advancedPanel, { api, esc, makeDialog, money, fmtDate, showError, bffUrl });
   }
 
   const dialog = detail.dialog;
