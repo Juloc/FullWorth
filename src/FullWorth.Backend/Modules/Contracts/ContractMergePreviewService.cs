@@ -94,7 +94,7 @@ public sealed class ContractMergePreviewService(ContractStore store)
             .OrderBy(x => x)
             .ToArray();
 
-        var payments = contracts
+        var allPayments = contracts
             .SelectMany(x => x.Activity?.Payments ?? Array.Empty<ContractPayment>())
             .GroupBy(payment => payment.Id)
             .Select(group => group
@@ -102,8 +102,8 @@ public sealed class ContractMergePreviewService(ContractStore store)
                 .First())
             .OrderByDescending(payment => payment.Date ?? DateOnly.MinValue)
             .ThenBy(payment => payment.Id)
-            .Take(120)
             .ToArray();
+        var payments = allPayments.Take(120).ToArray();
 
         var accountIds = contracts
             .Select(x => x.Contract.AccountId)
@@ -153,7 +153,7 @@ public sealed class ContractMergePreviewService(ContractStore store)
                 previewContracts,
                 fields,
                 payments,
-                payments.Length,
+                allPayments.Length,
                 accountIds,
                 aliases,
                 warnings,
