@@ -93,6 +93,92 @@ public sealed class CategoryAnalyticsIntegrationTests
     }
 
     [Fact]
+    public async Task ExactWeekRangeUsesCompletedPriorWeeksForAverages()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -21m, new DateOnly(2026, 7, 31));
+            Add(db, scenario.Account, scenario.Groceries, -14m, new DateOnly(2026, 7, 24));
+            Add(db, scenario.Account, scenario.Groceries, -7m, new DateOnly(2026, 7, 17));
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/categories?fullWorthSpaceId={scenario.Space}&from=2026-08-03&to=2026-08-09&granularity=week", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var groceries = json.RootElement.GetProperty("categories").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "Groceries");
+
+        Assert.Equal(100m, groceries.GetProperty("current").GetDecimal());
+        Assert.Equal(21m, groceries.GetProperty("previous").GetDecimal());
+        Assert.Equal(14m, groceries.GetProperty("average3").GetDecimal());
+        Assert.Equal(7m, groceries.GetProperty("average6").GetDecimal());
+        Assert.Equal(3.5m, groceries.GetProperty("average12").GetDecimal());
+    }
+
+    [Fact]
+    public async Task ExactQuarterRangeUsesCompletedPriorQuartersForAverages()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -90m, new DateOnly(2026, 2, 15));
+            Add(db, scenario.Account, scenario.Groceries, -120m, new DateOnly(2025, 11, 15));
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/categories?fullWorthSpaceId={scenario.Space}&from=2026-07-01&to=2026-09-30&granularity=quarter", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var groceries = json.RootElement.GetProperty("categories").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "Groceries");
+
+        Assert.Equal(160m, groceries.GetProperty("current").GetDecimal());
+        Assert.Equal(60m, groceries.GetProperty("previous").GetDecimal());
+        Assert.Equal(90m, groceries.GetProperty("average3").GetDecimal());
+        Assert.Equal(45m, groceries.GetProperty("average6").GetDecimal());
+        Assert.Equal(22.5m, groceries.GetProperty("average12").GetDecimal());
+    }
+
+    [Fact]
+    public async Task ExactYearRangeUsesCompletedPriorYearsForAverages()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -120m, new DateOnly(2025, 6, 15));
+            Add(db, scenario.Account, scenario.Groceries, -240m, new DateOnly(2024, 6, 15));
+            Add(db, scenario.Account, scenario.Groceries, -360m, new DateOnly(2023, 6, 15));
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/categories?fullWorthSpaceId={scenario.Space}&from=2026-01-01&to=2026-12-31&granularity=year", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var groceries = json.RootElement.GetProperty("categories").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == "Groceries");
+
+        Assert.Equal(220m, groceries.GetProperty("current").GetDecimal());
+        Assert.Equal(120m, groceries.GetProperty("previous").GetDecimal());
+        Assert.Equal(240m, groceries.GetProperty("average3").GetDecimal());
+        Assert.Equal(120m, groceries.GetProperty("average6").GetDecimal());
+        Assert.Equal(60m, groceries.GetProperty("average12").GetDecimal());
+    }
+
+    [Fact]
     public async Task SpaceMemberWithoutAccountOwnership_SeesNoSpend()
     {
         using var factory = new BackendWebApplicationFactory();
