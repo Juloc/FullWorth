@@ -84,6 +84,7 @@ function schedule(){if(S.queued)return;S.queued=true;requestAnimationFrame(()=>{
 onAppEvent('accounts:toggle-groups',()=>{S.groupMode?leaveGroups(false):enterGroups().catch(console.error)})
 onAppEvent('accounts:manual-dialog-opened',detail=>manualDialog(detail?.dialog||null))
 onAppEvent('accounts:manual-created',detail=>applyManualCreated(detail?.account).catch(console.error))
+onAppEvent('accounts:edit-visual',async detail=>{const id=String(detail?.accountId||'');if(!id)return;const bb=await bundle(true);const account=bb.accounts.find(item=>String(item.id)===id);if(account)await editAccount(account)})
 onAppEvent('surface:rendered',detail=>{if(detail?.view==='accounts'){S.bundleAt=0;S.unreadAt=0}if(detail?.view==='accounts'||detail?.view==='transactions')schedule()})
 window.addEventListener('popstate',schedule)
 ensureCss();schedule();
