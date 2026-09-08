@@ -17,7 +17,7 @@ function decorate() {
 
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className='btn btn-secondary';
     button.dataset.importBatchDetails = 'true';
     button.textContent = t('Details', 'Details');
     button.addEventListener('click', () => openDetails(card, button));
@@ -100,7 +100,7 @@ function renderItem(item) {
   const reference = item.sourceReference ? ` · ${item.sourceReference}` : '';
   const error = item.error ? `<div class="receipt-import-item-error">${esc(item.error)}</div>` : '';
   const receipt = item.purchaseId
-    ? `<a class="ghost receipt-import-item-open" href="${esc(receiptUrl(item.purchaseId))}" target="_blank" rel="noopener noreferrer">${esc(t('Beleg öffnen', 'Open receipt'))}</a>`
+    ? `<a class="btn btn-secondary receipt-import-item-open" href="${esc(receiptUrl(item.purchaseId))}" target="_blank" rel="noopener noreferrer">${esc(t('Beleg öffnen', 'Open receipt'))}</a>`
     : '';
 
   return `<div class="receipt-import-batch-item" data-import-batch-item data-status="${esc(status)}" data-source="${esc(source)}">
