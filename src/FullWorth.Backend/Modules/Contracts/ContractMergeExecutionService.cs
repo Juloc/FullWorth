@@ -72,6 +72,15 @@ public sealed class ContractMergeExecutionService(
         if (rows.Count != ids.Length)
             return new(ContractMergeExecuteResult.NotFound);
 
+        foreach (var id in ids)
+        {
+            var access = await store.GetRecordAccessForUserAsync(userId, fullWorthSpaceId, id, ct);
+            if (access == ContractAccessLevel.None)
+                return new(ContractMergeExecuteResult.NotFound);
+            if (access != ContractAccessLevel.Write)
+                return new(ContractMergeExecuteResult.Forbidden);
+        }
+
         var target = rows.Single(row => row.Id == request.CanonicalContractId);
         if (target.MergedIntoContractId.HasValue)
             return new(ContractMergeExecuteResult.Conflict, Error: "Canonical contract is already merged.");
@@ -91,15 +100,6 @@ public sealed class ContractMergeExecutionService(
 
         if (sources.Any(source => source.MergedIntoContractId.HasValue))
             return new(ContractMergeExecuteResult.Conflict, Error: "A source contract was already merged elsewhere.");
-
-        foreach (var id in ids)
-        {
-            var access = await store.GetAccessAsync(userId, fullWorthSpaceId, id, ct);
-            if (access == ContractAccessLevel.None)
-                return new(ContractMergeExecuteResult.NotFound);
-            if (access != ContractAccessLevel.Write)
-                return new(ContractMergeExecuteResult.Forbidden);
-        }
 
         var previewOutcome = await previews.PreviewAsync(
             userId,
