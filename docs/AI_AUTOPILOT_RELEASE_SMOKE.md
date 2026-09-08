@@ -22,7 +22,7 @@ Deploy 0 and Deploy 1 add **no database migration**. Deploy 2 adds only the addi
 - [ ] affected existing Coach/Intelligence tests pass
 - [ ] no required Docker Compose or environment change
 - [ ] no new container
-- [ ] Autopilot rollout defaults to `off`
+- [ ] write-capable Autopilot features remain `off`
 
 ## After deploy
 
@@ -66,21 +66,22 @@ When banking is configured:
 - [ ] account sync can complete
 - [ ] imported transactions remain visible
 
-## Deploy 0 expected behavior
+## Current rollout defaults
 
-No user-visible Autopilot feature exists yet.
+Deploy 5 is the first user-visible Autopilot release.
 
-Deploy 3 default rollout state:
+Default rollout state:
 
-- signals = `shadow`
-- insights = `off`
+- signals = `on`
+- insights = `on`
 - actions = `off`
 - automation-rules = `off`
 - scenarios = `off`
 - proactive-ai-explanations = `off`
 - insight-push = `off`
 
-An administrator can still explicitly override `signals=off` to disable shadow processing.
+An administrator can explicitly set `Autopilot__Features__insights=off` to hide the surface and
+`Autopilot__Features__signals=off` to stop deterministic signal generation.
 
 ## Optional rollout override
 
@@ -178,3 +179,71 @@ Deploy 4 adds **no database migration** and keeps `signals=shadow`, `insights=of
 Set `Autopilot__Features__signals=off` to stop all Autopilot signal generation immediately, then roll back the application image.
 
 There is no Deploy-4 schema change and no automatic transfer link, contract merge, account move, or price update to undo.
+
+
+## Deploy 5 smoke additions
+
+Deploy 5 adds **no database migration**, **no container**, and **no required environment variable**.
+
+Default rollout state changes to:
+
+- `signals=on`
+- `insights=on`
+- every write-capable Autopilot feature remains `off`
+
+Dashboard / navigation:
+
+- [ ] Dashboard shows a compact `Wichtig für dich` section above normal widgets
+- [ ] at most 3 active insights are shown on the Dashboard
+- [ ] empty insight state is calm and does not look like an error
+- [ ] insight API failure does not prevent the rest of Dashboard from rendering
+- [ ] Insights has no sidebar, bottom-nav, or More-menu entry
+- [ ] `Alle anzeigen` opens the secondary Insights route
+- [ ] browser back/forward works for the secondary route
+
+Insight lifecycle:
+
+- [ ] current / completed / hidden tabs load the correct API view
+- [ ] mark-read persists after reload
+- [ ] dismiss moves the insight to Hidden
+- [ ] snooze removes the insight from Current until the selected time
+- [ ] useful / irrelevant feedback persists
+- [ ] resolved signals appear in Completed
+- [ ] actions above change only FinancialSignalState/feedback, never finance source data
+
+Finance object navigation:
+
+- [ ] contract insight opens the existing contract detail
+- [ ] budget insight opens the existing budget detail
+- [ ] transfer/recent-transaction insight opens Transactions
+- [ ] category/merchant/cashflow insight opens Analytics
+- [ ] no merge, transfer-link, price-update, categorization, or other finance write is available
+
+Presentation / privacy:
+
+- [ ] normal insights use neutral styling
+- [ ] attention uses warning styling; red is reserved for `severity=high`
+- [ ] dark mode remains legible
+- [ ] mobile rows and tabs have usable touch targets
+- [ ] Privacy mode masks monetary values in insight summaries
+- [ ] no AI badge/gradient/provider is required
+
+PWA:
+
+- [ ] service-worker v96 installs successfully
+- [ ] `features/insights.js` is present in the static shell cache
+- [ ] no `/api/insights` response is cached by the service worker
+
+### Deploy 5 rollback
+
+For immediate UI rollback set:
+
+`Autopilot__Features__insights=off`
+
+The dashboard then hides the insight surface because the API returns 404.
+
+If deterministic generation must also stop, set:
+
+`Autopilot__Features__signals=off`
+
+Then roll back the image normally. There is no Deploy-5 schema change and no finance mutation to undo.

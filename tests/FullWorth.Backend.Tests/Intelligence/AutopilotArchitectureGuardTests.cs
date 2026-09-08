@@ -6,13 +6,15 @@ namespace FullWorth.Backend.Tests.Intelligence;
 public sealed class AutopilotArchitectureGuardTests
 {
     [Fact]
-    public void Deploy3DefaultsSignalsToShadowAndUserVisibleFeaturesToOff()
+    public void Deploy5DefaultsDeterministicSignalsAndReadOnlyInsightsToOn()
     {
         var configuration = new ConfigurationBuilder().Build();
         var settings = new AutopilotRolloutSettings(configuration);
 
-        Assert.Equal(AutopilotRolloutState.Shadow, settings.Get(AutopilotFeatures.Signals));
-        foreach (var feature in AutopilotFeatures.All.Where(x => x != AutopilotFeatures.Signals))
+        Assert.Equal(AutopilotRolloutState.On, settings.Get(AutopilotFeatures.Signals));
+        Assert.Equal(AutopilotRolloutState.On, settings.Get(AutopilotFeatures.Insights));
+        foreach (var feature in AutopilotFeatures.All.Where(x =>
+                     x != AutopilotFeatures.Signals && x != AutopilotFeatures.Insights))
             Assert.Equal(AutopilotRolloutState.Off, settings.Get(feature));
     }
 
