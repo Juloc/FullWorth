@@ -229,7 +229,7 @@ function renderHistoryChart(timeline){
   root.innerHTML=`<div class="history-chart-wrap">`+
     `<svg class="history-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Gehaltsverlauf mit Inflation, Werte per Mauszeiger">`+
       `${yTicks}${markers}`+
-      `<line class="history-crosshair" x1="0" x2="0" y1="${top}" y2="${h-bottom}" style="display:none"/>`+
+      `<line class="history-crosshair is-hidden" x1="0" x2="0" y1="${top}" y2="${h-bottom}"/>`+
       shown.map(([key,cls])=>series(key,`history-line-${cls}`)).join('')+
       shown.map(([key,cls])=>dots(key,`history-dot-${cls}`)).join('')+
       `<g class="history-hover-dots"></g>`+
@@ -257,7 +257,7 @@ function wireChartHover(root,points,dates,geo,eventByDate,shown){
     let idx=0,best=Infinity;
     for(let i=0;i<points.length;i++){const d=Math.abs(geo.x(dates[i])-vbx);if(d<best){best=d;idx=i}}
     const p=points[idx],px=geo.x(dates[idx]);
-    cross.setAttribute('x1',px.toFixed(1));cross.setAttribute('x2',px.toFixed(1));cross.style.display='';
+    cross.setAttribute('x1',px.toFixed(1));cross.setAttribute('x2',px.toFixed(1));cross.classList.remove('is-hidden');
     hoverG.innerHTML=shown.map(([key,cls])=>`<circle class="history-dot-active history-dot-${cls}" cx="${px.toFixed(1)}" cy="${geo.y(Number(p[key])||0).toFixed(1)}" r="4.2"/>`).join('');
     const ev=eventByDate.get(p.date);
     tip.innerHTML=`<div class="tip-date">${fmtDate(p.date)}${ev?` · <span class="tip-event">${esc(ev)}</span>`:''}</div>`+
@@ -278,7 +278,7 @@ function wireChartHover(root,points,dates,geo,eventByDate,shown){
     tip.style.left=`${Math.max(4,lx)}px`;tip.style.top=`${Math.min(Math.max(minY,ly),Math.max(minY,maxY))}px`;
   }
   svg.addEventListener('mousemove',move);
-  svg.addEventListener('mouseleave',()=>{tip.hidden=true;cross.style.display='none';hoverG.innerHTML=''});
+  svg.addEventListener('mouseleave',()=>{tip.hidden=true;cross.classList.add('is-hidden');hoverG.innerHTML=''});
 }
 
 function renderHistoryYears(timeline){

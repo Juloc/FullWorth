@@ -114,11 +114,16 @@ public sealed class CategoryAnalyticsIntegrationTests
         var groceries = json.RootElement.GetProperty("categories").EnumerateArray()
             .Single(item => item.GetProperty("name").GetString() == "Groceries");
 
+        // Weeks run Monday to Sunday, so the windows before 03.08. are 27.07.-02.08. (3 weeks back to
+        // 13.07.), 22.06.-02.08. (6 weeks) and 11.05.-02.08. (12 weeks). Besides this test's own 21/14/7
+        // the base scenario also books groceries on 05.07. (60 EUR, the Sunday of 29.06.-05.07.) and on
+        // 05.06. (30 EUR) - so the three windows sum 42, 102 and 132 EUR and must not share a divisor's
+        // worth of the same money.
         Assert.Equal(100m, groceries.GetProperty("current").GetDecimal());
         Assert.Equal(21m, groceries.GetProperty("previous").GetDecimal());
         Assert.Equal(14m, groceries.GetProperty("average3").GetDecimal());
-        Assert.Equal(7m, groceries.GetProperty("average6").GetDecimal());
-        Assert.Equal(3.5m, groceries.GetProperty("average12").GetDecimal());
+        Assert.Equal(17m, groceries.GetProperty("average6").GetDecimal());
+        Assert.Equal(11m, groceries.GetProperty("average12").GetDecimal());
     }
 
     [Fact]

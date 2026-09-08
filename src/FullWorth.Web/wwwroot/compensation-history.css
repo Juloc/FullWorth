@@ -60,6 +60,7 @@
 .history-dot-gross{stroke:var(--accent,#4a75ff)}.history-dot-net{stroke:var(--positive,#13834b)}.history-dot-inflation{stroke:#a3681d}.history-dot-total{stroke:#7c5ac7}
 .history-dot-active{stroke:var(--surface,#fff);stroke-width:1.5}
 .history-dot-active.history-dot-gross{fill:var(--accent,#4a75ff)}.history-dot-active.history-dot-net{fill:var(--positive,#13834b)}.history-dot-active.history-dot-inflation{fill:#a3681d}.history-dot-active.history-dot-total{fill:#7c5ac7}
+.history-crosshair.is-hidden{display:none}
 .history-crosshair{stroke:color-mix(in srgb,var(--muted,#6d737c) 55%,transparent);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
 .history-chart-tip{position:absolute;min-width:172px;max-width:224px;padding:9px 11px;border-radius:12px;background:var(--surface,#fff);border:1px solid var(--border,#e3e5e8);box-shadow:0 10px 26px rgba(0,0,0,.16);font-size:.72rem;pointer-events:none;z-index:5}
 .history-chart-tip .tip-date{font-weight:800;margin-bottom:6px;font-size:.74rem}
