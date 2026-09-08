@@ -256,7 +256,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/styles/features/wealth-investment-consolidation.css'",
                      "'/features/wealth-portability.js'",
                      "'/features/investment-performance-ui.js'",
-                     "'/investment-performance.css'",
+                     "'/styles/features/investment-performance.css'",
                      "'/features/receipt-imports.js'",
                      "'/ui/accessibility-release.js'"
                  })

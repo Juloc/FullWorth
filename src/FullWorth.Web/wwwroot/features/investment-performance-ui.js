@@ -16,7 +16,7 @@ const dateText = (value) => value ? new Intl.DateTimeFormat(lang() === 'en' ? 'e
 function ensureCss(){
   if(document.querySelector('link[data-investment-performance-css]')) return;
   const link=document.createElement('link');
-  link.rel='stylesheet';link.href='/investment-performance.css';link.dataset.investmentPerformanceCss='1';document.head.appendChild(link);
+  link.rel='stylesheet';link.href='/styles/features/investment-performance.css';link.dataset.investmentPerformanceCss='1';document.head.appendChild(link);
 }
 ensureCss();
 

@@ -12,7 +12,7 @@ function init(){
   const toast=$('#comp-error');
   if(!tabs||!toast)return;
 
-  const css=document.createElement('link');css.rel='stylesheet';css.href='/compensation-extended.css';document.head.appendChild(css);
+  const css=document.createElement('link');css.rel='stylesheet';css.href='/styles/features/compensation-extended.css';document.head.appendChild(css);
 
   tabs.insertAdjacentHTML('beforeend','<button data-extended-tab="optimizer" type="button">Optimierer</button><button data-extended-tab="payslips" type="button">Lohnabrechnungen</button>');
   toast.insertAdjacentHTML('beforebegin',optimizerMarkup()+payslipMarkup());

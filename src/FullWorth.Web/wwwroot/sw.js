@@ -59,7 +59,7 @@ const APP_SHELL = [
   '/styles/features/wealth-investment-consolidation.css',
   '/features/wealth-portability.js',
   '/features/investment-performance-ui.js',
-  '/investment-performance.css',
+  '/styles/features/investment-performance.css',
   '/features/accounts.js',
   '/features/settings.js',
   '/features/accounts-presentation.js',
