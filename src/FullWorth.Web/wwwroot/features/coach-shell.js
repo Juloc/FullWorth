@@ -81,7 +81,7 @@ function installShell() {
       <div class="coach-main">
         <article class="panel coach-hero">
           <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
-          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Lokale Auswertung', 'Local analysis'))}</span></div>
+          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="btn btn-secondary coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Lokale Auswertung', 'Local analysis'))}</span></div>
         </article>
         <article class="panel coach-chat-panel">
           <div id="coach-starters" class="coach-starters"></div>
@@ -103,7 +103,7 @@ function installShell() {
         </article>
       </div>
       <aside class="coach-side">
-        <article class="panel"><div class="panel-head"><h2>${esc(tr('Ausgaben-Review', 'Spending review'))}</h2><button id="coach-review-refresh" type="button" class="ghost">↻</button></div><div id="coach-summary"></div></article>
+        <article class="panel"><div class="panel-head"><h2>${esc(tr('Ausgaben-Review', 'Spending review'))}</h2><button id="coach-review-refresh" type="button" class="btn btn-secondary">↻</button></div><div id="coach-summary"></div></article>
         <article class="panel"><div class="panel-head"><h2>${esc(tr('Letzte Ausgaben bewerten', 'Review recent spending'))}</h2></div><div id="coach-review-list" class="coach-review-list"></div></article>
       </aside>
     </div>`;
@@ -861,7 +861,7 @@ function renderMessages(messages) {
 function messageTool(label, handler, title = label) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'ghost';
+  button.className='btn btn-secondary';
   button.textContent = label;
   button.title = title;
   button.addEventListener('click', handler);
@@ -988,7 +988,7 @@ function renderContextActions(){
   messageRoots().forEach(root=>{
     const article=[...root.querySelectorAll('.coach-message.assistant')].at(-1);if(!article||article.querySelector('.coach-response-actions'))return;
     const bar=document.createElement('div');bar.className='coach-response-actions';
-    actions.forEach(action=>{const b=document.createElement('button');b.type='button';b.className='ghost';b.textContent=action.label;b.addEventListener('click',action.run);bar.appendChild(b)});
+    actions.forEach(action=>{const b=document.createElement('button');b.type='button';b.className='btn btn-secondary';b.textContent=action.label;b.addEventListener('click',action.run);bar.appendChild(b)});
     article.appendChild(bar);
   });
 }
@@ -1099,7 +1099,7 @@ function toggleReviewDetails(tx, row) {
   const allowed = reasonsBySentiment[review.sentiment] || [];
   panel.innerHTML = `<div class="coach-reasons">${allowed.map(reason => `<button type="button" data-reason="${reason}" class="${review.reasons?.includes(reason) ? 'active' : ''}">${esc(reasonLabels[reason]?.[lang() === 'de' ? 0 : 1] || reason)}</button>`).join('')}</div>
     <textarea maxlength="500" rows="2" placeholder="${esc(tr('Optionale Notiz', 'Optional note'))}">${esc(review.note || '')}</textarea>
-    <div class="coach-detail-actions"><button type="button" data-clear class="ghost">${esc(tr('Bewertung löschen', 'Clear review'))}</button><button type="button" data-save>${esc(tr('Speichern', 'Save'))}</button></div>`;
+    <div class="coach-detail-actions"><button type="button" data-clear class="btn btn-secondary">${esc(tr('Bewertung löschen', 'Clear review'))}</button><button type="button" data-save>${esc(tr('Speichern', 'Save'))}</button></div>`;
   panel.querySelectorAll('[data-reason]').forEach(button => button.addEventListener('click', () => button.classList.toggle('active')));
   panel.querySelector('[data-save]').addEventListener('click', () => saveReviewDetails(tx, row, panel));
   panel.querySelector('[data-clear]').addEventListener('click', () => clearReview(tx, row));
