@@ -70,7 +70,9 @@ public sealed class FinancialSignalJobProcessor(
         if (job.Type == FinancialSignalJobTypes.RefreshSpace)
         {
             return await financeDb.FullWorthSpaceMembers.AsNoTracking()
-                .Where(x => x.FullWorthSpaceId == fullWorthSpaceId)
+                .Where(x =>
+                    x.FullWorthSpaceId == fullWorthSpaceId &&
+                    financeDb.Users.Any(user => user.Id == x.UserId && user.IsActive && !user.IsTombstone))
                 .Select(x => new SignalTarget(x.UserId, x.FullWorthSpaceId))
                 .Distinct()
                 .ToListAsync(ct);
@@ -78,12 +80,15 @@ public sealed class FinancialSignalJobProcessor(
 
         var userId = RequiredGuid(root, "userId");
         var member = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-            x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+            x.UserId == userId &&
+            x.FullWorthSpaceId == fullWorthSpaceId &&
+            financeDb.Users.Any(user => user.Id == x.UserId && user.IsActive && !user.IsTombstone), ct);
         return member ? [new SignalTarget(userId, fullWorthSpaceId)] : [];
     }
 
     private Task<List<SignalTarget>> AllTargetsAsync(CancellationToken ct) =>
         financeDb.FullWorthSpaceMembers.AsNoTracking()
+            .Where(x => financeDb.Users.Any(user => user.Id == x.UserId && user.IsActive && !user.IsTombstone))
             .Select(x => new SignalTarget(x.UserId, x.FullWorthSpaceId))
             .Distinct()
             .ToListAsync(ct);
