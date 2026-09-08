@@ -1,4 +1,5 @@
 import { api as sharedApi } from '../core/services.js';
+import { confirmMessage } from '../ui/confirm.js';
 const $ = id => document.getElementById(id);
 
 async function api(path = '', init = {}) {
@@ -73,7 +74,7 @@ function render(packs) {
     });
 
     row.querySelector('[data-pack-delete]')?.addEventListener('click', async () => {
-      if (!confirm('Dieses eigene Brand-Pack löschen? Das offizielle FullWorth-Pack bleibt unverändert.')) return;
+      if (!await confirmMessage({message:'Dieses eigene Brand-Pack löschen? Das offizielle FullWorth-Pack bleibt unverändert.',title:'Brand-Pack löschen',confirmLabel:'Löschen',cancelLabel:'Abbrechen',destructive:true})) return;
       try {
         await api(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
         status('Brand-Pack gelöscht.');
