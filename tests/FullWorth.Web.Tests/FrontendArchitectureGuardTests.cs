@@ -147,6 +147,23 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
+    public void SettingsWorkflowsStayOutOfAppBootstrap()
+    {
+        var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
+        var settings = File.ReadAllText(Path.Combine(WwwRoot(), "features", "settings.js"));
+
+        Assert.DoesNotContain("openDeleteAccountDialog", app);
+        Assert.DoesNotContain("openTwoFactorDialog", app);
+        Assert.DoesNotContain("renderSharing(", app);
+        Assert.Contains("bindSettings(ctx)", app);
+        Assert.Contains("renderSettings(ctx", app);
+
+        Assert.Contains("openDeleteAccountDialog", settings);
+        Assert.Contains("openTwoFactorDialog", settings);
+        Assert.Contains("renderSharing(ctx)", settings);
+    }
+
+    [Fact]
     public void BootstrapLivesInApp_NotInFeatureOwners()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
