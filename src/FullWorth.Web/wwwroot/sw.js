@@ -4,12 +4,15 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v94';
+const VERSION = 'v95';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
 const APP_SHELL = [
   '/styles/tokens.css',
+  '/styles/reset.css',
+  '/styles/shell.css',
+  '/styles/features/insights.css',
   '/app.css',
   '/appearance.css',
   '/design-depth.css',
@@ -131,17 +134,19 @@ self.addEventListener('fetch', (event) => {
   if (isSensitive(url)) return;
   if (!isStaticAsset(url)) return;
   event.respondWith(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.match(request).then((cached) => {
-        const network = fetch(request)
-          .then((response) => {
-            if (response && response.ok) cache.put(request, response.clone());
-            return response;
-          })
-          .catch(() => cached);
-        return cached || network;
-      })
-    )
+    caches.open(SHELL_CACHE).then(async (cache) => {
+      try {
+        // Prefer the current deployment when online. Serving cached JS first can combine a fresh
+        // index.html with stale modules after a release and crash the installed PWA.
+        const response = await fetch(request);
+        if (response && response.ok) await cache.put(request, response.clone());
+        return response;
+      } catch {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        throw new Error(`FullWorth offline shell miss: ${url.pathname}`);
+      }
+    })
   );
 });
 
