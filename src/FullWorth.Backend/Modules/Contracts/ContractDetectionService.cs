@@ -128,10 +128,15 @@ public sealed class ContractDetectionService(
                                    (contract.AccountId == null || db.AccountOwners.Any(owner =>
                                        owner.AccountId == contract.AccountId.Value &&
                                        owner.UserId == userId)))
-                .Select(contract => new { contract.ProviderName, contract.Currency })
+                .Select(contract => new { contract.ProviderName, contract.Currency, contract.AccountId })
                 .ToListAsync(ct))
-            .Select(contract => (CandidateProviderKey(contract.ProviderName!), contract.Currency.Trim().ToUpperInvariant()))
-            .ToHashSet();
+            .Select(contract => new
+            {
+                Provider = CandidateProviderKey(contract.ProviderName!),
+                Currency = contract.Currency.Trim().ToUpperInvariant(),
+                contract.AccountId
+            })
+            .ToList();
 
         var deduplicated = result
             .GroupBy(candidate => new
@@ -149,7 +154,12 @@ public sealed class ContractDetectionService(
 
         return deduplicated
             .Where(candidate => !dismissed.Contains((CandidateProviderKey(candidate.Counterparty), candidate.Currency.Trim().ToUpperInvariant())))
-            .Where(candidate => !accepted.Contains((CandidateProviderKey(candidate.Counterparty), candidate.Currency.Trim().ToUpperInvariant())))
+            .Where(candidate => !accepted.Any(existing =>
+                existing.Provider == CandidateProviderKey(candidate.Counterparty) &&
+                existing.Currency == candidate.Currency.Trim().ToUpperInvariant() &&
+                (!existing.AccountId.HasValue ||
+                 !candidate.AccountId.HasValue ||
+                 existing.AccountId.Value == candidate.AccountId.Value)))
             .OrderByDescending(x => x.Confidence).ThenBy(x => x.NextDueDate).ToList();
 
     }
