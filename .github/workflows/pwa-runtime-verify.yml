@@ -19,7 +19,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Run Web/PWA tests
-        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release -m:1 /p:BuildInParallel=false
 
       - name: Build unified Web image
         run: docker build -f src/FullWorth.Web/Dockerfile -t fullworth:pwa-verify .
