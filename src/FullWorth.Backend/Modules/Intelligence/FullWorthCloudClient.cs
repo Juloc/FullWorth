@@ -182,12 +182,14 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         string clientVersion,
         CancellationToken ct)
     {
+        // External self-hosted instances register publicly against the official Cloud and must not need any
+        // private Cloud-server secret. The shared enrollment token is therefore OPTIONAL: it is only sent when
+        // an operator configured one (same-host/private Cloud deployments that gate registration).
         var enrollment = configuration["FullWorthCloud:EnrollmentToken"]?.Trim();
-        if (string.IsNullOrWhiteSpace(enrollment))
-            throw new FullWorthCloudException("cloud_enrollment_missing");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/instances/register");
-        request.Headers.TryAddWithoutValidation("X-FullWorth-Enrollment-Token", enrollment);
+        if (!string.IsNullOrWhiteSpace(enrollment))
+            request.Headers.TryAddWithoutValidation("X-FullWorth-Enrollment-Token", enrollment);
         request.Content = JsonContent(new
         {
             instanceId,

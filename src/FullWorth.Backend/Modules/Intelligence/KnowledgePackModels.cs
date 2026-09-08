@@ -9,6 +9,23 @@ public static class KnowledgePackProtocol
     public const string SignatureAlgorithm = "RSA-PSS-SHA256";
     public const string InstallationScopeKey = "instance";
 
+    /// <summary>
+    /// Official knowledge-pack verification key, shipped with FullWorth so an external self-hosted instance can
+    /// verify signed packs from the official Cloud without access to any private Cloud-server secret volume.
+    /// This is a PUBLIC key — it is meant to be distributed; the signing private key never leaves the Cloud.
+    ///
+    /// Signature verification stays pinned to this key. An explicit <c>FullWorthCloud:KnowledgePackPublicKeyPem</c>
+    /// / <c>…Path</c> / <c>…Base64</c> setting takes precedence, which is how private or self-signed Cloud
+    /// deployments (and existing same-host installs reading the shared secrets volume) keep working unchanged.
+    ///
+    /// Set this to the official Cloud's public key PEM at release time. While it is empty, an instance without an
+    /// explicit override fails closed with <c>knowledge_pack_public_key_missing</c> rather than trusting anything.
+    /// </summary>
+    public const string OfficialPublicKeyPem = "";
+
+    public static string? ResolveOfficialPublicKeyPem() =>
+        string.IsNullOrWhiteSpace(OfficialPublicKeyPem) ? null : OfficialPublicKeyPem.Trim();
+
     public static bool IsSupportedSchemaVersion(string? value) =>
         value is LegacySchemaVersion or SchemaVersion;
 }

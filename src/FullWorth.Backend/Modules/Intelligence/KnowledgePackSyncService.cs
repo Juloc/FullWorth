@@ -1061,20 +1061,26 @@ public sealed class KnowledgePackSyncService(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return null;
+                // Unreadable override: fall through to the shipped official key instead of failing outright.
             }
         }
 
         var encoded = configuration["FullWorthCloud:KnowledgePackPublicKeyBase64"];
-        if (string.IsNullOrWhiteSpace(encoded)) return null;
-        try
+        if (!string.IsNullOrWhiteSpace(encoded))
         {
-            return Encoding.UTF8.GetString(Convert.FromBase64String(encoded.Trim()));
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(encoded.Trim()));
+            }
+            catch (FormatException)
+            {
+                // Malformed override: fall through to the shipped official key.
+            }
         }
-        catch (FormatException)
-        {
-            return null;
-        }
+
+        // No operator override. Use the official verification key that ships with FullWorth, so an external
+        // self-hosted instance needs no private Cloud-server secret volume at all.
+        return KnowledgePackProtocol.ResolveOfficialPublicKeyPem();
     }
 
     private static bool IsStrictlyNewerVersion(string candidate, string current)
