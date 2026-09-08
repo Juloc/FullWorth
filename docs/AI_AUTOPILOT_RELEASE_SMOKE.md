@@ -22,7 +22,7 @@ Deploy 0 and Deploy 1 add **no database migration**. Deploy 2 adds only the addi
 - [ ] affected existing Coach/Intelligence tests pass
 - [ ] no required Docker Compose or environment change
 - [ ] no new container
-- [ ] write-capable Autopilot features remain `off`
+- [ ] generic Autopilot actions remain `off`; only explicit contract merge execution is enabled
 
 ## After deploy
 
