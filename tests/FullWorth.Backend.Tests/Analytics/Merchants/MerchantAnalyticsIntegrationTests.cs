@@ -65,6 +65,92 @@ public sealed class MerchantAnalyticsIntegrationTests
     }
 
     [Fact]
+    public async Task WeekRangeComparesAgainstPriorEqualLengthWindow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        // Previous week window is [2026-07-27, 2026-08-02] (the 7 days before the current week).
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -40m, new DateOnly(2026, 7, 28), "REWE");
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/merchants?fullWorthSpaceId={scenario.Space}&from=2026-08-03&to=2026-08-09&granularity=week", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("week", json.RootElement.GetProperty("granularity").GetString());
+        var rewe = json.RootElement.GetProperty("merchants").EnumerateArray()
+            .Single(item => item.GetProperty("merchant").GetString() == "REWE");
+        // Current week has only REWE 2026-08-05 (100); prior equal-length window has the 2026-07-28 seed (40).
+        Assert.Equal(100m, rewe.GetProperty("currentSpend").GetDecimal());
+        Assert.Equal(1, rewe.GetProperty("currentCount").GetInt32());
+        Assert.Equal(40m, rewe.GetProperty("previousSpend").GetDecimal());
+        Assert.Equal(60m, rewe.GetProperty("trendAbsolute").GetDecimal());
+        Assert.Equal(150m, rewe.GetProperty("trendPercent").GetDecimal());
+    }
+
+    [Fact]
+    public async Task QuarterRangeComparesAgainstPriorEqualLengthWindow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        // Q3 2026 spans 92 days, so the prior equal-length window is [2026-03-31, 2026-06-30].
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -90m, new DateOnly(2026, 5, 15), "REWE");
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/merchants?fullWorthSpaceId={scenario.Space}&from=2026-07-01&to=2026-09-30&granularity=quarter", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("quarter", json.RootElement.GetProperty("granularity").GetString());
+        var rewe = json.RootElement.GetProperty("merchants").EnumerateArray()
+            .Single(item => item.GetProperty("merchant").GetString() == "REWE");
+        // Current quarter REWE: 2026-08-05 (100) + 2026-08-20 (50) + 2026-07-05 (60) = 210 over 3 bookings.
+        Assert.Equal(210m, rewe.GetProperty("currentSpend").GetDecimal());
+        Assert.Equal(3, rewe.GetProperty("currentCount").GetInt32());
+        Assert.Equal(90m, rewe.GetProperty("previousSpend").GetDecimal());
+        Assert.Equal(120m, rewe.GetProperty("trendAbsolute").GetDecimal());
+    }
+
+    [Fact]
+    public async Task YearRangeComparesAgainstPriorEqualLengthWindow()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        // Calendar year 2026 spans 365 days, so the prior equal-length window is all of 2025.
+        await factory.SeedAsync(async db =>
+        {
+            Add(db, scenario.Account, scenario.Groceries, -120m, new DateOnly(2025, 6, 15), "REWE");
+            await db.SaveChangesAsync();
+        });
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(HttpMethod.Get,
+            $"/api/analytics/merchants?fullWorthSpaceId={scenario.Space}&from=2026-01-01&to=2026-12-31&granularity=year", scenario.Owner));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("year", json.RootElement.GetProperty("granularity").GetString());
+        var rewe = json.RootElement.GetProperty("merchants").EnumerateArray()
+            .Single(item => item.GetProperty("merchant").GetString() == "REWE");
+        // Current year REWE: all three 2026 bookings (100 + 50 + 60 = 210); prior year has the 2025-06-15 seed (120).
+        Assert.Equal(210m, rewe.GetProperty("currentSpend").GetDecimal());
+        Assert.Equal(3, rewe.GetProperty("currentCount").GetInt32());
+        Assert.Equal(120m, rewe.GetProperty("previousSpend").GetDecimal());
+        Assert.Equal(90m, rewe.GetProperty("trendAbsolute").GetDecimal());
+        Assert.Equal(75m, rewe.GetProperty("trendPercent").GetDecimal());
+    }
+
+    [Fact]
     public async Task TopParameterLimitsResults()
     {
         using var factory = new BackendWebApplicationFactory();
