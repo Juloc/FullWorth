@@ -163,9 +163,9 @@ public sealed class FrontendArchitectureGuardTests
     }
 
     [Fact]
-    public void AccountsIntegrationUsesSharedCoreWithoutPatchObserverOrSyntheticNavigation()
+    public void AccountsPresentationUsesSharedCoreWithoutPatchObserverOrSyntheticNavigation()
     {
-        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts-ux.js"));
+        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts-presentation.js"));
         Assert.DoesNotContain("/bff/", accounts);
         Assert.DoesNotContain("new MutationObserver", accounts);
         Assert.DoesNotContain(".click()", accounts);
