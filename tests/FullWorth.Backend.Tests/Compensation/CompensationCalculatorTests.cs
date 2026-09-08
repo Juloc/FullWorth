@@ -395,6 +395,41 @@ public sealed class CompensationCalculatorTests
     }
 
     [Fact]
+    public void OneOffPayment_TaxableButSvFree_IsTaxedWithoutSocialInsurance()
+    {
+        var baseProfile = BasicProfile(42_000m);
+        var svFreeButTaxable = baseProfile with
+        {
+            OneOffPayments = new[]
+            {
+                new OneOffPaymentInput("SV-freier Zuschuss", 1_000m, Month: 6, Taxable: true, SocialInsuranceLiable: false)
+            }
+        };
+        var fullyContributory = baseProfile with
+        {
+            OneOffPayments = new[]
+            {
+                new OneOffPaymentInput("Voll beitragspflichtig", 1_000m, Month: 6, Taxable: true, SocialInsuranceLiable: true)
+            }
+        };
+
+        var baseline = GermanCompensationCalculator.Calculate(baseProfile);
+        var svFree = GermanCompensationCalculator.Calculate(svFreeButTaxable);
+        var contributory = GermanCompensationCalculator.Calculate(fullyContributory);
+
+        var svFreeGain = svFree.EstimatedCashNetAnnual - baseline.EstimatedCashNetAnnual;
+        var contributoryGain = contributory.EstimatedCashNetAnnual - baseline.EstimatedCashNetAnnual;
+
+        // Taxable, so it nets less than its gross, but SV-free keeps more than a fully contributory payment.
+        Assert.True(svFreeGain > 0m && svFreeGain < 1_000m);
+        Assert.True(svFreeGain > contributoryGain);
+        // An SV-free payment leaves social-insurance contributions untouched…
+        Assert.Equal(baseline.SocialInsurance.TotalAnnual, svFree.SocialInsurance.TotalAnnual);
+        // …and never touches a normal month.
+        Assert.Equal(baseline.EstimatedCashNetMonthly, svFree.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
     public void HistoricalAge_FromBirthDate_DrivesTheChildlessCareSurcharge()
     {
         // Born mid-2000: 20 in tax year 2020 (below 23 → no surcharge), 26 in 2026 (surcharge applies).
