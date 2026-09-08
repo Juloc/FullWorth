@@ -104,12 +104,12 @@ function renderCredentials() {
     actions.className = 'intel-row-actions';
     const test = document.createElement('button');
     test.type = 'button';
-    test.className = 'ghost';
+    test.className='btn btn-secondary';
     test.textContent = 'Testen';
     test.addEventListener('click', () => testCredential(credential.id));
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'ghost';
+    remove.className='btn btn-secondary';
     remove.textContent = 'Löschen';
     remove.addEventListener('click', () => deleteCredential(credential.id));
     actions.append(test, remove);
@@ -197,7 +197,7 @@ function renderSuggestions(suggestions) {
     accept.addEventListener('click', () => reviewSuggestion(suggestion.id, 'accept', accept, reject));
     const reject = document.createElement('button');
     reject.type = 'button';
-    reject.className = 'ghost';
+    reject.className='btn btn-secondary';
     reject.textContent = 'Ablehnen';
     reject.addEventListener('click', () => reviewSuggestion(suggestion.id, 'reject', accept, reject));
     actions.append(accept, reject);
