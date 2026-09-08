@@ -12,7 +12,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace FullWorth.Web.Tests;
 
-public class FullWorthWebFactory : WebApplicationFactory<Program>
+public class FullWorthWebFactory : WebApplicationFactory<FullWorth.Web.WebAssemblyMarker>
 {
     public const string BackendInternalKey = "web-test-backend-internal-key-7f496f1e2a4b46c8";
     public const string BackendSecret = BackendInternalKey;
