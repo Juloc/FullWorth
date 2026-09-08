@@ -281,6 +281,46 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
         }
     }
 
+    public async Task<CategoryMutationOutcome<CategorizationRule>> CreateOrUpdateRuleForProposalAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid proposalRuleId,
+        RuleWrite request,
+        CancellationToken ct)
+    {
+        if (proposalRuleId == Guid.Empty) return new(CategoryMutationResult.Invalid, Error: "Proposal rule id is required.");
+        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
+        if (!await CanManageGlobalRulesAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.Forbidden);
+        if (!await CategoryExistsAsync(fullWorthSpaceId, request.CategoryId, ct))
+            return new(CategoryMutationResult.NotFound);
+
+        var entity = await db.CategorizationRules
+            .SingleOrDefaultAsync(x => x.Id == proposalRuleId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+        var isNew = entity is null;
+        if (isNew)
+        {
+            entity = new CategorizationRule
+            {
+                Id = proposalRuleId,
+                FullWorthSpaceId = fullWorthSpaceId
+            };
+            db.CategorizationRules.Add(entity);
+        }
+
+        try
+        {
+            ValidateRuleWrite(request);
+            ApplyRuleWrite(entity!, request);
+            audit.Record(fullWorthSpaceId, userId, isNew ? "category.rule.created" : "category.rule.updated", "CategorizationRule", entity!.Id);
+            await db.SaveChangesAsync(ct);
+            return new(CategoryMutationResult.Success, entity);
+        }
+        catch (ArgumentException exception)
+        {
+            return new(CategoryMutationResult.Invalid, Error: exception.Message);
+        }
+    }
+
     public async Task<CategoryMutationOutcome<ReapplyResult>> ReapplyRulesForUserAsync(Guid userId, Guid fullWorthSpaceId, bool apply, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
