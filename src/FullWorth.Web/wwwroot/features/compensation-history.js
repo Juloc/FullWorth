@@ -109,21 +109,71 @@ function renderHistorySummary(summary){
     <article class="metric"><span>Gesamtwert aktuell</span><strong>${heuro.format(summary.currentFullWorthValueAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} / Jahr</small></article>`;
 }
 
+const HISTORY_SERIES=[
+  ['contractualGrossAnnual','gross','Brutto'],
+  ['estimatedCashNetAnnual','net','Netto'],
+  ['purchasingPowerMaintenanceGrossAnnual','inflation','Kaufkrafterhalt'],
+  ['fullWorthCompensationValueAnnual','total','Gesamtwert']
+];
+
 function renderHistoryChart(timeline){
   const root=H$('#history-chart'),points=timeline?.points||[];
   if(points.length<1){root.innerHTML='<div class="history-empty">Noch keine Daten für den Verlauf.</div>';return}
   const w=960,h=330,left=62,right=18,top=18,bottom=42;
-  const values=points.flatMap(p=>[p.contractualGrossAnnual,p.estimatedCashNetAnnual,p.fullWorthCompensationValueAnnual,p.purchasingPowerMaintenanceGrossAnnual]).map(Number);
+  const values=points.flatMap(p=>HISTORY_SERIES.map(([key])=>Number(p[key]))).map(Number);
   const max=Math.max(...values,1)*1.08,min=0;
   const dates=points.map(p=>new Date(`${p.date}T12:00:00`).getTime()),d0=Math.min(...dates),d1=Math.max(...dates);
   const x=t=>left+(d1===d0?0.5:(t-d0)/(d1-d0))*(w-left-right);
   const y=v=>top+(max-v)/(max-min)*(h-top-bottom);
   const series=(key,cls)=>`<polyline class="history-line ${cls}" points="${points.map((p,i)=>`${x(dates[i]).toFixed(1)},${y(Number(p[key])||0).toFixed(1)}`).join(' ')}"/>`;
+  const dots=(key,cls)=>points.map((p,i)=>`<circle class="history-dot ${cls}" cx="${x(dates[i]).toFixed(1)}" cy="${y(Number(p[key])||0).toFixed(1)}" r="2.4"/>`).join('');
   const yTicks=[0,.25,.5,.75,1].map(f=>{const v=max*(1-f),yy=top+f*(h-top-bottom);return `<line class="history-grid" x1="${left}" x2="${w-right}" y1="${yy}" y2="${yy}"/><text class="history-axis" x="${left-8}" y="${yy+3}" text-anchor="end">${shortMoney(v)}</text>`}).join('');
   const markerDates=[...new Set((timeline.events||[]).map(e=>e.effectiveDate))].map(d=>new Date(`${d}T12:00:00`).getTime()).filter(t=>t>=d0&&t<=d1);
   const markers=markerDates.map(t=>`<line class="history-event-line" x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${h-bottom}"/>`).join('');
   const first=points[0],last=points[points.length-1];
-  root.innerHTML=`<svg class="history-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Gehaltsverlauf mit Inflation">${yTicks}${markers}${series('contractualGrossAnnual','history-line-gross')}${series('estimatedCashNetAnnual','history-line-net')}${series('purchasingPowerMaintenanceGrossAnnual','history-line-inflation')}${series('fullWorthCompensationValueAnnual','history-line-total')}<text class="history-axis" x="${left}" y="${h-12}">${fmtDate(first.date)}</text><text class="history-axis" x="${w-right}" y="${h-12}" text-anchor="end">${fmtDate(last.date)}</text></svg>`;
+  root.innerHTML=`<div class="history-chart-wrap">`+
+    `<svg class="history-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Gehaltsverlauf mit Inflation, Werte per Mauszeiger">`+
+      `${yTicks}${markers}`+
+      `<line class="history-crosshair" x1="0" x2="0" y1="${top}" y2="${h-bottom}" style="display:none"/>`+
+      HISTORY_SERIES.map(([key,cls])=>series(key,`history-line-${cls}`)).join('')+
+      HISTORY_SERIES.map(([key,cls])=>dots(key,`history-dot-${cls}`)).join('')+
+      `<g class="history-hover-dots"></g>`+
+      `<rect class="history-hit" x="${left}" y="${top}" width="${(w-left-right).toFixed(1)}" height="${(h-top-bottom).toFixed(1)}" fill="transparent"/>`+
+      `<text class="history-axis" x="${left}" y="${h-12}">${fmtDate(first.date)}</text><text class="history-axis" x="${w-right}" y="${h-12}" text-anchor="end">${fmtDate(last.date)}</text>`+
+    `</svg>`+
+    `<div class="history-chart-tip" hidden></div>`+
+  `</div>`;
+  const eventByDate=new Map();(timeline.events||[]).forEach(e=>{if(!eventByDate.has(e.effectiveDate))eventByDate.set(e.effectiveDate,e.title)});
+  wireChartHover(root,points,dates,{x,y,w},eventByDate);
+}
+
+function wireChartHover(root,points,dates,geo,eventByDate){
+  const wrap=root.querySelector('.history-chart-wrap'),svg=root.querySelector('svg.history-chart');
+  const tip=root.querySelector('.history-chart-tip'),cross=svg?.querySelector('.history-crosshair'),hoverG=svg?.querySelector('.history-hover-dots');
+  if(!wrap||!svg||!tip||!cross||!hoverG)return;
+  function move(evt){
+    const rect=svg.getBoundingClientRect();if(!rect.width)return;
+    const vbx=(evt.clientX-rect.left)/rect.width*geo.w;
+    let idx=0,best=Infinity;
+    for(let i=0;i<points.length;i++){const d=Math.abs(geo.x(dates[i])-vbx);if(d<best){best=d;idx=i}}
+    const p=points[idx],px=geo.x(dates[idx]);
+    cross.setAttribute('x1',px.toFixed(1));cross.setAttribute('x2',px.toFixed(1));cross.style.display='';
+    hoverG.innerHTML=HISTORY_SERIES.map(([key,cls])=>`<circle class="history-dot-active history-dot-${cls}" cx="${px.toFixed(1)}" cy="${geo.y(Number(p[key])||0).toFixed(1)}" r="4.2"/>`).join('');
+    const ev=eventByDate.get(p.date);
+    tip.innerHTML=`<div class="tip-date">${fmtDate(p.date)}${ev?` · <span class="tip-event">${esc(ev)}</span>`:''}</div>`+
+      HISTORY_SERIES.map(([key,cls,label])=>`<div class="tip-row"><span class="tip-key"><i class="history-key history-key-${cls}"></i>${label}</span><span class="tip-val">${heuro.format(Number(p[key])||0)}</span></div>`).join('')+
+      `<div class="tip-row tip-sub"><span class="tip-key">Steuern</span><span class="tip-val">${heuro.format(p.taxesAnnual)}</span></div>`+
+      `<div class="tip-row tip-sub"><span class="tip-key">Sozialabgaben</span><span class="tip-val">${heuro.format(p.socialInsuranceAnnual)}</span></div>`+
+      `<div class="tip-row tip-sub"><span class="tip-key">AG-Kosten</span><span class="tip-val">${heuro.format(p.employerTotalCostAnnual)}</span></div>`+
+      `<div class="tip-row tip-sub"><span class="tip-key">Real seit Start</span><span class="tip-val ${p.realChangeFromBaselinePercent>=0?'positive':'negative'}">${signedPct(p.realChangeFromBaselinePercent)}</span></div>`;
+    tip.hidden=false;
+    const wr=wrap.getBoundingClientRect(),tw=tip.offsetWidth||200,th=tip.offsetHeight||150;
+    let lx=evt.clientX-wr.left+16;if(lx+tw>wr.width)lx=evt.clientX-wr.left-tw-16;
+    let ly=evt.clientY-wr.top-th/2;
+    tip.style.left=`${Math.max(4,lx)}px`;tip.style.top=`${Math.max(4,Math.min(ly,wr.height-th-4))}px`;
+  }
+  svg.addEventListener('mousemove',move);
+  svg.addEventListener('mouseleave',()=>{tip.hidden=true;cross.style.display='none';hoverG.innerHTML=''});
 }
 
 function renderHistoryYears(timeline){

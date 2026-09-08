@@ -21,6 +21,21 @@
 .history-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.72rem;color:var(--muted,#6d737c)}
 .history-legend span{display:flex;align-items:center;gap:6px}.history-key{width:18px;height:3px;border-radius:2px}
 .history-key-gross{background:var(--accent,#4a75ff)}.history-key-net{background:var(--positive,#13834b)}.history-key-inflation{background:#a3681d}.history-key-total{background:#7c5ac7}
+.history-chart-wrap{position:relative}
+.history-hit{cursor:crosshair}
+.history-dot{fill:var(--surface,#fff);stroke-width:1.3;opacity:.5}
+.history-dot-gross{stroke:var(--accent,#4a75ff)}.history-dot-net{stroke:var(--positive,#13834b)}.history-dot-inflation{stroke:#a3681d}.history-dot-total{stroke:#7c5ac7}
+.history-dot-active{stroke:var(--surface,#fff);stroke-width:1.5}
+.history-dot-active.history-dot-gross{fill:var(--accent,#4a75ff)}.history-dot-active.history-dot-net{fill:var(--positive,#13834b)}.history-dot-active.history-dot-inflation{fill:#a3681d}.history-dot-active.history-dot-total{fill:#7c5ac7}
+.history-crosshair{stroke:color-mix(in srgb,var(--muted,#6d737c) 55%,transparent);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
+.history-chart-tip{position:absolute;min-width:172px;max-width:224px;padding:9px 11px;border-radius:12px;background:var(--surface,#fff);border:1px solid var(--border,#e3e5e8);box-shadow:0 10px 26px rgba(0,0,0,.16);font-size:.72rem;pointer-events:none;z-index:5}
+.history-chart-tip .tip-date{font-weight:800;margin-bottom:6px;font-size:.74rem}
+.history-chart-tip .tip-event{font-weight:600;color:var(--accent,#4a75ff)}
+.history-chart-tip .tip-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:2px 0}
+.history-chart-tip .tip-key{display:flex;align-items:center;gap:6px;color:var(--muted,#6d737c)}
+.history-chart-tip .tip-val{font-weight:700;font-variant-numeric:tabular-nums}
+.history-chart-tip .tip-sub{font-size:.68rem;opacity:.92}
+.history-chart-tip .tip-val.positive{color:var(--positive,#13834b)}.history-chart-tip .tip-val.negative{color:var(--negative,#b52e36)}
 .history-list{display:grid;gap:8px}
 .history-entry{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:14px;align-items:start;padding:14px 16px}
 .history-entry-date{font-weight:800}.history-entry-main{display:grid;gap:4px}.history-entry-main h3{margin:0;font-size:.92rem}.history-entry-main p{margin:0;color:var(--muted,#6d737c);font-size:.76rem;line-height:1.4}
