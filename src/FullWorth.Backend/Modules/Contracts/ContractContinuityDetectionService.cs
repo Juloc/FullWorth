@@ -48,7 +48,7 @@ public sealed class ContractContinuityDetectionService(FullWorthDbContext db)
         Guid fullWorthSpaceId,
         CancellationToken ct)
     {
-        var state = await LoadStateAsync(userId, fullWorthSpaceId, ct);
+        var state = await LoadStateAsync(userId, fullWorthSpaceId, [], ct);
         return state is null ? [] : DetectContinuity(state.Contracts, state.Payments);
     }
 
@@ -58,7 +58,12 @@ public sealed class ContractContinuityDetectionService(FullWorthDbContext db)
         IReadOnlyList<ContractCandidate> recurrenceCandidates,
         CancellationToken ct)
     {
-        var state = await LoadStateAsync(userId, fullWorthSpaceId, ct);
+        var candidateAccountIds = recurrenceCandidates
+            .Where(candidate => candidate.AccountId.HasValue)
+            .Select(candidate => candidate.AccountId!.Value)
+            .Distinct()
+            .ToArray();
+        var state = await LoadStateAsync(userId, fullWorthSpaceId, candidateAccountIds, ct);
         if (state is null) return new([], []);
 
         return new(
@@ -69,6 +74,7 @@ public sealed class ContractContinuityDetectionService(FullWorthDbContext db)
     private async Task<ContractRelationshipState?> LoadStateAsync(
         Guid userId,
         Guid fullWorthSpaceId,
+        IReadOnlyCollection<Guid> additionalAccountIds,
         CancellationToken ct)
     {
         var member = await db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
@@ -90,16 +96,19 @@ public sealed class ContractContinuityDetectionService(FullWorthDbContext db)
             return new([], []);
 
         var accountIds = contracts.Select(x => x.AccountId!.Value).ToHashSet();
-        // Recurrence candidates can point at a newly observed account that has no contract row yet.
-        var candidateAccountIds = await db.AccountOwners.AsNoTracking()
-            .Where(owner => owner.UserId == userId)
-            .Join(
-                db.Accounts.AsNoTracking().Where(account => account.FullWorthSpaceId == fullWorthSpaceId),
-                owner => owner.AccountId,
-                account => account.Id,
-                (_, account) => account.Id)
-            .ToListAsync(ct);
-        accountIds.UnionWith(candidateAccountIds);
+        if (additionalAccountIds.Count > 0)
+        {
+            var visibleAdditional = await db.AccountOwners.AsNoTracking()
+                .Where(owner => owner.UserId == userId && additionalAccountIds.Contains(owner.AccountId))
+                .Join(
+                    db.Accounts.AsNoTracking().Where(account => account.FullWorthSpaceId == fullWorthSpaceId),
+                    owner => owner.AccountId,
+                    account => account.Id,
+                    (_, account) => account.Id)
+                .Distinct()
+                .ToListAsync(ct);
+            accountIds.UnionWith(visibleAdditional);
+        }
 
         var from = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-450));
         var payments = await db.Transactions.AsNoTracking()
