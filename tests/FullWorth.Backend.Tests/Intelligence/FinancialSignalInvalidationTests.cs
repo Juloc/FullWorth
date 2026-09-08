@@ -1,5 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Budgets;
+using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Transactions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -73,6 +74,31 @@ public sealed class FinancialSignalInvalidationTests
         Assert.True(changes.SignalsAffected);
         Assert.False(changes.NetWorthAffected);
         Assert.Contains(budget.FullWorthSpaceId, changes.FullWorthSpaceIds);
+    }
+
+    [Fact]
+    public void Contract_change_invalidates_signals_without_rebuilding_net_worth()
+    {
+        using var harness = Harness.Create();
+        var contract = new RecurringContract
+        {
+            Id = Guid.NewGuid(),
+            FullWorthSpaceId = Guid.NewGuid(),
+            Name = "Provider",
+            ProviderName = "Provider",
+            Amount = 20m,
+            Currency = "EUR",
+            BillingCycle = "monthly",
+            Interval = 1
+        };
+        harness.Db.Contracts.Attach(contract);
+        contract.Amount = 25m;
+
+        var changes = Capture(harness.Db);
+
+        Assert.True(changes.SignalsAffected);
+        Assert.False(changes.NetWorthAffected);
+        Assert.Contains(contract.FullWorthSpaceId, changes.FullWorthSpaceIds);
     }
 
     private static FinancialDataChangeSet Capture(FullWorthDbContext db)
