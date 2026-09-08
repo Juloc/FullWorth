@@ -1,5 +1,5 @@
-import '../security/browser-fetch.js';
 import { decodeBase64Url, encodeBase64Url } from './base64url.js';
+import { secureFetch } from '../security/secure-fetch.js';
 import { confirmMessage } from '../ui/confirm.js';
 
 const endpoints = {
@@ -67,7 +67,7 @@ function serializeAssertion(credential) {
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
+  const response = await secureFetch(url, {
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { Accept: 'application/json', ...(options.headers || {}) },
