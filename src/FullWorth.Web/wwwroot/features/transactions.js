@@ -5,9 +5,14 @@
 
 import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
+import { MoneyVariant, moneyClass } from '../ui/money.js';
 
 let ctx = null;
 let currentItemsById = new Map();
+function transactionMoneyVariant(item) {
+  if (item?.isTransfer || item?.refundOfTransactionId) return MoneyVariant.Neutral;
+  return Number(item?.amount || 0) > 0 ? MoneyVariant.Income : MoneyVariant.Neutral;
+}
 const selectedForCoach = new Map();
 
 function coachContextForTransaction(t, label) {
@@ -325,7 +330,7 @@ export async function renderTransactions(context) {
       `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       categoryCell(x, cat) +
       accountCell(x) +
-      `<td class="number amount ${x.amount < 0 ? 'negative' : 'positive'}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
+      `<td class="number ${moneyClass(transactionMoneyVariant(x))}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
       `<td class="tx-go"><span class="tx-go-caret" aria-hidden="true">›</span></td>`;
     // The category chip is an inline control: clicking it edits the category in place, without also
     // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
@@ -580,7 +585,7 @@ async function openDetail(listItem) {
     : '';
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
     <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="tx-amount amount ${t.amount < 0 ? 'negative' : 'positive'}">${ctx.money(t.amount, t.currency)}</div>
+    <div class="tx-amount ${moneyClass(transactionMoneyVariant(t))}">${ctx.money(t.amount, t.currency)}</div>
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}
     ${statusHistoryHtml}
@@ -865,7 +870,7 @@ async function openRefundPicker(t) {
 
     let names = new Map();
     try { const cats = await ctx.api('api/categories'); names = new Map(cats.map(c => [c.id, c.name])); } catch { /* names optional */ }
-    const opts = distinct.map(l => `<button type="button" class="row candidate-row" data-cat="${l.categoryId}"><div class="row-main"><div class="row-title">${ctx.esc(names.get(l.categoryId) || ctx.get('common.uncategorized'))}</div></div><div class="amount negative">${ctx.money(l.amount, original.currency)}</div></button>`).join('');
+    const opts = distinct.map(l => `<button type="button" class="row candidate-row" data-cat="${l.categoryId}"><div class="row-main"><div class="row-title">${ctx.esc(names.get(l.categoryId) || ctx.get('common.uncategorized'))}</div></div><div class="${moneyClass(MoneyVariant.Neutral)}">${ctx.money(l.amount, original.currency)}</div></button>`).join('');
     step.innerHTML = `<p class="row-sub">${ctx.esc(ctx.get('transactions.refundCategoryPick'))}</p>
       <div class="refund-candidates"><button type="button" class="row candidate-row" data-cat=""><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refundWhole'))}</div></div></button>${opts}</div>`;
     step.querySelectorAll('.candidate-row').forEach(row => row.addEventListener('click', () => link(original.id, row.dataset.cat || null)));
@@ -873,7 +878,7 @@ async function openRefundPicker(t) {
 
   // Step 1 — pick the original expense.
   const rows = candidates.length
-    ? candidates.map(x => `<button type="button" class="row candidate-row" data-id="${x.id}"><div class="row-main"><div class="row-title">${ctx.esc(x.counterparty || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(x.bookingDate))} · ${ctx.esc(x.category || ctx.get('common.uncategorized'))}</div></div><div class="amount negative">${ctx.money(x.amount, x.currency)}</div></button>`).join('')
+    ? candidates.map(x => `<button type="button" class="row candidate-row" data-id="${x.id}"><div class="row-main"><div class="row-title">${ctx.esc(x.counterparty || '—')}</div><div class="row-sub">${ctx.esc(ctx.date(x.bookingDate))} · ${ctx.esc(x.category || ctx.get('common.uncategorized'))}</div></div><div class="${moneyClass(MoneyVariant.Neutral)}">${ctx.money(x.amount, x.currency)}</div></button>`).join('')
     : `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`;
   step.innerHTML = `<p class="row-sub">${ctx.esc(ctx.get('transactions.refundPick'))}</p><div class="refund-candidates">${rows}</div>`;
   step.querySelectorAll('.candidate-row').forEach(row => row.addEventListener('click', () => chooseTarget(candidates.find(c => c.id === row.dataset.id))));
