@@ -93,7 +93,7 @@ async function openUser(id){
     actions.push('<button type="button" data-action="enable">Entsperren</button>');
   }else{
     actions.push('<button type="button" data-action="disable" class="secondary">Sperren</button>');
-    actions.push('<button type="button" data-action="schedule-deletion" class="danger">Löschung vormerken</button>');
+    actions.push('<button type="button" data-action="schedule-deletion" class="btn btn-danger">Löschung vormerken</button>');
   }
   if(u.isAdmin)actions.push('<button type="button" data-action="revoke-admin" class="secondary">Adminrecht entziehen</button>');
   else actions.push('<button type="button" data-action="grant-admin" class="secondary">Zum Admin machen</button>');
