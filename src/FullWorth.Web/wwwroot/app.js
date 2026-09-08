@@ -127,6 +127,7 @@ function bind(){
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true,path:location.pathname}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
   $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
+  $('[data-compensation-link]')?.addEventListener('click',()=>location.assign('/compensation.html'));
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
@@ -326,9 +327,11 @@ function openMoreSheet(){
       : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav);
     return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
   }).join('');
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
+  const compensation=`<button type="button" data-compensation-more><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V8m5 10V5m5 13v-7m5 7V9"/><path d="M3 21h18"/></svg><span>Gehalt &amp; Benefits</span></button>`;
+  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}${compensation}</div></form>`,{mobileMode:'sheet'});
   dlg.classList.add('more-sheet-dialog');
   dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
+  dlg.querySelector('[data-compensation-more]')?.addEventListener('click',()=>{dlg.close();location.assign('/compensation.html')});
   dlg.showModal();
 }
 
