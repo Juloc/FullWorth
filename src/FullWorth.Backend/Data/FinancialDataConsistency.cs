@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Budgets;
+using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Transactions;
@@ -222,6 +223,24 @@ internal static class FinancialDataChangeDetector
                     nameof(Budget.FullWorthSpaceId), nameof(Budget.CategoryId), nameof(Budget.Amount),
                     nameof(Budget.Currency), nameof(Budget.Period), nameof(Budget.CarryOver),
                     nameof(Budget.CarryOverOverspend), nameof(Budget.IsActive), nameof(Budget.StartDate), nameof(Budget.EndDate)))
+                continue;
+            changes.MarkSpace(entry.Entity.FullWorthSpaceId, today, netWorth: false, signals: true);
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+                changes.MarkSpace(entry.Property(x => x.FullWorthSpaceId).OriginalValue, today, netWorth: false, signals: true);
+        }
+
+        foreach (var entry in db.ChangeTracker.Entries<RecurringContract>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            if (entry.State == EntityState.Modified && !AnyModified(entry,
+                    nameof(RecurringContract.FullWorthSpaceId), nameof(RecurringContract.Name),
+                    nameof(RecurringContract.ProviderName), nameof(RecurringContract.Kind),
+                    nameof(RecurringContract.CategoryId), nameof(RecurringContract.AccountId),
+                    nameof(RecurringContract.MergedIntoContractId), nameof(RecurringContract.Amount),
+                    nameof(RecurringContract.Currency), nameof(RecurringContract.BillingCycle),
+                    nameof(RecurringContract.Interval), nameof(RecurringContract.StartDate),
+                    nameof(RecurringContract.EndDate), nameof(RecurringContract.NextDueDate),
+                    nameof(RecurringContract.AutoDetected), nameof(RecurringContract.IsActive)))
                 continue;
             changes.MarkSpace(entry.Entity.FullWorthSpaceId, today, netWorth: false, signals: true);
             if (entry.State is EntityState.Modified or EntityState.Deleted)

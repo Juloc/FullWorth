@@ -146,6 +146,7 @@ builder.Services.AddScoped<IFinancialSignalDetector, SavingsChangeSignalDetector
 builder.Services.AddScoped<IFinancialSignalDetector, DataQualitySignalDetector>();
 builder.Services.AddScoped<IFinancialSignalDetector, ClassificationQualitySignalDetector>();
 builder.Services.AddScoped<FinancialSignalDetectionService>();
+builder.Services.AddScoped<FinancialDomainSignalDetectionService>();
 builder.Services.AddScoped<FinancialSignalJobProcessor>();
 builder.Services.AddSingleton<DeterministicCoachEngine>();
 builder.Services.AddScoped<CoachAiAccessResolver>();
@@ -155,6 +156,7 @@ builder.Services.AddScoped<CoachService>();
 builder.Services.AddScoped<CategoryStore>();
 builder.Services.AddScoped<ContractStore>();
 builder.Services.AddScoped<ContractDetectionService>();
+builder.Services.AddScoped<ContractContinuityDetectionService>();
 builder.Services.AddScoped<ContractCandidateReviewStore>();
 builder.Services.AddScoped<PriceChangeStore>();
 builder.Services.AddScoped<BudgetStore>();

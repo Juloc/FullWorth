@@ -1,7 +1,7 @@
 # FullWorth AI Autopilot — Deployable Step-by-Step Rollout
 
-Completed: **Deploy 0 — Baseline and guardrails**, **Deploy 1 — FinancialContext foundation**, and **Deploy 2 — FinancialSignal schema and API**.  
-Current implementation: **Deploy 3 — first deterministic detectors in shadow mode**.
+Completed: **Deploy 0 — Baseline and guardrails**, **Deploy 1 — FinancialContext foundation**, **Deploy 2 — FinancialSignal schema and API**, and **Deploy 3 — first deterministic detectors in shadow mode**.  
+Current implementation: **Deploy 4 — transfer and contract signals in shadow mode**.
 
 This plan turns the AI Autopilot implementation into small releases that can be deployed between every major step.
 

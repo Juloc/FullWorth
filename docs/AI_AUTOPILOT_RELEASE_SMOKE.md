@@ -153,3 +153,28 @@ Deploy 3 adds no new migration.
 Set `Autopilot__Features__signals=off` first if immediate load reduction is needed, then roll back the application image.
 
 Existing FinancialSignal rows may remain in the additive Intelligence tables. They are not finance source-of-truth data and do not need a database downgrade.
+
+
+## Deploy 4 smoke additions
+
+Deploy 4 adds **no database migration** and keeps `signals=shadow`, `insights=off`.
+
+- [ ] an unlinked transfer candidate can produce a shadow signal without linking either transaction
+- [ ] background transfer detection only scans the recent 60-day window
+- [ ] a contract price change can produce a shadow signal without changing the contract amount
+- [ ] price preview does not create `PriceChangeSuggestion` rows
+- [ ] unrelated newer debits on the same account do not become contract price changes
+- [ ] an accepted recurring contract on account A can be detected again when recurrence moves to account B
+- [ ] account A -> B recurrence produces `detector:contract-account-change` without moving the contract
+- [ ] two root contract rows with continuous non-overlapping histories can produce `detector:contract-continuity`
+- [ ] overlapping same-provider histories do not produce a continuity signal
+- [ ] contract create/update/merge state invalidates signals without rebuilding net-worth history
+- [ ] existing Contracts UI remains unchanged
+- [ ] `/api/insights` remains hidden while `insights=off`
+- [ ] no AI credential/provider is required and no `AiRun` is created
+
+### Deploy 4 rollback
+
+Set `Autopilot__Features__signals=off` to stop all Autopilot signal generation immediately, then roll back the application image.
+
+There is no Deploy-4 schema change and no automatic transfer link, contract merge, account move, or price update to undo.
