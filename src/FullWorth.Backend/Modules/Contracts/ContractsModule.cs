@@ -693,6 +693,29 @@ public static class ContractEndpoints
             };
         });
 
+        group.MapPost("/merge-execute", async (
+            Guid fullWorthSpaceId,
+            ContractMergeExecuteRequest request,
+            CurrentUserContext currentUser,
+            ContractMergeExecutionService executionService,
+            CancellationToken ct) =>
+        {
+            var outcome = await executionService.ExecuteAsync(
+                currentUser.RequireUserId(),
+                fullWorthSpaceId,
+                request,
+                ct);
+            return outcome.Result switch
+            {
+                ContractMergeExecuteResult.Success => Results.Ok(outcome.ResultView),
+                ContractMergeExecuteResult.NotFound => Results.NotFound(),
+                ContractMergeExecuteResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                ContractMergeExecuteResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge confirmation." }),
+                ContractMergeExecuteResult.Conflict => Results.Conflict(new { error = outcome.Error ?? "Contract state changed. Open a new preview." }),
+                _ => Results.StatusCode(StatusCodes.Status409Conflict)
+            };
+        });
+
         group.MapPost("/", async (Guid fullWorthSpaceId, ContractWrite request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
             ToResult(await store.CreateForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
 
