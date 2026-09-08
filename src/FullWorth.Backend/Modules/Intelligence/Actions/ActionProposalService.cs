@@ -64,6 +64,23 @@ public sealed class ActionProposalService(
             return new(ActionProposalOperationResult.Invalid, Error: "Action proposal source is invalid.");
         var sourceReference = NormalizeReference(request.SourceReference);
 
+        if (sourceReference is not null)
+        {
+            var existing = await intelligenceDb.ActionProposals.AsNoTracking()
+                .Where(x =>
+                    x.UserId == userId &&
+                    x.FullWorthSpaceId == fullWorthSpaceId &&
+                    x.Handler == handler.Name &&
+                    x.State == ActionProposalStates.Pending &&
+                    x.Source == source &&
+                    x.SourceReference == sourceReference &&
+                    x.PayloadJson == payloadJson)
+                .OrderByDescending(x => x.UpdatedAt)
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+                return await RefreshPreviewAsync(userId, fullWorthSpaceId, existing.Id, ct);
+        }
+
         var proposal = new ActionProposal
         {
             Id = Guid.NewGuid(),
