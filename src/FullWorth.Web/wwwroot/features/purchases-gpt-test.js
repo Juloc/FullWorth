@@ -16,7 +16,7 @@ export function bindGptReceiptTest(context, appliedCallback) {
   const button = document.createElement('button');
   button.id = 'gpt-receipt-test';
   button.type = 'button';
-  button.className = 'ghost gpt-test-launch';
+  button.className='btn btn-secondary gpt-test-launch';
   button.textContent = 'GPT Scan · Test';
   button.title = 'Experimenteller ChatGPT/Codex-Bonscan mit vollständigem Debug-Output';
   normalScan.insertAdjacentElement('afterend', button);
@@ -54,12 +54,12 @@ async function openTestDialog() {
       </div>
 
       <div class="gpt-test-card" data-login-card>
-        <div class="panel-head"><div><strong>1. ChatGPT anmelden</strong><div class="row-sub">Verwendet <code>codex login --device-auth</code>.</div></div><div class="gpt-test-actions"><button type="button" data-login>Mit ChatGPT anmelden</button><button type="button" class="ghost" data-logout>Trennen</button></div></div>
+        <div class="panel-head"><div><strong>1. ChatGPT anmelden</strong><div class="row-sub">Verwendet <code>codex login --device-auth</code>.</div></div><div class="gpt-test-actions"><button type="button" data-login>Mit ChatGPT anmelden</button><button type="button" class="btn btn-secondary" data-logout>Trennen</button></div></div>
         <div data-login-flow></div>
       </div>
 
       <div class="gpt-test-card">
-        <div class="panel-head"><div><strong>2. Modell & Bon</strong><div class="row-sub">Auto nutzt die aktuelle Codex-Standardauswahl.</div></div><button type="button" class="ghost" data-models>Modelle neu laden</button></div>
+        <div class="panel-head"><div><strong>2. Modell & Bon</strong><div class="row-sub">Auto nutzt die aktuelle Codex-Standardauswahl.</div></div><button type="button" class="btn btn-secondary" data-models>Modelle neu laden</button></div>
         <div class="gpt-test-actions">
           <label>Modell <select data-model><option value="auto">Auto</option></select></label>
           <label>Bon <input type="file" data-file accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" capture="environment"></label>
@@ -78,10 +78,10 @@ async function openTestDialog() {
       <details class="gpt-test-section" open><summary>8. Finales Raw-Output</summary><div class="gpt-test-section-body"><pre class="gpt-test-pre" data-raw-output>—</pre></div></details>
       <details class="gpt-test-section"><summary>9. Codex JSONL Events</summary><div class="gpt-test-section-body"><pre class="gpt-test-pre" data-events>—</pre></div></details>
       <details class="gpt-test-section"><summary>10. stderr</summary><div class="gpt-test-section-body"><pre class="gpt-test-pre" data-stderr>—</pre></div></details>
-      <details class="gpt-test-section" open><summary>11. Vollständiges Run-Log</summary><div class="gpt-test-section-body"><div class="gpt-test-actions gpt-test-mb8"><button type="button" class="ghost" data-refresh-logs>Bridge-Log aktualisieren</button><button type="button" class="ghost" data-copy-debug>Debug kopieren</button></div><pre class="gpt-test-pre" data-full-log>—</pre></div></details>
+      <details class="gpt-test-section" open><summary>11. Vollständiges Run-Log</summary><div class="gpt-test-section-body"><div class="gpt-test-actions gpt-test-mb8"><button type="button" class="btn btn-secondary" data-refresh-logs>Bridge-Log aktualisieren</button><button type="button" class="btn btn-secondary" data-copy-debug>Debug kopieren</button></div><pre class="gpt-test-pre" data-full-log>—</pre></div></details>
       <details class="gpt-test-section"><summary>12. Kompletter Response-Payload</summary><div class="gpt-test-section-body"><pre class="gpt-test-pre" data-response>—</pre></div></details>
 
-      <div class="gpt-test-foot"><button type="button" class="ghost" data-close-bottom>Schließen</button><div class="gpt-test-actions"><span class="row-sub" data-apply-state>Es wird noch nichts gespeichert.</span><button type="button" data-apply disabled>Übernehmen</button></div></div>
+      <div class="gpt-test-foot"><button type="button" class="btn btn-secondary" data-close-bottom>Schließen</button><div class="gpt-test-actions"><span class="row-sub" data-apply-state>Es wird noch nichts gespeichert.</span><button type="button" data-apply disabled>Übernehmen</button></div></div>
     </div>
   </div>`);
   dlg.classList.add('gpt-test-dialog');
