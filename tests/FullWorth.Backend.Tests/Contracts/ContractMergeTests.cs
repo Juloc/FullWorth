@@ -8,6 +8,7 @@ using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Tests.Contracts;
 
@@ -60,6 +61,29 @@ public sealed class ContractMergeTests
         Assert.Equal(HttpStatusCode.OK, sourceSources.StatusCode);
         Assert.Empty((await targetSources.Content.ReadFromJsonAsync<List<JsonElement>>())!);
         Assert.Empty((await sourceSources.Content.ReadFromJsonAsync<List<JsonElement>>())!);
+    }
+
+    [Fact]
+    public async Task MergePreview_RejectsMixedCurrencies()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        await factory.SeedAsync(async db =>
+        {
+            var source = await db.Contracts.SingleAsync(contract => contract.Id == s.Source);
+            source.Currency = "USD";
+            await db.SaveChangesAsync();
+        });
+
+        using var response = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source } }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
