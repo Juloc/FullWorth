@@ -19,7 +19,7 @@ function injectTabs(ctx,dlg,data,asset){
  for(const [name,label] of [['energy',tr('energy')],['documents',tr('documents')]]){const b=document.createElement('button');b.type='button';b.role='tab';b.dataset.tab=name;b.setAttribute('aria-selected','false');b.textContent=label;tabs.insertBefore(b,history||null);b.onclick=()=>selectTab(dlg,name)}
  const card=dlg.querySelector('.property-dialog'),historyPane=dlg.querySelector('[data-pane="history"]');
  card?.insertBefore(makePane('energy',energyHtml(ctx,data.energy)),historyPane||null);card?.insertBefore(makePane('documents',documentsHtml(ctx,data.documents,asset)),historyPane||null);
- const head=dlg.querySelector('.panel-head');if(head){const button=document.createElement('button');button.type='button';button.className='ghost property-valuation-launch';button.dataset.valuationLaunch='1';button.textContent=tr('updateValue');head.insertBefore(button,head.lastElementChild)}
+ const head=dlg.querySelector('.panel-head');if(head){const button=document.createElement('button');button.type='button';button.className='btn btn-secondary property-valuation-launch';button.dataset.valuationLaunch='1';button.textContent=tr('updateValue');head.insertBefore(button,head.lastElementChild)}
  const current=(data.valuations||[]).find(x=>x.isCurrent&&x.isAccepted);if(current&&daysOld(current.valuedAt)>365){const overview=dlg.querySelector('[data-pane="overview"]');overview?.insertAdjacentHTML('afterbegin',`<div class="property-fx-warning">${ctx.esc(tr('stale'))}</div>`)}
 }
 function makePane(name,html){const s=document.createElement('section');s.className='property-pane';s.dataset.pane=name;s.hidden=true;s.innerHTML=html;return s}
