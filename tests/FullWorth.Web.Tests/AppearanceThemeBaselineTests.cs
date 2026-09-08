@@ -45,7 +45,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public async Task CuteTheme_MockupPolish_IsScopedAndCleanBaseStaysCanonical()
     {
-        var app = await GetAsync("/app.css");
+        var app = await GetAsync("/styles/tokens.css");
         var css = await GetAsync("/appearance.css");
 
         Assert.Contains("--font-default:'Barlow Condensed'", app);
@@ -82,7 +82,11 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         var sw = await GetAsync("/sw.js");
 
         Assert.Contains("'/appearance.css'", sw);
-        Assert.Contains("'/parity-completion.css'", sw);
+        Assert.Contains("'/styles/tokens.css'", sw);
+        Assert.Contains("'/styles/reset.css'", sw);
+        Assert.Contains("'/styles/shell.css'", sw);
+        Assert.Contains("'/styles/components.css'", sw);
+        Assert.DoesNotContain("/parity-completion.css", sw);
         Assert.Contains("'/ui/appearance.js'", sw);
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         Assert.Contains("'/features/wealth-real-estate.js'", sw);
