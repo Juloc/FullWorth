@@ -64,6 +64,8 @@ export async function mountTransferActionProposal(ctx, signal, target, detailDia
   const ids = transferIds(signal);
   if (!target || ids.length !== 2) return;
 
+  const section = target.closest('[data-action-proposal-section]');
+  if (section) section.hidden = false;
   target.hidden = false;
   target.innerHTML = '<div class="row-sub">' +
     ctx.esc(tr(ctx, 'insights.actionProposal.loading', 'Preparing action preview…')) + '</div>';
@@ -84,6 +86,7 @@ export async function mountTransferActionProposal(ctx, signal, target, detailDia
     if (error?.status === 404 || error?.status === 403) {
       target.hidden = true;
       target.innerHTML = '';
+      if (section) section.hidden = true;
       return;
     }
     target.innerHTML = '<div class="row-sub">' +
@@ -96,6 +99,7 @@ export async function mountTransferActionProposal(ctx, signal, target, detailDia
   if (!proposal) {
     target.hidden = true;
     target.innerHTML = '';
+    if (section) section.hidden = true;
     return;
   }
 
