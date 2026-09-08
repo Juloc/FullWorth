@@ -79,7 +79,7 @@ function installManualControls() {
   for (const [type, label] of definitions) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className='btn btn-secondary';
     button.dataset.intelEnqueue = type;
     button.textContent = label;
     button.addEventListener('click', () => enqueue(type, button));
