@@ -2,7 +2,7 @@
 
 Current continuation handoff: `docs/FRONTEND_ARCHITECTURE_HANDOFF.md`
 
-Status: approved architecture cleanup plan — in progress (shared `core/` + `ui/` primitives and the architecture guards are shipped; feature migration is ongoing and Phases 4, 5 and 8 are still open)  
+Status: approved architecture cleanup plan — in progress (core/UI primitives, guards, Accounts/Settings extraction and major workaround removal are shipped; Phase 8 CSS split and further feature consolidation remain)  
 Scope: FullWorth.Web frontend  
 Constraint: Accounts visible UX remains stable; structural migration was explicitly approved on 2026-09-07.
 
@@ -80,20 +80,24 @@ Current status: `core/` (shipped as `api.js`, `router.js`, `state.js`, `i18n.js`
 
 ## Phase 1 — Architecture contract and guards
 
-Guards: SHIPPED. Architecture tests live at `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs` (7 guards) and fail on:
-  - direct `document.createElement('dialog')` outside the dialog module — SHIPPED
-  - direct `/bff/backend` or `/bff/banking` access outside the API client — SHIPPED
-  - `window.fetch =` monkey patches — SHIPPED
-  - native `confirm` / `window.confirm` — SHIPPED
-  - new global MutationObservers without an explicit allow-list — SHIPPED
-  - new installer/final/parity/completion patch modules (by filename) — SHIPPED
-  - plus a guard that keeps the Accounts freeze contract intact (this doc's "BLOCKED" section + presence of `features/accounts-ux.js`) — SHIPPED
+Guards: SHIPPED and continuously tightened. Architecture tests live at `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs` and cover:
+  - native dialog creation outside the shared dialog module
+  - direct `/bff/backend` or `/bff/banking` URLs in feature code
+  - global fetch monkey patches
+  - native `confirm` / `window.confirm`
+  - global MutationObserver repair/decorator layers
+  - installer/final/parity/completion patch module names
+  - bootstrap ownership
+  - Settings ownership
+  - Accounts shared-core integration and removal of old navigation globals
 
-Still open (originally listed here, not yet implemented as guards):
-  - a guard on new feature-local action button variants instead of Primary/Secondary/Danger
-  - a guard on polling-style repeated `setTimeout`
+The direct-BFF, native-confirm and patch-filename guards no longer need legacy feature allow-lists. MutationObserver exceptions are limited to reviewed shared UI infrastructure. The remaining fetch monkey-patch exception is `security/browser-fetch.js`.
 
-Permanent contract doc: the standalone `docs/FRONTEND_ARCHITECTURE.md` was never created. The permanent rules currently live in this plan's "Non-negotiable rules" section together with the shipped guard tests, and `docs/UI_UX_SPEC.md` already references this plan (§ "The active cleanup/migration plan"). Extracting a separate contract doc is optional and no longer a blocker.
+Still useful to add later:
+  - a focused guard for feature-local button-role drift
+  - a targeted guard for timing/polling integration hacks without banning legitimate external-status polling
+
+Permanent contract: SHIPPED at `docs/FRONTEND_ARCHITECTURE.md`.
 
 Existing violations may be temporarily allow-listed and removed phase by phase. The allow-list must only shrink.
 
@@ -199,15 +203,20 @@ Consolidate:
 
 Target: `app.js` becomes bootstrapping and composition only.
 
-Move out:
-- banking workflows and dialogs
-- budget workflows
-- account management logic
-- settings workflows
-- search implementation
-- feature-specific forms
-- feature-specific API calls
-- feature-specific DOM rendering
+Already moved out:
+- banking workflows and dialogs -> `features/accounts.js`
+- account management logic -> `features/accounts.js`
+- budget workflows -> `features/budgets.js`
+- Settings/security workflows -> `features/settings.js`
+- global search -> `ui/global-search.js`
+- feature-specific transaction/analytics/contracts/net-worth/etc. rendering -> feature modules
+
+Still in `app.js`:
+- boot/session/capability composition
+- theme/locale/space shell state
+- sidebar/top-level shell behavior
+- router/view activation
+- shared context assembly and feature registration
 
 Target responsibility:
 - initialize core services
@@ -309,14 +318,17 @@ Explicit approval was given on 2026-09-07 to finish the remaining frontend restr
 
 Completed structural steps:
 
+- `features/accounts.js` owns account rendering, account/group actions and banking workflows.
 - Accounts UX uses the shared API client instead of a feature-local BFF client.
 - Scoped navigation uses the shared navigation service instead of synthetic button clicks or window globals.
 - The global MutationObserver integration loop was removed.
 - Newly-created manual-account identity is handed off by exact entity id instead of polling for a freshly-created row.
-- Explicit app events trigger account post-render enhancement.
+- Accounts UX no longer decorates Dashboard or Wealth DOM.
+- Dashboard and Net Worth own their account drill-down rendering.
+- Mobile account actions collapse into an owned overflow sheet instead of overflowing the row.
 - Account/group transaction drill-down behavior is preserved.
 
-Further extraction of account renderer/workflow code from `app.js` should be mechanical ownership cleanup only, not another visual redesign.
+Remaining Accounts work is consolidation: move the remaining same-domain visual/group-edit decoration from `accounts-ux.js` into the Accounts owner/shared account identity primitives, then retire the transitional file without changing the established UX.
 
 ## Delivery order
 
