@@ -16,7 +16,7 @@
     <ProjectReference Include="../FullWorth.FinTs/FullWorth.FinTs.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(FullWorthUnifiedReference)' == 'true'">
-    <Content Update="appsettings.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  <ItemGroup>
+    <Content Update="appsettings.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>
