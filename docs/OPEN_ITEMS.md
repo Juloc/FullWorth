@@ -57,3 +57,9 @@ Still open / worth tightening:
 
 - Decided (shipped): Amazon import intentionally uses server-side browser automation with an encrypted stored session, running automatic ~24h syncs. Credentials/OTP are submitted only to Amazon server-side, never persisted, never returned to the browser — consistent with the bank-credential rule. Documented in `PRODUCT_DECISIONS.md` and `SECURITY_ARCHITECTURE.md`. Manual/e-mail/export stay as complementary adapters.
 - external-tool least-privilege permissions and stricter share/screenshot mode still need explicit product scope.
+
+## Compliance / account deletion
+
+- Extend the `PersonalDataPurgeManifest` CI guard beyond `FullWorthDbContext` to the other two contexts required by `ACCOUNT_DELETION_PLAN.md` §7. Today only the finance model is guarded, so a new unclassified table in Intelligence or Auth would not fail CI.
+  - `IntelligenceDbContext`: 23 entities are currently unclassified by the finance-centric manifest and each needs an explicit account-deletion decision (GlobalAnonymous / System vs PersonalSpaceData): `AiInstanceSettings, BrandAssetBlob, CloudInstanceCredential, CloudSubmissionOutbox, CustomBrandPack/Asset/Alias, IntelligenceJob/JobLease/Watermark, KnowledgePackArchive/Installation, OfficialBrandAsset/Alias, OfficialContractProvider/Signature, OfficialMerchantMapping, OfficialOntologyEntity/Alias/Redirect, OfficialProduct/Gtin/Alias`. Most are global/instance reference data, but `CloudSubmissionOutbox` is personal-attributable (the purge already deletes per-user outbox items) — misclassifying it as global would be a data-retention regression. Decision is per-entity domain judgment.
+  - `AuthDbContext` lives in `FullWorth.Web`, so its guard belongs in `FullWorth.Web.Tests` (the Backend manifest cannot reference the Web `AuthUser` identity type); the Auth root user type is not recognized by the current finance manifest.
