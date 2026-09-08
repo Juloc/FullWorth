@@ -1,11 +1,12 @@
 import { confirmMessage } from '../ui/confirm.js';
+import { secureFetch } from '../security/secure-fetch.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const dt=v=>v?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(v)):'—';
 
 async function request(path,options){
-  const response=await fetch(path,options);
+  const response=await secureFetch(path,options);
   if(response.status===403){location.assign('/');throw new Error('forbidden')}
   if(!response.ok){
     let error=String(response.status);
