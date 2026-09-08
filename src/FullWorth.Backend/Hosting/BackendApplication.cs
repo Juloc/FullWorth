@@ -86,7 +86,11 @@ public static class BackendApplication
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiCompatibleIntelligenceProvider>());
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<CodexBridgeIntelligenceProvider>());
         builder.Services.AddScoped<IntelligenceProviderRegistry>();
-        builder.Services.AddSingleton(new AutopilotRolloutSettings(builder.Configuration));
+        // Resolved from the container rather than constructed here: building it eagerly snapshots whatever
+        // configuration happens to be present at registration time, so any source added afterwards is
+        // silently ignored and the rollout flags cannot be overridden at all.
+        builder.Services.AddSingleton(services =>
+            new AutopilotRolloutSettings(services.GetRequiredService<IConfiguration>()));
         builder.Services.AddScoped<IntelligenceStore>();
         builder.Services.AddScoped<IntelligenceAdminBootstrapper>();
         builder.Services.AddScoped<IntelligenceAdminAuthorizer>();
