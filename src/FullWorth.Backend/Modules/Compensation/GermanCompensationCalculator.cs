@@ -1,26 +1,27 @@
 namespace FullWorth.Backend.Modules.Compensation;
 
+/// <summary>
+/// The German payroll/net calculation. There is exactly one formula: every statutory figure it needs comes from
+/// <see cref="TaxYearParameters"/>, resolved once per calculation from <see cref="CompensationProfileInput.TaxYear"/>.
+/// A snapshot for 2019 is therefore computed with 2019 law and stays stable when later years change.
+/// </summary>
 public static class GermanCompensationCalculator
 {
+    // Kept as compile-time constants for callers and tests that pin the current year; they are cross-checked
+    // against the 2026 row of <see cref="TaxYearTable"/> by a unit test so they cannot silently drift.
     public const decimal HealthCareContributionCeiling2026 = 69_750m;
     public const decimal PensionUnemploymentContributionCeiling2026 = 101_400m;
     public const decimal BavTaxFreeLimit2026 = PensionUnemploymentContributionCeiling2026 * 0.08m;
     public const decimal BavSocialFreeLimit2026 = PensionUnemploymentContributionCeiling2026 * 0.04m;
 
-    private const decimal EmployeeLumpSum = 1_230m;
-    private const decimal SpecialExpenseLumpSum = 36m;
-    private const decimal SingleParentRelief = 4_260m;
-    private const decimal ChildAllowanceFull2026 = 9_756m;
-    private const decimal ChildAllowanceHalf2026 = 4_878m;
-    private const decimal WageTaxClass5W1 = 14_071m;
-    private const decimal WageTaxClass5W2 = 34_939m;
-    private const decimal WageTaxClass5W3 = 222_260m;
+    public const int CurrentTaxYear = 2026;
 
     public static CompensationCalculationResult Calculate(CompensationProfileInput input)
     {
         Validate(input);
-        var raw = CalculateRaw(input);
-        var plus100 = CalculateRaw(input with { AnnualGross = input.AnnualGross + 100m });
+        var year = TaxYearTable.Resolve(input);
+        var raw = CalculateRaw(input, year);
+        var plus100 = CalculateRaw(input with { AnnualGross = input.AnnualGross + 100m }, year);
         var marginal = RoundMoney(plus100.CashNetAnnual - raw.CashNetAnnual);
 
         // "Netto normaler Monat" must reflect a single ordinary payslip: the regular monthly salary taxed on a
@@ -31,13 +32,13 @@ public static class GermanCompensationCalculator
         // This makes the regular-month net independent of the bonus and of the number of salary payments.
         var salaryPayments = input.SalaryPaymentsPerYear is >= 12 and <= 14 ? input.SalaryPaymentsPerYear : 12;
         var regularMonthlyBase = RoundMoney(input.AnnualGross * 12m / salaryPayments);
-        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m, OneOffPayments = null });
+        var regularRaw = CalculateRaw(input with { AnnualGross = regularMonthlyBase, AnnualBonus = 0m, OneOffPayments = null }, year);
         var regularMonthlyNet = RoundMoney(regularRaw.CashNetAnnual / 12m);
         // "Ø Netto pro Monat" spreads the FULL annual net (bonus + every salary payment) evenly over 12 months.
         var averageMonthlyNet = RoundMoney(raw.CashNetAnnual / 12m);
 
         var noCarInput = input with { CompanyCar = (input.CompanyCar ?? new CompanyCarInput()) with { Enabled = false } };
-        var noCarRaw = CalculateRaw(noCarInput);
+        var noCarRaw = CalculateRaw(noCarInput, year);
         var carCashImpact = RoundMoney(noCarRaw.CashNetAnnual - raw.CashNetAnnual);
 
         var car = input.CompanyCar ?? new CompanyCarInput();
@@ -67,15 +68,15 @@ public static class GermanCompensationCalculator
         var noBavRaw = CalculateRaw(input with
         {
             OccupationalPension = pension with { EmployeeContributionMonthly = 0m, EmployerContributionMonthly = 0m }
-        });
+        }, year);
         var netSacrifice = Math.Max(0m, noBavRaw.CashNetAnnual - raw.CashNetAnnual);
         var totalInvested = bavEmployeeAnnual + bavEmployerAnnual;
         var projected = ProjectRecurringAnnualContribution(totalInvested, pension.ProjectionYears, pension.ExpectedAnnualReturnPercent);
         var pensionAnalysis = new OccupationalPensionAnalysis(
             RoundMoney(bavEmployeeAnnual),
             RoundMoney(bavEmployerAnnual),
-            RoundMoney(Math.Min(bavEmployeeAnnual, BavTaxFreeLimit2026)),
-            RoundMoney(Math.Min(bavEmployeeAnnual, BavSocialFreeLimit2026)),
+            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavTaxFreeLimit)),
+            RoundMoney(Math.Min(bavEmployeeAnnual, year.BavSocialFreeLimit)),
             RoundMoney(netSacrifice),
             RoundMoney(totalInvested),
             netSacrifice <= 0m ? 0m : Math.Round(totalInvested / netSacrifice, 3),
@@ -109,7 +110,7 @@ public static class GermanCompensationCalculator
             carAnalysis,
             pensionAnalysis,
             benefits,
-            Assumptions());
+            Assumptions(year));
     }
 
     public static CompensationComparisonResult Compare(CompensationComparisonRequest request)
@@ -125,62 +126,58 @@ public static class GermanCompensationCalculator
             RoundMoney(right.EffectiveNetValuePerWorkingHour - left.EffectiveNetValuePerWorkingHour));
     }
 
-    public static decimal IncomeTax2026(decimal taxableIncome)
-    {
-        var x = Math.Floor(Math.Max(0m, taxableIncome));
-        decimal tax;
-        if (x <= 12_348m) tax = 0m;
-        else if (x <= 17_799m)
-        {
-            var y = (x - 12_348m) / 10_000m;
-            tax = (914.51m * y + 1_400m) * y;
-        }
-        else if (x <= 69_878m)
-        {
-            var z = (x - 17_799m) / 10_000m;
-            tax = (173.10m * z + 2_397m) * z + 1_034.87m;
-        }
-        else if (x <= 277_825m) tax = 0.42m * x - 11_135.63m;
-        else tax = 0.45m * x - 19_470.38m;
-        return RoundMoney(Math.Max(0m, tax));
-    }
+    /// <summary>§32a EStG income tax for the given calendar year (clamped to the seeded year range).</summary>
+    public static decimal IncomeTax(decimal taxableIncome, int? taxYear) =>
+        TaxYearTable.Get(taxYear).IncomeTax.Tax(taxableIncome);
+
+    /// <summary>§32a EStG income tax for the current tax year.</summary>
+    public static decimal IncomeTax2026(decimal taxableIncome) => IncomeTax(taxableIncome, CurrentTaxYear);
 
     /// <summary>
-    /// Tax-class-aware 2026 wage-tax planning calculation derived from the BMF PAP structure.
-    /// It covers ordinary statutory-insurance employment, the six tax classes, class-IV factor,
-    /// ELStAM allowances and common statutory-insurance exceptions. It is intentionally not presented
-    /// as a full payroll engine for every PAP input (private insurance, Midijob transition rules,
+    /// Tax-class-aware wage-tax planning calculation derived from the BMF PAP structure, using the parameters of
+    /// the profile's tax year. It covers ordinary statutory-insurance employment, the six tax classes, the
+    /// class-IV factor, ELStAM allowances and common statutory-insurance exceptions. It is intentionally not
+    /// presented as a full payroll engine for every PAP input (private insurance, Midijob transition rules,
     /// pension payments and exact special-payment payroll require additional paths).
     /// </summary>
-    public static TaxBreakdown WageTax2026(decimal annualTaxableGross, CompensationProfileInput input)
+    public static TaxBreakdown WageTax(decimal annualTaxableGross, CompensationProfileInput input) =>
+        WageTax(annualTaxableGross, input, TaxYearTable.Resolve(input));
+
+    /// <summary>Wage tax pinned to the current tax year, regardless of the profile's tax year.</summary>
+    public static TaxBreakdown WageTax2026(decimal annualTaxableGross, CompensationProfileInput input) =>
+        WageTax(annualTaxableGross, input, TaxYearTable.Get(CurrentTaxYear));
+
+    private static TaxBreakdown WageTax(decimal annualTaxableGross, CompensationProfileInput input, TaxYearParameters year)
     {
         Validate(input);
         var gross = Math.Max(0m, annualTaxableGross);
-        var employeeLump = input.TaxClass == 6 ? 0m : EmployeeLumpSum;
+        var employeeLump = input.TaxClass == 6 ? 0m : year.EmployeeLumpSum;
         var specialExpense = input.TaxClass switch
         {
             6 => 0m,
-            3 => SpecialExpenseLumpSum * 2m,
-            _ => SpecialExpenseLumpSum
+            3 => year.SpecialExpenseLumpSum * 2m,
+            _ => year.SpecialExpenseLumpSum
         };
-        var singleParent = input.TaxClass == 2 ? SingleParentRelief : 0m;
-        var provisionAllowance = WageTaxProvisionAllowance2026(gross, input);
+        var singleParent = input.TaxClass == 2 ? year.SingleParentRelief : 0m;
+        var provisionAllowance = WageTaxProvisionAllowance(gross, input, year);
         var taxableIncome = Math.Max(0m, gross - employeeLump - specialExpense - singleParent - provisionAllowance - Math.Max(0m, input.AnnualTaxAllowance));
 
-        var incomeTax = ApplyTaxClass4Factor(WageTaxForClass2026(taxableIncome, input.TaxClass), input);
+        var incomeTax = ApplyTaxClass4Factor(WageTaxForClass(taxableIncome, input.TaxClass, year), input);
         var childAllowance = input.ChildAllowanceUnits is >= 0m
-            ? input.ChildAllowanceUnits.Value * ChildAllowanceFull2026
+            ? input.ChildAllowanceUnits.Value * year.ChildAllowanceFull
             : input.TaxClass switch
             {
-                3 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceFull2026,
-                1 or 2 or 4 => Math.Max(0, input.ChildrenUnder25) * ChildAllowanceHalf2026,
+                3 => Math.Max(0, input.ChildrenUnder25) * year.ChildAllowanceFull,
+                1 or 2 or 4 => Math.Max(0, input.ChildrenUnder25) * year.ChildAllowanceHalf,
                 _ => 0m
             };
         var soliTaxableIncome = Math.Max(0m, taxableIncome - childAllowance);
-        var soliAssessmentTax = ApplyTaxClass4Factor(WageTaxForClass2026(soliTaxableIncome, input.TaxClass), input);
-        var soliLimit = input.TaxClass == 3 ? 40_700m : 20_350m;
-        var fullSoli = soliAssessmentTax * 0.055m;
-        var reducedSoli = Math.Max(0m, (soliAssessmentTax - soliLimit) * 0.119m);
+        var soliAssessmentTax = ApplyTaxClass4Factor(WageTaxForClass(soliTaxableIncome, input.TaxClass, year), input);
+        var soliLimit = input.TaxClass == 3
+            ? year.SolidarityExemptionLimitAnnual * 2m
+            : year.SolidarityExemptionLimitAnnual;
+        var fullSoli = soliAssessmentTax * year.SolidaritySurchargeRate;
+        var reducedSoli = Math.Max(0m, (soliAssessmentTax - soliLimit) * year.SolidarityGlideRate);
         var soli = soliAssessmentTax <= soliLimit ? 0m : Math.Min(fullSoli, reducedSoli);
         var churchRate = input.StateCode.Trim().ToUpperInvariant() is "BW" or "BY" ? 0.08m : 0.09m;
         var church = input.ChurchTax ? soliAssessmentTax * churchRate : 0m;
@@ -237,7 +234,7 @@ public static class GermanCompensationCalculator
         return RoundMoney(monthly * 12m);
     }
 
-    private static RawResult CalculateRaw(CompensationProfileInput input)
+    private static RawResult CalculateRaw(CompensationProfileInput input, TaxYearParameters year)
     {
         var car = input.CompanyCar ?? new CompanyCarInput();
         var pension = input.OccupationalPension ?? new OccupationalPensionInput();
@@ -247,8 +244,8 @@ public static class GermanCompensationCalculator
         var carTaxable = CompanyCarTaxableBenefitAnnual(car);
         var otherTaxableBenefits = benefits.Sum(b => Math.Max(0m, b.TaxableBenefitMonthly) * 12m);
         var bavEmployee = Math.Max(0m, pension.EmployeeContributionMonthly * 12m);
-        var taxExemptBav = Math.Min(bavEmployee, BavTaxFreeLimit2026);
-        var socialExemptBav = Math.Min(bavEmployee, BavSocialFreeLimit2026);
+        var taxExemptBav = Math.Min(bavEmployee, year.BavTaxFreeLimit);
+        var socialExemptBav = Math.Min(bavEmployee, year.BavSocialFreeLimit);
 
         // One-off special payments for the year (Weihnachtsgeld, Corona-Prämie, …). Each can be independently
         // tax-free and/or SV-free, so a tax- and SV-free payment reaches net in full while a normal one is
@@ -260,8 +257,8 @@ public static class GermanCompensationCalculator
 
         var taxPayrollBase = Math.Max(0m, cashGross + oneOffTaxable + carTaxable + otherTaxableBenefits - taxExemptBav);
         var socialPayrollBase = Math.Max(0m, cashGross + oneOffSocial + carTaxable + otherTaxableBenefits - socialExemptBav);
-        var social = SocialInsurance2026(socialPayrollBase, input);
-        var tax = WageTax2026(taxPayrollBase, input);
+        var social = SocialInsurance(socialPayrollBase, input, year);
+        var tax = WageTax(taxPayrollBase, input, year);
 
         var carEmployeeCost = car.Enabled ? Math.Max(0m, car.EmployeeContributionMonthly * 12m) : 0m;
         var otherEmployeeCosts = benefits.Sum(b => Math.Max(0m, b.EmployeeCostMonthly) * 12m);
@@ -292,71 +289,80 @@ public static class GermanCompensationCalculator
         return RoundMoney(tax * factor);
     }
 
-    private static decimal WageTaxForClass2026(decimal taxableIncome, int taxClass) => taxClass switch
+    private static decimal WageTaxForClass(decimal taxableIncome, int taxClass, TaxYearParameters year) => taxClass switch
     {
-        3 => RoundMoney(2m * IncomeTax2026(taxableIncome / 2m)),
-        5 or 6 => WageTaxClass56_2026(taxableIncome),
-        _ => IncomeTax2026(taxableIncome)
+        3 => RoundMoney(2m * year.IncomeTax.Tax(taxableIncome / 2m)),
+        5 or 6 => WageTaxClass56(taxableIncome, year),
+        _ => year.IncomeTax.Tax(taxableIncome)
     };
 
-    private static decimal WageTaxClass56_2026(decimal taxableIncome)
+    private static decimal WageTaxClass56(decimal taxableIncome, TaxYearParameters year)
     {
         var x = Math.Max(0m, taxableIncome);
         if (x <= 0m) return 0m;
 
-        if (x > WageTaxClass5W2)
+        var tariff = year.IncomeTax;
+        var w1 = tariff.ClassFiveW1;
+        var w2 = tariff.ClassFiveW2;
+        var w3 = tariff.ClassFiveW3;
+
+        if (x > w2)
         {
-            var tax = WageTaxClass56Step(WageTaxClass5W2);
-            if (x > WageTaxClass5W3)
-                tax += (WageTaxClass5W3 - WageTaxClass5W2) * 0.42m + (x - WageTaxClass5W3) * 0.45m;
+            var tax = WageTaxClass56Step(w2, year);
+            if (x > w3)
+                tax += (w3 - w2) * tariff.Zone4Rate + (x - w3) * tariff.Zone5Rate;
             else
-                tax += (x - WageTaxClass5W2) * 0.42m;
+                tax += (x - w2) * tariff.Zone4Rate;
             return RoundMoney(tax);
         }
 
-        var result = WageTaxClass56Step(x);
-        if (x > WageTaxClass5W1)
+        var result = WageTaxClass56Step(x, year);
+        if (x > w1)
         {
-            var upperComparison = WageTaxClass56Step(WageTaxClass5W1) + (x - WageTaxClass5W1) * 0.42m;
+            var upperComparison = WageTaxClass56Step(w1, year) + (x - w1) * tariff.Zone4Rate;
             result = Math.Min(result, upperComparison);
         }
         return RoundMoney(result);
     }
 
-    private static decimal WageTaxClass56Step(decimal taxableIncome)
+    private static decimal WageTaxClass56Step(decimal taxableIncome, TaxYearParameters year)
     {
-        var difference = (IncomeTax2026(taxableIncome * 1.25m) - IncomeTax2026(taxableIncome * 0.75m)) * 2m;
-        return Math.Max(difference, taxableIncome * 0.14m);
+        var tariff = year.IncomeTax;
+        var difference = (tariff.Tax(taxableIncome * 1.25m) - tariff.Tax(taxableIncome * 0.75m)) * 2m;
+        return Math.Max(difference, taxableIncome * tariff.Zone2EntryRate / 10_000m);
     }
 
-    private static decimal WageTaxProvisionAllowance2026(decimal annualGross, CompensationProfileInput input)
+    private static decimal WageTaxProvisionAllowance(decimal annualGross, CompensationProfileInput input, TaxYearParameters year)
     {
-        var pensionBase = Math.Min(Math.Max(0m, annualGross), PensionUnemploymentContributionCeiling2026);
-        var pension = input.PensionInsuranceEnabled == false ? 0m : pensionBase * 0.093m;
-        var healthCareBase = Math.Min(Math.Max(0m, annualGross), HealthCareContributionCeiling2026);
-        // §39b PAP Vorsorgepauschale uses the reduced 7.0% statutory-health employee rate,
-        // plus half of the fund-specific additional contribution.
-        var healthRate = 0.07m + Math.Clamp(input.HealthInsuranceAdditionalRatePercent, 0m, 10m) / 200m;
-        var careRate = CareEmployeeRate(input);
+        var pensionBase = Math.Min(Math.Max(0m, annualGross), year.PensionCeilingAnnual(input.StateCode));
+        var pension = input.PensionInsuranceEnabled == false
+            ? 0m
+            : pensionBase * year.PensionEmployeeRate * year.PensionProvisionPhaseIn;
+        var healthCareBase = Math.Min(Math.Max(0m, annualGross), year.HealthCareCeilingAnnual);
+        // §39b PAP Vorsorgepauschale uses the reduced statutory-health employee rate (half of 14.0%),
+        // plus the employee's share of the fund-specific additional contribution.
+        var healthRate = year.HealthReducedEmployeeRate + AdditionalHealthEmployeeRate(input, year);
+        var careRate = CareEmployeeRate(input, year);
         return pension + healthCareBase * (healthRate + careRate);
     }
 
-    private static SocialInsuranceBreakdown SocialInsurance2026(decimal annualBase, CompensationProfileInput input)
+    private static SocialInsuranceBreakdown SocialInsurance(decimal annualBase, CompensationProfileInput input, TaxYearParameters year)
     {
-        var rvAvBase = Math.Min(Math.Max(0m, annualBase), PensionUnemploymentContributionCeiling2026);
-        var kvPvBase = Math.Min(Math.Max(0m, annualBase), HealthCareContributionCeiling2026);
-        var additionalRate = Math.Clamp(input.HealthInsuranceAdditionalRatePercent, 0m, 10m) / 100m;
+        var rvAvBase = Math.Min(Math.Max(0m, annualBase), year.PensionCeilingAnnual(input.StateCode));
+        var kvPvBase = Math.Min(Math.Max(0m, annualBase), year.HealthCareCeilingAnnual);
+        var employeeAdditional = AdditionalHealthEmployeeRate(input, year);
+        var employerAdditional = AdditionalHealthRate(input) - employeeAdditional;
 
-        var pension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * 0.093m;
-        var unemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * 0.013m;
-        var health = kvPvBase * (0.073m + additionalRate / 2m);
-        var care = kvPvBase * CareEmployeeRate(input);
+        var pension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * year.PensionEmployeeRate;
+        var unemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * year.UnemploymentEmployeeRate;
+        var health = kvPvBase * (year.HealthEmployeeBaseRate + employeeAdditional);
+        var care = kvPvBase * CareEmployeeRate(input, year);
 
         var saxony = input.StateCode.Trim().Equals("SN", StringComparison.OrdinalIgnoreCase);
-        var employerPension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * 0.093m;
-        var employerUnemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * 0.013m;
-        var employerHealth = kvPvBase * (0.073m + additionalRate / 2m);
-        var employerCare = kvPvBase * (saxony ? 0.013m : 0.018m);
+        var employerPension = input.PensionInsuranceEnabled == false ? 0m : rvAvBase * year.PensionEmployeeRate;
+        var employerUnemployment = input.UnemploymentInsuranceEnabled == false ? 0m : rvAvBase * year.UnemploymentEmployeeRate;
+        var employerHealth = kvPvBase * (year.HealthEmployeeBaseRate + employerAdditional);
+        var employerCare = kvPvBase * (saxony ? year.CareHalfRate - year.CareSaxonyEmployeeShift : year.CareHalfRate);
 
         return new SocialInsuranceBreakdown(
             RoundMoney(pension),
@@ -386,15 +392,27 @@ public static class GermanCompensationCalculator
         return input.Age;
     }
 
-    private static decimal CareEmployeeRate(CompensationProfileInput input)
+    /// <summary>The fund-specific additional health contribution (Zusatzbeitrag) as a rate.</summary>
+    private static decimal AdditionalHealthRate(CompensationProfileInput input) =>
+        Math.Clamp(input.HealthInsuranceAdditionalRatePercent, 0m, 10m) / 100m;
+
+    /// <summary>
+    /// The employee's part of the Zusatzbeitrag. Shared 50/50 with the employer since the
+    /// GKV-Versichertenentlastungsgesetz took effect in 2019; before that the employee carried it alone.
+    /// </summary>
+    private static decimal AdditionalHealthEmployeeRate(CompensationProfileInput input, TaxYearParameters year) =>
+        AdditionalHealthRate(input) * year.HealthAdditionalRateEmployeeShare;
+
+    private static decimal CareEmployeeRate(CompensationProfileInput input, TaxYearParameters year)
     {
         var saxony = input.StateCode.Trim().Equals("SN", StringComparison.OrdinalIgnoreCase);
-        var rate = saxony ? 0.023m : 0.018m;
+        var rate = saxony ? year.CareHalfRate + year.CareSaxonyEmployeeShift : year.CareHalfRate;
         var age = EffectiveAge(input) ?? 23;
         if (age >= 23 && input.ChildrenUnder25 <= 0 && input.ChildlessCareSurcharge)
-            rate += 0.006m;
-        else if (input.ChildrenUnder25 > 1)
-            rate = Math.Max(0m, rate - 0.0025m * (Math.Min(5, input.ChildrenUnder25) - 1));
+            rate += year.CareChildlessSurcharge;
+        else if (input.ChildrenUnder25 > 1 && year.CareChildDiscountPerChild > 0m)
+            rate = Math.Max(0m, rate - year.CareChildDiscountPerChild
+                * (Math.Min(year.CareChildDiscountMaxChildren, input.ChildrenUnder25) - 1));
         return rate;
     }
 
@@ -417,11 +435,11 @@ public static class GermanCompensationCalculator
         return Math.Max(1m, hours * 52m - days * hoursPerDay);
     }
 
-    private static CompensationAssumptions Assumptions() => new(
-        2026,
+    private static CompensationAssumptions Assumptions(TaxYearParameters year) => new(
+        year.Year,
         "tax-class-aware annualized wage-tax planning estimate",
-        "BMF PAP 2026 / EStG §32a; tax classes 1-6, tax-class-IV factor and statutory-insurance Vorsorgepauschale modeled locally",
-        "BMAS/BMG/BA 2026 contribution rates and ceilings",
+        $"BMF PAP {year.Year} / EStG §32a {year.Year}; tax classes 1-6, tax-class-IV factor and statutory-insurance Vorsorgepauschale modeled locally",
+        $"BMAS/BMG/BA {year.Year} contribution rates and ceilings ({year.SourceNote})",
         InflationIndex.Source,
         InflationIndex.DataAsOf,
         "Planning estimate only. The full BMF PAP has additional inputs for exact special-payment payroll, private insurance, individual allowances and pension income; actual payroll and tax assessment can differ.");

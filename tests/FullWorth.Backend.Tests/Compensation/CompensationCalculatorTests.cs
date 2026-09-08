@@ -447,6 +447,256 @@ public sealed class CompensationCalculatorTests
         Assert.True(older.SocialInsurance.CareAnnual > young.SocialInsurance.CareAnnual);
     }
 
+    // ---------------------------------------------------------------------------------------------------
+    // Year-aware calculation (§32a tariff, contribution rates and ceilings of the snapshot's calendar year)
+    // ---------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void TaxYearTable_CoversEveryYearFrom2018ToTheCurrentYear()
+    {
+        Assert.Equal(2018, TaxYearTable.FirstYear);
+        Assert.Equal(GermanCompensationCalculator.CurrentTaxYear, TaxYearTable.LastYear);
+        Assert.Equal(
+            Enumerable.Range(2018, GermanCompensationCalculator.CurrentTaxYear - 2017).ToArray(),
+            TaxYearTable.Years);
+    }
+
+    [Fact]
+    public void TaxYearTable_ResolvesUnsetAndOutOfRangeYearsWithoutThrowing()
+    {
+        Assert.Equal(TaxYearTable.LastYear, TaxYearTable.Get(null).Year);
+        Assert.Equal(TaxYearTable.LastYear, TaxYearTable.Get(2099).Year);
+        Assert.Equal(TaxYearTable.FirstYear, TaxYearTable.Get(1999).Year);
+        Assert.Equal(2019, TaxYearTable.Get(2019).Year);
+    }
+
+    [Fact]
+    public void CurrentYearConstants_StayInSyncWithTheTaxYearTable()
+    {
+        var current = TaxYearTable.Get(GermanCompensationCalculator.CurrentTaxYear);
+
+        Assert.Equal(GermanCompensationCalculator.HealthCareContributionCeiling2026, current.HealthCareCeilingAnnual);
+        Assert.Equal(GermanCompensationCalculator.PensionUnemploymentContributionCeiling2026, current.PensionCeilingAnnualWest);
+        Assert.Equal(GermanCompensationCalculator.BavTaxFreeLimit2026, current.BavTaxFreeLimit);
+        Assert.Equal(GermanCompensationCalculator.BavSocialFreeLimit2026, current.BavSocialFreeLimit);
+    }
+
+    [Fact]
+    public void ClassFiveThresholds_ReproduceThePublished2026Values()
+    {
+        // The BMF publishes W1/W2/W3 for §39b Abs. 2 Satz 7 EStG; they are derived from the year's §32a tariff
+        // here instead of being tabulated a second time. For 2026 the derivation must hit them exactly.
+        var tariff = TaxYearTable.Get(2026).IncomeTax;
+
+        Assert.Equal(14_071m, tariff.ClassFiveW1);
+        Assert.Equal(34_939m, tariff.ClassFiveW2);
+        Assert.Equal(222_260m, tariff.ClassFiveW3);
+    }
+
+    [Theory]
+    // §32a EStG proportional ("42 %") zone: 0,42 × 60.000 − Subtrahend of the respective year. These are the
+    // statutory amounts an official Einkommensteuer table shows for a taxable income of 60.000 €.
+    [InlineData(2018, 16_578.25)]
+    [InlineData(2019, 16_419.10)]
+    [InlineData(2020, 16_236.26)]
+    [InlineData(2021, 16_063.37)]
+    [InlineData(2022, 15_863.55)]
+    public void IncomeTax_MatchesTheStatutoryTariffOfTheYear(int year, double expected)
+    {
+        Assert.Equal((decimal)expected, GermanCompensationCalculator.IncomeTax(60_000m, year));
+    }
+
+    [Theory]
+    [InlineData(2018, 9_000)]
+    [InlineData(2019, 9_168)]
+    [InlineData(2020, 9_408)]
+    [InlineData(2021, 9_744)]
+    [InlineData(2022, 10_347)]
+    [InlineData(2023, 10_908)]
+    [InlineData(2024, 11_784)]
+    [InlineData(2025, 12_096)]
+    [InlineData(2026, 12_348)]
+    public void Grundfreibetrag_IsTaxFreeAndTheNextEuroIsTaxed(int year, int basicAllowance)
+    {
+        Assert.Equal(0m, GermanCompensationCalculator.IncomeTax(basicAllowance, year));
+        Assert.True(GermanCompensationCalculator.IncomeTax(basicAllowance + 1m, year) > 0m);
+    }
+
+    [Fact]
+    public void IncomeTaxTariff_IsContinuousAtEveryZoneBoundary_ForEveryYear()
+    {
+        // A typo in any coefficient of any year shows up as a jump at a zone boundary, so this pins the whole
+        // seeded table at once. The statute itself rounds its constants, hence the small tolerances.
+        foreach (var year in TaxYearTable.Years)
+        {
+            var t = TaxYearTable.Get(year).IncomeTax;
+
+            Assert.InRange(Math.Abs(t.Tax(t.Zone2Upper) - t.Zone3Base), 0m, 0.20m);
+            Assert.InRange(
+                Math.Abs(t.Tax(t.Zone3Upper) - (t.Zone4Rate * t.Zone3Upper - t.Zone4Subtrahend)),
+                0m, 2m);
+            Assert.InRange(
+                Math.Abs((t.Zone4Rate * t.Zone4Upper - t.Zone4Subtrahend)
+                    - (t.Zone5Rate * t.Zone4Upper - t.Zone5Subtrahend)),
+                0m, 0.01m);
+        }
+    }
+
+    [Fact]
+    public void SameGross_YieldsADifferentNetIn2019ThanIn2025()
+    {
+        var profile = BasicProfile(60_000m);
+        var in2019 = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2019 });
+        var in2025 = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2025 });
+
+        Assert.NotEqual(in2019.EstimatedCashNetAnnual, in2025.EstimatedCashNetAnnual);
+        // 2019 taxed the same nominal income far harder (Grundfreibetrag 9.168 € vs 12.096 €, and the
+        // Vorsorgepauschale only recognised 76 % of the pension contribution), and it still charged
+        // Solidaritätszuschlag, which the 2021 Freigrenze reform removed for this income.
+        Assert.True(in2019.Taxes.EstimatedIncomeTaxAnnual > in2025.Taxes.EstimatedIncomeTaxAnnual);
+        Assert.True(in2019.Taxes.EstimatedSolidaritySurchargeAnnual > 0m);
+        Assert.Equal(0m, in2025.Taxes.EstimatedSolidaritySurchargeAnnual);
+        // Contributions moved the other way: rates and ceilings both rose.
+        Assert.True(in2025.SocialInsurance.TotalAnnual > in2019.SocialInsurance.TotalAnnual);
+        Assert.True(in2025.EstimatedCashNetAnnual > in2019.EstimatedCashNetAnnual);
+
+        Assert.Equal(2019, in2019.Assumptions.TaxYear);
+        Assert.Equal(2025, in2025.Assumptions.TaxYear);
+    }
+
+    [Theory]
+    // Pinned so a historical snapshot can never silently move when a new tax year is seeded.
+    [InlineData(2018, 34_802.43, 12_573.23)]
+    [InlineData(2019, 35_477.03, 11_924.74)]
+    [InlineData(2023, 37_108.91, 12_614.33)]
+    [InlineData(2026, 37_798.27, 12_690.00)]
+    public void HistoricalSnapshot_StaysPinnedToItsOwnYear(int year, double expectedNet, double expectedSocial)
+    {
+        var result = GermanCompensationCalculator.Calculate(BasicProfile(60_000m) with { TaxYear = year });
+
+        Assert.Equal((decimal)expectedNet, result.EstimatedCashNetAnnual);
+        // Employee contributions are the exactly reproducible part: 2018 still put the full Zusatzbeitrag on the
+        // employee, and every year has its own rates and Beitragsbemessungsgrenzen.
+        Assert.Equal((decimal)expectedSocial, result.SocialInsurance.TotalAnnual);
+    }
+
+    [Fact]
+    public void UnsetTaxYear_UsesTheNewestSeededYear()
+    {
+        var withoutYear = GermanCompensationCalculator.Calculate(BasicProfile(60_000m));
+        var currentYear = GermanCompensationCalculator.Calculate(
+            BasicProfile(60_000m) with { TaxYear = GermanCompensationCalculator.CurrentTaxYear });
+
+        Assert.Equal(currentYear.EstimatedCashNetAnnual, withoutYear.EstimatedCashNetAnnual);
+        Assert.Equal(GermanCompensationCalculator.CurrentTaxYear, withoutYear.Assumptions.TaxYear);
+    }
+
+    [Fact]
+    public void BavLimits_FollowThePensionCeilingOfTheYear()
+    {
+        // §3 Nr. 63 EStG (8 %) and §1 SvEV (4 %) of the west pension ceiling: 80.400 € in 2019, 101.400 € in 2026.
+        Assert.Equal(6_432m, TaxYearTable.Get(2019).BavTaxFreeLimit);
+        Assert.Equal(3_216m, TaxYearTable.Get(2019).BavSocialFreeLimit);
+        Assert.Equal(8_112m, TaxYearTable.Get(2026).BavTaxFreeLimit);
+        Assert.Equal(4_056m, TaxYearTable.Get(2026).BavSocialFreeLimit);
+
+        var bav = new OccupationalPensionInput(EmployeeContributionMonthly: 700m);
+        var in2019 = GermanCompensationCalculator.Calculate(
+            BasicProfile(80_000m) with { TaxYear = 2019, OccupationalPension = bav });
+        var in2026 = GermanCompensationCalculator.Calculate(
+            BasicProfile(80_000m) with { TaxYear = 2026, OccupationalPension = bav });
+
+        Assert.Equal(6_432m, in2019.OccupationalPension.TaxExemptEmployeeContributionAnnual);
+        Assert.Equal(8_112m, in2026.OccupationalPension.TaxExemptEmployeeContributionAnnual);
+    }
+
+    [Fact]
+    public void PensionCeiling_UsedTheEastRechtskreisBeforeItWasUnifiedIn2025()
+    {
+        Assert.Equal(80_400m, TaxYearTable.Get(2019).PensionCeilingAnnual("BW"));
+        Assert.Equal(73_800m, TaxYearTable.Get(2019).PensionCeilingAnnual("SN"));
+        Assert.Equal(96_600m, TaxYearTable.Get(2025).PensionCeilingAnnual("BW"));
+        Assert.Equal(96_600m, TaxYearTable.Get(2025).PensionCeilingAnnual("SN"));
+
+        var west = GermanCompensationCalculator.Calculate(BasicProfile(90_000m) with { TaxYear = 2019, StateCode = "BW" });
+        var east = GermanCompensationCalculator.Calculate(BasicProfile(90_000m) with { TaxYear = 2019, StateCode = "TH" });
+
+        Assert.True(east.SocialInsurance.PensionAnnual < west.SocialInsurance.PensionAnnual);
+    }
+
+    [Fact]
+    public void CareInsurance_UsesTheChildDiscountOnlyFromTheYearItWasIntroduced()
+    {
+        // The per-child discounts (−0,25 points per child from the 2nd to the 5th) came in on 1.7.2023.
+        var manyChildren = BasicProfile(50_000m) with { ChildrenUnder25 = 4, ChildlessCareSurcharge = false };
+        var oneChild = manyChildren with { ChildrenUnder25 = 1 };
+
+        var in2022 = GermanCompensationCalculator.Calculate(manyChildren with { TaxYear = 2022 });
+        var in2022OneChild = GermanCompensationCalculator.Calculate(oneChild with { TaxYear = 2022 });
+        var in2024 = GermanCompensationCalculator.Calculate(manyChildren with { TaxYear = 2024 });
+        var in2024OneChild = GermanCompensationCalculator.Calculate(oneChild with { TaxYear = 2024 });
+
+        Assert.Equal(in2022OneChild.SocialInsurance.CareAnnual, in2022.SocialInsurance.CareAnnual);
+        Assert.True(in2024.SocialInsurance.CareAnnual < in2024OneChild.SocialInsurance.CareAnnual);
+    }
+
+    [Fact]
+    public void HealthZusatzbeitrag_WasEmployeeOnlyIn2018AndSharedFrom2019()
+    {
+        var profile = BasicProfile(40_000m) with { HealthInsuranceAdditionalRatePercent = 1.0m };
+        var in2018 = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2018 });
+        var in2019 = GermanCompensationCalculator.Calculate(profile with { TaxYear = 2019 });
+
+        // 40.000 € stays below both KV ceilings, so only the split changed: 7,3 % + 1,0 % vs 7,3 % + 0,5 %
+        // for the employee, and the mirror image for the employer.
+        Assert.Equal(40_000m * 0.083m, in2018.SocialInsurance.HealthAnnual);
+        Assert.Equal(40_000m * 0.073m, in2018.SocialInsurance.EmployerHealthAnnual);
+        Assert.Equal(40_000m * 0.078m, in2019.SocialInsurance.HealthAnnual);
+        Assert.Equal(in2019.SocialInsurance.HealthAnnual, in2019.SocialInsurance.EmployerHealthAnnual);
+    }
+
+    [Fact]
+    public void RegularMonthNet_StaysIndependentOfBonusAndSalaryCount_InAHistoricalYear()
+    {
+        const decimal monthly = 3_240m;
+        var profile = BasicProfile(monthly * 13m) with
+        {
+            TaxYear = 2019,
+            SalaryPaymentsPerYear = 13,
+            AnnualBonus = 4_000m,
+            OccupationalPension = new OccupationalPensionInput(EmployeeContributionMonthly: 210.43m)
+        };
+
+        var withBonus = GermanCompensationCalculator.Calculate(profile);
+        var noBonus = GermanCompensationCalculator.Calculate(profile with { AnnualBonus = 0m });
+        var moreSalaries = GermanCompensationCalculator.Calculate(
+            profile with { SalaryPaymentsPerYear = 14, AnnualGross = monthly * 14m });
+
+        Assert.Equal(withBonus.EstimatedCashNetMonthly, noBonus.EstimatedCashNetMonthly);
+        Assert.Equal(withBonus.EstimatedCashNetMonthly, moreSalaries.EstimatedCashNetMonthly);
+        Assert.True(withBonus.EstimatedAverageCashNetMonthly > noBonus.EstimatedAverageCashNetMonthly);
+
+        // …and the historical year is genuinely a different calculation, not the current one.
+        var today = GermanCompensationCalculator.Calculate(profile with { TaxYear = null });
+        Assert.NotEqual(today.EstimatedCashNetMonthly, withBonus.EstimatedCashNetMonthly);
+    }
+
+    [Fact]
+    public void Inflation_CoversTwentyEighteenAndClampsOnlyBeforeIt()
+    {
+        Assert.Equal(2018, InflationIndex.EarliestYear);
+        Assert.Equal(98.1m, InflationIndex.GetIndex(new DateOnly(2018, 12, 31)));
+        Assert.Equal(99.5m, InflationIndex.GetIndex(new DateOnly(2019, 12, 31)));
+        Assert.Equal(100.0m, InflationIndex.GetIndex(new DateOnly(2020, 12, 31)));
+        // Anything before the first published year falls back to it instead of to 2020.
+        Assert.Equal(98.1m, InflationIndex.GetIndex(new DateOnly(2015, 6, 30)));
+
+        // 2018 → 2026 is roughly +28 % cumulative German CPI, so an old salary needs a clearly larger figure now.
+        var adjusted = InflationIndex.AdjustForPurchasingPower(
+            30_000m, new DateOnly(2018, 12, 31), new DateOnly(2026, 7, 31));
+        Assert.InRange(adjusted, 38_000m, 38_800m);
+    }
+
     private static CompensationProfileInput BasicProfile(decimal annualGross) => new(
         Name: "Current",
         AnnualGross: annualGross,

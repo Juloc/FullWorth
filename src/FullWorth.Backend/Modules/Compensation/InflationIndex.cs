@@ -5,10 +5,16 @@ public static class InflationIndex
     public const string Source = "Destatis Verbraucherpreisindex Deutschland, 2020=100";
     public const string DataAsOf = "2026-08-12";
 
-    // Completed years use the official annual average. 2026 uses final monthly CPI values through July.
-    // The provisional August 2026 value is intentionally excluded from purchasing-power calculations.
+    // Completed years use the official Destatis annual average of the Verbraucherpreisindex (Genesis table
+    // 61111, base 2020=100). 2026 uses final monthly CPI values through July; the provisional August 2026 value
+    // is intentionally excluded from purchasing-power calculations.
+    //
+    // 2018 and 2019 are the published annual averages on the same 2020=100 base and let historical salary
+    // snapshots (apprenticeship years and earlier) be compared in real terms instead of being clamped to 2020.
     private static readonly IReadOnlyDictionary<int, decimal> AnnualAverage = new Dictionary<int, decimal>
     {
+        [2018] = 98.1m,
+        [2019] = 99.5m,
         [2020] = 100.0m,
         [2021] = 103.1m,
         [2022] = 110.2m,
@@ -35,10 +41,13 @@ public static class InflationIndex
         return new InflationMetadata(Source, "2020=100", DataAsOf, annual.Concat(Monthly2026).OrderBy(p => p.Date).ToArray());
     }
 
+    /// <summary>The earliest year with a real published index value; anything before it uses that value.</summary>
+    public static int EarliestYear { get; } = AnnualAverage.Keys.Min();
+
     public static decimal GetIndex(DateOnly date)
     {
-        if (date.Year <= 2020) return AnnualAverage[2020];
-        if (date.Year <= 2025 && AnnualAverage.TryGetValue(date.Year, out var annual)) return annual;
+        if (date.Year <= EarliestYear) return AnnualAverage[EarliestYear];
+        if (AnnualAverage.TryGetValue(date.Year, out var annual)) return annual;
         if (date.Year == 2026)
         {
             var point = Monthly2026.LastOrDefault(p => p.Date <= date) ?? Monthly2026[0];
