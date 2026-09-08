@@ -462,3 +462,8 @@ async function loadDashboard(){await renderDashboard(ctx)}
 
 
 async function loadSettings(){$('#language').value=state.lang;$('#theme').value=state.theme;$('#privacy-default').checked=privacyDefault();await Promise.all([renderSharing(ctx),renderBankingSettings(ctx),accessSetup.renderAiAccessSettings(),accessSetup.renderCloudSettings()])}
+
+if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
+initResizableSidebar();
+syncResponsiveSidebar();
+boot();
