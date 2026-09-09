@@ -1,4 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<!-- Microsoft.NET.Sdk.WebAssembly, not Microsoft.NET.Sdk: with the plain SDK, publish emitted managed
+     DLLs and nothing else - no _framework, no dotnet.js, no app bundle at all. This SDK is the one that
+     produces a loadable browser bundle. -->
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
