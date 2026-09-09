@@ -26,7 +26,7 @@ const WINDOWS = [
 ];
 
 // View state so the trend window can be changed without re-fetching (or clobbering) the rest of the view.
-const nw = { overview: null, history: [], bookingActivity: [], importCompleteness: null, assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
+const nw = { overview: null, history: [], bookingActivity: [], importCompleteness: null, assets: [], liabilities: [], accounts: [], accountGroups: [], portfolios: [], emergency: {}, projection: {}, currency: 'EUR', windowMonths: 12, customFrom: '', customTo: '' };
 
 const ASSET_KINDS = [
   'real_estate', 'vehicle', 'precious_metal', 'collectible',
@@ -54,7 +54,17 @@ const COPY = {
     customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.',
     bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne bestätigte Kontozuordnung und Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
     bookingOnlyHint: 'Importierte Buchungen sind vorhanden, aber noch kein belastbarer historischer Vermögensstand.',
-    emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.'
+    emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.',
+    projectionTitle: 'Wie könnte sich dein Vermögen entwickeln?',
+    projectionHint: 'Eine Rechnung mit deinen Annahmen, keine Prognose.',
+    projectionHorizon: 'Zeitraum', projectionYearsShort: 'J.', projectionYearsLong: 'Jahren',
+    projectionSavings: 'Sparrate pro Monat', projectionReturn: 'Rendite pro Jahr (%)', projectionInflation: 'Inflation pro Jahr (%)',
+    projectionFromHistory: 'Sparrate aus deinem eigenen Verlauf berechnet:',
+    projectionHistoryWas: 'Aus deinem Verlauf ergäbe sich:',
+    projectionNoHistory: 'Für eine Sparrate aus dem Verlauf fehlt noch Historie. Trag sie selbst ein.',
+    projectionIn: 'In', projectionReal: 'Kaufkraft von heute', projectionToday: 'Heute',
+    projectionContributed: 'Eingezahlt', projectionGrowth: 'Wertzuwachs',
+    projectionNote: 'Gerechnet mit monatlicher Verzinsung deiner Annahmen. Steuern, Gebühren und Schwankungen sind nicht enthalten. Keine Anlageempfehlung.'
   },
   en: {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
@@ -73,7 +83,17 @@ const COPY = {
     customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
     bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a confirmed account mapping and balance they are shown as booking activity, not as net worth.',
     bookingOnlyHint: 'Imported bookings are available, but no reliable historical net-worth value exists yet.',
-    emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.'
+    emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.',
+    projectionTitle: 'How could your wealth develop?',
+    projectionHint: 'A calculation from your assumptions, not a forecast.',
+    projectionHorizon: 'Horizon', projectionYearsShort: 'yr', projectionYearsLong: 'years',
+    projectionSavings: 'Savings per month', projectionReturn: 'Return per year (%)', projectionInflation: 'Inflation per year (%)',
+    projectionFromHistory: 'Savings rate calculated from your own history:',
+    projectionHistoryWas: 'Your history would suggest:',
+    projectionNoHistory: 'Not enough history for a savings rate yet. Enter one yourself.',
+    projectionIn: 'In', projectionReal: "In today's purchasing power", projectionToday: 'Today',
+    projectionContributed: 'Paid in', projectionGrowth: 'Growth',
+    projectionNote: 'Calculated with monthly compounding of your assumptions. Taxes, fees and volatility are not included. Not investment advice.'
   }
 };
 
@@ -156,7 +176,7 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref] = await Promise.all([
+  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref] = await Promise.all([
     loadHistory(nw.windowMonths),
     loadBookingActivity(nw.windowMonths),
     loadFinanzguruCompleteness(ctx.api),
@@ -165,7 +185,8 @@ export async function renderNetWorth(context) {
     ctx.api('api/accounts').catch(() => []),
     ctx.api('api/account-groups').catch(() => []),
     ctx.api('api/investments/portfolios').catch(() => []),
-    ctx.api('api/preferences/wealth.emergencyFund').catch(() => ({ value: {} }))
+    ctx.api('api/preferences/wealth.emergencyFund').catch(() => ({ value: {} })),
+    ctx.api('api/preferences/wealth.projection').catch(() => ({ value: {} }))
   ]);
 
   lastOverview = overview;
@@ -180,6 +201,7 @@ export async function renderNetWorth(context) {
   nw.accountGroups = accountGroups || [];
   nw.portfolios = portfolios || [];
   nw.emergency = emergencyPref?.value && typeof emergencyPref.value === 'object' ? emergencyPref.value : {};
+  nw.projection = projectionPref?.value && typeof projectionPref.value === 'object' ? projectionPref.value : {};
   nw.currency = overview.currency;
 
   paintNetWorth();
@@ -190,10 +212,11 @@ function paintNetWorth() {
   const host = ctx.$('#view-networth');
   if (!host) return;
   const completeness = finanzguruCompletenessNotice(nw.importCompleteness, { scope: 'wealth', lang: isDe() ? 'de' : 'en' });
-  host.innerHTML = `${completeness}${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+  host.innerHTML = `${completeness}${buildHeroCard()}${buildProjectionCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
 
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
+  wireProjection(host.querySelector('.nw-projection-card'));
   host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
   host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
   host.querySelectorAll('[data-action="emergency-fund"]').forEach(button => button.addEventListener('click', () => openEmergencyFundDialog()));
@@ -209,6 +232,188 @@ function paintNetWorth() {
   // static one) and re-render #nw-loans so the list survives internal refreshes, not just view opens.
   bindLoans(ctx);
   renderLoans(ctx);
+}
+
+/* ---- Card 2: "Wie könnte sich dein Vermögen entwickeln?" ------------------------------------- */
+
+// A projection, not a forecast. Every number follows from the four inputs and monthly compounding,
+// and the card says so. The only value taken from data is the starting savings rate, read off the
+// user's own history and freely overwritable - a round invented number would read like advice, and
+// this is a calculator, not a recommendation.
+const PROJECTION_YEARS = [5, 10, 20, 30];
+const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 10 };
+const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
+
+function monthsBetween(fromDate, toDate) {
+  const from = parseChartDate(fromDate);
+  const to = parseChartDate(toDate);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.max(0, Math.round((to - from) / MS_PER_MONTH));
+}
+
+// The average monthly change of the user's own net worth over the window currently shown. Returns
+// null when there is not enough history to say anything - the card then starts at zero and says
+// where the number would have come from, instead of projecting a made-up rate.
+function observedMonthlySavings() {
+  const usable = (nw.history || []).filter(point => Number.isFinite(Number(point.netWorth)));
+  if (usable.length < 2) return null;
+  const months = monthsBetween(usable[0].date, usable.at(-1).date);
+  if (months < 1) return null;
+  return Math.round((Number(usable.at(-1).netWorth) - Number(usable[0].netWorth)) / months);
+}
+
+function projectionSettings() {
+  const stored = nw.projection || {};
+  const observed = observedMonthlySavings();
+  const savings = Number(stored.monthlySavings);
+  const stored_years = Number(stored.years);
+  return {
+    monthlySavings: Number.isFinite(savings) ? savings : (observed ?? 0),
+    savingsIsObserved: !Number.isFinite(savings) && observed !== null,
+    hasObserved: observed !== null,
+    observed,
+    returnPercent: Number.isFinite(Number(stored.returnPercent)) ? Number(stored.returnPercent) : PROJECTION_FALLBACK.returnPercent,
+    inflationPercent: Number.isFinite(Number(stored.inflationPercent)) ? Number(stored.inflationPercent) : PROJECTION_FALLBACK.inflationPercent,
+    years: PROJECTION_YEARS.includes(stored_years) ? stored_years : PROJECTION_FALLBACK.years
+  };
+}
+
+// value(m+1) = value(m) * (1 + r/12) + savings. Monthly compounding, because the savings arrive
+// monthly; a yearly formula would silently overstate the growth on the current year's payments.
+function projectSeries(start, monthlySavings, returnPercent, months) {
+  const rate = (Number(returnPercent) || 0) / 100 / 12;
+  const series = [start];
+  let value = start;
+  for (let month = 1; month <= months; month++) {
+    value = value * (1 + rate) + monthlySavings;
+    series.push(value);
+  }
+  return series;
+}
+
+function projectionChartSvg(series) {
+  if (series.length < 2) return '';
+  const width = 900;
+  const height = 160;
+  const pad = 14;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const span = max - min || 1;
+  const yFor = value => height - ((value - min) / span) * (height - pad * 2) - pad;
+  const points = series.map((value, index) => ({ x: (index / (series.length - 1)) * width, y: yFor(value) }));
+  const line = smoothLinePath(points);
+  const area = line + ' L' + width + ',' + height + ' L0,' + height + ' Z';
+  const grid = [0.25, 0.5, 0.75].map(fraction =>
+    '<line class="nw-chart-grid" x1="0" y1="' + (height * fraction).toFixed(1) + '" x2="' + width + '" y2="' + (height * fraction).toFixed(1) + '" vector-effect="non-scaling-stroke"/>').join('');
+  // A projection that crosses zero has to show where zero is, or a negative path looks like growth.
+  const zero = min < 0 && max > 0
+    ? '<line class="nw-projection-zero" x1="0" y1="' + yFor(0).toFixed(1) + '" x2="' + width + '" y2="' + yFor(0).toFixed(1) + '" vector-effect="non-scaling-stroke"/>'
+    : '';
+  return '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" role="img" aria-label="'
+    + ctx.esc(t('projectionTitle')) + '">' + grid + zero
+    + '<path class="nw-chart-area nw-projection-area" d="' + area + '"/>'
+    + '<path class="nw-chart-line nw-projection-line" d="' + line + '" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>';
+}
+
+function projectionInner() {
+  const settings = projectionSettings();
+  const start = num(nw.overview?.netWorth);
+  const months = settings.years * 12;
+  const series = projectSeries(start, settings.monthlySavings, settings.returnPercent, months);
+  const end = series.at(-1);
+  const contributed = settings.monthlySavings * months;
+  const growth = end - start - contributed;
+  const real = end / Math.pow(1 + (settings.inflationPercent / 100), settings.years);
+
+  const seg = '<div class="fw-cycle nw-projection-years" role="tablist" aria-label="' + ctx.esc(t('projectionHorizon')) + '">'
+    + PROJECTION_YEARS.map(years => '<button type="button" role="tab" data-projection-years="' + years + '"'
+      + (years === settings.years ? ' class="active" aria-selected="true"' : ' aria-selected="false"')
+      + '>' + years + ' ' + ctx.esc(t('projectionYearsShort')) + '</button>').join('')
+    + '</div>';
+
+  const savingsHint = settings.savingsIsObserved
+    ? '<p class="nw-projection-observed">' + ctx.esc(t('projectionFromHistory')) + ' ' + ctx.esc(currentRangeLabel()) + '</p>'
+    : (settings.hasObserved
+      ? '<p class="nw-projection-observed">' + ctx.esc(t('projectionHistoryWas')) + ' ' + ctx.money(settings.observed, nw.currency) + '</p>'
+      : '<p class="nw-projection-observed">' + ctx.esc(t('projectionNoHistory')) + '</p>');
+
+  const fields = '<div class="nw-projection-fields">'
+    + '<label>' + ctx.esc(t('projectionSavings')) + '<input type="number" step="10" inputmode="numeric" data-projection-savings value="' + settings.monthlySavings + '"></label>'
+    + '<label>' + ctx.esc(t('projectionReturn')) + '<input type="number" step="0.1" min="-20" max="20" inputmode="decimal" data-projection-return value="' + settings.returnPercent + '"></label>'
+    + '<label>' + ctx.esc(t('projectionInflation')) + '<input type="number" step="0.1" min="0" max="20" inputmode="decimal" data-projection-inflation value="' + settings.inflationPercent + '"></label>'
+    + '</div>' + savingsHint;
+
+  const summary = '<div class="fw-summary nw-projection-summary">'
+    + '<div><span class="fw-summary-label">' + ctx.esc(t('projectionIn')) + ' ' + settings.years + ' ' + ctx.esc(t('projectionYearsLong')) + '</span><span class="fw-summary-value">' + ctx.money(end, nw.currency) + '</span></div>'
+    + '<div><span class="fw-summary-label">' + ctx.esc(t('projectionReal')) + '</span><span class="fw-summary-value">' + ctx.money(real, nw.currency) + '</span></div>'
+    + '</div>';
+
+  const breakdown = '<div class="nw-hero-metrics nw-projection-breakdown">'
+    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionToday')) + '</span><strong>' + ctx.money(start, nw.currency) + '</strong></div>'
+    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionContributed')) + '</span><strong>' + ctx.money(contributed, nw.currency) + '</strong></div>'
+    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionGrowth')) + '</span><strong' + (growth < 0 ? ' class="negative"' : '') + '>' + ctx.money(growth, nw.currency) + '</strong></div>'
+    + '</div>';
+
+  return seg + fields + '<div class="nw-chart nw-projection-chart">' + projectionChartSvg(series) + '</div>'
+    + summary + breakdown + '<p class="nw-projection-note">' + ctx.esc(t('projectionNote')) + '</p>';
+}
+
+function buildProjectionCard() {
+  return sectionCard(t('projectionTitle'), '<div class="nw-projection">' + projectionInner() + '</div>', {
+    sub: t('projectionHint'),
+    className: 'nw-projection-card'
+  });
+}
+
+function repaintProjection() {
+  const host = ctx.$('#view-networth');
+  const body = host?.querySelector('.nw-projection');
+  if (!body) return;
+  body.innerHTML = projectionInner();
+  wireProjection(host.querySelector('.nw-projection-card'));
+}
+
+let projectionSaveTimer = null;
+
+// Debounced: the card recomputes on every change either way, so the PUT is only about remembering the
+// inputs for the next visit and must not fire per keystroke.
+function persistProjection() {
+  clearTimeout(projectionSaveTimer);
+  projectionSaveTimer = setTimeout(() => {
+    ctx.api('api/preferences/wealth.projection', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nw.projection || {})
+    }).catch(() => { /* remembering the inputs is a convenience, not part of the calculation */ });
+  }, 600);
+}
+
+function wireProjection(card) {
+  if (!card) return;
+  card.querySelectorAll('[data-projection-years]').forEach(button => button.addEventListener('click', () => {
+    nw.projection = { ...(nw.projection || {}), years: Number(button.dataset.projectionYears) };
+    persistProjection();
+    repaintProjection();
+  }));
+  const finite = raw => {
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+  const clamp = (value, low, high) => value === null ? null : Math.max(low, Math.min(high, value));
+  const bind = (selector, key, parse) => {
+    const input = card.querySelector(selector);
+    if (!input) return;
+    input.addEventListener('change', () => {
+      const value = parse(input.value);
+      if (value === null) return;
+      nw.projection = { ...(nw.projection || {}), [key]: value };
+      persistProjection();
+      repaintProjection();
+    });
+  };
+  bind('[data-projection-savings]', 'monthlySavings', finite);
+  bind('[data-projection-return]', 'returnPercent', raw => clamp(finite(raw), -20, 20));
+  bind('[data-projection-inflation]', 'inflationPercent', raw => clamp(finite(raw), 0, 20));
 }
 
 /* ---- Card 1: "Wie entwickelt sich dein Vermögen?" -------------------------------------------- */
@@ -389,6 +594,9 @@ function repaintHeroTrend(hero) {
   const chartEl = hero.querySelector('.nw-chart');
   if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
   bindNetWorthScrubber(hero);
+  // The projection's default savings rate is read off the history that is currently loaded, so it has
+  // to follow the window - otherwise the card would keep quoting a range that is no longer on screen.
+  repaintProjection();
 }
 
 function wireHero(hero) {

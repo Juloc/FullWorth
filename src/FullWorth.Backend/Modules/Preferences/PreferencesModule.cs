@@ -36,6 +36,7 @@ public sealed class PreferenceStore(FullWorthDbContext db)
         "account-groups.visuals",
         "transactions.seenAt",
         "wealth.emergencyFund",
+        "wealth.projection",
     };
     public const int MaxValueBytes = 64 * 1024;
 

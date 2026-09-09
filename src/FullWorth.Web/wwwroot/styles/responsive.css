@@ -88,6 +88,8 @@
      strip, so 30px is a genuine miss. */
   .fw-window button{min-width:44px;min-height:44px}
   .nw-custom-range-fields button{min-height:44px}
+  /* Three number fields side by side is 90px each on a phone - unusable. */
+  .nw-projection-fields{grid-template-columns:1fr}
   /* Exempting the box from the floor was right - a 44px checkbox looks broken - but the target has to
      live somewhere, so the LABEL carries it. Without this pair every checkbox row on a phone was a
      20px target: select-all, the import options, the sharing lists. */

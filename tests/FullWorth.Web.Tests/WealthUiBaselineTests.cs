@@ -263,6 +263,42 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
             Assert.Contains(path, sw);
     }
 
+    [Fact]
+    public async Task WealthProjectionIsACalculationNotAForecastAndIsTranslatedBothWays()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+
+        // Monthly compounding, because the savings arrive monthly. A yearly formula would silently
+        // overstate the growth on the payments made during the current year.
+        Assert.Contains("/ 100 / 12", js);
+        Assert.Contains("value = value * (1 + rate) + monthlySavings", js);
+
+        // The inputs and the breakdown are what make it a calculation rather than a promise: today,
+        // paid in, growth. Drop those and the card becomes a number nobody can check.
+        Assert.Contains("data-projection-savings", js);
+        Assert.Contains("data-projection-return", js);
+        Assert.Contains("data-projection-inflation", js);
+        Assert.Contains("projectionContributed", js);
+        Assert.Contains("projectionGrowth", js);
+        Assert.Contains(".nw-projection-note", css);
+
+        // Wording: it must say what it is, in both languages. This is a calculator, not advice.
+        Assert.Contains("Keine Anlageempfehlung", js);
+        Assert.Contains("Not investment advice", js);
+
+        // A key present in only one language table renders as the bare key name for that language.
+        var used = System.Text.RegularExpressions.Regex.Matches(js, @"t\('(projection[A-Za-z]*)'\)")
+            .Select(match => match.Groups[1].Value).Distinct().ToArray();
+        Assert.NotEmpty(used);
+        foreach (var key in used)
+        {
+            var declarations = System.Text.RegularExpressions.Regex.Matches(js, $@"\b{key}:").Count;
+            Assert.True(declarations == 2,
+                $"{key} is declared {declarations} time(s); it must appear exactly once per language table.");
+        }
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await client.GetAsync(path);
