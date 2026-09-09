@@ -1384,57 +1384,11 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         throw new FormatException($"Invalid date '{value}'.");
     }
 
-    private static decimal? ParseOptionalAmount(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var text = value.Trim().Replace("€", "").Replace("$", "").Replace("£", "").Replace(" ", "").Replace("'", "");
-        if (text.Length == 0) return null;
-
-        var commaCount = text.Count(character => character == ',');
-        var dotCount = text.Count(character => character == '.');
-        string normalized;
-        if (commaCount > 0 && dotCount > 0)
-        {
-            var comma = text.LastIndexOf(',');
-            var dot = text.LastIndexOf('.');
-            var decimalSeparator = comma > dot ? ',' : '.';
-            var groupingSeparator = decimalSeparator == ',' ? '.' : ',';
-            normalized = text.Replace(groupingSeparator.ToString(), string.Empty);
-            if (decimalSeparator == ',') normalized = normalized.Replace(',', '.');
-        }
-        else if (commaCount == 1 || dotCount == 1)
-        {
-            // A single separator is treated as the decimal separator. This is the only safe way to
-            // accept both broker styles 12,50 and 12.50 without making the current server locale decide.
-            normalized = text.Replace(',', '.');
-        }
-        else if (commaCount > 1 || dotCount > 1)
-        {
-            var separator = commaCount > 1 ? ',' : '.';
-            var parts = text.Split(separator);
-            if (parts.Skip(1).All(part => part.Length == 3 && part.All(char.IsDigit)))
-            {
-                // Unambiguous repeated thousands grouping: 1.234.567 / 1,234,567.
-                normalized = string.Concat(parts);
-            }
-            else if (parts.Length > 2 && parts.Skip(1).Take(parts.Length - 2).All(part => part.Length == 3 && part.All(char.IsDigit)) &&
-                     parts[^1].Length is > 0 and <= 10 && parts[^1].All(char.IsDigit))
-            {
-                // Grouping plus a final decimal part using the same separator is unusual but can be
-                // represented deterministically, e.g. 1.234.567.89 -> 1234567.89.
-                normalized = string.Concat(parts.Take(parts.Length - 1)) + "." + parts[^1];
-            }
-            else
-            {
-                throw new FormatException($"Ambiguous number '{value}'. Use an explicit decimal format such as 1234.56 or 1234,56.");
-            }
-        }
-        else normalized = text;
-
-        if (decimal.TryParse(normalized, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
-                CultureInfo.InvariantCulture, out var amount)) return amount;
-        throw new FormatException($"Invalid number '{value}'.");
-    }
+    // Prices and quantities, not statement amounts: a single separator followed by three digits is a
+    // three-decimal unit price here ("12.500" is twelve and a half), which is why this passes Decimal
+    // while the transaction importers pass Grouping. The logic itself lives in ImportNumber.
+    private static decimal? ParseOptionalAmount(string? value) =>
+        ImportNumber.TryParse(value, ImportNumber.ThreeDigitTail.Decimal);
 
     private static decimal? AbsNullable(decimal? value) => value.HasValue ? Math.Abs(value.Value) : null;
 

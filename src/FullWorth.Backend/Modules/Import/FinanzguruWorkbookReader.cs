@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using FullWorth.Backend.Modules.Parity;
 
 namespace FullWorth.Backend.Modules.Import;
 
@@ -228,9 +229,22 @@ public sealed class FinanzguruWorkbookReader
     private static int ParseRowNumber(XElement row, int fallback) =>
         int.TryParse((string?)row.Attribute("r"), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : fallback;
 
-    private static bool TryParseDecimal(string? value, out decimal amount) =>
-        decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out amount)
-        || decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("de-DE"), out amount);
+    // Betrag is money, so three trailing digits after a single separator mean grouping - see ImportNumber.
+    private static bool TryParseDecimal(string? value, out decimal amount)
+    {
+        amount = 0m;
+        try
+        {
+            var parsed = ImportNumber.TryParse(value, ImportNumber.ThreeDigitTail.Grouping);
+            if (parsed is null) return false;
+            amount = parsed.Value;
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 
     private static bool TryParseDate(string? value, out DateOnly date)
     {

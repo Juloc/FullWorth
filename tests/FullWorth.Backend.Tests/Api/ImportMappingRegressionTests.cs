@@ -279,6 +279,82 @@ public sealed class ImportMappingRegressionTests
         });
     }
 
+    // A dot as the decimal separator is the normal shape of an English-format CSV and the ONLY shape
+    // an .xlsx can have, because OOXML stores cell values invariant. Parsing it with a German culture
+    // that allows thousands grouping turns 1234.56 into 123456, and .NET does not validate group sizes,
+    // so the wrong value parses successfully and is committed as real money.
+    [Fact]
+    public async Task DotDecimalAmountsAreImportedAtTheirRealValue()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+
+        using var upload = await Upload(client, owner,
+            "Datum;Betrag;Empfänger\r\n2026-08-29;1234.56;Gehalt\r\n2026-08-30;-0.99;Kaffee\r\n2026-08-31;-1234,56;Miete\r\n",
+            new
+            {
+                date = "Datum", amount = "Betrag", currency = (string?)null, counterparty = "Empfänger",
+                description = (string?)null, account = (string?)null, category = (string?)null,
+                externalKey = (string?)null
+            });
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        await Commit(client, owner, jobId, account);
+
+        await factory.SeedAsync(async db =>
+        {
+            var imported = await db.Transactions.AsNoTracking()
+                .Where(t => t.AccountId == account).OrderBy(t => t.BookingDate).ToListAsync();
+            Assert.Equal(3, imported.Count);
+            // Both notations must survive, and neither may be inflated by a factor of 100.
+            Assert.Equal(1234.56m, imported[0].Amount);
+            Assert.Equal(-0.99m, imported[1].Amount);
+            Assert.Equal(-1234.56m, imported[2].Amount);
+        });
+    }
+
+    // Same parser, the other endpoint pair: the unmapped generic importer.
+    [Theory]
+    [InlineData("1234.56", 1234.56)]
+    [InlineData("1.234,56", 1234.56)]
+    [InlineData("1,234.56", 1234.56)]
+    [InlineData("-0.99", -0.99)]
+    [InlineData("0,5", 0.5)]
+    [InlineData("1.234.567,89", 1234567.89)]
+    public async Task GenericImportReadsBothDecimalNotations(string amount, decimal expected)
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+
+        using var upload = await Upload(client, owner,
+            $"Datum;Betrag;Empfänger\r\n2026-08-29;{amount};Test\r\n",
+            new
+            {
+                date = "Datum", amount = "Betrag", currency = (string?)null, counterparty = "Empfänger",
+                description = (string?)null, account = (string?)null, category = (string?)null,
+                externalKey = (string?)null
+            });
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+        await Commit(client, owner, jobId, account);
+
+        await factory.SeedAsync(async db =>
+        {
+            var imported = await db.Transactions.AsNoTracking()
+                .SingleAsync(t => t.AccountId == account);
+            Assert.Equal(expected, imported.Amount);
+        });
+    }
+
     private static async Task<JsonElement> Preview(HttpClient client, Guid owner, Guid jobId, Guid account)
     {
         using var request = UserRequest(HttpMethod.Post,
