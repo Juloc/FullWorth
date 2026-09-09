@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FullWorth.Backend.Modules.Compensation;
 
 namespace FullWorth.Compensation.Wasm;
@@ -17,16 +18,14 @@ namespace FullWorth.Compensation.Wasm;
 [SupportedOSPlatform("browser")]
 public static partial class CompensationApi
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     [JSExport]
     public static string Calculate(string profileJson)
     {
         try
         {
-            var input = JsonSerializer.Deserialize<CompensationProfileInput>(profileJson, Json);
+            var input = JsonSerializer.Deserialize(profileJson, WasmJson.Default.CompensationProfileInput);
             if (input is null) return Error("Empty profile.");
-            return JsonSerializer.Serialize(GermanCompensationCalculator.Calculate(input), Json);
+            return JsonSerializer.Serialize(GermanCompensationCalculator.Calculate(input), WasmJson.Default.CompensationCalculationResult);
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or FormatException)
         {
@@ -37,7 +36,25 @@ public static partial class CompensationApi
     }
 
     [JSExport]
-    public static string SupportedTaxYears() => JsonSerializer.Serialize(TaxYearTable.Years, Json);
+    public static string SupportedTaxYears() =>
+        JsonSerializer.Serialize(TaxYearTable.Years, WasmJson.Default.IReadOnlyListInt32);
 
-    private static string Error(string message) => JsonSerializer.Serialize(new { error = message }, Json);
+    private static string Error(string message) =>
+        JsonSerializer.Serialize(new WasmError(message), WasmJson.Default.WasmError);
 }
+
+internal sealed record WasmError(string Error);
+
+/// <summary>
+/// Source-generated serialisation, which is what lets the bundle be trimmed. The reflection-based
+/// serializer forces PublishTrimmed off, and without trimming the publish output is ~25 MB - far too
+/// much for a page a visitor hits before they have decided to care. Every type crossing the JS boundary
+/// has to be listed here; a missing one fails at runtime rather than at build time, so add the entry
+/// when you add an export.
+/// </summary>
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(CompensationProfileInput))]
+[JsonSerializable(typeof(CompensationCalculationResult))]
+[JsonSerializable(typeof(IReadOnlyList<int>))]
+[JsonSerializable(typeof(WasmError))]
+internal sealed partial class WasmJson : JsonSerializerContext;

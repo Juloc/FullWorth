@@ -13,9 +13,12 @@
          invariant mode keeps the download small. -->
     <WasmEnableThreads>false</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- No trimming: the JSON round-trip uses the reflection-based serializer, which trimming quietly
-         breaks. Correctness over a smaller download; revisit with a source-generated context. -->
-    <PublishTrimmed>false</PublishTrimmed>
+    <!-- Trimming is what keeps this downloadable: untrimmed, the publish output was ~25 MB. It is only
+         safe because the JSON round-trip uses a source-generated context (WasmJson in
+         CompensationApi.cs) instead of the reflection-based serializer, which trimming quietly breaks.
+         If a new type crosses the JS boundary it must be added there. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
     <!-- Required by JSExportAttribute: the generated interop marshalling is unsafe code (SYSLIB1075).
          Scoped to this project - FullWorth.Compensation.Core stays safe. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

@@ -48,7 +48,13 @@ jobs:
           loader=$(find publish -name 'dotnet.js' -print -quit)
           test -n "$loader" || { echo "no dotnet.js loader anywhere in the publish output"; exit 1; }
           echo "loader: $loader"
-          echo "bundle size: $(du -sh "$root" | cut -f1)"
+          # The artifact zip is a misleading number: it contains every file three times (raw, .br, .gz)
+          # and the browser downloads exactly one variant of each. Report what a visitor actually pays.
+          raw=$(find "$root" -type f ! -name '*.br' ! -name '*.gz' -printf '%s\n' | awk '{t+=$1} END {print t+0}')
+          brotli=$(find "$root" -type f -name '*.br' -printf '%s\n' | awk '{t+=$1} END {print t+0}')
+          echo "payload raw:    $((raw/1024)) KiB"
+          echo "payload brotli: $((brotli/1024)) KiB"
+          echo "artifact tree:  $(du -sh "$root" | cut -f1) (all three variants, not a download size)"
       - uses: actions/upload-artifact@v4
         with:
           name: compensation-wasm
