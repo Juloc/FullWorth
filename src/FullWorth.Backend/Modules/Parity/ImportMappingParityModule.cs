@@ -206,6 +206,9 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
         var categoryIdsByKey = existingCategories.Where(c => !c.IsArchived).ToDictionary(c => c.Key, c => c.Id, StringComparer.OrdinalIgnoreCase);
 
         var imported=0;var duplicates=0;var skipped=0;
+        // Collected so the job can be rolled back: without a link row the commit leaves no record of
+        // WHICH transactions it created.
+        var createdTransactions=new List<FinanceTransaction>();
         // Same classifier the preview endpoint uses, so what the review list shows and what the
         // commit actually skips can never drift apart.
         var classifications = (await ClassifyAsync(db, candidates, accountMap, request.DefaultAccountId, ct))
@@ -240,9 +243,10 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
                 var evaluation=TransactionRuleEngine.EvaluateWithGermanyCatalog(entity,ruleList,categoryIdsByKey);
                 entity.CategoryId=evaluation.CategoryId;entity.IsTransfer=evaluation.MarkAsTransfer;entity.CategorizationSource=evaluation.CategoryId.HasValue?evaluation.Source:"none";
             }
-            db.Transactions.Add(entity);imported++;await MarkCandidate(db,candidate.Id,"imported",ct);
+            db.Transactions.Add(entity);createdTransactions.Add(entity);imported++;await MarkCandidate(db,candidate.Id,"imported",ct);
         }
         await db.SaveChangesAsync(ct);
+        await ImportTransactionProvenance.LinkAsync(db,jobId,createdTransactions.Select(entity=>entity.Id).ToArray(),ct);
         var connection=await ParitySql.OpenAsync(db,ct);await using(var command=ParitySql.Command(connection,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",jobId)))await command.ExecuteNonQueryAsync(ct);
         audit.Record(fullWorthSpaceId,userId,"import.mapped.completed","ImportJob",jobId);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);
         return Results.Ok(new{imported,duplicates,skipped,total=candidates.Count});

@@ -87,6 +87,10 @@ public static class ImportCenterPageEndpoints
           <div class="workflow-actions"><button id="tx-commit" class="primary-action" type="button">Importieren</button></div>
         </section>
         <div id="tx-result" class="rows" hidden></div>
+        <section id="tx-history-section">
+          <h3 id="tx-history-title">Letzte Buchungsimporte</h3>
+          <div id="tx-history" class="rows"></div>
+        </section>
       </article>
 
       <article id="investment-import" class="panel import-workflow" hidden>
