@@ -13,6 +13,9 @@
     <!-- No trimming: the JSON round-trip uses the reflection-based serializer, which trimming quietly
          breaks. Correctness over a smaller download; revisit with a source-generated context. -->
     <PublishTrimmed>false</PublishTrimmed>
+    <!-- Required by JSExportAttribute: the generated interop marshalling is unsafe code (SYSLIB1075).
+         Scoped to this project - FullWorth.Compensation.Core stays safe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\FullWorth.Compensation.Core\FullWorth.Compensation.Core.csproj" />
