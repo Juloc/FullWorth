@@ -13,3 +13,8 @@
 .ic-candidate-error{opacity:.65}
 .ic-candidate-error .amount{color:var(--negative)}
 .ic-errors .row-title{color:var(--negative)}
+/* A duplicate is not an error: the row stays readable and selectable, it just arrives unchecked and
+   says why. Marking it with the warning tone keeps the negative tone reserved for broken rows. */
+.ic-candidate-duplicate .row-sub{color:var(--warning)}
+.ic-candidate-duplicate{background:var(--warning-soft)}
+.ic-dup-hint{color:var(--warning)}

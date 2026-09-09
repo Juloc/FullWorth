@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Merchants;
+using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
@@ -115,6 +117,142 @@ public sealed class ImportMappingRegressionTests
         Assert.Equal(0, second.GetProperty("imported").GetInt32());
         Assert.Equal(2, second.GetProperty("duplicates").GetInt32());
     }
+
+    // The review list can only be honest if the preview and the commit use the same detection. This
+    // asserts the numbers against each other instead of against hand-written expectations, so the two
+    // cannot drift apart without failing here.
+    [Fact]
+    public async Task DuplicatePreviewAgreesWithWhatTheCommitActuallySkips()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+
+        var already = await UploadAndCommit(client, owner, account,
+            "Datum;Betrag;Empfänger;Text\r\n29.08.2026;-12,34;REWE;Lebensmittel\r\n30.08.2026;-5,00;Bäckerei;Frühstück\r\n");
+        Assert.Equal(2, already.GetProperty("imported").GetInt32());
+
+        // Two rows are already booked, one is new, and the last one repeats the new row inside the file.
+        const string second = "Datum;Betrag;Empfänger;Text\r\n29.08.2026;-12,34;REWE;Lebensmittel\r\n"
+            + "30.08.2026;-5,00;Bäckerei;Frühstück\r\n31.08.2026;-9,99;Kiosk;Zeitung\r\n31.08.2026;-9,99;Kiosk;Zeitung\r\n";
+        using var upload = await Upload(client, owner, second, FullMapping());
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        var preview = await Preview(client, owner, jobId, account);
+        Assert.Equal(3, preview.GetProperty("duplicates").GetInt32());
+        Assert.Equal(1, preview.GetProperty("fresh").GetInt32());
+        var reasons = preview.GetProperty("candidates").EnumerateArray()
+            .Where(item => item.GetProperty("status").GetString() == "duplicate")
+            .Select(item => item.GetProperty("reason").GetString()).ToArray();
+        // Rows this importer wrote itself carry a stable key, so they are caught by that key rather
+        // than by the semantic comparison - the semantic path is covered separately below.
+        Assert.Contains("external_key", reasons);
+        Assert.Contains("in_file", reasons);
+
+        // The preview must not write: the same rows against a different account mapping are a
+        // different answer, so a stored status would be a guess about a decision not yet made.
+        using var candidateRequest = UserRequest(HttpMethod.Get,
+            $"/api/import-jobs/{jobId:D}/candidates?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var candidateResponse = await client.SendAsync(candidateRequest);
+        Assert.Equal(HttpStatusCode.OK, candidateResponse.StatusCode);
+        using var candidateDoc = JsonDocument.Parse(await candidateResponse.Content.ReadAsStringAsync());
+        Assert.All(candidateDoc.RootElement.EnumerateArray(),
+            item => Assert.Equal("new", item.GetProperty("duplicateStatus").GetString()));
+
+        var commit = await Commit(client, owner, jobId, account);
+        Assert.Equal(preview.GetProperty("fresh").GetInt32(), commit.GetProperty("imported").GetInt32());
+        Assert.Equal(preview.GetProperty("duplicates").GetInt32(), commit.GetProperty("duplicates").GetInt32());
+    }
+
+    // A booking that came from a bank sync or was typed in by hand has no import key, so only the
+    // semantic comparison can recognise it. That is the case that protects against double-booking
+    // an export of something already in the account.
+    [Fact]
+    public async Task DuplicatePreviewRecognisesABookingThatWasNotCreatedByAnImport()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+        await factory.SeedAsync(async db =>
+        {
+            db.Transactions.Add(new FinanceTransaction
+            {
+                AccountId = account,
+                ExternalKey = $"fints-{Guid.NewGuid():N}",
+                BookingDate = new DateOnly(2026, 8, 29),
+                ValueDate = new DateOnly(2026, 8, 29),
+                Amount = -12.34m,
+                Currency = "EUR",
+                Counterparty = "REWE",
+                NormalizedCounterparty = MerchantNormalization.Normalize("REWE")
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var upload = await Upload(client, owner,
+            "Datum;Betrag;Empfänger;Text\r\n29.08.2026;-12,34;REWE;Lebensmittel\r\n", FullMapping());
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        var preview = await Preview(client, owner, jobId, account);
+        Assert.Equal(1, preview.GetProperty("duplicates").GetInt32());
+        Assert.Equal(0, preview.GetProperty("fresh").GetInt32());
+        Assert.Equal("existing", preview.GetProperty("candidates").EnumerateArray()
+            .Single().GetProperty("reason").GetString());
+    }
+
+    private static async Task<JsonElement> Preview(HttpClient client, Guid owner, Guid jobId, Guid account)
+    {
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/import-mapping/jobs/{jobId:D}/duplicate-preview?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        request.Content = JsonContent.Create(new
+        {
+            sourceAccountMappings = new Dictionary<string, Guid?>(),
+            defaultAccountId = account
+        });
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return doc.RootElement.Clone();
+    }
+
+    private static async Task<JsonElement> Commit(HttpClient client, Guid owner, Guid jobId, Guid account)
+    {
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/import-mapping/jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        request.Content = JsonContent.Create(new
+        {
+            sourceAccountMappings = new Dictionary<string, Guid?>(),
+            defaultAccountId = account,
+            categoryMappings = new Dictionary<string, Guid?>(),
+            createMissingCategories = false,
+            runFullWorthCategorization = false,
+            candidateIds = (Guid[]?)null
+        });
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return doc.RootElement.Clone();
+    }
+
+    private static object FullMapping() => new
+    {
+        date = "Datum",
+        amount = "Betrag",
+        currency = (string?)null,
+        counterparty = "Empfänger",
+        description = "Text",
+        account = (string?)null,
+        category = (string?)null,
+        externalKey = (string?)null
+    };
 
     private static async Task<JsonElement> UploadAndCommit(HttpClient client, Guid owner, Guid account, string csv)
     {

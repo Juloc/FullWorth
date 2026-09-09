@@ -72,6 +72,7 @@ public static class ImportCenterPageEndpoints
           <div id="tx-account-mapping" class="rows"></div>
           <h3 id="tx-rows-title">Buchungen prüfen</h3>
           <p class="row-sub" id="tx-rows-hint"></p>
+          <p class="row-sub ic-dup-hint" id="tx-duplicate-hint" hidden></p>
           <div id="tx-errors" class="rows ic-errors" hidden></div>
           <div class="import-option ic-rows-toolbar">
             <label class="check"><input id="tx-select-all" type="checkbox" checked><span id="tx-select-all-label">Alle auswählen</span></label>

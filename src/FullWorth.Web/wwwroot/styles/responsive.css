@@ -88,7 +88,11 @@
      strip, so 30px is a genuine miss. */
   .fw-window button{min-width:44px;min-height:44px}
   .nw-custom-range-fields button{min-height:44px}
+  /* Exempting the box from the floor was right - a 44px checkbox looks broken - but the target has to
+     live somewhere, so the LABEL carries it. Without this pair every checkbox row on a phone was a
+     20px target: select-all, the import options, the sharing lists. */
   label.check input{min-height:0}
+  label.check{min-height:44px}
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}
   .panel-head-actions{max-width:100%;flex-wrap:wrap;justify-content:flex-end}

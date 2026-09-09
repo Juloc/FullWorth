@@ -3,13 +3,13 @@ import { snapshotUploadFile } from '../security/secure-fetch.js';
 import { confirmMessage } from '../ui/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
-  de:{subtitle:'Buchungen und Depots aus anderen Apps übernehmen.',back:'Zurück',space:'FullWorth Space',txHint:'Für Bank- und App-Exporte. CSV und XLSX werden zuerst analysiert; du bestätigst Spalten und Zielkonten vor dem Import.',invHint:'Für Parqet, Finanzfluss und andere Depot-Exporte. Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden geprüft.',analyse:'Datei analysieren',review:'Import prüfen',import:'Importieren',importDepot:'Depot importieren',mapping:'Spalten zuordnen',targets:'Konten zuordnen',targetsHint:'Jedes in der Datei gefundene Konto bekommt ein Zielkonto in FullWorth.',securities:'Wertpapiere prüfen',working:'Wird verarbeitet …',needFile:'Bitte zuerst eine CSV- oder XLSX-Datei wählen.',needMapping:'Datum und Betrag müssen zugeordnet sein.',needInvestmentMapping:'Handelsdatum und Transaktionsart müssen zugeordnet sein.',needAccount:'Bitte alle Quellkonten einem Zielkonto zuordnen.',needPortfolio:'Bitte ein Zieldepot wählen.',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Zeilen',ready:'Bereit',errors:'Fehler',imported:'Importiert',duplicates:'Duplikate',newPortfolio:'Neues Import-Depot anlegen',none:'Nicht zuordnen',autoNew:'Automatisch / neu anlegen',matched:'Automatisch erkannt',willCreate:'Wird neu angelegt',noAccounts:'Keine beschreibbaren Konten gefunden.',noPortfolios:'Noch kein Depot vorhanden.',historyEmpty:'Noch keine Depotimporte.',rollback:'Import rückgängig machen',rollbackConfirm:'Diesen Depotimport wirklich rückgängig machen? Spätere abhängige Buchungen schützen den Rollback automatisch.',rolledBack:'Import wurde rückgängig gemacht.',healthy:'Plausibel',checkWarnings:'Hinweise',cash:'Cash',positions:'Positionen',rowsTitle:'Buchungen prüfen',rowsHint:'Wähle ab, was nicht importiert werden soll. Zeilen mit Fehlern sind nicht auswählbar.',selectAll:'Alle auswählen',selectedOf:'{n} von {total} ausgewählt',errorsTitle:'Zeile nicht importierbar',notImportable:'nicht importierbar',noRows:'Keine Zeilen gefunden.',showing:'Angezeigt werden die ersten {n} von {total} Zeilen. Die Auswahl gilt für alle.',noneSelected:'Bitte mindestens eine Buchung auswählen.'},
-  en:{subtitle:'Import transactions and portfolios from other apps.',back:'Back',space:'FullWorth Space',txHint:'For bank and finance-app exports. CSV and XLSX are analysed first; you confirm columns and target accounts before committing.',invHint:'For Parqet, Finanzfluss and other portfolio exports. Buys, sells, dividends, interest, fees and taxes are validated.',analyse:'Analyse file',review:'Review import',import:'Import',importDepot:'Import portfolio',mapping:'Map columns',targets:'Map accounts',targetsHint:'Every source account found in the file is mapped to a FullWorth account.',securities:'Review securities',working:'Processing …',needFile:'Choose a CSV or XLSX file first.',needMapping:'Date and amount must be mapped.',needInvestmentMapping:'Trade date and transaction type must be mapped.',needAccount:'Map every source account to a target account.',needPortfolio:'Choose a target portfolio.',done:'Import completed.',error:'Import failed.',rows:'Rows',ready:'Ready',errors:'Errors',imported:'Imported',duplicates:'Duplicates',newPortfolio:'Create new import portfolio',none:'Do not map',autoNew:'Automatic / create new',matched:'Auto matched',willCreate:'Will be created',noAccounts:'No writable accounts found.',noPortfolios:'No portfolio exists yet.',historyEmpty:'No portfolio imports yet.',rollback:'Roll back import',rollbackConfirm:'Really roll back this portfolio import? Later dependent trades automatically block an unsafe rollback.',rolledBack:'Import rolled back.',healthy:'Plausible',checkWarnings:'Warnings',cash:'Cash',positions:'Positions',rowsTitle:'Review bookings',rowsHint:'Uncheck anything you do not want to import. Rows with errors cannot be selected.',selectAll:'Select all',selectedOf:'{n} of {total} selected',errorsTitle:'Row cannot be imported',notImportable:'not importable',noRows:'No rows found.',showing:'Showing the first {n} of {total} rows. The selection applies to all of them.',noneSelected:'Select at least one booking.'}
+  de:{subtitle:'Buchungen und Depots aus anderen Apps übernehmen.',back:'Zurück',space:'FullWorth Space',txHint:'Für Bank- und App-Exporte. CSV und XLSX werden zuerst analysiert; du bestätigst Spalten und Zielkonten vor dem Import.',invHint:'Für Parqet, Finanzfluss und andere Depot-Exporte. Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden geprüft.',analyse:'Datei analysieren',review:'Import prüfen',import:'Importieren',importDepot:'Depot importieren',mapping:'Spalten zuordnen',targets:'Konten zuordnen',targetsHint:'Jedes in der Datei gefundene Konto bekommt ein Zielkonto in FullWorth.',securities:'Wertpapiere prüfen',working:'Wird verarbeitet …',needFile:'Bitte zuerst eine CSV- oder XLSX-Datei wählen.',needMapping:'Datum und Betrag müssen zugeordnet sein.',needInvestmentMapping:'Handelsdatum und Transaktionsart müssen zugeordnet sein.',needAccount:'Bitte alle Quellkonten einem Zielkonto zuordnen.',needPortfolio:'Bitte ein Zieldepot wählen.',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Zeilen',ready:'Bereit',errors:'Fehler',imported:'Importiert',duplicates:'Duplikate',newPortfolio:'Neues Import-Depot anlegen',none:'Nicht zuordnen',autoNew:'Automatisch / neu anlegen',matched:'Automatisch erkannt',willCreate:'Wird neu angelegt',noAccounts:'Keine beschreibbaren Konten gefunden.',noPortfolios:'Noch kein Depot vorhanden.',historyEmpty:'Noch keine Depotimporte.',rollback:'Import rückgängig machen',rollbackConfirm:'Diesen Depotimport wirklich rückgängig machen? Spätere abhängige Buchungen schützen den Rollback automatisch.',rolledBack:'Import wurde rückgängig gemacht.',healthy:'Plausibel',checkWarnings:'Hinweise',cash:'Cash',positions:'Positionen',rowsTitle:'Buchungen prüfen',rowsHint:'Wähle ab, was nicht importiert werden soll. Zeilen mit Fehlern sind nicht auswählbar.',selectAll:'Alle auswählen',selectedOf:'{n} von {total} ausgewählt',errorsTitle:'Zeile nicht importierbar',notImportable:'nicht importierbar',noRows:'Keine Zeilen gefunden.',showing:'Angezeigt werden die ersten {n} von {total} Zeilen. Die Auswahl gilt für alle.',noneSelected:'Bitte mindestens eine Buchung auswählen.',duplicate:'Schon vorhanden',dupInFile:'kommt in dieser Datei doppelt vor',dupExternalKey:'Buchungs-ID wurde schon importiert',dupExisting:'gleiches Datum, gleicher Betrag, gleicher Empfänger schon gebucht',dupHint:'{n} Buchungen sind schon vorhanden und deshalb abgewählt.',dupChecking:'Duplikate werden geprüft …'},
+  en:{subtitle:'Import transactions and portfolios from other apps.',back:'Back',space:'FullWorth Space',txHint:'For bank and finance-app exports. CSV and XLSX are analysed first; you confirm columns and target accounts before committing.',invHint:'For Parqet, Finanzfluss and other portfolio exports. Buys, sells, dividends, interest, fees and taxes are validated.',analyse:'Analyse file',review:'Review import',import:'Import',importDepot:'Import portfolio',mapping:'Map columns',targets:'Map accounts',targetsHint:'Every source account found in the file is mapped to a FullWorth account.',securities:'Review securities',working:'Processing …',needFile:'Choose a CSV or XLSX file first.',needMapping:'Date and amount must be mapped.',needInvestmentMapping:'Trade date and transaction type must be mapped.',needAccount:'Map every source account to a target account.',needPortfolio:'Choose a target portfolio.',done:'Import completed.',error:'Import failed.',rows:'Rows',ready:'Ready',errors:'Errors',imported:'Imported',duplicates:'Duplicates',newPortfolio:'Create new import portfolio',none:'Do not map',autoNew:'Automatic / create new',matched:'Auto matched',willCreate:'Will be created',noAccounts:'No writable accounts found.',noPortfolios:'No portfolio exists yet.',historyEmpty:'No portfolio imports yet.',rollback:'Roll back import',rollbackConfirm:'Really roll back this portfolio import? Later dependent trades automatically block an unsafe rollback.',rolledBack:'Import rolled back.',healthy:'Plausible',checkWarnings:'Warnings',cash:'Cash',positions:'Positions',rowsTitle:'Review bookings',rowsHint:'Uncheck anything you do not want to import. Rows with errors cannot be selected.',selectAll:'Select all',selectedOf:'{n} of {total} selected',errorsTitle:'Row cannot be imported',notImportable:'not importable',noRows:'No rows found.',showing:'Showing the first {n} of {total} rows. The selection applies to all of them.',noneSelected:'Select at least one booking.',duplicate:'Already there',dupInFile:'appears twice in this file',dupExternalKey:'booking id was already imported',dupExisting:'same date, amount and counterparty already booked',dupHint:'{n} bookings already exist and were unchecked.',dupChecking:'Checking for duplicates …'}
 }[lang];
 document.documentElement.lang=lang;
 
 const $=id=>document.getElementById(id);
-const state={space:null,accounts:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],selected:new Set()},inv:{file:null,detect:null,jobId:null,summary:null,history:[]}};
+const state={space:null,accounts:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],selected:new Set(),duplicates:new Map()},inv:{file:null,detect:null,jobId:null,summary:null,history:[]}};
 
 function setText(id,value){const el=$(id);if(el)el.textContent=value}
 setText('page-subtitle',t.subtitle);setText('back-link',t.back);setText('space-label',t.space);setText('tx-hint',t.txHint);setText('inv-hint',t.invHint);
@@ -83,7 +83,7 @@ const txFields=[{key:'date',label:lang==='de'?'Datum':'Date',required:true},{key
 const invFields=[{key:'tradeDate',label:lang==='de'?'Handelsdatum':'Trade date',required:true},{key:'tradeType',label:lang==='de'?'Transaktionsart':'Transaction type',required:true},{key:'settlementDate',label:lang==='de'?'Valuta':'Settlement date'},{key:'securityName',label:lang==='de'?'Wertpapier':'Security'},{key:'isin',label:'ISIN'},{key:'wkn',label:'WKN'},{key:'ticker',label:'Ticker'},{key:'quantity',label:lang==='de'?'Stückzahl':'Quantity'},{key:'price',label:lang==='de'?'Kurs':'Price'},{key:'grossAmount',label:lang==='de'?'Brutto':'Gross amount'},{key:'amount',label:lang==='de'?'Betrag':'Amount'},{key:'currency',label:lang==='de'?'Währung':'Currency'},{key:'fees',label:lang==='de'?'Gebühren':'Fees'},{key:'taxes',label:lang==='de'?'Steuern':'Taxes'},{key:'withholdingTax',label:lang==='de'?'Quellensteuer':'Withholding tax'},{key:'assetClass',label:lang==='de'?'Anlageklasse':'Asset class'},{key:'externalKey',label:'ID'}];
 
 async function detectTransactions(){const file=currentFile('tx');if(!file){status('tx',t.needFile);return}state.tx.file=file;status('tx',t.working);$('tx-review-section').hidden=true;$('tx-result').hidden=true;try{state.tx.detect=await api(`api/import-mapping/detect?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body:await formWithFile(file)});renderMapping('tx',txFields);status('tx',`${state.tx.detect.rowCount} ${t.rows}.`)}catch(err){error('tx',err)}}
-async function stageTransactions(){try{const mapping=collectMapping('tx',txFields);status('tx',t.working);const body=await formWithFile(state.tx.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/import-mapping/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.tx.jobId=staged.jobId;const [summary,candidates]=await Promise.all([api(`api/import-mapping/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`),api(`api/import-jobs/${staged.jobId}/candidates?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`)]);state.tx.summary=summary;state.tx.candidates=candidates;renderTransactionTargets(summary,staged);renderTransactionCandidates();$('tx-review-section').hidden=false;status('tx','')}catch(err){error('tx',err)}}
+async function stageTransactions(){try{const mapping=collectMapping('tx',txFields);status('tx',t.working);const body=await formWithFile(state.tx.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/import-mapping/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.tx.jobId=staged.jobId;const [summary,candidates]=await Promise.all([api(`api/import-mapping/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`),api(`api/import-jobs/${staged.jobId}/candidates?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`)]);state.tx.summary=summary;state.tx.candidates=candidates;state.tx.duplicates=new Map();renderTransactionTargets(summary,staged);renderTransactionCandidates();$('tx-review-section').hidden=false;status('tx','');await refreshDuplicatePreview()}catch(err){error('tx',err)}}
 function renderTransactionTargets(summary,staged){const root=$('tx-account-mapping');root.innerHTML='';const sources=summary.sourceAccounts?.length?summary.sourceAccounts:[{source:'',count:staged.ready||0}];for(const item of sources){const row=document.createElement('div');row.className='row ic-map-row';row.dataset.source=item.source??'';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=item.source||(lang==='de'?'Ohne Kontoangabe':'No source account');const sub=document.createElement('div');sub.className='row-sub';sub.textContent=`${item.count} ${t.rows}`;main.append(title,sub);row.append(main,accountSelect(item.source||''));root.appendChild(row)}if(!state.accounts.length){const note=document.createElement('p');note.className='row-sub ic-empty';note.textContent=t.noAccounts;root.appendChild(note)}renderMetrics('tx-review-summary',[[t.rows,staged.sourceRows],[t.ready,staged.ready,'pos'],[t.errors,staged.errors,'neg']])}
 
 // --- Review step: the actual bookings ---------------------------------------------------------
@@ -101,17 +101,23 @@ function candidateAmount(candidate) {
   catch { return `${value.toFixed(2)} ${candidate.currency || ''}`.trim(); }
 }
 
+const duplicateReasonText = reason => reason === 'in_file' ? t.dupInFile
+  : reason === 'external_key' ? t.dupExternalKey
+  : reason === 'existing' ? t.dupExisting : t.duplicate;
+
 function candidateRow(candidate) {
   const ready = candidateReady(candidate);
+  const duplicateReason = state.tx.duplicates.get(candidate.id);
   const row = document.createElement('div');
   row.className = ready ? 'row ic-candidate' : 'row ic-candidate ic-candidate-error';
+  if (ready && duplicateReason) row.classList.add('ic-candidate-duplicate');
 
   const label = document.createElement('label');
   label.className = 'check ic-candidate-label';
   const box = document.createElement('input');
   box.type = 'checkbox';
   box.dataset.candidate = candidate.id;
-  box.checked = ready;
+  box.checked = ready && !duplicateReason;
   box.disabled = !ready;
   box.addEventListener('change', () => {
     if (box.checked) state.tx.selected.add(candidate.id); else state.tx.selected.delete(candidate.id);
@@ -126,7 +132,8 @@ function candidateRow(candidate) {
   const sub = document.createElement('span');
   sub.className = 'row-sub';
   sub.textContent = [candidate.bookingDate, candidate.categoryText,
-    ready ? null : (candidate.validationError || t.notImportable)].filter(Boolean).join(' · ');
+    ready ? null : (candidate.validationError || t.notImportable),
+    duplicateReason ? `${t.duplicate} — ${duplicateReasonText(duplicateReason)}` : null].filter(Boolean).join(' · ');
   main.append(title, sub);
   label.append(box, main);
 
@@ -151,7 +158,15 @@ function renderTransactionCandidates() {
   const list = $('tx-candidates');
   if (!list) return;
   const all = state.tx.candidates || [];
-  state.tx.selected = new Set(all.filter(candidateReady).map(c => c.id));
+  // Duplicates stay visible but unchecked: importing them a second time is almost never what you
+  // want, and hiding them would make the row count disagree with the file you picked.
+  state.tx.selected = new Set(all.filter(c => candidateReady(c) && !state.tx.duplicates.has(c.id)).map(c => c.id));
+  const duplicateCount = all.filter(c => candidateReady(c) && state.tx.duplicates.has(c.id)).length;
+  const duplicateHint = $('tx-duplicate-hint');
+  if (duplicateHint) {
+    duplicateHint.hidden = duplicateCount === 0;
+    duplicateHint.textContent = fill(t.dupHint, { n: duplicateCount });
+  }
 
   setText('tx-rows-title', t.rowsTitle);
   setText('tx-rows-hint', t.rowsHint);
@@ -196,7 +211,45 @@ function renderTransactionCandidates() {
   }
   updateSelectedCount();
 }
-async function commitTransactions(){try{if(!state.tx.selected.size)throw new Error(t.noneSelected);const mappings={};for(const row of $('tx-account-mapping').querySelectorAll('.row')){const value=row.querySelector('select')?.value;if(!value)throw new Error(t.needAccount);mappings[row.dataset.source||'']=value}status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings,defaultAccountId:null,categoryMappings:{},createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:[...state.tx.selected]})});renderResult('tx',result);status('tx',t.done)}catch(err){error('tx',err)}}
+function collectAccountMappings({ required = true } = {}) {
+  const mappings = {};
+  for (const row of $('tx-account-mapping').querySelectorAll('.row')) {
+    const value = row.querySelector('select')?.value;
+    if (!value) {
+      if (required) throw new Error(t.needAccount);
+      return null;
+    }
+    mappings[row.dataset.source || ''] = value;
+  }
+  return mappings;
+}
+
+// The duplicate check compares against the transactions of the TARGET account, so it cannot run at
+// upload time - only once the accounts are mapped, and again whenever that mapping changes.
+async function refreshDuplicatePreview() {
+  if (!state.tx.jobId) return;
+  const mappings = collectAccountMappings({ required: false });
+  if (!mappings) {
+    state.tx.duplicates = new Map();
+    renderTransactionCandidates();
+    return;
+  }
+  try {
+    status('tx', t.dupChecking);
+    const preview = await api(`api/import-mapping/jobs/${state.tx.jobId}/duplicate-preview?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceAccountMappings: mappings, defaultAccountId: null }) });
+    state.tx.duplicates = new Map((preview.candidates || []).filter(item => item.status === 'duplicate').map(item => [item.id, item.reason]));
+    status('tx', '');
+  } catch (err) {
+    // A failed preview must not block the import - the commit runs the same check authoritatively.
+    console.warn('duplicate preview failed', err);
+    state.tx.duplicates = new Map();
+    status('tx', '');
+  }
+  renderTransactionCandidates();
+}
+
+async function commitTransactions(){try{if(!state.tx.selected.size)throw new Error(t.noneSelected);const mappings=collectAccountMappings();status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings,defaultAccountId:null,categoryMappings:{},createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:[...state.tx.selected]})});renderResult('tx',result);status('tx',t.done)}catch(err){error('tx',err)}}
 
 async function detectInvestments(){const file=currentFile('inv');if(!file){status('inv',t.needFile);return}state.inv.file=file;status('inv',t.working);$('inv-review-section').hidden=true;$('inv-result').hidden=true;try{state.inv.detect=await api(`api/investment-import/detect?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body:await formWithFile(file)});if(isTradeRepublicExport(state.inv.detect)){$('inv-preset').value='traderepublic';$('inv-new-portfolio-name').value='Trade Republic';$('inv-new-portfolio-currency').value=detectedCurrency(state.inv.detect);const matches=state.portfolios.filter(p=>!p.isArchived&&String(p.name||'').toLowerCase().includes('trade republic'));$('inv-portfolio').value=matches.length===1?matches[0].id:'__new__';syncPortfolioTarget()}renderMapping('inv',invFields);status('inv',`${state.inv.detect.rowCount} ${t.rows}.`)}catch(err){error('inv',err)}}
 async function stageInvestments(){try{const mapping=collectMapping('inv',invFields);if($('inv-preset')?.value==='traderepublic')mapping.sourceProvider='trade_republic';status('inv',t.working);const body=await formWithFile(state.inv.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/investment-import/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.inv.jobId=staged.jobId;state.inv.summary=await api(`api/investment-import/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`);renderInvestmentReview(state.inv.summary,staged);$('inv-review-section').hidden=false;status('inv','')}catch(err){error('inv',err)}}
@@ -228,4 +281,6 @@ $('tx-select-all')?.addEventListener('change',()=>{
   for(const box of $('tx-candidates').querySelectorAll('input[data-candidate]')) if(!box.disabled) box.checked=on;
   updateSelectedCount();
 });
+// Delegated: the account selects are created per source account, so they do not exist yet at boot.
+$('tx-account-mapping')?.addEventListener('change',event=>{if(event.target?.matches('select'))refreshDuplicatePreview()});
 await boot();
