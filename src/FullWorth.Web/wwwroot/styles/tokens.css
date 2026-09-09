@@ -48,6 +48,19 @@
      fallback resolved to currentColor (a dark border on light surfaces), the 42 with one each used
      whatever hex its author wrote, so the same divider had three appearances. Alias, not a new colour. */
   --border:var(--line);
+  /* Nine more of the same: names feature stylesheets invented for tokens that already existed, each
+     used with a hex fallback and therefore rendering that fallback - ignoring both the theme and the
+     picked brand colour. Aliases rather than edits in 13 files, and the fallbacks in those files are
+     now unreachable instead of authoritative. */
+  --danger:var(--negative);
+  --success:var(--positive);
+  --warning-border:var(--warning);
+  --muted-fg:var(--muted);
+  --text-muted:var(--muted);
+  --surface-1:var(--surface);
+  --surf2:var(--surface-2);
+  --surface-subtle:var(--surface-2);
+  --border-strong:var(--tint-line-2);
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
   --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
   /* Category identity palette (§13): one strong base tone per super-category; deeper levels are
