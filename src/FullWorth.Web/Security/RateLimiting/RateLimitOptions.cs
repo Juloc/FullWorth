@@ -14,6 +14,18 @@ public sealed class RateLimitOptions
         QueueLimit = 0
     };
 
+    // Account creation, kept apart from Login on purpose. An instance with open registration (the
+    // self-hosting/cloud setup) is the one place where an anonymous POST creates persistent state, and
+    // sharing the Login bucket meant a registration flood also locked out real logins from the same
+    // NAT - and vice versa. Five per hour per IP is far above what a household needs and far below
+    // what mass sign-up needs.
+    public RateLimitPolicyOptions Registration { get; set; } = new()
+    {
+        PermitLimit = 5,
+        WindowSeconds = 3600,
+        QueueLimit = 0
+    };
+
     public RateLimitPolicyOptions PasswordReset { get; set; } = new()
     {
         PermitLimit = 5,
@@ -82,6 +94,7 @@ public sealed class RateLimitOptionsValidator : IValidateOptions<RateLimitOption
 
         var errors = new List<string>();
         ValidatePolicy(nameof(options.Login), options.Login, errors);
+        ValidatePolicy(nameof(options.Registration), options.Registration, errors);
         ValidatePolicy(nameof(options.PasswordReset), options.PasswordReset, errors);
         ValidatePolicy(nameof(options.Passkey), options.Passkey, errors);
         ValidatePolicy(nameof(options.BrowserApi), options.BrowserApi, errors);

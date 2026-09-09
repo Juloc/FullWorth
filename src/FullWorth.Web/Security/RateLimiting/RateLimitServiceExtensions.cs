@@ -37,6 +37,12 @@ public static class RateLimitServiceExtensions
                     RateLimitPartitionKeys.GetIpPartitionKey(context),
                     GetConfigured(context).Login));
 
+            // By IP, not by user: there is no user yet.
+            options.AddPolicy(RateLimitPolicies.Registration, context =>
+                CreateFixedWindowPartition(
+                    RateLimitPartitionKeys.GetIpPartitionKey(context),
+                    GetConfigured(context).Registration));
+
             options.AddPolicy(RateLimitPolicies.PasswordReset, context =>
                 CreateFixedWindowPartition(
                     RateLimitPartitionKeys.GetIpPartitionKey(context),

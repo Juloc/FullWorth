@@ -26,7 +26,7 @@ public static class AuthEndpoints
         group.MapGet("/external/callback", ExternalCallbackAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/external/two-factor", ExternalTwoFactorAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
         group.MapPost("/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
-        group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Login);
+        group.MapPost("/register", RegisterAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicies.Registration);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapPost("/change-password", ChangePasswordAsync).RequireAuthorization();
         group.MapGet("/account-deletion/status", AccountDeletionStatusAsync).RequireAuthorization();

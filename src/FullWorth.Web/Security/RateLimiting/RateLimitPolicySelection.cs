@@ -21,6 +21,9 @@ public static class RateLimitPolicySelection
             if (string.Equals(value, "/auth/login", StringComparison.OrdinalIgnoreCase))
                 return RateLimitPolicies.Login;
 
+            if (string.Equals(value, "/auth/register", StringComparison.OrdinalIgnoreCase))
+                return RateLimitPolicies.Registration;
+
             if (string.Equals(value, "/auth/password-reset/request", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(value, "/auth/password-reset/complete", StringComparison.OrdinalIgnoreCase))
                 return RateLimitPolicies.PasswordReset;

@@ -24,6 +24,35 @@ public sealed class RateLimitMiddlewareTests
         Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/auth/login", null)).StatusCode);
     }
 
+    // Registration is the one anonymous POST that creates persistent state, so on an instance with
+    // open registration it needs its own budget - and that budget must be separate from Login in BOTH
+    // directions, or a sign-up flood locks out real logins from the same NAT and vice versa.
+    [Fact]
+    public async Task Registration_above_limit_returns_429()
+    {
+        using var server = CreateServer(("RateLimits:Registration:PermitLimit", "2"));
+        using var client = CreateClient(server, ip: "192.0.2.60");
+
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/auth/register", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/auth/register", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/auth/register", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Registration_flood_does_not_consume_the_login_budget()
+    {
+        using var server = CreateServer(
+            ("RateLimits:Registration:PermitLimit", "1"),
+            ("RateLimits:Login:PermitLimit", "1"));
+        using var client = CreateClient(server, ip: "192.0.2.61");
+
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/auth/register", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/auth/register", null)).StatusCode);
+
+        // The legitimate user on that same address can still log in.
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/auth/login", null)).StatusCode);
+    }
+
     [Fact]
     public async Task Password_reset_request_above_limit_returns_429()
     {
@@ -229,6 +258,7 @@ public sealed class RateLimitMiddlewareTests
         var settings = new Dictionary<string, string?>
         {
             ["RateLimits:Login:WindowSeconds"] = "60",
+            ["RateLimits:Registration:WindowSeconds"] = "60",
             ["RateLimits:PasswordReset:WindowSeconds"] = "60",
             ["RateLimits:Passkey:WindowSeconds"] = "60",
             ["RateLimits:BrowserApi:WindowSeconds"] = "60",
@@ -272,6 +302,8 @@ public sealed class RateLimitMiddlewareTests
                     endpoints.MapGet("/auth/login", () => Results.Ok());
                     endpoints.MapPost("/auth/login", () => Results.Ok())
                         .RequireRateLimiting(RateLimitPolicies.Login);
+                    endpoints.MapPost("/auth/register", () => Results.Ok())
+                        .RequireRateLimiting(RateLimitPolicies.Registration);
                     endpoints.MapPost("/auth/password-reset/request", () => Results.Accepted())
                         .RequireRateLimiting(RateLimitPolicies.PasswordReset);
                     endpoints.MapPost("/auth/password-reset/complete", () => Results.NoContent())

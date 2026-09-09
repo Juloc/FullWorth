@@ -173,6 +173,7 @@ public sealed class RateLimitOptionsAndPartitionTests
 
     [Theory]
     [InlineData("POST", "/auth/login", RateLimitPolicies.Login)]
+    [InlineData("POST", "/auth/register", RateLimitPolicies.Registration)]
     [InlineData("POST", "/auth/password-reset/request", RateLimitPolicies.PasswordReset)]
     [InlineData("POST", "/auth/password-reset/complete", RateLimitPolicies.PasswordReset)]
     [InlineData("POST", "/auth/passkeys/login/begin", RateLimitPolicies.Passkey)]
