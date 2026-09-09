@@ -1,31 +1,49 @@
 # Documentation
 
+Reference documents describe how FullWorth behaves today. Anything still to be done lives in exactly
+one place: [Improvement plan](IMPROVEMENT_PLAN.md).
+
+## Architecture and code
+
+- [Architecture](ARCHITECTURE.md) — unified container, module layout, data-access regimes, financial
+  consistency invariants
+- [Frontend architecture](FRONTEND_ARCHITECTURE.md) — feature lifecycle, CSS layers, the rules and the
+  documented exceptions
+- [Migrations](MIGRATIONS.md) — how the schema really changes
+- [Import](IMPORT.md) — every importer, what it parses, and what it persists
+- [Banking](BANKING.md) — Enable Banking and FinTS, sync cadence, health states, live validation
+- [Cloud](CLOUD.md) — enrollment, observation outbox, knowledge packs, benchmarks, brand packs
+- [AI Autopilot](AI_AUTOPILOT.md) — Coach, Intelligence, the Codex bridge and behaviour without AI
+- [Compensation analyzer](COMPENSATION_ANALYZER.md) — the German payroll engine
+- [Categorization catalog](CATEGORIZATION_CATALOG.md) — the category tree and its keys
+
 ## Product
 
 - [Roadmap](../ROADMAP.md) — scope and release priorities
 - [Product decisions](PRODUCT_DECISIONS.md) — product rules and trade-offs
-- [Potential finance data ideas](POTENTIAL_FINANCE_DATA_IDEAS.md) — non-binding ideas that require a decision on whether and how they should work before becoming roadmap or implementation work
 - [UI/UX specification](UI_UX_SPEC.md) — application behaviour and interface
-- [Simple finance-app UX rework plan](SIMPLE_FINANCE_APP_UX_REWORK_PLAN.md) — account/group booking drill-down, merchant/category identity, W/M/Q/Y analyses, contract filters and simplified mobile information architecture
-- [Simple finance-app UX gap-closure plan](SIMPLE_FINANCE_APP_UX_GAP_CLOSURE_PLAN.md) — closes the remaining backend, analytics, filter, contract and emergency-fund gaps found by audit
-- [Feature parity implementation plan](FEATURE_PARITY_IMPLEMENTATION_PLAN.md) — junior-executable plan for remaining Finanzguru/Finanzfluss parity, backend/UI consequences and delivery gates
-- [Wealth & asset management implementation plan](WEALTH_ASSET_MANAGEMENT_IMPLEMENTATION_PLAN.md) — junior-executable plan for unified net worth, real estate, asset valuation, rentals, debt links, specialized assets and investment integration
-- [Category Intelligence plan](CATEGORY_INTELLIGENCE_PLAN.md) — categorization catalog, review, learning, bulk actions, tags and visual category metadata
-- [Tax Assistant implementation plan](TAX_ASSISTANT_IMPLEMENTATION_PLAN.md) — optional tax-relevance detection, backend model, rule engine, UI, privacy, exports and delivery phases
+- [Potential finance data ideas](POTENTIAL_FINANCE_DATA_IDEAS.md) — non-binding ideas that still need a
+  decision before they become work
 
-## Security and operations
+## Security, testing and operations
 
-- [Security architecture](SECURITY_ARCHITECTURE.md) — trust boundaries, authentication and authorization
+- [Security architecture](SECURITY_ARCHITECTURE.md) — trust boundaries, authentication, tenant
+  isolation, headers, secrets
 - [Banking safety](BANKING_SAFETY.md) — provider request limits and sync rules
-- [Operations](OPERATIONS.md) — deployment, backups, restores and secret rotation
-- [Migrations](MIGRATIONS.md) — database migration guidance
+- [Testing](TESTING.md) — the commands that work, what does not exist, and how to verify UI without
+  credentials
+- [Operations](OPERATIONS.md) — deployment, backups, restores, secret rotation
 - [Release](RELEASE.md) — verification and image publishing
 
-## Validation
+## Work in progress
 
-- [Live bank validation](LIVE_BANK_TEST_PLAN.md)
-- [Accessibility audit](ACCESSIBILITY.md)
-- [Performance testing](PERFORMANCE.md)
+- [Improvement plan](IMPROVEMENT_PLAN.md) — the single active plan, P0 to P3
+- [Open items](OPEN_ITEMS.md) — smaller frontend and behaviour items
+- [Mobile navigation plan](MOBILE_NAVIGATION_2_PLAN.md), [UX rework
+  plan](SIMPLE_FINANCE_APP_UX_REWORK_PLAN.md), [UX gap-closure
+  plan](SIMPLE_FINANCE_APP_UX_GAP_CLOSURE_PLAN.md), [AI Autopilot implementation
+  plan](AI_AUTOPILOT_IMPLEMENTATION_PLAN.md) — older plans that still mix finished and open work; being
+  triaged into the improvement plan
 
-The session integration contract remains next to the code in
+The session integration contract stays next to the code in
 [src/FullWorth.Web/Modules/Sessions](../src/FullWorth.Web/Modules/Sessions/INTEGRATION.md).

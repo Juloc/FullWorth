@@ -65,4 +65,4 @@ Pre-releases never update stable aliases.
 
 Use one `FULLWORTH_VERSION` for both FullWorth and the optional Codex bridge. For reproducible production deployments, pin an exact version instead of `latest`.
 
-See [Security architecture](SECURITY_ARCHITECTURE.md) and [Live bank validation](LIVE_BANK_TEST_PLAN.md).
+See [Security architecture](SECURITY_ARCHITECTURE.md) and [Banking](BANKING.md).

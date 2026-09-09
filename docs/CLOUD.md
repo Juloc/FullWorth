@@ -4,9 +4,9 @@ This describes what a FullWorth instance does. The Cloud server lives in the pri
 `fullworth-cloud` repository; nothing here depends on having access to it.
 
 Everything is opt-in per instance and off until an administrator makes the setup decision. With
-Cloud disabled, FullWorth is fully functional: merchant/category/contract/product resolution falls
-back to whatever the last verified knowledge pack installed, and benchmark and price panels report
-"unavailable" instead of failing.
+Cloud disabled, FullWorth is fully functional: merchant/category/contract/product resolution reads
+the last verified knowledge pack from the local database and makes no network call, and the
+benchmark and price endpoints answer `503` so their panels render as unavailable.
 
 ## Where the state lives
 
@@ -98,9 +98,10 @@ if (!string.IsNullOrWhiteSpace(enrollment))
 Compose passes `FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}`, i.e. empty
 by default. An external self-hoster therefore enrolls with no header at all, and today that works
 because the Cloud deployment has public registration enabled. Whether it succeeds is entirely the
-server's decision: a Cloud with a configured token rejects a tokenless attempt with
-`enrollment_missing`, and a Cloud with neither a token nor public registration fails closed the same
-way.
+server's decision: a Cloud with a configured token, and a Cloud with neither a token nor public
+registration, both reject a tokenless attempt with `401` and `enrollment_missing`. The client maps
+that status to `cloud_unauthorized` and discards the body, so the specific reason never reaches
+`LastErrorCode` — a failed enrollment looks exactly like an expired credential in the UI.
 
 The response carries `{ instanceId, credential, credentialExpiresAt, entitlementStatus }`. The client
 rejects a response whose `instanceId` does not echo back, or whose credential is empty

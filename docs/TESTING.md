@@ -14,16 +14,19 @@ Four xUnit projects, all in `FullWorth.slnx`:
 ## What does not exist
 
 - **No linter and no formatter.** There is no `.editorconfig`, no ESLint/Prettier config and no
-  `package.json` anywhere in the repo, and no workflow runs `dotnet format`. The closest substitutes
-  are C# guard tests that grep the shipped frontend:
+  `package.json` anywhere in the repo (the CodexBridge sidecar is dependency-free `.mjs`), and no
+  workflow runs `dotnet format`. The closest substitutes are C# guard tests that grep the shipped
+  frontend:
   `tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs` (native dialogs, direct BFF calls,
   `fetch` monkey-patches, native `confirm`, DOM patch observers, patch-layer file names, CSS layer
   order, bootstrap ownership — each with an explicit allow-list of pre-existing offenders) and
   `Security/Headers/SecurityHeadersSourceAuditTests.cs` (inline script/style/handler, `javascript:`,
   `eval`, `new Function`).
-- **No automated browser or end-to-end test.** No test project references Playwright or drives a
-  browser; the Playwright dependency in `FullWorth.Backend.Tests` is transitive from the Amazon
-  connector. Web tests use `WebApplicationFactory` + `TestServer` with the backend and banking HTTP
+- **No automated browser or end-to-end test.** Nothing drives a browser. The Playwright assemblies
+  under `FullWorth.Backend.Tests/bin` are transitive from the Amazon connector's project reference,
+  not a test dependency: no test type mentions `IPage`, `BrowserType` or `Playwright`, and no test
+  project has a `Microsoft.Playwright` `PackageReference`.
+  Web tests use `WebApplicationFactory` + `TestServer` with the backend and banking HTTP
   clients replaced by stub handlers, and assert on served bytes (HTML/JS/CSS/JSON) rather than on a
   rendered page. Everything visual is verified by a human — see
   [UI verification without credentials](#ui-verification-without-credentials).
@@ -142,9 +145,11 @@ Three deliberate behaviours, each of them a lesson from a wrong conclusion:
 - Fixture data is deliberately awkward (a long counterparty name, a row that fails validation, a
   duplicate), because a layout only breaks on the awkward cases.
 
-Ordering rule in `server.mjs`: fixture keys match as substrings, so a key that is a substring of
-another path must come first (`rollback` before `import-jobs`), and the map applies only to `/bff/` and
-`/api/` paths — without that guard it also answered `/features/accounts.js` with JSON.
+Two `server.mjs` details worth knowing before debugging it: fixture keys match as **substrings**, so a
+key that is a substring of another path must come first (`rollback` before `import-jobs`), and the map
+applies only to `/bff/` and `/api/` paths — without that guard it also answered
+`/features/accounts.js` with JSON. And `/auth/admin/*` is answered by the server, not by the
+browser-side stub, because the admin page talks to it directly rather than through the BFF.
 
 Measure, do not eyeball. "Is this control 44 px on a phone" is a question for the harness plus devtools,
 not for a screenshot.
@@ -253,9 +258,13 @@ more speculatively (`FullWorthDbContext` declares 79 indexes):
 
 There is no automated e2e, so the post-deploy pass is manual. Before merging a release candidate:
 `dotnet build FullWorth.slnx --configuration Release`, the four suites above,
-`docker compose --env-file .env.example config --quiet`, and
-`ops/restore-test/verify-restore.sh` (restore verification against an isolated database; a live
-restore is destructive and needs its explicit `--force`).
+`docker compose --env-file .env.example config --quiet`, and `ops/restore-test/verify-restore.sh`.
+
+`verify-restore.sh` is safe to run against a live installation: it restores the latest Postgres dump
+into an **ephemeral** container and the latest purchases archive into a **throwaway** volume, then
+checks migration history, core tables, one relationship and the file manifest. Exit 0 is a pass. It
+never touches the live database or volume — that is `ops/backup/postgres/restore.sh`, which refuses to
+overwrite the live database without `--force`.
 
 After deploying:
 

@@ -226,8 +226,13 @@ await db.Database.ExecuteSqlRawAsync("SET LOCAL fullworth.asset_valuation_suppre
 ```
 
 `fullworth.asset_valuation_method` and `fullworth.asset_valuation_user_id` are read the same way, so
-a raw-SQL write can label the history row it causes. Check violations raised by these triggers reach
-the browser as HTTP problems through `PurchasePaymentAllocationConflictExceptionHandler`.
+a raw-SQL write can label the history row it causes.
+
+Most trigger check violations surface as a generic 500. One is translated:
+`PurchasePaymentAllocationConflictExceptionHandler` matches a `PostgresException` with
+`SqlState == CheckViolation` whose message starts with `"Purchase payment allocation"` or
+`"Purchase payment link must stay"` and rewrites it as a `409` problem. Any other database-enforced
+rule that needs a specific HTTP status needs the same treatment.
 
 ## Financial data consistency
 
@@ -258,8 +263,10 @@ interceptors on `FullWorthDbContext`:
 | `FinanceTransaction` | `AccountId`, `Status`, `BookingDate`, `ValueDate`, `Amount`, `Currency` | net worth + signals, from the earliest of the old and new date |
 | `FinanceTransaction` | `CategoryId`, `Counterparty`, `NormalizedCounterparty`, `Description`, `MerchantCategoryCode`, `IsIgnored`, `IsTransfer`, `CategorizationSource` | signals only |
 | `BalanceSnapshot` | any of `AccountId`, `Amount`, `Currency`, `BalanceType`, `ReferenceDate`, `CapturedAt` | from today only — a balance refresh moves the anchor, not historical cash flow |
-| `FinanceAccount` | `FullWorthSpaceId`, `Currency`, `IsActive`, `IncludeInNetWorth`; any delete | full history |
-| `AccountOwner`, `FullWorthSpaceMember` | any change | full history |
+| `FinanceAccount` | insert | from today |
+| `FinanceAccount` | delete, or a change to `FullWorthSpaceId`, `Currency`, `IsActive`, `IncludeInNetWorth` | full history |
+| `AccountOwner` | insert, delete, or a change to `AccountId`, `UserId`, `OwnershipType` | full history |
+| `FullWorthSpaceMember` | any insert, update or delete | full history |
 | `Asset`, `Liability` | value/currency/`IncludeInNetWorth`/space | from today |
 | `Budget`, `RecurringContract` | see the field lists in the detector | signals only, never net worth |
 

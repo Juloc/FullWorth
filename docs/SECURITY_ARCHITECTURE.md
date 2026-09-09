@@ -289,9 +289,9 @@ Banking keeps its own conservative synchronisation, retry and provider-rate poli
 
 ## Service worker and PWA
 
-`sw.js` caches the static application shell only. `isDataRequest` excludes `/api`, `/bff`, `/auth`,
-`/share` and `/connect`, so no finance response, receipt or auth response is ever written to the
-offline cache. Through the BFF, cache validators (`ETag`, `Cache-Control`, `Last-Modified`) are
+`sw.js` caches the static application shell only. `isSensitive(url)` excludes `/api`, `/bff`,
+`/auth`, `/share` and `/connect`, so no finance response, receipt or auth response is ever written to
+the offline cache. Through the BFF, cache validators (`ETag`, `Cache-Control`, `Last-Modified`) are
 forwarded for exactly one path prefix, `/api/intelligence/brand-assets/` — immutable non-financial
 bytes addressed by SHA-256 — and dropped for everything else, so a backend cache header can never make
 a finance response browser-cacheable.
@@ -438,17 +438,20 @@ exist in ordinary database backups until those expire; backups are never selecti
 restore must not be used to resurrect an account past the deadline outside controlled disaster
 recovery.
 
-## Intelligence Cloud and knowledge packs
+## Intelligence Cloud
 
-Signed knowledge packs are verified with `RSA-PSS-SHA256`. The key is resolved in order:
-`FullWorthCloud:KnowledgePackPublicKeyPem` / `…Path` / `…Base64`, then the key compiled into
-`KnowledgePackProtocol.OfficialPublicKeyPem`. **That constant is currently empty**, so an instance
-without an explicit override fails closed with `knowledge_pack_public_key_missing` rather than
-trusting an unverified pack — correct, but it means no external self-hosted instance can install
-official packs until the constant is filled at release time.
+[Cloud](CLOUD.md) documents the instance side: the consent gate, the optional enrollment token
+(currently empty in Compose, so enrollment relies on the Cloud's public registration), what the
+observation outbox is allowed to contain, and knowledge-pack `RSA-PSS-SHA256` verification —
+including the fact that the shipped `KnowledgePackProtocol.OfficialPublicKeyPem` is empty, so an
+instance without an explicit override fails closed with `knowledge_pack_public_key_missing` rather
+than trusting an unverified pack.
 
-Account deletion removes unsent, user-attributable outbox items locally. Already-accepted anonymous
-aggregate intelligence may remain, but no remote record may retain a link back to the deleted user.
+Two rules bind Cloud to the rest of this document: outbound payloads may carry only anonymous
+aggregates plus the instance id — never a finance user id or e-mail — and account deletion removes
+unsent, user-attributable outbox items locally (`AccountPurgeService.PurgeIntelligenceUserDataAsync`).
+Already-accepted anonymous aggregates may remain; there is currently no remote retraction call, which
+is why the payload-anonymity rule has to hold at submission time.
 
 ## Release gate
 
