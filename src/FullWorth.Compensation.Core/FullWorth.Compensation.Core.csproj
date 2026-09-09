@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- No package references, on purpose. This assembly is the one German payroll formula and its
+         statutory parameters, and it has to stay loadable outside the web host - the landing page is
+         meant to run it in the browser, which rules out EF Core, ASP.NET and anything else that would
+         drag a server in. Keep it that way: a dependency added here is a dependency in the browser. -->
+  </PropertyGroup>
+</Project>

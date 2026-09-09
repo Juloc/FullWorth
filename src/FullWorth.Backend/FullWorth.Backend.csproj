@@ -8,6 +8,9 @@
     <Compile Include="..\Shared\SecretBootstrap.cs" Link="Security\SecretBootstrap.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\FullWorth.Compensation.Core\FullWorth.Compensation.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <PrivateAssets>all</PrivateAssets>

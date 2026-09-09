@@ -4,12 +4,14 @@ WORKDIR /src
 # Copy project files first so Docker can cache restore independently from source changes.
 COPY src/FullWorth.Web/FullWorth.Web.csproj src/FullWorth.Web/
 COPY src/FullWorth.Backend/FullWorth.Backend.csproj src/FullWorth.Backend/
+COPY src/FullWorth.Compensation.Core/FullWorth.Compensation.Core.csproj src/FullWorth.Compensation.Core/
 COPY src/FullWorth.Banking/FullWorth.Banking.csproj src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/FullWorth.FinTs.csproj src/FullWorth.FinTs/
 RUN dotnet restore src/FullWorth.Web/FullWorth.Web.csproj
 
 COPY src/FullWorth.Web/ src/FullWorth.Web/
 COPY src/FullWorth.Backend/ src/FullWorth.Backend/
+COPY src/FullWorth.Compensation.Core/ src/FullWorth.Compensation.Core/
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/

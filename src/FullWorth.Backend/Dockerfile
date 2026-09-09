@@ -1,8 +1,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/FullWorth.Backend/FullWorth.Backend.csproj src/FullWorth.Backend/
+COPY src/FullWorth.Compensation.Core/FullWorth.Compensation.Core.csproj src/FullWorth.Compensation.Core/
 RUN dotnet restore src/FullWorth.Backend/FullWorth.Backend.csproj
 COPY src/FullWorth.Backend/ src/FullWorth.Backend/
+COPY src/FullWorth.Compensation.Core/ src/FullWorth.Compensation.Core/
 COPY src/Shared/ src/Shared/
 RUN dotnet publish src/FullWorth.Backend/FullWorth.Backend.csproj -c Release -o /app /p:UseAppHost=false
 
