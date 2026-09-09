@@ -21,6 +21,10 @@ public static class ImportCenterPageEndpoints
   <link rel="stylesheet" href="/styles/components.css">
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/styles/responsive.css">
+  <!-- These pages open confirm dialogs (ui/confirm.js). Without dialogs.css the .dialog-card has no
+       background, border or padding at all, so the dialog rendered as bare text on the backdrop. -->
+  <link rel="stylesheet" href="/design-depth.css">
+  <link rel="stylesheet" href="/dialogs.css">
   <link rel="stylesheet" href="/styles/features/import-center-page.css">
 </head>
 <body>

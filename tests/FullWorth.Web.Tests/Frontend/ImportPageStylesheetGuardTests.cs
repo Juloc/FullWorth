@@ -24,7 +24,11 @@ public sealed class ImportPageStylesheetGuardTests
         "/styles/shell.css",
         "/styles/components.css",
         "/app.css",
-        "/styles/responsive.css"
+        "/styles/responsive.css",
+        // Every one of these pages opens a confirm dialog. dialogs.css carries the .dialog-card base
+        // (background, border, padding) - without it the dialog is bare text on the backdrop, which is
+        // exactly how it shipped until this line existed.
+        "/dialogs.css"
     ];
 
     [Theory]
@@ -56,6 +60,9 @@ public sealed class ImportPageStylesheetGuardTests
         Assert.True(
             Array.IndexOf(loaded, "/app.css") < Array.IndexOf(loaded, "/styles/responsive.css"),
             $"{fileName} must load responsive.css after app.css, or the mobile rules cannot win.");
+        Assert.True(
+            Array.IndexOf(loaded, "/styles/responsive.css") < Array.IndexOf(loaded, "/dialogs.css"),
+            $"{fileName} must load dialogs.css after responsive.css, matching index.html.");
     }
 
     private static string Root()
