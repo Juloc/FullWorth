@@ -55,8 +55,11 @@ label{display:grid;gap:5px;color:var(--muted);font-size:12px;text-transform:uppe
 label.check{display:flex;align-items:center;gap:var(--s2);font-size:13px;text-transform:none;letter-spacing:normal;font-weight:400}
 label.check input{width:auto}
 /* A field paired with a small trigger button beside it (e.g. the category picker's search icon) */
-.field-inline{display:flex;align-items:center;gap:var(--s2)}
-.field-inline select{flex:1;min-width:0}
+/* min-width:0 on the whole chain: a select's intrinsic minimum is its LONGEST OPTION, so without this a
+   long category name (e.g. a nested "Lebensmittel › …" path) forces the field to ~480px. Inside a
+   phone-width dialog that made the card scroll sideways and clipped its header off-screen. */
+.field-inline{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.field-inline select{flex:1;min-width:0;max-width:100%;text-overflow:ellipsis}
 .field-inline .icon-button{width:34px;height:34px;flex:0 0 auto}
 /* Sharing invite dialog: account picker + generated claim link */
 .share-accounts{border:1px solid var(--line);border-radius:var(--radius);padding:var(--s3);margin:0;display:grid;gap:var(--s2)}

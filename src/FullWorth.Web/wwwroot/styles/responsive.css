@@ -51,10 +51,18 @@
   #toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
 }
 @media(max-width:767px){
-  .topbar{padding-top:var(--s4);align-items:flex-start}
+  /* Phone: stack the header. Side by side, the five controls claimed 240px and still wrapped onto a
+     second row (94px tall), which squeezed the title column to 124px so title AND subtitle wrapped over
+     several lines - measured 126px total and it read as broken rather than dense. Stacked, the title
+     gets the full 380px on one line and the controls fit one row: measured 110px. */
+  .topbar{padding-top:var(--s4);align-items:stretch;flex-direction:column;gap:var(--s2)}
   .topbar-title h1{font-size:24px;overflow-wrap:anywhere}
-  .topbar-actions{flex-wrap:wrap;justify-content:flex-end;gap:6px}
-  .topbar-actions .primary-action{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Decorative on a phone - the title and the bottom nav already say which page this is, and keeping it
+     was what forced the title into a 124px column. */
+  #page-subtitle{display:none}
+  .topbar-actions{flex-wrap:nowrap;justify-content:flex-start;gap:6px}
+  /* Utilities left, the page's own action on the right edge where the thumb sits. */
+  .topbar-actions .primary-action{margin-left:auto;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .content-grid{grid-template-columns:1fr}
   .dashboard-grid{grid-template-columns:1fr}
   .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
@@ -64,6 +72,22 @@
   select,input,textarea{min-height:44px;font-size:16px}
   .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
   .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button,.btn{min-height:44px}
+  /* The touch floor, in one place. Roles that were missing from it shipped 28-40px targets across
+     twelve views: .ghost (dashboard, analytics, tax, notifications), .secondary and .fw-card-action
+     (Vermögen, 28px), and the unclassed buttons in the segmented filter rows (38px). */
+  .ghost,.secondary,.fw-card-action,.ux-icon-text-button,main button{min-height:44px}
+  .ux-icon-text-button,.icon-button{min-width:44px}
+  /* These three shrink a shared role from a higher-specificity selector, so the floor above cannot
+     reach them - a media query adds no specificity. Matched here rather than fought with !important;
+     responsive.css is loaded after app.css and components.css, so equal specificity wins. */
+  .detected-actions .btn{min-height:44px}
+  .field-inline .icon-button{width:44px;height:44px}
+  .dialog-card [data-close]:not(.icon-button){width:44px;height:44px}
+  /* Both live in app.css with a specificity the role-based floor above cannot reach. The period
+     steppers are isolated arrow targets (aria-label "Vorheriger Zeitraum"), not part of a segmented
+     strip, so 30px is a genuine miss. */
+  .fw-window button{min-width:44px;min-height:44px}
+  .nw-custom-range-fields button{min-height:44px}
   label.check input{min-height:0}
   .toolbar input[type=search]{min-width:100%}
   .panel-head{align-items:flex-start;flex-wrap:wrap}

@@ -14,7 +14,8 @@
 .import-link-currency{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
 .import-link-meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:6px}
 .import-link-controls{display:grid;grid-template-columns:minmax(220px,2fr) minmax(160px,1fr) auto;gap:10px;align-items:end;margin-top:12px}
-.import-link-controls .primary-action{min-height:40px}
+/* Desktop only: on a phone the shared 44px touch floor must win. */
+@media(min-width:768px){.import-link-controls .primary-action{min-height:40px}}
 .import-balance-hint{font-size:11px}
 .required-balance input{border-color:var(--warning)}
 .import-link-success{font-weight:600;color:var(--positive)}

@@ -546,9 +546,9 @@ button:hover,
   #accounts-view-list .account-more {
     display: inline-grid;
     place-items: center;
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
     padding: 0;
     font-size: 22px;
     line-height: 1;
@@ -570,9 +570,14 @@ button:hover,
   }
 
   .ux-icon-text-button {
-    width: 40px;
-    min-width: 40px;
+    width: 44px;
+    min-width: 44px;
     padding-inline: 0 !important;
+  }
+
+  /* Primary local navigation: the app-wide 44px touch floor applies; the 38px base is desktop. */
+  .accounts-local-nav button {
+    min-height: 44px;
   }
 
   .accounts-sidebar-children {

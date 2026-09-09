@@ -87,7 +87,8 @@ body.coach-dock-resizing{cursor:col-resize;user-select:none}
 .coach-dock-header{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3);border-bottom:1px solid var(--line)}
 .coach-dock-title{display:flex;align-items:center;gap:var(--s2);min-width:0}.coach-dock-title>.brand-logo{width:28px;height:28px}
 .coach-dock-title>div{display:grid;min-width:0}.coach-dock-title strong{font-size:15px}.coach-dock-title span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.coach-dock-actions{display:flex;align-items:center;gap:6px}.coach-dock-actions .icon-button{width:34px;height:34px}
+.coach-dock-actions{display:flex;align-items:center;gap:6px}/* Desktop only: on a phone the shared 44px touch floor must win. */
+@media(min-width:768px){.coach-dock-actions .icon-button{width:34px;height:34px}}
 .coach-dock-pin.active{background:var(--surface-3);border-color:var(--k3)}
 .coach-dock-close{font-size:22px;line-height:1}
 .coach-dock-chat{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:var(--s3);padding:var(--s3)}

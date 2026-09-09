@@ -49,6 +49,7 @@
   .insight-copy>span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .insights-tabs{padding:0 10px}
   .insights-tabs button{min-height:44px;padding:0 11px}
+  .insights-all{min-height:44px}
   .insight-detail-actions,.insight-feedback{display:grid;grid-template-columns:1fr 1fr}
   .insight-detail-actions button,.insight-feedback button{width:100%}
   .insight-snooze{display:grid;grid-template-columns:minmax(0,1fr) auto}
