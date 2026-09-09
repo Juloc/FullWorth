@@ -11,7 +11,16 @@ public static class BrokerPdfImportPageEndpoints
   <meta name="color-scheme" content="light dark">
   <title>Broker-PDF importieren · FullWorth</title>
   <script src="/theme-init.js"></script>
+  <!-- The full layer chain, in the same order as index.html. Loading only app.css left every design
+       token undefined (--s4, --line, --muted, --surface, --cta all resolved to nothing) and skipped the
+       responsive layer entirely, so this page rendered with unstyled 20px form controls on a phone. -->
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/reset.css">
+  <link rel="stylesheet" href="/appearance.css">
+  <link rel="stylesheet" href="/styles/shell.css">
+  <link rel="stylesheet" href="/styles/components.css">
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/features/import-center-page.css">
 </head>
 <body>
