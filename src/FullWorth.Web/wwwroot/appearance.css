@@ -19,6 +19,24 @@
 :root {
   --brand-primary: var(--cta);
   --brand-secondary: var(--accent);
+
+  /* Derived chrome. design-depth.css used to carry ~30 fixed greys for its gradients, borders, hover
+     surfaces and dark chips, which is why a picked brand colour reached the buttons and left
+     everything around them grey. These are mixes of the primary into the surface/line/text tokens, so
+     the whole chrome follows the choice - and, because the base is a per-theme token, dark mode gets
+     its own values for free instead of inheriting light-mode greys.
+
+     With the shipped near-black primary the results land within a hair of the greys they replace, so
+     an untouched install barely moves. The percentages are a scale, not tuned per site: 1 is the
+     faintest wash, 3 the most present. */
+  --tint-surface-1: color-mix(in srgb, var(--brand-primary) 3%, var(--surface));
+  --tint-surface-2: color-mix(in srgb, var(--brand-primary) 6%, var(--surface));
+  --tint-surface-3: color-mix(in srgb, var(--brand-primary) 9%, var(--surface));
+  --tint-line-1: color-mix(in srgb, var(--brand-primary) 10%, var(--line));
+  --tint-line-2: color-mix(in srgb, var(--brand-primary) 22%, var(--line));
+  --tint-line-3: color-mix(in srgb, var(--brand-primary) 45%, var(--line));
+  --tint-text-strong: color-mix(in srgb, var(--brand-primary) 20%, var(--text));
+  --tint-text-soft: color-mix(in srgb, var(--brand-primary) 12%, var(--muted));
 }
 
 /* The brand mark is tinted by swapping the image source for a recoloured data URL (see tintBrandMark
