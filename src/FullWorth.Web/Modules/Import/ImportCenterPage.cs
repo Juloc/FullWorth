@@ -70,6 +70,11 @@ public static class ImportCenterPageEndpoints
           <h3 id="tx-target-title">Konten zuordnen</h3>
           <p class="row-sub" id="tx-target-hint"></p>
           <div id="tx-account-mapping" class="rows"></div>
+          <section id="tx-category-section" hidden>
+            <h3 id="tx-category-title">Kategorien zuordnen</h3>
+            <p class="row-sub" id="tx-category-hint"></p>
+            <div id="tx-category-mapping" class="rows"></div>
+          </section>
           <h3 id="tx-rows-title">Buchungen prüfen</h3>
           <p class="row-sub" id="tx-rows-hint"></p>
           <p class="row-sub ic-dup-hint" id="tx-duplicate-hint" hidden></p>

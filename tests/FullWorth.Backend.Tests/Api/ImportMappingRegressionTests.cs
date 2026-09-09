@@ -4,11 +4,13 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FullWorth.Backend.Modules.Accounts;
+using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Tests.Api;
 
@@ -206,6 +208,75 @@ public sealed class ImportMappingRegressionTests
         Assert.Equal(0, preview.GetProperty("fresh").GetInt32());
         Assert.Equal("existing", preview.GetProperty("candidates").EnumerateArray()
             .Single().GetProperty("reason").GetString());
+    }
+
+    // categoryMappings was supported by the commit but no caller ever sent one, so it was untested.
+    // Now that the review step offers the mapping, both directions have to hold: an explicit target
+    // beats the same-named category, and an explicit "do not map" suppresses the name match too.
+    [Fact]
+    public async Task AnExplicitCategoryMappingWinsOverTheSameNamedCategory()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        var leisure = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await SeedAccount(factory, account, owner);
+        await factory.SeedAsync(async db =>
+        {
+            db.Categories.Add(new FinanceCategory
+            {
+                Id = leisure, FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                Key = "test-freizeit", Name = "Freizeit", IsSystem = false, IsArchived = false,
+                SortOrder = 0, CreatedAt = DateTimeOffset.UtcNow
+            });
+            db.Categories.Add(new FinanceCategory
+            {
+                Id = other, FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                Key = "test-sonstiges", Name = "Sonstiges", IsSystem = false, IsArchived = false,
+                SortOrder = 0, CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var upload = await Upload(client, owner,
+            "Datum;Betrag;Empfänger;Kategorie\r\n29.08.2026;-12,34;REWE;Sonstiges\r\n30.08.2026;-5,00;Kino;Freizeit\r\n",
+            new
+            {
+                date = "Datum", amount = "Betrag", currency = (string?)null, counterparty = "Empfänger",
+                description = (string?)null, account = (string?)null, category = "Kategorie",
+                externalKey = (string?)null
+            });
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        using var commit = UserRequest(HttpMethod.Post,
+            $"/api/import-mapping/jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        commit.Content = JsonContent.Create(new
+        {
+            sourceAccountMappings = new Dictionary<string, Guid?>(),
+            defaultAccountId = account,
+            categoryMappings = new Dictionary<string, Guid?> { ["Sonstiges"] = leisure, ["Freizeit"] = null },
+            createMissingCategories = false,
+            runFullWorthCategorization = false,
+            candidateIds = (Guid[]?)null
+        });
+        using var response = await client.SendAsync(commit);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var imported = await db.Transactions.AsNoTracking()
+                .Where(t => t.AccountId == account).OrderBy(t => t.BookingDate).ToListAsync();
+            Assert.Equal(2, imported.Count);
+            Assert.Equal(leisure, imported[0].CategoryId);
+            Assert.Null(imported[1].CategoryId);
+            // Nothing new was invented: createMissingCategories was off and both names already existed.
+            Assert.Equal(2, await db.Categories.AsNoTracking()
+                .CountAsync(c => c.FullWorthSpaceId == FullWorthSpaceDefaults.LegacyId && !c.IsSystem));
+        });
     }
 
     private static async Task<JsonElement> Preview(HttpClient client, Guid owner, Guid jobId, Guid account)
