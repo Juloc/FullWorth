@@ -39,7 +39,11 @@
      instead of stretching cards and tables across the whole width; centered inside the shell column. */
   --content-max:1520px;
   /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
-  --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
+  /* These are the values the app has actually been rendering. They lived in design-depth.css, which
+     re-declared the whole light palette under its own --fw-* names and overrode this block - so every
+     value here was dead and tokens.css lied about the palette. Moved here unchanged (same pixels), and
+     design-depth.css now only owns depth and motion, which is what its header always claimed. */
+  --bg:#f5f6f7;--surface:#ffffff;--surface-2:#f7f8f9;--surface-3:#eceff2;--text:#101114;--muted:#686d75;--line:#dfe3e8;
   /* --border was used 67 times across the frontend but never defined here. The 25 uses without a
      fallback resolved to currentColor (a dark border on light surfaces), the 42 with one each used
      whatever hex its author wrote, so the same divider had three appearances. Alias, not a new colour. */

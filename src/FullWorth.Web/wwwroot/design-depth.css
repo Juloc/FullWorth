@@ -2,27 +2,20 @@
    This file intentionally sits above app.css: app.css owns structure and component contracts;
    this layer owns visual depth, motion and richer category emphasis without changing behavior. */
 
+/* The colour palette used to live here under --fw-page/-card/-card-soft/-line/-text/-muted, and the
+   block below re-declared --bg/--surface/--text/--muted/--line from it. That made this file the real
+   palette and tokens.css a decoration: its light values were never rendered. The colours moved to
+   tokens.css unchanged; --fw-card-soft went with nothing because it was never used at all.
+   What stays here is depth and motion - shadows and the easing curve - which is this layer's job. */
 :root{
-  --fw-page:#f5f6f7;
-  --fw-card:#ffffff;
-  --fw-card-soft:#fbfbfc;
-  --fw-line:#dfe3e8;
-  --fw-text:#101114;
-  --fw-muted:#686d75;
   --fw-shadow-card:0 1px 2px rgba(16,24,40,.04),0 6px 18px rgba(16,24,40,.045),0 22px 52px rgba(16,24,40,.035);
   --fw-shadow-hover:0 2px 5px rgba(16,24,40,.05),0 12px 28px rgba(16,24,40,.075),0 28px 64px rgba(16,24,40,.06);
   --fw-shadow-control:0 1px 2px rgba(16,24,40,.035),0 4px 12px rgba(16,24,40,.035);
   --fw-ease:cubic-bezier(.2,.7,.2,1);
 }
 
+/* Depth only. The palette is in tokens.css. */
 html[data-theme="light"]{
-  --bg:var(--fw-page);
-  --surface:var(--fw-card);
-  --surface-2:#f7f8f9;
-  --surface-3:#eceff2;
-  --text:var(--fw-text);
-  --muted:var(--fw-muted);
-  --line:var(--fw-line);
   --shadow:var(--fw-shadow-card);
 }
 
