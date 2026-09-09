@@ -29,18 +29,23 @@ jobs:
         run: dotnet publish src/FullWorth.Compensation.Wasm/FullWorth.Compensation.Wasm.csproj -c Release -o publish
       # The landing page needs main.js, dotnet.js and the _framework payload. If any of those is
       # missing the bundle is useless, so fail here rather than shipping a broken folder.
+      # List before asserting: a failing assertion on an unknown layout tells you nothing, and the
+      # published layout for a browser-wasm console project is not the same as Blazor's.
+      - name: Show what was published
+        run: find publish -maxdepth 3 -type f | sort | head -60
       - name: Check the bundle is complete
         run: |
           set -eu
           root=publish/wwwroot
-          test -f "$root/main.js" || { echo "main.js missing"; exit 1; }
-          test -f "$root/_framework/dotnet.js" || { echo "_framework/dotnet.js missing"; exit 1; }
+          test -d "$root" || root=publish
+          test -f "$root/main.js" || { echo "main.js missing under $root"; exit 1; }
+          test -f "$root/_framework/dotnet.js" || { echo "_framework/dotnet.js missing under $root"; exit 1; }
           test -n "$(find "$root/_framework" -name 'FullWorth.Compensation.Core*' -print -quit)" \
             || { echo "the calculator assembly is not in the bundle"; exit 1; }
+          echo "bundle root: $root"
           echo "bundle size: $(du -sh "$root" | cut -f1)"
-          find "$root" -maxdepth 2 -type f | sort | head -40
       - uses: actions/upload-artifact@v4
         with:
           name: compensation-wasm
-          path: publish/wwwroot
+          path: publish
           if-no-files-found: error
