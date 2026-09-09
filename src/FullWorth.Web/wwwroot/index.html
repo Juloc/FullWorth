@@ -73,8 +73,11 @@
       <div class="topbar-actions">
         <button id="global-search" class="icon-button" type="button" data-i18n-title="search.open" title="Suche öffnen" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
         <button id="privacy-toggle" class="icon-button" type="button" aria-pressed="false" data-i18n-title="privacy.toggle" title="Privatmodus umschalten" aria-label="Privacy"><svg class="pv-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><svg class="pv-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A9.9 9.9 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a9.9 9.9 0 0 0 3.4-.6"/></svg></button>
-        <button id="notif-indicator" class="icon-button" type="button" data-view-jump="notifications" data-i18n-title="nav.notifications" title="Benachrichtigungen" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button>
-        <button id="refresh" class="icon-button" type="button" data-i18n-title="common.refresh" title="Aktualisieren" aria-label="Refresh">↻</button>
+        <!-- The bell used to sit here. It carried no unread state and only jumped to a view the
+             sidebar and the bottom nav already offer, so it was a fixed button that never told you
+             anything. Refresh and the privacy toggle moved into the overflow menu below: the topbar
+             shows what is actionable now or what is currently switched ON, the rest is one tap away. -->
+        <button id="topbar-more" class="icon-button" type="button" data-i18n-title="nav.more" title="Mehr" aria-label="More"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
         <button id="primary-action" class="primary-action" type="button">Dashboard bearbeiten</button>
       </div>
     </header>

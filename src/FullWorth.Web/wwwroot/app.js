@@ -134,7 +134,7 @@ function bind(){
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
   $$('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewJump)));
-  $('#refresh').addEventListener('click',loadCurrent);
+  $('#topbar-more').addEventListener('click',openTopbarMenu);
   bindTransactions(ctx);
   bindAccounts(ctx);
   bindSettings(ctx);
@@ -157,7 +157,27 @@ function bind(){
   // Desktop keyboard shortcut: "/" opens global search unless typing in a field (§19).
   document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
 }
-function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());$('#privacy-default').checked=privacyDefault()}
+function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());
+  // Only in the topbar while it is ON. A toggle that is off carries no information, and the whole
+  // point of the overflow menu is that the bar shows state, not a fixed row of buttons.
+  b.hidden=!isPrivate();
+  $('#privacy-default').checked=privacyDefault()}
+
+// The topbar's overflow menu. Same sheet the bottom-nav "more" uses, so there is one menu pattern in
+// the app rather than a second popover style.
+function openTopbarMenu(){
+  const entries=[
+    ['privacy',get('privacy.toggle'),'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',()=>togglePrivacy()],
+    ['refresh',get('common.refresh'),'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>',()=>loadCurrent()]
+  ];
+  const items=entries.map(([key,label,icon])=>`<button type="button" data-menu="${key}">${icon}<span>${esc(label)}</span></button>`).join('');
+  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}</div></form>`,{mobileMode:'sheet'});
+  dlg.classList.add('more-sheet-dialog');
+  for(const [key,,,run] of entries){
+    dlg.querySelector(`[data-menu="${key}"]`)?.addEventListener('click',()=>{dlg.close();run()});
+  }
+  dlg.showModal();
+}
 function toggleSidebar(){
   const collapsed=!document.body.classList.contains('nav-collapsed');
   document.body.classList.toggle('nav-collapsed',collapsed);
