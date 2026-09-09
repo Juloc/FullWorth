@@ -70,6 +70,14 @@ public static class ImportCenterPageEndpoints
           <h3 id="tx-target-title">Konten zuordnen</h3>
           <p class="row-sub" id="tx-target-hint"></p>
           <div id="tx-account-mapping" class="rows"></div>
+          <h3 id="tx-rows-title">Buchungen prüfen</h3>
+          <p class="row-sub" id="tx-rows-hint"></p>
+          <div id="tx-errors" class="rows ic-errors" hidden></div>
+          <div class="import-option ic-rows-toolbar">
+            <label class="check"><input id="tx-select-all" type="checkbox" checked><span id="tx-select-all-label">Alle auswählen</span></label>
+            <span class="row-sub" id="tx-selected-count"></span>
+          </div>
+          <div id="tx-candidates" class="rows ic-candidates"></div>
           <div class="import-options">
             <label class="check"><input id="tx-create-categories" type="checkbox" checked><span id="tx-create-categories-label">Kategorien aus Datei übernehmen</span></label>
             <label class="check"><input id="tx-run-rules" type="checkbox" checked><span id="tx-run-rules-label">FullWorth-Regeln für nicht kategorisierte Buchungen anwenden</span></label>
