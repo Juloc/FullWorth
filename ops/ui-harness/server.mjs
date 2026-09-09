@@ -74,15 +74,6 @@ createServer(async (req, res) => {
     }
     // secure-fetch.js requires a { token } payload before any write, so the harness must answer this
     // like the real host does or every POST fails before it reaches a fixture.
-    // Log write bodies so a commit payload can be inspected. secure-fetch.js captures nativeFetch at
-    // module load, so a page-side fetch override never sees these requests.
-    if (req.method !== 'GET' && /\/commit/.test(path)) {
-      let raw = '';
-      for await (const chunk of req) raw += chunk;
-      console.log(`COMMIT ${path} ${raw.slice(0, 600)}`);
-      res.writeHead(200, { 'content-type': 'application/json' });
-      return res.end(JSON.stringify({ imported: 3, duplicates: 0, total: 3 }));
-    }
     if (path === '/auth/antiforgery') {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ token: 'harness-token', headerName: 'X-CSRF-TOKEN' }));
@@ -93,6 +84,17 @@ createServer(async (req, res) => {
     // Import fixtures, so the confirmation step can be walked end to end without a backend. One row is
     // deliberately invalid: the point of the review is that a bad row is shown WITH its reason and
     // cannot be selected.
+    // Log every write body BEFORE anything can answer it. secure-fetch.js captures nativeFetch at
+    // module load, so a page-side fetch override never sees these requests - the server log is the only
+    // place the payload a page really sends can be read. This has to sit above the fixture map: put it
+    // below and every logged path is exactly the one a fixture already returned, i.e. none of them.
+    if (req.method !== 'GET' && req.method !== 'HEAD'
+      && (path.startsWith('/bff/') || path.startsWith('/api/') || path.startsWith('/auth/'))) {
+      let raw = '';
+      for await (const chunk of req) raw += chunk;
+      console.log(`${req.method} ${path} ${raw.slice(0, 900)}`);
+    }
+
     const JOB = '22222222-2222-2222-2222-222222222222';
     const IMPORT = {
       'fullworth-spaces': [{ id: '11111111-1111-1111-1111-111111111111', name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
@@ -122,6 +124,21 @@ createServer(async (req, res) => {
       ],
       // Must stay ABOVE 'import-jobs': the rollback path contains that substring too.
       'rollback': { jobId: JOB, removed: 3, kept: 1 },
+      'commit': { imported: 3, duplicates: 0, total: 3 },
+      // Enough of a CompensationCalculationResult for the Gehalt page to render. Deliberately a
+      // PARTIAL year (four months) - that is the case whose note is easy to forget.
+      'compensation/calculate': {
+        name: 'Aktuelles Gehalt', monthsEmployedInYear: 4, salaryPaymentsInYear: 4,
+        contractualGrossAnnual: 60000, bonusAnnual: 0, cashGrossAnnual: 20000,
+        estimatedCashNetAnnual: 12800, estimatedCashNetMonthly: 3200,
+        estimatedAverageCashNetMonthly: 3200, estimatedNetRatioPercent: 64,
+        employerTotalCostAnnual: 23900, fullWorthCompensationValueAnnual: 13100,
+        marginalNetFromNext100Gross: 51.4, effectiveNetValuePerWorkingHour: 18.46,
+        taxes: { estimatedIncomeTaxAnnual: 2900, estimatedSolidaritySurchargeAnnual: 0, estimatedChurchTaxAnnual: 0 },
+        socialInsurance: { pensionAnnual: 1860, unemploymentAnnual: 260, healthAnnual: 1580, careAnnual: 600 },
+        benefits: [], companyCar: null, occupationalPension: null,
+        assumptions: ['Harness-Fixture, keine echte Berechnung.']
+      },
       'import-jobs': [
         { id: JOB, fileName: 'umsaetze.csv', adapterKey: 'mapped_csv', status: 'completed', sourceRowCount: 5, readyCount: 4, duplicateCount: 2, importedCount: 3, errorCount: 1, createdAt: '2026-09-09T08:12:00Z', completedAt: '2026-09-09T08:12:30Z', rolledBackAt: null, rollbackAvailable: true },
         { id: '33333333-3333-3333-3333-333333333333', fileName: 'alter-export.csv', adapterKey: 'mapped_csv', status: 'rolled_back', sourceRowCount: 2, readyCount: 2, duplicateCount: 0, importedCount: 2, errorCount: 0, createdAt: '2026-09-01T10:00:00Z', completedAt: '2026-09-01T10:00:20Z', rolledBackAt: '2026-09-02T10:00:00Z', rollbackAvailable: false }

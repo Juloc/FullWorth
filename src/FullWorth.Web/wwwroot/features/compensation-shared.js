@@ -347,6 +347,10 @@ export function readProfile() {
     age: birthDate ? derivedAge() : manualAge,
     taxYear: selectedTaxYear(),
     birthDate,
+    // Beschäftigungszeitraum. The calculator has handled a partial year since it existed, but nothing
+    // could enter one: a mid-year job change was silently calculated as a full twelve months.
+    employmentStart: val('employment-start') || null,
+    employmentEnd: val('employment-end') || null,
     childlessCareSurcharge: checked('childless-surcharge'),
     pensionInsuranceEnabled: checked('pension-insurance'),
     unemploymentInsuranceEnabled: checked('unemployment-insurance'),
@@ -398,6 +402,8 @@ export function fillProfile(profile) {
   setVal('children', p.childrenUnder25 ?? 0);
   setVal('tax-year', p.taxYear ?? '');
   setVal('birth-date', p.birthDate ? String(p.birthDate).slice(0, 10) : '');
+  setVal('employment-start', p.employmentStart ? String(p.employmentStart).slice(0, 10) : '');
+  setVal('employment-end', p.employmentEnd ? String(p.employmentEnd).slice(0, 10) : '');
   setVal('employee-age', p.age ?? '');
   setChecked('childless-surcharge', p.childlessCareSurcharge !== false);
   setChecked('pension-insurance', p.pensionInsuranceEnabled !== false);

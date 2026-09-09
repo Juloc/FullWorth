@@ -60,3 +60,6 @@
 @media(max-width:767px){
   .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 }
+
+/* A partial employment year is stated in the hero, not left to be inferred from smaller numbers. */
+.comp-partial-year{color:var(--warning)}

@@ -14,6 +14,31 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         _client = factory.CreateClient();
     }
 
+    // The calculator has always handled a partial year; for a long time nothing could enter one, so a
+    // mid-year job change was silently calculated as twelve months. Three parts have to stay together:
+    // the fields, the mapping in the shared profile reader, and the note that explains the smaller
+    // annual figures - the mapping alone would produce correct numbers with no visible reason.
+    [Fact]
+    public async Task CompensationPage_CanEnterAPartialEmploymentYearAndSaysWhenItDoes()
+    {
+        var html = await GetAsync("/compensation.html");
+        var shared = await GetAsync("/features/compensation-shared.js");
+        var baseJs = await GetAsync("/features/compensation.js");
+        var css = await GetAsync("/compensation.css");
+
+        Assert.Contains("id=\"employment-start\"", html);
+        Assert.Contains("id=\"employment-end\"", html);
+        Assert.Contains("employmentStart: val('employment-start')", shared);
+        Assert.Contains("employmentEnd: val('employment-end')", shared);
+        Assert.Contains("setVal('employment-start'", shared);
+        Assert.Contains("setVal('employment-end'", shared);
+        Assert.Contains("monthsEmployedInYear", baseJs);
+        Assert.Contains("comp-partial-year", baseJs);
+        // The rule has to live in the sheet the page actually loads - compensation.html loads
+        // /compensation.css, not styles/features/compensation.css.
+        Assert.Contains(".comp-partial-year", css);
+    }
+
     [Fact]
     public async Task CompensationPage_LoadsAllFeatureModules()
     {

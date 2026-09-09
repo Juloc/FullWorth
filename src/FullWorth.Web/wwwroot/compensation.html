@@ -113,6 +113,8 @@
                 <label>Kinderfreibetrag laut ELStAM<input id="child-allowance-units" type="number" min="0" max="10" step="0.5" placeholder="automatisch"><small class="field-help">Leer lassen = aus Kinderzahl und Steuerklasse ableiten.</small></label>
                 <label>Geburtsdatum<input id="birth-date" type="date"><small class="field-help">Daraus wird das Alter im gewählten Steuerjahr berechnet – wichtig für den Pflegeversicherungs-Zuschlag und historische Jahre.</small></label>
                 <label>Alter<input id="employee-age" type="number" min="0" max="120" step="1" placeholder="optional"><small id="employee-age-help" class="field-help">Relevant für den Pflegeversicherungs-Zuschlag. Mit Geburtsdatum wird das Alter automatisch berechnet.</small></label>
+                <label>Beschäftigung von<input id="employment-start" type="date"><small class="field-help">Nur nötig, wenn du nicht das ganze Steuerjahr beschäftigt warst – zum Beispiel bei einem Jobwechsel. Leer = ganzes Jahr.</small></label>
+                <label>Beschäftigung bis<input id="employment-end" type="date"><small class="field-help">Leer = weiterhin beschäftigt. Teilmonate zählen nach Payroll-Konvention mit 30 SV-Tagen.</small></label>
                 <label>Wochenstunden<input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="40"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
                 <label>Urlaubstage<input id="vacation-days" type="number" min="0" max="60" step="1" value="30"><small class="field-help">Für den Wert pro Arbeitsstunde.</small></label>
               </div>

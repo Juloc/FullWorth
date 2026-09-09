@@ -7,6 +7,9 @@ import {
   addOneOffFromPreset as addOneOff, fillOneOffPresets, syncAgeFields
 } from './compensation-shared.js';
 const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
+// Months employed can be fractional - a month entered mid-month counts 15/30 - so 4 and 4,5 both have
+// to read naturally.
+const monthsFormat=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2});
 
 boot();
 
@@ -136,7 +139,13 @@ function renderResult(result){
   $('#result-net-label').textContent='Netto normaler Monat';
   $('#result-net-month').textContent=money2.format(regularMonth);
   const avgNote=showAverage?` · Ø ${esc(money2.format(avg))}/Monat`:'';
-  $('#result-net-year').innerHTML=`<span class="comp-hero-sub">${esc(money.format(result.estimatedCashNetAnnual))} Jahresnetto${avgNote}</span><span class="fw-trend positive comp-hero-badge">${esc(pct(result.estimatedNetRatioPercent))} vom Cash-Brutto</span>`;
+  // A partial year has to say so. Without this the annual figures simply come out lower and look like
+  // a calculation error instead of "you were employed for four months".
+  const months=Number(result.monthsEmployedInYear);
+  const partialNote=Number.isFinite(months)&&months<11.999
+    ?`<span class="comp-hero-sub comp-partial-year">Teiljahr: ${esc(monthsFormat.format(months))} von 12 Monaten beschäftigt</span>`
+    :'';
+  $('#result-net-year').innerHTML=`<span class="comp-hero-sub">${esc(money.format(result.estimatedCashNetAnnual))} Jahresnetto${avgNote}</span><span class="fw-trend positive comp-hero-badge">${esc(pct(result.estimatedNetRatioPercent))} vom Cash-Brutto</span>${partialNote}`;
   $('#result-employer').textContent=money.format(result.employerTotalCostAnnual);
   $('#result-fullworth').textContent=money.format(result.fullWorthCompensationValueAnnual);
   $('#result-marginal').textContent=money2.format(result.marginalNetFromNext100Gross);
