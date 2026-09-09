@@ -291,9 +291,14 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
     }
 
     /// <summary>
-    /// Records a new balance snapshot for a manual account. Only account owners may set it, and only
-    /// on connection-less provider "manual" accounts — any account tied to a bank connection gets its
+    /// Records a new balance snapshot for an account the owner maintains by hand. Only account owners
+    /// may set it, and only on accounts with no bank connection — anything tied to a connection gets its
     /// balances from that connection. Ordering mirrors PATCH/DELETE: not-found → forbidden → conflict.
+    ///
+    /// The gate is the CONNECTION, not the provider label. It used to be Provider == "manual", which
+    /// locked out the one other connection-less kind: a finanzguru-import account. That account could
+    /// then only ever show a value by linking it to a different, live account after the import - and the
+    /// link was undone by the next sync. An imported account must be able to carry its own balance.
     /// </summary>
     public async Task<ManualBalanceResult> SetManualBalanceAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, ManualBalanceRequest request, CancellationToken ct)
     {
@@ -309,7 +314,8 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         var isOwner = await db.Set<AccountOwner>().AsNoTracking().AnyAsync(x =>
             x.AccountId == accountId && x.UserId == userId && x.OwnershipType == AccountOwnershipTypes.Owner, ct);
         if (!isOwner) return ManualBalanceResult.Forbidden;
-        if (account.Provider != "manual" || account.BankConnectionId is not null) return ManualBalanceResult.NotManual;
+        if (account.BankConnectionId is not null) return ManualBalanceResult.NotManual;
+        if (account.Provider is not ("manual" or FinanzguruImportProvider)) return ManualBalanceResult.NotManual;
 
         // A snapshot in a different currency would silently corrupt net worth: the aggregation sums
         // the latest snapshot per account bucketed by the ACCOUNT's currency.
@@ -325,9 +331,35 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             ReferenceDate = DateOnly.FromDateTime(DateTime.UtcNow),
             CapturedAt = DateTimeOffset.UtcNow
         });
+
+        // An imported history account is created archived and excluded, because the export file carries
+        // no balance. Anchoring it with one makes it a real account: leaving it hidden would show the
+        // history as a flat line and keep the money out of net worth, which is the whole complaint.
+        // Its bookings also have to count towards the balance history, exactly as confirming an
+        // attached history does for a live account.
+        if (account.Provider == FinanzguruImportProvider)
+        {
+            var imported = await db.Accounts.SingleAsync(x => x.Id == accountId, ct);
+            imported.IsActive = true;
+            imported.IncludeInNetWorth = true;
+            imported.UpdatedAt = DateTimeOffset.UtcNow;
+
+            var bookings = await db.Transactions
+                .Where(transaction => transaction.AccountId == accountId && !transaction.UseForBalanceHistory)
+                .ToListAsync(ct);
+            foreach (var booking in bookings)
+            {
+                booking.UseForBalanceHistory = true;
+                booking.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         return ManualBalanceResult.Ok;
     }
+
+    /// <summary>The provider of a Finanzguru history import; see FinanzguruImportService.</summary>
+    private const string FinanzguruImportProvider = "finanzguru-import";
 
     // --- Account groups (§8.1). Group CRUD is space-member gated (like account create); assignment is
     // account-owner gated (like the manual-balance write). ---

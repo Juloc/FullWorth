@@ -80,7 +80,7 @@ a loan reduces it, a portfolio increases it.
 **Tests.** Integration test with an account, a loan and a portfolio asserting equality across the two
 surfaces.
 
-### P0-4 An imported account cannot show its own value — `OPEN`
+### P0-4 An imported account cannot show its own value — `DONE` (see below)
 
 **Cause.** Three things compound. `Modules/Import/FinanzguruImportModule.cs:269` never writes a
 `BalanceSnapshot` and creates the account with `IsActive=false` and `IncludeInNetWorth=false`. No API
@@ -88,23 +88,25 @@ can then give that account a balance — the one that could refuses on a `Provid
 `Modules/Import/FinanzguruAccountReconciliationService.cs:211` re-applies both flags on *every* bank
 sync in the space and on every re-import, wiping a user override.
 
-**Impact.** This is the reported symptom. An imported account renders flat or empty and can only ever
-show a value by manually linking it to a different, live account after the import — and that link is
-undone again by the next sync. `tests/.../Import/FinanzguruImportTests.cs:113` asserts this as intended
-behaviour, so it is locked in.
+**Impact.** This was the reported symptom. An imported account rendered flat or empty and could only
+ever show a value by manually linking it to a different, live account — and the link was undone by the
+next sync.
 
-**Target.** An import that carries a balance writes it as a balance snapshot owned by the imported
-account, and the account is visible and counted by default. A link to a live account is an *optional*
-enrichment, never a precondition for the account's own value. Reconciliation may only change flags the
-user has not set explicitly.
+**Fix.** The Finanzguru export carries no balance column, so the import genuinely cannot know the
+balance and still creates the account archived. What was wrong is that the owner could not then give it
+one. `SetManualBalanceAsync` gated on `Provider == "manual"`, and the endpoint maps that refusal to a
+409, so the one connection-less account kind that is not literally called "manual" was locked out. The
+gate is now the **bank connection** — which is what its own comment always said it was about — and
+anchoring an import account with a balance activates it, includes it in net worth and marks its bookings
+as balance-history-relevant, exactly as confirming an attached history does for a live account.
 
-**Acceptance.** Import a file with a closing balance and no matching live account: the account appears
-in the account list with that balance, is included in net worth, and a subsequent sync of an unrelated
-connection does not change either.
+Reconciliation and re-import now only re-archive an import account that has **no balance of its own**.
+A bare history container still stays out of net worth; an anchored one survives every sync.
 
-**Tests.** Replace the test that asserts the old behaviour. Add: import with balance and no link →
-value visible and counted; user sets `IncludeInNetWorth=true` → survives a sync; re-import → no flag
-reset.
+**Verified.** 288 account/portfolio/net-worth/analytics/import tests, including three new ones: anchor
+an imported account with no link → visible, counted, bookings count towards history; the same account
+re-imported → still active; a reconciliation pass → still active. The existing test that asserts the
+archived state at import time still holds, because that state is still correct before anchoring.
 
 ### P0-5 `docker compose down -v` could delete the encryption key — `DONE` (docker 87000ff)
 

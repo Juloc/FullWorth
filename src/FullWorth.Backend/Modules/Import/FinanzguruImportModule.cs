@@ -246,8 +246,15 @@ public sealed class FinanzguruImportService(
             {
                 if (!importedAccount.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
                     throw new FinanzguruImportConflictException("A matching Finanzguru import account already exists in this FullWorth Space but is owned by another user.");
-                importedAccount.IsActive = false;
-                importedAccount.IncludeInNetWorth = false;
+                // Only a bare history container is re-archived. Once the owner has given this account a
+                // balance it is a real account, and a re-import must not take it back out of net worth.
+                var anchored = await db.BalanceSnapshots.AsNoTracking()
+                    .AnyAsync(balance => balance.AccountId == importedAccount.Id, ct);
+                if (!anchored)
+                {
+                    importedAccount.IsActive = false;
+                    importedAccount.IncludeInNetWorth = false;
+                }
                 importedAccount.UpdatedAt = now;
                 bySourceKey[sourceKey] = new(importedAccount, false);
                 matched++;

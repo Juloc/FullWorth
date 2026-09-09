@@ -12,6 +12,7 @@ using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Backend.Tests.Import;
 
@@ -124,6 +125,121 @@ public sealed class FinanzguruImportTests
 
         using var response = await SendImportAsync(client, scenario.Space, scenario.Outsider, workbook);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // The reported symptom: an imported account rendered flat because it had no balance of its own, and
+    // the only way to give it one was to link it to a DIFFERENT, live account - a link the next sync
+    // undid. An imported account must be able to carry its own balance and to keep it.
+    [Fact]
+    public async Task ImportedAccountCanBeAnchoredWithItsOwnBalance()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, addLiveAccount: false);
+        using var client = factory.CreateClient();
+
+        using var import = await SendImportAsync(client, scenario.Space, scenario.User,
+            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "anchor-1")));
+        Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
+
+        using var response = await SetBalanceAsync(client, scenario.Space, scenario.User, importedId, 1234.56m);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var account = await db.Accounts.AsNoTracking().SingleAsync(item => item.Id == importedId);
+            // Visible and counted, without any link to another account.
+            Assert.True(account.IsActive);
+            Assert.True(account.IncludeInNetWorth);
+            Assert.Null(account.ImportLinkedAccountId);
+
+            var snapshot = await db.BalanceSnapshots.AsNoTracking().SingleAsync(x => x.AccountId == importedId);
+            Assert.Equal(1234.56m, snapshot.Amount);
+            Assert.Equal("EUR", snapshot.Currency);
+
+            // Its bookings now count towards the balance history, or the account shows a flat line.
+            Assert.True(await db.Transactions.AsNoTracking()
+                .Where(t => t.AccountId == importedId).AllAsync(t => t.UseForBalanceHistory));
+        });
+    }
+
+    [Fact]
+    public async Task AnchoredImportedAccountSurvivesAReImport()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, addLiveAccount: false);
+        using var client = factory.CreateClient();
+
+        using var first = await SendImportAsync(client, scenario.Space, scenario.User,
+            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "keep-1")));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await SetBalanceAsync(client, scenario.Space, scenario.User, importedId, 500m)).StatusCode);
+
+        // The same account again: it is matched rather than created, and must not be re-archived.
+        using var second = await SendImportAsync(client, scenario.Space, scenario.User,
+            CreateWorkbook(Row("29.08.2026", -5m, "Shop", "Test", "Lifestyle", "Shopping", "keep-2")));
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        await factory.SeedAsync(async db =>
+        {
+            var account = await db.Accounts.AsNoTracking().SingleAsync(item => item.Id == importedId);
+            Assert.True(account.IsActive);
+            Assert.True(account.IncludeInNetWorth);
+        });
+    }
+
+    // Reconciliation runs after EVERY sync of ANY connection in the space, so this is the path that
+    // used to wipe the decision again and again.
+    [Fact]
+    public async Task ReconciliationLeavesAnAnchoredImportedAccountAlone()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory, addLiveAccount: false);
+        using var client = factory.CreateClient();
+
+        using var import = await SendImportAsync(client, scenario.Space, scenario.User,
+            CreateWorkbook(Row("28.08.2026", -12.34m, "Shop", "Test", "Lifestyle", "Shopping", "recon-1")));
+        Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        var importedId = await ImportedAccountIdAsync(factory, scenario.Space);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await SetBalanceAsync(client, scenario.Space, scenario.User, importedId, 42m)).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var reconciliation = scope.ServiceProvider.GetRequiredService<FinanzguruAccountReconciliationService>();
+            await reconciliation.ReconcileAsync(scenario.Space, [], CancellationToken.None);
+        }
+
+        await factory.SeedAsync(async db =>
+        {
+            var account = await db.Accounts.AsNoTracking().SingleAsync(item => item.Id == importedId);
+            Assert.True(account.IsActive);
+            Assert.True(account.IncludeInNetWorth);
+        });
+    }
+
+    private static async Task<HttpResponseMessage> SetBalanceAsync(
+        HttpClient client, Guid space, Guid userId, Guid accountId, decimal amount)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put,
+            $"/api/accounts/{accountId:D}/balance?fullWorthSpaceId={space:D}");
+        request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
+        request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
+        request.Content = JsonContent.Create(new { amount, currency = "EUR" });
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<Guid> ImportedAccountIdAsync(BackendWebApplicationFactory factory, Guid space)
+    {
+        var id = Guid.Empty;
+        await factory.SeedAsync(async db =>
+        {
+            id = (await db.Accounts.AsNoTracking()
+                .SingleAsync(item => item.FullWorthSpaceId == space && item.Provider == "finanzguru-import")).Id;
+        });
+        return id;
     }
 
     private sealed record Scenario(Guid Space, Guid User, Guid Outsider, Guid Account);

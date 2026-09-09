@@ -204,13 +204,24 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var transactionsMoved = 0;
         var transactionsMerged = 0;
 
+        var anchoredImportIds = await db.BalanceSnapshots.AsNoTracking()
+            .Where(balance => importAccounts.Select(account => account.Id).Contains(balance.AccountId))
+            .Select(balance => balance.AccountId)
+            .Distinct()
+            .ToListAsync(ct);
+
         foreach (var importedAccount in importAccounts)
         {
-            // Import-only accounts represent history, never a current balance. Keep them archived even
-            // if no safe live match can be established yet.
-            importedAccount.IsActive = false;
-            importedAccount.IncludeInNetWorth = false;
-            importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
+            // An import account with no balance of its own is a bare history container, so it stays
+            // archived and out of net worth. One the owner has anchored with a balance is a real account
+            // and must survive: this used to run on EVERY sync of ANY connection in the space and on
+            // every re-import, so it silently undid that decision again and again.
+            if (!anchoredImportIds.Contains(importedAccount.Id))
+            {
+                importedAccount.IsActive = false;
+                importedAccount.IncludeInNetWorth = false;
+                importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
+            }
 
             if (importedAccount.ImportLinkedAccountId is null && string.IsNullOrWhiteSpace(importedAccount.IbanLast4)) continue;
             var importedOwners = importedAccount.Owners
