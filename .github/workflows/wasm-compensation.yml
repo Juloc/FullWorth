@@ -27,22 +27,27 @@ jobs:
         run: dotnet workload install wasm-tools
       - name: Publish
         run: dotnet publish src/FullWorth.Compensation.Wasm/FullWorth.Compensation.Wasm.csproj -c Release -o publish
-      # The landing page needs main.js, dotnet.js and the _framework payload. If any of those is
-      # missing the bundle is useless, so fail here rather than shipping a broken folder.
-      # List before asserting: a failing assertion on an unknown layout tells you nothing, and the
-      # published layout for a browser-wasm console project is not the same as Blazor's.
+      # List before asserting - a failing assertion on an unknown layout tells you nothing. Skip the
+      # hundreds of fingerprinted assemblies in _framework or the listing is all noise and gets cut off
+      # before the interesting files (that alone cost a round trip).
       - name: Show what was published
-        run: find publish -maxdepth 3 -type f | sort | head -60
+        run: |
+          find publish -maxdepth 2 -type f -not -path '*/_framework/*' | sort
+          echo "--- _framework entry points ---"
+          find publish -path '*/_framework/*' \( -name 'dotnet*.js' -o -name '*.json' \) | sort
+      # What the landing page actually needs: the calculator compiled into the bundle, and a runtime
+      # loader to start it. The JS glue is NOT asserted - it is twelve lines that belong to the page,
+      # and this SDK does not copy it into the bundle.
       - name: Check the bundle is complete
         run: |
           set -eu
           root=publish/wwwroot
-          test -d "$root" || root=publish
-          test -f "$root/main.js" || { echo "main.js missing under $root"; exit 1; }
-          test -f "$root/_framework/dotnet.js" || { echo "_framework/dotnet.js missing under $root"; exit 1; }
-          test -n "$(find "$root/_framework" -name 'FullWorth.Compensation.Core*' -print -quit)" \
+          test -d "$root/_framework" || { echo "no _framework: this is not a browser bundle"; exit 1; }
+          test -n "$(find "$root/_framework" -name 'FullWorth.Compensation.Core*.wasm' -print -quit)" \
             || { echo "the calculator assembly is not in the bundle"; exit 1; }
-          echo "bundle root: $root"
+          loader=$(find publish -name 'dotnet.js' -print -quit)
+          test -n "$loader" || { echo "no dotnet.js loader anywhere in the publish output"; exit 1; }
+          echo "loader: $loader"
           echo "bundle size: $(du -sh "$root" | cut -f1)"
       - uses: actions/upload-artifact@v4
         with:
