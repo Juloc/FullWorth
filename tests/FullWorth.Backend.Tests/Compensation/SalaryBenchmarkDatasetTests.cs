@@ -530,18 +530,34 @@ public sealed class SalaryBenchmarkDatasetTests
     }
 
     [Fact]
-    public void MetadataCarriesTheDisclaimerAndTheVerificationStatus()
+    public void DisclaimerAndVerificationStatusReachEverySurfaceTheUiReads()
     {
-        // Both exist to keep the UI honest about what this data is. A field that is present in the JSON
-        // but missing from the DTO is dropped silently at deserialization and can never be shown - which
-        // is exactly what happened to VerificationStatus.
+        // Both exist to keep the UI honest about what this data is. A field present in the JSON but
+        // missing from the DTO is dropped silently at deserialization and can never be shown - which is
+        // exactly what happened to VerificationStatus. A missing or emptied field in the JSON fails here
+        // too, because both surfaces are asserted non-empty.
+        //
+        // Deliberately no assertion on the wording: pinning phrases turns a guard into a string check
+        // that breaks when the text is legitimately rewritten. What must hold is that the note exists,
+        // is identical everywhere, and reaches both surfaces the frontend actually reads.
         var metadata = SalaryBenchmarkDataset.Metadata();
+        var record = SalaryBenchmarkDataset.Lookup(
+            new SalaryBenchmarkQuery("softwareentwicklung", "DE", 2024, "3-5", null));
 
         Assert.False(string.IsNullOrWhiteSpace(metadata.Disclaimer));
+        Assert.False(string.IsNullOrWhiteSpace(record.Disclaimer));
+
         Assert.False(
             string.IsNullOrWhiteSpace(metadata.VerificationStatus),
-            "the dataset's verification status must reach the API, or the UI cannot state which anchors " +
-            "were actually checked against their sources");
-        Assert.Contains("nicht", metadata.VerificationStatus!, StringComparison.OrdinalIgnoreCase);
+            "the dataset's verification status must reach the metadata endpoint, or the UI cannot state " +
+            "which anchors were actually checked against their sources");
+        Assert.False(
+            string.IsNullOrWhiteSpace(record.VerificationStatus),
+            "a single lookup must carry the verification status too, like it already carries the " +
+            "disclaimer, so a caller does not need a second request to label the number honestly");
+
+        // One source of truth: the note may never differ between the two surfaces.
+        Assert.Equal(metadata.VerificationStatus, record.VerificationStatus);
+        Assert.Equal(metadata.Disclaimer, record.Disclaimer);
     }
 }

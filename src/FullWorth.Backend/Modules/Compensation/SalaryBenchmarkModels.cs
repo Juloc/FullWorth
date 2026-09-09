@@ -151,6 +151,9 @@ public sealed record SalaryBenchmarkRecord(
     IReadOnlyList<SalaryBenchmarkSource> Sources,
     string DataAsOf,
     string Disclaimer,
+    // Repeated per record on purpose: this DTO already carries Disclaimer, DataAsOf, Currency and
+    // Basis so a single lookup stands on its own without a second call for the metadata.
+    string? VerificationStatus,
     bool YearIsProjected,
     bool StateFallbackApplied,
     bool YearFallbackApplied,

@@ -45,3 +45,7 @@
   .bench-source-links{padding-left:0;list-style:none}
   .bench-source-links a{display:inline-flex;align-items:center;min-height:44px}
 }
+
+/* The verification note is a caveat, not help text: it gets the same warning accent as the
+   "Schätzwert" badge so it does not read as ordinary small print. */
+.bench-verification>p{border-left:2px solid var(--warning);padding-left:10px}

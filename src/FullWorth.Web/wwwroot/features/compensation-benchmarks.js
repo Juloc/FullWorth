@@ -187,6 +187,7 @@ function renderRecord(record, series) {
   <p class="bench-disclaimer">${esc(record.disclaimer)}</p>
   ${seriesMarkup(series)}
   ${methodMarkup()}
+  ${verificationMarkup(record)}
 </article>`;
 }
 
@@ -208,6 +209,18 @@ function methodMarkup() {
     <h3>Grenzen</h3>
     <ul class="bench-notes-list">${(method.limitations || []).map(limit => `<li>${esc(limit)}</li>`).join('')}</ul>
     <p class="bench-sources">Revision ${esc(method.revision)} · ${bstate.metadata.recordCount} Referenzwerte · Datensatz ${esc(bstate.metadata.datasetKey)}</p>
+  </details>`;
+}
+
+// The dataset states itself which anchor values were spot-checked against their sources and which are
+// only weakly evidenced. That text is printed verbatim: paraphrasing it would mean inventing a
+// confidence claim the data does not support. The record carries the note so a single lookup stands on
+// its own; the metadata copy is the fallback before the first lookup.
+function verificationMarkup(record) {
+  const note = record?.verificationStatus || bstate.metadata?.verificationStatus;
+  if (!note) return '';
+  return `<details class="bench-details bench-verification"><summary>Was an diesem Datensatz geprüft ist</summary>
+    <p class="bench-explain">${esc(note)}</p>
   </details>`;
 }
 

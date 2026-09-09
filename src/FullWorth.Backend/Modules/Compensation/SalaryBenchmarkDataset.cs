@@ -218,6 +218,7 @@ public static class SalaryBenchmarkDataset
             sources,
             data.DataAsOf,
             data.Disclaimer,
+            data.VerificationStatus,
             data.ProjectedYears.Contains(row.Year),
             stateFallback,
             yearFallback,
