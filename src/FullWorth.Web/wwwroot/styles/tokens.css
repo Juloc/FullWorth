@@ -40,6 +40,10 @@
   --content-max:1520px;
   /* neutral surfaces — white, separated by lines rather than fills/shadows (§4.3) */
   --bg:#ffffff;--surface:#ffffff;--surface-2:#f7f7f7;--surface-3:#ececec;--text:#0f0f0f;--muted:#606060;--line:#e5e5e5;
+  /* --border was used 67 times across the frontend but never defined here. The 25 uses without a
+     fallback resolved to currentColor (a dark border on light surfaces), the 42 with one each used
+     whatever hex its author wrote, so the same divider had three appearances. Alias, not a new colour. */
+  --border:var(--line);
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
   --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
   /* Category identity palette (§13): one strong base tone per super-category; deeper levels are

@@ -31,8 +31,31 @@ try {
   document.documentElement.dataset.theme = actualTheme;
   applyThemeChrome(actualTheme);
 
-  const visualTheme = localStorage.getItem('finance.visualTheme') || 'clean';
-  document.documentElement.dataset.visualTheme = ['clean', 'cute'].includes(visualTheme) ? visualTheme : 'clean';
+  // The two brand colours, applied before first paint for the same reason the theme is: setting them
+  // later means a visible flash of the default colour on every page load. Only well-formed hex is
+  // accepted, and an empty value removes nothing - the property is simply never set, which leaves
+  // tokens.css in charge. Contrast for the button label is derived here too, so a light primary does
+  // not briefly render white-on-white. Keep in sync with ui/appearance.js.
+  const hex = value => /^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? value.trim().toLowerCase() : '';
+  const primary = hex(localStorage.getItem('finance.color.primary'));
+  const secondary = hex(localStorage.getItem('finance.color.secondary'));
+  if (primary) {
+    const channel = index => {
+      const value = parseInt(primary.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    };
+    const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+    document.documentElement.style.setProperty('--brand-primary', primary);
+    document.documentElement.style.setProperty('--cta', primary);
+    document.documentElement.style.setProperty('--cta-text', luminance > 0.42 ? '#151719' : '#ffffff');
+  }
+  if (secondary) {
+    document.documentElement.style.setProperty('--brand-secondary', secondary);
+    document.documentElement.style.setProperty('--accent', secondary);
+    document.documentElement.style.setProperty('--accent-soft', `color-mix(in srgb, ${secondary} 12%, transparent)`);
+  }
+  document.documentElement.dataset.brandTint =
+    primary && localStorage.getItem('finance.color.tintLogo') === 'true' ? 'on' : 'off';
 
   const font = localStorage.getItem('finance.font') || 'default';
   const fonts = [

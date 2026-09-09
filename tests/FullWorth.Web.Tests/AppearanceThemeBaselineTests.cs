@@ -1,5 +1,12 @@
 namespace FullWorth.Web.Tests;
 
+/// <summary>
+/// The "cute" visual theme is gone. It was a second look layered over the whole app - topbar, sidebar,
+/// panels, progress bars, budget cards - so every new feature had to be checked twice and the design
+/// drifted in two directions at once. It is replaced by two user-chosen brand colours: same room for
+/// taste, one design to maintain. These tests pin the replacement and the fact that nothing branches
+/// on a visual theme any more.
+/// </summary>
 public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFactory>
 {
     private readonly HttpClient _client;
@@ -10,69 +17,101 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     }
 
     [Fact]
-    public async Task ThemeInit_AppliesVisualThemeBeforeAppBoot()
+    public async Task ThemeInit_AppliesTheBrandColoursBeforeAppBoot()
     {
         var init = await GetAsync("/theme-init.js");
+        // From disk: an unauthenticated request for /index.html gets the auth shell, not the app shell.
+        var head = File.ReadAllText(Path.Combine(WwwrootDir(), "index.html"));
 
-        Assert.Contains("finance.visualTheme", init);
-        Assert.Contains("dataset.visualTheme", init);
+        // Applied pre-paint for the same reason the light/dark theme is: doing it after boot means a
+        // visible flash of the default colour on every page load.
+        Assert.Contains("finance.color.primary", init);
+        Assert.Contains("finance.color.secondary", init);
+        Assert.Contains("--cta", init);
+        Assert.Contains("--accent", init);
+        // A light primary must not get white text on it, so contrast is derived here too.
+        Assert.Contains("0.2126", init);
         Assert.Contains("/ui/appearance.js", init);
-        Assert.False(init.Contains("mascot", StringComparison.OrdinalIgnoreCase));
-
-        // appearance.css is now a render-blocking <link> in the shell <head> (loaded before app.js),
-        // so the visual theme is painted on the first frame instead of being injected by theme-init.js
-        // after boot. Assert it is referenced in the head rather than appended at runtime.
-        var head = await File.ReadAllTextAsync(Path.Combine(WwwrootDir(), "index.html"));
-        head = head[..head.IndexOf("</head>", StringComparison.Ordinal)];
         Assert.Contains("/appearance.css", head);
     }
 
     [Fact]
-    public async Task CuteTheme_IsAnOverrideLayer_NotAParallelApp()
+    public async Task CuteThemeIsGoneEverywhere()
     {
         var css = await GetAsync("/appearance.css");
+        var appearance = await GetAsync("/ui/appearance.js");
+        var init = await GetAsync("/theme-init.js");
 
-        Assert.Contains("data-visual-theme=\"cute\"", css);
-        Assert.Contains("--radius-card", css);
-        Assert.Contains("--surface", css);
-        Assert.Contains("--shadow", css);
-        Assert.Contains("prefers-reduced-motion: reduce", css);
-        Assert.False(css.Contains("mascot", StringComparison.OrdinalIgnoreCase));
-        Assert.False(css.Contains("CuteCard", StringComparison.OrdinalIgnoreCase));
-        Assert.False(css.Contains("CleanCard", StringComparison.OrdinalIgnoreCase));
+        foreach (var source in new[] { css, appearance, init })
+        {
+            // Comments are prose about what was removed and have to be stripped, or the guard trips
+            // over its own explanation.
+            var code = System.Text.RegularExpressions.Regex.Replace(source, @"/\*.*?\*/", string.Empty,
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            code = System.Text.RegularExpressions.Regex.Replace(code, @"^\s*//.*$", string.Empty,
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            Assert.DoesNotContain("data-visual-theme", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("visualTheme", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("cute", code, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
-    public async Task CuteTheme_MockupPolish_IsScopedAndCleanBaseStaysCanonical()
+    public async Task AppearanceLayerOnlyDefinesProperties()
     {
-        var app = await GetAsync("/styles/tokens.css");
         var css = await GetAsync("/appearance.css");
 
-        Assert.Contains("--font-default:'Barlow Condensed'", app);
-        Assert.Contains("--radius-card:12px", app);
-
-        Assert.Contains("--radius-card: 22px", css);
-        Assert.Contains("--cute-pastel-lavender", css);
-        Assert.Contains("--cat-1: #8878cf", css);
-        Assert.Contains("font-family: var(--font-fredoka)", css);
-        Assert.Contains("html[data-theme=\"light\"][data-visual-theme=\"cute\"] .topbar", css);
-        Assert.Contains("html[data-visual-theme=\"cute\"] .progress.ontrack>span", css);
-        Assert.Contains("html[data-visual-theme=\"cute\"] .budget-card", css);
-        Assert.Contains("rx: 6px", css);
-        Assert.Contains("text-transform: none", css);
-        Assert.DoesNotContain("data-visual-theme=\"clean\"", css);
+        // appearance.css loads third in the chain (tokens -> reset -> appearance -> shell ->
+        // components -> app.css -> responsive), so it can never win a rule against app.css. If it ever
+        // starts declaring real rules again they will silently lose, exactly as the cute layer did in
+        // the places app.css was more specific.
+        Assert.Contains("--brand-primary", css);
+        Assert.Contains("--brand-secondary", css);
+        var declarations = System.Text.RegularExpressions.Regex.Replace(css, @"/\*.*?\*/", string.Empty,
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        foreach (var block in System.Text.RegularExpressions.Regex.Matches(declarations, @"\{([^}]*)\}")
+                     .Select(match => match.Groups[1].Value))
+        {
+            foreach (var property in block.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                         .Select(entry => entry.Trim()).Where(entry => entry.Length > 0))
+            {
+                Assert.StartsWith("--", property, StringComparison.Ordinal);
+            }
+        }
     }
 
     [Fact]
-    public async Task AppearanceSettings_KeepColorModeAndVisualStyleIndependent()
+    public async Task ColourPickerDrivesTheTokensTheAppAlreadyReads()
+    {
+        var appearance = await GetAsync("/ui/appearance.js");
+        var css = await GetAsync("/app.css");
+
+        // primary -> --cta (buttons), secondary -> --accent (links, focus rings, chart strokes).
+        // Writing anything else would give a picker that visibly does nothing.
+        Assert.Contains("set('--cta', appearance.primary)", appearance);
+        Assert.Contains("set('--accent', appearance.secondary)", appearance);
+        Assert.Contains("readableTextOn", appearance);
+        // Empty means "the token decides", which is not the same as writing the default value: it has
+        // to hand control back so light and dark keep their own values.
+        Assert.Contains("removeProperty", appearance);
+
+        Assert.Contains("BRAND_PRESETS", appearance);
+        Assert.Contains("finance.color.tintLogo", appearance);
+        // The mark is recoloured by swapping the source; a CSS mask would flatten its three bars.
+        Assert.Contains("tintBrandMark", appearance);
+        Assert.DoesNotContain("mask-image", css.Substring(css.IndexOf(".appearance-colors", StringComparison.Ordinal)));
+        Assert.Contains(".appearance-preset", css);
+    }
+
+    [Fact]
+    public async Task AppearanceSettings_KeepColorModeAndBrandColoursIndependent()
     {
         var app = await GetAsync("/app.js");
         var appearance = await GetAsync("/ui/appearance.js");
 
         Assert.Contains("finance.theme", app);
-        Assert.Contains("finance.visualTheme", appearance);
-        Assert.Contains("visualTheme", appearance);
-        Assert.DoesNotContain("finance.visualTheme", app);
+        Assert.Contains("finance.color.primary", appearance);
+        Assert.DoesNotContain("finance.color.primary", app);
         Assert.False(appearance.Contains("mascot", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -104,27 +143,24 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     }
 
     [Fact]
-    public void FeatureModules_NeverBranchOnVisualTheme()
+    public void NothingInTheFrontendBranchesOnAVisualTheme()
     {
-        var featuresDir = Path.Combine(WwwrootDir(), "features");
-        Assert.True(Directory.Exists(featuresDir), $"features directory not found: {featuresDir}");
-
-        string[] forbidden = ["visualTheme", "data-visual-theme"];
+        var root = WwwrootDir();
         var violations = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(featuresDir, "*.js"))
+        foreach (var file in Directory.EnumerateFiles(root, "*.js", SearchOption.AllDirectories)
+                     .Concat(Directory.EnumerateFiles(root, "*.css", SearchOption.AllDirectories)))
         {
             var source = File.ReadAllText(file);
-            foreach (var marker in forbidden)
+            foreach (var marker in new[] { "visualTheme", "data-visual-theme" })
             {
                 if (source.Contains(marker, StringComparison.Ordinal))
-                    violations.Add($"{Path.GetFileName(file)} references '{marker}'");
+                    violations.Add($"{Path.GetRelativePath(root, file)} references '{marker}'");
             }
         }
 
         Assert.True(
             violations.Count == 0,
-            "Feature modules must remain independent of the visual theme:\n"
-                + string.Join("\n", violations));
+            "The visual-theme switch is gone; nothing may branch on it again:\n" + string.Join("\n", violations));
     }
 
     private static string WwwrootDir()

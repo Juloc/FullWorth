@@ -178,3 +178,8 @@
   .contract-detail-v2,.contract-analysis-dialog{max-height:94vh;border-radius:18px 18px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
   .contract-analysis-dialog{border-radius:18px 18px 0 0}
 }
+/* Two colour fields side by side is ~170px each on a phone; the native colour swatch needs room. */
+@media(max-width:620px){
+  .appearance-color-fields{grid-template-columns:1fr}
+  .appearance-preset{min-height:44px}
+}

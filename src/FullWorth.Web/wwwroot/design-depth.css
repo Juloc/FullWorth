@@ -108,8 +108,12 @@ html[data-theme="light"] .icon-button:hover{
   box-shadow:0 2px 4px rgba(16,24,40,.05),0 7px 18px rgba(16,24,40,.055);
 }
 
+/* Derived from --cta, not a fixed grey: .primary-action is the app's most prominent button and this
+   rule outranks anything token-based, so with a hardcoded gradient the brand colour picker changed
+   every .btn-primary and left the topbar action dark. The two stops are shades of the chosen colour,
+   not a second palette entry. */
 html[data-theme="light"] .primary-action{
-  background:linear-gradient(180deg,#2d3036,#1e2024);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cta) 86%,white),var(--cta));
   box-shadow:0 2px 5px rgba(16,24,40,.12),0 8px 18px rgba(16,24,40,.09),inset 0 1px 0 rgba(255,255,255,.13);
 }
 

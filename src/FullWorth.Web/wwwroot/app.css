@@ -1216,3 +1216,18 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));max-height:92v
 .contract-analysis-bg-0{background:var(--cat-1)}.contract-analysis-bg-1{background:var(--cat-2)}.contract-analysis-bg-2{background:var(--cat-3)}.contract-analysis-bg-3{background:var(--cat-4)}
 .contract-analysis-bg-4{background:var(--cat-5)}.contract-analysis-bg-5{background:var(--cat-6)}.contract-analysis-bg-6{background:var(--cat-7)}.contract-analysis-bg-7{background:var(--cat-8)}
 .contract-analysis-category progress{grid-column:2/-1}
+
+/* Appearance: the two brand colours. Replaced the cute visual theme - one design, two chosen colours.
+   The preset swatches fall back to the live tokens, so the monochrome preset shows what is actually in
+   effect instead of an empty square. */
+.appearance-colors{display:grid;gap:var(--s3)}
+.appearance-color-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3)}
+.appearance-color-field{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.appearance-color-field input[type=color]{width:100%;height:38px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface);cursor:pointer}
+.appearance-presets{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.appearance-preset{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer;min-height:36px}
+.appearance-preset:hover{background:var(--surface-2)}
+.appearance-preset.active{border-color:var(--accent)}
+.appearance-preset-name{font-size:12px;white-space:nowrap}
+.appearance-swatch{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);background:var(--cta)}
+.appearance-swatch[data-preset-slot="--preset-b"]{background:var(--accent)}
