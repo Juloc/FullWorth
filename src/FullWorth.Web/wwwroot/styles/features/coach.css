@@ -4,6 +4,8 @@
 .coach-hero{display:flex;align-items:center;justify-content:space-between;gap:var(--s3)}
 .coach-identity{display:flex;align-items:center;gap:var(--s3);min-width:0}
 .coach-avatar{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:50%;background:var(--surface-2);font-weight:600;flex:0 0 auto}
+/* The mark is wider than tall, so inside a round avatar it is bounded by the circle's width, not its height. */
+.coach-avatar>.brand-logo{height:auto;width:26px}
 .coach-identity>div:last-child{display:grid;min-width:0}.coach-identity strong{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .coach-eyebrow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .coach-mode{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid var(--line);border-radius:var(--radius-pill);color:var(--muted);font-size:11px;white-space:nowrap}
@@ -85,7 +87,7 @@ button.coach-context-chip::after{content:"×";margin-left:5px;opacity:.65}
 .coach-dock-resizer:hover::after,.coach-dock-resizer.is-dragging::after{background:var(--k4)}
 body.coach-dock-resizing{cursor:col-resize;user-select:none}
 .coach-dock-header{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3);border-bottom:1px solid var(--line)}
-.coach-dock-title{display:flex;align-items:center;gap:var(--s2);min-width:0}.coach-dock-title>.brand-logo{width:28px;height:28px}
+.coach-dock-title{display:flex;align-items:center;gap:var(--s2);min-width:0}.coach-dock-title>.brand-logo{height:22px;width:auto}
 .coach-dock-title>div{display:grid;min-width:0}.coach-dock-title strong{font-size:15px}.coach-dock-title span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .coach-dock-actions{display:flex;align-items:center;gap:6px}/* Desktop only: on a phone the shared 44px touch floor must win. */
 @media(min-width:768px){.coach-dock-actions .icon-button{width:34px;height:34px}}

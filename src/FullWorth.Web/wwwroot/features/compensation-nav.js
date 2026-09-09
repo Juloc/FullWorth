@@ -39,7 +39,7 @@ render(document.querySelector('[data-app-bottom-nav]'), BOTTOM_ITEMS, false);
 function render(host, markup, withBrand) {
   if (!host) return;
   const brand = withBrand
-    ? '<div class="brand"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="26" height="26">'
+    ? '<div class="brand"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt="" width="45" height="24">'
       + '<span class="brand-name"><strong>FullWorth</strong><span class="brand-beta">Alpha</span></span></div>'
     : '';
   host.innerHTML = brand + (withBrand ? `<nav id="nav" aria-label="Sections">${markup}</nav>` : markup);
