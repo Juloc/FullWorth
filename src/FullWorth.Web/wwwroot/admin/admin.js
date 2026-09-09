@@ -1,4 +1,5 @@
 import { confirmMessage } from '../ui/confirm.js';
+import { createDialog } from '../ui/dialog.js';
 import { secureFetch } from '../security/secure-fetch.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
@@ -17,7 +18,7 @@ async function request(path,options){
 }
 
 function toast(text){
-  const el=$('#toast');el.textContent=text;el.classList.add('show');
+  const el=$('#admin-toast');el.textContent=text;el.classList.add('show');
   clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2500);
 }
 
@@ -31,10 +32,12 @@ async function loadOverview(){
   $('#metric-admins').textContent=o.admins;
 }
 
-function statusBadge(u){
-  if(u.deletionRequestedAt)return '<span class="badge danger">Löschung</span>';
-  if(u.isDisabled)return '<span class="badge warn">Gesperrt</span>';
-  return '<span class="badge">Aktiv</span>';
+// The shared .chip (app.css) with an admin tone, so the states follow the app's colours instead of a
+// second badge component that has to be kept in sync by hand.
+function statusChip(u){
+  if(u.deletionRequestedAt)return '<span class="chip admin-chip-danger">Löschung</span>';
+  if(u.isDisabled)return '<span class="chip admin-chip-warn">Gesperrt</span>';
+  return '<span class="chip">Aktiv</span>';
 }
 
 async function loadUsers(){
@@ -45,15 +48,15 @@ async function loadUsers(){
   state.total=page.total;
   const list=$('#users');
   if(!page.items.length){
-    list.innerHTML='<div class="user-row"><div>Keine User gefunden.</div></div>';
+    list.innerHTML='<div class="admin-user"><div class="row-sub">Keine User gefunden.</div></div>';
   }else{
     list.innerHTML=page.items.map(u=>`
-      <button class="user-row" type="button" data-user="${u.id}">
-        <div><div class="user-email">${esc(u.email)}</div><div class="sub">${esc(u.id)}</div></div>
-        <div>${u.isAdmin?'<span class="badge admin">Admin</span>':'User'}</div>
-        <div>${statusBadge(u)}</div>
-        <div><span class="badge">${u.activeSessionCount} Session${u.activeSessionCount===1?'':'s'}</span></div>
-        <div>›</div>
+      <button class="admin-user" type="button" data-user="${u.id}">
+        <div><div class="admin-user-email">${esc(u.email)}</div><div class="admin-sub">${esc(u.id)}</div></div>
+        <div>${u.isAdmin?'<span class="chip admin-chip-admin">Admin</span>':'<span class="row-sub">User</span>'}</div>
+        <div>${statusChip(u)}</div>
+        <div><span class="chip">${u.activeSessionCount} Session${u.activeSessionCount===1?'':'s'}</span></div>
+        <div aria-hidden="true">›</div>
       </button>`).join('');
     list.querySelectorAll('[data-user]').forEach(button=>button.addEventListener('click',()=>openUser(button.dataset.user)));
   }
@@ -68,11 +71,27 @@ async function refresh(){
   await Promise.all([loadOverview(),loadUsers()]);
 }
 
+let detailDialog=null;
+
 async function openUser(id){
   const detail=await request('/auth/admin/users/'+encodeURIComponent(id));
   state.detail=detail;
   const u=detail.user;
-  $('#detail-email').textContent=u.email;
+
+  // createDialog gives this page the app's dialog behaviour: the generated close button and the
+  // full-screen phone treatment. The page used to declare a static <dialog> and style it itself,
+  // which is exactly why it had neither. No mobileMode: 'sheet' is the OPT-OUT of the full-screen
+  // treatment (dialogs.css keys it on :not(.fw-dialog--sheet)) and a user detail is not a sheet.
+  if(detailDialog?.open)detailDialog.close();
+  detailDialog=createDialog(`
+    <div class="dialog-card">
+      <div class="panel-head"><div><span class="admin-eyebrow">User</span><h2>${esc(u.email)}</h2></div></div>
+      <div id="detail-meta" class="admin-detail-grid"></div>
+      <section><h3>Sessions</h3><div id="detail-sessions" class="admin-sessions"></div></section>
+      <section><h3>Aktionen</h3><div id="detail-actions" class="admin-actions"></div></section>
+      <p id="detail-error" class="admin-error" hidden></p>
+    </div>`,{closeLabel:'Schließen'});
+
   $('#detail-meta').innerHTML=`
     <div><span>Status</span><strong>${u.deletionRequestedAt?'Löschung vorgemerkt':u.isDisabled?'Gesperrt':'Aktiv'}</strong></div>
     <div><span>Admin</span><strong>${u.isAdmin?'Ja':'Nein'}</strong></div>
@@ -82,25 +101,24 @@ async function openUser(id){
     <div><span>Löschung geplant</span><strong>${dt(u.deletionScheduledFor)}</strong></div>`;
 
   $('#detail-sessions').innerHTML=detail.sessions.length
-    ? detail.sessions.map(s=>`<div class="session"><strong>${esc(s.deviceName)}</strong><div class="sub">Zuletzt ${dt(s.lastSeenAt)} · ${s.active?'aktiv':'beendet'}</div></div>`).join('')
-    : '<div class="sub">Keine Sessions.</div>';
+    ? detail.sessions.map(s=>`<div class="admin-session"><strong>${esc(s.deviceName)}</strong><div class="admin-sub">Zuletzt ${dt(s.lastSeenAt)} · ${s.active?'aktiv':'beendet'}</div></div>`).join('')
+    : '<div class="row-sub">Keine Sessions.</div>';
 
   const actions=[];
-  actions.push('<button type="button" data-action="revoke-sessions" class="secondary">Sessions beenden</button>');
+  actions.push('<button type="button" data-action="revoke-sessions" class="btn btn-secondary">Sessions beenden</button>');
   if(u.deletionRequestedAt){
-    actions.push('<button type="button" data-action="cancel-deletion" class="secondary">Löschung abbrechen</button>');
+    actions.push('<button type="button" data-action="cancel-deletion" class="btn btn-secondary">Löschung abbrechen</button>');
   }else if(u.isDisabled){
-    actions.push('<button type="button" data-action="enable">Entsperren</button>');
+    actions.push('<button type="button" data-action="enable" class="btn btn-primary">Entsperren</button>');
   }else{
-    actions.push('<button type="button" data-action="disable" class="secondary">Sperren</button>');
-    actions.push('<button type="button" data-action="schedule-deletion" class="danger">Löschung vormerken</button>');
+    actions.push('<button type="button" data-action="disable" class="btn btn-secondary">Sperren</button>');
+    actions.push('<button type="button" data-action="schedule-deletion" class="btn btn-danger">Löschung vormerken</button>');
   }
-  if(u.isAdmin)actions.push('<button type="button" data-action="revoke-admin" class="secondary">Adminrecht entziehen</button>');
-  else actions.push('<button type="button" data-action="grant-admin" class="secondary">Zum Admin machen</button>');
+  if(u.isAdmin)actions.push('<button type="button" data-action="revoke-admin" class="btn btn-secondary">Adminrecht entziehen</button>');
+  else actions.push('<button type="button" data-action="grant-admin" class="btn btn-secondary">Zum Admin machen</button>');
   $('#detail-actions').innerHTML=actions.join('');
   $('#detail-actions').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>runAction(b.dataset.action)));
-  $('#detail-error').hidden=true;
-  $('#user-dialog').showModal();
+  detailDialog.showModal();
 }
 
 async function confirmAdmin(message, confirmLabel='Bestätigen') {
@@ -125,6 +143,7 @@ async function runAction(action){
     await openUser(u.id);
   }catch(e){
     const target=$('#detail-error');
+    if(!target)return;
     target.textContent=e.message==='last_admin'
       ?'Der letzte aktive Admin kann nicht gesperrt, gelöscht oder herabgestuft werden.'
       :'Aktion fehlgeschlagen: '+e.message;
@@ -141,8 +160,6 @@ $('#status').addEventListener('change',e=>{state.status=e.target.value;state.off
 $('#refresh').addEventListener('click',()=>refresh().catch(console.error));
 $('#prev').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-state.limit);loadUsers().catch(console.error)});
 $('#next').addEventListener('click',()=>{state.offset+=state.limit;loadUsers().catch(console.error)});
-$('#close-detail').addEventListener('click',()=>$('#user-dialog').close());
-$('#user-dialog').addEventListener('click',e=>{if(e.target===$('#user-dialog'))$('#user-dialog').close()});
 
 refresh().catch(error=>{
   if(error.message!=='forbidden'){document.body.innerHTML='<main class="admin-shell"><h1>Admin konnte nicht geladen werden</h1></main>'}
