@@ -19,6 +19,12 @@
          If a new type crosses the JS boundary it must be added there. -->
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>full</TrimMode>
+    <!-- Trimming defaults this to true, which replaces framework exception messages with their resource
+         KEYS. Verified in the browser: a malformed profile came back as
+         "ExpectedStartOfPropertyNotFound, n Path:" and a bad employment period appended
+         "Arg_ParamName_Name, EmploymentEnd". Those strings are what a visitor on the landing page would
+         read, so the few KB of resources are worth it. -->
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
     <!-- Required by JSExportAttribute: the generated interop marshalling is unsafe code (SYSLIB1075).
          Scoped to this project - FullWorth.Compensation.Core stays safe. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

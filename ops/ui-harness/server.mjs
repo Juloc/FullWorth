@@ -22,7 +22,10 @@ const TYPES = {
   '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp',
-  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff', '.map': 'application/json'
+  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff', '.map': 'application/json',
+  // application/wasm is required for streaming instantiation; without it the .NET runtime falls back
+  // to a slower path and Chrome logs a warning, which reads like a bundle problem when it is not.
+  '.wasm': 'application/wasm', '.dat': 'application/octet-stream', '.blat': 'application/octet-stream'
 };
 
 // Injected before app.js so the fetch stub is installed before any module runs.
