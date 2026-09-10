@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v101';
+const VERSION = 'v102';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -16,6 +16,23 @@ const APP_SHELL = [
   '/security/secure-fetch.js',
   '/ui/money.js',
   '/ui/balance-meaning.js',
+  // The Gehalt page is its own HTML page rather than an SPA view, so the shell import graph above
+  // does not reach it. It is precached because the payroll engine is pure client-side maths and
+  // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
+  // one of them needs the server to do anything, so caching them would only fake availability.
+  '/compensation.html',
+  '/compensation-history.css',
+  '/compensation.css',
+  '/features/compensation-benchmarks.js',
+  '/features/compensation-extended.js',
+  '/features/compensation-history.js',
+  '/features/compensation-nav.js',
+  '/features/compensation-other-income.js',
+  '/features/compensation-shared.js',
+  '/features/compensation.js',
+  '/security/browser-fetch.js',
+  '/styles/features/compensation-benchmarks.css',
+  '/styles/features/compensation-other-income.css',
   '/ui/dashboard.js',
   '/ui/lock.js',
   '/ui/privacy.js',

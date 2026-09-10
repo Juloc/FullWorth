@@ -56,6 +56,29 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
             + string.Join(Environment.NewLine, missing));
     }
 
+    /// <summary>
+    /// Gehalt is its own HTML page rather than an SPA view, so the shell's import graph never reached it
+    /// — and it is the one standalone page that genuinely works with no network, because the German
+    /// payroll engine is pure client-side maths.
+    ///
+    /// Auth, admin, intelligence, passkeys and account deletion are deliberately NOT asserted here.
+    /// Every one of them needs the server to do anything, so precaching them would only fake
+    /// availability: the page would open offline and then fail on its first request.
+    /// </summary>
+    [Fact]
+    public void The_salary_page_works_offline()
+    {
+        var precached = PrecachedPaths();
+        var reachable = ReachableFrom("compensation.html");
+
+        Assert.Contains("/compensation.html", precached);
+        var missing = reachable.Where(path => !precached.Contains(path)).Order(StringComparer.Ordinal).ToArray();
+        Assert.True(
+            missing.Length == 0,
+            "the Gehalt page needs these and they are not precached:" + Environment.NewLine
+            + string.Join(Environment.NewLine, missing));
+    }
+
     private HashSet<string> PrecachedPaths()
     {
         var sw = File.ReadAllText(AssetPath("sw.js"));
@@ -70,12 +93,17 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     /// Walks the real import graph from the modules index.html loads. Both static and dynamic import
     /// specifiers count: a dynamically imported module is still needed the moment that code path runs.
     /// </summary>
-    private HashSet<string> ReachableFromIndex()
+    private HashSet<string> ReachableFromIndex() => ReachableFrom("index.html");
+
+    private HashSet<string> ReachableFrom(string pageFile)
     {
-        var index = File.ReadAllText(AssetPath("index.html"));
+        var index = File.ReadAllText(AssetPath(pageFile));
         var queue = new Queue<string>(Regex
             .Matches(index, """<script[^>]+type="module"[^>]+src="(?<path>/[^"?#]+)""")
-            .Select(match => match.Groups["path"].Value));
+            .Select(match => match.Groups["path"].Value)
+            .Concat(Regex
+                .Matches(index, """<link[^>]+rel="stylesheet"[^>]+href="(?<path>/[^"?#]+)""")
+                .Select(match => match.Groups["path"].Value)));
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         while (queue.Count > 0)
