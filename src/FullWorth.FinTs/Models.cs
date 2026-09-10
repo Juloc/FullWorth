@@ -131,9 +131,18 @@ public sealed record FinTsResult<T>(
         => new(FinTsResultKind.TanPending, default, session, challenge);
 }
 
-public sealed class FinTsException(string message, string? code = null, Exception? inner = null) : Exception(message, inner)
+public sealed class FinTsException(
+    string message,
+    string? code = null,
+    Exception? inner = null,
+    string? bankCode = null,
+    string? segmentReference = null,
+    string? bankMessage = null) : Exception(message, inner)
 {
     public string? Code { get; } = code;
+    public string? BankCode { get; } = bankCode;
+    public string? SegmentReference { get; } = segmentReference;
+    public string? BankMessage { get; } = bankMessage;
 }
 
 public sealed record FinTsOpenResult(FinTsResultKind Kind, FinTsSessionState Session, FinTsTanChallenge? Challenge = null)

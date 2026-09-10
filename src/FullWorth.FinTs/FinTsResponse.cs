@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace FullWorth.FinTs;
 
-internal sealed record FinTsResponseCode(string Code, string Text, IReadOnlyList<string> Parameters)
+internal sealed record FinTsResponseCode(string Code, string? Reference, string Text, IReadOnlyList<string> Parameters)
 {
     public bool IsError => Code.Length == 4 && Code[0] == '9';
     public bool TanRequired => Code is "0030" or "3955";
@@ -35,7 +35,11 @@ internal sealed class FinTsResponse
             "9930" or "9931" => "access_locked",
             _ => "bank_error"
         };
-        throw new FinTsException(string.IsNullOrWhiteSpace(error.Text) ? $"FinTS bank error {error.Code}." : error.Text, code);
+        var message = string.IsNullOrWhiteSpace(error.Text) ? $"FinTS bank error {error.Code}." : error.Text;
+        throw new FinTsException(message, code,
+            bankCode: error.Code,
+            segmentReference: string.IsNullOrWhiteSpace(error.Reference) ? null : error.Reference,
+            bankMessage: string.IsNullOrWhiteSpace(error.Text) ? null : error.Text);
     }
 }
 
@@ -104,8 +108,8 @@ internal static class FinTsResponseParser
             }
         }
 
-        foreach (var code in response.Codes.Where(x => x.Code == "3920"))
-            allowedSecurityFunctions.AddRange(code.Parameters.Where(x => x.All(char.IsDigit)));
+        foreach (var responseCode in response.Codes.Where(x => x.Code == "3920"))
+            allowedSecurityFunctions.AddRange(responseCode.Parameters.Where(x => x.All(char.IsDigit)));
 
         var security = current.SecurityFunction;
         if (allowedSecurityFunctions.Count > 0)
@@ -185,9 +189,10 @@ internal static class FinTsResponseParser
                 var group = segment.Groups[i];
                 var code = Text(group, 0);
                 if (code.Length != 4 || !code.All(char.IsDigit)) continue;
+                var reference = Text(group, 1);
                 var text = Text(group, Math.Min(2, group.Values.Count - 1));
                 var parameters = group.Values.Skip(3).OfType<FinTsValue.Text>().Select(x => x.Value).ToArray();
-                result.Add(new FinTsResponseCode(code, text, parameters));
+                result.Add(new FinTsResponseCode(code, reference, text, parameters));
             }
         }
         return result;
