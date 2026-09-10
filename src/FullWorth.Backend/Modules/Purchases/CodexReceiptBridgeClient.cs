@@ -47,7 +47,7 @@ public sealed class CodexReceiptBridgeClient(
         IReadOnlyList<string> categories,
         CancellationToken ct)
     {
-        if (!configuration.GetValue<bool>("CodexTest:Enabled")) return null;
+        if (!Intelligence.CodexBridgeConfiguration.IsEnabled(configuration)) return null;
         if (files.Count == 0 || sources.Count == 0) return null;
         // Never silently omit one source. If a format is not supported by Codex, the complete set falls
         // back to local OCR/manual review so the user's receipt is not partially interpreted as complete.
@@ -56,11 +56,10 @@ public sealed class CodexReceiptBridgeClient(
         var fileIds = files.Select(x => x.Id).ToHashSet();
         if (sources.Any(source => !fileIds.Contains(source.FileId))) return null;
 
-        var key = configuration["CodexTest:BridgeKey"];
+        var key = Intelligence.CodexBridgeConfiguration.Key(configuration);
         if (string.IsNullOrWhiteSpace(key)) return null;
-        var baseUrl = (configuration["CodexTest:BaseUrl"] ?? "http://fullworth-codex:8080").TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttp)
-            return null;
+        var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
+        if (baseUri is null) return null;
 
         var payload = JsonSerializer.Serialize(new
         {

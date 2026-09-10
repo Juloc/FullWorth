@@ -304,6 +304,15 @@ public static class BackendApplication
 
     public static void UseFullWorthBackend(this WebApplication app, bool unifiedHost = false)
     {
+        // The Codex sidecar had two configuration namespaces and different consumers read different
+        // ones, so configuring only one silently left half the features off. Both still work; say once
+        // which legacy key is carrying the configuration so an operator can move it. Key NAMES only -
+        // the bridge key is a secret.
+        if (Modules.Intelligence.CodexBridgeConfiguration.LegacyKeysInUse(app.Configuration) is { Count: > 0 } legacy)
+            app.Logger.LogWarning(
+                "Codex bridge configured through deprecated keys: {Keys}",
+                string.Join(", ", legacy));
+
         if (!unifiedHost)
         {
             app.UseExceptionHandler();

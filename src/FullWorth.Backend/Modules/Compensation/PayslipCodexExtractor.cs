@@ -23,8 +23,8 @@ public sealed class PayslipCodexExtractor(
     };
 
     public bool IsEnabled =>
-        configuration.GetValue<bool>("CodexTest:Enabled") &&
-        !string.IsNullOrWhiteSpace(configuration["CodexTest:BridgeKey"]);
+        Intelligence.CodexBridgeConfiguration.IsEnabled(configuration) &&
+        !string.IsNullOrWhiteSpace(Intelligence.CodexBridgeConfiguration.Key(configuration));
 
     public async Task<PayslipExtractionResult?> TryStructureAsync(
         Guid userId, string ocrText, CancellationToken ct)
@@ -32,11 +32,9 @@ public sealed class PayslipCodexExtractor(
         if (!IsEnabled) return null;
         if (string.IsNullOrWhiteSpace(ocrText)) return null;
 
-        var key = configuration["CodexTest:BridgeKey"];
-        var baseUrl = (configuration["CodexTest:BaseUrl"] ?? "http://fullworth-codex:8080").TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(key) ||
-            !Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttp)
-            return null;
+        var key = Intelligence.CodexBridgeConfiguration.Key(configuration);
+        var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
+        if (string.IsNullOrWhiteSpace(key) || baseUri is null) return null;
 
         // Cap the OCR text: a payslip is one page; anything larger is almost certainly noise.
         var text = ocrText.Length <= 24_000 ? ocrText : ocrText[..24_000];

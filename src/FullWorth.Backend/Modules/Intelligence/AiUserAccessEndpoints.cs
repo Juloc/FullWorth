@@ -449,15 +449,12 @@ public static class AiUserAccessEndpoints
         IHttpClientFactory clients,
         CancellationToken ct)
     {
-        var baseUrl = (configuration["AiAccess:CodexBridgeBaseUrl"] ??
-                       configuration["CodexTest:BaseUrl"] ??
-                       "http://fullworth-codex:8080").TrimEnd('/');
+        var baseUrl = CodexBridgeConfiguration.BaseUrl(configuration);
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != Uri.UriSchemeHttp)
             return (StatusCodes.Status503ServiceUnavailable, "{\"error\":\"codex_bridge_invalid\"}");
 
-        var key = configuration["AiAccess:CodexBridgeKey"] ??
-                  configuration["CodexTest:BridgeKey"];
+        var key = CodexBridgeConfiguration.Key(configuration);
         if (string.IsNullOrWhiteSpace(key))
             return (StatusCodes.Status503ServiceUnavailable, "{\"error\":\"codex_bridge_unavailable\"}");
 

@@ -315,15 +315,12 @@ public sealed class CodexBridgeIntelligenceProvider(
         string? json,
         CancellationToken ct)
     {
-        var baseUrl = (configuration["AiAccess:CodexBridgeBaseUrl"] ??
-                       configuration["CodexTest:BaseUrl"] ??
-                       "http://fullworth-codex:8080").TrimEnd('/');
+        var baseUrl = CodexBridgeConfiguration.BaseUrl(configuration);
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
             baseUri.Scheme != Uri.UriSchemeHttp)
             throw new IntelligenceProviderException("Codex bridge URL is invalid.");
 
-        var key = configuration["AiAccess:CodexBridgeKey"] ??
-                  configuration["CodexTest:BridgeKey"];
+        var key = CodexBridgeConfiguration.Key(configuration);
         if (string.IsNullOrWhiteSpace(key))
             throw new IntelligenceProviderException("Codex bridge key is unavailable.");
 

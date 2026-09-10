@@ -314,13 +314,10 @@ public sealed class CoachModelCatalogService(
 
     private async Task<IReadOnlyList<string>> ListCodexAsync(string ownerScope, CancellationToken ct)
     {
-        var baseUrl = (configuration["AiAccess:CodexBridgeBaseUrl"] ??
-                       configuration["CodexTest:BaseUrl"] ??
-                       "http://fullworth-codex:8080").TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttp)
-            return [];
+        var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
+        if (baseUri is null) return [];
 
-        var key = configuration["AiAccess:CodexBridgeKey"] ?? configuration["CodexTest:BridgeKey"];
+        var key = Intelligence.CodexBridgeConfiguration.Key(configuration);
         if (string.IsNullOrWhiteSpace(key)) return [];
 
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, "/models"));

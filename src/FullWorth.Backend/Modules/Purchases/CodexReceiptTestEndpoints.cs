@@ -200,7 +200,7 @@ public static class CodexReceiptTestEndpoints
     }
 
     private static bool Enabled(IConfiguration configuration) =>
-        configuration.GetValue<bool>("CodexTest:Enabled");
+        Intelligence.CodexBridgeConfiguration.IsEnabled(configuration);
 
     private static IResult Disabled() => Results.NotFound(new { error = "GPT receipt test mode is disabled." });
 
@@ -240,13 +240,13 @@ public static class CodexReceiptTestEndpoints
         CancellationToken ct,
         bool normalizeFailureForDebug = false)
     {
-        var baseUrl = (configuration["CodexTest:BaseUrl"] ?? "http://fullworth-codex:8080").TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttp)
+        var baseUri = Intelligence.CodexBridgeConfiguration.BaseUri(configuration);
+        if (baseUri is null)
             return Results.Problem("Codex test bridge URL is invalid.", statusCode: StatusCodes.Status503ServiceUnavailable);
 
         // Deliberately separate from Security:InternalKey. The Codex sidecar processes untrusted files
         // and must never hold the key that can establish trusted Finance backend user context.
-        var bridgeKey = configuration["CodexTest:BridgeKey"];
+        var bridgeKey = Intelligence.CodexBridgeConfiguration.Key(configuration);
         if (string.IsNullOrWhiteSpace(bridgeKey))
             return Results.Problem("Codex test bridge key is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable);
 

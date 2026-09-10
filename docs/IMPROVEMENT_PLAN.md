@@ -612,8 +612,15 @@ gross) and the hover readout plus the metric break out "davon Firmenwagen".
   the commit suffix stripped, `Numeric` is what the knowledge-pack minimum-client check compares — and a
   build that set no version can no longer be judged "too old", which would have broken a self-hoster
   building from source.
-- **Two Codex configuration namespaces coexist** (`CodexTest:*` and `AiAccess:CodexBridge*`) and
-  different consumers read different ones.
+- ~~**Two Codex configuration namespaces coexist**~~ `DONE` — and it was worse than untidy: the AI
+  provider resolvers read `AiAccess:CodexBridge*` with a fallback to `CodexTest:*`, while the receipt
+  bridge, the payslip extractor and the receipt test endpoints read `CodexTest:*` **only**. So an operator
+  who configured just the newer namespace got the AI providers and silently lost receipt scanning and
+  payslip extraction, with nothing saying why — and the deploy stack had to export the same secret twice
+  under two names to work at all. One `CodexBridgeConfiguration` reads it now:
+  `AiAccess:CodexBridge*` is canonical, `CodexTest:*` still works so a running deployment keeps running,
+  and the host logs once which deprecated key is carrying the configuration (**key names only** — the
+  bridge key is a secret). Default stays off, and a non-http base URL is refused rather than retried.
 - **The Cloud services have no healthchecks** — including the API, which is the stack's only
   Caddy-routed upstream. Needs `curl` in the image first.
 - **Test coverage gaps** the owner named explicitly and that genuinely have nothing: import of an IDR or
