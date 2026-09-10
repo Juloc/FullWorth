@@ -142,15 +142,80 @@ public sealed class FxRateFetchWorker(IServiceScopeFactory scopeFactory, FxRateP
                 .Select(rate => new { rate.Date, rate.Currency })
                 .ToListAsync(ct);
             var have = existing.Select(e => (e.Date, e.Currency)).ToHashSet();
-            var toAdd = fetched.Where(rate => !have.Contains((rate.Date, rate.Currency))).ToList();
+            // Also de-duplicate WITHIN the answer: a provider (or a self-hosted mirror) that repeats a
+            // day would otherwise make the very first insert violate the unique index.
+            var toAdd = fetched
+                .Where(rate => !have.Contains((rate.Date, rate.Currency)))
+                .GroupBy(rate => (rate.Date, rate.Currency))
+                .Select(group => group.First())
+                .ToList();
             if (toAdd.Count == 0) return;
-            db.FxRates.AddRange(toAdd);
-            await db.SaveChangesAsync(ct);
-            logger.LogInformation("Stored {Count} new FX reference rates from {From} to {To}.", toAdd.Count, from, today);
+
+            var stored = await InsertMissingAsync(db, toAdd, ct);
+            logger.LogInformation(
+                "Stored {Count} new FX reference rates from {From} to {To} ({Skipped} already present).",
+                stored, from, today, toAdd.Count - stored);
         }
         catch (Exception exception)
         {
             logger.LogWarning(exception, "FX rate refresh failed; will retry next cycle. Conversions stay incomplete rather than assuming 1:1.");
         }
+    }
+
+    /// <summary>
+    /// Inserts the rates that are not stored yet, and does it idempotently.
+    ///
+    /// The read-then-insert above is not atomic: two overlapping refreshes - two containers coexisting
+    /// for a moment during a rolling restart, a startup pass overtaking the previous one - both see the
+    /// same gap and both try to fill it. One then violates IX_FxRates_Date_Currency.
+    ///
+    /// That mattered far more than the error line suggests. Every rate of the cycle was added to ONE
+    /// SaveChanges, so a single duplicate rolled the whole batch back: the run stored NOTHING and the
+    /// next attempt was 12 hours later. That is where "a required historical FX rate is missing" came
+    /// from - the rates were fetched, then thrown away because one of them already existed.
+    ///
+    /// So the write is now an ON CONFLICT DO NOTHING upsert, in chunks, and a row that someone else
+    /// inserted in the meantime is simply skipped. Postgres only; other providers (the SQLite test
+    /// harness) keep the plain insert, which is safe there because nothing runs concurrently.
+    /// </summary>
+    public static async Task<int> InsertMissingAsync(
+        FullWorthDbContext db,
+        IReadOnlyList<FxRate> rates,
+        CancellationToken ct)
+    {
+        if (db.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) != true)
+        {
+            db.FxRates.AddRange(rates);
+            await db.SaveChangesAsync(ct);
+            return rates.Count;
+        }
+
+        var stored = 0;
+        // Five parameters per row against Postgres' 65535 limit; 500 keeps a wide margin.
+        foreach (var chunk in rates.Chunk(500))
+        {
+            var values = new List<string>(chunk.Length);
+            var parameters = new List<object>(chunk.Length * 5);
+            foreach (var rate in chunk)
+            {
+                var index = parameters.Count;
+                values.Add($"({{{index}}}, {{{index + 1}}}, {{{index + 2}}}, {{{index + 3}}}, {{{index + 4}}})");
+                parameters.Add(rate.Id);
+                parameters.Add(rate.Date);
+                parameters.Add(rate.Currency);
+                parameters.Add(rate.Rate);
+                parameters.Add(rate.FetchedAt);
+            }
+
+            stored += await db.Database.ExecuteSqlRawAsync(
+                $"""
+                INSERT INTO "FxRates" ("Id", "Date", "Currency", "Rate", "FetchedAt")
+                VALUES {string.Join(", ", values)}
+                ON CONFLICT ("Date", "Currency") DO NOTHING;
+                """,
+                parameters,
+                ct);
+        }
+        return stored;
     }
 }
