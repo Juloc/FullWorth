@@ -582,9 +582,14 @@ gross) and the hover readout plus the metric break out "davon Firmenwagen".
   carries `isManual` and `hasProviderDetails` (a provider transaction id AND a live non-FinTS
   connection), the button follows the latter, and an error without a known code shows the plain "no
   details available" sentence instead of a bare status string.
-- **Dead code: the three-slot sync schedule.** `Services/Scheduling/BankSyncScheduleService.cs` and its
-  options are registered in no container and referenced only by their own tests, while the real worker
-  is a plain interval loop. Either wire it in or delete both.
+- ~~**Dead code: the three-slot sync schedule.**~~ `DONE` — deleted, with its options and its tests.
+  It was registered in no container, had no `SyncSchedule` section in any appsettings, dated from the
+  repo split and was referenced only by its own tests, so removing it cannot change behaviour. What it
+  implemented is not lost either: the ≥6 h per-connection cadence it enforced is already enforced by
+  `CanBackgroundSync`, and the worker's 5–60 min loop is only a wake-up interval. Its own default was
+  `TimeZoneId = "Europe/Berlin"`, which the platform rules would have had to fix anyway. If predictable
+  fixed sync times are wanted later, that is a feature request against `BankSyncWorker` — not a reason to
+  keep an unreferenced second scheduler next to the real one.
 - **Automatic Enable Banking registration state is in-memory only** (20-minute TTL), so after a restart
   the wizard polls a 404 forever instead of failing the step.
 - **Tenant isolation is 1 293 hand-threaded parameters with no enforcing layer** — every query must
