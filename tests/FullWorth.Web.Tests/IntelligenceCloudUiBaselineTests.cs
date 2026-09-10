@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -47,11 +48,31 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
         var script = Read("intelligence", "cloud.js");
 
         // The self-hosted app ships only the minimal consent/connection client; the contribution
-        // sync + outbox UI lives in the private cloud service, not here.
+        // sync + outbox MANAGEMENT UI lives in the private cloud service, not here.
+        //
+        // The boundary is about who acts, not about which words appear. Reading this instance's own
+        // outbox depth is a link-health diagnostic and belongs here - it is the number that answers
+        // "is the link working at all", and it comes from the local database. Triggering a sync,
+        // retrying or flushing the queue is the Cloud service's job, and calling its /cloud/sync or
+        // /cloud/outbox endpoints from here is what must never happen.
         Assert.DoesNotContain("cloud-sync", html);
-        Assert.DoesNotContain("cloud-outbox", html);
         Assert.DoesNotContain("/cloud/sync", script);
         Assert.DoesNotContain("/cloud/outbox", script);
+
+        // Read-only is the whole allowance: no control that acts on the queue.
+        foreach (var action in new[] { "outbox-retry", "outbox-flush", "outbox-delete", "outbox-resend" })
+            Assert.DoesNotContain(action, html);
+
+        // The precise rule: this page calls exactly three paths - read the state, and record the
+        // consent decision either way. Anything else appearing here is the Cloud service's surface
+        // leaking into the self-hosted app.
+        var called = Regex.Matches(script, """api('(?<path>/[a-z/-]+)'""")
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["/cloud", "/cloud/disable", "/cloud/enable"], called);
+
         Assert.Contains("state.requiresSetupDecision", script);
     }
 
