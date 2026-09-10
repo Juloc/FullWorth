@@ -45,6 +45,12 @@ public sealed class KnowledgePackSyncService(
             if (string.IsNullOrWhiteSpace(secret))
                 return await FailAsync(installation, state, "cloud_credential_missing", ct);
 
+            // Resolve the verification key BEFORE asking for anything. Without it the pack cannot be
+            // verified and is therefore useless, and this ran every few minutes: an instance with no key
+            // downloaded up to 5 MB and threw it away roughly 288 times a day, on both sides of the wire.
+            if (ResolvePublicKeyPem() is null)
+                return await FailAsync(installation, state, "knowledge_pack_public_key_missing", ct);
+
             var region = NormalizeRegion(configuration["FullWorthCloud:KnowledgePackRegion"]);
             var manifest = await cloud.GetLatestKnowledgePackManifestAsync(
                 secret,

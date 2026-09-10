@@ -150,8 +150,15 @@ public sealed class FullWorthCloudException(
 }
 
 /// <summary>
-/// Typed client for the official FullWorth Platform Cloud. Production always targets the compiled
-/// official endpoint; only Development/Testing builds may override it for local cloud development.
+/// Typed client for a FullWorth Platform Cloud. It defaults to the official endpoint, and a
+/// self-hoster may point it at their own by setting FullWorthCloud:BaseUrl.
+///
+/// That configuration used to be read and then thrown away outside Development/Testing, so an operator
+/// who entered their own Cloud kept sending observations to api.fullworth.de with no error and no
+/// warning. This product must not depend on anybody else's infrastructure, so the setting is honoured
+/// in every environment - under two rules: outside Development it must be HTTPS (a plaintext endpoint
+/// for finance observations is not a configuration choice, it is a mistake), and a loopback or private
+/// address is only accepted in Development, where a local cloud is the point.
 /// </summary>
 public sealed class FullWorthCloudClient : IFullWorthCloudClient
 {
@@ -476,13 +483,47 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
     internal static Uri ResolveBaseUri(IConfiguration configuration, IHostEnvironment environment)
     {
         var configured = configuration["FullWorthCloud:BaseUrl"]?.Trim();
-        var allowOverride = environment.IsDevelopment() || environment.IsEnvironment("Testing");
-        var value = allowOverride && !string.IsNullOrWhiteSpace(configured) ? configured : OfficialBaseUrl;
-        if (!Uri.TryCreate(value.TrimEnd('/') + "/", UriKind.Absolute, out var uri))
+        var isDevelopment = environment.IsDevelopment() || environment.IsEnvironment("Testing");
+        var value = string.IsNullOrWhiteSpace(configured) ? OfficialBaseUrl : configured;
+
+        if (!Uri.TryCreate(value.TrimEnd('/') + "/", UriKind.Absolute, out var uri) ||
+            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
+            !string.IsNullOrEmpty(uri.UserInfo))
             throw new InvalidOperationException("FullWorth Cloud base URL is invalid.");
-        if (!allowOverride && uri.Scheme != Uri.UriSchemeHttps)
-            throw new InvalidOperationException("FullWorth Cloud production endpoint must use HTTPS.");
+
+        if (isDevelopment) return uri;
+
+        // Anonymised observations still describe someone's finances, so the transport is not optional.
+        if (uri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException(
+                "FullWorth Cloud base URL must use HTTPS. Set FullWorthCloud:BaseUrl to an https:// endpoint.");
+
+        // A Cloud reached over the public internet cannot live on loopback or inside a private range;
+        // a value like that is a copied development setting, and failing loudly beats silently sending
+        // to a host that answers nothing.
+        if (uri.IsLoopback || IsPrivateHost(uri))
+            throw new InvalidOperationException(
+                "FullWorth Cloud base URL must be a public host outside Development.");
+
         return uri;
+    }
+
+    private static bool IsPrivateHost(Uri uri)
+    {
+        if (!System.Net.IPAddress.TryParse(uri.Host, out var address) ||
+            address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            return false;
+
+        var octets = address.GetAddressBytes();
+        return octets[0] switch
+        {
+            10 => true,
+            127 => true,
+            172 => octets[1] >= 16 && octets[1] <= 31,
+            192 => octets[1] == 168,
+            169 => octets[1] == 254,
+            _ => false
+        };
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
