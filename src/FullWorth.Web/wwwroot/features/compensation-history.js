@@ -13,12 +13,14 @@ const HISTORY_WINDOWS=[{m:6,label:'6 M'},{m:12,label:'1 J'},{m:24,label:'2 J'},{
 
 // All series are ANNUAL values, so they share one scale. The last three come from the separate
 // other-income track (sonstige regelmäßige Einkünfte) and are NOT employer figures.
+// A company car is a taxable benefit in kind, so it is part of the gross and is counted ON the Brutto
+// curve rather than drawn beside it: as its own series it was a small, often negative line that only
+// flattened the scale. The hover readout still breaks out how much of the gross it is.
 const HISTORY_SERIES=[
-  ['contractualGrossAnnual','gross','Brutto'],
+  ['grossIncludingCompanyCarAnnual','gross','Brutto'],
   ['estimatedCashNetAnnual','net','Netto'],
   ['purchasingPowerMaintenanceGrossAnnual','inflation','Kaufkrafterhalt'],
   ['fullWorthCompensationValueAnnual','total','Gesamtwert'],
-  ['companyCarNetCashImpactAnnual','car','Firmenwagen'],
   ['otherRegularIncomeAnnual','other','Sonstige Einkünfte'],
   ['otherRegularIncomeCountedAnnual','other-counted','Sonstige angerechnet'],
   ['personallyAvailableTotalIncomeAnnual','personal','Persönlich verfügbar']
@@ -28,10 +30,9 @@ const hstate={
   entries:[],timeline:null,editing:null,
   windowMonths:0,
   scope:'single',
-  // Firmenwagen is off by default: it is a small, often negative line that would otherwise flatten the scale.
-  // The three other-income curves start off too and are switched on once (see loadHistory) as soon as the
+  // The three other-income curves start off and are switched on once (see loadHistory) as soon as the
   // timeline actually reports such records — without any they would just duplicate the Netto line.
-  series:{gross:true,net:true,inflation:true,total:true,car:false,other:false,'other-counted':false,personal:false},
+  series:{gross:true,net:true,inflation:true,total:true,other:false,'other-counted':false,personal:false},
   otherSeriesPrimed:false
 };
 
@@ -105,7 +106,7 @@ function historyMarkup(){return `
   <div id="history-summary" class="metric-grid history-summary"></div>
   <article class="panel history-chart-card">
     <div class="history-chart-head">
-      <div><h2>Gehalt, Netto und Kaufkraft</h2><small>Alle Werte jährlich. Die Inflationslinie zeigt, welches Brutto für die Kaufkraft des Startpunkts nötig wäre.</small></div>
+      <div><h2>Gehalt, Netto und Kaufkraft</h2><small>Alle Werte jährlich. Brutto enthält den geldwerten Vorteil eines Firmenwagens. Die Inflationslinie zeigt, welches Brutto für die Kaufkraft des Startpunkts nötig wäre.</small></div>
       <div class="fw-cycle history-scope" role="tablist" aria-label="Umfang">
         <button type="button" role="tab" data-history-scope="single">Einzeln</button>
         <button type="button" role="tab" data-history-scope="joint">Gemeinsam</button>
@@ -202,7 +203,7 @@ function renderHistorySummary(summary,timeline){
     <article class="metric"><span>Sonstige Einkünfte</span><strong>${heuro.format(summary.currentOtherRegularIncomeAnnual)}</strong><small>${heuro2.format((Number(summary.currentOtherRegularIncomeAnnual)||0)/12)} / Monat · kein Arbeitgeber-Bestandteil</small></article>
     <article class="metric"><span>Persönlich verfügbar</span><strong>${heuro.format(summary.currentPersonallyAvailableTotalIncomeAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} + angerechnete sonstige Einkünfte</small></article>`:'';
   root.innerHTML=`
-    <article class="metric"><span>Brutto aktuell</span><strong>${heuro.format(summary.currentGrossAnnual)}</strong><small>seit Start ${signedPct(summary.nominalChangePercent)} nominal</small></article>
+    <article class="metric"><span>Brutto aktuell</span><strong>${heuro.format(summary.currentGrossAnnual)}</strong><small>seit Start ${signedPct(summary.nominalChangePercent)} nominal${Number(summary.currentCompanyCarTaxableBenefitAnnual)?` · davon Firmenwagen ${heuro.format(Number(summary.currentCompanyCarTaxableBenefitAnnual))}`:''}</small></article>
     <article class="metric"><span>Kaufkrafterhalt</span><strong>${heuro.format(summary.purchasingPowerMaintenanceGrossAnnual)}</strong><small>Inflation seit Start ${signedPct(summary.inflationPercent)}</small></article>
     <article class="metric"><span>Reale Gehaltsänderung</span><strong class="${summary.realChangePercent>=0?'positive':'negative'}">${signedPct(summary.realChangePercent)}</strong><small>Brutto nach Inflation</small></article>
     <article class="metric"><span>Gesamtwert aktuell</span><strong>${heuro.format(summary.currentFullWorthValueAnnual)}</strong><small>Netto ${heuro.format(summary.currentNetAnnual)} / Jahr</small></article>${otherIncome}`;
@@ -215,7 +216,7 @@ function renderHistoryChart(timeline){
   const shown=enabledSeries();
   if(!shown.length){root.innerHTML='<div class="history-empty">Keine Kurve ausgewählt. Wähle oben mindestens einen Wert.</div>';return}
   const values=points.flatMap(p=>shown.map(([key])=>Number(p[key])||0));
-  // The Firmenwagen line can be negative, so the scale must be able to go below zero.
+  // A net other-income series can be negative, so the scale must be able to go below zero.
   const max=Math.max(...values,1)*1.08,min=Math.min(0,...values);
   const dates=points.map(p=>new Date(`${p.date}T12:00:00`).getTime()),d0=Math.min(...dates),d1=Math.max(...dates);
   const x=t=>left+(d1===d0?0.5:(t-d0)/(d1-d0))*(w-left-right);
@@ -262,6 +263,7 @@ function wireChartHover(root,points,dates,geo,eventByDate,shown){
     const ev=eventByDate.get(p.date);
     tip.innerHTML=`<div class="tip-date">${fmtDate(p.date)}${ev?` · <span class="tip-event">${esc(ev)}</span>`:''}</div>`+
       shown.map(([key,cls,label])=>`<div class="tip-row"><span class="tip-key"><i class="history-key history-key-${cls}"></i>${label}</span><span class="tip-val">${heuro.format(Number(p[key])||0)}</span></div>`).join('')+
+      (Number(p.companyCarTaxableBenefitAnnual)?`<div class="tip-row tip-sub"><span class="tip-key">davon Firmenwagen</span><span class="tip-val">${heuro.format(Number(p.companyCarTaxableBenefitAnnual))}</span></div>`:'')+
       (hstate.series.personal?`<div class="tip-row tip-sub"><span class="tip-key">Persönlich verfügbar / Monat</span><span class="tip-val">${heuro2.format((Number(p.personallyAvailableTotalIncomeAnnual)||0)/12)}</span></div>`:'')+
       `<div class="tip-row tip-sub"><span class="tip-key">Steuern</span><span class="tip-val">${heuro.format(p.taxesAnnual)}</span></div>`+
       `<div class="tip-row tip-sub"><span class="tip-key">Sozialabgaben</span><span class="tip-val">${heuro.format(p.socialInsuranceAnnual)}</span></div>`+
@@ -291,7 +293,7 @@ function renderHistoryYears(timeline){
   const withOther=hasOtherIncome(timeline);
   const extraHead=withOther?'<th>Sonstige Einkünfte</th><th>Persönlich verfügbar</th>':'';
   const extraCells=p=>withOther?`<td>${heuro.format(p.otherRegularIncomeAnnual)}</td><td>${heuro.format(p.personallyAvailableTotalIncomeAnnual)}</td>`:'';
-  root.innerHTML=`<table class="history-years"><thead><tr><th>Jahr</th><th>Brutto</th><th>Netto</th><th>Steuern</th><th>Sozialabgaben</th><th>AG-Kosten</th><th>Gesamtwert</th>${extraHead}<th>Real seit Start</th></tr></thead><tbody>${rows.map(([year,p])=>`<tr><td>${year}</td><td>${heuro.format(p.contractualGrossAnnual)}</td><td>${heuro.format(p.estimatedCashNetAnnual)}</td><td>${heuro.format(p.taxesAnnual)}</td><td>${heuro.format(p.socialInsuranceAnnual)}</td><td>${heuro.format(p.employerTotalCostAnnual)}</td><td>${heuro.format(p.fullWorthCompensationValueAnnual)}</td>${extraCells(p)}<td class="${p.realChangeFromBaselinePercent>=0?'positive':'negative'}">${signedPct(p.realChangeFromBaselinePercent)}</td></tr>`).join('')}</tbody></table>`;
+  root.innerHTML=`<table class="history-years"><thead><tr><th>Jahr</th><th>Brutto</th><th>Netto</th><th>Steuern</th><th>Sozialabgaben</th><th>AG-Kosten</th><th>Gesamtwert</th>${extraHead}<th>Real seit Start</th></tr></thead><tbody>${rows.map(([year,p])=>`<tr><td>${year}</td><td>${heuro.format(p.grossIncludingCompanyCarAnnual)}</td><td>${heuro.format(p.estimatedCashNetAnnual)}</td><td>${heuro.format(p.taxesAnnual)}</td><td>${heuro.format(p.socialInsuranceAnnual)}</td><td>${heuro.format(p.employerTotalCostAnnual)}</td><td>${heuro.format(p.fullWorthCompensationValueAnnual)}</td>${extraCells(p)}<td class="${p.realChangeFromBaselinePercent>=0?'positive':'negative'}">${signedPct(p.realChangeFromBaselinePercent)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function historyDeltaHtml(delta){

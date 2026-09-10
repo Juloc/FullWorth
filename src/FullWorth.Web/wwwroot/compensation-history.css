@@ -31,10 +31,6 @@
 .history-series-toggle .history-key{opacity:.35}
 .history-series-toggle.on{color:var(--text);border-color:color-mix(in srgb,var(--accent,#4a75ff) 40%,var(--border,#e3e5e8))}
 .history-series-toggle.on .history-key{opacity:1}
-.history-line-car{stroke:#2f8f8f;stroke-dasharray:2 4}
-.history-dot-car{stroke:#2f8f8f}
-.history-dot-active.history-dot-car{fill:#2f8f8f}
-.history-key-car{background:#2f8f8f}
 /* Sonstige regelmäßige Einkünfte: a separate income track, so it gets its own hues from the category
    palette instead of reusing a salary colour. "angerechnet" is the dashed subset of the full track. */
 .history-line-other{stroke:var(--cat-4)}

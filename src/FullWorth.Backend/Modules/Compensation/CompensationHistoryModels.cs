@@ -43,6 +43,12 @@ public sealed record CompensationTimelinePoint(
     decimal SocialInsuranceAnnual,
     decimal PersonalBenefitsValueAnnual,
     decimal CompanyCarNetCashImpactAnnual,
+    // The taxable benefit in kind of a company car (geldwerter Vorteil) is part of the payroll gross,
+    // so the history shows it ON the gross figure instead of as a curve of its own next to it - as its
+    // own series it was a small, often negative line that only flattened the scale and answered a
+    // different question than "what did this job pay". ContractualGrossAnnual stays the cash gross.
+    decimal CompanyCarTaxableBenefitAnnual,
+    decimal GrossIncludingCompanyCarAnnual,
     decimal PurchasingPowerMaintenanceGrossAnnual,
     decimal NominalChangeFromBaselinePercent,
     decimal InflationFromBaselinePercent,
@@ -60,7 +66,10 @@ public sealed record CompensationTimelineSummary(
     DateOnly BaselineDate,
     DateOnly CurrentDate,
     decimal BaselineGrossAnnual,
+    // Gross including the taxable company-car benefit, matching the history chart. The baseline above
+    // is on the same basis, so the percentages below compare like with like.
     decimal CurrentGrossAnnual,
+    decimal CurrentCompanyCarTaxableBenefitAnnual,
     decimal CurrentNetAnnual,
     decimal CurrentFullWorthValueAnnual,
     decimal PurchasingPowerMaintenanceGrossAnnual,

@@ -291,15 +291,21 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             return new CompensationTimelineResult(start, end, entries, [], null, otherIncome);
 
         var baseline = rawPoints[0];
-        var baselineGross = RoundMoney(baseline.Totals.Gross);
+        // The company car is a taxable benefit in kind and therefore part of the payroll gross. The
+        // baseline, the inflation-maintenance line and the nominal/real percentages all sit on that
+        // same basis, so adding a car to the same salary shows up as the gross increase it is instead
+        // of leaving the curves comparing two different definitions of "Brutto".
+        var baselineGross = RoundMoney(baseline.Totals.Gross + baseline.Totals.CarTaxable);
         var points = rawPoints.Select(point =>
         {
             var maintenance = InflationIndex.AdjustForPurchasingPower(
                 baselineGross, baseline.Date, point.Date);
             var gross = RoundMoney(point.Totals.Gross);
-            var nominal = PercentChange(baselineGross, gross);
+            var carTaxable = RoundMoney(point.Totals.CarTaxable);
+            var grossWithCar = RoundMoney(gross + carTaxable);
+            var nominal = PercentChange(baselineGross, grossWithCar);
             var inflation = PercentChange(baselineGross, maintenance);
-            var real = maintenance <= 0m ? 0m : (gross / maintenance - 1m) * 100m;
+            var real = maintenance <= 0m ? 0m : (grossWithCar / maintenance - 1m) * 100m;
             var net = RoundMoney(point.Totals.Net);
             return new CompensationTimelinePoint(
                 point.Date,
@@ -313,6 +319,8 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
                 RoundMoney(point.Totals.Social),
                 RoundMoney(point.Totals.Benefits),
                 RoundMoney(point.Totals.CarImpact),
+                carTaxable,
+                grossWithCar,
                 maintenance,
                 RoundPercent(nominal),
                 RoundPercent(inflation),
@@ -329,7 +337,8 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             points[0].Date,
             current.Date,
             baselineGross,
-            current.ContractualGrossAnnual,
+            current.GrossIncludingCompanyCarAnnual,
+            current.CompanyCarTaxableBenefitAnnual,
             current.EstimatedCashNetAnnual,
             current.FullWorthCompensationValueAnnual,
             current.PurchasingPowerMaintenanceGrossAnnual,
@@ -698,7 +707,8 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
         decimal Taxes,
         decimal Social,
         decimal Benefits,
-        decimal CarImpact)
+        decimal CarImpact,
+        decimal CarTaxable)
     {
         public static TimelineTotals Zero => default;
 
@@ -712,7 +722,8 @@ public sealed class CompensationHistoryStore(FullWorthDbContext db)
             Taxes + TotalTaxes(c),
             Social + c.SocialInsurance.TotalAnnual,
             Benefits + c.PersonalBenefitsValueAnnual,
-            CarImpact + c.CompanyCar.EstimatedNetCashImpactAnnual);
+            CarImpact + c.CompanyCar.EstimatedNetCashImpactAnnual,
+            CarTaxable + c.CompanyCar.TaxableBenefitAnnual);
     }
 
     private sealed record RawHistoryRow(

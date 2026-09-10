@@ -431,10 +431,20 @@ reproduction against his three contracts to say which.
 `wealth.projection` preference), but shows it as a text tile. It belongs IN the first graph: a
 configurable forward preview of how net worth could develop, drawn as a continuation of the trend.
 
-### O-7 The salary graph shows the company car separately instead of on top of gross — `OPEN`
+### O-7 The salary graph shows the company car separately instead of on top of gross — `DONE`
 
-In the compensation history chart the company-car benefit is its own series; it should be added onto the
-gross figure, because that is what it is (a taxable benefit in kind that raises gross).
+The chart drew the car as a series of its own — and not even the gross-relevant figure: it plotted the
+net *cash* impact, a small, often negative line that flattened the whole scale (which is why it shipped
+switched off by default).
+
+**Fixed** by putting the taxable benefit where payroll puts it. The timeline now reports
+`CompanyCarTaxableBenefitAnnual` (the geldwerter Vorteil actually applied that year) and
+`GrossIncludingCompanyCarAnnual`; the Brutto curve, the "Brutto aktuell" metric and the year table's
+Brutto column all read the latter, and the separate Firmenwagen curve and its toggle are gone. The
+baseline, the Kaufkrafterhalt line and the nominal/real percentages sit on the same basis, so a car added
+to an unchanged salary now shows as the gross increase it is instead of "nothing happened" — and a car
+present from the start is not mistaken for a raise. `ContractualGrossAnnual` keeps its meaning (cash
+gross) and the hover readout plus the metric break out "davon Firmenwagen".
 
 ---
 
