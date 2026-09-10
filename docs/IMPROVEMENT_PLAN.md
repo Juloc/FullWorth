@@ -17,6 +17,21 @@ Status values: `OPEN`, `IN PROGRESS`, `DONE` (with the commit), `NEEDS DECISION`
 
 Audited 2026-09-09 against `main` at `3232803` / cloud `15d05ec` / deploy `87000ff`.
 
+## Release slices
+
+The work is cut so that every few items end in a released alpha the owner can deploy and test, instead
+of one long branch. A slice ships when its items are green; anything that turns out bigger than the
+slice moves to the next one rather than holding the release.
+
+| Release | Contents | What the owner can check |
+| --- | --- | --- |
+| `alpha.17` | The P0/P1/P2 sweep up to and including the FX refresh fix | shipped |
+| `alpha.18` | Sync-skip reason codes, receipt-poll backoff, O-3 pending ordering, O-7 company car on gross | the log says why a sync skipped; "Vorgemerkt" sits above "Heute"; the salary graph counts the car in Brutto |
+| `alpha.19` | Balance provenance (source, as-of, note), manual balance, Finanzguru import balances, unlinked import accounts counting in net worth | an imported or unconnected account shows a real balance and says where it came from |
+| `alpha.20` | Statement import (CSV/MT940/CAMT) into an existing account, explicit reversible account link/unlink — O-4 second half and O-5 | Ikano and PayPal can be kept current without a live connection, and a duplicate can be resolved and undone |
+| `alpha.21` | O-6: contract merge and the wealth projection as a graph | the three "Weg" contracts become one; the projection is a curve, not a tile |
+| `alpha.22`–`alpha.24` | bAV per [PENSION.md](PENSION.md): domain and manual flow, then document import and snapshots, then wealth/salary/dashboard/simulation | the Altersvorsorge area, filled by hand first and from a statement afterwards |
+
 ---
 
 ## P0 — wrong money or data loss
@@ -410,10 +425,25 @@ be resolvable — and the resolution has to be reversible and changeable**. P1-1
 the "count it once" rule for the same IBAN across providers, but nothing lets the user say "these two ARE
 the same, merge them" or undo that decision afterwards.
 
-### O-5 A PayPal account cannot be linked, only a Giro account — `OPEN`
+### O-5 A PayPal account cannot be linked, only a Giro account — `OPEN` (cause found, ships with O-4)
 
-Wherever an account is picked to link (contract payment account, depot settlement account, emergency
-fund), the selection must not be limited to checking accounts. A wallet account is a payment account.
+The first guess was wrong and is corrected here: **no account picker filters by account type.** The
+contract payment account, the depot settlement account, the loan account, the emergency-fund scope and
+the manual-booking account all offer every account, wallet accounts included.
+
+The real blocker is that every path which decides "these two are the same account" is keyed on the IBAN
+token alone:
+
+- `IngestionModule.cs:209` only sets `IbanLookup` when the provider reported an IBAN, and the
+  count-once rule below it is inside `if (isNew && ibanLookup is not null)`.
+- `AccountsModule.WithDuplicateMarkersAsync` filters to `account.IbanLookup != null` before looking for
+  a counterpart, so a wallet row can never even be told which account it duplicates.
+- `TransferDetection.cs:216` matches the two sides of a transfer the same way.
+
+PayPal, Wise, Revolut, cash and manual accounts have no IBAN, so for them linking and de-duplication do
+not exist at all — not because a list filtered them out, but because the identity these paths use is one
+they cannot have. The fix is therefore the same mechanism O-4 still needs: an explicit, user-chosen and
+reversible link between two accounts that does not depend on an IBAN. Both ship together.
 
 ### O-6 Contracts cannot be merged in practice, and the wealth projection is only a tile — `OPEN`
 
