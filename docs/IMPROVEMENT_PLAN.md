@@ -352,6 +352,82 @@ providers.
 
 ---
 
+## Reported by the owner on 2026-09-10
+
+Seven items from use, in the priority they get worked. Each was checked against the code; what is
+stated as confirmed was read in the source, and what needs data from the running instance says so.
+
+### O-1 PayPal bookings all sit on the sync date instead of their real booking date — `NEEDS DATA`
+
+Checked and ruled out: the ingest never invents a date (`IngestionModule.cs:419` assigns exactly what
+arrived), the transaction table renders `bookingDate` and shows `—` when it is null (`dateHeading`), and
+the booking-activity chart groups by `BookingDate ?? ValueDate`. So nothing in our code substitutes the
+sync time — which means the provider payload for these rows is the place to look.
+
+**What is needed:** one PayPal row from the instance — its `BookingDate`, `ValueDate`, `FirstSeenAt` and
+the `booking_date`/`value_date` fields of its stored `RawJson` (encrypted at rest, so it has to come from
+the running app). If PayPal reports only a value date, the fix is to fall back to it *visibly* rather
+than leaving the date empty; if it reports neither, the row must say "date unknown" instead of adopting
+any timestamp.
+
+### O-2 Pending bookings are never resolved when they book or are cancelled — `CONFIRMED`
+
+`IngestionModule.UpsertTransactionsAsync` only ever inserts or updates. A pending row is keyed
+`fp:<fingerprint including status>` (Enable Banking rarely gives a stable `entry_reference` for pending),
+so when the same payment returns as `BOOK` it arrives under a DIFFERENT key and is inserted as a second
+row. Nothing ever deletes the pending one, and nothing links it to its booked successor. A cancelled or
+expired authorisation stays forever.
+
+So every pending payment ends up as two rows, and any view that includes pending counts the money twice.
+
+**Target.** The provider feed is authoritative for the window it covers: a pending row on that account
+that was NOT in the payload, and whose date lies inside the fetched window, is either booked or cancelled
+and is removed (an authorisation was never a ledger entry). Only after a complete account sync, never on
+a partial one, and never for pending rows older than the window.
+
+### O-3 The "today" bar sits above the newest pending row in the booking history — `OPEN`
+
+Ordering/marker placement in the booking history: a pending row dated today (or later) sorts above the
+today marker, so the marker no longer marks today.
+
+### O-4 An imported account must be able to get a balance without being connected — `PARTLY DONE`
+
+The first half is done (P0-4): an imported account shows its own value and can be anchored with a manual
+balance without a bank connection, and that no longer depends on a link created after the import.
+
+Still open: when an imported account is later matched with a real connected one, the **duplicate has to
+be resolvable — and the resolution has to be reversible and changeable**. P1-14 built the detection and
+the "count it once" rule for the same IBAN across providers, but nothing lets the user say "these two ARE
+the same, merge them" or undo that decision afterwards.
+
+### O-5 A PayPal account cannot be linked, only a Giro account — `OPEN`
+
+Wherever an account is picked to link (contract payment account, depot settlement account, emergency
+fund), the selection must not be limited to checking accounts. A wallet account is a payment account.
+
+### O-6 Contracts cannot be merged in practice, and the wealth projection is only a tile — `OPEN`
+
+Two things.
+
+**Merging.** The machinery exists and is reachable (`openMergeDialog` from the contract detail and from
+the duplicate banner, `ContractMergeExecutionService` behind it), but the owner has three separate
+contracts for what was only an account change and cannot merge them. Two candidate causes are visible in
+the code: the candidate list is filtered to an EXACTLY equal currency string
+(`contracts.js:1020`, so a contract with no currency can never be merged with a EUR one), and the only
+entry points are one contract at a time — there is no "select these three, merge" in the list. Needs a
+reproduction against his three contracts to say which.
+
+**Projection.** The wealth page already computes a projection (`buildProjectionCard`, the
+`wealth.projection` preference), but shows it as a text tile. It belongs IN the first graph: a
+configurable forward preview of how net worth could develop, drawn as a continuation of the trend.
+
+### O-7 The salary graph shows the company car separately instead of on top of gross — `OPEN`
+
+In the compensation history chart the company-car benefit is its own series; it should be added onto the
+gross figure, because that is what it is (a taxable benefit in kind that raises gross).
+
+---
+
 ## P2 — misleading, or secondary paths
 
 - **Sums never state their rate or its date.** `WealthModule.cs:106`/`:29` expose only a boolean
