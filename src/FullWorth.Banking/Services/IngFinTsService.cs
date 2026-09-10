@@ -64,9 +64,9 @@ public sealed class IngFinTsService(
 
         var bank = KnownBanks.Ing;
         var credentials = new FinTsCredentials(request.UserId.Trim(), request.Pin, productId);
-        var parameters = await finTs.SynchronizeAsync(bank, credentials, ct);
+        var parameters = await LogFinTsAsync("synchronize", () => finTs.SynchronizeAsync(bank, credentials, ct));
         if (!string.IsNullOrWhiteSpace(request.TanMedium)) parameters = parameters with { TanMedium = request.TanMedium.Trim() };
-        var opened = await finTs.OpenAsync(bank, credentials, parameters, ct);
+        var opened = await LogFinTsAsync("open", () => finTs.OpenAsync(bank, credentials, parameters, ct));
         var secret = new FinTsConnectionSecret(bank.Id, credentials.UserId, credentials.Pin, credentials.ProductId,
             opened.Session.Parameters, opened.IsOpen ? null : opened.Session, opened.Challenge);
 
@@ -126,12 +126,12 @@ public sealed class IngFinTsService(
         if (poll)
         {
             if (!secret.Challenge.IsDecoupled) throw new InvalidOperationException("This TAN method cannot be polled.");
-            result = await finTs.PollDialogTanAsync(KnownBanks.Get(secret.BankId), credentials, secret.Session, secret.Challenge, ct);
+            result = await LogFinTsAsync("poll", () => finTs.PollDialogTanAsync(KnownBanks.Get(secret.BankId), credentials, secret.Session, secret.Challenge, ct));
         }
         else
         {
             if (string.IsNullOrWhiteSpace(tan)) throw new ArgumentException("TAN is required.");
-            result = await finTs.SubmitDialogTanAsync(KnownBanks.Get(secret.BankId), credentials, secret.Session, secret.Challenge, tan.Trim(), ct);
+            result = await LogFinTsAsync("submit-tan", () => finTs.SubmitDialogTanAsync(KnownBanks.Get(secret.BankId), credentials, secret.Session, secret.Challenge, tan.Trim(), ct));
         }
 
         secret = secret with
@@ -231,7 +231,7 @@ public sealed class IngFinTsService(
         {
             var terminal = ex.Code is "pin_wrong" or "access_locked";
             var errorCode = "FINTS_" + (ex.Code ?? "BANK_ERROR").ToUpperInvariant();
-            logger.LogWarning("FinTS sync failed for ING ({Code}).", ex.Code ?? "bank_error");
+            LogFinTsFailure("sync", ex);
             var failed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 status: terminal ? "INVALID" : connection.Status,
                 nextSyncAllowedAt: terminal ? null : nextAllowed,
@@ -365,6 +365,37 @@ public sealed class IngFinTsService(
         if (result.Kind is FinTsResultKind.TanRequired or FinTsResultKind.TanPending)
             throw new FinTsInteractiveRequiredException(result.Session, result.Challenge ?? throw new InvalidOperationException("FinTS TAN challenge missing."));
         return result.Session;
+    }
+
+    private async Task<T> LogFinTsAsync<T>(string operation, Func<Task<T>> action)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (FinTsException ex)
+        {
+            LogFinTsFailure(operation, ex);
+            throw;
+        }
+    }
+
+    private void LogFinTsFailure(string operation, FinTsException ex)
+    {
+        logger.LogWarning(
+            "ING FinTS {Operation} failed. ErrorCode={ErrorCode}, BankCode={BankCode}, SegmentReference={SegmentReference}, BankMessage={BankMessage}",
+            operation,
+            ex.Code ?? "bank_error",
+            ex.BankCode ?? "-",
+            ex.SegmentReference ?? "-",
+            SanitizeBankMessage(ex.BankMessage ?? ex.Message));
+    }
+
+    private static string SanitizeBankMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return "-";
+        var normalized = message.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length > 500 ? normalized[..500] : normalized;
     }
 
     private async Task<BankConnectionDto> FailAsync(BankConnectionDto connection, string code, CancellationToken ct)
