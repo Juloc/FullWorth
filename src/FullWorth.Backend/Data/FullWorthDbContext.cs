@@ -163,6 +163,8 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => new { x.AccountId, x.CapturedAt });
             e.Property(x => x.Amount).HasPrecision(20, 8);
             e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.Source).HasMaxLength(32);
+            e.Property(x => x.Note).HasMaxLength(200);
             e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
         });
 

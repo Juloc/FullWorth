@@ -10,7 +10,11 @@ public sealed record AccountBalance(
     string Currency,
     string BalanceType,
     DateOnly? ReferenceDate,
-    DateTimeOffset CapturedAt);
+    DateTimeOffset CapturedAt,
+    // Where the figure came from (BalanceSources) and the owner's remark. Optional so the many
+    // callers that construct a balance for a calculation stay unchanged.
+    string? Source = null,
+    string? Note = null);
 
 /// <summary>
 /// The current balance of an account, PER CURRENCY.
@@ -81,7 +85,7 @@ public static class CurrentBalances
                 latestCaptures.Contains(balance.CapturedAt))
             .Select(balance => new AccountBalance(
                 balance.AccountId, balance.Amount, balance.Currency, balance.BalanceType,
-                balance.ReferenceDate, balance.CapturedAt))
+                balance.ReferenceDate, balance.CapturedAt, balance.Source, balance.Note))
             .ToListAsync(ct);
 
         return rows;

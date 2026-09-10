@@ -396,6 +396,8 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             Amount = currentBalance.Value,
             Currency = currency,
             BalanceType = "manualCurrent",
+            // Typed by the owner while confirming an import, so it is their figure, not the file's.
+            Source = BalanceSources.Manual,
             ReferenceDate = DateOnly.FromDateTime(now.UtcDateTime),
             CapturedAt = now
         });

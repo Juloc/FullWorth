@@ -362,7 +362,7 @@ public sealed class IngestionService(
         foreach (var item in items)
         {
             if (!accounts.TryGetValue(item.IdentificationHash, out var account)) continue;
-            db.BalanceSnapshots.Add(new BalanceSnapshot { AccountId = account.Id, Amount = item.Amount, Currency = item.Currency, BalanceType = item.BalanceType, ReferenceDate = item.ReferenceDate, CapturedAt = item.CapturedAt });
+            db.BalanceSnapshots.Add(new BalanceSnapshot { AccountId = account.Id, Amount = item.Amount, Currency = item.Currency, BalanceType = item.BalanceType, Source = BalanceSources.Provider, ReferenceDate = item.ReferenceDate, CapturedAt = item.CapturedAt });
             inserted++;
         }
         await db.SaveChangesAsync(ct); return inserted;

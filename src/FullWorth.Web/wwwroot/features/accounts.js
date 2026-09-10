@@ -105,8 +105,17 @@ function accountRow(x,groups){
   const duplicateNote=x.duplicateOfDisplayName
     ? ` · ${esc(get('accounts.duplicateOf').replace('{name}',x.duplicateOfDisplayName))}`
     : '';
-  const dataAsOf=x.latestBalance?.capturedAt
-    ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(dateTime(x.latestBalance.capturedAt))}`
+  // The as-of date is the date the figure is valid FOR; capturedAt is only when it was recorded.
+  // A balance anchored from last month's statement has to read as last month's, and a figure the
+  // owner typed has to be distinguishable from one a bank reported.
+  const asOfValue=x.latestBalance?.referenceDate
+    ? date(x.latestBalance.referenceDate)
+    : x.latestBalance?.capturedAt ? dateTime(x.latestBalance.capturedAt) : '';
+  const dataAsOf=asOfValue
+    ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(asOfValue)}`
+    : '';
+  const balanceSource=x.latestBalance?.source==='manual'||x.latestBalance?.source==='import'
+    ? ` · ${esc(get('accounts.source_'+x.latestBalance.source))}`
     : '';
   // An account that can carry its own balance and has none yet is not broken, it is unfinished -
   // say so instead of showing a bare em dash next to it.
@@ -121,7 +130,7 @@ function accountRow(x,groups){
   const balanceBtn=canSetBalance(x)?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${balanceSource}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
@@ -366,13 +375,21 @@ function openManualAccountDialog(){
   dlg.showModal();
   decorateManualAccountDialog(dlg);
 }
+// A balance entered by hand is the only balance an unconnected or imported account has, so it also
+// carries WHEN it is valid for and WHERE it was read off. Without an as-of date every anchor claimed
+// to be today's figure, which is wrong the moment it comes off a statement.
 function openBalanceDialog(account){
   const current=account.latestBalance?account.latestBalance.amount:'';
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.updateBalance'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div><label>${esc(get('accounts.newBalance'))} (${esc(account.currency)})<input name="amount" type="number" step="0.01" inputmode="decimal" value="${current}" required></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.apply'))}</button></div></form>`);
+  const today=new Date();today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+  const todayIso=today.toISOString().slice(0,10);
+  const asOf=account.latestBalance?.referenceDate?String(account.latestBalance.referenceDate).slice(0,10):todayIso;
+  const note=account.latestBalance?.note||'';
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.updateBalance'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div><label>${esc(get('accounts.newBalance'))} (${esc(account.currency)})<input name="amount" type="number" step="0.01" inputmode="decimal" value="${current}" required></label><label>${esc(get('accounts.balanceAsOf'))}<input name="asOf" type="date" value="${esc(asOf)}" max="${esc(todayIso)}" required></label><label>${esc(get('accounts.balanceNote'))}<input name="note" type="text" maxlength="200" value="${esc(note)}" placeholder="${esc(get('accounts.balanceNoteHint'))}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.apply'))}</button></div></form>`);
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
     e.preventDefault();const fd=new FormData(e.currentTarget);
-    try{await api(`api/accounts/${account.id}/balance`,{...jsonBody({amount:Number(fd.get('amount')),currency:null}),method:'PUT'});dlg.close();toast(get('accounts.balanceUpdated'));await loadAccountsView()}catch(err){toast(err.message||get('common.error'))}
+    const body={amount:Number(fd.get('amount')),currency:null,asOf:String(fd.get('asOf')||'')||null,note:String(fd.get('note')||'').trim()||null};
+    try{await api(`api/accounts/${account.id}/balance`,{...jsonBody(body),method:'PUT'});dlg.close();toast(get('accounts.balanceUpdated'));await loadAccountsView()}catch(err){toast(err.message||get('common.error'))}
   };
   dlg.showModal();
 }

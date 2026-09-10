@@ -59,11 +59,45 @@ public sealed class BalanceSnapshot
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "EUR";
     public string BalanceType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where this figure came from - see <see cref="BalanceSources"/>. A balance said what it was (the
+    /// bank's balance_type) but never where it came from, so a value the owner typed and a value a bank
+    /// reported looked identical on screen. That matters most where there is no bank at all.
+    /// </summary>
+    public string? Source { get; set; }
+
+    /// <summary>The owner's own remark, e.g. which statement or app the figure was read off.</summary>
+    public string? Note { get; set; }
+
+    /// <summary>The date the figure is valid FOR, as opposed to when it was recorded.</summary>
     public DateOnly? ReferenceDate { get; set; }
     public DateTimeOffset CapturedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
-public sealed record BalanceView(decimal Amount, string Currency, string BalanceType, DateTimeOffset CapturedAt);
+/// <summary>The provenance of a balance. Stored, never guessed from the balance type.</summary>
+public static class BalanceSources
+{
+    /// <summary>Reported by a bank through a live connection.</summary>
+    public const string Provider = "provider";
+
+    /// <summary>Entered by the owner.</summary>
+    public const string Manual = "manual";
+
+    /// <summary>Read off an imported file (a statement, or an import wizard's anchor).</summary>
+    public const string Import = "import";
+}
+
+// ReferenceDate is the as-of date, CapturedAt when FullWorth recorded it. Both are shown: an owner
+// who anchors an account with last month's statement needs to see that it is last month's figure.
+public sealed record BalanceView(
+    decimal Amount,
+    string Currency,
+    string BalanceType,
+    DateTimeOffset CapturedAt,
+    DateOnly? ReferenceDate = null,
+    string? Source = null,
+    string? Note = null);
 
 public static class BalanceSnapshotQueries
 {
@@ -104,7 +138,9 @@ public static class BalanceSnapshotQueries
 public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null);
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive, bool? IncludeInNetWorth, int? SortOrder);
-public sealed record ManualBalanceRequest(decimal Amount, string? Currency);
+// AsOf defaults to today when omitted, so an existing caller keeps its behaviour. Note is the
+// owner's remark about where the figure came from.
+public sealed record ManualBalanceRequest(decimal Amount, string? Currency, DateOnly? AsOf = null, string? Note = null);
 public sealed record AccountGroupDto(Guid Id, Guid FullWorthSpaceId, string Name, int SortOrder);
 public sealed record AccountGroupWrite(string Name, int? SortOrder);
 public sealed record AccountGroupAssignRequest(Guid? GroupId);
@@ -186,7 +222,8 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
                 .ThenByDescending(balance => balance.Amount)
                 .ThenBy(balance => balance.Currency, StringComparer.Ordinal)
                 .Select(balance => new BalanceView(
-                    balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt))
+                    balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt,
+                    balance.ReferenceDate, balance.Source, balance.Note))
                 .ToList();
             return item with
             {
@@ -373,11 +410,14 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
                 Amount = request.InitialBalance.Value,
                 Currency = account.Currency,
                 BalanceType = "manual",
+                Source = BalanceSources.Manual,
                 ReferenceDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 CapturedAt = now
             };
             db.BalanceSnapshots.Add(snapshot);
-            initialBalance = new BalanceView(snapshot.Amount, snapshot.Currency, snapshot.BalanceType, snapshot.CapturedAt);
+            initialBalance = new BalanceView(
+                snapshot.Amount, snapshot.Currency, snapshot.BalanceType, snapshot.CapturedAt,
+                snapshot.ReferenceDate, snapshot.Source, snapshot.Note);
         }
 
         await db.SaveChangesAsync(ct);
@@ -421,13 +461,24 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         var currency = string.IsNullOrWhiteSpace(request.Currency) ? account.Currency : NormalizeCurrency(request.Currency);
         if (currency != account.Currency) throw new ArgumentException("Currency must match the account currency.");
 
+        // The as-of date is the owner's, not the clock's: anchoring an account from last month's
+        // statement is a figure valid for last month. A future date is not a balance anyone can have
+        // seen yet, so it is refused rather than quietly clamped.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var asOf = request.AsOf ?? today;
+        if (asOf > today) throw new ArgumentException("The as-of date cannot be in the future.");
+        var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        if (note is { Length: > 200 }) throw new ArgumentException("Note must be 200 characters or fewer.");
+
         db.BalanceSnapshots.Add(new BalanceSnapshot
         {
             AccountId = accountId,
             Amount = request.Amount,
             Currency = currency,
             BalanceType = "manual",
-            ReferenceDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Source = BalanceSources.Manual,
+            Note = note,
+            ReferenceDate = asOf,
             CapturedAt = DateTimeOffset.UtcNow
         });
 
@@ -616,7 +667,9 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
                                   : balance.BalanceType == "closingBooked" ? "2"
                                   : balance.BalanceType == "interimBooked" ? "3"
                                   : balance.BalanceType == "expected" ? "4" : "5") + balance.BalanceType)
-                .Select(balance => new BalanceView(balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt)).FirstOrDefault(),
+                .Select(balance => new BalanceView(
+                    balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt,
+                    balance.ReferenceDate, balance.Source, balance.Note)).FirstOrDefault(),
             account.GroupId,
             // Inline scalar subquery (EF can't expand a helper inside a projection) — null when ungrouped.
             db.AccountGroups.Where(g => g.Id == account.GroupId).Select(g => g.Name).FirstOrDefault()));
