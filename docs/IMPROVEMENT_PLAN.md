@@ -199,19 +199,25 @@ answered `https://api.fullworth.de`. 12 resolution cases.
 
 **Still open:** the resolved endpoint is still not surfaced anywhere (see the visibility items in P2).
 
-### P1-6 Multi-currency accounts lose every wallet but one — `OPEN`
+### P1-6 Multi-currency accounts lose every wallet but one — `DONE`
 
-`Modules/Accounts/AccountsModule.cs:97` exposes exactly one `BalanceView` per account and picks the row
-by a sort key with **no currency discriminator**; `BankSyncService.cs:1208` writes one snapshot per
-currency with an identical `CapturedAt`. So for PayPal, Wise or Revolut the displayed balance is an
-arbitrary wallet, it can flip between syncs, and the money in every other currency is invisible. There
-is no multi-wallet model anywhere: one account has exactly one `Currency` column.
+`Modules/Accounts/CurrentBalances.cs` is now the single selection rule, and it separates the two things
+that were tangled together: **per (account, currency)** the newest capture wins (with the balance-type
+preference as the tiebreak), and **per account** one of those currencies is shown first — a display
+decision that no longer decides which money counts. The headline is the declared currency, then the
+largest holding, so it cannot flip between syncs.
 
-**Target.** An account carries a set of balances, one per currency, with a deterministic display rule
-(the account's declared currency first, then descending value). Net worth counts all of them.
+Every surface reads it: the account list (`balances` per row, `baseValue` now covering the whole
+account), the dashboard total, the wealth overview and its emergency-fund reserve, the net-worth
+history — whose back-cast anchor is now per (account, currency) — and the data export. The rank helper
+that was copied into four files is gone.
 
-**Tests.** A PayPal account with EUR, USD and IDR wallets shows all three, sums correctly, and the
-displayed primary balance is stable across syncs.
+Frontend: the account row and the dashboard account row list the other wallets under the headline
+amount. Verified in `ops/ui-harness`: the PayPal row reads `100,00 €` with `2.000.000 IDR · 55,00 $`
+beneath it and `250,00 €` as the base-currency total.
+
+Proven by reverting to one balance per account: totals read 100 instead of 250, and the headline
+currency came back as USD on one surface and IDR on another — the instability, visible.
 
 ### P1-7 Linking an account to a portfolio deletes its real balance — `DONE` (668dc32)
 
@@ -256,11 +262,12 @@ Noted while fixing it: `budget-status` looks like it is served by `AnalyticsModu
 it already resolved the base currency. Pinned by a test, because nothing in the code makes that
 shadowing visible.
 
-### P1-11 The only path that gives an account a balance has no test — `OPEN`
+### P1-11 The only path that gives an account a balance has no test — `DONE`
 
-`Modules/Ingestion/IngestionModule.cs:257` (`InsertBalancesAsync`) is the single production code path
-that gives an imported or synced account its balance, and it has **zero** coverage in all four test
-projects. Everything in P0-2, P0-4, P1-6 and P1-8 runs through it.
+`tests/FullWorth.Backend.Tests/Ingestion/BalanceIngestionTests.cs` covers it through the real endpoint:
+every wallet of a multi-currency account is stored, a balance keeps the currency it was reported in, a
+later sync appends history instead of overwriting the earlier value, and a balance for an unannounced
+account is ignored rather than attached to another account.
 
 ### P1-12 Foreign accounts silently vanish from the Wealth trend — `DONE`
 

@@ -85,6 +85,12 @@ function accountRow(x,groups){
   const kind=[x.product||x.accountType,isManual?get('accounts.manual'):null].filter(Boolean).join(' · ');
   const nativeAmt=x.latestBalance?money(x.latestBalance.amount,x.latestBalance.currency):'—';
   const convertedAmt=x.baseValue!=null?`<div class="amount-converted">${converted(x.baseValue,x.baseCurrency)}</div>`:'';
+  // A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency. The
+  // headline shows one of them, so the others are listed here - they used to be invisible entirely.
+  const otherWallets=(x.balances||[]).slice(1);
+  const walletsLine=otherWallets.length
+    ? `<div class="amount-wallets">${otherWallets.map(b=>esc(money(b.amount,b.currency))).join(' · ')}</div>`
+    : '';
   const dataAsOf=x.latestBalance?.capturedAt
     ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(dateTime(x.latestBalance.capturedAt))}`
     : '';
@@ -96,7 +102,7 @@ function accountRow(x,groups){
   const balanceBtn=isManual?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));

@@ -94,7 +94,11 @@ public static class BalanceSnapshotQueries
 // BaseValue/BaseCurrency (§18): the latest balance converted into the space's base currency, for the
 // "native first, smaller converted base underneath" row display. Null when the account is already in
 // the base currency or no conversion rate is available (the row then shows only its native amount).
-public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null);
+//
+// LatestBalance is the HEADLINE figure only. Balances carries the account's current balance in every
+// currency it holds - PayPal, Wise and Revolut report a wallet per currency - and it is what any total
+// must be built from. It used to be one row per account, so every other wallet was invisible.
+public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null);
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive, bool? IncludeInNetWorth, int? SortOrder);
 public sealed record ManualBalanceRequest(decimal Amount, string? Currency);
@@ -111,8 +115,40 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         var items = await Project(AccessibleAccounts(userId, fullWorthSpaceId)
                 .OrderBy(x => x.SortOrder).ThenBy(x => x.InstitutionName).ThenBy(x => x.DisplayName))
             .ToListAsync(ct);
+        items = await WithAllCurrenciesAsync(items, ct);
         items = await WithConvertedBalancesAsync(items, fullWorthSpaceId, ct);
         return WithDisplayIdentifiers(items);
+    }
+
+    // An account can hold money in several currencies. The projection above can only carry one row per
+    // account (a correlated subquery cannot return a set), so the full per-currency picture is attached
+    // here - and the headline balance is re-picked from it deterministically instead of depending on
+    // which row the subquery happened to order first.
+    private async Task<List<AccountListItem>> WithAllCurrenciesAsync(
+        List<AccountListItem> items, CancellationToken ct)
+    {
+        if (items.Count == 0) return items;
+        var balances = await CurrentBalances.LoadAsync(db, items.Select(item => item.Id).ToArray(), ct);
+        if (balances.Count == 0) return items;
+        var byAccount = balances.GroupBy(balance => balance.AccountId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+        return items.Select(item =>
+        {
+            if (!byAccount.TryGetValue(item.Id, out var rows)) return item;
+            var primary = CurrentBalances.Primary(rows, item.Currency);
+            var ordered = rows
+                .OrderByDescending(balance => primary is not null && balance.Currency == primary.Currency)
+                .ThenByDescending(balance => balance.Amount)
+                .ThenBy(balance => balance.Currency, StringComparer.Ordinal)
+                .Select(balance => new BalanceView(
+                    balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt))
+                .ToList();
+            return item with
+            {
+                LatestBalance = ordered[0],
+                Balances = ordered
+            };
+        }).ToList();
     }
 
     // §18: fill each foreign account's balance converted into the space base currency for the row's
@@ -127,10 +163,25 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         var snapshot = await fx.PrepareLatestAsync(baseCurrency, today, ct);
         return items.Select(item =>
         {
-            var balance = item.LatestBalance;
-            if (balance is null || string.Equals(balance.Currency, baseCurrency, StringComparison.OrdinalIgnoreCase)) return item;
-            var converted = snapshot.ToBaseOn(balance.Amount, balance.Currency, today);
-            return converted is null ? item : item with { BaseValue = converted.Value, BaseCurrency = baseCurrency };
+            // The whole account, every currency it holds - this is what a group subtotal and the net
+            // worth add up. Converting only the headline wallet left the rest of a multi-currency
+            // account out of every base-currency figure on screen.
+            var balances = item.Balances ?? (item.LatestBalance is null ? [] : [item.LatestBalance]);
+            if (balances.Count == 0) return item;
+            if (balances.All(balance =>
+                    string.Equals(balance.Currency, baseCurrency, StringComparison.OrdinalIgnoreCase)))
+                return item;  // already the base currency: the native amount IS the base amount
+
+            decimal total = 0m;
+            foreach (var balance in balances)
+            {
+                var converted = snapshot.ToBaseOn(balance.Amount, balance.Currency, today);
+                // A missing rate makes the total unknown, not smaller: the row then shows only its
+                // native amounts, exactly as it did before any conversion existed.
+                if (converted is null) return item;
+                total += converted.Value;
+            }
+            return item with { BaseValue = total, BaseCurrency = baseCurrency };
         }).ToList();
     }
 
@@ -173,9 +224,12 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
 
     public async Task<AccountListItem?> GetForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, CancellationToken ct)
     {
+        // Same per-currency treatment as the list; see WithAllCurrenciesAsync.
         var item = await Project(AccessibleAccounts(userId, fullWorthSpaceId).Where(x => x.Id == accountId))
             .SingleOrDefaultAsync(ct);
-        return item is null ? null : WithDisplayIdentifiers([item])[0];
+        if (item is null) return null;
+        var withCurrencies = await WithAllCurrenciesAsync([item], ct);
+        return WithDisplayIdentifiers(withCurrencies)[0];
     }
 
     public Task<List<AccountOwnerDto>> ListOwnersAsync(Guid accountId, Guid fullWorthSpaceId, CancellationToken ct) =>

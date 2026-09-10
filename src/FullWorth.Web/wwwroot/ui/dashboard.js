@@ -265,6 +265,14 @@ function bindDrill(ctx, el, queryFn) {
 function errorState(ctx) { return `<div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`; }
 function emptyState(ctx, key) { return `<div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get(key || 'common.empty'))}</div></div>`; }
 
+// A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency; the
+// amount above is one of them, so the rest is named here instead of being invisible.
+function walletLine(account) {
+  const others = (account.balances || []).slice(1);
+  if (!others.length) return '';
+  return `<div class="amount-wallets">${others.map(b => money(b.amount, b.currency)).join(' · ')}</div>`;
+}
+
 function renderWidget(type, ctx, body, data, cfg) {
   const d = data.dashboard;
   const cur = d?.currency || 'EUR';
@@ -305,7 +313,7 @@ function renderWidget(type, ctx, body, data, cfg) {
     // computed - so the label and the numbers can never disagree.
     const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
     const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
-    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;
+    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}${walletLine(x)}</div></div>`;
     const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
     // Each group is its own calm block: a header row (folder monogram · name · subtotal · drill chevron)
     // over its account rows, blocks spaced by whitespace rather than heavy rules (reference overview §3).

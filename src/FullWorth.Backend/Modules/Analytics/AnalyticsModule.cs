@@ -226,36 +226,18 @@ public sealed class AnalyticsService(
         var investment = await investments.CalculateAsync(fullWorthSpaceId, userId, today, ct);
         if (investment.Incomplete) incomplete = true;
 
-        var accountBalances = await AccessibleAccounts(userId, fullWorthSpaceId)
+        // Every currency the account holds, not one row per account: PayPal, Wise and Revolut report a
+        // wallet per currency, and reducing that to a single balance left the rest of the money out of
+        // this total entirely. Amount and currency always travel together - pairing an amount with the
+        // ACCOUNT's declared currency converted a foreign wallet at the wrong rate.
+        var accountIds = await AccessibleAccounts(userId, fullWorthSpaceId)
             .Where(account => account.IsActive && account.IncludeInNetWorth)
-            .Select(account => new
-            {
-                AccountId = account.Id,
-                AccountCurrency = account.Currency,
-                // Inlined CurrentFirst ordering — correlated subquery, where EF cannot expand the
-                // extension (see BalanceSnapshotQueries.CurrentFirst). Newest capture, then rank-prefix + type.
-                //
-                // Amount AND Currency come from the SAME row on purpose. This used to select only the
-                // amount and pair it with the ACCOUNT's currency, so a balance reported in another
-                // currency - a PayPal wallet, a provider that reports in the settlement currency - was
-                // converted with the wrong rate. Two separate subqueries would not do either: a sync
-                // stamps every balance type with an identical CapturedAt, so they could disagree about
-                // which row they read.
-                Balance = db.BalanceSnapshots
-                    .Where(balance => balance.AccountId == account.Id)
-                    .OrderByDescending(balance => balance.CapturedAt)
-                    .ThenBy(balance => (balance.BalanceType == "interimAvailable" ? "0"
-                                      : balance.BalanceType == "closingAvailable" ? "1"
-                                      : balance.BalanceType == "closingBooked" ? "2"
-                                      : balance.BalanceType == "interimBooked" ? "3"
-                                      : balance.BalanceType == "expected" ? "4" : "5") + balance.BalanceType)
-                    .Select(balance => new { balance.Amount, balance.Currency })
-                    .FirstOrDefault()
-            })
+            .Select(account => account.Id)
             .ToListAsync(ct);
+        var accountBalances = await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct);
         var accounts = SumInBase(accountBalances
-            .Where(row => row.Balance is not null && !investment.ExcludedLinkedAccountIds.Contains(row.AccountId))
-            .Select(row => (row.Balance!.Amount, row.Balance.Currency)));
+            .Where(row => !investment.ExcludedLinkedAccountIds.Contains(row.AccountId))
+            .Select(row => (row.Amount, row.Currency)));
 
         var assetRows = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)

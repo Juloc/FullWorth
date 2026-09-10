@@ -75,27 +75,17 @@ public sealed class ExportService(FullWorthDbContext db)
                 account.UpdatedAt))
             .ToListAsync(ct);
 
-        var balances = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => accountIds.Contains(balance.AccountId))
-            .GroupBy(balance => balance.AccountId)
-            .Select(group => group.OrderByDescending(balance => balance.CapturedAt)
-                // Deterministic balance-type preference (see BalanceSnapshotQueries.CurrentFirst): a sync
-                // stamps every balance_type with the same CapturedAt, so tiebreak to avoid a flipping pick.
-                // One concatenated rank-prefix + type-name key so the ordering stays translatable here.
-                .ThenBy(balance => (balance.BalanceType == "interimAvailable" ? "0"
-                                  : balance.BalanceType == "closingAvailable" ? "1"
-                                  : balance.BalanceType == "closingBooked" ? "2"
-                                  : balance.BalanceType == "interimBooked" ? "3"
-                                  : balance.BalanceType == "expected" ? "4" : "5") + balance.BalanceType)
-                .Select(balance => new ExportBalance(
-                    balance.AccountId,
-                    balance.Amount,
-                    balance.Currency,
-                    balance.BalanceType,
-                    balance.ReferenceDate,
-                    balance.CapturedAt))
-                .First())
-            .ToListAsync(ct);
+        // One current balance per (account, CURRENCY). This exported a single row per account, so a
+        // multi-currency wallet left the user with an export that was missing money they hold.
+        var balances = (await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct))
+            .Select(balance => new ExportBalance(
+                balance.AccountId,
+                balance.Amount,
+                balance.Currency,
+                balance.BalanceType,
+                balance.ReferenceDate,
+                balance.CapturedAt))
+            .ToList();
 
         var transactions = await db.Transactions.AsNoTracking()
             .Where(transaction => accountIds.Contains(transaction.AccountId))

@@ -127,28 +127,12 @@ public sealed class WealthOverviewService(
             .Select(account => new { account.Id, account.Currency, account.GroupId })
             .ToListAsync(ct);
         var accountIds = accounts.Select(account => account.Id).ToArray();
-        var balanceRows = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => accountIds.Contains(balance.AccountId))
-            .Select(balance => new
-            {
-                balance.AccountId,
-                balance.Amount,
-                balance.Currency,
-                balance.BalanceType,
-                balance.CapturedAt
-            })
-            .ToListAsync(ct);
-        var latestBalanceByAccount = balanceRows
-            .GroupBy(balance => balance.AccountId)
-            .Select(group => group
-                .OrderByDescending(balance => balance.CapturedAt)
-                .ThenBy(balance => BalanceRank(balance.BalanceType))
-                .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
-                .First())
-            .ToDictionary(
-                balance => balance.AccountId,
-                balance => new NativeValue(balance.Amount, balance.Currency));
-        var latestBalances = latestBalanceByAccount.Values.ToList();
+        // One balance PER CURRENCY, not per account: a multi-currency wallet (PayPal, Wise, Revolut)
+        // holds money in several, and taking a single row left the rest out of this total.
+        var currentBalances = await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct);
+        var latestBalances = currentBalances
+            .Select(balance => new NativeValue(balance.Amount, balance.Currency))
+            .ToList();
 
         var manualAssets = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
@@ -186,9 +170,11 @@ public sealed class WealthOverviewService(
             var selectedAccounts = accounts.Where(account =>
                 (!emergencyPreference.AccountId.HasValue || account.Id == emergencyPreference.AccountId.Value) &&
                 (!emergencyPreference.AccountGroupId.HasValue || account.GroupId == emergencyPreference.AccountGroupId.Value));
-            var selectedBalances = selectedAccounts
-                .Where(account => latestBalanceByAccount.ContainsKey(account.Id))
-                .Select(account => latestBalanceByAccount[account.Id])
+            // Every currency of a selected account counts towards the reserve, not just one wallet.
+            var selectedIds = selectedAccounts.Select(account => account.Id).ToHashSet();
+            var selectedBalances = currentBalances
+                .Where(balance => selectedIds.Contains(balance.AccountId))
+                .Select(balance => new NativeValue(balance.Amount, balance.Currency))
                 .ToList();
             var emergencyMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var emergencyComponent = ConvertComponent(selectedBalances, targetCurrency, today, fx, emergencyMissing);
@@ -652,15 +638,6 @@ public sealed class WealthOverviewService(
             : null;
     }
 
-    private static int BalanceRank(string? type) => type switch
-    {
-        "interimAvailable" => 0,
-        "closingAvailable" => 1,
-        "closingBooked" => 2,
-        "interimBooked" => 3,
-        "expected" => 4,
-        _ => 5
-    };
 
     private static void AddParameter(DbCommand command, string name, object value)
     {

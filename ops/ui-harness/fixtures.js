@@ -15,7 +15,20 @@
     ],
     'accounts': [
       { id: 'a1', name: 'Girokonto', iban: 'DE02120300000000202051', currency: 'EUR', balance: 2431.55, type: 'checking', groupId: null, ownerUserIds: [] },
-      { id: 'a2', name: 'Tagesgeld mit langem Namen', iban: 'DE02500105170137075030', currency: 'EUR', balance: 18250.10, type: 'savings', groupId: null, ownerUserIds: [] }
+      { id: 'a2', name: 'Tagesgeld mit langem Namen', iban: 'DE02500105170137075030', currency: 'EUR', balance: 18250.10, type: 'savings', groupId: null, ownerUserIds: [] },
+      // A wallet-per-currency account in the shape the real API returns: one headline balance plus every
+      // currency it holds, and a base-currency value covering ALL of them (100 EUR + 55 USD + 2m IDR).
+      {
+        id: 'a3', displayName: 'PayPal', institutionName: 'PayPal', provider: 'test', accountType: 'wallet',
+        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: null, sortOrder: 3,
+        latestBalance: { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
+        balances: [
+          { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
+          { amount: 2000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
+          { amount: 55, currency: 'USD', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }
+        ],
+        baseValue: 250, baseCurrency: 'EUR'
+      }
     ],
     'account-groups': [],
     'transactions': {

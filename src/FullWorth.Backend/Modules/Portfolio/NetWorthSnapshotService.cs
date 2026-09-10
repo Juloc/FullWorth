@@ -101,19 +101,11 @@ public sealed class NetWorthSnapshotService(
         var accountIds = accounts.Select(account => account.Id).ToArray();
         var accountCurrency = accounts.ToDictionary(account => account.Id, account => account.Currency, EqualityComparer<Guid>.Default);
 
-        var balanceRows = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => accountIds.Contains(balance.AccountId))
-            .ToListAsync(ct);
-        var latestBalances = balanceRows
-            .GroupBy(balance => balance.AccountId)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderByDescending(balance => balance.CapturedAt)
-                    .ThenBy(balance => BalanceRank(balance.BalanceType))
-                    .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
-                    .First());
-        var anchoredAccountIds = latestBalances.Keys.ToArray();
+        // The anchor is per (account, CURRENCY). An account can hold several currencies - a PayPal or
+        // Wise wallet per currency - and one anchor per account meant the history only ever back-cast
+        // one of them while the others were missing from every day of the curve.
+        var latestBalances = await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct);
+        var anchoredAccountIds = latestBalances.Select(balance => balance.AccountId).Distinct().ToArray();
 
         // Back-casting requires a real balance anchor. Finanzguru-only rows that were moved onto a live
         // account remain tagged with their stable finanzguru:* external key until a provider row exists;
@@ -201,7 +193,7 @@ public sealed class NetWorthSnapshotService(
             .Concat(accounts.Select(account => account.Currency))
             // A balance can be denominated in a currency no account declares; without its own bucket
             // that money would silently disappear from the history.
-            .Concat(latestBalances.Values.Select(balance => balance.Currency))
+            .Concat(latestBalances.Select(balance => balance.Currency))
             .Concat(currentAssets.Keys)
             .Concat(currentLiabilities.Keys)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -220,12 +212,12 @@ public sealed class NetWorthSnapshotService(
             // declares. Bucketing by account.Currency while summing balance.Amount put a foreign
             // balance into the wrong series and then converted it with the wrong rate - and WealthModule
             // reads the balance's own currency, so the two surfaces disagreed on the same data.
-            var anchoredHere = accounts
-                .Where(account => latestBalances.TryGetValue(account.Id, out var balance) &&
-                                  string.Equals(balance.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
-                .Select(account => account.Id)
-                .ToHashSet();
-            var currentAccounts = anchoredHere.Sum(accountId => latestBalances[accountId].Amount);
+            var anchorsHere = latestBalances
+                .Where(balance => string.Equals(
+                    balance.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var anchoredHere = anchorsHere.Select(balance => balance.AccountId).ToHashSet();
+            var currentAccounts = anchorsHere.Sum(balance => balance.Amount);
 
             var dailyDelta = transactions
                 .Where(transaction =>
@@ -306,15 +298,6 @@ public sealed class NetWorthSnapshotService(
         return snapshot.Date >= createdDate.AddDays(-1);
     }
 
-    private static int BalanceRank(string? type) => type switch
-    {
-        "interimAvailable" => 0,
-        "closingAvailable" => 1,
-        "closingBooked" => 2,
-        "interimBooked" => 3,
-        "expected" => 4,
-        _ => 5
-    };
 
     private static DateOnly? Min(DateOnly? left, DateOnly? right)
     {
