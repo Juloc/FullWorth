@@ -15,6 +15,7 @@ one place: [Improvement plan](IMPROVEMENT_PLAN.md).
 - [Cloud](CLOUD.md) — enrollment, observation outbox, knowledge packs, benchmarks, brand packs
 - [AI Autopilot](AI_AUTOPILOT.md) — Coach, Intelligence, the Codex bridge and behaviour without AI
 - [Compensation analyzer](COMPENSATION_ANALYZER.md) — the German payroll engine
+- [Occupational pension](PENSION.md) — the bAV data model, what it reuses, and the money-direction rule
 - [Categorization catalog](CATEGORIZATION_CATALOG.md) — the category tree and its keys
 
 ## Product
