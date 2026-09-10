@@ -16,6 +16,7 @@ one place: [Improvement plan](IMPROVEMENT_PLAN.md).
 - [AI Autopilot](AI_AUTOPILOT.md) — Coach, Intelligence, the Codex bridge and behaviour without AI
 - [Compensation analyzer](COMPENSATION_ANALYZER.md) — the German payroll engine
 - [Occupational pension](PENSION.md) — the bAV data model, what it reuses, and the money-direction rule
+- [UI audit](UI_AUDIT.md) — the desktop/mobile/PWA measurements, how to repeat them, and the dialog plan
 - [Categorization catalog](CATEGORIZATION_CATALOG.md) — the category tree and its keys
 
 ## Product
