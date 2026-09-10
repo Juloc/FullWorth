@@ -146,6 +146,31 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("ingEnableBankingOnly", de);
     }
 
+    /// <summary>
+    /// The server has accepted a manual balance for a connection-less account since P0-4, and that
+    /// deliberately includes a finanzguru-import account: the export file carries only bookings, so the
+    /// import creates the account archived and out of net worth until someone gives it a balance.
+    ///
+    /// The list did neither. It hid every archived account and it only rendered the balance affordance
+    /// for provider === 'manual', so an imported account was invisible AND unreachable - the money sat
+    /// outside net worth with no path in the app to fix it. Both gates are asserted here.
+    /// </summary>
+    [Fact]
+    public async Task AccountsList_OffersAManualBalanceToAnImportedAccount()
+    {
+        var js = await GetAsync("/features/accounts.js");
+
+        Assert.Contains("const canSetBalance", js);
+        Assert.Contains("'finanzguru-import'", js);
+        Assert.Contains("canSetBalance(x)", js);
+        Assert.Contains("canSetBalance(account)", js);
+        // The row action must not be back on the manual-provider gate.
+        Assert.DoesNotContain("const balanceBtn=isManual", js);
+        // An archived import account still has to appear, or there is nothing to click.
+        Assert.Contains("a.isActive!==false||a.provider==='finanzguru-import'", js);
+        Assert.Contains("accounts.needsBalance", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);

@@ -38,6 +38,16 @@
         latestBalance: { amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
         balances: [{ amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }],
         baseValue: null, baseCurrency: null
+      },
+      // A Finanzguru history import with no balance yet: the export file carries only bookings, so the
+      // account arrives archived and out of net worth until someone gives it a balance. It must offer
+      // exactly that - the server has accepted a manual balance for this provider since P0-4, but the
+      // list only showed the button for provider === 'manual'.
+      {
+        id: 'a5', displayName: 'Bargeld (Import)', institutionName: 'Finanzguru Import',
+        provider: 'finanzguru-import', product: 'Imported history', accountType: 'checking',
+        currency: 'EUR', isActive: false, includeInNetWorth: false, groupId: null, sortOrder: 5,
+        latestBalance: null, balances: [], baseValue: null, baseCurrency: null
       }
     ],
     'account-groups': [{ id: 'g1', name: 'Alltag', sortOrder: 1 }],

@@ -417,8 +417,18 @@ row with no booking date shows its value date instead of an em dash.
 
 ### O-4 An imported account must be able to get a balance without being connected — `PARTLY DONE`
 
-The first half is done (P0-4): an imported account shows its own value and can be anchored with a manual
-balance without a bank connection, and that no longer depends on a link created after the import.
+The first half is done. P0-4 opened the server side: `PUT api/accounts/{id}/balance` accepts a balance for
+any account without a bank connection, a `finanzguru-import` account included, and anchoring one makes it
+active, counted in net worth and gives its bookings a balance history — no link to another account
+involved.
+
+The frontend had been left on the old gate, which is why the owner still saw those accounts reported with
+`Balance unavailable` and `IncludeInNetWorth=false`. Two gates, both now fixed: the list hid every
+archived account (an import account is created archived, because the Finanzguru export carries **only
+bookings — there is no balance column in the file**, so nothing is discarded at creation, there is
+nothing to discard), and the balance affordance was rendered only for `provider === 'manual'`. So the
+account existed, carried its history, and had no reachable path to a balance anywhere in the app. It is
+listed now, marked "Kontostand hinterlegen", and offers the balance action.
 
 Still open: when an imported account is later matched with a real connected one, the **duplicate has to
 be resolvable — and the resolution has to be reversible and changeable**. P1-14 built the detection and

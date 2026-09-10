@@ -712,6 +712,7 @@
     "validUntil": "Consent until",
     "lastSync": "Last sync",
     "nextSyncAllowed": "Next possible sync",
+    "needsBalance": "Add a balance",
     "dataAsOf": "Data as of",
     "syncHistory": "Sync history",
     "syncHistoryEmpty": "No sync attempts have been recorded yet.",

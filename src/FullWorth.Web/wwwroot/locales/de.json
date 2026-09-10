@@ -712,6 +712,7 @@
     "validUntil": "Freigabe bis",
     "lastSync": "Letzter Sync",
     "nextSyncAllowed": "Nächster möglicher Sync",
+    "needsBalance": "Kontostand hinterlegen",
     "dataAsOf": "Datenstand",
     "syncHistory": "Sync-Verlauf",
     "syncHistoryEmpty": "Noch keine Sync-Versuche protokolliert.",

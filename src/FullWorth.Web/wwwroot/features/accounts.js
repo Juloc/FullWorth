@@ -31,6 +31,14 @@ const dialog = (html, options = {}) => ctx.dialog(html, options);
 const empty = (el, message) => ctx.empty(el, message);
 const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 
+// Mirrors the server's gate on PUT api/accounts/{id}/balance: an account without a bank connection
+// keeps its balance by hand. The UI used to ask for provider === 'manual' alone, so an imported
+// account - the one kind that has no connection AND no way to be synced - had no way to be given a
+// balance at all, and sat in the list reading "Kontostand nicht verfügbar" and out of net worth,
+// even though the server has accepted one for it since P0-4.
+const canSetBalance = account =>
+  !account.bankConnectionId && (account.provider === 'manual' || account.provider === 'finanzguru-import');
+
 const ACCT_TRASH='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
 const ACCT_EDIT='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
 const ACCT_FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4Z"/></svg>';
@@ -42,7 +50,8 @@ function openAccountActionsDialog(account, groups) {
     ['visual', get('accounts.editVisual'), false],
     ...(groups || []).length ? [['move', get('accounts.moveToGroup'), false]] : [],
     ['rename', get('accounts.rename'), false],
-    ...(isManual ? [['balance', get('accounts.updateBalance'), false], ['delete', get('accounts.delete'), true]] : [])
+    ...(canSetBalance(account) ? [['balance', get('accounts.updateBalance'), false]] : []),
+    ...(isManual ? [['delete', get('accounts.delete'), true]] : [])
   ];
 
   const dlg = dialog(`<div class="dialog-card more-sheet account-actions-sheet">
@@ -99,15 +108,20 @@ function accountRow(x,groups){
   const dataAsOf=x.latestBalance?.capturedAt
     ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(dateTime(x.latestBalance.capturedAt))}`
     : '';
+  // An account that can carry its own balance and has none yet is not broken, it is unfinished -
+  // say so instead of showing a bare em dash next to it.
+  const needsBalance=!x.latestBalance&&canSetBalance(x)
+    ? ` · ${esc(get('accounts.needsBalance'))}`
+    : '';
   const row=document.createElement('div');row.className='row';
   // The "move to group" affordance only appears once at least one group exists (otherwise the dialog
   // would be a dead end offering only "Ungrouped").
   const moveBtn=(groups||[]).length?`<button type="button" class="icon-button" data-move title="${esc(get('accounts.moveToGroup'))}" aria-label="${esc(get('accounts.moveToGroup'))}">${ACCT_FOLDER}</button>`:'';
   const renameBtn=`<button type="button" class="icon-button" data-rename-account title="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}" aria-label="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}">${ACCT_EDIT}</button>`;
-  const balanceBtn=isManual?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
+  const balanceBtn=canSetBalance(x)?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));
@@ -124,8 +138,12 @@ function accountRow(x,groups){
 async function loadAccountsView(){
   const [accounts,connections,groups]=await Promise.all([api('api/accounts'),api('api/bank-connections'),api('api/account-groups').catch(()=>[])]);
   const list=$('#accounts-view-list');list.innerHTML='';
-  // Archived accounts (IsActive=false, e.g. a deleted manual account) are hidden from the list.
-  const visibleAccounts=(accounts||[]).filter(a=>a.isActive!==false);
+  // Archived accounts (IsActive=false, e.g. a deleted manual account) are hidden from the list -
+  // except an imported one. A Finanzguru export carries only bookings, no balance, so the import
+  // creates the account archived and out of net worth until it is given one. Hiding it meant there
+  // was NO path to that balance anywhere in the app: the account existed, carried its history, and
+  // was invisible. It is listed now and says what it needs.
+  const visibleAccounts=(accounts||[]).filter(a=>a.isActive!==false||a.provider==='finanzguru-import');
   const groupList=(groups||[]).slice().sort((a,b)=>(a.sortOrder-b.sortOrder)||a.name.localeCompare(b.name));
   const baseCur=state.space?.baseCurrency||'EUR';
   const collapsed=new Set(JSON.parse(localStorage.getItem('finance.groupsCollapsed')||'[]'));
