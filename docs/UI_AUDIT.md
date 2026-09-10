@@ -151,5 +151,41 @@ it this grows straight back: the census went from 73 to 76 call sites during thi
 
 ## Measured layout findings
 
-Filled in from the probe once the current round of feature work has landed, so the numbers describe
-what ships rather than a moving target.
+### Page bodies: clean
+
+The probe reported **no findings at all** on `/`, `/accounts`, `/transactions`, `/contracts`,
+`/budgets`, `/analytics`, `/pension` and `/settings` at 1440×900, and none on `/`, `/accounts`,
+`/transactions`, `/contracts` and `/pension` at 375×812. No sideways page scroll, nothing past the
+right edge, no clipped number, no tap target under 40 px, no fixed element off-screen. The page
+layouts are not the problem.
+
+### Dialogs: every single one overflowed, and it was one declaration
+
+This is the "overflow design error" — found and fixed in this pass, and worth recording because of how
+it hid.
+
+`.dialog-card` is `display: grid` with no `grid-template-columns`, so its single implicit column is
+`auto`, which resolves to **max-content**. A `<select>`'s max-content width is its longest `<option>`.
+So one long category or merchant name sized the whole dialog. Measured on the booking filter at
+375 px:
+
+| | before | after |
+| --- | --- | --- |
+| card width | 375 px | 375 px |
+| card content width | **467 px** | 375 px |
+| grid column | **435 px** | 343 px |
+| elements past the right edge | **14** (every label, every select, the close button) | 0 |
+
+All 76 dialog call sites use `.dialog-card`, so all of them had it. It depends on the data, which is
+exactly why it read as random and was never pinned down. `minmax(0, 1fr)` plus `min-width: 0` on the
+items fixes it — plain `1fr` would **not** have, because a grid item's default `min-width: auto`
+refuses to shrink below min-content. `ResponsiveLayoutTests` pins it.
+
+Re-measured after the fix, at 375 px: the booking filter, the manual-booking dialog and the account
+`⋯` sheet all report zero horizontal overflow and zero elements past the edge.
+
+### What is left is the design, not the layout
+
+The booking filter still scrolls **364 px vertically** at 375 px — 14 controls in a flat list. That is
+not an overflow bug, it is the disclosure problem in step 3 of the plan above, and it is the reason the
+dialog reads as over-complex even now that it fits.
