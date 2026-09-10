@@ -20,7 +20,7 @@
       // currency it holds, and a base-currency value covering ALL of them (100 EUR + 55 USD + 2m IDR).
       {
         id: 'a3', displayName: 'PayPal', institutionName: 'PayPal', provider: 'test', accountType: 'wallet',
-        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: null, sortOrder: 3,
+        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: 'g1', sortOrder: 3,
         latestBalance: { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
         balances: [
           { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
@@ -28,9 +28,19 @@
           { amount: 55, currency: 'USD', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }
         ],
         baseValue: 250, baseCurrency: 'EUR'
+      },
+      // A foreign account with NO convertible rate: it must not be counted as zero inside a confident
+      // base-currency subtotal, so the subtotal is marked instead.
+      {
+        id: 'a4', displayName: 'IDR Wallet', institutionName: 'Bank Mandiri', provider: 'test',
+        accountType: 'checking', currency: 'IDR', isActive: true, includeInNetWorth: true,
+        groupId: 'g1', sortOrder: 4,
+        latestBalance: { amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
+        balances: [{ amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }],
+        baseValue: null, baseCurrency: null
       }
     ],
-    'account-groups': [],
+    'account-groups': [{ id: 'g1', name: 'Alltag', sortOrder: 1 }],
     // Two connections: one healthy, one FinTS parked on a TAN. The second must offer "TAN eingeben",
     // never "Neu verbinden" - reconnecting discards the challenge the bank is waiting for.
     'bank-connections': [

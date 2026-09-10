@@ -357,11 +357,16 @@ providers.
 - **Sums never state their rate or its date.** `WealthModule.cs:106`/`:29` expose only a boolean
   `IsComplete`, while the FX snapshot silently accepts a fixing up to 14 days old. The owner's rule is
   that a cross-currency total must say which rate and which date it used.
-- **Account subtotals silently omit what they cannot convert.** `wwwroot/features/accounts.js:126`
-  counts an unconvertible foreign account as zero and still prints a confident base-currency figure.
-- **Historical net worth rewrites itself.** `NetWorthSnapshotService.cs:254` re-derives the accounts
-  component every six hours by back-casting today's balance through today's account set instead of
-  storing it as of its date.
+- ~~**Account subtotals silently omit what they cannot convert.**~~ `DONE` — a subtotal that had to
+  leave money out is marked (`*` with the reason on hover) on the accounts page and on the dashboard.
+  Adding the foreign figure into a base-currency total is still refused; it is the silence that was the
+  defect. An account with no balance at all is not "incomplete" — it simply has no value yet.
+- ~~**Historical net worth rewrites itself.**~~ `DONE` — a snapshot written on (or before) the day it
+  describes is a measurement and is now kept; the back-cast only fills days that have none, and
+  **re-anchors** on a measured day so earlier days derive from what was recorded there instead of from
+  today's balance carried across it. `IsObservedSnapshot` was too loose to protect a measurement with (a
+  one-day slack for UTC skew also lets a row reconstructed today for yesterday look measured), so this
+  uses its own stricter predicate. Today stays live.
 - **The history back-cast is offset by pending authorisations.** `NetWorthSnapshotService.cs:124`
   anchors on `interimAvailable` but walks back over booked transactions only.
 - **An asset valuation overwrites the current value unconditionally.**

@@ -131,10 +131,25 @@ async function loadAccountsView(){
   const collapsed=new Set(JSON.parse(localStorage.getItem('finance.groupsCollapsed')||'[]'));
   const byGroup=new Map();
   for(const a of visibleAccounts){const k=a.groupId||'';if(!byGroup.has(k))byGroup.set(k,[]);byGroup.get(k).push(a);}
-  // Group subtotal in the base currency: use the converted baseValue for foreign accounts, the native
-  // amount for base-currency accounts, and EXCLUDE a foreign account with no FX rate (baseValue null)
-  // rather than adding its foreign figure into a base-currency total.
-  const total=accts=>accts.reduce((s,a)=>a.baseValue!=null?s+Number(a.baseValue):(a.latestBalance&&a.latestBalance.currency===baseCur?s+Number(a.latestBalance.amount):s),0);
+  // Group subtotal in the base currency: the converted baseValue for foreign accounts, the native
+  // amount for base-currency accounts. An account whose money could NOT be converted is left out -
+  // adding a foreign figure into a base-currency total would be arithmetic across units - but leaving
+  // it out silently printed a confident number that was missing real money, so the subtotal now says
+  // so. (An account with no balance at all is not incomplete; it simply has no value yet.)
+  const total=accts=>{
+    let sum=0,incomplete=false;
+    for(const a of accts){
+      if(a.baseValue!=null){sum+=Number(a.baseValue);continue}
+      if(a.latestBalance&&a.latestBalance.currency===baseCur){sum+=Number(a.latestBalance.amount);continue}
+      if(a.latestBalance)incomplete=true;
+    }
+    return{sum,incomplete};
+  };
+  const totalMarkup=accts=>{
+    const t=total(accts);
+    const mark=t.incomplete?`<span class="amount-incomplete" title="${esc(get('common.fxIncomplete'))}" aria-label="${esc(get('common.fxIncomplete'))}">*</span>`:'';
+    return `${money(t.sum,baseCur)}${mark}`;
+  };
   // Group header (g=null → the "Ungrouped" bucket). Collapse state persists in localStorage.
   const renderBucket=(g,accts)=>{
     const gid=g?g.id:'';const isCollapsed=collapsed.has(gid);
@@ -142,7 +157,7 @@ async function loadAccountsView(){
     // The chevron only expands/collapses; the name is a separate drill-down that opens all bookings of
     // the group's accounts (UX rework §3). The name keeps class `group-toggle` for accounts-ux decoration.
     const toggle=()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));loadAccountsView();};
-    head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${money(total(accts),baseCur)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
+    head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${totalMarkup(accts)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
     head.querySelector('[data-toggle]').addEventListener('click',toggle);
     head.querySelector('[data-group-open]').addEventListener('click',()=>{if(g)ctx.showView('transactions',{query:'groupId='+encodeURIComponent(g.id)});else toggle();});
     head.querySelector('[data-rename]')?.addEventListener('click',()=>openGroupDialog(g));

@@ -312,9 +312,24 @@ function renderWidget(type, ctx, body, data, cfg) {
     // currency comes from the accounts themselves (baseCurrency), which is where the converted values were
     // computed - so the label and the numbers can never disagree.
     const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
-    const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
+    // Same rule as the accounts page: money that could not be converted is left out of the
+    // base-currency sum, and the row says so instead of printing a confident number that is short.
+    const groupTotal = accts => {
+      let sum = 0, incomplete = false;
+      for (const x of accts) {
+        if (x.baseValue != null) { sum += Number(x.baseValue); continue; }
+        if (x.latestBalance && x.latestBalance.currency === baseCur) { sum += Number(x.latestBalance.amount); continue; }
+        if (x.latestBalance) incomplete = true;
+      }
+      return { sum, incomplete };
+    };
+    const groupTotalMarkup = accts => {
+      const total = groupTotal(accts);
+      const mark = total.incomplete ? `<span class="amount-incomplete" title="${ctx.esc(ctx.get('common.fxIncomplete'))}">*</span>` : '';
+      return `${money(total.sum, baseCur)}${mark}`;
+    };
     const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}${walletLine(x)}</div></div>`;
-    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${money(groupTotal(accts), baseCur)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
+    const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${groupTotalMarkup(accts)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
     // Each group is its own calm block: a header row (folder monogram · name · subtotal · drill chevron)
     // over its account rows, blocks spaced by whitespace rather than heavy rules (reference overview §3).
     const groupBlock = (headHtml, accts) => `<section class="dash-group">${headHtml}<div class="dash-group-rows">${accts.map(acctRow).join('')}</div></section>`;

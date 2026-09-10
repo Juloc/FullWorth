@@ -252,8 +252,18 @@ public sealed class NetWorthSnapshotService(
                     existingByKey[key] = snapshot;
                 }
 
+                // A snapshot recorded ON its own day holds what the accounts actually were that day.
+                // The walk below is an ESTIMATE: it back-casts today balance through today bookings. It
+                // used to overwrite the measurement every six hours, so the past moved whenever a booking
+                // was re-categorised or an account was removed - and the real number was gone for good.
+                //
+                // Today is the exception: today IS the live measurement.
+                var measured = day != today && WasMeasuredOnItsOwnDay(snapshot);
                 var component = components.GetValueOrDefault(day);
-                snapshot.Accounts = runningAccounts;
+                // Re-anchor on a measured day, so the days before it are derived from what was actually
+                // recorded there rather than from today balance carried across it.
+                if (measured) runningAccounts = snapshot.Accounts;
+                else snapshot.Accounts = runningAccounts;
                 snapshot.Assets = component.Assets;
                 snapshot.Liabilities = component.Liabilities;
                 snapshot.NetWorth = snapshot.Accounts + snapshot.Assets - snapshot.Liabilities;
@@ -290,6 +300,17 @@ public sealed class NetWorthSnapshotService(
         }
         return result;
     }
+
+    /// <summary>
+    /// The row was written on - or before - the day it describes, so its accounts figure is what was
+    /// actually measured then and must not be replaced by an estimate.
+    ///
+    /// Deliberately stricter than <see cref="IsObservedSnapshot"/>: that one allows a day of slack for
+    /// UTC/local skew, which also lets a row RECONSTRUCTED today for yesterday look measured. Too loose to
+    /// protect a measurement with - it would freeze yesterday at whatever the first back-cast guessed.
+    /// </summary>
+    private static bool WasMeasuredOnItsOwnDay(NetWorthSnapshot snapshot) =>
+        snapshot.Date >= DateOnly.FromDateTime(snapshot.CreatedAt.UtcDateTime);
 
     private static bool IsObservedSnapshot(NetWorthSnapshot snapshot)
     {

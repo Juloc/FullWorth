@@ -71,6 +71,9 @@ label.check input{width:auto}
 .share-link-box .share-link{font-family:var(--mono,monospace);font-size:12px}
 /* §18: a cross-currency total that couldn't fully convert (a rate was missing) — amber, never hidden */
 .fx-incomplete{font-size:11px;color:var(--warning);margin-top:6px}
+/* Marks a sum that had to leave money out because a rate was missing. Inline next to the figure, so
+   a total can never look complete when it is not. */
+.amount-incomplete{color:var(--warning);margin-left:2px;cursor:help}
 /* §18: native amount with a smaller converted base value underneath it */
 .amount-stack{display:flex;flex-direction:column;align-items:flex-end}
 .amount-converted{font-size:11px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
