@@ -137,8 +137,9 @@ WHERE l."Id"=@id
             if (!await CanWriteContract(db, userId, fullWorthSpaceId, contract.Id, ct))
                 return Results.NotFound();
 
-        if (contracts.Select(contract => contract.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
-            return Results.BadRequest(new { error = "Contracts with different currencies cannot be merged." });
+        var selectedCurrencies = contracts.Select(contract => contract.Currency).ToArray();
+        if (!ContractMergeCurrency.TryResolve(selectedCurrencies, out _))
+            return Results.BadRequest(new { error = ContractMergeCurrency.ConflictError(selectedCurrencies) });
 
         var target = request.TargetContractId.HasValue
             ? contracts.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)

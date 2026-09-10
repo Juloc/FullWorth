@@ -504,13 +504,31 @@ in your own Enable Banking application appear, and links straight to the API App
 
 Two things.
 
-**Merging.** The machinery exists and is reachable (`openMergeDialog` from the contract detail and from
-the duplicate banner, `ContractMergeExecutionService` behind it), but the owner has three separate
-contracts for what was only an account change and cannot merge them. Two candidate causes are visible in
-the code: the candidate list is filtered to an EXACTLY equal currency string
-(`contracts.js:1020`, so a contract with no currency can never be merged with a EUR one), and the only
-entry points are one contract at a time — there is no "select these three, merge" in the list. Needs a
-reproduction against his three contracts to say which.
+**Merging — `DONE`.** Both suspected causes were real, and a third one sat behind them.
+
+*Cause.* Four places compared currency strings for exact equality — the candidate list in
+`contracts.js`, `ContractMergePreviewService`, `ContractStore.MergeForUserAsync` and the
+`/api/contract-parity/merge` pre-check — so a contract row without a currency (older imports and
+hand-written rows) could not be merged with a EUR one, from any entry point. On top of that the only
+entry points were one contract at a time, and the preview always picked the survivor itself, so even a
+successful merge could not keep the row the owner wanted.
+
+*Fix.* One rule, shared: an unknown currency does not vote (`ContractMergeCurrency.TryResolve`), two
+known codes are still a conflict and the refusal names both. A survivor whose own currency was unknown
+adopts the one code the selection knows — no amount is touched — because payment matching filters
+bookings by the contract's currency and would otherwise find nothing. `ContractMergePreviewRequest`
+gained `PreferredCanonicalContractId`, which the execution service passes on so a user-chosen survivor
+revalidates against its own preview token. The contract list has a selection mode (one toolbar toggle,
+rows become checkboxes, "n ausgewählt" + Zusammenführen) that feeds the existing merge dialog, which now
+also asks which contract stays. Merging goes through `merge-preview` + `merge-execute` (the path
+`insights.js` already uses), not the legacy parity endpoint. Nothing is deleted: the merged-away rows keep
+their `MergedIntoContractId` and their payment account, so they still appear under "Zahlungskonten &
+Historie" and their bookings keep counting towards the surviving contract.
+
+*Verified.* `ContractMultiMergeTests` (9 tests) walks the three-account "Weg" case, including the
+currency-less row as the chosen survivor, and asserts that all three bookings, both former accounts and
+every contract row survive the merge. Each of the four fixes was reverted individually to watch the
+matching test fail.
 
 **Projection.** `DONE` — the preview is the trend curve continued past today, inside card 1. The
 measured history keeps its solid line and its area fill; the forward part is a dashed segment on the

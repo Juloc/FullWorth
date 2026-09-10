@@ -1,0 +1,58 @@
+/* Contract merging: the list's selection mode and the survivor block in the merge dialog.
+   Tokens only. Everything else (rows, `.contract-merge-option`, buttons) reuses the shared styles. */
+
+/* Selection bar inside the list card, between the toolbar and the rows. */
+.contracts-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin: 0 0 var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--cta);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+
+.contracts-selection[hidden] { display: none; }
+
+.contracts-selection-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  min-width: 0;
+}
+
+.contracts-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: 0 0 auto;
+}
+
+/* The box is only the visual state of a row that is itself the control. */
+.contract-row-select {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cta);
+  pointer-events: none;
+}
+
+.contract-row-selected { background: var(--accent-soft); }
+
+/* Survivor choice: the same option rows as the source list, set apart by a heading and a rule. */
+.contract-merge-survivor {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.contract-merge-survivor[hidden] { display: none; }
+
+.contract-merge-survivor-head {
+  font-weight: 650;
+  margin-bottom: var(--s1);
+}
+
+.contract-merge-note { margin-top: var(--s1); }

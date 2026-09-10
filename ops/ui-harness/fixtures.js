@@ -14,8 +14,8 @@
       { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, iconKey: 'groceries' }
     ],
     'accounts': [
-      { id: 'a1', name: 'Girokonto', iban: 'DE02120300000000202051', currency: 'EUR', balance: 2431.55, type: 'checking', groupId: null, ownerUserIds: [] },
-      { id: 'a2', name: 'Tagesgeld mit langem Namen', iban: 'DE02500105170137075030', currency: 'EUR', balance: 18250.10, type: 'savings', groupId: null, ownerUserIds: [] },
+      { id: 'a1', name: 'Girokonto', displayName: 'Girokonto', iban: 'DE02120300000000202051', currency: 'EUR', balance: 2431.55, type: 'checking', groupId: null, ownerUserIds: [] },
+      { id: 'a2', name: 'Tagesgeld mit langem Namen', displayName: 'Tagesgeld mit langem Namen', iban: 'DE02500105170137075030', currency: 'EUR', balance: 18250.10, type: 'savings', groupId: null, ownerUserIds: [] },
       // A wallet-per-currency account in the shape the real API returns: one headline balance plus every
       // currency it holds, and a base-currency value covering ALL of them (100 EUR + 55 USD + 2m IDR).
       {
@@ -80,9 +80,44 @@
       ],
       total: 6, page: 1, pageSize: 50
     },
+    // The real /api/contracts shape (amount + billingCycle + server-computed monthlyEquivalent /
+    // annualizedAmount), not a hand-made "monthlyAmount". The last three rows are the reported merge
+    // case: ONE utility contract that changed its paying account twice, so three rows exist - and the
+    // oldest of them carries no currency at all, which must still be mergeable with the EUR ones.
     'contracts': [
-      { id: 'k1', name: 'Stromvertrag', providerName: 'Stadtwerke', monthlyAmount: 78.5, currency: 'EUR', status: 'active', nextDueDate: iso('2026-10-01'), categoryId: 'c1', accountId: 'a1' },
-      { id: 'k2', name: 'Mobilfunk', providerName: 'Telekom', monthlyAmount: 29.99, currency: 'EUR', status: 'active', nextDueDate: iso('2026-09-20'), categoryId: 'c1', accountId: 'a1' }
+      {
+        id: 'k1', name: 'Stromvertrag', providerName: 'Stadtwerke', kind: 'contract', amount: 78.5,
+        currency: 'EUR', billingCycle: 'monthly', interval: 1, monthlyEquivalent: 78.5, annualizedAmount: 942,
+        nextDueDate: iso('2026-10-01'), categoryId: 'c1', accountId: 'a1', autoDetected: false, isActive: true,
+        createdAt: '2025-01-04T09:00:00Z', updatedAt: '2026-09-01T09:00:00Z'
+      },
+      {
+        id: 'k2', name: 'Mobilfunk', providerName: 'Telekom', kind: 'subscription', amount: 29.99,
+        currency: 'EUR', billingCycle: 'monthly', interval: 1, monthlyEquivalent: 29.99, annualizedAmount: 359.88,
+        nextDueDate: iso('2026-09-20'), categoryId: 'c1', accountId: 'a1', autoDetected: false, isActive: true,
+        createdAt: '2025-02-04T09:00:00Z', updatedAt: '2026-09-01T09:00:00Z'
+      },
+      {
+        id: 'k3', name: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG', providerName: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG',
+        kind: 'contract', amount: 182, currency: '', billingCycle: 'monthly', interval: 1,
+        monthlyEquivalent: 182, annualizedAmount: 2184, nextDueDate: iso('2026-04-01'), categoryId: 'c1',
+        accountId: 'a1', autoDetected: true, isActive: true,
+        createdAt: '2024-05-04T09:00:00Z', updatedAt: '2026-04-02T09:00:00Z'
+      },
+      {
+        id: 'k4', name: 'WEG AM KÖNIGSTRÄßLE 1 5 VERTR D PPG', providerName: 'WEG AM KÖNIGSTRÄßLE 1 5 VERTR D PPG',
+        kind: 'contract', amount: 182, currency: 'EUR', billingCycle: 'monthly', interval: 1,
+        monthlyEquivalent: 182, annualizedAmount: 2184, nextDueDate: iso('2026-07-01'), categoryId: 'c1',
+        accountId: 'a2', autoDetected: true, isActive: true,
+        createdAt: '2026-04-04T09:00:00Z', updatedAt: '2026-07-02T09:00:00Z'
+      },
+      {
+        id: 'k5', name: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG', providerName: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG',
+        kind: 'contract', amount: 182, currency: 'EUR', billingCycle: 'monthly', interval: 1,
+        monthlyEquivalent: 182, annualizedAmount: 2184, nextDueDate: iso('2026-10-01'), categoryId: 'c1',
+        accountId: 'a3', autoDetected: true, isActive: true,
+        createdAt: '2026-07-04T09:00:00Z', updatedAt: '2026-09-02T09:00:00Z'
+      }
     ],
     'budgets': [],
     'notifications': [],

@@ -4,7 +4,13 @@ using FullWorth.Backend.Modules.Intelligence;
 
 namespace FullWorth.Backend.Modules.Contracts;
 
-public sealed record ContractMergePreviewRequest(IReadOnlyList<Guid> ContractIds);
+/// <summary>
+/// <paramref name="PreferredCanonicalContractId"/> is the contract the user picked as the survivor. It
+/// wins whenever it is part of the selection; without it the deterministic ordering below decides.
+/// </summary>
+public sealed record ContractMergePreviewRequest(
+    IReadOnlyList<Guid> ContractIds,
+    Guid? PreferredCanonicalContractId = null);
 
 public sealed record ContractMergePreviewContract(
     Guid Id,
@@ -85,16 +91,22 @@ public sealed class ContractMergePreviewService(ContractStore store, AutopilotRo
                 executionEnabled = false;
         }
 
-        if (contracts.Select(x => x.Contract.Currency).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
-            return new(ContractMergePreviewResult.Invalid, Error: "Contracts with different currencies cannot be merged.");
+        var selectedCurrencies = contracts.Select(x => x.Contract.Currency).ToArray();
+        if (!ContractMergeCurrency.TryResolve(selectedCurrencies, out var mergedCurrency))
+            return new(ContractMergePreviewResult.Invalid, Error: ContractMergeCurrency.ConflictError(selectedCurrencies));
 
-        var canonical = contracts
-            .OrderByDescending(x => x.Activity?.LastPayment ?? DateOnly.MinValue)
-            .ThenByDescending(x => x.Contract.IsActive)
-            .ThenByDescending(x => x.Contract.UpdatedAt)
-            .ThenByDescending(x => x.Contract.CreatedAt)
-            .ThenBy(x => x.Contract.Id)
-            .First();
+        var preferred = request.PreferredCanonicalContractId is { } preferredId && preferredId != Guid.Empty
+            ? contracts.FirstOrDefault(x => x.Contract.Id == preferredId)
+            : default;
+        var canonical = preferred.Contract is not null
+            ? preferred
+            : contracts
+                .OrderByDescending(x => x.Activity?.LastPayment ?? DateOnly.MinValue)
+                .ThenByDescending(x => x.Contract.IsActive)
+                .ThenByDescending(x => x.Contract.UpdatedAt)
+                .ThenByDescending(x => x.Contract.CreatedAt)
+                .ThenBy(x => x.Contract.Id)
+                .First();
 
         var sourceIds = contracts
             .Where(x => x.Contract.Id != canonical.Contract.Id)
@@ -130,7 +142,7 @@ public sealed class ContractMergePreviewService(ContractStore store, AutopilotRo
             .ToArray();
 
         var warnings = BuildWarnings(contracts);
-        var fields = BuildCanonicalFields(canonical.Contract);
+        var fields = BuildCanonicalFields(canonical.Contract, mergedCurrency);
 
         var previewContracts = contracts
             .Select(x => new ContractMergePreviewContract(
@@ -207,14 +219,22 @@ public sealed class ContractMergePreviewService(ContractStore store, AutopilotRo
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private static IReadOnlyList<ContractMergePreviewField> BuildCanonicalFields(ContractView contract) =>
+    private static IReadOnlyList<ContractMergePreviewField> BuildCanonicalFields(
+        ContractView contract,
+        string mergedCurrency) =>
     [
         new("name", contract.Name, contract.Id, "canonical-contract"),
         new("providerName", contract.ProviderName, contract.Id, "canonical-contract"),
         new("accountId", contract.AccountId?.ToString("D"), contract.Id, "latest-payment-canonical"),
         new("categoryId", contract.CategoryId?.ToString("D"), contract.Id, "canonical-contract"),
         new("amount", contract.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture), contract.Id, "canonical-contract"),
-        new("currency", contract.Currency, contract.Id, "required-equal"),
+        // The survivor keeps its own code; a survivor without one adopts the only code the selection
+        // knows, so the merged contract can still match its bookings.
+        new(
+            "currency",
+            ContractMergeCurrency.Normalize(contract.Currency).Length > 0 ? contract.Currency : mergedCurrency,
+            contract.Id,
+            ContractMergeCurrency.Normalize(contract.Currency).Length > 0 ? "canonical-contract" : "only-known-currency-in-selection"),
         new("billingCycle", contract.BillingCycle, contract.Id, "canonical-contract"),
         new("interval", contract.Interval.ToString(System.Globalization.CultureInfo.InvariantCulture), contract.Id, "canonical-contract")
     ];

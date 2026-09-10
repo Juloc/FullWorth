@@ -36,6 +36,7 @@ const APP_SHELL = [
   '/ui/ux-kit.js',
   '/features/budgets.js',
   '/features/contracts.js',
+  '/styles/features/contracts-merge.css',
   '/features/insights.js',
   '/features/tax.js',
   '/features/tax-review-extra.js',

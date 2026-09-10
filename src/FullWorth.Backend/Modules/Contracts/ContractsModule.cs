@@ -265,8 +265,10 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
                 contract.MergedIntoContractId == null)
             .ToListAsync(ct);
         if (sources.Count != sourceIds.Length) return new(ContractMutationResult.NotFound);
-        if (sources.Any(source => !string.Equals(source.Currency, target.Currency, StringComparison.OrdinalIgnoreCase)))
-            return new(ContractMutationResult.Invalid, Error: "Contracts with different currencies cannot be merged.");
+
+        var selectedCurrencies = sources.Select(source => source.Currency).Append(target.Currency).ToArray();
+        if (!ContractMergeCurrency.TryResolve(selectedCurrencies, out var mergedCurrency))
+            return new(ContractMutationResult.Invalid, Error: ContractMergeCurrency.ConflictError(selectedCurrencies));
 
         foreach (var source in sources)
         {
@@ -295,6 +297,12 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             source.UpdatedAt = DateTimeOffset.UtcNow;
             audit.Record(fullWorthSpaceId, userId, "contract.merged", "RecurringContract", source.Id);
         }
+
+        // Filling an unknown currency from the selection is not a conversion and never touches an amount:
+        // the surviving row keeps its own amount, and its payment matching (which filters bookings by the
+        // contract's currency) only works once the code is known.
+        if (ContractMergeCurrency.Normalize(target.Currency).Length == 0 && mergedCurrency.Length > 0)
+            target.Currency = mergedCurrency;
 
         target.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -562,6 +570,44 @@ public sealed record ContractActivity(
     int MatchedCount,
     decimal? AverageAmount,
     IReadOnlyList<ContractPayment> Payments);
+
+// A merge must only be refused for a real conflict. A contract row can carry no currency at all
+// (older imports, hand-written rows, anything created before the write path required a code), and an
+// unknown currency is not a different one - it stays compatible with any code in the selection. Two
+// genuinely different codes remain a conflict, and the refusal names both.
+public static class ContractMergeCurrency
+{
+    public static string Normalize(string? currency) =>
+        string.IsNullOrWhiteSpace(currency) ? string.Empty : currency.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// The single currency a selection agrees on. Contracts without a currency do not vote; the result
+    /// is empty when nothing in the selection knows its currency. Returns false only when two known
+    /// codes disagree - that is the one case a merge must refuse.
+    /// </summary>
+    public static bool TryResolve(IEnumerable<string?> currencies, out string resolved)
+    {
+        var known = KnownCodes(currencies);
+        resolved = known.Length == 1 ? known[0] : string.Empty;
+        return known.Length <= 1;
+    }
+
+    public static string[] KnownCodes(IEnumerable<string?> currencies) =>
+        currencies
+            .Select(Normalize)
+            .Where(currency => currency.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(currency => currency, StringComparer.Ordinal)
+            .ToArray();
+
+    public static string ConflictError(IEnumerable<string?> currencies)
+    {
+        var known = KnownCodes(currencies);
+        return known.Length > 1
+            ? $"Contracts with different currencies cannot be merged ({string.Join(", ", known)})."
+            : "Contracts with different currencies cannot be merged.";
+    }
+}
 
 public static class ContractIdentity
 {

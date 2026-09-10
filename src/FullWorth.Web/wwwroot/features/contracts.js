@@ -24,6 +24,10 @@ let categoryIcons = new Map();
 let accountNames = new Map();
 // Filter/sort state is URL-backed so the contracts view is restorable and shareable.
 const view = { kind: '', status: 'active', account: '', category: '', cycle: '', sort: 'cycle', order: 'asc' };
+// Multi-select for merging: a transient list mode, deliberately NOT in the URL — it is an action in
+// progress, not a view worth restoring.
+let selectMode = false;
+const selection = new Set();
 
 function loadViewState() {
   const p = new URLSearchParams(location.search);
@@ -60,6 +64,28 @@ function contractIdentityKey(contract) {
   while (tokens.length > 1 && CONTRACT_LEGAL_SUFFIXES.has(tokens[tokens.length - 1])) tokens.pop();
   return tokens.join(' ');
 }
+// A contract row can carry no currency at all (detection and older imports both produce that), and an
+// unknown currency is not a different one: it stays mergeable with any code. Only two KNOWN codes are a
+// real conflict — the same rule the backend applies, so the dialog never offers what the server refuses
+// and never hides what it would accept.
+function mergeCurrency(contract) { return String(contract?.currency || '').trim().toUpperCase(); }
+function mergeCurrencyCompatible(a, b) {
+  const left = mergeCurrency(a);
+  const right = mergeCurrency(b);
+  return !left || !right || left === right;
+}
+function mergeCurrencyCodes(contracts) {
+  return [...new Set(contracts.map(mergeCurrency).filter(Boolean))].sort();
+}
+function mergeCurrencyConflict(contracts) {
+  const codes = mergeCurrencyCodes(contracts);
+  return codes.length > 1 ? codes : null;
+}
+// The one currency a selection knows, used to render an amount whose own row has none.
+function mergeSelectionCurrency(contracts) {
+  const codes = mergeCurrencyCodes(contracts);
+  return codes.length === 1 ? codes[0] : '';
+}
 function sameExpectedAmount(a, b) {
   const left = Math.abs(Number(a?.amount) || 0);
   const right = Math.abs(Number(b?.amount) || 0);
@@ -74,14 +100,14 @@ function likelyDuplicateGroups() {
     if (!key) continue;
     let group = groups.find(item =>
       item.key === key &&
-      item.currency === String(contract.currency || '').toUpperCase() &&
+      mergeCurrencyCompatible(item, contract) &&
       item.cycle === String(contract.billingCycle || 'monthly') &&
       item.interval === Number(contract.interval || 1) &&
       sameExpectedAmount(item.contracts[0], contract));
     if (!group) {
       group = {
         key,
-        currency: String(contract.currency || '').toUpperCase(),
+        currency: mergeCurrency(contract),
         cycle: String(contract.billingCycle || 'monthly'),
         interval: Number(contract.interval || 1),
         contracts: []
@@ -89,6 +115,9 @@ function likelyDuplicateGroups() {
       groups.push(group);
     }
     group.contracts.push(contract);
+    // Once one member knows its currency the group does too, so a later row in another currency no
+    // longer joins through the still-unknown one.
+    if (!group.currency) group.currency = mergeCurrency(contract);
   }
   return groups.filter(group => {
     if (group.contracts.length < 2) return false;
@@ -228,6 +257,8 @@ export async function renderContracts(context) {
   ctx = context;
   loadViewState();
   detectedVisibleCount = DETECTED_BATCH_SIZE;
+  selectMode = false;
+  selection.clear();
   await ensureOfficialBrandCatalog(ctx.api);
   injectCss();
   const host = ctx.$('#view-contracts');
@@ -379,6 +410,19 @@ function viewHtml() {
       ${sortIcon('<path d="M4 6h16M7 12h10M10 18h4"/>')}
       ${filterCount ? `<span>${filterCount}</span>` : ''}
     </button>
+    <button type="button" class="contracts-filter-open${selectMode ? ' active' : ''}" data-select-toggle aria-pressed="${selectMode}" aria-label="${esc(t('Verträge auswählen und zusammenführen', 'Select and merge contracts'))}">
+      ${sortIcon('<path d="M4 7h9M4 12h9M4 17h6"/><path d="M15 15.5l2.2 2.2L21 13"/>')}
+    </button>
+  </div>`;
+
+  // Shown only while selecting: the count plus the one action the mode exists for. It replaces nothing
+  // in the row itself, so a normal list stays free of checkboxes and buttons.
+  const selectionBar = `<div class="contracts-selection" data-selection-bar${selectMode ? '' : ' hidden'}>
+    <span class="contracts-selection-count" data-selection-count></span>
+    <span class="contracts-selection-actions">
+      <button type="button" class="btn btn-secondary" data-selection-cancel>${esc(ctx.get('common.cancel'))}</button>
+      <button type="button" class="btn btn-primary" data-selection-merge disabled>${esc(ctx.get('contracts.mergeConfirm'))}</button>
+    </span>
   </div>`;
 
   const duplicateReview = duplicateReviewHtml();
@@ -390,6 +434,7 @@ function viewHtml() {
     <div id="contracts-detected" class="detected-panel" hidden></div>
     <div class="contracts-listcard">
       ${toolbar}
+      ${selectionBar}
       <div class="contracts-list" data-list></div>
     </div>
     <div id="contracts-cloud-benchmarks" hidden></div>
@@ -459,6 +504,64 @@ function wireControls(host) {
     const sourceIds = String(button.dataset.duplicateSources || '').split(',').filter(Boolean);
     openMergeDialog(target, sourceIds);
   }));
+  host.querySelector('[data-select-toggle]')?.addEventListener('click', () => {
+    selectMode = !selectMode;
+    selection.clear();
+    host.innerHTML = viewHtml();
+    wireControls(host);
+    renderList(host);
+  });
+  host.querySelector('[data-selection-cancel]')?.addEventListener('click', () => exitSelectMode(host));
+  host.querySelector('[data-selection-merge]')?.addEventListener('click', () => openMergeForSelection());
+  updateSelectionBar();
+}
+
+// A merge needs at least two contracts, so the action stays disabled until a second one is ticked.
+function updateSelectionBar() {
+  const bar = ctx.$('[data-selection-bar]');
+  if (!bar) return;
+  bar.hidden = !selectMode;
+  const count = bar.querySelector('[data-selection-count]');
+  if (count) {
+    count.textContent = selection.size
+      ? t(`${selection.size} ausgewählt`, `${selection.size} selected`)
+      : t('Verträge zum Zusammenführen antippen', 'Tap the contracts to merge');
+  }
+  const merge = bar.querySelector('[data-selection-merge]');
+  if (merge) merge.disabled = selection.size < 2;
+}
+
+function exitSelectMode(host) {
+  const wasOn = selectMode;
+  selectMode = false;
+  selection.clear();
+  const box = host || ctx.$('#view-contracts');
+  if (!wasOn || !box?.querySelector('[data-list]')) return;
+  box.innerHTML = viewHtml();
+  wireControls(box);
+  renderList(box);
+}
+
+// The survivor the dialog pre-selects: an active contract before an archived one, then the one with the
+// most recent due date / last change - i.e. the row that most likely reflects the current agreement.
+function survivorPreference(a, b) {
+  return (Number(b.isActive !== false) - Number(a.isActive !== false))
+    || String(b.nextDueDate || '').localeCompare(String(a.nextDueDate || ''))
+    || String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+}
+
+function openMergeForSelection() {
+  const chosen = [...selection].map(id => contractsById.get(id)).filter(Boolean);
+  if (chosen.length < 2) return;
+  const conflict = mergeCurrencyConflict(chosen);
+  if (conflict) {
+    ctx.toast(t(
+      `Verschiedene Währungen (${conflict.join(', ')}) können nicht zusammengeführt werden.`,
+      `Different currencies (${conflict.join(', ')}) cannot be merged.`));
+    return;
+  }
+  const primary = chosen.slice().sort(survivorPreference)[0];
+  openMergeDialog(primary, chosen.filter(item => item.id !== primary.id).map(item => item.id));
 }
 
 function setActive(host, selector, activeEl) {
@@ -541,9 +644,16 @@ function sortContracts(list) {
   return list.slice().sort((a, b) => dir * cmp(a, b) || byName(a, b));
 }
 
-// Injected once (no app.css edits). Everything else reuses the shared `.fw-*` and app.css classes.
-// No-op: the contracts layout CSS lives in app.css (the app CSP blocks injected inline <style>).
-function injectCss() { }
+// The contracts layout CSS lives in app.css. Only the merge/selection surface brings its own file, and
+// it is loaded as a <link> because the CSP blocks an injected inline <style> block.
+function injectCss() {
+  if (document.querySelector('link[data-contracts-merge-css]')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/styles/features/contracts-merge.css';
+  link.dataset.contractsMergeCss = '1';
+  document.head.appendChild(link);
+}
 
 // Price-change suggestions (UI_UX_SPEC §13): detected jumps in a subscription's recurring amount, shown
 // for the owner to accept (apply the new price to the contract) or dismiss. `detect` runs a fresh scan
@@ -638,21 +748,48 @@ function rowFor(c) {
       ? `<div class="contract-row-alert">${esc(t('Kündigungsfrist', 'Cancellation deadline'))}: ${ctx.esc(ctx.date(c.cancellation.cancellationDeadline))}</div>`
       : '';
 
-  row.innerHTML = `${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath, categoryIconKey: categoryIconKey(c) })}
+  // In selection mode the row itself is the control, so it reports the checked state and the box is a
+  // visual affordance only (never a second tab stop next to its own row).
+  const selected = selection.has(c.id);
+  if (selectMode) {
+    row.setAttribute('role', 'checkbox');
+    row.setAttribute('aria-checked', String(selected));
+    row.classList.toggle('contract-row-selected', selected);
+  }
+  const selectCell = selectMode
+    ? `<input type="checkbox" class="contract-row-select" data-select-row tabindex="-1" aria-hidden="true"${selected ? ' checked' : ''}>`
+    : '';
+
+  row.innerHTML = `${selectCell}${identityIcon(c.providerName || c.name, { logoAssetPath: c.logoAssetPath, categoryIconKey: categoryIconKey(c) })}
     <div class="fw-row-main">
       <div class="fw-row-title">${ctx.esc(c.name)}${marker}</div>
       <div class="fw-row-sub">${ctx.esc(secondary)}</div>
       ${alert}
     </div>
     <div class="fw-row-amt">${amount}${amountSub ? `<small>${ctx.esc(amountSub)}</small>` : ''}</div>
-    <span class="contract-row-chevron" aria-hidden="true">›</span>`;
+    ${selectMode ? '' : '<span class="contract-row-chevron" aria-hidden="true">›</span>'}`;
 
   const open = () => openDetail(c.id);
-  row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
+  // While selecting, the whole row is the checkbox: a tap anywhere toggles it. A tap on the box itself
+  // has already toggled natively, so that state is adopted instead of flipped again.
+  const setSelected = value => {
+    if (value) selection.add(c.id); else selection.delete(c.id);
+    row.classList.toggle('contract-row-selected', value);
+    row.setAttribute('aria-checked', String(value));
+    const box = row.querySelector('[data-select-row]');
+    if (box) box.checked = value;
+    updateSelectionBar();
+  };
+  const activate = event => {
+    if (!selectMode) { open(); return; }
+    const box = event?.target?.closest?.('[data-select-row]');
+    setSelected(box ? box.checked : !selection.has(c.id));
+  };
+  row.addEventListener('click', event => { if (!event.target.closest('button')) activate(event); });
   row.addEventListener('keydown', event => {
     if (!event.target.closest('button') && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      open();
+      activate(event);
     }
   });
   return row;
@@ -1007,59 +1144,137 @@ function mergeCandidateScore(primary, candidate) {
   const primaryIdentity = contractIdentityKey(primary);
   const candidateIdentity = contractIdentityKey(candidate);
   if (primaryIdentity && candidateIdentity && primaryIdentity === candidateIdentity) score += 12;
-  if ((primary.currency || '') === (candidate.currency || '')) score += 4;
+  if (mergeCurrency(primary) === mergeCurrency(candidate)) score += 4;
   if (Math.abs(Number(primary.amount || 0) - Number(candidate.amount || 0)) < 0.01) score += 6;
   if ((primary.billingCycle || 'monthly') === (candidate.billingCycle || 'monthly')) score += 3;
   if (primary.accountId && candidate.accountId && primary.accountId !== candidate.accountId) score += 1;
   return score;
 }
 
+// One line of context per contract in the merge dialog: which account pays it, what it costs, how
+// often — plus the two facts that decide whether a merge is allowed at all (archived, currency).
+function mergeOptionMeta(contract, fallbackCurrency) {
+  const account = contract.accountId
+    ? (accountNames.get(contract.accountId) || ctx.get('contracts.account'))
+    : t('Ohne festes Konto', 'No fixed account');
+  const currency = mergeCurrency(contract);
+  const amount = currency
+    ? ctx.money(contract.amount, currency)
+    : `${ctx.money(contract.amount, fallbackCurrency || 'EUR')} (${t('Währung nicht gesetzt', 'currency not set')})`;
+  const cycle = ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'));
+  const archived = contract.isActive === false ? ` · ${ctx.get('contracts.archived')}` : '';
+  return `${ctx.esc(account)} · ${amount} · ${ctx.esc(cycle)}${ctx.esc(archived)}`;
+}
+
+// Merge entry point for one contract (detail view, duplicate banner) and for a multi-selection in the
+// list, which passes the rest of the selection in `preselectedIds`. The survivor is chosen here, so
+// the same dialog covers "keep the one I opened" and "keep this one of the three".
 async function openMergeDialog(contract, preselectedIds = []) {
   const preselected = new Set(preselectedIds);
+  const rejected = allContracts.filter(candidate =>
+    candidate.id !== contract.id && !mergeCurrencyCompatible(candidate, contract));
   const candidates = allContracts
-    .filter(candidate => candidate.id !== contract.id && (candidate.currency || '') === (contract.currency || ''))
+    .filter(candidate => candidate.id !== contract.id && mergeCurrencyCompatible(candidate, contract))
     .slice()
     .sort((a, b) => {
+      const pre = Number(preselected.has(b.id)) - Number(preselected.has(a.id));
       const score = mergeCandidateScore(contract, b) - mergeCandidateScore(contract, a);
-      return score || String(a.name || '').localeCompare(String(b.name || ''));
+      return pre || score || String(a.name || '').localeCompare(String(b.name || ''));
     });
 
   if (!candidates.length) {
-    ctx.toast(ctx.get('contracts.mergeNone'));
+    ctx.toast(rejected.length
+      ? t('Nur Verträge in derselben Währung können zusammengeführt werden.', 'Only contracts in the same currency can be merged.')
+      : ctx.get('contracts.mergeNone'));
     return;
   }
 
-  const rows = candidates.map(candidate => {
-    const account = candidate.accountId ? (accountNames.get(candidate.accountId) || ctx.get('contracts.account')) : t('Ohne festes Konto', 'No fixed account');
-    const archived = candidate.isActive === false ? ` · ${ctx.get('contracts.archived')}` : '';
-    return `<label class="check contract-merge-option">
+  let survivorId = contract.id;
+  const rows = candidates.map(candidate => `<label class="check contract-merge-option">
       <input type="checkbox" name="sourceContractId" value="${candidate.id}"${preselected.has(candidate.id) ? ' checked' : ''}>
-      <span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${ctx.esc(account)} · ${ctx.money(candidate.amount, candidate.currency)} · ${ctx.esc(ctx.get('contracts.cycle_' + (candidate.billingCycle || 'monthly')))}${ctx.esc(archived)}</span></span>
-    </label>`;
-  }).join('');
+      <span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${mergeOptionMeta(candidate, mergeCurrency(contract))}</span></span>
+    </label>`).join('');
 
-  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog">
+  const rejectedNote = rejected.length
+    ? `<div class="row-sub contract-merge-note">${ctx.esc(t(
+      `Verträge in einer anderen Währung sind nicht aufgeführt (${rejected.length}).`,
+      `Contracts in a different currency are not listed (${rejected.length}).`))}</div>`
+    : '';
+
+  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog contract-merge-dialog">
     <div class="panel-head"><div><h2>${ctx.esc(ctx.get('contracts.mergeTitle'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="row-sub">${ctx.esc(ctx.get('contracts.mergeHint'))}</div>
     <div class="contract-merge-options">${rows}</div>
+    ${rejectedNote}
+    <div class="contract-merge-survivor" data-survivor hidden>
+      <div class="contract-merge-survivor-head">${ctx.esc(t('Welcher Vertrag bleibt bestehen?', 'Which contract stays?'))}</div>
+      <div class="contract-merge-options" data-survivor-list></div>
+      <div class="row-sub">${ctx.esc(t(
+        'Die Zahlungskonten der zusammengeführten Verträge bleiben als Historie erhalten, ihre Buchungen zählen weiter zu diesem Vertrag.',
+        'The payment accounts of the merged contracts are kept as history, and their payments keep counting towards this contract.'))}</div>
+    </div>
     <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary" data-merge-submit disabled>${ctx.esc(ctx.get('contracts.mergeConfirm'))}</button></div>
   </form>`);
 
   const submit = dlg.querySelector('[data-merge-submit]');
-  const updateSubmit = () => { submit.disabled = !dlg.querySelector('input[name="sourceContractId"]:checked'); };
-  dlg.querySelectorAll('input[name="sourceContractId"]').forEach(input => input.addEventListener('change', updateSubmit));
-  updateSubmit();
+  const survivorBox = dlg.querySelector('[data-survivor]');
+  const survivorList = dlg.querySelector('[data-survivor-list]');
+  const checkedIds = () => [...dlg.querySelectorAll('input[name="sourceContractId"]:checked')].map(input => input.value);
+  const checkedContracts = () => checkedIds().map(id => contractsById.get(id)).filter(Boolean);
+
+  function renderSurvivor() {
+    const pool = [contract, ...checkedContracts()];
+    if (!pool.some(item => item.id === survivorId)) survivorId = contract.id;
+    survivorBox.hidden = pool.length < 2;
+    const fallback = mergeSelectionCurrency(pool);
+    survivorList.innerHTML = pool.map(item => `<label class="check contract-merge-option">
+      <input type="radio" name="canonicalContractId" value="${item.id}"${item.id === survivorId ? ' checked' : ''}>
+      <span><strong>${ctx.esc(item.name)}</strong><span class="row-sub">${mergeOptionMeta(item, fallback)}</span></span>
+    </label>`).join('');
+    survivorList.querySelectorAll('input[name="canonicalContractId"]').forEach(input =>
+      input.addEventListener('change', () => { survivorId = input.value; }));
+    submit.disabled = pool.length < 2;
+  }
+
+  dlg.querySelectorAll('input[name="sourceContractId"]').forEach(input => input.addEventListener('change', renderSurvivor));
+  renderSurvivor();
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
-    const sourceContractIds = [...dlg.querySelectorAll('input[name="sourceContractId"]:checked')].map(input => input.value);
+    const sourceContractIds = checkedIds();
     if (!sourceContractIds.length) return;
+    const conflict = mergeCurrencyConflict([contract, ...checkedContracts()]);
+    if (conflict) {
+      ctx.toast(t(
+        `Verschiedene Währungen (${conflict.join(', ')}) können nicht zusammengeführt werden.`,
+        `Different currencies (${conflict.join(', ')}) cannot be merged.`));
+      return;
+    }
     submit.disabled = true;
+    const contractIds = [contract.id, ...sourceContractIds];
     try {
-      await ctx.api('api/contract-parity/merge', jsonBody({
-        contractIds: [contract.id, ...sourceContractIds],
-        targetContractId: contract.id
+      // Preview first: it revalidates the whole selection server-side and returns the token the execute
+      // call has to present, so a merge can never run against data that changed while the dialog was open.
+      const preview = await ctx.api('api/contracts/merge-preview', jsonBody({
+        contractIds,
+        preferredCanonicalContractId: survivorId
+      }, 'POST'));
+      if (!preview?.executionEnabled) {
+        submit.disabled = false;
+        ctx.toast(t('Zusammenführen ist hier nicht möglich.', 'Merging is not available here.'));
+        return;
+      }
+      // Never merge into a different survivor than the one on screen.
+      if (preview.canonicalContractId !== survivorId) {
+        submit.disabled = false;
+        ctx.toast(t('Der gewählte Vertrag kann nicht bestehen bleiben.', 'The chosen contract cannot be kept.'));
+        return;
+      }
+      await ctx.api('api/contracts/merge-execute', jsonBody({
+        contractIds,
+        canonicalContractId: preview.canonicalContractId,
+        previewToken: preview.previewToken
       }, 'POST'));
       dlg.close();
       ctx.toast(ctx.get('contracts.mergedToast'));

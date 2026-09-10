@@ -101,10 +101,12 @@ public sealed class ContractMergeExecutionService(
         if (sources.Any(source => source.MergedIntoContractId.HasValue))
             return new(ContractMergeExecuteResult.Conflict, Error: "A source contract was already merged elsewhere.");
 
+        // Preview with the survivor the caller confirmed, so a user-chosen canonical revalidates against
+        // the same preview (and the same token) instead of being overruled by the default ordering.
         var previewOutcome = await previews.PreviewAsync(
             userId,
             fullWorthSpaceId,
-            new ContractMergePreviewRequest(ids),
+            new ContractMergePreviewRequest(ids, request.CanonicalContractId),
             ct);
 
         if (previewOutcome.Result == ContractMergePreviewResult.NotFound)
