@@ -6,7 +6,8 @@ import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data
 import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
-// offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?"), an allocation card
+// offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
+// measured history AND the configurable forward preview past today, an allocation card
 // ("Verteilung deines Vermögens"), the optional portfolio panel, and finally the asset/liability/loan
 // editors behind a Details/Verwalten disclosure. Totals/history come from /api/wealth/*; type-specific
 // modules own their detail logic. The optional emergency-fund card is driven by an explicit per-user,
@@ -56,16 +57,18 @@ const COPY = {
     bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne bestätigte Kontozuordnung und Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
     bookingOnlyHint: 'Importierte Buchungen sind vorhanden, aber noch kein belastbarer historischer Vermögensstand.',
     emergencyTitle: 'Notgroschen', emergencyHint: 'Liquiditätsreserve für unerwartete Ausgaben', emergencyTarget: 'Ziel', emergencyCurrent: 'Aktuell', emergencySetup: 'Notgroschen einrichten', emergencyEdit: 'Notgroschen bearbeiten', emergencyScope: 'Berücksichtigte Konten', emergencyAll: 'Alle liquiden Konten', emergencyEnabled: 'Notgroschen anzeigen', emergencyInvalid: 'Bitte ein Ziel größer als 0 eingeben.',
-    projectionTitle: 'Wie könnte sich dein Vermögen entwickeln?',
-    projectionHint: 'Eine Rechnung mit deinen Annahmen, keine Prognose.',
+    projectionLabel: 'Vorschau', projectionAdjust: 'Vorschau anpassen', projectionOff: 'Aus',
+    projectionAssumption: 'Annahme', projectionPerMonth: 'pro Monat', projectionPerYear: 'pro Jahr',
+    projectionNotMeasured: 'gerechnet, nicht gemessen',
+    projectionNotInRange: 'Die Vorschau beginnt heute. Wähle einen Zeitraum, der heute enthält, um sie im Verlauf zu sehen.',
     projectionHorizon: 'Zeitraum', projectionYearsShort: 'J.', projectionYearsLong: 'Jahren',
     projectionSavings: 'Sparrate pro Monat', projectionReturn: 'Rendite pro Jahr (%)', projectionInflation: 'Inflation pro Jahr (%)',
     projectionFromHistory: 'Sparrate aus deinem eigenen Verlauf berechnet:',
     projectionHistoryWas: 'Aus deinem Verlauf ergäbe sich:',
     projectionNoHistory: 'Für eine Sparrate aus dem Verlauf fehlt noch Historie. Trag sie selbst ein.',
-    projectionIn: 'In', projectionReal: 'Kaufkraft von heute', projectionToday: 'Heute',
+    projectionIn: 'In', projectionReal: 'Kaufkraft von heute',
     projectionContributed: 'Eingezahlt', projectionGrowth: 'Wertzuwachs',
-    projectionNote: 'Gerechnet mit monatlicher Verzinsung deiner Annahmen. Steuern, Gebühren und Schwankungen sind nicht enthalten. Keine Anlageempfehlung.'
+    projectionNote: 'Gerechnet mit monatlicher Verzinsung deiner Annahmen. Steuern, Gebühren und Schwankungen sind nicht enthalten. Das ist keine Prognose und keine Anlageempfehlung.'
   },
   en: {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
@@ -86,16 +89,18 @@ const COPY = {
     bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a confirmed account mapping and balance they are shown as booking activity, not as net worth.',
     bookingOnlyHint: 'Imported bookings are available, but no reliable historical net-worth value exists yet.',
     emergencyTitle: 'Emergency fund', emergencyHint: 'Liquid reserve for unexpected expenses', emergencyTarget: 'Target', emergencyCurrent: 'Current', emergencySetup: 'Set up emergency fund', emergencyEdit: 'Edit emergency fund', emergencyScope: 'Included accounts', emergencyAll: 'All liquid accounts', emergencyEnabled: 'Show emergency fund', emergencyInvalid: 'Enter a target greater than 0.',
-    projectionTitle: 'How could your wealth develop?',
-    projectionHint: 'A calculation from your assumptions, not a forecast.',
+    projectionLabel: 'Projection', projectionAdjust: 'Adjust projection', projectionOff: 'Off',
+    projectionAssumption: 'Assumption', projectionPerMonth: 'per month', projectionPerYear: 'per year',
+    projectionNotMeasured: 'calculated, not measured',
+    projectionNotInRange: 'The projection starts today. Choose a range that includes today to see it in the chart.',
     projectionHorizon: 'Horizon', projectionYearsShort: 'yr', projectionYearsLong: 'years',
     projectionSavings: 'Savings per month', projectionReturn: 'Return per year (%)', projectionInflation: 'Inflation per year (%)',
     projectionFromHistory: 'Savings rate calculated from your own history:',
     projectionHistoryWas: 'Your history would suggest:',
     projectionNoHistory: 'Not enough history for a savings rate yet. Enter one yourself.',
-    projectionIn: 'In', projectionReal: "In today's purchasing power", projectionToday: 'Today',
+    projectionIn: 'In', projectionReal: "In today's purchasing power",
     projectionContributed: 'Paid in', projectionGrowth: 'Growth',
-    projectionNote: 'Calculated with monthly compounding of your assumptions. Taxes, fees and volatility are not included. Not investment advice.'
+    projectionNote: 'Calculated with monthly compounding of your assumptions. Taxes, fees and volatility are not included. This is not a forecast and not investment advice.'
   }
 };
 
@@ -219,11 +224,10 @@ function paintNetWorth() {
   const host = ctx.$('#view-networth');
   if (!host) return;
   const completeness = finanzguruCompletenessNotice(nw.importCompleteness, { scope: 'wealth', lang: isDe() ? 'de' : 'en' });
-  host.innerHTML = `${completeness}${buildHeroCard()}${buildProjectionCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
+  host.innerHTML = `${completeness}${buildHeroCard()}${buildAllocationCard()}${buildEmergencyCard()}${investmentsCardMarkup()}${manageMarkup()}`;
 
   const hero = host.querySelector('.nw-hero');
   if (hero) wireHero(hero);
-  wireProjection(host.querySelector('.nw-projection-card'));
   host.querySelector('[data-action="new-asset"]')?.addEventListener('click', () => openAssetWizard());
   host.querySelector('[data-action="new-liability"]')?.addEventListener('click', () => openLiabilityDialog());
   host.querySelectorAll('[data-action="emergency-fund"]').forEach(button => button.addEventListener('click', () => openEmergencyFundDialog()));
@@ -241,192 +245,12 @@ function paintNetWorth() {
   renderLoans(ctx);
 }
 
-/* ---- Card 2: "Wie könnte sich dein Vermögen entwickeln?" ------------------------------------- */
-
-// A projection, not a forecast. Every number follows from the four inputs and monthly compounding,
-// and the card says so. The only value taken from data is the starting savings rate, read off the
-// user's own history and freely overwritable - a round invented number would read like advice, and
-// this is a calculator, not a recommendation.
-const PROJECTION_YEARS = [5, 10, 20, 30];
-const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 10 };
-const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
-
-function monthsBetween(fromDate, toDate) {
-  const from = parseChartDate(fromDate);
-  const to = parseChartDate(toDate);
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
-  return Math.max(0, Math.round((to - from) / MS_PER_MONTH));
-}
-
-// The average monthly change of the user's own net worth over the window currently shown. Returns
-// null when there is not enough history to say anything - the card then starts at zero and says
-// where the number would have come from, instead of projecting a made-up rate.
-function observedMonthlySavings() {
-  const usable = (nw.history || []).filter(point => Number.isFinite(Number(point.netWorth)));
-  if (usable.length < 2) return null;
-  const months = monthsBetween(usable[0].date, usable.at(-1).date);
-  if (months < 1) return null;
-  return Math.round((Number(usable.at(-1).netWorth) - Number(usable[0].netWorth)) / months);
-}
-
-function projectionSettings() {
-  const stored = nw.projection || {};
-  const observed = observedMonthlySavings();
-  const savings = Number(stored.monthlySavings);
-  const stored_years = Number(stored.years);
-  return {
-    monthlySavings: Number.isFinite(savings) ? savings : (observed ?? 0),
-    savingsIsObserved: !Number.isFinite(savings) && observed !== null,
-    hasObserved: observed !== null,
-    observed,
-    returnPercent: Number.isFinite(Number(stored.returnPercent)) ? Number(stored.returnPercent) : PROJECTION_FALLBACK.returnPercent,
-    inflationPercent: Number.isFinite(Number(stored.inflationPercent)) ? Number(stored.inflationPercent) : PROJECTION_FALLBACK.inflationPercent,
-    years: PROJECTION_YEARS.includes(stored_years) ? stored_years : PROJECTION_FALLBACK.years
-  };
-}
-
-// value(m+1) = value(m) * (1 + r/12) + savings. Monthly compounding, because the savings arrive
-// monthly; a yearly formula would silently overstate the growth on the current year's payments.
-function projectSeries(start, monthlySavings, returnPercent, months) {
-  const rate = (Number(returnPercent) || 0) / 100 / 12;
-  const series = [start];
-  let value = start;
-  for (let month = 1; month <= months; month++) {
-    value = value * (1 + rate) + monthlySavings;
-    series.push(value);
-  }
-  return series;
-}
-
-function projectionChartSvg(series) {
-  if (series.length < 2) return '';
-  const width = 900;
-  const height = 160;
-  const pad = 14;
-  const min = Math.min(...series);
-  const max = Math.max(...series);
-  const span = max - min || 1;
-  const yFor = value => height - ((value - min) / span) * (height - pad * 2) - pad;
-  const points = series.map((value, index) => ({ x: (index / (series.length - 1)) * width, y: yFor(value) }));
-  const line = smoothLinePath(points);
-  const area = line + ' L' + width + ',' + height + ' L0,' + height + ' Z';
-  const grid = [0.25, 0.5, 0.75].map(fraction =>
-    '<line class="nw-chart-grid" x1="0" y1="' + (height * fraction).toFixed(1) + '" x2="' + width + '" y2="' + (height * fraction).toFixed(1) + '" vector-effect="non-scaling-stroke"/>').join('');
-  // A projection that crosses zero has to show where zero is, or a negative path looks like growth.
-  const zero = min < 0 && max > 0
-    ? '<line class="nw-projection-zero" x1="0" y1="' + yFor(0).toFixed(1) + '" x2="' + width + '" y2="' + yFor(0).toFixed(1) + '" vector-effect="non-scaling-stroke"/>'
-    : '';
-  return '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" role="img" aria-label="'
-    + ctx.esc(t('projectionTitle')) + '">' + grid + zero
-    + '<path class="nw-chart-area nw-projection-area" d="' + area + '"/>'
-    + '<path class="nw-chart-line nw-projection-line" d="' + line + '" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>';
-}
-
-function projectionInner() {
-  const settings = projectionSettings();
-  const start = num(nw.overview?.netWorth);
-  const months = settings.years * 12;
-  const series = projectSeries(start, settings.monthlySavings, settings.returnPercent, months);
-  const end = series.at(-1);
-  const contributed = settings.monthlySavings * months;
-  const growth = end - start - contributed;
-  const real = end / Math.pow(1 + (settings.inflationPercent / 100), settings.years);
-
-  const seg = '<div class="fw-cycle nw-projection-years" role="tablist" aria-label="' + ctx.esc(t('projectionHorizon')) + '">'
-    + PROJECTION_YEARS.map(years => '<button type="button" role="tab" data-projection-years="' + years + '"'
-      + (years === settings.years ? ' class="active" aria-selected="true"' : ' aria-selected="false"')
-      + '>' + years + ' ' + ctx.esc(t('projectionYearsShort')) + '</button>').join('')
-    + '</div>';
-
-  const savingsHint = settings.savingsIsObserved
-    ? '<p class="nw-projection-observed">' + ctx.esc(t('projectionFromHistory')) + ' ' + ctx.esc(currentRangeLabel()) + '</p>'
-    : (settings.hasObserved
-      ? '<p class="nw-projection-observed">' + ctx.esc(t('projectionHistoryWas')) + ' ' + ctx.money(settings.observed, nw.currency) + '</p>'
-      : '<p class="nw-projection-observed">' + ctx.esc(t('projectionNoHistory')) + '</p>');
-
-  const fields = '<div class="nw-projection-fields">'
-    + '<label>' + ctx.esc(t('projectionSavings')) + '<input type="number" step="10" inputmode="numeric" data-projection-savings value="' + settings.monthlySavings + '"></label>'
-    + '<label>' + ctx.esc(t('projectionReturn')) + '<input type="number" step="0.1" min="-20" max="20" inputmode="decimal" data-projection-return value="' + settings.returnPercent + '"></label>'
-    + '<label>' + ctx.esc(t('projectionInflation')) + '<input type="number" step="0.1" min="0" max="20" inputmode="decimal" data-projection-inflation value="' + settings.inflationPercent + '"></label>'
-    + '</div>' + savingsHint;
-
-  const summary = '<div class="fw-summary nw-projection-summary">'
-    + '<div><span class="fw-summary-label">' + ctx.esc(t('projectionIn')) + ' ' + settings.years + ' ' + ctx.esc(t('projectionYearsLong')) + '</span><span class="fw-summary-value">' + ctx.money(end, nw.currency) + '</span></div>'
-    + '<div><span class="fw-summary-label">' + ctx.esc(t('projectionReal')) + '</span><span class="fw-summary-value">' + ctx.money(real, nw.currency) + '</span></div>'
-    + '</div>';
-
-  const breakdown = '<div class="nw-hero-metrics nw-projection-breakdown">'
-    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionToday')) + '</span><strong>' + ctx.money(start, nw.currency) + '</strong></div>'
-    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionContributed')) + '</span><strong>' + ctx.money(contributed, nw.currency) + '</strong></div>'
-    + '<div><span class="nw-metric-label">' + ctx.esc(t('projectionGrowth')) + '</span><strong' + (growth < 0 ? ' class="negative"' : '') + '>' + ctx.money(growth, nw.currency) + '</strong></div>'
-    + '</div>';
-
-  return seg + fields + '<div class="nw-chart nw-projection-chart">' + projectionChartSvg(series) + '</div>'
-    + summary + breakdown + '<p class="nw-projection-note">' + ctx.esc(t('projectionNote')) + '</p>';
-}
-
-function buildProjectionCard() {
-  return sectionCard(t('projectionTitle'), '<div class="nw-projection">' + projectionInner() + '</div>', {
-    sub: t('projectionHint'),
-    className: 'nw-projection-card'
-  });
-}
-
-function repaintProjection() {
-  const host = ctx.$('#view-networth');
-  const body = host?.querySelector('.nw-projection');
-  if (!body) return;
-  body.innerHTML = projectionInner();
-  wireProjection(host.querySelector('.nw-projection-card'));
-}
-
-let projectionSaveTimer = null;
-
-// Debounced: the card recomputes on every change either way, so the PUT is only about remembering the
-// inputs for the next visit and must not fire per keystroke.
-function persistProjection() {
-  clearTimeout(projectionSaveTimer);
-  projectionSaveTimer = setTimeout(() => {
-    ctx.api('api/preferences/wealth.projection', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nw.projection || {})
-    }).catch(() => { /* remembering the inputs is a convenience, not part of the calculation */ });
-  }, 600);
-}
-
-function wireProjection(card) {
-  if (!card) return;
-  card.querySelectorAll('[data-projection-years]').forEach(button => button.addEventListener('click', () => {
-    nw.projection = { ...(nw.projection || {}), years: Number(button.dataset.projectionYears) };
-    persistProjection();
-    repaintProjection();
-  }));
-  const finite = raw => {
-    const value = Number(raw);
-    return Number.isFinite(value) ? value : null;
-  };
-  const clamp = (value, low, high) => value === null ? null : Math.max(low, Math.min(high, value));
-  const bind = (selector, key, parse) => {
-    const input = card.querySelector(selector);
-    if (!input) return;
-    input.addEventListener('change', () => {
-      const value = parse(input.value);
-      if (value === null) return;
-      nw.projection = { ...(nw.projection || {}), [key]: value };
-      persistProjection();
-      repaintProjection();
-    });
-  };
-  bind('[data-projection-savings]', 'monthlySavings', finite);
-  bind('[data-projection-return]', 'returnPercent', raw => clamp(finite(raw), -20, 20));
-  bind('[data-projection-inflation]', 'inflationPercent', raw => clamp(finite(raw), 0, 20));
-}
-
 /* ---- Card 1: "Wie entwickelt sich dein Vermögen?" -------------------------------------------- */
 
 function trendStats(history) {
-  const usable = (history || []).filter(point => Number.isFinite(Number(point.netWorth)));
+  // measuredPoints(), not a Number.isFinite() filter: Number(null) is 0 and finite, so an unknown
+  // point used to enter the delta as a zero and turn "we do not know yet" into a rise from nothing.
+  const usable = measuredPoints(history);
   if (usable.length < 2) return { hasData: false, pct: 0, delta: 0 };
   const first = Number(usable[0].netWorth);
   const last = Number(usable.at(-1).netWorth);
@@ -497,27 +321,71 @@ function selectedChartDomain(history, activity) {
   return { start: Math.min(safeStart, safeEnd), end: Math.max(safeStart, safeEnd) };
 }
 
+// A net worth that is not there is UNKNOWN, not zero - and `Number(null)` is 0, which is exactly how
+// an unknown value sneaks in as a measurement. One helper for every reader of a net-worth figure.
+function measuredValue(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+// A measured history point: a netWorth of null is a deliberate "unknown", so it is dropped from the
+// curve (which leaves the gap it should) instead of being drawn at the baseline.
+function measuredPoints(history = nw.history) {
+  return (history || []).filter(point => measuredValue(point?.netWorth) !== null);
+}
+
+function activityPoints(activity = nw.bookingActivity) {
+  return (activity || []).filter(point => Number.isFinite(parseChartDate(point.month)) && Number(point.count) > 0);
+}
+
+// The forward preview shares ONE chart with the measured history: the same value scale and — as long
+// as it fits — the same time scale, because a second scale would make a projection look like a
+// measurement drawn next to it. Only when the horizon would squeeze the measured window into a sliver
+// (10 years of preview against 12 months of history) does the forward part get capped to this share of
+// the width; below the cap both halves keep identical pixels-per-day, so the axis stays uniform.
+const FORECAST_MAX_WIDTH_SHARE = 0.5;
+
 function trendChartGeometry(history, activity = nw.bookingActivity) {
-  const usable = (history || []).filter(point => point?.netWorth !== null && point?.netWorth !== undefined && Number.isFinite(Number(point.netWorth)));
-  const activityUsable = (activity || []).filter(point => Number.isFinite(parseChartDate(point.month)) && Number(point.count) > 0);
+  const usable = measuredPoints(history);
+  const activityUsable = activityPoints(activity);
   if (!usable.length && !activityUsable.length) return null;
   const values = usable.map(point => Number(point.netWorth));
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 1;
+  const domain = selectedChartDomain(usable, activityUsable);
+  const model = forecastModel();
+  const forecast = forecastIsInWindow(model, domain) ? model : null;
+  // The projected values belong in the scale, or the forward curve would run off the top of the card.
+  const scaleValues = values.concat(forecast ? forecast.points.map(point => point.value) : []);
+  const min = scaleValues.length ? Math.min(...scaleValues) : 0;
+  const max = scaleValues.length ? Math.max(...scaleValues) : 1;
   const span = max - min || 1;
   const width = 900; const height = 200; const pad = 14; const activityBand = 24;
   const plotHeight = height - activityBand;
-  const domain = selectedChartDomain(usable, activityUsable);
-  const timeSpan = domain.end - domain.start || 1;
+  const measuredSpan = Math.max(1, domain.end - domain.start);
+  const forecastEnd = forecast ? parseChartDate(forecast.points.at(-1).date) : null;
+  const forwardSpan = Number.isFinite(forecastEnd) ? Math.max(0, forecastEnd - domain.end) : 0;
+  const forwardShare = forwardSpan > 0
+    ? Math.min(FORECAST_MAX_WIDTH_SHARE, forwardSpan / (measuredSpan + forwardSpan))
+    : 0;
+  const splitX = width * (1 - forwardShare);
   const xForDate = value => {
     const time = parseChartDate(value);
-    return Number.isFinite(time) ? Math.max(0, Math.min(width, ((time - domain.start) / timeSpan) * width)) : 0;
+    if (!Number.isFinite(time)) return 0;
+    if (forwardSpan <= 0 || time <= domain.end)
+      return Math.max(0, Math.min(splitX, ((time - domain.start) / measuredSpan) * splitX));
+    return Math.max(splitX, Math.min(width, splitX + ((time - domain.end) / forwardSpan) * (width - splitX)));
   };
-  const pts = usable.map((point, index) => ({
-    x: xForDate(point.date),
-    y: plotHeight - ((values[index] - min) / span) * (plotHeight - pad * 2) - pad
-  }));
-  return { usable, activityUsable, values, width, height, plotHeight, pts, xForDate };
+  const yFor = value => plotHeight - ((value - min) / span) * (plotHeight - pad * 2) - pad;
+  const pts = usable.map((point, index) => ({ x: xForDate(point.date), y: yFor(values[index]) }));
+  const forecastPts = forecast ? forecast.points.map(point => ({ x: xForDate(point.date), y: yFor(point.value) })) : [];
+  // The dashed path starts at the last measured point so the curve is one line, not two: between that
+  // point and today nothing was measured either, and dashed is exactly what that stretch is.
+  const forecastPath = forecast ? (pts.length ? [pts.at(-1)] : []).concat(forecastPts) : [];
+  return {
+    usable, activityUsable, values, width, height, plotHeight, pts, xForDate, yFor,
+    forecast, forecastPts, forecastPath,
+    todayX: forecast ? xForDate(forecast.anchor.date) : null
+  };
 }
 
 function bookingActivityMarkup(geometry) {
@@ -558,8 +426,19 @@ function trendChartSvg(history) {
     const area = `${line} L${lastX},${plotHeight} L${firstX},${plotHeight} Z`;
     wealth = `<path class="nw-chart-area" d="${area}"/><path class="nw-chart-line" d="${line}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/>`;
   }
+  // The forward preview: dashed, no area fill, and separated from the measured part by a "today"
+  // divider. It is drawn on top of the measured curve so the join stays visible, and it is the only
+  // part of this card the projection is allowed to touch.
+  let forecast = '';
+  if (geometry.forecast && geometry.forecastPath.length > 1) {
+    const divider = Number.isFinite(geometry.todayX)
+      ? `<line class="nw-chart-today" x1="${geometry.todayX.toFixed(2)}" y1="0" x2="${geometry.todayX.toFixed(2)}" y2="${plotHeight}" vector-effect="non-scaling-stroke"/>`
+      : '';
+    forecast = `${divider}<path class="nw-chart-line nw-chart-forecast" d="${smoothLinePath(geometry.forecastPath)}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/>`;
+  }
+  const label = `${ctx.get('analytics.trend')}${geometry.forecast ? ` · ${t('projectionLabel')}` : ''}`;
   const empty = pts.length ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(t('noTrend'))}</text>`;
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(ctx.get('analytics.trend'))}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${empty}</svg>${bookingHistoryHint()}`;
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${bookingHistoryHint()}`;
 }
 
 function bindNetWorthScrubber(hero) {
@@ -567,17 +446,48 @@ function bindNetWorthScrubber(hero) {
   const valueEl = hero.querySelector('.nw-hero-value .fw-summary-value');
   const geometry = trendChartGeometry(nw.history, nw.bookingActivity);
   if (!svg || !valueEl || !geometry) return;
-  const points = geometry.usable.map((point, index) => ({
+  const measured = geometry.usable.map((point, index) => ({
     x: geometry.pts[index].x,
     label: ctx.date(point.date),
     markers: [{ y: geometry.pts[index].y }],
-    data: point
+    projected: false,
+    date: point.date,
+    value: Number(point.netWorth)
   }));
+  // A projected point is not a measurement, so it gets its own marker, says "gerechnet, nicht
+  // gemessen" in the preview line and in the screen-reader text, and never reaches the headline
+  // figure. Index 0 of the forecast is today's anchor, which the headline already shows.
+  const projected = geometry.forecast
+    ? geometry.forecast.points.slice(1).map((point, index) => ({
+      x: geometry.forecastPts[index + 1].x,
+      label: ctx.date(point.date),
+      markers: [{ y: geometry.forecastPts[index + 1].y, className: 'projected' }],
+      projected: true,
+      date: point.date,
+      value: point.value
+    }))
+    : [];
+  const points = measured.concat(projected);
+  if (!points.length) return;
+  const headline = () => { valueEl.innerHTML = ctx.money(nw.overview?.netWorth, nw.currency); };
   bindChartScrubber(svg, points, {
-    initialIndex: points.length - 1,
-    onChange: point => { valueEl.innerHTML = ctx.money(point.data.netWorth, nw.currency); },
-    onReset: () => { valueEl.innerHTML = ctx.money(nw.overview.netWorth, nw.currency); },
-    formatAria: point => `${point.label}: ${ctx.money(point.data.netWorth, nw.currency)}`
+    initialIndex: measured.length ? measured.length - 1 : 0,
+    onChange: point => {
+      if (point.projected) {
+        headline();
+        setForecastReadout(hero, point);
+        return;
+      }
+      valueEl.innerHTML = ctx.money(point.value, nw.currency);
+      setForecastReadout(hero, null);
+    },
+    onReset: () => {
+      headline();
+      setForecastReadout(hero, null);
+    },
+    formatAria: point => point.projected
+      ? `${t('projectionLabel')} ${point.label}: ${ctx.money(point.value, nw.currency)} (${t('projectionNotMeasured')})`
+      : `${point.label}: ${ctx.money(point.value, nw.currency)}`
   });
 }
 
@@ -590,7 +500,7 @@ function buildHeroCard() {
   const grossAssets = num(overview.totalAssets) + num(overview.accounts?.amount);
   const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
   const fx = overview.isComplete ? '' : `<p class="nw-fx">${fxIncompleteText(overview)}</p>`;
-  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${metrics}${fx}`;
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${forecastMarkup()}${metrics}${fx}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
 }
 
@@ -617,16 +527,21 @@ function fxIncompleteText(overview) {
 function repaintHeroTrend(hero) {
   const trendEl = hero.querySelector('.nw-hero-trend');
   if (trendEl) trendEl.innerHTML = heroTrendInner();
+  // The projection's default savings rate is read off the history that is currently loaded, so it has
+  // to follow the window - otherwise the preview would keep quoting a range that is no longer on
+  // screen. The inputs are rebuilt here (their VALUE changes with the window), which is why this is
+  // the one path that replaces the whole block instead of only the derived figures.
+  const forecastEl = hero.querySelector('.nw-forecast');
+  if (forecastEl) forecastEl.outerHTML = forecastMarkup();
   const chartEl = hero.querySelector('.nw-chart');
   if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
   bindNetWorthScrubber(hero);
-  // The projection's default savings rate is read off the history that is currently loaded, so it has
-  // to follow the window - otherwise the card would keep quoting a range that is no longer on screen.
-  repaintProjection();
+  wireForecast(hero);
 }
 
 function wireHero(hero) {
   bindNetWorthScrubber(hero);
+  wireForecast(hero);
   hero.querySelectorAll('[data-window]').forEach(button => {
     button.addEventListener('click', async () => {
       const months = Number(button.dataset.window);
@@ -670,6 +585,291 @@ function wireHero(hero) {
     ]);
     repaintHeroTrend(hero);
   });
+}
+
+/* ---- Card 1's forward preview: the trend curve continued past today -------------------------- */
+
+// A projection, not a forecast, and never a measurement. It is drawn as the dashed continuation of the
+// measured curve inside the SAME chart - "eine variable einstellbare Vorschau wie es sich entwickeln
+// könnte" is part of the trend, not a second card - and it may not touch the headline net worth, the
+// metrics or anything else that reads as today's value. Every number follows from the inputs below and
+// monthly compounding. The only value taken from data is the starting savings rate, read off the user's
+// own history over the window currently on screen and freely overwritable: a round invented number
+// would read like advice, and this is a calculator, not a recommendation. Horizon (including "off",
+// stored as 0 years), savings rate, return and inflation persist in the existing `wealth.projection`
+// preference.
+const PROJECTION_YEARS = [5, 10, 20, 30];
+const PROJECTION_FALLBACK = { returnPercent: 5, inflationPercent: 2, years: 10 };
+// A 30-year horizon is 361 monthly values; drawing and scrubbing every one of them buys nothing. The
+// series stays COMPOUNDED monthly - only the points that end up in the path are thinned.
+const PROJECTION_MAX_POINTS = 60;
+const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30.4375;
+
+// Session-only, deliberately not a preference field: the stored value is the calculation's inputs, not
+// whether a disclosure happens to be open.
+let forecastSettingsOpen = false;
+
+function monthsBetween(fromDate, toDate) {
+  const from = parseChartDate(fromDate);
+  const to = parseChartDate(toDate);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.max(0, Math.round((to - from) / MS_PER_MONTH));
+}
+
+// The average monthly change of the user's own net worth over the window currently shown. Returns
+// null when there is not enough history to say anything - the preview then starts at zero and says
+// where the number would have come from, instead of projecting a made-up rate.
+function observedMonthlySavings() {
+  const usable = measuredPoints();
+  if (usable.length < 2) return null;
+  const months = monthsBetween(usable[0].date, usable.at(-1).date);
+  if (months < 1) return null;
+  return Math.round((Number(usable.at(-1).netWorth) - Number(usable[0].netWorth)) / months);
+}
+
+function projectionSettings() {
+  const stored = nw.projection || {};
+  const observed = observedMonthlySavings();
+  const savings = Number(stored.monthlySavings);
+  const storedYears = Number(stored.years);
+  return {
+    monthlySavings: Number.isFinite(savings) ? savings : (observed ?? 0),
+    savingsIsObserved: !Number.isFinite(savings) && observed !== null,
+    hasObserved: observed !== null,
+    observed,
+    returnPercent: Number.isFinite(Number(stored.returnPercent)) ? Number(stored.returnPercent) : PROJECTION_FALLBACK.returnPercent,
+    inflationPercent: Number.isFinite(Number(stored.inflationPercent)) ? Number(stored.inflationPercent) : PROJECTION_FALLBACK.inflationPercent,
+    // 0 = the preview is switched off. Anything else unknown falls back to the default horizon.
+    years: (storedYears === 0 || PROJECTION_YEARS.includes(storedYears)) ? storedYears : PROJECTION_FALLBACK.years
+  };
+}
+
+// value(m+1) = value(m) * (1 + r/12) + savings. Monthly compounding, because the savings arrive
+// monthly; a yearly formula would silently overstate the growth on the current year's payments.
+function projectSeries(start, monthlySavings, returnPercent, months) {
+  const rate = (Number(returnPercent) || 0) / 100 / 12;
+  const series = [start];
+  let value = start;
+  for (let month = 1; month <= months; month++) {
+    value = value * (1 + rate) + monthlySavings;
+    series.push(value);
+  }
+  return series;
+}
+
+// Calendar months, clamped at a short month end, so a curve anchored on the 31st does not drift a day
+// per step (which would put a "30 years" horizon almost a year off).
+function addMonthsIso(iso, months) {
+  const base = parseChartDate(iso);
+  if (!Number.isFinite(base)) return null;
+  const from = new Date(base);
+  const target = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(from.getUTCDate(), lastDay));
+  return target.toISOString().slice(0, 10);
+}
+
+// Where the forward curve starts: what is measured today. Today's own history point wins (it is the
+// same figure the chart already draws, so the curves join exactly), then the overview total, then the
+// last measured point. Nothing is ever anchored on an invented value.
+function projectionAnchor() {
+  const usable = measuredPoints();
+  const last = usable.at(-1);
+  const today = localDate(new Date());
+  if (last && String(last.date).slice(0, 10) === today) return { date: today, value: measuredValue(last.netWorth) };
+  const overviewValue = measuredValue(nw.overview?.netWorth);
+  if (overviewValue !== null) return { date: today, value: overviewValue };
+  if (last) return { date: String(last.date).slice(0, 10), value: measuredValue(last.netWorth) };
+  return null;
+}
+
+// One model behind both the dashed curve and the figures under it, so the two can never disagree.
+function forecastModel() {
+  const settings = projectionSettings();
+  const anchor = projectionAnchor();
+  if (!anchor || !Number.isFinite(anchor.value) || settings.years <= 0) return null;
+  const months = settings.years * 12;
+  const series = projectSeries(anchor.value, settings.monthlySavings, settings.returnPercent, months);
+  const step = Math.max(1, Math.ceil(months / PROJECTION_MAX_POINTS));
+  const points = [];
+  for (let month = 0; month <= months; month += step) points.push({ date: addMonthsIso(anchor.date, month), value: series[month], monthsAhead: month });
+  if (points.at(-1).monthsAhead !== months) points.push({ date: addMonthsIso(anchor.date, months), value: series[months], monthsAhead: months });
+  const usable = points.filter(point => point.date && Number.isFinite(point.value));
+  if (usable.length < 2) return null;
+  const end = series[months];
+  const contributed = settings.monthlySavings * months;
+  return {
+    settings, anchor, months, points: usable, end, contributed,
+    growth: end - anchor.value - contributed,
+    real: end / Math.pow(1 + (settings.inflationPercent / 100), settings.years)
+  };
+}
+
+// The preview starts today, so it can only be drawn in a window that contains today. A custom range
+// that ends in the past keeps its measured curve unsquashed and says why the dashed part is missing,
+// instead of stretching the axis by ten years for a segment nobody asked to see there.
+function forecastIsInWindow(model, domain = null) {
+  if (!model) return false;
+  const range = domain || selectedChartDomain(measuredPoints(), activityPoints());
+  const anchor = parseChartDate(model.anchor.date);
+  return Number.isFinite(anchor) && anchor >= range.start && anchor <= range.end;
+}
+
+function percentText(value) {
+  const number = Number(value) || 0;
+  try { return `${new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-US', { maximumFractionDigits: 1 }).format(number)} %`; }
+  catch { return `${number} %`; }
+}
+
+// The assumption travels with the curve: a preview whose savings rate is not on screen is a promise.
+function assumptionText(settings) {
+  return `${ctx.esc(t('projectionAssumption'))}: ${ctx.money(settings.monthlySavings, nw.currency)} ${ctx.esc(t('projectionPerMonth'))}`
+    + ` · ${ctx.esc(percentText(settings.returnPercent))} ${ctx.esc(t('projectionPerYear'))}`;
+}
+
+function forecastReadout(model, point) {
+  if (!model) return '';
+  if (point) {
+    return `${ctx.esc(ctx.date(point.date))}: ≈ ${ctx.money(point.value, nw.currency)}`
+      + ` <span class="nw-forecast-flag">(${ctx.esc(t('projectionNotMeasured'))})</span>`;
+  }
+  return `${ctx.esc(t('projectionIn'))} ${model.settings.years} ${ctx.esc(t('projectionYearsLong'))}: ≈ ${ctx.money(model.end, nw.currency)}`;
+}
+
+// Hovering a projected point reads out HERE, never in the headline: the headline is today's measured
+// net worth and a projection may not overwrite it.
+function setForecastReadout(hero, point) {
+  const el = hero?.querySelector('[data-forecast-readout]');
+  if (el) el.innerHTML = forecastReadout(forecastModel(), point);
+}
+
+function forecastLeadInner(model) {
+  if (!model) return '';
+  const drawn = forecastIsInWindow(model);
+  return `<span class="nw-forecast-swatch" aria-hidden="true"></span>`
+    + `<span class="nw-forecast-label">${ctx.esc(t('projectionLabel'))}</span>`
+    + `<span class="nw-forecast-value" data-forecast-readout>${forecastReadout(model, null)}</span>`
+    + `<span class="nw-forecast-assumption">${assumptionText(model.settings)}</span>`
+    + (drawn ? '' : `<span class="nw-forecast-note">${ctx.esc(t('projectionNotInRange'))}</span>`);
+}
+
+function forecastFigure(label, value, negative = false) {
+  return `<div><span class="nw-metric-label">${ctx.esc(label)}</span><strong${negative ? ' class="negative"' : ''}>${value}</strong></div>`;
+}
+
+// What the curve itself cannot say: the same end value in today's purchasing power, and how much of it
+// is money paid in versus assumed growth. Today's own total is deliberately absent - the headline
+// above already carries it, and repeating it inside a projection block is exactly the confusion
+// between measured and calculated that this card has to avoid.
+function forecastFiguresInner(model) {
+  const settings = model ? model.settings : projectionSettings();
+  const hint = settings.savingsIsObserved
+    ? `<p class="nw-projection-observed">${ctx.esc(t('projectionFromHistory'))} ${ctx.esc(currentRangeLabel())}</p>`
+    : (settings.hasObserved
+      ? `<p class="nw-projection-observed">${ctx.esc(t('projectionHistoryWas'))} ${ctx.money(settings.observed, nw.currency)}</p>`
+      : `<p class="nw-projection-observed">${ctx.esc(t('projectionNoHistory'))}</p>`);
+  if (!model) return hint;
+  const figures = `<div class="nw-hero-metrics nw-projection-figures">`
+    + forecastFigure(`${t('projectionIn')} ${model.settings.years} ${t('projectionYearsLong')}`, `≈ ${ctx.money(model.end, nw.currency)}`)
+    + forecastFigure(t('projectionReal'), `≈ ${ctx.money(model.real, nw.currency)}`)
+    + forecastFigure(t('projectionContributed'), ctx.money(model.contributed, nw.currency))
+    + forecastFigure(t('projectionGrowth'), ctx.money(model.growth, nw.currency), model.growth < 0)
+    + `</div>`;
+  return hint + figures;
+}
+
+// Sits directly under the chart it belongs to: the dashed swatch and the assumption are the curve's
+// legend, and the controls that move the curve are one click away behind them.
+function forecastMarkup() {
+  const settings = projectionSettings();
+  const model = forecastModel();
+  const strip = `<div class="fw-cycle nw-projection-years" role="tablist" aria-label="${ctx.esc(t('projectionHorizon'))}">`
+    + [0, ...PROJECTION_YEARS].map(years => {
+      const active = years === settings.years;
+      const label = years === 0 ? t('projectionOff') : `${years} ${t('projectionYearsShort')}`;
+      return `<button type="button" role="tab" data-projection-years="${years}"${active ? ' class="active" aria-selected="true"' : ' aria-selected="false"'}>${ctx.esc(label)}</button>`;
+    }).join('')
+    + `</div>`;
+  const fields = `<div class="nw-projection-fields">`
+    + `<label>${ctx.esc(t('projectionSavings'))}<input type="number" step="10" inputmode="numeric" data-projection-savings value="${ctx.esc(String(settings.monthlySavings))}"></label>`
+    + `<label>${ctx.esc(t('projectionReturn'))}<input type="number" step="0.1" min="-20" max="20" inputmode="decimal" data-projection-return value="${ctx.esc(String(settings.returnPercent))}"></label>`
+    + `<label>${ctx.esc(t('projectionInflation'))}<input type="number" step="0.1" min="0" max="20" inputmode="decimal" data-projection-inflation value="${ctx.esc(String(settings.inflationPercent))}"></label>`
+    + `</div>`;
+  return `<div class="nw-forecast"><p class="nw-forecast-lead" data-forecast-lead>${forecastLeadInner(model)}</p>`
+    + `<details class="nw-forecast-settings"${forecastSettingsOpen ? ' open' : ''}><summary>${ctx.esc(t('projectionAdjust'))}</summary>`
+    + `<div class="nw-forecast-controls">${strip}${fields}<div data-forecast-figures>${forecastFiguresInner(model)}</div>`
+    + `<p class="nw-projection-note">${ctx.esc(t('projectionNote'))}</p></div></details></div>`;
+}
+
+// Repaints what an assumption changes: the curve, its scrubber and the derived figures. The inputs and
+// the horizon strip are left standing on purpose - rebuilding them would throw the caret out of the
+// field the user is still typing in.
+function repaintForecast(hero) {
+  const chartEl = hero.querySelector('.nw-chart');
+  if (chartEl) chartEl.innerHTML = trendChartSvg(nw.history);
+  bindNetWorthScrubber(hero);
+  const model = forecastModel();
+  const lead = hero.querySelector('[data-forecast-lead]');
+  if (lead) lead.innerHTML = forecastLeadInner(model);
+  const figures = hero.querySelector('[data-forecast-figures]');
+  if (figures) figures.innerHTML = forecastFiguresInner(model);
+}
+
+let projectionSaveTimer = null;
+
+// Debounced: the curve recomputes on every change either way, so the PUT is only about remembering the
+// inputs for the next visit and must not fire per keystroke.
+function persistProjection() {
+  clearTimeout(projectionSaveTimer);
+  projectionSaveTimer = setTimeout(() => {
+    ctx.api('api/preferences/wealth.projection', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nw.projection || {})
+    }).catch(() => { /* remembering the inputs is a convenience, not part of the calculation */ });
+  }, 600);
+}
+
+function wireForecast(hero) {
+  const block = hero.querySelector('.nw-forecast');
+  if (!block) return;
+  const details = block.querySelector('.nw-forecast-settings');
+  details?.addEventListener('toggle', () => { forecastSettingsOpen = !!details.open; });
+
+  block.querySelectorAll('[data-projection-years]').forEach(button => button.addEventListener('click', () => {
+    nw.projection = { ...(nw.projection || {}), years: Number(button.dataset.projectionYears) };
+    block.querySelectorAll('[data-projection-years]').forEach(other => {
+      const active = other === button;
+      other.classList.toggle('active', active);
+      other.setAttribute('aria-selected', String(active));
+    });
+    persistProjection();
+    repaintForecast(hero);
+  }));
+
+  // An emptied field is not a zero: `Number('')` is 0, so clearing the savings box used to commit a
+  // 0 %/0 € assumption before the user had typed the new one. numberOrNull() says null instead.
+  const finite = raw => {
+    const value = numberOrNull(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+  const clamp = (value, low, high) => value === null ? null : Math.max(low, Math.min(high, value));
+  const bind = (selector, key, parse) => {
+    const input = block.querySelector(selector);
+    if (!input) return;
+    // `input`, not `change`: the curve is the answer to the number being typed, so it has to move with
+    // it. A half-typed value ("-", "") parses to null and is simply ignored until it is a number.
+    input.addEventListener('input', () => {
+      const value = parse(input.value);
+      if (value === null) return;
+      nw.projection = { ...(nw.projection || {}), [key]: value };
+      persistProjection();
+      repaintForecast(hero);
+    });
+  };
+  bind('[data-projection-savings]', 'monthlySavings', finite);
+  bind('[data-projection-return]', 'returnPercent', raw => clamp(finite(raw), -20, 20));
+  bind('[data-projection-inflation]', 'inflationPercent', raw => clamp(finite(raw), 0, 20));
 }
 
 /* ---- Card 2: "Verteilung deines Vermögens" --------------------------------------------------- */

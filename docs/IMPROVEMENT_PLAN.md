@@ -478,9 +478,24 @@ the code: the candidate list is filtered to an EXACTLY equal currency string
 entry points are one contract at a time — there is no "select these three, merge" in the list. Needs a
 reproduction against his three contracts to say which.
 
-**Projection.** The wealth page already computes a projection (`buildProjectionCard`, the
-`wealth.projection` preference), but shows it as a text tile. It belongs IN the first graph: a
-configurable forward preview of how net worth could develop, drawn as a continuation of the trend.
+**Projection.** `DONE` — the preview is the trend curve continued past today, inside card 1. The
+measured history keeps its solid line and its area fill; the forward part is a dashed segment on the
+**same value scale**, behind a "today" divider, with no fill — so it cannot be read as a second,
+measured series. Under the chart sits its legend: the projected end value and the assumption in plain
+sight ("Annahme: 600 € pro Monat · 5 % pro Jahr"), with the controls one disclosure deeper — horizon
+(including "Aus", stored as `years: 0` in the unchanged `wealth.projection` preference), savings rate,
+return and inflation, each moving the curve on every keystroke while the caret stays in the field. The
+scrubber tells the halves apart: a projected point gets a dashed marker, reads out in the preview line
+as "gerechnet, nicht gemessen", and never touches the headline net worth or the metrics. The separate
+text tile is gone; the three things only it could say (purchasing power, paid in vs. growth, the
+disclaimer) moved into the disclosure, so there is one representation instead of two.
+
+Time stays honest: both halves share one pixels-per-day scale until the horizon would squeeze the
+measured window below half the card width, and a custom window that ends in the past draws no preview
+at all (it says why) instead of stretching the axis by ten years. Found and fixed on the way: an
+unknown (`null`) net worth passed the old `Number.isFinite(Number(point.netWorth))` filter as a **zero**
+— it entered the trend delta as a rise from nothing and would have anchored the projection at 0 — so
+every reader of a net-worth figure now goes through `measuredValue()`.
 
 ### O-7 The salary graph shows the company car separately instead of on top of gross — `DONE`
 

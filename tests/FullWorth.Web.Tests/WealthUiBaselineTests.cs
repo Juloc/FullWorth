@@ -274,18 +274,19 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("/ 100 / 12", js);
         Assert.Contains("value = value * (1 + rate) + monthlySavings", js);
 
-        // The inputs and the breakdown are what make it a calculation rather than a promise: today,
-        // paid in, growth. Drop those and the card becomes a number nobody can check.
+        // The inputs and the breakdown are what make it a calculation rather than a promise: paid in,
+        // growth, purchasing power. Drop those and the preview becomes a number nobody can check.
         Assert.Contains("data-projection-savings", js);
         Assert.Contains("data-projection-return", js);
         Assert.Contains("data-projection-inflation", js);
         Assert.Contains("projectionContributed", js);
         Assert.Contains("projectionGrowth", js);
+        Assert.Contains("projectionReal", js);
         Assert.Contains(".nw-projection-note", css);
 
         // Wording: it must say what it is, in both languages. This is a calculator, not advice.
-        Assert.Contains("Keine Anlageempfehlung", js);
-        Assert.Contains("Not investment advice", js);
+        Assert.Contains("keine Anlageempfehlung", js);
+        Assert.Contains("not investment advice", js);
 
         // A key present in only one language table renders as the bare key name for that language.
         var used = System.Text.RegularExpressions.Regex.Matches(js, @"t\('(projection[A-Za-z]*)'\)")
@@ -297,6 +298,63 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
             Assert.True(declarations == 2,
                 $"{key} is declared {declarations} time(s); it must appear exactly once per language table.");
         }
+    }
+
+    [Fact]
+    public async Task WealthProjectionIsDrawnIntoTheTrendChartAndNotAsASecondRepresentation()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+
+        // The preview is the trend curve continued past today: ONE chart, one value scale, a dashed
+        // forward segment and a "today" divider. The old tile drew a second chart of the same numbers.
+        Assert.Contains("nw-chart-forecast", js);
+        Assert.Contains("nw-chart-today", js);
+        Assert.Contains("${forecastMarkup()}", js);
+        Assert.DoesNotContain("buildProjectionCard", js);
+        Assert.DoesNotContain("nw-projection-card", js);
+        Assert.DoesNotContain("nw-projection-chart", js);
+        Assert.Contains(".nw-chart-forecast{stroke-dasharray", css);
+
+        // Both halves go through the geometry's own value scale, so the projected part cannot be drawn
+        // on a scale of its own that makes it look like a measurement standing next to the history.
+        Assert.Contains("y: yFor(point.value)", js);
+        Assert.Contains("values.concat(forecast ? forecast.points.map(point => point.value) : [])", js);
+
+        // Configurable, immediately, and still persisted in the existing preference - including the
+        // horizon, where 0 years means "off" rather than a new preference field.
+        Assert.Contains("api/preferences/wealth.projection", js);
+        Assert.Contains("data-projection-years=", js);
+        Assert.Contains("projectionOff", js);
+        Assert.Contains("addEventListener('input'", js);
+
+        // The savings default follows the loaded window, so the preview cannot keep quoting a range
+        // that is no longer on screen.
+        Assert.Contains("forecastEl.outerHTML = forecastMarkup()", js);
+    }
+
+    [Fact]
+    public async Task WealthProjectionNeverReadsAsAMeasuredValue()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+
+        // Scrubbing a projected point must leave the headline net worth alone: it reads out in the
+        // preview line, with its own marker, and says that it was calculated rather than measured.
+        Assert.Contains("data-forecast-readout", js);
+        Assert.Contains("point.projected", js);
+        Assert.Contains("projectionNotMeasured", js);
+        Assert.Contains("className: 'projected'", js);
+        Assert.Contains(".fw-chart-scrub-marker.projected", css);
+
+        // The assumption travels with the curve instead of hiding behind a disclosure.
+        Assert.Contains("projectionAssumption", js);
+        Assert.Contains("nw-forecast-assumption", js);
+
+        // Number(null) is 0 AND finite, so that filter let an unknown net worth through as a zero -
+        // into the curve, into the trend delta and (worst) as the anchor of the projection.
+        Assert.Contains("function measuredValue(", js);
+        Assert.DoesNotContain("Number.isFinite(Number(point.netWorth))", js);
     }
 
     private async Task<string> GetAsync(string path)

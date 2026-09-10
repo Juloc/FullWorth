@@ -189,6 +189,8 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .fw-chart-scrub-marker.positive,.fw-chart-scrub-marker.income{stroke:var(--positive)}
 .fw-chart-scrub-marker.negative,.fw-chart-scrub-marker.expense{stroke:var(--negative)}
 .fw-chart-scrub-marker.benchmark{stroke:var(--muted)}
+/* A calculated point, not a measured one: a dashed ring says so before the readout does. */
+.fw-chart-scrub-marker.projected{stroke-dasharray:3 2.5}
 .an-line-expense{stroke:var(--accent);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
 .an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
 .an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -277,15 +279,31 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .nw-hero-metrics strong.negative{color:var(--negative)}
 .nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 .nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
-/* Projection card. The inputs ARE the card, so they sit above the chart: change a number, watch the
-   curve move. Same chart primitives as the trend card, dashed line because none of it happened yet. */
+/* The forward preview is part of the trend chart, so its legend sits directly under that chart and its
+   controls one disclosure below: change a number, watch the dashed part of the curve move. Muted and
+   small on purpose - none of it happened yet, and nothing here may compete with the measured figures. */
+.nw-forecast{margin:0 0 var(--s2)}
+.nw-forecast-lead{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px var(--s2);margin:0;color:var(--muted);font-size:12px}
+/* Preview switched off ("Aus"): no legend, and no empty row where the legend was. */
+.nw-forecast-lead:empty{display:none}
+.nw-forecast-swatch{align-self:center;width:18px;border-top:2px dashed var(--cta);opacity:.6;flex:0 0 auto}
+.nw-forecast-label{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.nw-forecast-value{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.nw-forecast-flag,.nw-forecast-assumption{color:var(--muted);font-size:11px}
+.nw-forecast-note{flex-basis:100%;color:var(--muted);font-size:11px}
+.nw-forecast-settings{margin-top:var(--s2);font-size:12px}
+.nw-forecast-settings>summary{cursor:pointer;color:var(--muted);font-weight:600;list-style:none;width:max-content}
+.nw-forecast-settings>summary::-webkit-details-marker{display:none}
+.nw-forecast-settings>summary::before{content:"▸";margin-right:6px}
+.nw-forecast-settings[open]>summary::before{content:"▾"}
+.nw-projection-years{margin-top:var(--s2);max-width:100%;overflow-x:auto;scrollbar-width:none}
+.nw-projection-years::-webkit-scrollbar{display:none}
+.nw-projection-years button{flex:0 0 auto}
 .nw-projection-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3);margin-top:var(--s3)}
 .nw-projection-fields label{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:11px}
 .nw-projection-fields input{min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:8px 10px;font:inherit;font-variant-numeric:tabular-nums}
 .nw-projection-observed{margin:var(--s2) 0 0;color:var(--muted);font-size:11px}
-.nw-projection-line{stroke-dasharray:7 5}
-.nw-projection-zero{stroke:var(--line)}
-.nw-projection-summary{margin-top:var(--s2)}
+.nw-projection-figures{margin-top:var(--s3)}
 .nw-projection-note{margin:var(--s3) 0 0;color:var(--muted);font-size:11px}
 .data-completeness-warning{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin:0 0 var(--s3);padding:12px 14px;border:1px solid var(--warning);border-radius:12px;background:var(--warning-soft)}
 .data-completeness-copy{display:grid;gap:3px;min-width:0}
@@ -669,6 +687,10 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .nw-trend-grad-top{stop-color:var(--cta);stop-opacity:.16}
 .nw-trend-grad-bottom{stop-color:var(--cta);stop-opacity:0}
 .nw-chart-line{stroke-linecap:round;stroke-linejoin:round}
+/* The projected continuation: same colour, dashed and lighter, and without the area fill the measured
+   part carries - a filled forward curve would read as substance that is not there. */
+.nw-chart-forecast{stroke-dasharray:9 7;opacity:.5}
+.nw-chart-today{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 4;opacity:.6}
 .nw-chart-grid{stroke:var(--line);stroke-width:1;opacity:.55}
 .nw-chart-activity{fill:var(--muted);opacity:.22}
 .nw-chart-activity.imported{opacity:.38}

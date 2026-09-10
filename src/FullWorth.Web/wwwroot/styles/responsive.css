@@ -12,6 +12,9 @@
 }
 @media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.nw-custom-range-fields label{flex:1 1 130px}.nw-custom-range-fields input{width:100%;min-width:0}}
+/* The trend chart's preview legend: on a phone the projected value keeps the first line and the
+   assumption gets its own, so neither wraps through the middle of an amount. */
+@media(max-width:560px){.nw-forecast-assumption{flex-basis:100%}.nw-projection-figures{gap:var(--s3) var(--s4)}}
 @media(max-width:560px){.data-completeness-warning{align-items:flex-start;flex-direction:column}.data-completeness-action{width:100%}}
 @media(max-width:560px){
   #nw-investments .panel-head{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
