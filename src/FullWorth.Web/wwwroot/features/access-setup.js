@@ -421,6 +421,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<label class="check"><input type="checkbox" data-enabled ' + (enabledByDefault ? 'checked' : '') + '> ' +
           esc(get('cloudIntelligence.useCloud')) + '</label>' +
         '<p class="row-sub">' + esc(get('cloudIntelligence.localWins')) + '</p>' +
+        '<p class="row-sub"><a href="/intelligence/index.html">' + esc(get('cloudIntelligence.diagnostics')) + ' \u2197</a></p>' +
         '<div class="dialog-actions"><button type="button" data-cancel>' + esc(get('common.cancel')) + '</button>' +
         '<button type="button" data-save>' + esc(get('common.save')) + '</button></div>';
 

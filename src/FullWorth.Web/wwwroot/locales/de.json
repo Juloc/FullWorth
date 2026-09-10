@@ -1130,6 +1130,7 @@
     "cloudText": "Verbessert Händler-, Kategorie- und Vertragszuordnungen gemeinsam und ermöglicht anonyme Vergleichswerte."
   },
   "cloudIntelligence": {
+    "diagnostics": "Verbindungsdiagnose öffnen (Endpunkt, Warteschlange)",
     "title": "FullWorth Cloud Intelligence",
     "manage": "Cloud Intelligence verwalten",
     "loading": "Cloud-Status wird geprüft…",

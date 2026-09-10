@@ -1130,6 +1130,7 @@
     "cloudText": "Improves merchant, category, and contract mappings collaboratively and enables anonymous benchmarks."
   },
   "cloudIntelligence": {
+    "diagnostics": "Open connection diagnostics (endpoint, queue)",
     "title": "FullWorth Cloud Intelligence",
     "manage": "Manage Cloud Intelligence",
     "loading": "Checking cloud status…",
