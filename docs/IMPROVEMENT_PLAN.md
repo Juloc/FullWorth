@@ -681,11 +681,34 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   input (it broke `RealEstateAdvancedIntegrationTests` on exactly that flow). Fixing this properly means
   separating "when this was appraised" from "when this row was last touched" first, and only then
   refusing a stale accept.
-- **The user cannot tell what a balance means.** `AccountsModule.cs:66` drops the provider's balance
-  reference date, never exposes the balance type (available vs booked), and labels the sync time as
-  "Datenstand".
-- **The balance-type preference is implemented seven times, two different ways** — and no test covers
-  any type beyond `closingBooked`/`closingAvailable`/`manual`.
+- ~~**The user cannot tell what a balance means.**~~ `DONE` — the reference date and the provenance
+  landed earlier; the missing half was that a row still never said whether the figure was the **booked**
+  balance or the **available** one, which differ by exactly the pending authorisations the reader is
+  trying to account for. `CurrentBalances.Meaning` derives that from the balance type
+  (`available`/`booked`/`expected`/`recorded`) and `BalanceView` ships it as a computed `meaning`, so no
+  caller can stamp a figure with something its type does not say. `ui/balance-meaning.js` turns it into
+  one muted word under the amount ("verfügbar"/"gebucht"/"erwartet", full sentence on hover) on the
+  accounts list, the overview account rows and the net-worth account rows — deliberately NOT a
+  client-side copy of the type table. A manual or imported anchor gets **no** label: it has no
+  booked/available claim to make, and the row already says "manuell erfasst"/"aus Import".
+  "Datenstand" is now used only for `referenceDate`, a date somebody actually vouched for; a row that
+  only has `capturedAt` says "Abgerufen", because when FullWorth wrote a figure down is not a data date.
+- ~~**The balance-type preference is implemented seven times, two different ways**~~ `DONE` — earlier
+  work had already folded most callers into `CurrentBalances`; three copies were left, in two shapes:
+  the int `Rank` switch, the string-CASE ordering in `BalanceSnapshotQueries.CurrentFirst`, and a
+  hand-written duplicate of that CASE inlined into the accounts-list EF projection. All three are gone.
+  There is now ONE table (`CurrentBalances.Preference`) that `Rank`, `IsBooked` and `Meaning` are all
+  read off, so the preference, "is this settled money" and the label the user sees cannot disagree.
+  No EF projection needs a copy any more, so nothing had to be generated or asserted-equal: the
+  projection's subquery was **removed** (its result was overwritten by `WithAllCurrenciesAsync` anyway,
+  and both callers of `Project()` run that), and `CurrentFirst`'s last caller —
+  `FinancialReconciliationReports.CashflowAvailableAsync` — reads `CurrentBalances.LoadAsync`, which also
+  fixes the wallet defect it still had (one row per account, so a multi-currency account contributed a
+  fraction of its money to "available today") and drops an N+1. The coverage gap is closed too:
+  `BalanceTypePreferenceTests` (36, no DB) and `BalanceMeaningApiTests` (13) cover `interimAvailable`,
+  `interimBooked`, `expected`, unknown types, `manual`/`manualCurrent`, the `import` source, every
+  permutation of a single capture, and the case that matters most — several types with the SAME
+  `CapturedAt`, where the row must not flip type or wallet between two syncs of the same data.
 - ~~**A wallet-level sync failure aborts the whole connection.**~~ `DONE` — a provider error on one
   account is caught, logged and reported as `ACCOUNT_SYNC_FAILED`, and the remaining accounts still
   sync. Connection-level categories (rate limit, consent/session expired, auth required) still abort

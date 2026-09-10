@@ -14,18 +14,48 @@
       { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, iconKey: 'groceries' }
     ],
     'accounts': [
-      { id: 'a1', name: 'Girokonto', displayName: 'Girokonto', iban: 'DE02120300000000202051', currency: 'EUR', balance: 2431.55, type: 'checking', groupId: null, ownerUserIds: [] },
-      { id: 'a2', name: 'Tagesgeld mit langem Namen', displayName: 'Tagesgeld mit langem Namen', iban: 'DE02500105170137075030', currency: 'EUR', balance: 18250.10, type: 'savings', groupId: null, ownerUserIds: [] },
+      // The two everyday accounts carry the two balance types a reader has to be able to tell apart:
+      // a1 is the bank's AVAILABLE figure (pending authorisations already deducted) with the bank's own
+      // as-of date, a2 is a BOOKED figure with no as-of date at all - so the row must say "Abgerufen",
+      // not "Datenstand". `meaning` is what the server derives from balanceType.
+      {
+        id: 'a1', name: 'Girokonto', displayName: 'Girokonto', institutionName: 'Sparkasse',
+        iban: 'DE02120300000000202051', ibanLast4: '2051', provider: 'test', accountType: 'checking',
+        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: null, sortOrder: 1,
+        ownerUserIds: [],
+        latestBalance: {
+          amount: 2431.55, currency: 'EUR', balanceType: 'interimAvailable', meaning: 'available',
+          referenceDate: '2026-09-09', capturedAt: iso('2026-09-09T06:12:00Z'), source: 'provider'
+        },
+        balances: [{
+          amount: 2431.55, currency: 'EUR', balanceType: 'interimAvailable', meaning: 'available',
+          referenceDate: '2026-09-09', capturedAt: iso('2026-09-09T06:12:00Z'), source: 'provider'
+        }]
+      },
+      {
+        id: 'a2', name: 'Tagesgeld mit langem Namen', displayName: 'Tagesgeld mit langem Namen',
+        institutionName: 'Sparkasse', iban: 'DE02500105170137075030', ibanLast4: '5030',
+        provider: 'test', accountType: 'savings', currency: 'EUR', isActive: true,
+        includeInNetWorth: true, groupId: null, sortOrder: 2, ownerUserIds: [],
+        latestBalance: {
+          amount: 18250.10, currency: 'EUR', balanceType: 'closingBooked', meaning: 'booked',
+          capturedAt: iso('2026-09-09T06:12:00Z'), source: 'provider'
+        },
+        balances: [{
+          amount: 18250.10, currency: 'EUR', balanceType: 'closingBooked', meaning: 'booked',
+          capturedAt: iso('2026-09-09T06:12:00Z'), source: 'provider'
+        }]
+      },
       // A wallet-per-currency account in the shape the real API returns: one headline balance plus every
       // currency it holds, and a base-currency value covering ALL of them (100 EUR + 55 USD + 2m IDR).
       {
         id: 'a3', displayName: 'PayPal', institutionName: 'PayPal', provider: 'test', accountType: 'wallet',
         currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: 'g1', sortOrder: 3,
-        latestBalance: { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
+        latestBalance: { amount: 100, currency: 'EUR', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') },
         balances: [
-          { amount: 100, currency: 'EUR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
-          { amount: 2000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
-          { amount: 55, currency: 'USD', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }
+          { amount: 100, currency: 'EUR', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') },
+          { amount: 2000000, currency: 'IDR', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') },
+          { amount: 55, currency: 'USD', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') }
         ],
         baseValue: 250, baseCurrency: 'EUR'
       },
@@ -35,9 +65,26 @@
         id: 'a4', displayName: 'IDR Wallet', institutionName: 'Bank Mandiri', provider: 'test',
         accountType: 'checking', currency: 'IDR', isActive: true, includeInNetWorth: true,
         groupId: 'g1', sortOrder: 4,
-        latestBalance: { amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') },
-        balances: [{ amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', capturedAt: iso('2026-09-09') }],
+        latestBalance: { amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') },
+        balances: [{ amount: 5000000, currency: 'IDR', balanceType: 'closingBooked', meaning: 'booked', capturedAt: iso('2026-09-09') }],
         baseValue: null, baseCurrency: null
+      },
+      // A cash account anchored by hand: no provider type behind the figure, so it gets NO booked or
+      // available claim - the row says "manuell erfasst" and the owner's own as-of date instead.
+      {
+        id: 'a6', displayName: 'Bargeld', institutionName: 'Haushalt', provider: 'manual',
+        accountType: 'cash', currency: 'EUR', isActive: true, includeInNetWorth: true,
+        groupId: null, sortOrder: 6,
+        latestBalance: {
+          amount: 240, currency: 'EUR', balanceType: 'manual', meaning: 'recorded',
+          referenceDate: '2026-08-31', capturedAt: iso('2026-09-01T09:00:00Z'),
+          source: 'manual', note: 'Bargeld gezählt'
+        },
+        balances: [{
+          amount: 240, currency: 'EUR', balanceType: 'manual', meaning: 'recorded',
+          referenceDate: '2026-08-31', capturedAt: iso('2026-09-01T09:00:00Z'),
+          source: 'manual', note: 'Bargeld gezählt'
+        }]
       },
       // A Finanzguru history import with no balance yet: the export file carries only bookings, so the
       // account arrives archived and out of net worth until someone gives it a balance. It must offer

@@ -282,9 +282,11 @@ Signal refresh is queued, not synchronous: `FinancialSignalRefreshQueue` writes 
 `NetWorthSnapshotService.RebuildHistoryForUserAsync` reconstructs history per space *and per member*
 from the newest trusted balance backwards:
 
-- The anchor is the latest `BalanceSnapshot` per account, ordered by `CapturedAt` then by a
-  `BalanceRank` preference (`interimAvailable` → `closingAvailable` → `closingBooked` →
-  `interimBooked` → `expected`). An account with no balance row is not back-cast at all.
+- The anchor is the latest `BalanceSnapshot` per account **and currency**, ordered by `CapturedAt` then
+  by `CurrentBalances.Rank` (`interimAvailable` → `closingAvailable` → `closingBooked` →
+  `interimBooked` → `expected`, anything unknown last). That order lives in exactly one table,
+  `CurrentBalances.Preference`, which also produces `IsBooked` and the `meaning` the UI labels a balance
+  with. An account with no balance row is not back-cast at all.
 - Only accounts that are active, `IncludeInNetWorth`, owned by that member via `AccountOwner`, and
   not a portfolio-linked account are included.
 - Transactions are excluded when `Status == "PDNG"` or `UseForBalanceHistory == false`, and are only

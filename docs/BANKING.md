@@ -446,9 +446,13 @@ Owner notifications fire on edges only: `BankSyncError` on the first failure aft
 failed poll.
 
 Accounts show `displayName` (from `details`, else `product`), institution, product/type, masked IBAN
-last 4 and the capture time of the displayed balance. When several balance types were captured, the
-displayed one is picked deterministically: `interimAvailable` > `closingAvailable` > `closingBooked` >
-`interimBooked` > `expected`.
+last 4, and — for the displayed balance — its as-of date ("Datenstand", the provider's `reference_date`)
+or, when there is none, the time it was fetched ("Abgerufen"). When several balance types were captured,
+the displayed one is picked deterministically: `interimAvailable` > `closingAvailable` > `closingBooked` >
+`interimBooked` > `expected`, anything unrecognised last. The row also says WHAT the figure is —
+`meaning` (`available`/`booked`/`expected`/`recorded`, derived from the balance type by
+`CurrentBalances.Meaning`) is rendered as one muted word under the amount, because available and booked
+differ by exactly the pending authorisations a reader is trying to reconcile.
 
 ## Failure modes that look like nothing happened
 

@@ -1,4 +1,5 @@
 import { money, converted, maskIdentifier } from '../ui/money.js';
+import { balanceMeaningLine } from '../ui/balance-meaning.js';
 import { state } from '../core/state.js';
 import {
   bindAccountsPresentation,
@@ -101,6 +102,9 @@ function accountRow(x,groups){
   const isManual=x.provider==='manual'&&!x.bankConnectionId;
   const kind=[x.product||x.accountType,isManual?get('accounts.manual'):null].filter(Boolean).join(' · ');
   const nativeAmt=x.latestBalance?money(x.latestBalance.amount,x.latestBalance.currency):'—';
+  // What the headline figure IS - available (pending already deducted) or booked (not yet). One word
+  // under the amount, because that is where the question is asked.
+  const meaningLine=balanceMeaningLine(x.latestBalance,get,esc);
   const convertedAmt=x.baseValue!=null?`<div class="amount-converted">${converted(x.baseValue,x.baseCurrency)}</div>`:'';
   // A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency. The
   // headline shows one of them, so the others are listed here - they used to be invisible entirely.
@@ -114,15 +118,16 @@ function accountRow(x,groups){
   const duplicateNote=x.duplicateOfDisplayName
     ? ` · ${esc(get(x.duplicateLinkExplicit?'accounts.countedAs':'accounts.duplicateOf').replace('{name}',x.duplicateOfDisplayName))}`
     : '';
-  // The as-of date is the date the figure is valid FOR; capturedAt is only when it was recorded.
-  // A balance anchored from last month's statement has to read as last month's, and a figure the
-  // owner typed has to be distinguishable from one a bank reported.
-  const asOfValue=x.latestBalance?.referenceDate
-    ? date(x.latestBalance.referenceDate)
-    : x.latestBalance?.capturedAt ? dateTime(x.latestBalance.capturedAt) : '';
-  const dataAsOf=asOfValue
-    ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(asOfValue)}`
-    : '';
+  // Two different dates, and only one of them is a "Datenstand". referenceDate is the date the figure
+  // is valid FOR - the bank's own as-of date, or the day the owner read it off a statement - so a
+  // balance anchored from last month reads as last month's. capturedAt is merely when FullWorth wrote
+  // it down; calling that the data date claimed a freshness nobody had promised, so it is labelled as
+  // what it is: when the figure was fetched.
+  const dataAsOf=x.latestBalance?.referenceDate
+    ? ` · ${esc(get('accounts.dataAsOf'))}: ${esc(date(x.latestBalance.referenceDate))}`
+    : x.latestBalance?.capturedAt
+      ? ` · ${esc(get('accounts.retrievedAt'))}: ${esc(dateTime(x.latestBalance.capturedAt))}`
+      : '';
   const balanceSource=x.latestBalance?.source==='manual'||x.latestBalance?.source==='import'
     ? ` · ${esc(get('accounts.source_'+x.latestBalance.source))}`
     : '';
@@ -139,7 +144,7 @@ function accountRow(x,groups){
   const balanceBtn=canSetBalance(x)?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
   const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${balanceSource}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${balanceSource}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   row.querySelector('[data-move]')?.addEventListener('click',()=>openMoveToGroupDialog(x,groups));
   row.querySelector('[data-rename-account]')?.addEventListener('click',()=>openAccountNameDialog(x));

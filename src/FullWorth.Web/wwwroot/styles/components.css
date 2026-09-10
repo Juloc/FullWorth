@@ -80,6 +80,11 @@ label.check input{width:auto}
 /* The account's other currency wallets, under its headline amount. Same weight as the converted line,
    so a multi-currency account reads as one figure with detail rather than several competing numbers. */
 .amount-wallets{font-size:11px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+/* Says WHAT the amount above it is: "verfügbar" (pending authorisations already deducted) or "gebucht"
+   (not in it yet) - the two differ by exactly the pending amount, and a bare figure named neither.
+   Same weight and colour as the wallet/converted lines, so it reads as a note on the figure and never
+   competes with it. `cursor:help` because the full sentence is in the title. */
+.amount-meaning{font-size:11px;font-weight:400;color:var(--muted);text-align:right;cursor:help}
 .toolbar{display:flex;gap:var(--s2);margin-bottom:var(--s3);flex-wrap:wrap}
 .toolbar input[type=search]{min-width:260px;flex:1}
 .table-panel{padding:0;overflow:auto}

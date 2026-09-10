@@ -119,33 +119,14 @@ public sealed record BalanceView(
     DateTimeOffset CapturedAt,
     DateOnly? ReferenceDate = null,
     string? Source = null,
-    string? Note = null);
-
-public static class BalanceSnapshotQueries
+    string? Note = null)
 {
-    // Deterministic "current balance" selection. A sync stamps EVERY provider balance_type
-    // (interimAvailable, closingBooked, …) with the same CapturedAt, so ordering by CapturedAt alone
-    // let the chosen balance — and thus the displayed amount and net worth — flip arbitrarily between
-    // available/booked from one sync to the next. Newest capture first, then a single sort key that
-    // encodes the balance-type preference (a one-digit rank prefix) followed by the type name as an
-    // in-bucket tiebreak → always the same balance for the same data.
-    //
-    // Why one concatenated key instead of several ThenBy() keys: a longer key chain (or an
-    // integer-valued CASE) fails to translate. A single string key with a CASE rank prefix translates
-    // and preserves both the preference and a deterministic alphabetical fallback.
-    //
-    // IMPORTANT: this extension only works as a TOP-LEVEL query (e.g. NetWorthSnapshotService), where
-    // its body is invoked and composes into the query. Inside a correlated FirstOrDefault subquery that
-    // lives in a projection lambda (accounts list, analytics, export) EF cannot expand a user method —
-    // extension OR helper — and throws "could not be translated" at runtime (500). Those sites must
-    // write the SAME conditional key inline; the CASE below is duplicated there by necessity. Keep in sync.
-    public static IOrderedQueryable<BalanceSnapshot> CurrentFirst(this IQueryable<BalanceSnapshot> source) =>
-        source.OrderByDescending(b => b.CapturedAt)
-              .ThenBy(b => (b.BalanceType == "interimAvailable" ? "0"
-                          : b.BalanceType == "closingAvailable" ? "1"
-                          : b.BalanceType == "closingBooked" ? "2"
-                          : b.BalanceType == "interimBooked" ? "3"
-                          : b.BalanceType == "expected" ? "4" : "5") + b.BalanceType);
+    /// <summary>
+    /// What this figure IS (<see cref="BalanceMeanings"/>): available, booked, expected or just recorded.
+    /// A computed property on purpose — no caller passes it, so it can never be stamped with something
+    /// the balance type does not say, and every surface labels the amount from the same rule.
+    /// </summary>
+    public string Meaning => CurrentBalances.Meaning(BalanceType);
 }
 // BaseValue/BaseCurrency (§18): the latest balance converted into the space's base currency, for the
 // "native first, smaller converted base underneath" row display. Null when the account is already in
@@ -903,18 +884,13 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             account.Id, account.FullWorthSpaceId, account.BankConnectionId, account.InstitutionName, account.DisplayName,
             account.Product, account.AccountType, account.Currency, account.IbanLast4, account.IsActive,
             account.IncludeInNetWorth, account.SortOrder, account.UpdatedAt, account.Provider,
-            // Inlined CurrentFirst ordering — this is a correlated subquery, where EF cannot expand the
-            // extension (see BalanceSnapshotQueries.CurrentFirst). Newest capture, then rank-prefix + type.
-            db.BalanceSnapshots.Where(balance => balance.AccountId == account.Id)
-                .OrderByDescending(balance => balance.CapturedAt)
-                .ThenBy(balance => (balance.BalanceType == "interimAvailable" ? "0"
-                                  : balance.BalanceType == "closingAvailable" ? "1"
-                                  : balance.BalanceType == "closingBooked" ? "2"
-                                  : balance.BalanceType == "interimBooked" ? "3"
-                                  : balance.BalanceType == "expected" ? "4" : "5") + balance.BalanceType)
-                .Select(balance => new BalanceView(
-                    balance.Amount, balance.Currency, balance.BalanceType, balance.CapturedAt,
-                    balance.ReferenceDate, balance.Source, balance.Note)).FirstOrDefault(),
+            // No balance here, on purpose. This used to be a correlated subquery carrying a hand-written
+            // copy of the balance-type preference, because EF cannot expand a method inside a projection
+            // lambda — and WithAllCurrenciesAsync then threw the result away and re-picked the headline
+            // through CurrentBalances anyway. Both callers of Project() run it, so the copy bought
+            // nothing and was one more place the preference could drift. Every path now reads the one
+            // rule in CurrentBalances.
+            null,
             account.GroupId,
             // Inline scalar subquery (EF can't expand a helper inside a projection) — null when ungrouped.
             db.AccountGroups.Where(g => g.Id == account.GroupId).Select(g => g.Name).FirstOrDefault()));

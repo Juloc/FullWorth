@@ -3,6 +3,7 @@
 // single ordered full-width list (§6.3). Edit mode adds/removes/reorders with an accessible
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
 import { money, converted, maskIdentifier } from './money.js';
+import { balanceMeaningLine } from './balance-meaning.js';
 import { isPrivate } from './privacy.js';
 import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from './ux-kit.js';
 import { bindChartScrubber } from './chart-scrubber.js';
@@ -273,6 +274,13 @@ function walletLine(account) {
   return `<div class="amount-wallets">${others.map(b => money(b.amount, b.currency)).join(' · ')}</div>`;
 }
 
+// What the amount IS - available (pending authorisations already deducted) or booked (not yet). The
+// wording comes from ui/balance-meaning.js so the overview, the accounts page and net worth cannot
+// describe the same figure differently.
+function meaningLine(ctx, account) {
+  return balanceMeaningLine(account.latestBalance, key => ctx.get(key), value => ctx.esc(value));
+}
+
 function renderWidget(type, ctx, body, data, cfg) {
   const d = data.dashboard;
   const cur = d?.currency || 'EUR';
@@ -328,7 +336,7 @@ function renderWidget(type, ctx, body, data, cfg) {
       const mark = total.incomplete ? `<span class="amount-incomplete" title="${ctx.esc(ctx.get('common.fxIncomplete'))}">*</span>` : '';
       return `${money(total.sum, baseCur)}${mark}`;
     };
-    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}${walletLine(x)}</div></div>`;
+    const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}${meaningLine(ctx, x)}${walletLine(x)}</div></div>`;
     const groupHead = (g, accts) => `<div class="fw-row dash-group-head is-drillable" role="button" tabindex="0" data-group="${ctx.esc(g.id)}"><span class="dash-group-icon">${DASH_FOLDER}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(g.name)}</div><div class="fw-row-sub">${accts.length} · ${ctx.esc(ctx.get('nav.accounts'))}</div></div><div class="fw-row-amt">${groupTotalMarkup(accts)}</div><span class="dash-drill-chevron">${DASH_CHEVRON}</span></div>`;
     // Each group is its own calm block: a header row (folder monogram · name · subtotal · drill chevron)
     // over its account rows, blocks spaced by whitespace rather than heavy rules (reference overview §3).

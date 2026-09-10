@@ -4,6 +4,7 @@ import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
 import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
+import { balanceMeaningLine } from '../ui/balance-meaning.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
@@ -1087,8 +1088,11 @@ function renderAccounts(accounts) {
       row.setAttribute('role', 'button');
       row.tabIndex = 0;
       const balance = account.latestBalance ? ctx.money(account.latestBalance.amount, account.latestBalance.currency) : '—';
+      // Same one-word label as the accounts page and the overview: available vs booked, from the
+      // server's classification. A net-worth row that only shows a number cannot be checked.
+      const meaning = balanceMeaningLine(account.latestBalance, key => ctx.get(key), value => ctx.esc(value));
       const sub = [account.product || account.accountType || '', maskIdentifier(account.ibanLast4)].filter(Boolean).join(' · ');
-      row.innerHTML = `<span class="tx-ident-slot">${identityIcon(account.displayName || account.institutionName, {})}</span><div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div>${sub ? `<div class="row-sub">${ctx.esc(sub)}</div>` : ''}</div><div class="${moneyClass(MoneyVariant.Neutral)}">${balance}</div>`;
+      row.innerHTML = `<span class="tx-ident-slot">${identityIcon(account.displayName || account.institutionName, {})}</span><div class="row-main"><div class="row-title">${ctx.esc(account.displayName || account.institutionName)}</div>${sub ? `<div class="row-sub">${ctx.esc(sub)}</div>` : ''}</div><div class="${moneyClass(MoneyVariant.Neutral)}">${balance}${meaning}</div>`;
       const open = event => {
         if (event?.target?.closest?.('button,a,input,select')) return;
         ctx.navScope('transactions', 'accountId=' + encodeURIComponent(account.id));

@@ -190,14 +190,19 @@ public sealed class FinancialReconciliationReportService(
         var fx = await converter.PrepareAsync(space.BaseCurrency, day.AddMonths(-2), horizon, ct);
         var incomplete = false;
 
+        // Accounts.CurrentBalances is the one rule for "which balance is the current one", and it works
+        // per (account, CURRENCY). This loop used to run its own ordering per account and take a single
+        // row, so a wallet account (PayPal, Wise, Revolut reports one balance per currency) contributed
+        // a fraction of its money to "available today" while the rest was silently missing - the same
+        // defect the cashflow forecast had. One query for the accounts, two for the balances.
+        var activeAccountIds = await db.Accounts.AsNoTracking()
+            .Where(account => visible.Contains(account.Id) && account.IsActive)
+            .Select(account => account.Id)
+            .ToListAsync(ct);
         decimal balances = 0m;
-        foreach (var accountId in visible)
+        foreach (var balance in await Accounts.CurrentBalances.LoadAsync(db, activeAccountIds, ct))
         {
-            var account = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == accountId && a.IsActive, ct);
-            if (account is null) continue;
-            var snapshot = await db.BalanceSnapshots.AsNoTracking().Where(b => b.AccountId == accountId).CurrentFirst().FirstOrDefaultAsync(ct);
-            if (snapshot is null) continue;
-            var converted = fx.ToBaseOn(snapshot.Amount, snapshot.Currency, day);
+            var converted = fx.ToBaseOn(balance.Amount, balance.Currency, day);
             if (converted.HasValue) balances += converted.Value; else incomplete = true;
         }
 

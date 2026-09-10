@@ -17,6 +17,25 @@ public sealed record AccountBalance(
     string? Note = null);
 
 /// <summary>
+/// What a balance figure IS, in terms a reader can act on. Derived from the provider's balance type by
+/// <see cref="CurrentBalances.Meaning"/> and never stored, so it cannot drift away from the type.
+/// </summary>
+public static class BalanceMeanings
+{
+    /// <summary>Spendable now: pending authorisations are already deducted.</summary>
+    public const string Available = "available";
+
+    /// <summary>Settled money only: pending authorisations are not in this figure yet.</summary>
+    public const string Booked = "booked";
+
+    /// <summary>The provider's own forecast, not money that has moved.</summary>
+    public const string Expected = "expected";
+
+    /// <summary>No provider type behind it: a figure somebody recorded, by hand or off a file.</summary>
+    public const string Recorded = "recorded";
+}
+
+/// <summary>
 /// The current balance of an account, PER CURRENCY.
 ///
 /// An account has one declared currency but can hold money in several: PayPal, Wise and Revolut report a
@@ -34,22 +53,56 @@ public sealed record AccountBalance(
 public static class CurrentBalances
 {
     /// <summary>
-    /// Provider balance-type preference. A sync stamps every type with an identical <c>CapturedAt</c>, so
-    /// without a tiebreak the chosen balance flips arbitrarily between available and booked.
+    /// THE balance-type table: every provider type FullWorth knows, in preference order, with what each
+    /// one means to the reader. Preference, "is this settled money", and the label the UI puts under the
+    /// amount are all read off this one list — they used to be three independent hand-written copies of
+    /// the same ordering (one of them a string CASE inside an EF query), which is how "available" and
+    /// "booked" could disagree between two screens showing the same account.
+    ///
+    /// A sync stamps every type with an identical <c>CapturedAt</c>, so without this tiebreak the chosen
+    /// balance flips arbitrarily between available and booked from one sync to the next.
     /// </summary>
-    public static int Rank(string? balanceType) => balanceType switch
+    private static readonly (string Type, string Meaning)[] Preference =
+    [
+        ("interimAvailable", BalanceMeanings.Available),
+        ("closingAvailable", BalanceMeanings.Available),
+        ("closingBooked", BalanceMeanings.Booked),
+        ("interimBooked", BalanceMeanings.Booked),
+        ("expected", BalanceMeanings.Expected)
+    ];
+
+    /// <summary>The known provider balance types, most preferred first. For tests and for the UI.</summary>
+    public static IReadOnlyList<string> PreferenceOrder { get; } =
+        Preference.Select(entry => entry.Type).ToArray();
+
+    /// <summary>
+    /// Position of a balance type in <see cref="Preference"/>. Anything FullWorth does not know — a
+    /// manual anchor, a provider extension — ranks last, so it is used when it is all there is and never
+    /// beats a type we do understand.
+    /// </summary>
+    public static int Rank(string? balanceType)
     {
-        "interimAvailable" => 0,
-        "closingAvailable" => 1,
-        "closingBooked" => 2,
-        "interimBooked" => 3,
-        "expected" => 4,
-        _ => 5
-    };
+        for (var index = 0; index < Preference.Length; index++)
+            if (string.Equals(Preference[index].Type, balanceType, StringComparison.Ordinal))
+                return index;
+        return Preference.Length;
+    }
 
     /// <summary>Balance types that describe SETTLED money — no pending authorisations included.</summary>
     public static bool IsBooked(string? balanceType) =>
-        balanceType is "closingBooked" or "interimBooked";
+        Meaning(balanceType) == BalanceMeanings.Booked;
+
+    /// <summary>
+    /// What the figure IS, for the reader: available money (pending authorisations already deducted),
+    /// booked money (they are not in it yet), a provider forecast, or a figure somebody recorded. The row
+    /// shows an amount and a date; without this it never said which of the two an amount was, and the two
+    /// differ by exactly the pending authorisations the reader is looking for.
+    /// </summary>
+    public static string Meaning(string? balanceType)
+    {
+        var rank = Rank(balanceType);
+        return rank < Preference.Length ? Preference[rank].Meaning : BalanceMeanings.Recorded;
+    }
 
     public static async Task<List<AccountBalance>> LoadAsync(
         FullWorthDbContext db,
