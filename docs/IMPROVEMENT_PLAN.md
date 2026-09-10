@@ -797,10 +797,30 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   `HEALTHCHECK` reads via `find`. The deploy repo's `docker-compose.yml` wires the same checks in, and
   `fullworth-cloud-web` now depends on `fullworth-cloud-api` with `condition: service_healthy` instead of
   `service_started`.
-- **Test coverage gaps** the owner named explicitly and that genuinely have nothing: import of an IDR or
+- ~~**Test coverage gaps** the owner named explicitly and that genuinely have nothing: import of an IDR or
   any non-EUR account end to end, PayPal, an account without an asset link, several accounts in several
   currencies, historical values under a missing rate, a non-EUR base currency through the real
-  endpoints, and any frontend currency behaviour at all.
+  endpoints, and any frontend currency behaviour at all.~~ `DONE` — every item now has a test that asserts
+  the RULE rather than the current output. Backend, all through the real endpoints:
+  `Import/NonEuroAccountImportIntegrationTests` (an IDR MT940 uploaded and committed: amounts stay in
+  rupiah, the account carries its own balance with no asset and no linking step, net worth names IDR
+  instead of guessing 1:1 or 0, and a dot-decimal amount in a foreign CSV is not multiplied by a
+  hundred), `Accounts/WalletAccountCurrencyTests` (a PayPal-shaped wallet across two syncs: the headline
+  pick does not move, no wallet is lost, and a wallet without a rate stays visible while the total says
+  it is incomplete), `Accounts/AccountWithoutAssetLinkTests` (a bare account's value on the list, the
+  single read, the dashboard, the overview and the trend, plus a hand-entered balance refused in a
+  foreign currency), `Portfolio/NonEuroBaseCurrencyIntegrationTests` (an IDR-based space with EUR/USD/IDR
+  and one unconvertible account: totals, account list, wealth overview, dashboard, income/expenses and a
+  duplicate link counted once) and `Portfolio/WealthHistoryHistoricalRateTests` (today's rate neither
+  fills in nor lowers a day two months back, a rate backfilled FOR that date resolves it at that date's
+  value, and reading the trend never rewrites the stored native snapshot). Frontend:
+  `FullWorth.Web.Tests/CurrencyUiBaselineTests` covers the three behaviours named — own-currency
+  rendering, the converted figure as a second line that never replaces the original, and an
+  unconvertible value marked rather than dropped — plus the balance dialog's currency and the privacy
+  mask keeping its symbol. Shared seeding lives in
+  `tests/FullWorth.Backend.Tests/Infrastructure/CurrencyScenario.cs`. Note the standing repo-wide limit:
+  there is no browser/e2e harness, so the frontend assertions read the shipped assets rather than a
+  rendered DOM.
 
 ---
 
