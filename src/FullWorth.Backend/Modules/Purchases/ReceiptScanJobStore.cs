@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
-public sealed class ReceiptScanJobStore(FullWorthDbContext db)
+public sealed class ReceiptScanJobStore(FullWorthDbContext db, ReceiptScanQueueSignal? signal = null)
 {
     public async Task CreateAsync(ReceiptScanJobRow job, CancellationToken ct)
     {
@@ -145,6 +145,9 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db)
               AND j."Status" = 'draft'
               AND EXISTS (SELECT 1 FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id")
             """, ct);
+        // Wake the worker instead of letting it discover this on its next poll: that is what allows the
+        // idle loop to back off without making an upload wait for it.
+        if (affected == 1) signal?.Notify();
         return affected == 1;
     }
 
@@ -158,6 +161,7 @@ public sealed class ReceiptScanJobStore(FullWorthDbContext db)
               AND j."Status" = 'error'
               AND EXISTS (SELECT 1 FROM "ReceiptScanSources" s WHERE s."ReceiptScanJobId" = j."Id")
             """, ct);
+        if (affected == 1) signal?.Notify();
         return affected == 1;
     }
 

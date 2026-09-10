@@ -11,12 +11,27 @@ namespace FullWorth.Backend.Modules.Purchases;
 public sealed class ReceiptScanQueueWorker(
     IServiceScopeFactory scopes,
     IConfiguration configuration,
+    ReceiptScanQueueSignal signal,
     ILogger<ReceiptScanQueueWorker> logger) : BackgroundService
 {
     // Stable app-specific signed bigint used only by the receipt scan queue.
     private const long QueueAdvisoryLockKey = 0x465752435343414E; // "FWRCSCAN"
-    private static readonly TimeSpan PollDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ProcessingLease = TimeSpan.FromMinutes(6);
+
+    // An idle worker used to poll every second, and every tick opened a connection, took the advisory
+    // lock and ran BOTH the stale-lease recovery UPDATE and a claim query - whether or not any job
+    // existed. On an idle instance that is two statements a second, forever, which is the
+    // ReceiptScanJobs UPDATE showing up in the log every couple of seconds.
+    //
+    // Now it waits, doubling up to a cap, and an upload wakes it immediately through the signal, so
+    // responsiveness is unchanged. The cap only bounds a job queued by ANOTHER replica, where the
+    // in-process signal cannot reach.
+    private static readonly TimeSpan MinimumIdleDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaximumIdleDelay = TimeSpan.FromSeconds(30);
+
+    // A stale processing row is left behind by a crashed worker, so it cannot appear faster than the
+    // lease. Checking it once a minute is ample; it used to run on every single poll.
+    private static readonly TimeSpan StaleCheckInterval = TimeSpan.FromMinutes(1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -27,6 +42,9 @@ public sealed class ReceiptScanQueueWorker(
             return;
         }
 
+        var idleDelay = MinimumIdleDelay;
+        var nextStaleCheck = DateTimeOffset.MinValue;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             ReceiptScanJobRow? job = null;
@@ -36,7 +54,8 @@ public sealed class ReceiptScanQueueWorker(
                 await lockConnection.OpenAsync(stoppingToken);
                 if (!await TryAcquireQueueLockAsync(lockConnection, stoppingToken))
                 {
-                    await Task.Delay(PollDelay, stoppingToken);
+                    // Another processor holds the queue; nothing to do until it releases.
+                    await WaitForWorkAsync(MaximumIdleDelay, stoppingToken);
                     continue;
                 }
 
@@ -44,15 +63,26 @@ public sealed class ReceiptScanQueueWorker(
                 // processing row older than the maximum scan lease was left behind by a crashed worker.
                 await using var scope = scopes.CreateAsyncScope();
                 var store = scope.ServiceProvider.GetRequiredService<ReceiptScanJobStore>();
-                await store.RequeueStaleAsync(DateTimeOffset.UtcNow - ProcessingLease, stoppingToken);
+                var now = DateTimeOffset.UtcNow;
+                if (now >= nextStaleCheck)
+                {
+                    await store.RequeueStaleAsync(now - ProcessingLease, stoppingToken);
+                    nextStaleCheck = now + StaleCheckInterval;
+                }
 
                 job = await store.ClaimNextAsync(stoppingToken);
                 if (job is null)
                 {
                     // Closing lockConnection releases the session advisory lock automatically.
-                    await Task.Delay(PollDelay, stoppingToken);
+                    await WaitForWorkAsync(idleDelay, stoppingToken);
+                    idleDelay = idleDelay >= MaximumIdleDelay
+                        ? MaximumIdleDelay
+                        : TimeSpan.FromTicks(Math.Min(idleDelay.Ticks * 2, MaximumIdleDelay.Ticks));
                     continue;
                 }
+
+                // Work exists, so react immediately again after it.
+                idleDelay = MinimumIdleDelay;
 
                 var processor = scope.ServiceProvider.GetRequiredService<ReceiptScanQueueProcessor>();
                 await processor.ProcessAsync(job, stoppingToken);
@@ -70,6 +100,13 @@ public sealed class ReceiptScanQueueWorker(
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             }
         }
+    }
+
+    /// <summary>Waits for an enqueue signal or the delay, whichever comes first.</summary>
+    private async Task WaitForWorkAsync(TimeSpan delay, CancellationToken ct)
+    {
+        try { await signal.WaitAsync(delay, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
 
     private static async Task<bool> TryAcquireQueueLockAsync(NpgsqlConnection connection, CancellationToken ct)

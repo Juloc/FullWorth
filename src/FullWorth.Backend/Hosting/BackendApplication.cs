@@ -194,6 +194,7 @@ public static class BackendApplication
         builder.Services.AddScoped<PurchaseStore>();
         builder.Services.AddScoped<PurchaseAuthorizationStore>();
         builder.Services.AddScoped<PurchaseCaptureService>();
+        builder.Services.AddSingleton<ReceiptScanQueueSignal>();
         builder.Services.AddScoped<ReceiptScanJobStore>();
         builder.Services.AddScoped<ReceiptScanQueueService>();
         builder.Services.AddScoped<CodexReceiptBridgeClient>();
