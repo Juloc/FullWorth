@@ -594,8 +594,18 @@ anywhere else) can point at without any wiring on this page's side.
   currencies **it** could not convert (`WealthComponentView.MissingCurrencies`), and the wealth page
   names the value and the rate together ("Unvollständig, weil ein Wechselkurs fehlt: Konten (IDR)")
   instead of a flat "something is incomplete" with a list of currencies detached from any figure. Still
-  open: a total that WAS converted does not say which rate and which date it used, and the FX snapshot
-  still silently accepts a fixing up to 14 days old.
+  A converted total now also says what it was converted **with**: `FxSnapshot.ConvertToBase` returns the
+  effective rate and the fixing date behind it, a cross-rate through EUR reports the **older** of its two
+  fixings (a total is only as current as its stalest input), and `WealthComponentView.RatesUsed` carries
+  one entry per currency with its age and a `IsStale` flag past `FxSnapshot.StaleAfterDays` (4 days —
+  a weekend plus a holiday). The 14-day lookback deliberately stays: shortening it would turn
+  conversions that work today into missing numbers, which trades a stated uncertainty for no answer at
+  all. Writing the test caught a real regression on the way — routing the plain conversion through the
+  new one made an amount **already in the base currency** report "unconvertible", which would have marked
+  every total containing base-currency money incomplete.
+
+  Still open: the frontend does not show the rate and its date yet (the wealth page is being edited in
+  parallel), so the data reaches the API but not the screen.
 - **A balance never said where it came from.** `DONE` — `BalanceSnapshot` carries `Source`
   (`provider`/`manual`/`import`) and the owner's `Note`, and a manual balance finally uses
   `ReferenceDate` as the owner's as-of date instead of always stamping today. So an account anchored

@@ -11,6 +11,14 @@ namespace FullWorth.Backend.Modules.Portfolio;
 
 public sealed record WealthNativeAmount(string Currency, decimal Amount);
 
+/// <summary>
+/// The rate one currency of a component was converted with, and the date of the fixing behind it.
+/// A converted total used to be a bare number: nobody could tell which rate produced it, or that the
+/// fixing was up to two weeks old. <see cref="IsStale"/> is a statement about the rate, not a refusal
+/// to convert - a stated uncertainty is worth more than a missing number.
+/// </summary>
+public sealed record WealthRateUsed(string Currency, decimal Rate, DateOnly RateDate, int AgeInDays, bool IsStale);
+
 public sealed record WealthComponentView(
     decimal Amount,
     string Currency,
@@ -19,7 +27,9 @@ public sealed record WealthComponentView(
     // The currencies THIS component could not convert. The overview also reports a flat union of
     // them, which said that something was missing without saying which figure it made incomplete -
     // so a missing IDR rate read as "your wealth is incomplete" with nothing to act on.
-    IReadOnlyList<string>? MissingCurrencies = null);
+    IReadOnlyList<string>? MissingCurrencies = null,
+    // What the conversion was actually done with, per currency. Empty when nothing needed converting.
+    IReadOnlyList<WealthRateUsed>? RatesUsed = null);
 
 public sealed record EmergencyFundView(
     bool Enabled,
@@ -402,8 +412,19 @@ public sealed class WealthOverviewService(
         // Tracked per component as well as in the caller's union, so the answer to "which value is
         // missing because of which rate" is on the value itself.
         var missingHere = new SortedSet<string>(StringComparer.Ordinal);
+        // One entry per currency: the rate and the fixing date are the same for every amount in it,
+        // so repeating them per amount would only be noise.
+        var ratesUsed = new Dictionary<string, WealthRateUsed>(StringComparer.Ordinal);
         foreach (var value in values)
         {
+            var conversion = fx.ConvertToBase(value.Amount, value.Currency, date);
+            if (conversion is not null && !ratesUsed.ContainsKey(conversion.From))
+                ratesUsed[conversion.From] = new WealthRateUsed(
+                    conversion.From,
+                    conversion.Rate,
+                    conversion.RateDate,
+                    conversion.AgeInDays(date),
+                    conversion.AgeInDays(date) > FxSnapshot.StaleAfterDays);
             var converted = fx.ToBaseOn(value.Amount, value.Currency, date);
             if (!converted.HasValue)
             {
@@ -421,7 +442,13 @@ public sealed class WealthOverviewService(
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => new WealthNativeAmount(group.Key, group.Sum(value => value.Amount)))
             .ToArray();
-        return new(total, targetCurrency, complete, originals, missingHere.Count == 0 ? null : [.. missingHere]);
+        return new(
+            total,
+            targetCurrency,
+            complete,
+            originals,
+            missingHere.Count == 0 ? null : [.. missingHere],
+            ratesUsed.Count == 0 ? null : [.. ratesUsed.Values.OrderBy(rate => rate.Currency, StringComparer.Ordinal)]);
     }
 
     private static WealthHistoryPoint BuildExplicitHistoryPoint(
