@@ -36,6 +36,25 @@ function selectedChoice() {
   return null;
 }
 
+// The transport reports a machine code. Showing it raw ("cloud_entitlement_denied") tells the
+// operator nothing and offers no way out, so each known code gets a sentence and a next step; an
+// unknown code is still shown, because a token is more use than silence.
+const CLOUD_ERRORS = {
+  cloud_unreachable: 'Die Cloud ist nicht erreichbar. Prüfe die Internetverbindung und FullWorthCloud:BaseUrl.',
+  cloud_timeout: 'Die Cloud hat nicht rechtzeitig geantwortet. Der Versuch wird automatisch wiederholt.',
+  cloud_unauthorized: 'Die Zugangsdaten dieser Instanz wurden abgelehnt. Aktiviere Cloud Intelligence erneut, um sie neu zu registrieren.',
+  cloud_entitlement_denied: 'Diese Instanz ist für diesen Cloud-Dienst nicht freigeschaltet.',
+  cloud_rate_limited: 'Die Cloud hat zu viele Anfragen gemeldet. Der nächste Versuch erfolgt später automatisch.',
+  cloud_server_error: 'Die Cloud meldet einen Serverfehler. Das liegt nicht an dieser Instanz; es wird erneut versucht.',
+  cloud_batch_too_large: 'Ein Beitrag war zu groß für die Cloud. Er wird beim nächsten Versuch kleiner geschnitten.',
+  cloud_enrollment_refused: 'Die Cloud hat die Anmeldung dieser Instanz abgelehnt. Prüfe den Enrollment-Token.',
+  registration_lost: 'Der Vorgang ist abgelaufen. Bitte starte die Einrichtung erneut.'
+};
+
+function cloudErrorText(code) {
+  return CLOUD_ERRORS[code] || `Unbekannter Cloud-Fehler (${code}).`;
+}
+
 function setResult(message, kind = '') {
   const node = $('cloud-result');
   if (!node) return;
@@ -78,7 +97,7 @@ function renderCloudState(state) {
   $('cloud-submission').textContent = formatDate(state.lastSubmissionAt);
   $('cloud-ops').hidden = !state.setupDecisionAt;
 
-  if (state.lastErrorCode && enabled) setResult(`Cloud-Status: ${state.lastErrorCode}`, 'bad');
+  if (state.lastErrorCode && enabled) setResult(`Cloud-Status: ${cloudErrorText(state.lastErrorCode)}`, 'bad');
   refreshSaveState();
 }
 
@@ -133,9 +152,17 @@ async function saveDecision() {
       : await api('/cloud/disable', { method: 'POST', body: '{}' });
 
     renderCloudState(state);
-    setResult(choice === 'enabled'
-      ? 'FullWorth Cloud Intelligence ist aktiviert. Empfang und geeignete minimierte Beiträge sind gemeinsam aktiv.'
-      : 'Diese Instanz bleibt lokal. Es werden keine FullWorth-Cloud-Beiträge gesendet und keine erweiterten Cloud-Mappings bezogen.', 'ok');
+    // Enabling stores the decision locally and then registers with the Cloud, and registration is
+    // deliberately best-effort - a temporarily unreachable Cloud must not make setup fail. But the
+    // green success line was printed either way, so a refused or unreachable Cloud read as "aktiviert"
+    // and the reason sat unnoticed in the state as lastErrorCode.
+    if (choice === 'enabled' && state?.lastErrorCode) {
+      setResult(`Die Entscheidung ist gespeichert, aber die Anmeldung bei der Cloud ist fehlgeschlagen: ${cloudErrorText(state.lastErrorCode)} Es wird automatisch erneut versucht.`, 'bad');
+    } else {
+      setResult(choice === 'enabled'
+        ? 'FullWorth Cloud Intelligence ist aktiviert. Empfang und geeignete minimierte Beiträge sind gemeinsam aktiv.'
+        : 'Diese Instanz bleibt lokal. Es werden keine FullWorth-Cloud-Beiträge gesendet und keine erweiterten Cloud-Mappings bezogen.', 'ok');
+    }
   } catch (error) {
     if (error.status === 409 && error.detail?.error === 'cloud_policy_stale') {
       setResult('Die Cloud-Richtlinie hat sich geändert. Der aktuelle Stand wird neu geladen; bitte bestätige erneut.', 'bad');

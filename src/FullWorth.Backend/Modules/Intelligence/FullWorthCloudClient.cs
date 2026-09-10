@@ -153,6 +153,14 @@ public sealed class FullWorthCloudException(
     public HttpStatusCode? StatusCode { get; } = statusCode;
     public TimeSpan? RetryAfter { get; } = retryAfter;
     public bool Transient { get; } = transient;
+
+    /// <summary>
+    /// What the Cloud says the operator should DO about it. The Cloud sends one with every error;
+    /// this client used to throw the response body away and derive a code from the HTTP status alone,
+    /// so a precise "your instance is not entitled to this metric" arrived as \"cloud_forbidden\" with
+    /// no advice, and the UI showed the bare token.
+    /// </summary>
+    public string? Remediation { get; init; }
 }
 
 /// <summary>
@@ -558,7 +566,7 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
 
         var retryAfter = ParseRetryAfter(response.Headers.RetryAfter);
         var status = response.StatusCode;
-        var errorCode = status switch
+        var statusCode = status switch
         {
             HttpStatusCode.Unauthorized => "cloud_unauthorized",
             HttpStatusCode.Forbidden => "cloud_entitlement_denied",
@@ -568,9 +576,60 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
             _ => $"cloud_http_{(int)status}"
         };
         var transient = status == HttpStatusCode.TooManyRequests || (int)status >= 500;
+
+        // The Cloud states the real reason and what to do about it in the body. Reading only the
+        // status code threw that away, so every 403 looked the same and the UI could only show a bare
+        // token. The status-derived code stays as the fallback for a body we cannot read - including a
+        // reverse proxy answering instead of the Cloud.
+        var reported = await ReadErrorAsync(response, ct);
         response.Dispose();
-        throw new FullWorthCloudException(errorCode, status, retryAfter, transient);
+        throw new FullWorthCloudException(
+            string.IsNullOrWhiteSpace(reported.ErrorCode) ? statusCode : reported.ErrorCode!,
+            status,
+            retryAfter,
+            transient,
+            reported.Message)
+        {
+            Remediation = reported.Remediation
+        };
     }
+
+    /// <summary>
+    /// Reads the Cloud's error contract. Never throws: an unreadable body only means the caller falls
+    /// back to the status-derived code, and a failure to parse an error must not replace the error.
+    /// </summary>
+    private static async Task<(string? ErrorCode, string? Message, string? Remediation)> ReadErrorAsync(
+        HttpResponseMessage response,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (response.Content.Headers.ContentType?.MediaType is not "application/json"
+                and not "application/problem+json")
+                return (null, null, null);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(body) || body.Length > 8 * 1024) return (null, null, null);
+            var reported = JsonSerializer.Deserialize<CloudErrorBody>(
+                body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // A machine code has to look like one; a sentence in the errorCode field is not a code.
+            var code = reported?.ErrorCode?.Trim();
+            if (code is { Length: > 64 } or "") code = null;
+            return (code, Trim(reported?.Message), Trim(reported?.Remediation));
+        }
+        catch (Exception exception) when (exception is JsonException or HttpRequestException or InvalidOperationException)
+        {
+            return (null, null, null);
+        }
+
+        static string? Trim(string? value)
+        {
+            var trimmed = value?.Trim();
+            return string.IsNullOrEmpty(trimmed) ? null : trimmed[..Math.Min(trimmed.Length, 500)];
+        }
+    }
+
+    private sealed record CloudErrorBody(string? ErrorCode, string? Message, string? Remediation);
 
     private static async Task<T> DeserializeAsync<T>(HttpResponseMessage response, CancellationToken ct)
     {

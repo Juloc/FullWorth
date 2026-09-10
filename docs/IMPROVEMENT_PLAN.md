@@ -749,26 +749,21 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
 - **The Cloud has no link-health surface.** `/intelligence/index.html` is the only page with transport
   diagnostics and it is reachable only by typing the URL; the resolved Cloud endpoint appears in no
   response, no UI field and no log; outbox depth and dead-letter count are exposed nowhere.
-- **A failed enrollment reads as success.** `wwwroot/intelligence/cloud.js:136` overwrites the returned
-  error with a green success line, and `features/access-setup.js:571` discards the response entirely.
-  Checked against fullworth-cloud: `/v1/instances/register` already answers a real non-2xx status with
-  `{errorCode, message, remediation}` on failure, so the Cloud API is not the cause. The fault is entirely
-  in FullWorth: `IntelligenceAdminEndpoints.cs`'s `POST /cloud/enable` catches `FullWorthCloudException`
-  and stores `ex.ErrorCode` as `CloudConnectionState.LastErrorCode`, but still returns `Results.Ok(...)`
-  regardless of whether registration succeeded — and `cloud.js` renders the fixed success string without
-  ever checking the returned `lastErrorCode`. Fix belongs on the client: `cloud.js`'s `saveDecision()` must
-  branch on `state.lastErrorCode` before showing the green line.
-- **Cloud transport errors are shown as raw snake_case tokens** with no translation and no remediation.
-  `PARTLY DONE` (fullworth-cloud) — every Cloud API error body now also carries a fixed, human-readable
-  `remediation` hint next to the stable `errorCode` (`CloudResults.RemediationFor`), including codes that
-  had none before (`benchmark_metric_invalid`, `price_*_invalid`, `admin_disabled`/`admin_unauthorized`).
-  Still open on the FullWorth side: `FullWorthCloudClient.SendAsync` derives `FullWorthCloudException`'s
-  `ErrorCode` purely from the HTTP status code and never reads the response body at all, so the Cloud's
-  precise code and remediation never reach the client or the UI — two different `401`s (`enrollment_missing`
-  vs `enrollment_invalid`) both collapse into the same generic `cloud_unauthorized`. Fix: read
-  `{errorCode, message, remediation}` from the body (falling back to the status-derived code only when the
-  body cannot be parsed), carry `remediation` on the exception, and have `cloud.js` show it instead of the
-  raw code.
+- ~~**A failed enrollment reads as success.**~~ `DONE` — enabling Cloud Intelligence stores the decision
+  and then registers, and registration is deliberately best-effort (a temporarily unreachable Cloud must
+  not make setup fail). But the green "ist aktiviert" line was printed either way, so a refused or
+  unreachable Cloud read as success while the reason sat unnoticed in `lastErrorCode`. The page now
+  checks it and says the decision was saved but the registration failed, with the reason and the fact
+  that it retries by itself. The Cloud API was verified to be correct here — it already returns a real
+  non-2xx with a reason — so the whole defect was on this side.
+- ~~**Cloud transport errors are shown as raw snake_case tokens**~~ `DONE` — two halves. The Cloud sends
+  `{errorCode, message, remediation}` with every error and this client threw the body away, deriving a
+  code from the HTTP status alone: every 403 became the same generic `cloud_entitlement_denied` and the
+  Cloud’s own advice was lost. It reads the contract now, keeps the status-derived code as the fallback
+  for a body it cannot parse (a reverse proxy answering instead of the Cloud sends HTML), refuses a
+  "code" that is really a sentence, and keeps transience a property of the status. The page then turns
+  the code into a German sentence with a next step instead of printing the token — an unknown code is
+  still shown, because a token is more use than silence.
 - ~~**Registration-on-demand runs inside user-facing GET handlers**~~ `DONE` — six read endpoints each
   carried the same twenty-five lines (no secret → register → save → record the transport status), and
   registration goes through the client's 45 s HTTP timeout, so an unreachable Cloud stalled a page load
