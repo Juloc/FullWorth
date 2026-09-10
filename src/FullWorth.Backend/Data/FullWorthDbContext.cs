@@ -9,6 +9,7 @@ using FullWorth.Backend.Modules.Contracts.Review;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Loans;
+using FullWorth.Backend.Modules.Pension;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Modules.Notifications;
@@ -74,6 +75,12 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<TaxAnalysisRun> TaxAnalysisRuns => Set<TaxAnalysisRun>();
     public DbSet<FullWorth.Backend.Modules.Preferences.UserPreference> UserPreferences => Set<FullWorth.Backend.Modules.Preferences.UserPreference>();
     public DbSet<FullWorth.Backend.Modules.Fx.FxRate> FxRates => Set<FullWorth.Backend.Modules.Fx.FxRate>();
+    public DbSet<BavContract> BavContracts => Set<BavContract>();
+    public DbSet<BavSnapshot> BavSnapshots => Set<BavSnapshot>();
+    public DbSet<BavContribution> BavContributions => Set<BavContribution>();
+    public DbSet<BavInvestmentAllocation> BavInvestmentAllocations => Set<BavInvestmentAllocation>();
+    public DbSet<BavCost> BavCosts => Set<BavCost>();
+    public DbSet<BavDocument> BavDocuments => Set<BavDocument>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -533,6 +540,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         });
 
         TaxModelConfiguration.Configure(b);
+        PensionModelConfiguration.Configure(b);
 
         // The fast unit-style tests run this model on in-memory SQLite, which cannot order or compare
         // DateTimeOffset columns (many queries order by CreatedAt/UpdatedAt/StartedAt). Store timestamps

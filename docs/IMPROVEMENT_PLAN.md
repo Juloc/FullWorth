@@ -30,7 +30,8 @@ slice moves to the next one rather than holding the release.
 | `alpha.19` | Balance provenance (source, as-of, note), manual balance, Finanzguru import balances, unlinked import accounts counting in net worth | an imported or unconnected account shows a real balance and says where it came from |
 | `alpha.20` | Statement import (CSV/MT940/CAMT) into an existing account, explicit reversible account link/unlink — O-4 second half and O-5 | Ikano and PayPal can be kept current without a live connection, and a duplicate can be resolved and undone |
 | `alpha.21` | O-6: contract merge and the wealth projection as a graph | the three "Weg" contracts become one; the projection is a curve, not a tile |
-| `alpha.22`–`alpha.24` | bAV per [PENSION.md](PENSION.md): domain and manual flow, then document import and snapshots, then wealth/salary/dashboard/simulation | the Altersvorsorge area, filled by hand first and from a statement afterwards |
+| `alpha.22` | bAV step 1 per [PENSION.md](PENSION.md): domain, migration, API and the manual entry flow — see O-9 | the Altersvorsorge area exists and can be filled in by hand |
+| `alpha.23`–`alpha.24` | bAV steps 2 and 3: document import with snapshot extraction, then wealth/salary/dashboard/simulation | a statement fills a contract, and the pension shows up in the wealth and salary views |
 
 ---
 
@@ -500,7 +501,7 @@ thing it does not mean, and the reason the owner went looking for a FullWorth bu
 **Fixed**: the empty state (and a search that matches nothing) now says that only institutions enabled
 in your own Enable Banking application appear, and links straight to the API Applications page.
 
-### O-6 Contracts cannot be merged in practice, and the wealth projection is only a tile — `OPEN`
+### O-6 Contracts cannot be merged in practice, and the wealth projection is only a tile — `DONE`
 
 Two things.
 
@@ -585,6 +586,47 @@ zero bookings) is not mistaken for a failed import and hidden.
 Reachable directly at `/settings/import?mode=statement` and, with an account already in mind, at
 `/settings/import?mode=statement&accountId={id}` — a normal query-string link the accounts page (or
 anywhere else) can point at without any wiring on this page's side.
+
+### O-10 There is no place for the occupational pension (bAV) — `PARTLY DONE` (step 1 of 3)
+
+The owner's bAV had no home. The balance could only be typed in as a nameless `Asset`, which loses the
+implementation route, the policy holder vs the insured person, the guarantee, the annuity factor and —
+worst — the employer/employee split, so a 338 € contribution made of 169 € + 169 € looked like a 338 €
+outflow. There was also nothing to stop next year's statement from overwriting this year's value.
+
+**Step 1 — DONE.** The architecture is [PENSION.md](PENSION.md); it was written before any code and is
+what got built. Six new tables (`BavContracts`, `BavSnapshots`, `BavContributions`,
+`BavInvestmentAllocations`, `BavCosts`, `BavDocuments`) in migration
+`20260910233000_OccupationalPension`, `/api/pension/*`, and the Altersvorsorge area
+(`features/pension.js`, view `pension`) with Übersicht / Verträge / Verlauf and a working manual entry
+flow. Nothing is duplicated: the balance reaches net worth through one `Asset` of kind
+`insurance_pension` per contract, and the employee payment is meant for the existing
+`RecurringContract`.
+
+Five invariants are enforced in the store **and** as database checks, so they hold for a writer that
+bypasses the API:
+
+- the same policy number at the same provider is one contract — a create for it is a 409 naming the
+  existing contract, so an annual statement becomes a snapshot;
+- history is added to, never rewritten: `(contract, date, document)` is unique with
+  `NULLS NOT DISTINCT`, so a second value for a date is a 409;
+- `paid_up` (beitragsfrei) is its own status next to `active`, and every cost carries
+  `ContinuesWhenPaidUp` — beitragsfrei is neither cancelled nor cost-free;
+- a tax or social-insurance effect needs the source that stated it (`document` / `payslip` /
+  `simulation`); FullWorth computes no personal net effect of its own;
+- a projected figure needs its basis and its return assumption, and only a snapshot **balance** ever
+  reaches the asset — a projection never becomes wealth.
+
+The policy number is personal data: encrypted with `FieldCipher`, matched through a keyed blind index
+like an IBAN, and returned only as its last four characters. No provider is hardcoded anywhere.
+
+**Verified.** 18 backend integration tests in `tests/FullWorth.Backend.Tests/Pension/` and 3 shell/UX
+guards in `tests/FullWorth.Web.Tests/PensionUxBaselineTests.cs`, plus `FinanceMigrationTests` (the model
+snapshot still matches the model) and the frontend guard suite.
+
+**Open.** Step 2: document upload, extraction and the review screen. Step 3: the `pensionAssets` block
+in the wealth overview, the employee share in cashflow, the dashboard entry, the projection and the
+variant comparison. `PENSION.md` lists both, plus the append-only limitation of contributions/costs.
 
 ---
 

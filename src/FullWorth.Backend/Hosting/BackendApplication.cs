@@ -27,6 +27,7 @@ using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Modules.Loans;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Modules.Pension;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Preferences;
 using FullWorth.Backend.Modules.Purchases;
@@ -272,6 +273,7 @@ public static class BackendApplication
         builder.Services.AddScoped<MerchantStore>();
         builder.Services.AddScoped<TransferDetectionService>();
         builder.Services.AddScoped<TaxStore>();
+        builder.Services.AddScoped<PensionStore>();
         builder.Services.AddScoped<TaxAnalysisService>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
@@ -359,6 +361,7 @@ public static class BackendApplication
         endpoints.MapSpendingReviewEndpoints();
         endpoints.MapCoachEndpoints();
         endpoints.MapTaxEndpoints();
+        endpoints.MapPensionEndpoints();
         endpoints.MapCategoryIntelligenceEndpoints();
         endpoints.MapCategoryEndpoints();
         endpoints.MapContractEndpoints();

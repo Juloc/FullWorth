@@ -1,0 +1,229 @@
+/* Altersvorsorge (bAV). Tokens only — no hardcoded colour anywhere in this file, so the area follows
+   every theme including the cute one. The toolbar and tab shapes deliberately reuse the same geometry
+   as styles/features/tax.css, because a second tab style would be a second visual language. */
+
+.pension-view { display: none; }
+.pension-view.active { display: block; }
+
+.pension-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s5);
+  flex-wrap: wrap;
+}
+
+.pension-tabs {
+  display: flex;
+  gap: var(--s1);
+  padding: var(--s1);
+  background: var(--surface-2);
+  border-radius: var(--radius-card);
+}
+
+.pension-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-input);
+}
+
+.pension-tabs button.active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.pension-toolbar [data-pension-add] { margin-left: auto; }
+
+.pension-metrics { margin-bottom: var(--s5); }
+
+.pension-notices { display: grid; gap: var(--s2); margin-bottom: var(--s5); }
+
+.pension-notice {
+  padding: var(--s3);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  line-height: 1.45;
+  font-size: .86rem;
+}
+
+/* A missing exchange rate is the one thing here that makes a total unusable, so it is the only notice
+   that gets the warning tint. Everything else is information, not an alarm. */
+.pension-notice-warn {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+}
+
+.pension-unconverted { border-top: 1px solid var(--line); }
+
+.pension-list { display: block; }
+
+.pension-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  padding: var(--s3) 0;
+}
+
+.pension-row:first-child { border-top: 0; }
+.pension-row .row-main { min-width: 0; }
+.pension-row-value { text-align: right; white-space: nowrap; }
+.pension-row-chevron { color: var(--muted); }
+
+.pension-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-top: var(--s2);
+}
+
+.pension-badge {
+  font-size: .74rem;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pension-badge-quiet { color: var(--muted); background: var(--surface-2); }
+
+/* An estimate and a total that does not add up are both "look at this", not "something broke". */
+.pension-badge-warn { background: var(--warning-soft); color: var(--text); }
+
+/* Beitragsfrei is its own state and must not read as an error or as ended: it keeps the neutral badge
+   and only 'terminated' is dimmed. */
+.pension-status-paid_up { background: var(--surface-3); color: var(--text); }
+.pension-status-terminated { opacity: .62; }
+
+.pension-footnote {
+  font-size: .8rem;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: var(--s3) 2px 0;
+}
+
+.pension-projection-card .pension-projection-value { font-size: 1.15rem; font-weight: 600; }
+.pension-projection p { margin: var(--s2) 0 0; }
+
+/* ---- detail ---- */
+
+.pension-detail { width: min(760px, 94vw); }
+.pension-detail-body { display: grid; gap: var(--s4); max-height: 66vh; overflow: auto; }
+.pension-detail-actions { justify-content: space-between; }
+
+.pension-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--s2) var(--s4);
+  margin: 0;
+}
+
+.pension-facts > div { display: grid; gap: 2px; min-width: 0; }
+.pension-facts dt { font-size: .78rem; color: var(--muted); }
+.pension-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.pension-status-hint { margin: var(--s2) 0 0; }
+
+.pension-value-block {
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+
+.pension-value-head {
+  font-size: .8rem;
+  color: var(--muted);
+  margin-bottom: var(--s2);
+}
+
+/* A projected value is money nobody has. The dashed edge says "different kind of number" without
+   using colour to imply that it is wrong. */
+.pension-value-projected {
+  border-style: dashed;
+  background: transparent;
+}
+
+.pension-value-projected p { margin: var(--s2) 0 0; }
+
+.pension-section { display: grid; gap: var(--s2); }
+
+.pension-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.pension-section-head h3 { margin: 0; font-size: .95rem; }
+
+/* ---- forms ---- */
+
+.pension-form { width: min(680px, 94vw); }
+
+.pension-form-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s3);
+  max-height: 64vh;
+  overflow: auto;
+  padding-right: var(--s1);
+}
+
+.pension-field { display: grid; gap: 4px; min-width: 0; }
+.pension-field > span { font-size: .82rem; color: var(--muted); }
+.pension-field input, .pension-field select, .pension-field textarea { width: 100%; min-width: 0; }
+.pension-field small { line-height: 1.4; }
+
+.pension-check { align-self: end; }
+.pension-check-hint { grid-column: 1 / -1; margin-top: calc(var(--s2) * -1); }
+
+.pension-fieldset {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--s3);
+  margin: 0;
+}
+
+.pension-fieldset legend { padding: 0 var(--s2); font-size: .85rem; color: var(--text); }
+.pension-fieldset > p { grid-column: 1 / -1; margin: 0; }
+
+/* ---- narrow viewports (down to ~360px, so nothing overflows on a phone) ---- */
+
+@media (max-width: 760px) {
+  .pension-toolbar { align-items: stretch; }
+  .pension-tabs { width: 100%; }
+  .pension-tabs button { flex: 1; }
+  .pension-toolbar [data-pension-add] { margin-left: 0; width: 100%; }
+
+  .pension-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .pension-row-value { grid-row: 1; grid-column: 2; }
+  .pension-row-chevron { display: none; }
+
+  .pension-detail, .pension-form { width: 100%; }
+  .pension-detail-body, .pension-form-body { max-height: none; }
+  .pension-form-body, .pension-fieldset { grid-template-columns: 1fr; }
+  .pension-facts { grid-template-columns: 1fr; }
+  .pension-detail-actions { flex-wrap: wrap; }
+  .pension-badge { white-space: normal; }
+}
