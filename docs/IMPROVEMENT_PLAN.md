@@ -667,20 +667,28 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   from the **booked** balance of the same (account, currency) while today keeps the preferred figure
   the user sees. Anchor and deltas describe the same money again; before, every past day was off by
   whatever was pending. Falls back to the preferred balance when the provider sent no booked type.
-- **An asset valuation overwrites the current value unconditionally.** `PARTLY DONE` — the currency half
-  is fixed: accepting a valuation denominated in another currency is refused with a reason (relabelling a
-  400 000 EUR house as 400 000 of something else is not a conversion, and a conversion is derived and may
-  never overwrite the original). The asset's currency is no longer in the UPDATE at all; only an asset
-  that had none yet receives one. Recording it with `isAccepted=false` still keeps it in the history.
+- ~~**An asset valuation overwrites the current value unconditionally.**~~ `DONE` — both halves. The
+  currency half: accepting a valuation denominated in another currency is refused with a reason
+  (relabelling a 400 000 EUR house as 400 000 of something else is not a conversion, and a conversion is
+  derived and may never overwrite the original). The asset's currency is no longer in the UPDATE at all;
+  only an asset that had none yet receives one.
 
-  **The date half is deliberately NOT fixed, and the reason is a bug of its own:** there is no
-  trustworthy "as of" date to compare a valuation against. The `fullworth_prepare_asset` trigger stamps
-  `ValuedAt = CURRENT_DATE` whenever an asset row is touched without one, and creating an asset
-  materialises a "current" valuation carrying that same synthetic date. So a legitimate appraisal dated
-  last month looks *older* than a stamp that never described an appraisal — a naive check rejects real
-  input (it broke `RealEstateAdvancedIntegrationTests` on exactly that flow). Fixing this properly means
-  separating "when this was appraised" from "when this row was last touched" first, and only then
-  refusing a stale accept.
+  The date half needed its own bug fixed first, in `20260911003000_AssetValuationAsOfProvenance`: the
+  `fullworth_prepare_asset` trigger stamped `ValuedAt = CURRENT_DATE` whenever a row was touched without
+  one, so a stamp that never described an appraisal was indistinguishable from one — and always looked
+  newer. The two facts are now separate. `Assets."ValuedAt"` holds **only** a date somebody stated and
+  stays NULL when nobody did; `Assets."ValueRecordedAt"` (trigger-maintained, moves only with value,
+  currency or stated date) and `AssetValuations."CreatedAt"` say when FullWorth learned the figure;
+  `AssetValuations."ValuedAtIsStated"` marks which of the two a history row's date is. Existing rows were
+  migrated conservatively — a date within a day of the row's own last-touched day is treated as the stamp
+  it almost certainly was (dropped on the asset, `ValuedAtIsStated = FALSE` on the valuation, nothing lost
+  because `ValueRecordedAt` carries that same day honestly), and `legacy` rows are only promoted when the
+  asset's surviving date proves it. Only then the accept rule: accepting a valuation whose **stated** date
+  is older than the **stated** date of the current one is refused with both dates in the message. A
+  current value with no stated date is not evidence, and an undated valuation means "as of now", so
+  neither can make real input stale — the flow in `RealEstateAdvancedIntegrationTests` still passes, and
+  fails immediately if the stamp is put back. Recording anything with `isAccepted=false` still keeps it in
+  the history.
 - ~~**The user cannot tell what a balance means.**~~ `DONE` — the reference date and the provenance
   landed earlier; the missing half was that a row still never said whether the figure was the **booked**
   balance or the **available** one, which differ by exactly the pending authorisations the reader is
