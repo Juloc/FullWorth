@@ -13,6 +13,7 @@ import { renderLoans, bindLoans } from './features/loans.js';
 import { renderAnalytics, bindAnalytics } from './features/analytics.js';
 import { renderPurchases, bindPurchases } from './features/purchases.js';
 import { renderTax, bindTax } from './features/tax.js';
+import { renderPension, bindPension } from './features/pension.js';
 import { renderMerchants, bindMerchants, newMerchant } from './features/merchants.js';
 import { renderAudit, bindAudit } from './features/audit.js';
 import { renderDashboardInsights, mountInsights } from './features/insights.js';
@@ -39,7 +40,7 @@ const get=path=>i18n.get(path);
 // Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
 // permanent slot); everything else lives in More.
 const MOBILE_PRIMARY=['dashboard','contracts','analytics','networth'];
-const ALL_VIEWS=['dashboard','insights','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','categories','rules','notifications','merchants','audit','settings'];
+const ALL_VIEWS=['dashboard','insights','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','pension','categories','rules','notifications','merchants','audit','settings'];
 const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v)&&v!=='insights');
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
@@ -96,6 +97,10 @@ function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');i
 function renderPageHeader(){
   const p=state.messages.pages?.[state.view];
   if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle}
+  // A view whose copy lives in its own module has no pages.* entry. Without this it would keep the
+  // PREVIOUS screen's heading, which reads as a broken navigation. Fall back to the view's own nav
+  // label from the shell and clear the subtitle.
+  else{const nav=$(`.sidebar button[data-view="${state.view}"] span`)?.textContent||'';$('#page-title').textContent=nav;$('#page-subtitle').textContent=''}
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
   if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
@@ -148,6 +153,7 @@ function bind(){
   bindRules(ctx);
   bindPurchases(ctx);
   bindTax(ctx);
+  bindPension(ctx);
   bindMerchants(ctx);
   bindAudit(ctx);
   bindDashboard(ctx);
@@ -341,12 +347,13 @@ function openMoreSheet(){
   const items=MORE_VIEWS.map(view=>{
     const source=$(`.sidebar button[data-view="${view}"]`);
     const icon=source?source.querySelector('svg').outerHTML:'';
-    // Prefer the nav label; fall back to the page title when a view has no nav.* key (merchants, audit)
-    // so the sheet never shows a raw i18n key.
+    // Prefer the nav label; fall back to the page title, then to the label the sidebar button already
+    // carries (a view whose copy lives in its own module has neither key), so the sheet never shows a
+    // raw i18n key or a bare view name.
     const nav=get(`nav.${view}`);
     const label=view==='transactions'
       ? get('transactions.allTx')
-      : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||view):nav);
+      : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||source?.querySelector('span')?.textContent||view):nav);
     return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
   }).join('');
   const compensation=`<button type="button" data-compensation-more><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V8m5 10V5m5 13v-7m5 7V9"/><path d="M3 21h18"/></svg><span>Gehalt &amp; Benefits</span></button>`;
@@ -380,6 +387,7 @@ const featureRegistry=createFeatureRegistry()
   .register('analytics',()=>renderAnalytics(ctx))
   .register('purchases',()=>renderPurchases(ctx))
   .register('tax',()=>renderTax(ctx))
+  .register('pension',()=>renderPension(ctx))
   .register('categories',()=>renderCategories(ctx))
   .register('rules',()=>renderRules(ctx))
   .register('notifications',()=>renderNotifications(ctx))
