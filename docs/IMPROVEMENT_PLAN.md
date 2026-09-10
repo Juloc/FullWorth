@@ -280,7 +280,22 @@ And a day that still cannot convert one of its rows now reports **unknown** rath
 a total missing a whole account is not a smaller net worth, and the chart already drops null points and
 draws a gap. `WealthHistoryPoint.NetWorth` became nullable for that reason.
 
-### P1-13 A FinTS connection that needs a TAN cannot be repaired at all — `OPEN`
+### P1-13 A FinTS connection that needs a TAN cannot be repaired at all — `DONE`
+
+All three dead ends are closed. `tan_required` is its own health state, so the row offers **TAN
+eingeben** instead of Reconnect (which would have started a fresh authorization and discarded the
+challenge the bank is waiting for). `reconnectConnection()` dispatches on the provider, so a FinTS
+connection re-authorizes with its own login and can no longer be rewritten to `enable-banking`. A
+manual sync on a TAN-pending connection returns `tan_required` — checked *before* the authorization
+test, which used to answer "reconnect needed" — and the UI opens the challenge straight away. A new
+`GET api/banking/fints/connections/{id}/challenge` reads the parked challenge back (challenge only;
+the login and PIN stay in the service), which is what made answering a TAN outside the original
+dialog possible at all.
+
+Verified in `ops/ui-harness`: the healthy connection shows the sync button, the FinTS one shows "TAN
+nötig" and "TAN eingeben".
+
+The original analysis, for the record:
 
 Three defects in one dead end, all in the path the owner asked about specifically ("no error may leave
 the UI looking like nothing happened"):
@@ -316,14 +331,17 @@ Documentation claimed this was prevented; nothing prevents it.
 **Target.** A cross-provider identity (normalised IBAN) that either merges or refuses the second
 connection, with the user told which.
 
-### P1-15 Deleting a FinTS connection leaves the depot data behind — `OPEN`
+### P1-15 Deleting a FinTS connection leaves the depot data behind — `DONE`
 
-`BankConnectionStore.DeleteForUserAsync` with `deleteLocalData=true` removes accounts, balance
-snapshots and transactions, but the `InvestmentPortfolios`, `InvestmentTrades` (`Source=fints_snapshot`),
-`Securities` and `SecurityPrices` rows written by `FinTsInvestmentSnapshotEndpoints` stay. The user asks
-for everything to be deleted and keeps a portfolio that still counts in net worth.
+The delete now also removes the depot the connection created: portfolios whose `ProviderName` carries
+this connection id (trades cascade with them), and the securities that nothing else uses — a security
+that is also on a watchlist, a portfolio benchmark, a benchmark definition, referenced by a broker
+import or still traded anywhere survives, because deleting a bank connection must not quietly destroy
+unrelated investment history. Prices cascade off the security.
 
-**Tests.** Delete with local data → no orphaned portfolio, trade, security or price row remains.
+The SQLite test harness gained the tables this path reads (it hand-creates a subset of the raw-SQL
+parity schema), and the SQL avoids `DELETE ... AS alias` and array parameters so it runs on both
+providers.
 
 ---
 

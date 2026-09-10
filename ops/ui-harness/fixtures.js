@@ -31,6 +31,21 @@
       }
     ],
     'account-groups': [],
+    // Two connections: one healthy, one FinTS parked on a TAN. The second must offer "TAN eingeben",
+    // never "Neu verbinden" - reconnecting discards the challenge the bank is waiting for.
+    'bank-connections': [
+      {
+        id: 'c1', provider: 'enable-banking', institutionName: 'Testbank', country: 'DE',
+        status: 'AUTHORIZED', healthStatus: 'authorized', validUntil: iso('2026-12-31'),
+        lastSyncedAt: iso('2026-09-09'), daysUntilExpiry: 112, nextSyncAllowedAt: null
+      },
+      {
+        id: 'c2', provider: 'fints', institutionName: 'ING', country: 'DE',
+        status: 'TAN_REQUIRED', healthStatus: 'tan_required', validUntil: iso('2026-12-31'),
+        lastSyncedAt: iso('2026-09-08'), daysUntilExpiry: 112, nextSyncAllowedAt: null,
+        lastError: 'FINTS_TAN_REQUIRED'
+      }
+    ],
     'transactions': {
       items: [
         { id: 't1', bookingDate: iso('2026-09-08'), amount: -42.19, currency: 'EUR', counterparty: 'REWE Markt GmbH', description: 'Einkauf', categoryId: 'c1', accountId: 'a1', isSplit: false },

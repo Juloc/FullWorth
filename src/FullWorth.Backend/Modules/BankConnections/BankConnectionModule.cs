@@ -201,11 +201,69 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
             await db.Transactions.Where(x => accountIds.Contains(x.AccountId)).ExecuteDeleteAsync(ct);
             await db.Accounts.Where(x => accountIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
         }
+
+        await DeleteFinTsDepotDataAsync(fullWorthSpaceId, id, ct);
         db.BankConnections.Remove(connection);
         audit.Record(fullWorthSpaceId, userId, "bank_connection.disconnected", "BankConnection", id);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// A FinTS depot is not reachable through <c>Accounts</c>: FinTsInvestmentSnapshotEndpoints writes an
+    /// InvestmentPortfolio keyed by <c>fints:{connectionId}:{depotKey}</c>, with its positions as trades
+    /// and the securities and prices behind them. Deleting the connection with its local data left all of
+    /// that behind — so a user who asked for everything to be removed kept a portfolio that still counted
+    /// in net worth.
+    ///
+    /// Securities are shared, so only the ones nothing else uses go with it. A security that is also on a
+    /// watchlist, is a portfolio benchmark or a benchmark definition, came from a broker import, or is
+    /// still referenced by any other trade, stays — its prices hang off it by cascade.
+    /// </summary>
+    private async Task DeleteFinTsDepotDataAsync(Guid fullWorthSpaceId, Guid connectionId, CancellationToken ct)
+    {
+        var providerPrefix = $"fints:{connectionId:N}:%";
+
+        var securityIds = await db.Database
+            .SqlQuery<Guid>($"""
+                SELECT DISTINCT t."SecurityId" AS "Value"
+                FROM "InvestmentTrades" t
+                JOIN "InvestmentPortfolios" p ON p."Id" = t."PortfolioId"
+                WHERE p."FullWorthSpaceId" = {fullWorthSpaceId}
+                  AND p."ProviderName" LIKE {providerPrefix}
+                  AND t."SecurityId" IS NOT NULL
+                """)
+            .ToListAsync(ct);
+
+        // Trades cascade with their portfolio (FK ON DELETE CASCADE).
+        var removedPortfolios = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "InvestmentPortfolios"
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId}
+              AND "ProviderName" LIKE {providerPrefix}
+            """, ct);
+        if (removedPortfolios == 0 || securityIds.Count == 0) return;
+
+        // One statement per id (there are a handful): a DELETE alias and an array parameter are both
+        // Postgres-only, and this has to run on the SQLite-backed tests too.
+        foreach (var securityId in securityIds)
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Securities"
+                WHERE "Id" = {securityId}
+                  AND "FullWorthSpaceId" = {fullWorthSpaceId}
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "InvestmentTrades" t WHERE t."SecurityId" = "Securities"."Id")
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "InvestmentPortfolios" p
+                      WHERE p."BenchmarkSecurityId" = "Securities"."Id")
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "WatchlistItems" w WHERE w."SecurityId" = "Securities"."Id")
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "BenchmarkDefinitions" b WHERE b."SecurityId" = "Securities"."Id")
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "InvestmentImportSecurityLinks" l
+                      WHERE l."SecurityId" = "Securities"."Id")
+                """, ct);
     }
 
     public async Task<bool> CloseRetainingDataForUserAsync(

@@ -36,7 +36,11 @@ public sealed record ConnectBankRequest(
 
 public sealed record BankSyncResult(int Synced, int Skipped, int Failed, bool AlreadyRunning);
 
-public enum ManualSyncStatus { Started, PartialHistory, Error, Cooldown, AlreadyRunning, ReauthorizationRequired, NotFound }
+/// <summary>
+/// <c>TanRequired</c> is its own outcome on purpose: a FinTS sync that ends in a TAN used to be reported
+/// as a generic error, so the user got "sync failed" with no hint that a TAN was waiting for them.
+/// </summary>
+public enum ManualSyncStatus { Started, PartialHistory, Error, Cooldown, AlreadyRunning, ReauthorizationRequired, TanRequired, NotFound }
 public sealed record ManualSyncResult(ManualSyncStatus Status, DateTimeOffset? NextSyncAllowedAt = null);
 
 public enum DisconnectStatus { Deleted, ClosedDataRetained, NotFound, ProviderFailed }
@@ -439,6 +443,10 @@ public sealed class BankSyncService(
         if (connection is null) return new(ManualSyncStatus.NotFound);
 
         var now = DateTimeOffset.UtcNow;
+        // Asked BEFORE the authorization check: a connection parked on a TAN is not authorized, so it was
+        // answered with "reconnect needed" - and reconnecting discards the challenge the bank is waiting
+        // for. The user has to be pointed at the TAN instead.
+        if (IsWaitingForTan(connection)) return new(ManualSyncStatus.TanRequired);
         if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
             (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= now))
@@ -465,6 +473,7 @@ public sealed class BankSyncService(
         catch (EnableBankingApiException)
         {
             var afterFailure = await FindConnectionAsync(connectionId, ct);
+            if (IsWaitingForTan(afterFailure)) return new(ManualSyncStatus.TanRequired);
             if (RequiresReauthorization(afterFailure))
                 return new(ManualSyncStatus.ReauthorizationRequired);
             if (string.Equals(
@@ -477,10 +486,15 @@ public sealed class BankSyncService(
         catch
         {
             var afterFailure = await FindConnectionAsync(connectionId, ct);
+            if (IsWaitingForTan(afterFailure)) return new(ManualSyncStatus.TanRequired);
             return new(ManualSyncStatus.Error, afterFailure?.NextSyncAllowedAt);
         }
 
         var afterSync = await FindConnectionAsync(connectionId, ct);
+        // Before the reauthorization check: a TAN_REQUIRED connection is not authorized any more, so it
+        // would otherwise be reported as "reconnect needed" - and reconnecting is exactly the wrong
+        // action, it throws the pending challenge away.
+        if (IsWaitingForTan(afterSync)) return new(ManualSyncStatus.TanRequired);
         if (RequiresReauthorization(afterSync))
             return new(ManualSyncStatus.ReauthorizationRequired);
         if (string.Equals(afterSync?.LastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
@@ -1636,6 +1650,12 @@ public sealed class BankSyncService(
     }
 
     /// <summary>In-memory only; the highest value across an account loop is the reported error.</summary>
+    /// <summary>A FinTS sync parked a TAN challenge on the connection and is waiting for an answer.</summary>
+    private static bool IsWaitingForTan(BankConnectionDto? connection) =>
+        connection is not null &&
+        (string.Equals(connection.Status, "TAN_REQUIRED", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(connection.LastError, "FINTS_TAN_REQUIRED", StringComparison.OrdinalIgnoreCase));
+
     private enum AccountSyncOutcome
     {
         Success = 0,

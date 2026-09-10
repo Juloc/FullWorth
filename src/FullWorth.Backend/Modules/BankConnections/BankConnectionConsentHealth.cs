@@ -18,6 +18,8 @@ public static class BankConnectionConsentHealthCalculator
             : null;
 
         var normalizedStatus = (status ?? string.Empty).ToUpperInvariant();
+        if (normalizedStatus == "TAN_REQUIRED")
+            return new("tan_required", daysUntilExpiry);
         if (normalizedStatus == "EXPIRED")
             return new("expired", daysUntilExpiry);
         if (normalizedStatus == "REVOKED")
@@ -30,6 +32,11 @@ public static class BankConnectionConsentHealthCalculator
             return new("expired", daysUntilExpiry);
         if (string.Equals(lastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
             return new("partial_history", daysUntilExpiry);
+        // A parked TAN challenge is not a broken connection and must not be offered "Reconnect": that
+        // starts a fresh authorization and throws the challenge away. It gets its own state so the UI can
+        // offer the one action that actually helps - answering the TAN.
+        if (string.Equals(lastError, "FINTS_TAN_REQUIRED", StringComparison.Ordinal))
+            return new("tan_required", daysUntilExpiry);
         if (consecutiveFailures > 0 || lastError is not null)
             return new("error", daysUntilExpiry);
         if (nextSyncAllowedAt is { } cooldownEndsAt && cooldownEndsAt > now)

@@ -104,6 +104,35 @@ public sealed class IngFinTsService(
             saved?.Parameters.Accounts.Count(x => x.IsDepot) ?? 0);
     }
 
+    /// <summary>
+    /// The TAN challenge a stored connection is waiting on, so it can be answered later instead of only
+    /// in the dialog that started it. A sync that hits a TAN parks the challenge in the connection
+    /// secret and there was no way to read it back — the connection was simply stuck.
+    ///
+    /// Returns the challenge ONLY. The same secret holds the login and PIN, which never leave here.
+    /// </summary>
+    public async Task<FinTsConnectionResult?> PendingChallengeAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        CancellationToken ct)
+    {
+        var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, connectionId, null, ct);
+        if (authorized != BankAuthorizeResult.Authorized)
+            throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
+        var connection = await FindAsync(connectionId, ct) ?? throw new BankAccessException(false);
+        if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var secret = ReadSecret(connection);
+        if (secret?.Challenge is null || secret.Session is null) return null;
+        return new FinTsConnectionResult(
+            connection.Id,
+            connection.Status,
+            secret.Challenge,
+            secret.Parameters.Accounts.Count(x => !x.IsDepot),
+            secret.Parameters.Accounts.Count(x => x.IsDepot));
+    }
+
     public async Task<FinTsConnectionResult> ContinueTanAsync(
         Guid connectionId,
         BankingCaller caller,

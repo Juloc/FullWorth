@@ -386,6 +386,26 @@ public static class BankingApplication
             }
         });
         
+        // The challenge a stored connection is waiting on, so a TAN can be answered outside the dialog
+        // that started it. 204 when nothing is pending; the login and PIN never leave the service.
+        endpoints.MapGet("/api/banking/fints/connections/{id:guid}/challenge", async (
+            HttpContext http,
+            Guid id,
+            IngFinTsService service,
+            CancellationToken ct) =>
+        {
+            if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+            try
+            {
+                var pending = await service.PendingChallengeAsync(id, caller, ct);
+                return pending is null ? Results.NoContent() : Results.Ok(pending);
+            }
+            catch (BankAccessException exception)
+            {
+                return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+            }
+        });
+
         endpoints.MapPost("/api/banking/fints/connections/{id:guid}/poll", async (
             HttpContext http,
             Guid id,
@@ -465,6 +485,7 @@ public static class BankingApplication
                 ManualSyncStatus.Cooldown => "cooldown",
                 ManualSyncStatus.AlreadyRunning => "already_running",
                 ManualSyncStatus.ReauthorizationRequired => "reauthorization_required",
+                ManualSyncStatus.TanRequired => "tan_required",
                 _ => "unknown"
             };
             return Results.Ok(new { status, nextSyncAllowedAt = result.NextSyncAllowedAt });

@@ -758,7 +758,11 @@
     "moreActions": "More actions",
     "askCoach": "Ask Coach",
     "editVisual": "Icon & appearance",
-    "rename": "Rename account"
+    "rename": "Rename account",
+    "health_tan_required": "TAN required",
+    "enterTan": "Enter TAN",
+    "syncTanRequired": "The bank is asking for a TAN. Enter it now.",
+    "tanUnavailable": "No TAN is waiting any more. Start the sync again."
   },
   "a11y": {
     "skipToContent": "Skip to content"

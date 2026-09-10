@@ -41,6 +41,21 @@ public sealed class BankConnectionConsentHealthTests
         Assert.Equal(expectedDaysUntilExpiry, result.DaysUntilExpiry);
     }
 
+    // A parked TAN challenge is its own state. It used to fall through to reauthorization_required,
+    // whose only action is Reconnect - which starts a fresh authorization and discards the very challenge
+    // the bank is waiting for, leaving the connection permanently unrepairable.
+    [Theory]
+    [InlineData("TAN_REQUIRED", null)]
+    [InlineData("TAN_REQUIRED", "FINTS_TAN_REQUIRED")]
+    [InlineData("AUTHORIZED", "FINTS_TAN_REQUIRED")]
+    public void APendingTanIsItsOwnHealthState(string status, string? lastError)
+    {
+        var result = BankConnectionConsentHealthCalculator.Calculate(
+            status, "session", Now.AddDays(30), 0, lastError, null, Now);
+
+        Assert.Equal("tan_required", result.HealthStatus);
+    }
+
     [Fact]
     public void CalculateReturnsNoExpiryDaysWhenConsentHasNoExpiry()
     {

@@ -159,13 +159,17 @@ async function loadAccountsView(){
     const health=x.healthStatus||'authorized';
     const label=get(`accounts.health_${health}`);
     const warn=['reauthorization_required','expired','revoked','closed','error','partial_history'].includes(health);
+    // A parked TAN is not a broken connection: Reconnect would start a fresh authorization and throw
+    // the pending challenge away. The only action that helps is answering the TAN.
+    const needsTan=health==='tan_required';
     const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
     const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
     const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+    row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
     row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
     row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
     row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
+    row.querySelector('[data-enter-tan]')?.addEventListener('click',ev=>openPendingTanDialog(x,ev.currentTarget));
     row.querySelector('[data-disconnect]').addEventListener('click',ev=>disconnectConnection(x,ev.currentTarget));
     conns.appendChild(row);
   }
@@ -194,9 +198,11 @@ async function syncConnection(id,button){
   try{
     const r=await bankApi(`api/banking/connections/${id}/sync?force=true`,{method:'POST'});
     const status=(r&&r.status)||'started';
-    const messages={started:'accounts.syncStarted',completed:'accounts.syncCompleted',partial_history:'accounts.syncPartial',error:'accounts.syncError',already_running:'accounts.syncRunning',cooldown:'accounts.syncCooldown',reauthorization_required:'accounts.syncReauth'};
+    const messages={started:'accounts.syncStarted',completed:'accounts.syncCompleted',partial_history:'accounts.syncPartial',error:'accounts.syncError',already_running:'accounts.syncRunning',cooldown:'accounts.syncCooldown',reauthorization_required:'accounts.syncReauth',tan_required:'accounts.syncTanRequired'};
     const detail=status==='cooldown'&&r?.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(r.nextSyncAllowedAt)}`:'';
     toast(`${get(messages[status]||'accounts.syncStarted')}${detail}`);
+    // A TAN is waiting: open it straight away instead of leaving the user with a toast and no way in.
+    if(status==='tan_required'){await openPendingTanDialog({id},null);return}
     await ctx.reload();
   }catch(err){toast(err.message||get('common.error'));if(button)button.disabled=false}
 }
@@ -277,6 +283,14 @@ async function disconnectConnection(connection,button){
 // §17: re-authorizes an expired/errored connection IN PLACE (reconnectConnectionId) instead of
 // creating a duplicate connection for the same institution.
 async function reconnectConnection(connection,button){
+  // FinTS connections are re-authorized with their own login, not through Enable Banking. Without
+  // this check the Enable Banking flow ran with the FinTS connection id, which rewrote the
+  // connection provider - or, with no Enable Banking profile, opened its setup wizard for a bank
+  // that never needed one.
+  if(String(connection?.provider||'').toLowerCase()==='fints'){
+    if(button)button.disabled=false;
+    return openIngConnectionOptions(connection);
+  }
   if(button)button.disabled=true;
   try{
     const status=await bankApi('api/banking/status');
@@ -760,6 +774,23 @@ async function openIngConnectionOptions(reconnectConnection=null){
     }catch(err){toast(err.message||get('common.error'));submit.disabled=false}
   };
   dlg.showModal();
+}
+
+// Reopens the challenge a connection is already waiting on. The sync that hit the TAN parked it on the
+// connection; before this there was no way to answer it outside the dialog that first triggered it, so
+// the connection stayed stuck forever.
+async function openPendingTanDialog(connection,button){
+  if(button)button.disabled=true;
+  try{
+    const pending=await bankApi(`api/banking/fints/connections/${encodeURIComponent(connection.id)}/challenge`);
+    if(!pending||!pending.challenge){
+      toast(get('accounts.tanUnavailable'));
+      await loadAccountsView();
+      return;
+    }
+    openIngTanDialog(pending);
+  }catch(err){toast(err.message||get('common.error'))}
+  finally{if(button)button.disabled=false}
 }
 
 function openIngTanDialog(initial){

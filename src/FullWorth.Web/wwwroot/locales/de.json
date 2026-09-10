@@ -758,7 +758,11 @@
     "moreActions": "Weitere Aktionen",
     "askCoach": "Coach fragen",
     "editVisual": "Icon & Darstellung",
-    "rename": "Konto umbenennen"
+    "rename": "Konto umbenennen",
+    "health_tan_required": "TAN nötig",
+    "enterTan": "TAN eingeben",
+    "syncTanRequired": "Die Bank verlangt eine TAN. Gib sie jetzt ein.",
+    "tanUnavailable": "Es wartet keine TAN mehr. Starte den Abgleich neu."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
