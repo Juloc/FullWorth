@@ -51,14 +51,14 @@
 
 /* The mobile bottom nav is fixed, so the page toast must sit above it (responsive.css only lifts #toast). */
 @media(max-width:767px){
-  .comp-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
+  .comp-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
 }
 
 /* Must stay LAST: .comp-shell is declared again further up with a `padding` shorthand at the same
    specificity, so an earlier mobile override would be silently reset. The fixed mobile bottom nav needs
    this clearance or the last panel is hidden behind it. */
 @media(max-width:767px){
-  .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .comp-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 }
 
 /* A partial employment year is stated in the hero, not left to be inferred from smaller numbers. */

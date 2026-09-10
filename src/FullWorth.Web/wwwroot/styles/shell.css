@@ -1,7 +1,7 @@
 .skip-link{position:fixed;top:-60px;left:8px;z-index:100;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-input);padding:10px 14px;transition:top .15s}
 .skip-link:focus{top:8px}
 
-.shell{min-height:100vh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
+.shell{min-height:100vh;min-height:100dvh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
 body.nav-collapsed .shell,body.nav-auto-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
 
 /* Sidebar (§3.1) */

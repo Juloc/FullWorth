@@ -77,9 +77,9 @@ button.is-loading::before{content:"";width:14px;height:14px;border:2px solid cur
 /* Sanctioned exception to the Barlow-Condensed-only rule: recovery codes are security-critical and
    must be unambiguous to read/transcribe, so they use a monospace family (0/O, 1/l disambiguation). */
 .recovery-codes code{font:600 14px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
-.auth-footer{text-align:center;color:var(--muted);font-size:12px;padding-bottom:max(0px,env(safe-area-inset-bottom))}
+.auth-footer{text-align:center;color:var(--muted);font-size:12px;padding-bottom:max(0px,env(safe-area-inset-bottom,0px))}
 .auth-version::before{content:"·";margin:0 var(--s1)}
-.auth-utility{position:fixed;left:clamp(12px,3vw,24px);bottom:max(clamp(12px,3vw,24px),env(safe-area-inset-bottom));display:flex;gap:var(--s2);z-index:2}
+.auth-utility{position:fixed;left:clamp(12px,3vw,24px);bottom:max(clamp(12px,3vw,24px),env(safe-area-inset-bottom,0px));display:flex;gap:var(--s2);z-index:2}
 .auth-util-btn{display:inline-flex;align-items:center;gap:var(--s1);min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:color .18s ease,border-color .18s ease,background-color .18s ease}
 .auth-util-btn:hover{color:var(--text);border-color:color-mix(in srgb,var(--line) 60%,var(--text))}
 .auth-util-btn svg{flex:0 0 auto}
@@ -91,7 +91,7 @@ button.is-loading::before{content:"";width:14px;height:14px;border:2px solid cur
 #auth-theme[data-theme-pref="dark"] [data-theme-icon="dark"]{display:block}
 [hidden]{display:none!important}
 @media(max-width:600px){
-  .auth-shell{padding:var(--s3) var(--s3) max(var(--s3),env(safe-area-inset-bottom));gap:var(--s3)}
+  .auth-shell{padding:var(--s3) var(--s3) max(var(--s3),env(safe-area-inset-bottom,0px));gap:var(--s3)}
   .auth-topbar{align-items:flex-start}
   .auth-brand{padding-top:var(--s1)}
   .auth-preferences{gap:var(--s1)}
