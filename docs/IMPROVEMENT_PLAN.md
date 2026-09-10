@@ -118,18 +118,27 @@ is `external: true` in both stacks now, so compose can never remove it.
 
 ## P1 — core-path defects and security
 
-### P1-1 Re-registration hands an anonymous caller someone else's instance — `OPEN` (cloud)
+### P1-1 Re-registration hands an anonymous caller someone else's instance — `DONE` (cloud 34175bd, client b6e41b7)
 
 `FullWorth.Cloud.Api/Endpoints/InstanceEndpoints.cs:18` — `POST /v1/instances/register` carries no
 instance auth filter, and re-registering an existing `instanceId` **revokes the live credential** and
 issues a fresh one to the caller. Public enrollment is now on, so this is reachable from the internet:
 anyone who learns an instance id can lock that instance out and take its place.
 
-**Target.** Re-registration of a known id must require the current credential, or must create a new
-identity instead of rebinding the existing one. Rate-limit and audit both paths.
+**Fix.** Registration creates an identity. Re-registering a known id requires proof that the caller
+holds one of that instance's credentials, and both outcomes are audited. The proof is deliberately
+weaker than authentication - an expired or already-revoked credential still counts - because that is
+what a legitimate instance renewing itself holds, while someone who only learned an id holds nothing.
+New code `instance_already_registered` (409).
 
-**Tests.** Register, then re-register the same id anonymously → rejected, original credential still
-valid.
+Client half: the held credential is presented on re-registration, and the 401 self-heal now renews with
+the rejected credential instead of deleting it first, which would have left the instance unable to
+re-enroll at all.
+
+**Verified.** Proven by reverting: the takeover test expects 409 and the old code answered 200. Six new
+cloud tests plus twelve client-side cases.
+
+**Not yet deployed:** image 1.2.6 predates this fix.
 
 ### P1-2 The Cloud rate limiter treats the whole internet as one caller — `OPEN` (cloud)
 
@@ -166,19 +175,27 @@ instance re-downloads and discards it every 5 minutes — about 288 times a day.
 **Decision needed from the owner:** pin the official Cloud's public key into the constant at release
 time (it is a public key; the doc comment says this was the intent), or publish it from the Cloud API.
 
-**Independent of that decision, fix now:** resolve the key before fetching anything and fail fast.
+**Independent of that decision, DONE (96daf74):** the key is resolved before any request, so a keyless
+instance no longer downloads and discards up to 5 MB every five minutes.
 
-### P1-5 A self-hoster's own Cloud URL is silently ignored — `OPEN`
+**Also DONE:** the key can now be obtained at all - the Cloud admin UI shows it with a download and a
+copy button (cloud a14f5d6). What remains is the owner's decision on where it gets pinned.
+
+### P1-5 A self-hoster's own Cloud URL is silently ignored — `DONE` (96daf74)
 
 `Modules/Intelligence/FullWorthCloudClient.cs:480` reads `FullWorthCloud:BaseUrl` and then discards it
 unless the environment is Development or Testing. Someone who points their instance at their own Cloud
 keeps sending to `api.fullworth.de` with no error and no warning. This breaks the product's own rule
 that no deployment may depend on the owner's infrastructure.
 
-**Target.** Honour the configured URL in every environment. Keep the public default; log the resolved
-endpoint once at startup.
+**Fix.** The configured URL is honoured in every environment. Outside Development it must be HTTPS and
+a public host - a loopback or private address there is a copied development setting, and failing loudly
+beats posting to a host that answers nothing.
 
-**Tests.** With `FullWorthCloud:BaseUrl` set in Production, enrollment and upload target that host.
+**Verified.** Proven by reverting: the test asks for `https://cloud.example.org` and the old code
+answered `https://api.fullworth.de`. 12 resolution cases.
+
+**Still open:** the resolved endpoint is still not surfaced anywhere (see the visibility items in P2).
 
 ### P1-6 Multi-currency accounts lose every wallet but one — `OPEN`
 
