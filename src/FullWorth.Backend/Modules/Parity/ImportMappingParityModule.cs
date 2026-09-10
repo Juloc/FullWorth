@@ -104,6 +104,13 @@ public static class ImportMappingParityEndpoints
 
         var jobId = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
         var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        // A file without a currency column states no currency; the space's own base currency is the
+        // honest reading of that, not a hardcoded EUR.
+        var spaceCurrency = await db.FullWorthSpaces.AsNoTracking()
+            .Where(space => space.Id == fullWorthSpaceId)
+            .Select(space => space.BaseCurrency)
+            .SingleOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(spaceCurrency)) spaceCurrency = "EUR";
         var candidates = new List<MappedCandidate>(); var errorCount = 0;
         for (var index = 0; index < rows.Count; index++)
         {
@@ -112,7 +119,7 @@ public static class ImportMappingParityEndpoints
             {
                 var date = ParseDate(row.GetValueOrDefault(mapping.Date));
                 var amount = ParseAmount(row.GetValueOrDefault(mapping.Amount));
-                var currency = ParseCurrency(mapping.Currency is null ? null : row.GetValueOrDefault(mapping.Currency));
+                var currency = ParseCurrency(mapping.Currency is null ? null : row.GetValueOrDefault(mapping.Currency), spaceCurrency);
                 var party = Clean(mapping.Counterparty is null ? null : row.GetValueOrDefault(mapping.Counterparty));
                 var description = Clean(mapping.Description is null ? null : row.GetValueOrDefault(mapping.Description));
                 var account = Clean(mapping.Account is null ? null : row.GetValueOrDefault(mapping.Account));
@@ -124,8 +131,8 @@ public static class ImportMappingParityEndpoints
             catch (Exception exception)
             {
                 errorCount++;
-                candidates.Add(new(Guid.NewGuid(), null, null, 0, "EUR", null, null, null, null,
-                    Fingerprint(null, 0, "EUR", null, $"row-{index}", null), "error", exception.Message));
+                candidates.Add(new(Guid.NewGuid(), null, null, 0, spaceCurrency, null, null, null, null,
+                    Fingerprint(null, 0, spaceCurrency, null, $"row-{index}", null), "error", exception.Message));
             }
         }
 
@@ -319,7 +326,18 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
     private static ImportColumnMapping Suggest(IEnumerable<string> headers){var h=headers.ToArray();string? Find(params string[] names)=>h.FirstOrDefault(x=>names.Any(n=>Norm(x)==Norm(n)));return new(Find("date","datum","booking date","buchungsdatum")??"",Find("amount","betrag","value","umsatz")??"",Find("currency","währung","waehrung"),Find("counterparty","empfänger","empfaenger","payee","merchant","gegenpartei"),Find("description","verwendungszweck","text","purpose","memo"),Find("account","konto","account name","referenzkonto"),Find("category","kategorie"),Find("id","booking id","transaction id","buchungs-id"));}
     private static string Norm(string value)=>new(value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
-    private static string ParseCurrency(string? value){var v=Clean(value)?.ToUpperInvariant();return v is{Length:3}&&v.All(char.IsLetter)?v:"EUR";}
+    /// <summary>
+    /// Same rule as ImportParityModule.RowCurrency: a mapped currency column that IS present but
+    /// unreadable makes the row an error the user can see, instead of being relabelled to a currency the
+    /// file never stated. A file with no currency column falls back to the space base currency.
+    /// </summary>
+    private static string ParseCurrency(string? value, string fallback)
+    {
+        var v = Clean(value)?.ToUpperInvariant();
+        if (v is null) return fallback;
+        if (v is { Length: 3 } && v.All(char.IsAsciiLetterUpper)) return v;
+        throw new FormatException($"Unknown currency '{value!.Trim()}'.");
+    }
     private static DateOnly ParseDate(string? value){if(string.IsNullOrWhiteSpace(value))throw new FormatException("Date is missing.");var s=value.Trim();if(double.TryParse(s,NumberStyles.Float,CultureInfo.InvariantCulture,out var serial)&&serial is >20000 and <100000)return DateOnly.FromDateTime(new DateTime(1899,12,30).AddDays(serial));var formats=new[]{"yyyy-MM-dd","dd.MM.yyyy","d.M.yyyy","dd/MM/yyyy","MM/dd/yyyy","yyyy/MM/dd"};foreach(var f in formats)if(DateOnly.TryParseExact(s,f,CultureInfo.InvariantCulture,DateTimeStyles.None,out var d))return d;if(DateOnly.TryParse(s,CultureInfo.CurrentCulture,out var parsed))return parsed;throw new FormatException($"Invalid date '{value}'.");}
     // Statement amounts, so three trailing digits after a single separator mean grouping - see ImportNumber.
     private static decimal ParseAmount(string? value)=>ImportNumber.Parse(value,ImportNumber.ThreeDigitTail.Grouping);

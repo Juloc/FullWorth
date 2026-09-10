@@ -390,12 +390,23 @@ providers.
   "Datenstand".
 - **The balance-type preference is implemented seven times, two different ways** — and no test covers
   any type beyond `closingBooked`/`closingAvailable`/`manual`.
-- **A wallet-level sync failure aborts the whole connection.** `BankSyncService.cs:924` — one failing
-  balances endpoint leaves every remaining account showing stale values.
-- **The account currency defaults to EUR** when the provider omits it (`BankSyncService.cs:1104`), and
-  nothing reconciles it against the currencies that actually arrived.
-- **The import stamps EUR on every row** whose currency column is missing or unrecognised
-  (`ImportParityModule.cs:99`) and never checks the row currency against the target account.
+- ~~**A wallet-level sync failure aborts the whole connection.**~~ `DONE` — a provider error on one
+  account is caught, logged and reported as `ACCOUNT_SYNC_FAILED`, and the remaining accounts still
+  sync. Connection-level categories (rate limit, consent/session expired, auth required) still abort
+  the run on purpose: continuing would hammer the provider and every remaining account would fail the
+  same way. The split uses the existing `EnableBankingErrorClassifier`.
+- ~~**The account currency defaults to EUR** when the provider omits it.~~ `DONE` — the parser no
+  longer invents one: `AccountState.Currency` is nullable, and the sync resolves it from the currency
+  the money actually **arrived** in. A balance or booking with no currency anywhere is treated as
+  unreadable rather than stamped with a guess. EUR survives only as the last resort when the provider
+  named no currency AND sent no readable balance, and that case is logged.
+- ~~**The import stamps EUR on every row** whose currency column is missing or unrecognised.~~ `DONE`
+  in both importers (`ImportParityModule` and `ImportMappingParityModule`): a currency column that IS
+  present but unreadable makes the row a visible error instead of being relabelled, and a file with no
+  currency column falls back to the **space** base currency rather than a hardcoded EUR. Not done, and
+  deliberately: comparing the row currency against the target account. A foreign-currency booking on a
+  euro account is legitimate (a card payment abroad), so a mismatch is not by itself an error — what
+  would help is showing the mix before the commit, which is a UI question.
 - **The cashflow forecast picks a different balance than the account list** for the same data
   (`CashflowParityModule.cs:222`).
 - **The Wealth allocation donut splits a converted total using unconverted ratios**

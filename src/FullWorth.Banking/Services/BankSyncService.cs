@@ -743,8 +743,29 @@ public sealed class BankSyncService(
             var outcome = AccountSyncOutcome.Success;
             foreach (var account in accounts)
             {
-                var accountOutcome = await SyncAccountAsync(client, connection, account, psuContext, ct);
-                if (accountOutcome > outcome) outcome = accountOutcome;
+                try
+                {
+                    var accountOutcome = await SyncAccountAsync(client, connection, account, psuContext, ct);
+                    if (accountOutcome > outcome) outcome = accountOutcome;
+                }
+                catch (EnableBankingApiException exception) when (IsSingleAccountProblem(exception))
+                {
+                    // One account failing is not the connection failing. This used to escape the loop,
+                    // so every account AFTER the failing one was skipped entirely and kept showing its
+                    // last known balance - a wallet the bank refuses (common on PayPal-style multi-
+                    // account setups) silently froze all the others.
+                    //
+                    // Connection-level problems - an expired consent, a revoked session, the bank rate
+                    // limiting us - still abort: continuing would hammer the provider and every
+                    // remaining account would fail the same way. Those are re-thrown by the guard.
+                    logger.LogWarning(
+                        exception,
+                        "Account {Account} of connection {Connection} failed to sync ({Code}); continuing with the remaining accounts.",
+                        account.ProviderAccountId,
+                        connection.Id,
+                        exception.ErrorCode);
+                    if (AccountSyncOutcome.AccountFailed > outcome) outcome = AccountSyncOutcome.AccountFailed;
+                }
             }
 
             var error = outcome switch
@@ -752,6 +773,7 @@ public sealed class BankSyncService(
                 AccountSyncOutcome.AccountResolutionFailed => "ACCOUNT_RESOLUTION_FAILED",
                 AccountSyncOutcome.HistoryPageLimitReached => "HISTORY_PAGE_LIMIT_REACHED",
                 AccountSyncOutcome.BalanceUnreadable => "BALANCE_UNREADABLE",
+                AccountSyncOutcome.AccountFailed => "ACCOUNT_SYNC_FAILED",
                 _ => null
             };
 
@@ -941,6 +963,21 @@ public sealed class BankSyncService(
         var balanceResult = ParseBalances(account, balancesJson);
         var balances = balanceResult.Items;
 
+        // The currency the money actually arrived in, when the provider did not name one. Last resort
+        // stays EUR - an account has to be storable even with nothing to go on - but it is now only
+        // reached when the provider named no currency AND sent no readable balance, and it is logged
+        // instead of passing silently.
+        if (string.IsNullOrWhiteSpace(account.Currency))
+        {
+            var reported = balances.Select(balance => balance.Currency)
+                .FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency));
+            if (string.IsNullOrWhiteSpace(reported))
+                logger.LogWarning(
+                    "Account {Account} reported no currency and no readable balance; defaulting to EUR.",
+                    account.ProviderAccountId);
+            account = account with { Currency = reported ?? "EUR" };
+        }
+
         var now = DateOnly.FromDateTime(DateTime.UtcNow);
         DateOnly? from = syncState?.LatestBookingDate is { } latest
             ? latest.AddDays(-Math.Max(0, _sync.OverlapDays))
@@ -1121,7 +1158,11 @@ public sealed class BankSyncService(
             display ?? connection.InstitutionName,
             product,
             GetString(json, "cash_account_type"),
-            GetString(json, "currency") ?? "EUR",
+            // No fallback: a provider that does not state a currency has not stated one. Reading that
+            // silence as EUR labelled real accounts with a currency nobody reported, and every amount
+            // on them was then converted with the wrong rate. SyncAccountAsync resolves it from the
+            // balances that actually arrive.
+            GetString(json, "currency"),
             GetIbanLast4(json),
             IdentificationHashes: GetIdentificationHashes(json, hash),
             Iban: GetIban(json),
@@ -1135,7 +1176,9 @@ public sealed class BankSyncService(
     private static AccountState? ParseAccountFromUid(BankConnectionDto connection, string? uid)
     {
         if (string.IsNullOrWhiteSpace(uid)) return null;
-        return new($"uid:{uid}", uid, connection.InstitutionName, null, null, "EUR", null,
+        // A placeholder for an account whose details could not be read at all - flagged HasDetails:false
+        // so the backend never overwrites stored metadata with it. Its currency is unknown, not EUR.
+        return new($"uid:{uid}", uid, connection.InstitutionName, null, null, null, null,
             IdentificationHashes: [], HasDetails: false, NeedsHashResolution: true);
     }
 
@@ -1245,9 +1288,16 @@ public sealed class BankSyncService(
         {
             // Everything in this array was meant to be a balance, so anything we cannot read is a
             // balance we failed to read - counted, not swallowed.
+            // A balance with no currency - neither on the row nor on the account - has no unit, so it
+            // is a number nobody can use. Counted as unreadable rather than stamped with a guess.
+            var currency = item.ValueKind == JsonValueKind.Object &&
+                           item.TryGetProperty("balance_amount", out var amountForCurrency)
+                ? GetString(amountForCurrency, "currency") ?? account.Currency
+                : account.Currency;
             if (item.ValueKind != JsonValueKind.Object ||
                 !item.TryGetProperty("balance_amount", out var amount) ||
-                GetDecimal(amount, "amount") is not { } value)
+                GetDecimal(amount, "amount") is not { } value ||
+                string.IsNullOrWhiteSpace(currency))
             {
                 unreadable++;
                 continue;
@@ -1255,7 +1305,7 @@ public sealed class BankSyncService(
             result.Add(new(
                 account.IdentificationHash,
                 value,
-                GetString(amount, "currency") ?? account.Currency,
+                currency,
                 GetString(item, "balance_type") ?? "",
                 ParseDate(item, "reference_date"),
                 captured));
@@ -1284,6 +1334,8 @@ public sealed class BankSyncService(
         var entryReference = GetString(json, "entry_reference");
         var status = (GetString(json, "status") ?? "BOOK").ToUpperInvariant();
         var currency = GetString(amountJson, "currency") ?? account.Currency;
+        // Same rule as a balance: an amount without a unit is not a booking.
+        if (string.IsNullOrWhiteSpace(currency)) return null;
 
         // Enable Banking: entry_reference is the stable account-scoped cross-retrieval identifier.
         // transaction_id is only a pointer to the details resource and can change between retrievals.
@@ -1650,6 +1702,17 @@ public sealed class BankSyncService(
     }
 
     /// <summary>In-memory only; the highest value across an account loop is the reported error.</summary>
+    /// <summary>
+    /// Whether this failure belongs to ONE account rather than the whole connection. An expired consent,
+    /// a revoked session or a rate limit affects every account, so those keep aborting the run.
+    /// </summary>
+    private static bool IsSingleAccountProblem(EnableBankingApiException exception) =>
+        EnableBankingErrorClassifier.Classify(exception).Category is
+            BankErrorCategory.TransientProvider or
+            BankErrorCategory.InvalidRequest or
+            BankErrorCategory.TransactionsPeriod or
+            BankErrorCategory.Unknown;
+
     /// <summary>A FinTS sync parked a TAN challenge on the connection and is waiting for an answer.</summary>
     private static bool IsWaitingForTan(BankConnectionDto? connection) =>
         connection is not null &&
@@ -1661,7 +1724,8 @@ public sealed class BankSyncService(
         Success = 0,
         AccountResolutionFailed = 1,
         HistoryPageLimitReached = 2,
-        BalanceUnreadable = 3
+        BalanceUnreadable = 3,
+        AccountFailed = 4
     }
 
     private sealed record AccountState(
@@ -1670,7 +1734,11 @@ public sealed class BankSyncService(
         string DisplayName,
         string? Product,
         string? AccountType,
-        string Currency,
+        /// <summary>
+        /// What the PROVIDER said, or null when it said nothing. Resolved from the arriving balances
+        /// before the account is stored; never guessed here.
+        /// </summary>
+        string? Currency,
         string? IbanLast4,
         IReadOnlyList<string>? IdentificationHashes = null,
         bool HasDetails = true,

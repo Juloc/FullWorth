@@ -434,6 +434,70 @@ public sealed class ImportMappingRegressionTests
         return doc.RootElement.Clone();
     }
 
+    // The importer answered "EUR" for anything it could not read in a mapped currency column, so a
+    // foreign amount landed in a euro column and was later converted 1:1. A stated-but-unreadable
+    // currency is a row error the user can see instead.
+    [Fact]
+    public async Task An_unreadable_currency_makes_the_row_an_error_instead_of_euro()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+
+        const string csv = "Datum;Betrag;Währung;Empfänger\r\n" +
+                           "30.08.2026;-12,34;EUR;REWE\r\n" +
+                           "30.08.2026;-99,00;Dollars;Broken\r\n";
+        using var response = await Upload(client, owner, csv, new
+        {
+            date = "Datum",
+            amount = "Betrag",
+            currency = "Währung",
+            counterparty = "Empfänger",
+            description = (string?)null,
+            account = (string?)null,
+            category = (string?)null,
+            externalKey = (string?)null
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(2, doc.RootElement.GetProperty("sourceRows").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("ready").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("errors").GetInt32());
+    }
+
+    // A file with no currency column states no currency. Stamping EUR mislabelled every row of a space
+    // that is not held in euro; the space's own base currency is the honest reading.
+    [Fact]
+    public async Task Without_a_currency_column_the_space_currency_is_used()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        await factory.SeedAsync(async db =>
+        {
+            var space = await db.FullWorthSpaces.SingleAsync(x => x.Id == FullWorthSpaceDefaults.LegacyId);
+            space.BaseCurrency = "USD";
+            await db.SaveChangesAsync();
+        });
+
+        using var upload = await Upload(client, owner,
+            "Datum;Betrag;Empfänger\r\n30.08.2026;-12,34;REWE\r\n",
+            BasicMapping());
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        using var request = UserRequest(HttpMethod.Get,
+            $"/api/import-jobs/{jobId:D}/candidates?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var row = doc.RootElement.EnumerateArray().Single();
+        Assert.Equal("USD", row.GetProperty("currency").GetString());
+    }
+
     private static async Task<HttpResponseMessage> Upload(HttpClient client, Guid user, string csv, object mapping)
     {
         var request = UserRequest(HttpMethod.Post,
