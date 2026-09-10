@@ -213,28 +213,29 @@ is no multi-wallet model anywhere: one account has exactly one `Currency` column
 **Tests.** A PayPal account with EUR, USD and IDR wallets shows all three, sums correctly, and the
 displayed primary balance is stable across syncs.
 
-### P1-7 Linking an account to a portfolio deletes its real balance — `OPEN`
+### P1-7 Linking an account to a portfolio deletes its real balance — `DONE` (668dc32)
 
-`Modules/Parity/InvestmentNetWorthService.cs:37` unconditionally removes a linked account's bank
-balance from every aggregate and substitutes the portfolio's trade-derived value — which is 0 when no
-trades were imported and 0 when the portfolio currency has no FX rate.
+The account is now excluded only when the portfolio produced a usable valuation: it has trades, no
+price or rate was missing, and the conversion into the base currency succeeded. Otherwise the account
+keeps its own balance and that portfolio contributes nothing, so nothing is double counted either way,
+and the result is flagged incomplete. Per-portfolio incompleteness is tracked per portfolio instead of
+in one flag shared across all of them.
 
-**Target.** A link must not be able to reduce a known balance to zero. Prefer the portfolio valuation
-only when it is complete, and never drop the account's own balance silently.
+The Wealth page had the mirror-image bug on the client: it hid every account named by any portfolio, so
+a row could vanish while the headline still contained it. The overview now reports
+`accountsRepresentedByDepots` from the same calculation that produced the totals.
 
-**Tests.** Link an account with a 5 000 balance to an empty portfolio → net worth does not fall to 0
-and the incompleteness is surfaced.
+### P1-8 A provider balance that fails to parse becomes a real zero — `DONE` (490a25a)
 
-### P1-8 A provider balance that fails to parse becomes a real zero — `OPEN`
+The amount reader returns null instead of `0m`. An unreadable balance row is skipped and counted; if any
+were skipped the account reports `BALANCE_UNREADABLE`, which puts the connection in the error health
+state instead of showing a clean sync that found no money. An unreadable transaction is skipped rather
+than booked as 0 — its fingerprint key had made that 0 permanent.
 
-`FullWorth.Banking/Services/BankSyncService.cs:1602` — `GetDecimal` returns `0m` for a missing or
-unparseable amount, and that 0 is persisted as a genuine current balance, indistinguishable from a real
-zero. `FinTsInvestmentSnapshotEndpoints.cs:123` has the same shape: a holding with no unit price is
-valued at 0 and the resulting incompleteness flag is dropped before the snapshot is written.
-
-**Target.** Absent is not zero. Skip the row and record the failure, or persist the balance as unknown.
-
-**Tests.** A provider payload with a missing amount produces no balance row and a visible sync warning.
+FinTS depots: the unit price is derived from the market value the bank reported when no price was sent,
+so a depot the bank valued at 40 000 is no longer worth 0; a reported price still wins, and a position
+with neither stays unpriced and reports incomplete. Found while testing it: a holding **without an
+ISIN** failed the entire depot snapshot with a 500 (untyped NULL parameter in the security lookup).
 
 ### P1-9 The net-worth sparkline subtracts one currency from another — `OPEN`
 
@@ -256,11 +257,16 @@ collapse to 0 and are mislabelled EUR.
 that gives an imported or synced account its balance, and it has **zero** coverage in all four test
 projects. Everything in P0-2, P0-4, P1-6 and P1-8 runs through it.
 
-### P1-12 Foreign accounts silently vanish from the Wealth trend — `OPEN`
+### P1-12 Foreign accounts silently vanish from the Wealth trend — `DONE`
 
-`Modules/Portfolio/Wealth/WealthModule.cs:481` drops every non-base-currency snapshot row whose date has
-no FX rate, and the rate table is backfilled only 60 days. On the default 12-month window that means ten
-of twelve months exclude every foreign account, so the curve reads flat or plainly too low.
+Two halves. The rate table is now deep-backfilled across the history window (`Fx:HistoryBackfillDays`,
+default 400) while it does not already reach that far, so a fresh install can convert a foreign account
+on an old day at all; afterwards only the cheap 60-day window is refetched. `FxRateBackfill.ResolveFrom`
+is pure and tested, including the weekend slack that would otherwise re-fetch everything every cycle.
+
+And a day that still cannot convert one of its rows now reports **unknown** rather than a partial sum:
+a total missing a whole account is not a smaller net worth, and the chart already drops null points and
+draws a gap. `WealthHistoryPoint.NetWorth` became nullable for that reason.
 
 ### P1-13 A FinTS connection that needs a TAN cannot be repaired at all — `OPEN`
 

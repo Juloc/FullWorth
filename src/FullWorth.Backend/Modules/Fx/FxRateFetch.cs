@@ -14,8 +14,15 @@ public sealed class FxRateOptions
     /// <summary>ECB-backed, no API key, historical-by-date. Self-hosters can point this at their own mirror.</summary>
     public string ProviderBaseUrl { get; set; } = "https://api.frankfurter.app";
     public int RefreshIntervalHours { get; set; } = 12;
-    /// <summary>Days of history to backfill on startup so recent value-date conversions resolve.</summary>
+    /// <summary>Days of history re-checked on every refresh cycle, for recent value-date conversions.</summary>
     public int BackfillDays { get; set; } = 60;
+    /// <summary>
+    /// Days of history fetched ONCE while the rate table does not reach that far back. The wealth trend
+    /// defaults to a 12-month window and converts every historical snapshot at ITS OWN date, so with only
+    /// <see cref="BackfillDays"/> of rates ten of twelve months could not convert a foreign account at
+    /// all - the curve read flat or plainly too low on every fresh install.
+    /// </summary>
+    public int HistoryBackfillDays { get; set; } = 400;
 }
 
 /// <summary>
@@ -66,6 +73,28 @@ public sealed class FxRateProvider(HttpClient http)
 }
 
 /// <summary>
+/// How far back one refresh cycle reaches. Pure so the decision is testable without a database or a
+/// provider: the deep window is used only while the table does not already cover it.
+/// </summary>
+public static class FxRateBackfill
+{
+    /// <summary>
+    /// Slack for the start of the deep range landing on a weekend or holiday, which has no ECB fixing -
+    /// without it the earliest stored date is always a little later than the requested one and every
+    /// cycle would re-fetch the whole history.
+    /// </summary>
+    private const int WeekendSlackDays = 7;
+
+    public static DateOnly ResolveFrom(DateOnly today, DateOnly? earliestStored, FxRateOptions options)
+    {
+        var deepFrom = today.AddDays(-Math.Clamp(options.HistoryBackfillDays, 1, 400));
+        if (earliestStored is null || earliestStored > deepFrom.AddDays(WeekendSlackDays))
+            return deepFrom;
+        return today.AddDays(-Math.Clamp(options.BackfillDays, 1, 400));
+    }
+}
+
+/// <summary>
 /// Periodically refreshes the FX rate table (mirrors the banking BankSyncWorker pattern). Best-effort:
 /// any failure (offline, provider down) is logged and retried next cycle — the app keeps working, it
 /// just reports conversions as incomplete rather than inventing a rate.
@@ -96,12 +125,18 @@ public sealed class FxRateFetchWorker(IServiceScopeFactory scopeFactory, FxRateP
         try
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var from = today.AddDays(-Math.Clamp(_options.BackfillDays, 1, 400));
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<FullWorthDbContext>();
+
+            // Reach back far enough for the history the app actually draws, but only while the table does
+            // not already cover it - afterwards the cheap recent window is enough.
+            var earliestStored = await db.FxRates.AsNoTracking()
+                .MinAsync(rate => (DateOnly?)rate.Date, ct);
+            var from = FxRateBackfill.ResolveFrom(today, earliestStored, _options);
+
             var fetched = await provider.GetRangeAsync(from, today, ct);
             if (fetched.Count == 0) return;
 
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<FullWorthDbContext>();
             var existing = await db.FxRates.AsNoTracking()
                 .Where(rate => rate.Date >= from)
                 .Select(rate => new { rate.Date, rate.Currency })

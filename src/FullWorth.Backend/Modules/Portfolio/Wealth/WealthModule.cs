@@ -57,7 +57,9 @@ public sealed record WealthHistoryPoint(
     decimal? OtherLiabilities,
     decimal? TotalAssets,
     decimal? TotalLiabilities,
-    decimal NetWorth,
+    // Null when a rate the day needed was missing: the sum would be short a whole account, which is not
+    // a smaller net worth but an unknown one. The chart drops a null point and draws a gap.
+    decimal? NetWorth,
     bool IsComplete,
     IReadOnlyList<string> MissingCurrencies);
 
@@ -423,6 +425,12 @@ public sealed class WealthOverviewService(
         decimal loans = 0m;
         decimal otherLiabilities = 0m;
         var complete = true;
+        // A conversion that FAILED is different from data that was already flagged incomplete when it
+        // was written: the sum below is then missing a whole account, so it is not a smaller number -
+        // it is an unknown one. Reported as null, the chart draws a gap instead of a dip that never
+        // happened.
+        var accountsUnknown = false;
+        var componentsUnknown = false;
 
         // Accounts remain native-currency legacy values, so aggregate them from every row for the day.
         foreach (var row in allRows)
@@ -432,6 +440,7 @@ public sealed class WealthOverviewService(
             {
                 missing.Add(FxSnapshot.Normalize(row.Currency));
                 complete = false;
+                accountsUnknown = true;
                 continue;
             }
             accounts += row.Accounts * multiplier.Value;
@@ -447,6 +456,7 @@ public sealed class WealthOverviewService(
             {
                 missing.Add(FxSnapshot.Normalize(componentCurrency));
                 complete = false;
+                componentsUnknown = true;
                 continue;
             }
             manualAssets += row.ManualAssets!.Value * multiplier.Value;
@@ -457,17 +467,25 @@ public sealed class WealthOverviewService(
             foreach (var currency in row.MissingCurrencies) missing.Add(currency);
         }
 
+        decimal? accountsValue = accountsUnknown ? null : accounts;
+        decimal? manualAssetsValue = componentsUnknown ? null : manualAssets;
+        decimal? investmentsValue = componentsUnknown ? null : investments;
+        decimal? loansValue = componentsUnknown ? null : loans;
+        decimal? otherLiabilitiesValue = componentsUnknown ? null : otherLiabilities;
+
         return new(
             date,
             targetCurrency,
-            accounts,
-            manualAssets,
-            investments,
-            loans,
-            otherLiabilities,
-            manualAssets + investments,
-            loans + otherLiabilities,
-            accounts + manualAssets + investments - loans - otherLiabilities,
+            accountsValue,
+            manualAssetsValue,
+            investmentsValue,
+            loansValue,
+            otherLiabilitiesValue,
+            componentsUnknown ? null : manualAssets + investments,
+            componentsUnknown ? null : loans + otherLiabilities,
+            accountsUnknown || componentsUnknown
+                ? null
+                : accounts + manualAssets + investments - loans - otherLiabilities,
             complete && missing.Count == 0,
             missing.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray());
     }
@@ -505,7 +523,9 @@ public sealed class WealthOverviewService(
             null,
             null,
             null,
-            netWorth,
+            // Same rule as the explicit path: a day that could not convert one of its accounts has an
+            // unknown net worth, not a lower one.
+            accountComplete ? netWorth : null,
             false,
             missing.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray());
     }

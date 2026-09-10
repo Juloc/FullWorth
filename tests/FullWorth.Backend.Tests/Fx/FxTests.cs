@@ -83,3 +83,59 @@ public sealed class FxRateProviderParseTests
         Assert.Equal(1.10m, row.Rate);
     }
 }
+
+/// <summary>
+/// The wealth trend converts every historical snapshot at ITS OWN date, so a 12-month window needs twelve
+/// months of rates. Only 60 days were ever fetched, so on a fresh install ten of twelve months could not
+/// convert a foreign account at all and the curve read flat or plainly too low.
+/// </summary>
+public sealed class FxRateBackfillWindowTests
+{
+    private static readonly DateOnly Today = new(2026, 9, 10);
+
+    [Fact]
+    public void An_empty_rate_table_is_backfilled_across_the_whole_history_window()
+    {
+        var from = FxRateBackfill.ResolveFrom(Today, earliestStored: null, new FxRateOptions());
+
+        Assert.Equal(Today.AddDays(-400), from);
+    }
+
+    [Fact]
+    public void History_that_only_reaches_back_60_days_is_still_backfilled()
+    {
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-60), new FxRateOptions());
+
+        Assert.Equal(Today.AddDays(-400), from);
+    }
+
+    [Fact]
+    public void Once_the_history_is_there_only_the_recent_window_is_refetched()
+    {
+        var options = new FxRateOptions();
+
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-400), options);
+
+        Assert.Equal(Today.AddDays(-options.BackfillDays), from);
+    }
+
+    // The deep range can start on a weekend or holiday, which has no ECB fixing, so the earliest stored
+    // date is always a few days later than the one that was requested. Without slack that difference would
+    // re-fetch the entire history on every single cycle.
+    [Fact]
+    public void A_weekend_at_the_start_of_the_range_does_not_retrigger_the_deep_fetch()
+    {
+        var from = FxRateBackfill.ResolveFrom(Today, Today.AddDays(-397), new FxRateOptions());
+
+        Assert.Equal(Today.AddDays(-60), from);
+    }
+
+    [Fact]
+    public void The_window_stays_within_the_providers_supported_range()
+    {
+        var from = FxRateBackfill.ResolveFrom(
+            Today, earliestStored: null, new FxRateOptions { HistoryBackfillDays = 5000 });
+
+        Assert.Equal(Today.AddDays(-400), from);
+    }
+}
