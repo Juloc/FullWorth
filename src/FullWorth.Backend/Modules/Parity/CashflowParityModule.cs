@@ -218,8 +218,19 @@ ON CONFLICT ("FullWorthSpaceId") DO UPDATE SET "HorizonMode"=EXCLUDED."HorizonMo
         var horizon=settingsResult.HorizonMode=="end_of_month"||nextIncome is null ? new DateOnly(day.Year,day.Month,DateTime.DaysInMonth(day.Year,day.Month)) : nextIncome.NextDate!.Value;
         var fx=await converter.PrepareAsync(baseCurrency,day.AddMonths(-2),horizon,ct); var incomplete=false;
 
-        var accounts=await db.Accounts.AsNoTracking().Where(a=>visible.Contains(a.Id)&&a.IsActive).ToListAsync(ct); decimal balances=0;
-        foreach(var account in accounts){var snap=await db.BalanceSnapshots.AsNoTracking().Where(x=>x.AccountId==account.Id).OrderByDescending(x=>x.CapturedAt).FirstOrDefaultAsync(ct); if(snap is null)continue; var converted=fx.ToBaseOn(snap.Amount,snap.Currency,day); if(converted.HasValue)balances+=converted.Value;else incomplete=true;}
+        var accountIds=await db.Accounts.AsNoTracking().Where(a=>visible.Contains(a.Id)&&a.IsActive).Select(a=>a.Id).ToListAsync(ct);
+        // The same current-balance rule as the account list and net worth (Accounts.CurrentBalances): the
+        // newest capture per (account, CURRENCY), with the balance-type preference as the tiebreak. This
+        // used to take whatever row came first by CapturedAt alone - a sync stamps every balance type with
+        // an identical CapturedAt, so the forecast could start from a different balance than the account
+        // list showed for the same data - and it only ever read ONE currency per account, so a wallet
+        // account was forecast from a fraction of its money.
+        decimal balances=0;
+        foreach(var balance in await Accounts.CurrentBalances.LoadAsync(db,accountIds,ct))
+        {
+            var converted=fx.ToBaseOn(balance.Amount,balance.Currency,day);
+            if(converted.HasValue)balances+=converted.Value;else incomplete=true;
+        }
 
         var lines=new List<CashflowLine>(); decimal income=0;
         foreach(var schedule in schedules.Where(x=>x.NextDate>=day&&x.NextDate<=horizon&&x.Amount.HasValue)) {var converted=fx.ToBaseOn(schedule.Amount!.Value,schedule.Currency,schedule.NextDate!.Value); if(converted.HasValue)income+=converted.Value;else incomplete=true; lines.Add(new("income",schedule.Name,schedule.NextDate,schedule.Amount.Value,schedule.Currency,converted));}

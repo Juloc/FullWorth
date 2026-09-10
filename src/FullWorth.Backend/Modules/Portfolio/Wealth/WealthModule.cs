@@ -45,7 +45,12 @@ public sealed record WealthOverviewView(
     // Accounts above. The frontend used to derive this itself from every portfolio that names an
     // account, which is no longer the same set: a depot that cannot value itself leaves the account
     // counted, so a guessing client hid a row that the total still contains.
-    IReadOnlyList<Guid>? AccountsRepresentedByDepots = null);
+    IReadOnlyList<Guid>? AccountsRepresentedByDepots = null,
+    // A SUBSET of ManualAssets, converted the same way, so the allocation chart can show real estate
+    // as its own slice. The frontend used to derive that slice from a ratio of NATIVE asset values,
+    // which is meaningless across currencies: one 5 000 000 IDR asset made a 300 000 EUR house look
+    // like a rounding error.
+    WealthComponentView? RealEstateAssets = null);
 
 public sealed record WealthHistoryPoint(
     DateOnly Date,
@@ -134,10 +139,15 @@ public sealed class WealthOverviewService(
             .Select(balance => new NativeValue(balance.Amount, balance.Currency))
             .ToList();
 
-        var manualAssets = await db.Assets.AsNoTracking()
+        var manualAssetRows = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
-            .Select(asset => new NativeValue(asset.CurrentValue, asset.Currency))
+            .Select(asset => new { asset.Kind, Value = new NativeValue(asset.CurrentValue, asset.Currency) })
             .ToListAsync(ct);
+        var manualAssets = manualAssetRows.Select(row => row.Value).ToList();
+        var realEstateAssets = manualAssetRows
+            .Where(row => string.Equals(row.Kind, AssetKinds.RealEstate, StringComparison.OrdinalIgnoreCase))
+            .Select(row => row.Value)
+            .ToList();
 
         var loanRows = await db.Loans.AsNoTracking()
             .Where(loan => loan.FullWorthSpaceId == fullWorthSpaceId && loan.IsActive)
@@ -153,6 +163,10 @@ public sealed class WealthOverviewService(
         var missingCurrencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var accountsView = ConvertComponent(latestBalances, targetCurrency, today, fx, missingCurrencies);
         var manualAssetsView = ConvertComponent(manualAssets, targetCurrency, today, fx, missingCurrencies);
+        // Converted with the same snapshot, so the slice and the total can never disagree. Its missing
+        // currencies are already in the set from the line above.
+        var realEstateView = ConvertComponent(
+            realEstateAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var loansView = ConvertComponent(loanRows, targetCurrency, today, fx, missingCurrencies);
         var otherLiabilitiesView = ConvertComponent(otherLiabilities, targetCurrency, today, fx, missingCurrencies);
 
@@ -224,7 +238,8 @@ public sealed class WealthOverviewService(
                 investment.Incomplete,
                 missingCurrencies.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray(),
                 emergencyFund,
-                excludedInvestmentAccounts.Order().ToArray()));
+                excludedInvestmentAccounts.Order().ToArray(),
+                realEstateView));
     }
 
     public async Task<WealthHistoryOutcome> GetHistoryForUserAsync(

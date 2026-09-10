@@ -589,7 +589,7 @@ async function openDetail(listItem) {
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}
     ${statusHistoryHtml}
-    ${!t.isManual ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
+    ${t.hasProviderDetails ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
@@ -626,9 +626,11 @@ async function openDetail(listItem) {
       target.hidden = false;
       button.hidden = true;
     } catch (err) {
-      ctx.toast(err.message === 'reauthorization_required'
-        ? ctx.get('transactions.bankReauthRequired')
-        : (err.message || ctx.get('transactions.bankDetailsUnavailable')));
+      // Only a known error code is worth showing; anything else (a bare "404", a status line) means
+      // nothing to the user, so it becomes the plain "no details available" sentence.
+      const known = { reauthorization_required: 'transactions.bankReauthRequired',
+                      transaction_details_unavailable: 'transactions.bankDetailsUnavailable' };
+      ctx.toast(ctx.get(known[err.message] || 'transactions.bankDetailsUnavailable'));
       button.disabled = false;
     }
   });

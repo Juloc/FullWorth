@@ -102,7 +102,14 @@ public sealed record TransactionListItem(
     int PurchaseCount,
     int PurchaseItemCount,
     Guid? MerchantId,
-    string? MerchantDisplayName);
+    string? MerchantDisplayName,
+    // The drawer read both of these off the row and neither existed, so `isManual` was always
+    // undefined: the bank-details button rendered for EVERY transaction (and 404s on one that has no
+    // provider pointer) while the delete action for a manual transaction rendered for none.
+    bool IsManual = false,
+    // Provider details are only fetchable with a provider transaction id, through a live non-FinTS
+    // connection. FinTS details are already part of the imported transaction.
+    bool HasProviderDetails = false);
 
 public sealed class TransactionStore(FullWorthDbContext db)
 {
@@ -320,7 +327,11 @@ public sealed class TransactionStore(FullWorthDbContext db)
                     (p.Visibility != "private" || p.CreatedByUserId == userId))
                 .SelectMany(p => p.Items).Count(),
             null,
-            null)).ToListAsync(ct);
+            null,
+            db.Accounts.Any(a => a.Id == x.AccountId && a.BankConnectionId == null),
+            x.ProviderTransactionId != null && x.ProviderTransactionId != "" &&
+            db.Accounts.Any(a => a.Id == x.AccountId && a.BankConnectionId != null &&
+                db.BankConnections.Any(c => c.Id == a.BankConnectionId && c.Provider != "fints")))).ToListAsync(ct);
 
         if (fullWorthSpaceId.HasValue && items.Count > 0)
         {

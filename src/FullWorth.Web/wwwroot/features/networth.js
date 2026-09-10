@@ -685,13 +685,10 @@ function buildAllocationCard() {
   const accounts = num(overview.accounts?.amount);
   const investments = num(overview.investments?.amount);
   const manualTotal = num(overview.manualAssets?.amount);
-  // Split the (already FX-converted) manual-asset total into real estate vs. other assets using the
-  // native-currency proportion from the assets list, so both show as separate allocation segments.
-  const included = (nw.assets || []).filter(item => item.includeInNetWorth !== false);
-  const manualRaw = included.reduce((sum, item) => sum + num(item.currentValue), 0);
-  const realEstateRaw = included.filter(item => item.kind === 'real_estate').reduce((sum, item) => sum + num(item.currentValue), 0);
-  const realEstateRatio = manualRaw > 0 ? realEstateRaw / manualRaw : 0;
-  const realEstate = manualTotal * realEstateRatio;
+  // Real estate as its own slice, converted by the backend with the SAME rates as the total it is a
+  // subset of. This used to derive the slice from a ratio of NATIVE asset values, which is meaningless
+  // across currencies: one 5.000.000 IDR asset made a 300.000 EUR house look like a rounding error.
+  const realEstate = Math.min(manualTotal, num(overview.realEstateAssets?.amount));
   const otherAssets = manualTotal - realEstate;
   const liabilities = num(overview.totalLiabilities);
 

@@ -407,15 +407,26 @@ providers.
   deliberately: comparing the row currency against the target account. A foreign-currency booking on a
   euro account is legitimate (a card payment abroad), so a mismatch is not by itself an error — what
   would help is showing the mix before the commit, which is a UI question.
-- **The cashflow forecast picks a different balance than the account list** for the same data
-  (`CashflowParityModule.cs:222`).
-- **The Wealth allocation donut splits a converted total using unconverted ratios**
-  (`wwwroot/features/networth.js:688`).
+- ~~**The cashflow forecast picks a different balance than the account list** for the same data.~~
+  `DONE` — it reads `Accounts.CurrentBalances` like every other surface, so the newest capture per
+  (account, **currency**) with the balance-type preference as the tiebreak. It used to order by
+  `CapturedAt` alone (a sync stamps every type identically, so the pick was arbitrary) and to read one
+  currency per account, forecasting a wallet account from a fraction of its money. Also two queries
+  now instead of one per account.
+- ~~**The Wealth allocation donut splits a converted total using unconverted ratios.**~~ `DONE` — the
+  wealth overview returns `realEstateAssets`, a subset of `manualAssets` converted with the same rates,
+  and the chart uses it instead of deriving a share from native asset values. Measured in the harness
+  with a 9 000 EUR house next to a 5 000 000 IDR asset: the house showed as **21,56 € (0 %)** before
+  and 9 000,00 € (17 %) after.
 - **The demo's PayPal account is seeded flat.** `ShowcaseWorldBuilder.cs:77` gives it a fixed 85.40 EUR
   and no transaction ever references it, so the shipped public demo reproduces the reported symptom.
-- **The transaction drawer offers "Bankdetails" for transactions that have none.** It renders for every
-  non-manual transaction; a finanzguru-import transaction has no `BankConnectionId`, so the call 404s
-  and the toast shows the bare string "404".
+- ~~**The transaction drawer offers "Bankdetails" for transactions that have none.**~~ `DONE`, and it
+  was worse than described: `isManual` was **never in the API response at all**, so `!t.isManual` was
+  always true — the button rendered for every transaction including manual ones, and the delete action
+  for a manual transaction (guarded by the same undefined field) rendered for **none**. The row now
+  carries `isManual` and `hasProviderDetails` (a provider transaction id AND a live non-FinTS
+  connection), the button follows the latter, and an error without a known code shows the plain "no
+  details available" sentence instead of a bare status string.
 - **Dead code: the three-slot sync schedule.** `Services/Scheduling/BankSyncScheduleService.cs` and its
   options are registered in no container and referenced only by their own tests, while the real worker
   is a plain interval loop. Either wire it in or delete both.

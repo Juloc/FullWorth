@@ -70,14 +70,23 @@
     ],
     'budgets': [],
     'notifications': [],
-    'assets': [],
+    // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
+    // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
+    'assets': [
+      { id: 'as1', name: 'Wohnung', kind: 'real_estate', currentValue: 9000, currency: 'EUR', includeInNetWorth: true },
+      { id: 'as2', name: 'IDR Anlage', kind: 'other', currentValue: 5000000, currency: 'IDR', includeInNetWorth: true }
+    ],
     'networth': { total: 20681.65, series: [], groups: [] },
     // Wealth view. The history rises by a flat 600 per month over exactly 12 months, so the
     // projection card's derived savings rate must come out at 600 - a value that is wrong by any
     // rounding mistake is visible immediately.
     'wealth/overview': {
       netWorth: 48250.30, totalAssets: 32000, totalLiabilities: 5000,
-      accounts: { amount: 21250.30 }, currency: 'EUR', isComplete: true, missingCurrencies: []
+      accounts: { amount: 21250.30 }, currency: 'EUR', isComplete: true, missingCurrencies: [],
+      // Real estate is its own converted slice of manualAssets, so the allocation donut never has to
+      // guess it from native asset values.
+      manualAssets: { amount: 12000 }, investments: { amount: 20000 },
+      realEstateAssets: { amount: 9000 }
     },
     'wealth/history': [
       { date: '2025-09-09', netWorth: 41050.30 }, { date: '2025-10-09', netWorth: 41650.30 },
