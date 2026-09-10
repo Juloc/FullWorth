@@ -44,6 +44,7 @@ const COPY = {
     realEstate: 'Immobilien', vehicles: 'Fahrzeuge', otherValues: 'Weitere Werte',
     valueHistory: 'Werthistorie', details: 'Details', updateValue: 'Wert aktualisieren', current: 'Aktuell',
     noValuations: 'Noch keine Bewertungen vorhanden.', fxIncomplete: 'Gesamtsumme unvollständig: Für mindestens eine Währung fehlt ein Wechselkurs.',
+    fxIncompleteWhich: 'Unvollständig, weil ein Wechselkurs fehlt',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
@@ -73,6 +74,7 @@ const COPY = {
     realEstate: 'Real estate', vehicles: 'Vehicles', otherValues: 'Other assets',
     valueHistory: 'Value history', details: 'Details', updateValue: 'Update value', current: 'Current', noValuations: 'No valuations yet.',
     fxIncomplete: 'Total is incomplete: at least one required FX rate is missing.', dataIncomplete: 'Data incomplete', composition: 'Composition',
+    fxIncompleteWhich: 'Incomplete because an FX rate is missing',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
@@ -587,10 +589,29 @@ function buildHeroCard() {
   const custom = `<details class="nw-custom-range"${nw.windowMonths === -1 ? ' open' : ''}><summary>${ctx.esc(t('customRange'))}</summary><div class="nw-custom-range-fields"><label>${ctx.esc(t('from'))}<input type="date" data-range-from value="${ctx.esc(nw.customFrom)}"></label><label>${ctx.esc(t('to'))}<input type="date" data-range-to value="${ctx.esc(nw.customTo)}"></label><button type="button" class="secondary" data-range-apply>${ctx.esc(t('applyRange'))}</button><span class="nw-range-error" data-range-error hidden></span></div></details>`;
   const grossAssets = num(overview.totalAssets) + num(overview.accounts?.amount);
   const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
-  const missing = (overview.missingCurrencies || []).join(', ');
-  const fx = overview.isComplete ? '' : `<p class="nw-fx">${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}</p>`;
+  const fx = overview.isComplete ? '' : `<p class="nw-fx">${fxIncompleteText(overview)}</p>`;
   const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${metrics}${fx}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
+}
+
+// "Gesamtsumme unvollständig" plus a flat list of currencies said that something was missing without
+// saying which figure it made incomplete. Each component now reports the currencies IT could not
+// convert, so the line names the value and the rate together. The flat list stays as the fallback for
+// a backend that does not send the per-component breakdown.
+function fxIncompleteText(overview) {
+  const parts = [
+    ['accounts', t('accounts')],
+    ['manualAssets', t('manualAssets')],
+    ['investments', t('investments')],
+    ['loans', t('debt')],
+    ['otherLiabilities', t('debt')]
+  ]
+    .map(([key, label]) => [label, (overview[key]?.missingCurrencies || []).join(', ')])
+    .filter(([, currencies]) => currencies)
+    .map(([label, currencies]) => `${label} (${currencies})`);
+  if (parts.length) return `${ctx.esc(t('fxIncompleteWhich'))}: ${ctx.esc([...new Set(parts)].join(' · '))}`;
+  const missing = (overview.missingCurrencies || []).join(', ');
+  return `${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}`;
 }
 
 function repaintHeroTrend(hero) {

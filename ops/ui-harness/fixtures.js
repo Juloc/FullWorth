@@ -98,10 +98,13 @@
     // rounding mistake is visible immediately.
     'wealth/overview': {
       netWorth: 48250.30, totalAssets: 32000, totalLiabilities: 5000,
-      accounts: { amount: 21250.30 }, currency: 'EUR', isComplete: true, missingCurrencies: [],
+      // Incomplete because the IDR wallet (a4) has no rate: the message has to name the value AND the
+      // rate, not just say "something is missing".
+      accounts: { amount: 21250.30, isComplete: false, missingCurrencies: ['IDR'] },
+      currency: 'EUR', isComplete: false, missingCurrencies: ['IDR'],
       // Real estate is its own converted slice of manualAssets, so the allocation donut never has to
       // guess it from native asset values.
-      manualAssets: { amount: 12000 }, investments: { amount: 20000 },
+      manualAssets: { amount: 12000, isComplete: true }, investments: { amount: 20000, isComplete: true },
       realEstateAssets: { amount: 9000 }
     },
     'wealth/history': [

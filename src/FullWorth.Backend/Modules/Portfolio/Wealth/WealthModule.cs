@@ -15,7 +15,11 @@ public sealed record WealthComponentView(
     decimal Amount,
     string Currency,
     bool IsComplete,
-    IReadOnlyList<WealthNativeAmount> OriginalAmounts);
+    IReadOnlyList<WealthNativeAmount> OriginalAmounts,
+    // The currencies THIS component could not convert. The overview also reports a flat union of
+    // them, which said that something was missing without saying which figure it made incomplete -
+    // so a missing IDR rate read as "your wealth is incomplete" with nothing to act on.
+    IReadOnlyList<string>? MissingCurrencies = null);
 
 public sealed record EmergencyFundView(
     bool Enabled,
@@ -210,7 +214,10 @@ public sealed class WealthOverviewService(
             convertedInvestment ?? 0m,
             targetCurrency,
             investmentConversionComplete && !investment.Incomplete,
-            [new WealthNativeAmount(FxSnapshot.Normalize(investment.BaseCurrency), investment.Amount)]);
+            [new WealthNativeAmount(FxSnapshot.Normalize(investment.BaseCurrency), investment.Amount)],
+            investmentConversionComplete
+                ? null
+                : [FxSnapshot.Normalize(investment.BaseCurrency).ToUpperInvariant()]);
 
         var totalAssets = manualAssetsView.Amount + investmentsView.Amount;
         var totalLiabilities = loansView.Amount + otherLiabilitiesView.Amount;
@@ -392,13 +399,18 @@ public sealed class WealthOverviewService(
     {
         decimal total = 0m;
         var complete = true;
+        // Tracked per component as well as in the caller's union, so the answer to "which value is
+        // missing because of which rate" is on the value itself.
+        var missingHere = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var value in values)
         {
             var converted = fx.ToBaseOn(value.Amount, value.Currency, date);
             if (!converted.HasValue)
             {
                 complete = false;
-                missingCurrencies.Add(FxSnapshot.Normalize(value.Currency));
+                var currency = FxSnapshot.Normalize(value.Currency);
+                missingCurrencies.Add(currency);
+                missingHere.Add(currency.ToUpperInvariant());
                 continue;
             }
             total += converted.Value;
@@ -409,7 +421,7 @@ public sealed class WealthOverviewService(
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => new WealthNativeAmount(group.Key, group.Sum(value => value.Amount)))
             .ToArray();
-        return new(total, targetCurrency, complete, originals);
+        return new(total, targetCurrency, complete, originals, missingHere.Count == 0 ? null : [.. missingHere]);
     }
 
     private static WealthHistoryPoint BuildExplicitHistoryPoint(

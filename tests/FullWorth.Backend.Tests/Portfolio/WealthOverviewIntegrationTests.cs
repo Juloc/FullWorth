@@ -121,6 +121,39 @@ public sealed class WealthOverviewIntegrationTests
             item.GetProperty("currency").GetString() == "USD" && item.GetProperty("amount").GetDecimal() == 100m);
     }
 
+    /// <summary>
+    /// "Something is incomplete" plus a flat list of currencies was not actionable: it never said WHICH
+    /// figure the missing rate had spoiled, so a missing rate read as "your wealth is wrong somewhere".
+    /// Every component reports the currencies it could not convert itself.
+    /// </summary>
+    [Fact]
+    public async Task EachComponentNamesTheRateThatMadeItIncomplete()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory, includeUsdAsset: true);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(
+            $"/api/wealth/overview?fullWorthSpaceId={scenario.Space}&currency=EUR",
+            scenario.Owner));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+
+        var manualAssets = root.GetProperty("manualAssets");
+        Assert.False(manualAssets.GetProperty("isComplete").GetBoolean());
+        Assert.Equal(
+            ["USD"],
+            manualAssets.GetProperty("missingCurrencies").EnumerateArray().Select(item => item.GetString()).ToArray());
+
+        // The USD asset is the only unconvertible figure, so no other component may claim a missing rate.
+        Assert.True(root.GetProperty("accounts").GetProperty("isComplete").GetBoolean());
+        Assert.True(
+            root.GetProperty("accounts").GetProperty("missingCurrencies").ValueKind == JsonValueKind.Null,
+            "a component that converted everything reports no missing rate");
+    }
+
     [Fact]
     public async Task BookingActivityKeepsArchivedFinanzguruHistoryVisibleWithoutMakingItWealth()
     {

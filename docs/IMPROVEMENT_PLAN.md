@@ -490,9 +490,17 @@ gross) and the hover readout plus the metric break out "davon Firmenwagen".
 
 ## P2 — misleading, or secondary paths
 
-- **Sums never state their rate or its date.** `WealthModule.cs:106`/`:29` expose only a boolean
-  `IsComplete`, while the FX snapshot silently accepts a fixing up to 14 days old. The owner's rule is
-  that a cross-currency total must say which rate and which date it used.
+- **Sums never state their rate or its date.** `PARTLY DONE` — every component now reports the
+  currencies **it** could not convert (`WealthComponentView.MissingCurrencies`), and the wealth page
+  names the value and the rate together ("Unvollständig, weil ein Wechselkurs fehlt: Konten (IDR)")
+  instead of a flat "something is incomplete" with a list of currencies detached from any figure. Still
+  open: a total that WAS converted does not say which rate and which date it used, and the FX snapshot
+  still silently accepts a fixing up to 14 days old.
+- **A balance never said where it came from.** `DONE` — `BalanceSnapshot` carries `Source`
+  (`provider`/`manual`/`import`) and the owner's `Note`, and a manual balance finally uses
+  `ReferenceDate` as the owner's as-of date instead of always stamping today. So an account anchored
+  from last month's statement reads as last month's figure and says it was entered by hand. A future
+  as-of date is refused rather than clamped.
 - ~~**Account subtotals silently omit what they cannot convert.**~~ `DONE` — a subtotal that had to
   leave money out is marked (`*` with the reason on hover) on the accounts page and on the dashboard.
   Adding the foreign figure into a base-currency total is still refused; it is the silence that was the
