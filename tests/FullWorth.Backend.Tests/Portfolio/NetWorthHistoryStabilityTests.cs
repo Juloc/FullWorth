@@ -75,6 +75,49 @@ public sealed class NetWorthHistoryStabilityTests
         Assert.Equal(500m, await AccountsOnAsync(factory, scenario, measuredDay));
     }
 
+    // The walk back subtracts BOOKED transactions only, so it has to start from booked money. The
+    // preferred balance is interimAvailable, which already includes pending authorisations, and anchoring
+    // there shifted every past day by the pending amount.
+    [Fact]
+    public async Task The_walk_back_starts_from_settled_money_not_from_pending_authorisations()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedAsync(factory);
+        // The provider reports both: 1 000 available (includes a 150 pending card authorisation) and 850
+        // actually booked.
+        // One capture with both types, exactly as a sync stores them.
+        await AddProviderBalancesAsync(factory, scenario, (1000m, "interimAvailable"), (850m, "closingBooked"));
+        await AddBookingAsync(factory, scenario, Today.AddDays(-2), 200m);
+
+        await RebuildAsync(factory, scenario);
+
+        // Today shows what the user sees now...
+        Assert.Equal(1000m, await AccountsOnAsync(factory, scenario, Today));
+        // ...and the past is reconstructed from the settled figure, not 150 too high.
+        Assert.Equal(850m, await AccountsOnAsync(factory, scenario, Today.AddDays(-1)));
+    }
+
+    private static Task AddProviderBalancesAsync(
+        BackendWebApplicationFactory factory,
+        Scenario scenario,
+        params (decimal Amount, string BalanceType)[] balances) =>
+        factory.SeedAsync(async db =>
+        {
+            // A sync stamps every balance type of one account with an IDENTICAL CapturedAt, which is why
+            // the type preference exists at all.
+            var captured = DateTimeOffset.UtcNow.AddMinutes(5);
+            foreach (var (amount, balanceType) in balances)
+                db.BalanceSnapshots.Add(new BalanceSnapshot
+                {
+                    AccountId = scenario.Account,
+                    Amount = amount,
+                    Currency = "EUR",
+                    BalanceType = balanceType,
+                    CapturedAt = captured
+                });
+            await db.SaveChangesAsync();
+        });
+
     private sealed record Scenario(Guid Owner, Guid Space, Guid Account);
 
     private static async Task<Scenario> SeedAsync(BackendWebApplicationFactory factory)

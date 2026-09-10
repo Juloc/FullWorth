@@ -43,7 +43,22 @@ public static class CurrentBalances
         _ => 5
     };
 
+    /// <summary>Balance types that describe SETTLED money — no pending authorisations included.</summary>
+    public static bool IsBooked(string? balanceType) =>
+        balanceType is "closingBooked" or "interimBooked";
+
     public static async Task<List<AccountBalance>> LoadAsync(
+        FullWorthDbContext db,
+        IReadOnlyCollection<Guid> accountIds,
+        CancellationToken ct) =>
+        Pick(await LoadRowsAsync(db, accountIds, ct));
+
+    /// <summary>
+    /// Every balance row at the newest capture per (account, currency) — before the type preference is
+    /// applied. Callers that need more than the one preferred figure (the history back-cast needs the
+    /// BOOKED one) use this and pick themselves.
+    /// </summary>
+    public static async Task<List<AccountBalance>> LoadRowsAsync(
         FullWorthDbContext db,
         IReadOnlyCollection<Guid> accountIds,
         CancellationToken ct)
@@ -69,7 +84,7 @@ public static class CurrentBalances
                 balance.ReferenceDate, balance.CapturedAt))
             .ToListAsync(ct);
 
-        return Pick(rows);
+        return rows;
     }
 
     /// <summary>
@@ -84,6 +99,15 @@ public static class CurrentBalances
                 .ThenBy(balance => balance.BalanceType, StringComparer.Ordinal)
                 .First())
             .ToList();
+
+    /// <summary>
+    /// The settled balance per (account, currency), or nothing for that pair when the provider sent only
+    /// an available one. The history back-cast needs this: it walks back over BOOKED transactions, so
+    /// anchoring it on a balance that already includes pending authorisations shifts every past day by
+    /// the pending amount.
+    /// </summary>
+    public static List<AccountBalance> PickBooked(IEnumerable<AccountBalance> rows) =>
+        Pick(rows.Where(balance => IsBooked(balance.BalanceType)));
 
     /// <summary>
     /// The balance shown as the account's headline figure: the account's own declared currency when it has

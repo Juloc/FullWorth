@@ -177,6 +177,71 @@ public sealed class AssetValuationIntegrationTests
         Assert.Equal(80m, rows.Single(row => row.GetProperty("isCurrent").GetBoolean()).GetProperty("amount").GetDecimal());
     }
 
+    // Accepting a valuation replaces the asset's current value, so it is checked against what it would
+    // replace. The seeded asset is 100 000 EUR as of 2026-08-01.
+    [Fact]
+    public async Task A_valuation_in_another_currency_cannot_relabel_the_asset()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(
+            HttpMethod.Post,
+            $"/api/assets/{scenario.Asset}/valuations?fullWorthSpaceId={scenario.Space}",
+            scenario.Owner,
+            new
+            {
+                amount = 140_000m,
+                currency = "usd",
+                valuedAt = "2026-09-01",
+                method = "manual",
+                isAccepted = true
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("USD", body, StringComparison.Ordinal);
+        Assert.Contains("EUR", body, StringComparison.Ordinal);
+        await AssertAssetUnchangedAsync(factory, scenario);
+    }
+
+    // An older appraisal recorded WITHOUT accepting it is history and must stay storable. (Accepting an
+    // older one is NOT refused - there is no trustworthy date to compare against; see the module.)
+    [Fact]
+    public async Task An_older_valuation_can_still_be_recorded_as_history()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var response = await client.SendAsync(UserRequest(
+            HttpMethod.Post,
+            $"/api/assets/{scenario.Asset}/valuations?fullWorthSpaceId={scenario.Space}",
+            scenario.Owner,
+            new
+            {
+                amount = 90_000m,
+                currency = "eur",
+                valuedAt = "2026-07-01",
+                method = "manual",
+                isAccepted = false
+            }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await AssertAssetUnchangedAsync(factory, scenario);
+    }
+
+    private static Task AssertAssetUnchangedAsync(
+        BackendWebApplicationFactory factory, Scenario scenario) =>
+        factory.SeedAsync(async db =>
+        {
+            var asset = await db.Assets.AsNoTracking().SingleAsync(x => x.Id == scenario.Asset);
+            Assert.Equal(100_000m, asset.CurrentValue);
+            Assert.Equal("EUR", asset.Currency);
+            Assert.Equal(new DateOnly(2026, 8, 1), asset.ValuedAt);
+        });
+
     private static object AssetPayload(string name, decimal value) => new
     {
         name,

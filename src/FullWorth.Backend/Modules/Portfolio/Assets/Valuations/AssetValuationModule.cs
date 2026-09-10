@@ -139,6 +139,31 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
 
             if (request.IsAccepted)
             {
+                // Accepting a valuation replaces the asset's current value, so its UNIT has to match.
+                // This used to overwrite the asset's currency, so a house worth 400 000 EUR could end up
+                // reading 400 000 as though the appraisal had been in that other currency. Expressing it
+                // in another currency needs a conversion, and a conversion is a derived value that must
+                // never overwrite the original. Recording it with isAccepted=false still keeps it in the
+                // asset's history.
+                //
+                // NOT checked here: whether the valuation is older than the current one. There is no
+                // trustworthy date to compare against yet - the fullworth_prepare_asset trigger stamps
+                // ValuedAt = CURRENT_DATE whenever the asset row is touched without one, and asset
+                // creation materialises a "current" valuation carrying that same synthetic date. So a
+                // perfectly legitimate appraisal dated last month looks older than a stamp that never
+                // described an appraisal at all. Refusing on it would reject real input; see the
+                // improvement plan.
+                var assetCurrency = await ReadAssetCurrencyAsync(fullWorthSpaceId, assetId, ct);
+                if (!string.IsNullOrWhiteSpace(assetCurrency) &&
+                    !string.Equals(assetCurrency, value.Currency, StringComparison.OrdinalIgnoreCase))
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new(
+                        AssetValuationMutationResult.Invalid,
+                        Error: $"This valuation is in {value.Currency}, the asset is held in " +
+                               $"{assetCurrency}. Convert it first or record it without accepting it.");
+                }
+
                 await db.Database.ExecuteSqlRawAsync(
                     "SET LOCAL fullworth.asset_valuation_suppress = 'on';",
                     ct);
@@ -149,10 +174,13 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
                     WHERE "AssetId" = {assetId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "IsCurrent" = TRUE;
                     """, ct);
 
+                // Currency is deliberately not in this SET: it is the asset's unit, checked above, not
+                // something a valuation may change. (An asset that had no currency yet still gets one,
+                // because the check only applies once a value exists.)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Assets"
                     SET "CurrentValue" = {value.Amount},
-                        "Currency" = {value.Currency},
+                        "Currency" = COALESCE(NULLIF("Currency", ''), {value.Currency}),
                         "ValuedAt" = {value.ValuedAt},
                         "UpdatedAt" = {now}
                     WHERE "Id" = {assetId} AND "FullWorthSpaceId" = {fullWorthSpaceId};
@@ -197,6 +225,14 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
             asset.FullWorthSpaceId == fullWorthSpaceId &&
             db.FullWorthSpaceMembers.Any(member =>
                 member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId), ct);
+
+    /// <summary>The unit an accepted valuation has to match. Empty when the asset has none yet.</summary>
+    private async Task<string?> ReadAssetCurrencyAsync(
+        Guid fullWorthSpaceId, Guid assetId, CancellationToken ct) =>
+        await db.Assets.AsNoTracking()
+            .Where(asset => asset.Id == assetId && asset.FullWorthSpaceId == fullWorthSpaceId)
+            .Select(asset => asset.Currency)
+            .SingleOrDefaultAsync(ct);
 
     private async Task<bool> LockAssetAsync(Guid fullWorthSpaceId, Guid assetId, CancellationToken ct)
     {

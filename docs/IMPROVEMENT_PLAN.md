@@ -367,11 +367,24 @@ providers.
   today's balance carried across it. `IsObservedSnapshot` was too loose to protect a measurement with (a
   one-day slack for UTC skew also lets a row reconstructed today for yesterday look measured), so this
   uses its own stricter predicate. Today stays live.
-- **The history back-cast is offset by pending authorisations.** `NetWorthSnapshotService.cs:124`
-  anchors on `interimAvailable` but walks back over booked transactions only.
-- **An asset valuation overwrites the current value unconditionally.**
-  `AssetValuationModule.cs:154` — no check that the valuation is newer, and a differently-denominated one
-  silently relabels the asset's currency.
+- ~~**The history back-cast is offset by pending authorisations.**~~ `DONE` — the walk now continues
+  from the **booked** balance of the same (account, currency) while today keeps the preferred figure
+  the user sees. Anchor and deltas describe the same money again; before, every past day was off by
+  whatever was pending. Falls back to the preferred balance when the provider sent no booked type.
+- **An asset valuation overwrites the current value unconditionally.** `PARTLY DONE` — the currency half
+  is fixed: accepting a valuation denominated in another currency is refused with a reason (relabelling a
+  400 000 EUR house as 400 000 of something else is not a conversion, and a conversion is derived and may
+  never overwrite the original). The asset's currency is no longer in the UPDATE at all; only an asset
+  that had none yet receives one. Recording it with `isAccepted=false` still keeps it in the history.
+
+  **The date half is deliberately NOT fixed, and the reason is a bug of its own:** there is no
+  trustworthy "as of" date to compare a valuation against. The `fullworth_prepare_asset` trigger stamps
+  `ValuedAt = CURRENT_DATE` whenever an asset row is touched without one, and creating an asset
+  materialises a "current" valuation carrying that same synthetic date. So a legitimate appraisal dated
+  last month looks *older* than a stamp that never described an appraisal — a naive check rejects real
+  input (it broke `RealEstateAdvancedIntegrationTests` on exactly that flow). Fixing this properly means
+  separating "when this was appraised" from "when this row was last touched" first, and only then
+  refusing a stale accept.
 - **The user cannot tell what a balance means.** `AccountsModule.cs:66` drops the provider's balance
   reference date, never exposes the balance type (available vs booked), and labels the sync time as
   "Datenstand".

@@ -104,7 +104,14 @@ public sealed class NetWorthSnapshotService(
         // The anchor is per (account, CURRENCY). An account can hold several currencies - a PayPal or
         // Wise wallet per currency - and one anchor per account meant the history only ever back-cast
         // one of them while the others were missing from every day of the curve.
-        var latestBalances = await Accounts.CurrentBalances.LoadAsync(db, accountIds, ct);
+        var balanceRows = await Accounts.CurrentBalances.LoadRowsAsync(db, accountIds, ct);
+        var latestBalances = Accounts.CurrentBalances.Pick(balanceRows);
+        // The walk below subtracts BOOKED transactions only, so it has to start from booked money. The
+        // preferred balance is usually interimAvailable, which already includes pending authorisations -
+        // anchoring there shifted every past day by the pending amount. Today keeps the preferred figure
+        // (that is what the user sees now); only the walk continues from the settled one.
+        var bookedBalances = Accounts.CurrentBalances.PickBooked(balanceRows)
+            .ToDictionary(balance => (balance.AccountId, balance.Currency.ToUpperInvariant()));
         var anchoredAccountIds = latestBalances.Select(balance => balance.AccountId).Distinct().ToArray();
 
         // Back-casting requires a real balance anchor. Finanzguru-only rows that were moved onto a live
@@ -218,6 +225,10 @@ public sealed class NetWorthSnapshotService(
                 .ToList();
             var anchoredHere = anchorsHere.Select(balance => balance.AccountId).ToHashSet();
             var currentAccounts = anchorsHere.Sum(balance => balance.Amount);
+            var bookedAccounts = anchorsHere.Sum(balance =>
+                bookedBalances.TryGetValue((balance.AccountId, normalizedCurrency), out var booked)
+                    ? booked.Amount
+                    : balance.Amount);
 
             var dailyDelta = transactions
                 .Where(transaction =>
@@ -269,6 +280,9 @@ public sealed class NetWorthSnapshotService(
                 snapshot.NetWorth = snapshot.Accounts + snapshot.Assets - snapshot.Liabilities;
                 result.Add(snapshot);
 
+                // Leaving today: continue from settled money, not from the available figure that was
+                // just written for the user.
+                if (day == today) runningAccounts = bookedAccounts;
                 if (dailyDelta.TryGetValue(day, out var delta)) runningAccounts -= delta;
                 if (day == start.Value) break;
             }
