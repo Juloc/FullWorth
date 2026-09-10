@@ -321,6 +321,7 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .nw-legend-label{flex:1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nw-legend-amt{font-variant-numeric:tabular-nums;font-weight:600}
 .nw-legend-amt.negative{color:var(--negative)}
+.nw-alloc-note{margin:var(--s3) 0 0;color:var(--muted);font-size:12px}
 .nw-manage{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface);overflow:hidden}
 .nw-manage>summary{position:relative;cursor:pointer;padding:var(--s4) calc(var(--s4) + 20px) var(--s4) var(--s4);display:flex;flex-direction:column;gap:2px;list-style:none;font-weight:600}
 .nw-manage>summary::-webkit-details-marker{display:none}

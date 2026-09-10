@@ -357,6 +357,29 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("Number.isFinite(Number(point.netWorth))", js);
     }
 
+    [Fact]
+    public async Task AllocationDonutNeverClaimsTheHeroAssetsWording()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+
+        // A donut cannot draw a negative slice, so its own total only ever covers the categories it can
+        // show. Labelling that total "Vermögenswerte"/"Assets" - the same wording the hero card uses for
+        // a total that DOES include a negative category - put two different numbers on screen under the
+        // identical name. The donut must use its own, differently worded label instead.
+        Assert.Contains("assetMix: 'Anlagemix'", js);
+        Assert.Contains("assetMix: 'Asset mix'", js);
+        Assert.Contains("donutSvg(segments, assetSum, t('assetMix'), currency)", js);
+        Assert.DoesNotContain("wealthCap", js);
+
+        // When a category nets negative it is dropped from the ring - never added back in as a positive
+        // amount, never subtracted from the ring's total either - and the page says so instead of
+        // silently presenting a smaller, unexplained "asset mix" number.
+        Assert.Contains("hasHiddenNegative", js);
+        Assert.Contains("nw-alloc-note", js);
+        Assert.Contains(".nw-alloc-note", css);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await client.GetAsync(path);

@@ -737,8 +737,12 @@ anywhere else) can point at without any wiring on this page's side.
   different schemas never touch each other's. A template that exists without its ready marker was
   interrupted and gets rebuilt.
 
-- Negative or zero account balances are counted in the Wealth hero figure but excluded from the
-  composition donut, so one page shows two different asset totals (`features/networth.js:698`).
+- ~~Negative or zero account balances are counted in the Wealth hero figure but excluded from the
+  composition donut, so one page shows two different asset totals.~~ `DONE` — the donut cannot draw a
+  negative slice, so a netted-negative category is still dropped from the ring, but the ring's total is
+  now labelled "Anlagemix"/"Asset mix" instead of reusing the hero's "Vermögenswerte"/"Assets" wording,
+  and a note appears under the card whenever a category was hidden that way
+  (`features/networth.js`, `app.css`).
 - The Cloud admin Instances view drops `registeredAt`, which the API already returns, and nothing
   records whether an instance is externally hosted.
 - `latest` in the landing repo moves for pre-releases, against the platform's own tag policy.
