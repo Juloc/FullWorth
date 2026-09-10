@@ -119,6 +119,7 @@ public static class IntelligenceAdminEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         request.ClientVersion ?? "unknown",
+                        null,
                         ct);
                     await credentialStore.SaveAsync(registration, ct);
                     await cloudState.SetTransportStatusAsync(

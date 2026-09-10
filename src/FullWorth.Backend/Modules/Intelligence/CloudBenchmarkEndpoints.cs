@@ -45,6 +45,7 @@ public static class CloudBenchmarkEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;
@@ -128,6 +129,7 @@ public static class CloudBenchmarkEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;
@@ -295,6 +297,7 @@ public static class CloudBenchmarkEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;
@@ -436,6 +439,7 @@ public static class CloudBenchmarkEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;

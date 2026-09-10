@@ -809,6 +809,7 @@ public sealed class KnowledgePackSyncServiceTests
             Guid instanceId,
             string policyVersion,
             string clientVersion,
+            string? currentCredential,
             CancellationToken ct) =>
             Task.FromResult(new FullWorthCloudRegistrationResult(
                 instanceId,

@@ -57,6 +57,7 @@ public sealed class CloudLearningOutboxUploader(
                     state.InstanceId,
                     CloudIntelligencePolicy.CurrentVersion,
                     ClientVersion(),
+                    null,
                     ct);
                 await credentialStore.SaveAsync(registration, ct);
                 secret = registration.Credential;
@@ -122,8 +123,12 @@ public sealed class CloudLearningOutboxUploader(
         }
         catch (FullWorthCloudException ex)
         {
+            // A rejected credential is still PROOF that this is the same instance, and the Cloud
+            // refuses an unproven re-registration of a known instance id - so it is used to renew the
+            // identity before being given up on. Deleting it first, as this did, left the next cycle with
+            // nothing to present and the instance permanently unable to re-enroll.
             if (ex.StatusCode is System.Net.HttpStatusCode.Unauthorized)
-                await credentialStore.DeleteAsync(state.InstanceId, CancellationToken.None);
+                await RenewOrForgetCredentialAsync(state.InstanceId);
 
             foreach (var row in rows)
             {
@@ -181,6 +186,35 @@ public sealed class CloudLearningOutboxUploader(
         {
             logger.LogDebug(ex, "Could not persist FullWorth Cloud transport error state.");
         }
+    }
+
+    private async Task RenewOrForgetCredentialAsync(Guid instanceId)
+    {
+        var rejected = await credentialStore.GetSecretAsync(instanceId, CancellationToken.None);
+        if (!string.IsNullOrWhiteSpace(rejected))
+        {
+            try
+            {
+                var renewed = await cloud.RegisterAsync(
+                    instanceId,
+                    CloudIntelligencePolicy.CurrentVersion,
+                    ClientVersion(),
+                    rejected,
+                    CancellationToken.None);
+                await credentialStore.SaveAsync(renewed, CancellationToken.None);
+                return;
+            }
+            catch (FullWorthCloudException exception)
+            {
+                logger.LogWarning(
+                    "FullWorth Cloud credential renewal failed ({ErrorCode}); dropping the stored credential.",
+                    exception.ErrorCode);
+            }
+        }
+
+        // Nothing left to prove ownership with. A fresh enrollment is only possible under a new instance
+        // id, which the operator has to decide on - the transport error stays visible in the state.
+        await credentialStore.DeleteAsync(instanceId, CancellationToken.None);
     }
 
     private static string ClientVersion() =>

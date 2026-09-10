@@ -61,13 +61,18 @@ public sealed class CloudLearningOutboxUploaderTests
         public int RegisterCalls { get; private set; }
         public int SubmitCalls { get; private set; }
 
+        /// <summary>The credential the last registration presented as proof of ownership, if any.</summary>
+        public string? LastRegistrationProof { get; private set; }
+
         public Task<FullWorthCloudRegistrationResult> RegisterAsync(
             Guid instanceId,
             string policyVersion,
             string clientVersion,
+            string? currentCredential,
             CancellationToken ct)
         {
             RegisterCalls++;
+            LastRegistrationProof = currentCredential;
             return Task.FromResult(new FullWorthCloudRegistrationResult(
                 instanceId,
                 "test-secret",

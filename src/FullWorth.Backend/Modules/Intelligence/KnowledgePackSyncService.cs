@@ -348,6 +348,7 @@ public sealed class KnowledgePackSyncService(
             instanceId,
             CloudIntelligencePolicy.CurrentVersion,
             typeof(KnowledgePackSyncService).Assembly.GetName().Version?.ToString() ?? "unknown",
+            null,
             ct);
         await credentialStore.SaveAsync(registration, ct);
         await stateService.SetTransportStatusAsync(

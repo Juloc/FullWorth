@@ -156,6 +156,7 @@ public static class CloudMerchantBenchmarkEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudMerchantBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;

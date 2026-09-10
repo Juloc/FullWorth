@@ -22,11 +22,13 @@ public sealed class CloudEnrollmentTests
         var handler = new CapturingHandler(instanceId);
         var client = CreateClient(handler, enrollmentToken: null);
 
-        var result = await client.RegisterAsync(instanceId, "policy-1", "1.0.0", CancellationToken.None);
+        var result = await client.RegisterAsync(instanceId, "policy-1", "1.0.0", null, CancellationToken.None);
 
         Assert.Equal(instanceId, result.InstanceId);
         Assert.Equal("instance-secret", result.Credential);
         Assert.False(handler.Request!.Headers.Contains("X-FullWorth-Enrollment-Token"));
+        // A first enrollment has nothing to prove and must not send an Authorization header.
+        Assert.Null(handler.Request.Headers.Authorization);
     }
 
     [Fact]
@@ -36,10 +38,25 @@ public sealed class CloudEnrollmentTests
         var handler = new CapturingHandler(instanceId);
         var client = CreateClient(handler, enrollmentToken: "shared-token");
 
-        await client.RegisterAsync(instanceId, "policy-1", "1.0.0", CancellationToken.None);
+        await client.RegisterAsync(instanceId, "policy-1", "1.0.0", null, CancellationToken.None);
 
         Assert.True(handler.Request!.Headers.TryGetValues("X-FullWorth-Enrollment-Token", out var values));
         Assert.Equal("shared-token", Assert.Single(values!));
+    }
+
+    // Re-registering a known instance id revokes that instance's live credential, so the Cloud only
+    // allows it for a caller that proves it holds one. The client has to present it.
+    [Fact]
+    public async Task A_re_registration_presents_the_current_credential_as_proof()
+    {
+        var instanceId = Guid.NewGuid();
+        var handler = new CapturingHandler(instanceId);
+        var client = CreateClient(handler, enrollmentToken: null);
+
+        await client.RegisterAsync(instanceId, "policy-1", "1.0.0", "held-credential", CancellationToken.None);
+
+        Assert.Equal("Bearer", handler.Request!.Headers.Authorization?.Scheme);
+        Assert.Equal("held-credential", handler.Request.Headers.Authorization?.Parameter);
     }
 
     private static FullWorthCloudClient CreateClient(HttpMessageHandler handler, string? enrollmentToken)

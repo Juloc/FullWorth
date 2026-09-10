@@ -118,6 +118,7 @@ public static class CloudPriceEndpoints
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
                         typeof(CloudPriceEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
                     secret = registration.Credential;

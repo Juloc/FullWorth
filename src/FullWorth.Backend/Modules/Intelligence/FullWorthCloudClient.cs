@@ -67,7 +67,13 @@ public sealed record FullWorthCloudPrice(
 public interface IFullWorthCloudClient
 {
     Uri BaseUri { get; }
-    Task<FullWorthCloudRegistrationResult> RegisterAsync(Guid instanceId, string policyVersion, string clientVersion, CancellationToken ct);
+    /// <param name="currentCredential">
+    /// The credential this instance currently holds, or null on a first enrollment. Registering an
+    /// instance id the Cloud already knows revokes that instance's live credential, so the Cloud only
+    /// allows it for a caller that proves it holds one of that instance's credentials - including an
+    /// expired or already-revoked one, which is exactly what an instance renewing itself has.
+    /// </param>
+    Task<FullWorthCloudRegistrationResult> RegisterAsync(Guid instanceId, string policyVersion, string clientVersion, string? currentCredential, CancellationToken ct);
     Task<FullWorthCloudRegistrationResult> RotateCredentialAsync(Guid instanceId, string currentCredential, CancellationToken ct);
     Task<FullWorthCloudBatchResult> SubmitBatchAsync(Guid instanceId, string instanceCredential, IReadOnlyList<FullWorthCloudSubmissionEvent> events, CancellationToken ct);
     Task<FullWorthCloudBenchmark?> GetBenchmarkAsync(
@@ -187,6 +193,7 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         Guid instanceId,
         string policyVersion,
         string clientVersion,
+        string? currentCredential,
         CancellationToken ct)
     {
         // External self-hosted instances register publicly against the official Cloud and must not need any
@@ -197,6 +204,11 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         using var request = new HttpRequestMessage(HttpMethod.Post, "v1/instances/register");
         if (!string.IsNullOrWhiteSpace(enrollment))
             request.Headers.TryAddWithoutValidation("X-FullWorth-Enrollment-Token", enrollment);
+        // Proof that a re-registration is this instance renewing itself rather than someone who merely
+        // learned its id. Omitted on a first enrollment, where there is nothing to prove yet.
+        if (!string.IsNullOrWhiteSpace(currentCredential))
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", currentCredential.Trim());
         request.Content = JsonContent(new
         {
             instanceId,
