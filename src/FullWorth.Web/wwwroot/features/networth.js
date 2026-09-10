@@ -190,14 +190,19 @@ export async function renderNetWorth(context) {
   ]);
 
   lastOverview = overview;
-  const linkedInvestmentAccounts = new Set((portfolios || []).map(item => item.accountId).filter(Boolean));
+  // Authoritative, from the same calculation that produced the totals. Deriving it from the portfolio
+  // list would hide accounts the total still counts: a depot that cannot value itself (no trades, no
+  // price, no rate) does not replace its account's balance, so that account stays in Accounts.
+  const linkedInvestmentAccounts = new Set(
+    (Array.isArray(overview?.accountsRepresentedByDepots) ? overview.accountsRepresentedByDepots : [])
+      .map(id => String(id)));
   nw.overview = overview;
   nw.history = history || [];
   nw.bookingActivity = bookingActivity || [];
   nw.importCompleteness = importCompleteness || null;
   nw.assets = assets || [];
   nw.liabilities = liabilities || [];
-  nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(account.id));
+  nw.accounts = (accounts || []).filter(account => !linkedInvestmentAccounts.has(String(account.id)));
   nw.accountGroups = accountGroups || [];
   nw.portfolios = portfolios || [];
   nw.emergency = emergencyPref?.value && typeof emergencyPref.value === 'object' ? emergencyPref.value : {};

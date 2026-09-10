@@ -31,12 +31,12 @@ public sealed class InvestmentNetWorthService(FullWorthDbContext db, CurrencyCon
 
         foreach (var portfolio in portfolios)
         {
-            if (portfolio.AccountId.HasValue)
-            {
-                if (!visibleAccounts.Contains(portfolio.AccountId.Value)) continue;
-                excluded.Add(portfolio.AccountId.Value);
-            }
+            if (portfolio.AccountId.HasValue && !visibleAccounts.Contains(portfolio.AccountId.Value))
+                continue;
 
+            // Per portfolio, not shared: whether THIS portfolio could value itself decides whether it
+            // may replace a linked account's balance.
+            var portfolioIncomplete = false;
             var trades = await LoadTradesAsync(portfolio.Id, asOf, ct);
             var start = trades.Count == 0 ? asOf : trades.Min(item => item.TradeDate);
             var portfolioFx = await currencyConverter.PrepareAsync(portfolio.Currency, start, asOf, ct);
@@ -61,7 +61,7 @@ public sealed class InvestmentNetWorthService(FullWorthDbContext db, CurrencyCon
                     "tax" => ToPortfolio(-(trade.Amount + trade.Taxes + trade.WithholdingTax)),
                     _ => 0m
                 };
-                if (!converted.HasValue) incomplete = true;
+                if (!converted.HasValue) portfolioIncomplete = true;
                 else cash += converted.Value;
 
                 if (!trade.SecurityId.HasValue) continue;
@@ -81,14 +81,33 @@ public sealed class InvestmentNetWorthService(FullWorthDbContext db, CurrencyCon
             foreach (var holding in quantities.Where(item => item.Value > 0.0000000001m))
             {
                 var price = await LatestPriceAsync(holding.Key, asOf, ct);
-                if (price is null) { incomplete = true; continue; }
+                if (price is null) { portfolioIncomplete = true; continue; }
                 var value = portfolioFx.ToBaseOn(price.Price * holding.Value, price.Currency, price.Date);
-                if (!value.HasValue) { incomplete = true; continue; }
+                if (!value.HasValue) { portfolioIncomplete = true; continue; }
                 securities += value.Value;
             }
 
             var portfolioTotal = cash + securities;
             var convertedBase = baseSnapshot.ToBaseOn(portfolioTotal, portfolio.Currency, asOf);
+
+            // A linked account IS this depot, so counting the account balance and the portfolio would
+            // count the same money twice - but the substitution is only allowed when the portfolio can
+            // actually value itself. A depot with no imported trades values at 0, and so does one whose
+            // prices or FX rates are missing, and that 0 used to REPLACE a real balance: link an account
+            // holding 5,000 to an empty depot and net worth silently lost 5,000.
+            //
+            // So when the valuation is not usable the account keeps its own balance and this portfolio
+            // contributes nothing (nothing is counted twice either way), and the result is flagged
+            // incomplete so the gap is visible instead of looking like a number.
+            var valuationUsable = trades.Count > 0 && !portfolioIncomplete && convertedBase.HasValue;
+            if (portfolio.AccountId.HasValue && !valuationUsable)
+            {
+                incomplete = true;
+                continue;
+            }
+
+            if (portfolioIncomplete) incomplete = true;
+            if (portfolio.AccountId.HasValue) excluded.Add(portfolio.AccountId.Value);
             if (!convertedBase.HasValue) incomplete = true;
             else totalBase += convertedBase.Value;
         }

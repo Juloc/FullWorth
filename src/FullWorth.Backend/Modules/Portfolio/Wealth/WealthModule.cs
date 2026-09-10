@@ -40,7 +40,12 @@ public sealed record WealthOverviewView(
     bool IsComplete,
     bool InvestmentDataIncomplete,
     IReadOnlyList<string> MissingCurrencies,
-    EmergencyFundView? EmergencyFund = null);
+    EmergencyFundView? EmergencyFund = null,
+    // The accounts whose balance is represented by a linked depot and therefore NOT part of
+    // Accounts above. The frontend used to derive this itself from every portfolio that names an
+    // account, which is no longer the same set: a depot that cannot value itself leaves the account
+    // counted, so a guessing client hid a row that the total still contains.
+    IReadOnlyList<Guid>? AccountsRepresentedByDepots = null);
 
 public sealed record WealthHistoryPoint(
     DateOnly Date,
@@ -230,7 +235,8 @@ public sealed class WealthOverviewService(
                 complete,
                 investment.Incomplete,
                 missingCurrencies.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray(),
-                emergencyFund));
+                emergencyFund,
+                excludedInvestmentAccounts.Order().ToArray()));
     }
 
     public async Task<WealthHistoryOutcome> GetHistoryForUserAsync(
