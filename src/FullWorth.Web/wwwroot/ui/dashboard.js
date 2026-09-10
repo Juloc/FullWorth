@@ -217,13 +217,24 @@ async function saveLayout(ctx, layout) {
 }
 export function invalidateLayout() { cachedLayout = null; }
 
+// Twelve months, the same default window the Wealth page uses.
+function sparklineRange() {
+  const to = new Date();
+  const from = new Date(to.getFullYear(), to.getMonth() - 12, to.getDate());
+  const iso = date => date.toISOString().slice(0, 10);
+  return new URLSearchParams({ from: iso(from), to: iso(to) }).toString();
+}
+
 async function gatherData(ctx) {
   const [dashboard, accounts, budgets, groups, nwHistory] = await Promise.all([
     ctx.api('api/analytics/dashboard').catch(() => null),
     ctx.api('api/accounts').catch(() => []),
     ctx.api('api/analytics/budget-status').catch(() => ({ items: [] })),
     ctx.api('api/account-groups').catch(() => []),
-    ctx.api('api/net-worth/history').catch(() => []),
+    // The already-converted, one-point-per-day series. api/net-worth/history returns one raw snapshot
+    // row PER CURRENCY per day, so flattening it here made the sparkline zigzag between currencies and
+    // the change badge subtract, say, IDR from EUR while labelling the result in the base currency.
+    ctx.api(`api/wealth/history?${sparklineRange()}`).catch(() => []),
   ]);
   return { dashboard, accounts, budgets, groups, nwHistory };
 }
@@ -259,7 +270,11 @@ function renderWidget(type, ctx, body, data, cfg) {
   const cur = d?.currency || 'EUR';
   if (type === 'net-worth') {
     if (!d) { body.innerHTML = emptyState(ctx); return; }
-    const hist = (data.nwHistory || []).map(x => Number(x.netWorth) || 0);
+    // A day whose rate was missing reports null: skipped, so the line has a gap instead of a dip that
+    // never happened. `|| 0` would have drawn it as zero.
+    const hist = (data.nwHistory || [])
+      .filter(point => Number.isFinite(Number(point.netWorth)))
+      .map(point => Number(point.netWorth));
     const change = hist.length > 1 ? hist[hist.length - 1] - hist[0] : 0;
     const changeCls = change > 0 ? 'positive' : change < 0 ? 'negative' : 'muted';
     const changeBadge = hist.length > 1 && change !== 0
@@ -285,9 +300,9 @@ function renderWidget(type, ctx, body, data, cfg) {
     const byGroup = new Map();
     for (const x of a) { const k = x.groupId || ''; if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(x); }
     // The group subtotal is in the SPACE base currency: foreign accounts carry a converted `baseValue`,
-    // base-currency accounts have baseValue==null and their native amount IS the base amount. Derive the
-    // base currency from the accounts themselves (baseCurrency), never from the analytics response — that
-    // endpoint always reports EUR and would drop non-EUR base accounts from the sum and mislabel it.
+    // base-currency accounts have baseValue==null and their native amount IS the base amount. The base
+    // currency comes from the accounts themselves (baseCurrency), which is where the converted values were
+    // computed - so the label and the numbers can never disagree.
     const baseCur = a.find(x => x.baseCurrency)?.baseCurrency || cur;
     const groupTotal = accts => accts.reduce((s, x) => x.baseValue != null ? s + Number(x.baseValue) : (x.latestBalance && x.latestBalance.currency === baseCur ? s + Number(x.latestBalance.amount) : s), 0);
     const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}</div></div>`;

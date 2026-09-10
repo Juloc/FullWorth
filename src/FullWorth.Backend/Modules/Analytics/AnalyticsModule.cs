@@ -37,7 +37,7 @@ public sealed class AnalyticsService(
     FullWorth.Backend.Modules.Parity.InvestmentNetWorthService investments)
 {
     public Task<object?> OverviewForUserAsync(
-        Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct) =>
+        Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? currency, CancellationToken ct) =>
         OverviewForUserAsync(userId, fullWorthSpaceId, from, to, currency, "month", null, null, ct);
 
     public async Task<object?> OverviewForUserAsync(
@@ -45,14 +45,14 @@ public sealed class AnalyticsService(
         Guid fullWorthSpaceId,
         DateOnly? from,
         DateOnly? to,
-        string currency,
+        string? currency,
         string granularity,
         Guid? accountId,
         Guid? accountGroupId,
         CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
-        currency = NormalizeCurrency(currency);
+        currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         // §18: include foreign-currency transactions and convert each to the base currency at the rate
@@ -198,10 +198,10 @@ public sealed class AnalyticsService(
         };
     }
 
-    public async Task<DashboardResult?> DashboardForUserAsync(Guid userId, Guid fullWorthSpaceId, string currency, CancellationToken ct)
+    public async Task<DashboardResult?> DashboardForUserAsync(Guid userId, Guid fullWorthSpaceId, string? currency, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
-        currency = NormalizeCurrency(currency);
+        currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
 
         var today = DateOnly.FromDateTime(DateTime.Today);
 
@@ -340,10 +340,10 @@ public sealed class AnalyticsService(
     /// current calendar month (so a mid-cycle pay-cycle/weekly budget reports its true in-progress
     /// window), otherwise the 1st of the requested month.
     /// </summary>
-    public async Task<object?> BudgetStatusForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string currency, CancellationToken ct)
+    public async Task<object?> BudgetStatusForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string? currency, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
-        currency = NormalizeCurrency(currency);
+        currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
 
         var budgets = await db.Budgets.AsNoTracking()
             .Where(budget => budget.FullWorthSpaceId == fullWorthSpaceId && budget.IsActive && budget.Currency == currency)
@@ -478,11 +478,11 @@ public sealed class AnalyticsService(
         return periods;
     }
 
-    public async Task<object?> ForecastForUserAsync(Guid userId, Guid fullWorthSpaceId, int months, string currency, CancellationToken ct)
+    public async Task<object?> ForecastForUserAsync(Guid userId, Guid fullWorthSpaceId, int months, string? currency, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         months = Math.Clamp(months, 1, 60);
-        currency = NormalizeCurrency(currency);
+        currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
         var today = DateOnly.FromDateTime(DateTime.Today);
         var historyFrom = today.AddMonths(-6);
         var rows = await AccessibleTransactions(userId, fullWorthSpaceId)
@@ -529,10 +529,10 @@ public sealed class AnalyticsService(
 
     // Guided chart builder (§15.2): a bounded measure×dimension query reusing the same FX-aware
     // aggregation as Overview (materialize rows, then aggregate + convert in memory — Npgsql-safe).
-    public async Task<ChartResult?> ChartForUserAsync(Guid userId, Guid fullWorthSpaceId, string measure, string dimension, DateOnly from, DateOnly to, string currency, CancellationToken ct)
+    public async Task<ChartResult?> ChartForUserAsync(Guid userId, Guid fullWorthSpaceId, string measure, string dimension, DateOnly from, DateOnly to, string? currency, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
-        currency = NormalizeCurrency(currency);
+        currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
         measure = OneOf(measure, "spend", "income", "net", "count");
         dimension = OneOf(dimension, "month", "category", "merchant", "none");
 
@@ -649,7 +649,25 @@ public sealed class AnalyticsService(
         return normalized is "week" or "month" or "quarter" or "year" ? normalized : "month";
     }
 
-    private static string NormalizeCurrency(string currency)
+    /// <summary>
+    /// The currency every analytics answer is expressed in. An omitted one used to fall back to a
+    /// hardcoded EUR, and the frontend never passes one: a space whose base currency is not EUR got its
+    /// dashboard, overview, forecast and charts converted INTO EUR while being labelled with its own
+    /// currency, so its subtotals collapsed towards 0. (Budget status looks like it is served here too, but
+    /// BudgetReconciliationCompatibility intercepts that path and already resolved the base currency.)
+    /// </summary>
+    private async Task<string> ResolveCurrencyAsync(
+        Guid fullWorthSpaceId, string? requested, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(requested)) return NormalizeCurrency(requested);
+        var baseCurrency = await db.FullWorthSpaces.AsNoTracking()
+            .Where(space => space.Id == fullWorthSpaceId)
+            .Select(space => space.BaseCurrency)
+            .SingleOrDefaultAsync(ct);
+        return NormalizeCurrency(baseCurrency);
+    }
+
+    private static string NormalizeCurrency(string? currency)
     {
         var normalized = string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
         return normalized.Length == 3 && normalized.All(character => character is >= 'A' and <= 'Z') ? normalized : "EUR";
@@ -686,23 +704,23 @@ public static class AnalyticsEndpoints
             AnalyticsService service,
             CancellationToken ct) =>
             ToResult(await service.OverviewForUserAsync(
-                currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency ?? "EUR",
+                currentUser.RequireUserId(), fullWorthSpaceId, from, to, currency,
                 granularity ?? "month", accountId, accountGroupId, ct)));
 
         group.MapGet("/dashboard", async (Guid fullWorthSpaceId, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
         {
-            var result = await service.DashboardForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, currency ?? "EUR", ct);
+            var result = await service.DashboardForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, currency, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         });
 
         group.MapGet("/budget-status", async (Guid fullWorthSpaceId, int? year, int? month, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
         {
             var now = DateTime.Today;
-            return ToResult(await service.BudgetStatusForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, year ?? now.Year, month ?? now.Month, currency ?? "EUR", ct));
+            return ToResult(await service.BudgetStatusForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, year ?? now.Year, month ?? now.Month, currency, ct));
         });
 
         group.MapGet("/forecast", async (Guid fullWorthSpaceId, int? months, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
-            ToResult(await service.ForecastForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, months ?? 12, currency ?? "EUR", ct)));
+            ToResult(await service.ForecastForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, months ?? 12, currency, ct)));
 
         group.MapGet("/chart", async (Guid fullWorthSpaceId, string? measure, string? dimension, DateOnly? from, DateOnly? to, string? currency, CurrentUserContext currentUser, AnalyticsService service, CancellationToken ct) =>
         {
@@ -711,7 +729,7 @@ public static class AnalyticsEndpoints
             var t = to ?? today;
             if (t < f) (f, t) = (t, f);
             if (t.DayNumber - f.DayNumber > 1830) f = t.AddDays(-1830); // clamp span to ~5 years
-            return ToResult(await service.ChartForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, measure ?? "spend", dimension ?? "month", f, t, currency ?? "EUR", ct));
+            return ToResult(await service.ChartForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, measure ?? "spend", dimension ?? "month", f, t, currency, ct));
         });
         return app;
     }

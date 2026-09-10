@@ -237,19 +237,24 @@ so a depot the bank valued at 40 000 is no longer worth 0; a reported price stil
 with neither stays unpriced and reports incomplete. Found while testing it: a holding **without an
 ISIN** failed the entire depot snapshot with a 500 (untyped NULL parameter in the security lookup).
 
-### P1-9 The net-worth sparkline subtracts one currency from another — `OPEN`
+### P1-9 The net-worth sparkline subtracts one currency from another — `DONE`
 
-`wwwroot/ui/dashboard.js:262` flattens `/api/net-worth/history` — which returns one row **per currency**
-per day — into a single series. With any foreign account the chart zigzags between currencies and the
-change badge subtracts, say, IDR from EUR while labelling the result in the base currency.
+The dashboard now reads `api/wealth/history` — one already-converted point per day in the target
+currency, the same series the Wealth page draws — over a 12-month window, and skips the days that
+report unknown instead of drawing them as 0. Verified in `ops/ui-harness`: the widget draws a
+sparkline and a change badge of exactly +7 200 (the fixture rises 600 a month for twelve months);
+before it drew nothing at all there, because no fixture answered the raw endpoint.
 
-**Target.** Convert per row and then aggregate per day, or request an already-aggregated series.
+### P1-10 A non-EUR space gets its home screen converted into EUR — `DONE`
 
-### P1-10 A non-EUR space gets its home screen converted into EUR — `OPEN`
+The requested currency stays optional all the way down and `AnalyticsService.ResolveCurrencyAsync`
+falls back to the space's base currency — dashboard, overview, forecast and chart. An explicitly
+requested currency still wins.
 
-`Modules/Analytics/AnalyticsModule.cs:662` hard-defaults the target currency to EUR instead of the
-space's base currency and the frontend never passes one, so `ui/dashboard.js:291` shows subtotals that
-collapse to 0 and are mislabelled EUR.
+Noted while fixing it: `budget-status` looks like it is served by `AnalyticsModule`, but
+`BudgetReconciliationCompatibility` is a middleware in front of that path and answers it instead — and
+it already resolved the base currency. Pinned by a test, because nothing in the code makes that
+shadowing visible.
 
 ### P1-11 The only path that gives an account a balance has no test — `OPEN`
 
