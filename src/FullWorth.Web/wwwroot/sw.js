@@ -4,11 +4,34 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v99';
+const VERSION = 'v100';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
 const APP_SHELL = [
+  // Everything below is imported by the shell itself, so an offline cold start needs all of it. The
+  // fetch handler is network-first with a cache fallback, which hides a gap here while online and
+  // only fails once there is no connection - PwaOfflineShellCoverageTests walks the real import
+  // graph so the list cannot fall behind again.
+  '/security/secure-fetch.js',
+  '/ui/money.js',
+  '/ui/dashboard.js',
+  '/ui/lock.js',
+  '/ui/privacy.js',
+  '/ui/category-picker.js',
+  '/ui/chart-scrubber.js',
+  '/ui/topbar-metrics.js',
+  '/features/access-setup.js',
+  '/features/audit.js',
+  '/features/categories.js',
+  '/features/loans.js',
+  '/features/merchants.js',
+  '/features/notifications.js',
+  '/features/rules.js',
+  '/features/sharing.js',
+  '/push/push.js',
+  '/passkeys/passkeys.js',
+  '/passkeys/base64url.js',
   '/styles/tokens.css',
   '/styles/reset.css',
   '/styles/shell.css',
