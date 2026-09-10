@@ -156,9 +156,14 @@ function valuationPanel(asset, d) {
     <label>${esc(t('date'))}<input type="date" name="valuedAt" value="${today()}" required></label><div class="span-2 specialized-form-actions"><button type="submit">${esc(t('accept'))}</button></div></form></div>${appraisal}<p class="row-sub">${esc(t('referenceOnly'))}</p>`;
 }
 
+// A valuation's date is either one somebody stated or the day the row was recorded. Printing the
+// second as a bare date claims an appraisal that never happened.
+const recordedOnLabel = () =>
+  (document.documentElement.lang || 'de').startsWith('de') ? 'erfasst am' : 'recorded on';
+
 function historyPanel(valuations) {
   if (!(valuations || []).length) return `<div class="specialized-empty">${esc(t('noHistory'))}</div>`;
-  return (valuations || []).map(v => `<div class="specialized-history-row"><div class="specialized-history-main"><div class="specialized-history-title">${money(v.amount, v.currency)}${v.isCurrent ? ` · ${esc(t('current'))}` : ''}</div><div class="specialized-history-sub">${esc(v.method)} · ${esc(fmtDate(v.valuedAt))}</div></div></div>`).join('');
+  return (valuations || []).map(v => `<div class="specialized-history-row"><div class="specialized-history-main"><div class="specialized-history-title">${money(v.amount, v.currency)}${v.isCurrent ? ` · ${esc(t('current'))}` : ''}</div><div class="specialized-history-sub">${esc(v.method)} · ${esc(v.valuedAtIsStated === false ? recordedOnLabel() + ' ' + fmtDate(v.valuedAt) : fmtDate(v.valuedAt))}</div></div></div>`).join('');
 }
 
 function activityPanel(asset, activity) {

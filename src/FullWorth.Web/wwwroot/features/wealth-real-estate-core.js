@@ -16,6 +16,7 @@ const COPY = {
     principal: 'Ursprünglicher Kredit', currentBalance: 'Restschuld', rate: 'Sollzins', payment: 'Rate', noDebt: 'Keine Finanzierung verknüpft.',
     acquisitionBreakdown: 'Kaufkosten-Aufschlüsselung', addCost: 'Kaufkosten hinzufügen', noCosts: 'Keine detaillierten Kaufkosten hinterlegt.',
     valueHistory: 'Werthistorie', updateValue: 'Wert aktualisieren', noHistory: 'Keine Werthistorie vorhanden.', source: 'Quelle',
+    recordedOn: 'erfasst am', dateOptional: 'Datum (leer = ohne Stichtag)',
     fxIncomplete: 'Kennzahlen unvollständig: Wechselkurs fehlt', close: 'Schließen', notAvailable: 'N/A', selectDebt: 'Darlehen/Schuld auswählen',
     areaUnit: 'm²', propertyType_apartment: 'Wohnung', propertyType_detached_house: 'Einfamilienhaus', propertyType_semi_detached: 'Doppelhaushälfte',
     propertyType_row_house: 'Reihenhaus', propertyType_multi_family: 'Mehrfamilienhaus', propertyType_land: 'Grundstück',
@@ -43,6 +44,7 @@ const COPY = {
     payoff: 'Estimated payoff', expectedInterest: 'Expected remaining interest', principal: 'Original principal', currentBalance: 'Current balance',
     rate: 'Interest rate', payment: 'Payment', noDebt: 'No financing linked.', acquisitionBreakdown: 'Acquisition cost breakdown', addCost: 'Add acquisition cost',
     noCosts: 'No detailed acquisition costs stored.', valueHistory: 'Value history', updateValue: 'Update value', noHistory: 'No valuation history.',
+    recordedOn: 'recorded on', dateOptional: 'Date (empty = no stated date)',
     source: 'Source', fxIncomplete: 'Metrics incomplete: missing FX rate', close: 'Close', notAvailable: 'N/A', selectDebt: 'Select loan/debt', areaUnit: 'm²',
     propertyType_apartment: 'Apartment', propertyType_detached_house: 'Detached house', propertyType_semi_detached: 'Semi-detached house',
     propertyType_row_house: 'Row house', propertyType_multi_family: 'Multi-family', propertyType_land: 'Land', propertyType_commercial: 'Commercial',
@@ -257,9 +259,18 @@ function debtCardsHtml(ctx, debts) {
   </div>`).join('');
 }
 
+// A valuation's date is either one somebody stated or the day the row was recorded, and the two mean
+// very different things: a stated date is evidence about the asset, a recording day is only evidence
+// about us. Printing both as a bare date claimed an appraisal that never happened - which is exactly
+// what the trigger stamping CURRENT_DATE used to produce.
+function valuationDate(ctx, value) {
+  const shown = ctx.date ? ctx.date(value.valuedAt) : value.valuedAt;
+  return value.valuedAtIsStated === false ? `${tr('recordedOn')} ${shown}` : shown;
+}
+
 function historyHtml(ctx, d) {
-  const rows = d.valuations?.length ? d.valuations.map(value => `<div class="property-valuation-row"><div><strong>${ctx.money(value.amount, value.currency)}</strong><div class="property-debt-meta">${ctx.esc(value.valuedAt)} · ${ctx.esc(tr(`method_${value.method}`))}${value.providerDisplayName ? ` · ${ctx.esc(value.providerDisplayName)}` : ''}</div></div>${value.isCurrent ? '<span class="tx-marker">Aktuell</span>' : ''}</div>`).join('') : `<div class="row-sub">${ctx.esc(tr('noHistory'))}</div>`;
-  return `${rows}<form data-value-form class="property-section"><h3>${ctx.esc(tr('updateValue'))}</h3><div class="property-grid two"><label>Wert<input name="amount" type="number" min="0" step="0.01" value="${d.property.currentValue}" required></label><label>Währung<input name="currency" minlength="3" maxlength="3" value="${ctx.esc(d.property.currency)}" required></label><label>Datum<input name="valuedAt" type="date" value="${todayValue()}"></label></div><div class="dialog-actions"><button type="submit">${ctx.esc(tr('updateValue'))}</button></div></form>`;
+  const rows = d.valuations?.length ? d.valuations.map(value => `<div class="property-valuation-row"><div><strong>${ctx.money(value.amount, value.currency)}</strong><div class="property-debt-meta">${ctx.esc(valuationDate(ctx, value))} · ${ctx.esc(tr(`method_${value.method}`))}${value.providerDisplayName ? ` · ${ctx.esc(value.providerDisplayName)}` : ''}</div></div>${value.isCurrent ? '<span class="tx-marker">Aktuell</span>' : ''}</div>`).join('') : `<div class="row-sub">${ctx.esc(tr('noHistory'))}</div>`;
+  return `${rows}<form data-value-form class="property-section"><h3>${ctx.esc(tr('updateValue'))}</h3><div class="property-grid two"><label>Wert<input name="amount" type="number" min="0" step="0.01" value="${d.property.currentValue}" required></label><label>Währung<input name="currency" minlength="3" maxlength="3" value="${ctx.esc(d.property.currency)}" required></label><label>${ctx.esc(tr('dateOptional'))}<input name="valuedAt" type="date"></label></div><div class="dialog-actions"><button type="submit">${ctx.esc(tr('updateValue'))}</button></div></form>`;
 }
 
 function wirePropertyForm(ctx, dlg, id, current, changed) {
@@ -344,4 +355,3 @@ function jsonBody(body, method = 'POST') { return { method, headers: { 'Content-
 function numberOrNull(value) { const text = String(value ?? '').trim(); return text === '' ? null : Number(text); }
 function textOrNull(value) { const text = String(value ?? '').trim(); return text || null; }
 function dateValue(value) { return value ? String(value).slice(0, 10) : ''; }
-function todayValue() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }

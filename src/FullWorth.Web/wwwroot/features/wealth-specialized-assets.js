@@ -7,7 +7,8 @@ const TEXT = {
   de: {
     details: 'Details', valuation: 'Bewertung', financing: 'Finanzierung', history: 'Historie', close: 'Schließen', save: 'Speichern',
     manualValue: 'Manueller Wert', internalEstimate: 'Interne Schätzung', calculate: 'Berechnen', accept: 'Wert übernehmen',
-    amount: 'Betrag', currency: 'Währung', date: 'Datum', current: 'Aktuell', noHistory: 'Noch keine Bewertungen vorhanden.',
+    amount: 'Betrag', currency: 'Währung', date: 'Datum', current: 'Aktuell', recordedOn: 'erfasst am',
+    dateOptional: 'Datum (leer = ohne Stichtag)', noHistory: 'Noch keine Bewertungen vorhanden.',
     debtEmpty: 'Keine Finanzierung verknüpft.', debtAdd: 'Finanzierung verknüpfen', debtSource: 'Kredit / Verbindlichkeit', allocation: 'Zuordnung %', relation: 'Beziehung', add: 'Hinzufügen', remove: 'Entfernen',
     vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', privacy: 'Sensible Kennzeichen-/Lagerdaten werden im Privacy-Modus verdeckt.',
     vehicleType: 'Fahrzeugtyp', manufacturer: 'Hersteller', model: 'Modell', variant: 'Variante', vin: 'VIN', licensePlate: 'Kennzeichen', firstRegistration: 'Erstzulassung', modelYear: 'Modelljahr', mileage: 'Kilometerstand', powertrain: 'Antrieb', powerKw: 'Leistung kW', purchaseDate: 'Kaufdatum', purchasePrice: 'Kaufpreis', condition: 'Zustand', annualMileage: 'Jahresfahrleistung', notes: 'Notizen',
@@ -20,7 +21,8 @@ const TEXT = {
   en: {
     details: 'Details', valuation: 'Valuation', financing: 'Financing', history: 'History', close: 'Close', save: 'Save',
     manualValue: 'Manual value', internalEstimate: 'Internal estimate', calculate: 'Calculate', accept: 'Accept value',
-    amount: 'Amount', currency: 'Currency', date: 'Date', current: 'Current', noHistory: 'No valuations yet.',
+    amount: 'Amount', currency: 'Currency', date: 'Date', current: 'Current', recordedOn: 'recorded on',
+    dateOptional: 'Date (empty = no stated date)', noHistory: 'No valuations yet.',
     debtEmpty: 'No financing linked.', debtAdd: 'Link financing', debtSource: 'Loan / liability', allocation: 'Allocation %', relation: 'Relation', add: 'Add', remove: 'Remove',
     vehicle: 'Vehicle', precious_metal: 'Precious metal', privacy: 'Sensitive registration/storage identifiers are masked in privacy mode.',
     vehicleType: 'Vehicle type', manufacturer: 'Manufacturer', model: 'Model', variant: 'Variant', vin: 'VIN', licensePlate: 'License plate', firstRegistration: 'First registration', modelYear: 'Model year', mileage: 'Mileage km', powertrain: 'Powertrain', powerKw: 'Power kW', purchaseDate: 'Purchase date', purchasePrice: 'Purchase price', condition: 'Condition', annualMileage: 'Annual mileage', notes: 'Notes',
@@ -43,7 +45,6 @@ function money(value, currency) {
   catch { return `${Number(value).toFixed(2)} ${currency || ''}`.trim(); }
 }
 function date(value) { if (!value) return '—'; try { return new Intl.DateTimeFormat(lang() === 'de' ? 'de-DE' : 'en-US').format(new Date(`${String(value).slice(0, 10)}T12:00:00`)); } catch { return String(value); } }
-function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function num(value) { return value === '' || value == null ? null : Number(value); }
 function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
 
@@ -213,7 +214,7 @@ function valuationPanel(asset, detail) {
   return `<div class="specialized-asset-section"><h3>${esc(t('manualValue'))}</h3><form data-manual-form class="specialized-asset-grid">
       <label>${esc(t('amount'))}<input type="number" name="amount" min="0" step="0.01" value="${esc(asset.currentValue ?? '')}" required></label>
       <label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label>
-      <label>${esc(t('date'))}<input type="date" name="valuedAt" value="${today()}" required></label>
+      <label>${esc(t('dateOptional'))}<input type="date" name="valuedAt"></label>
       <div class="span-2 specialized-form-actions"><button type="submit">${esc(t('accept'))}</button></div></form></div>
     <div class="specialized-asset-section"><h3>${esc(t('internalEstimate'))}</h3>${internal}<div data-estimate-result></div></div>`;
 }
@@ -234,7 +235,7 @@ function financingPanel(asset, debts, loans, liabilities) {
 
 function historyPanel(valuations) {
   if (!(valuations || []).length) return `<div class="specialized-empty">${esc(t('noHistory'))}</div>`;
-  return (valuations || []).map(v => `<div class="specialized-history-row"><div class="specialized-history-main"><div class="specialized-history-title">${money(v.amount, v.currency)}${v.isCurrent ? ` · ${esc(t('current'))}` : ''}</div><div class="specialized-history-sub">${esc(v.method)} · ${esc(date(v.valuedAt))}${v.lowEstimate != null && v.highEstimate != null ? ` · ${money(v.lowEstimate, v.currency)}–${money(v.highEstimate, v.currency)}` : ''}</div></div></div>`).join('');
+  return (valuations || []).map(v => `<div class="specialized-history-row"><div class="specialized-history-main"><div class="specialized-history-title">${money(v.amount, v.currency)}${v.isCurrent ? ` · ${esc(t('current'))}` : ''}</div><div class="specialized-history-sub">${esc(v.method)} · ${esc(v.valuedAtIsStated === false ? t('recordedOn') + ' ' + date(v.valuedAt) : date(v.valuedAt))}${v.lowEstimate != null && v.highEstimate != null ? ` · ${money(v.lowEstimate, v.currency)}–${money(v.highEstimate, v.currency)}` : ''}</div></div></div>`).join('');
 }
 
 function options(values, selected) { return values.map(value => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(value)}</option>`).join(''); }
@@ -270,7 +271,7 @@ function bindValuation(dlg, asset, endpoint) {
   dlg.querySelector('[data-manual-form]')?.addEventListener('submit', async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
     try {
-      await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(fd.get('amount')), currency: String(fd.get('currency')).toUpperCase(), valuedAt: fd.get('valuedAt'), method: 'manual', isAccepted: true }));
+      await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(fd.get('amount')), currency: String(fd.get('currency')).toUpperCase(), valuedAt: fd.get('valuedAt') || null, method: 'manual', isAccepted: true }));
       toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click();
     } catch (error) { toast(error.message || t('invalid')); }
   });
