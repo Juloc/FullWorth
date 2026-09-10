@@ -98,6 +98,9 @@ public static class BackendApplication
         builder.Services.AddScoped<IntelligenceFeedbackRecorder>();
         builder.Services.AddScoped<CloudIntelligenceStateService>();
         builder.Services.AddScoped<CloudInstanceCredentialStore>();
+        // Singleton, because remembering a failed registration across requests is the whole point.
+        builder.Services.AddSingleton<CloudRegistrationCooldown>();
+        builder.Services.AddScoped<CloudCredentialAcquisition>();
         builder.Services.AddScoped<CloudLearningOutboxUploader>();
         builder.Services.AddScoped<CloudContractBenchmarkContributionService>();
         builder.Services.AddHostedService<CloudContractBenchmarkContributionWorker>();

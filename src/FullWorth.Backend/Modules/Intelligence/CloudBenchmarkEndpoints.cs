@@ -23,7 +23,7 @@ public static class CloudBenchmarkEndpoints
             string? observedMonth,
             CurrentUserContext currentUser,
             CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentials,
+            CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
@@ -36,28 +36,12 @@ public static class CloudBenchmarkEndpoints
             if (state is null)
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
-            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            // A page load must never wait out the Cloud client's HTTP timeout, so the attempt is
+            // budgeted and a failure puts the next request straight into this branch.
+            var (secret, _) = await acquisition.TryGetAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
             {
-                try
-                {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        FullWorthVersion.Full,
-                        null,
-                        ct);
-                    await credentials.SaveAsync(registration, ct);
-                    secret = registration.Credential;
-                    await cloudState.SetTransportStatusAsync(
-                        state.InstanceId, null, registration.EntitlementStatus,
-                        DateTimeOffset.UtcNow, null, ct);
-                }
-                catch (FullWorthCloudException ex)
-                {
-                    await cloudState.SetTransportStatusAsync(state.InstanceId, ex.ErrorCode, null, null, null, ct);
-                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-                }
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
 
             try
@@ -104,7 +88,7 @@ public static class CloudBenchmarkEndpoints
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
             CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentials,
+            CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
@@ -120,27 +104,12 @@ public static class CloudBenchmarkEndpoints
             if (state is null)
                 return Results.Ok(new { available = false, items = Array.Empty<object>() });
 
-            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            // A page load must never wait out the Cloud client's HTTP timeout, so the attempt is
+            // budgeted and a failure puts the next request straight into this branch.
+            var (secret, _) = await acquisition.TryGetAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
             {
-                try
-                {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        FullWorthVersion.Full,
-                        null,
-                        ct);
-                    await credentials.SaveAsync(registration, ct);
-                    secret = registration.Credential;
-                    await cloudState.SetTransportStatusAsync(
-                        state.InstanceId, null, registration.EntitlementStatus,
-                        DateTimeOffset.UtcNow, null, ct);
-                }
-                catch (FullWorthCloudException)
-                {
-                    return Results.Ok(new { available = false, items = Array.Empty<object>() });
-                }
+                return Results.Ok(new { available = false, items = Array.Empty<object>() });
             }
 
             var rows = await financeDb.Contracts.AsNoTracking()
@@ -241,7 +210,7 @@ public static class CloudBenchmarkEndpoints
             FullWorthDbContext financeDb,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentials,
+            CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
@@ -288,24 +257,12 @@ public static class CloudBenchmarkEndpoints
             if (state is null)
                 return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
 
-            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            // A page load must never wait out the Cloud client's HTTP timeout, so the attempt is
+            // budgeted and a failure puts the next request straight into this branch.
+            var (secret, _) = await acquisition.TryGetAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
             {
-                try
-                {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        FullWorthVersion.Full,
-                        null,
-                        ct);
-                    await credentials.SaveAsync(registration, ct);
-                    secret = registration.Credential;
-                }
-                catch (FullWorthCloudException)
-                {
-                    return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
-                }
+                return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
             }
 
             var country = await SpaceCountryAsync(financeDb, fullWorthSpaceId, ct);
@@ -397,7 +354,7 @@ public static class CloudBenchmarkEndpoints
             FullWorthDbContext financeDb,
             CloudSavingsBenchmarkContributionService localSavings,
             CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentials,
+            CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
@@ -430,29 +387,17 @@ public static class CloudBenchmarkEndpoints
                     local.ObservedMonth
                 });
 
-            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            // A page load must never wait out the Cloud client's HTTP timeout, so the attempt is
+            // budgeted and a failure puts the next request straight into this branch.
+            var (secret, _) = await acquisition.TryGetAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
             {
-                try
+                return Results.Ok(new
                 {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        FullWorthVersion.Full,
-                        null,
-                        ct);
-                    await credentials.SaveAsync(registration, ct);
-                    secret = registration.Credential;
-                }
-                catch (FullWorthCloudException)
-                {
-                    return Results.Ok(new
-                    {
-                        available = false,
-                        localSavingsRate = local.SavingsRate,
-                        local.ObservedMonth
-                    });
-                }
+                    available = false,
+                    localSavingsRate = local.SavingsRate,
+                    local.ObservedMonth
+                });
             }
 
             FullWorthCloudBenchmark? aggregate = null;

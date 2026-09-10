@@ -16,7 +16,7 @@ public static class CloudMerchantBenchmarkEndpoints
             FullWorthDbContext financeDb,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
-            CloudInstanceCredentialStore credentials,
+            CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
@@ -147,24 +147,12 @@ public static class CloudMerchantBenchmarkEndpoints
             if (state is null)
                 return Results.Ok(new { available = false, merchantName = identity.CanonicalName, observedMonth });
 
-            var secret = await credentials.GetSecretAsync(state.InstanceId, ct);
+            // A page load must never wait out the Cloud client's HTTP timeout, so the attempt is
+            // budgeted and a failure puts the next request straight into this branch.
+            var (secret, _) = await acquisition.TryGetAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
             {
-                try
-                {
-                    var registration = await cloud.RegisterAsync(
-                        state.InstanceId,
-                        CloudIntelligencePolicy.CurrentVersion,
-                        FullWorthVersion.Full,
-                        null,
-                        ct);
-                    await credentials.SaveAsync(registration, ct);
-                    secret = registration.Credential;
-                }
-                catch (FullWorthCloudException)
-                {
-                    return Results.Ok(new { available = false, merchantName = identity.CanonicalName, observedMonth });
-                }
+                return Results.Ok(new { available = false, merchantName = identity.CanonicalName, observedMonth });
             }
 
             var items = new List<object>();

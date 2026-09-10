@@ -602,8 +602,14 @@ gross) and the hover readout plus the metric break out "davon Firmenwagen".
 - **A failed enrollment reads as success.** `wwwroot/intelligence/cloud.js:136` overwrites the returned
   error with a green success line, and `features/access-setup.js:571` discards the response entirely.
 - **Cloud transport errors are shown as raw snake_case tokens** with no translation and no remediation.
-- **Registration-on-demand runs inside user-facing GET handlers** with a 45 s timeout
-  (`CloudBenchmarkEndpoints.cs:44`), so an unreachable Cloud stalls page loads.
+- ~~**Registration-on-demand runs inside user-facing GET handlers**~~ `DONE` — six read endpoints each
+  carried the same twenty-five lines (no secret → register → save → record the transport status), and
+  registration goes through the client's 45 s HTTP timeout, so an unreachable Cloud stalled a page load
+  for up to 45 s — **once per request**, because every request started its own attempt. One
+  `CloudCredentialAcquisition` now does it with a 5 s budget and a one-minute cooldown, so the first
+  load gives up quickly and the next answers at once. Nothing is lost by giving up: the background
+  workers register too, so a Cloud that comes back is picked up without a reload. Each endpoint kept its
+  own failure response, because they legitimately differ (503 versus an `available:false` body).
 - ~~**No assembly version is set anywhere**~~ `DONE` — `Directory.Build.props` sets the version
   (`0.0.0-dev` locally, the real tag in a release), the three .NET Dockerfiles take it as a build arg and
   copy the props file into the build context, and `release.yml` passes the validated tag to both
