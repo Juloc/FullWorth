@@ -321,15 +321,22 @@ and never changes its provider.
 **Tests.** Manual sync → TAN required → the connection stays `provider=fints` and the API exposes the
 challenge; the reconnect action for a FinTS connection does not call any Enable Banking endpoint.
 
-### P1-14 The same IBAN connected twice is counted twice — `OPEN`
+### P1-14 The same IBAN connected twice is counted twice — `DONE`
 
-Account uniqueness is `(FullWorthSpaceId, Provider, IdentificationHash)`, so an ING Girokonto reached
-through both FinTS and Enable Banking becomes **two accounts with two transaction sets**, both counted
-in net worth. The only reconciliation code that exists handles the `finanzguru-import` provider.
-Documentation claimed this was prevented; nothing prevents it.
+Owner decision: **keep both connections, count the money once.** Refusing the second connection would
+have blocked the owner's own ING setup (FinTS for the depots, Enable Banking for the bookings), and
+merging two transaction sets with different keys risks deleting or duplicating real bookings.
 
-**Target.** A cross-provider identity (normalised IBAN) that either merges or refuses the second
-connection, with the user told which.
+A newly created account whose `IbanLookup` matches an existing active, counted account in the same space
+starts with `IncludeInNetWorth = false`, and that is audited. Only at creation: an account the user
+deliberately switched back on is never silently switched off again by the next sync. Every total already
+filters on that flag, so nothing else had to change — and the flag is the toggle.
+
+The account list marks the excluded row with `duplicateOfAccountId`/`duplicateOfDisplayName` (computed
+from the keyed lookup token, which never leaves the server) and the row reads "Doppelt zu X · zählt
+nicht im Vermögen" — without that, an account missing from net worth had no visible reason.
+
+Proven by reverting: the dashboard total comes back as 2 000 for 1 000 of real money.
 
 ### P1-15 Deleting a FinTS connection leaves the depot data behind — `DONE`
 

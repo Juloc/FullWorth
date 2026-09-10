@@ -762,7 +762,8 @@
     "health_tan_required": "TAN required",
     "enterTan": "Enter TAN",
     "syncTanRequired": "The bank is asking for a TAN. Enter it now.",
-    "tanUnavailable": "No TAN is waiting any more. Start the sync again."
+    "tanUnavailable": "No TAN is waiting any more. Start the sync again.",
+    "duplicateOf": "Duplicate of {name} · not counted in net worth"
   },
   "a11y": {
     "skipToContent": "Skip to content"

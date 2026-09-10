@@ -98,7 +98,10 @@ public static class BalanceSnapshotQueries
 // LatestBalance is the HEADLINE figure only. Balances carries the account's current balance in every
 // currency it holds - PayPal, Wise and Revolut report a wallet per currency - and it is what any total
 // must be built from. It used to be one row per account, so every other wallet was invisible.
-public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null);
+// DuplicateOf* names the account this one is the same bank account as, reached through another
+// provider (same IBAN). Both connections are kept on purpose - each brings data the other does not -
+// so the row has to say why one of them is not in the totals.
+public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null);
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive, bool? IncludeInNetWorth, int? SortOrder);
 public sealed record ManualBalanceRequest(decimal Amount, string? Currency);
@@ -117,7 +120,49 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             .ToListAsync(ct);
         items = await WithAllCurrenciesAsync(items, ct);
         items = await WithConvertedBalancesAsync(items, fullWorthSpaceId, ct);
+        items = await WithDuplicateMarkersAsync(items, ct);
         return WithDisplayIdentifiers(items);
+    }
+
+    // The same bank account reached through two providers (same IBAN) is two accounts by design - each
+    // connection brings data the other does not - but only one of them counts in the totals. The row
+    // has to name the other one, or a user seeing an account excluded from their net worth has no way
+    // to tell why.
+    private async Task<List<AccountListItem>> WithDuplicateMarkersAsync(
+        List<AccountListItem> items, CancellationToken ct)
+    {
+        var excluded = items.Where(item => !item.IncludeInNetWorth).Select(item => item.Id).ToArray();
+        if (excluded.Length == 0) return items;
+
+        // IbanLookup is a keyed token, never the IBAN itself, and never leaves the server.
+        var identities = await db.Accounts.AsNoTracking()
+            .Where(account => account.IbanLookup != null &&
+                              items.Select(item => item.Id).Contains(account.Id))
+            .Select(account => new { account.Id, account.IbanLookup, account.IncludeInNetWorth })
+            .ToListAsync(ct);
+        var counterpartByAccount = identities
+            .Where(account => !account.IncludeInNetWorth)
+            .Select(account => new
+            {
+                account.Id,
+                Counterpart = identities.FirstOrDefault(other =>
+                    other.Id != account.Id &&
+                    other.IncludeInNetWorth &&
+                    other.IbanLookup == account.IbanLookup)
+            })
+            .Where(pair => pair.Counterpart is not null)
+            .ToDictionary(pair => pair.Id, pair => pair.Counterpart!.Id);
+        if (counterpartByAccount.Count == 0) return items;
+
+        var nameById = items.ToDictionary(item => item.Id, item => item.DisplayName);
+        return items.Select(item =>
+            counterpartByAccount.TryGetValue(item.Id, out var counterpart)
+                ? item with
+                {
+                    DuplicateOfAccountId = counterpart,
+                    DuplicateOfDisplayName = nameById.GetValueOrDefault(counterpart)
+                }
+                : item).ToList();
     }
 
     // An account can hold money in several currencies. The projection above can only carry one row per

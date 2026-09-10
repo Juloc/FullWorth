@@ -187,6 +187,35 @@ public sealed class IngestionService(
             }
             var ibanLookup = AccountIdentifierLookup.Create(item.Iban, cipher);
             if (ibanLookup is not null) entity.IbanLookup = ibanLookup;
+
+            // Account identity is (space, provider, hash), so the same IBAN reached through two
+            // providers - an ING Girokonto over FinTS for the depots AND over Enable Banking for the
+            // bookings - becomes two accounts with two transaction sets, and BOTH used to count in net
+            // worth. Both connections stay (each brings data the other does not), but the money is
+            // counted once: a newly created duplicate starts excluded from totals.
+            //
+            // Only ever at creation. An account the user deliberately switched back on must not be
+            // silently switched off again on the next sync.
+            if (isNew && ibanLookup is not null)
+            {
+                var alreadyKnown = await db.Accounts
+                    .AnyAsync(other =>
+                        other.FullWorthSpaceId == connection.FullWorthSpaceId &&
+                        other.IbanLookup == ibanLookup &&
+                        other.IsActive &&
+                        other.IncludeInNetWorth &&
+                        other.Id != entity.Id, ct);
+                if (alreadyKnown)
+                {
+                    entity.IncludeInNetWorth = false;
+                    audit.Record(
+                        connection.FullWorthSpaceId,
+                        null,
+                        "account.duplicate_excluded_from_net_worth",
+                        "Account",
+                        entity.Id);
+                }
+            }
             entity.IsActive = item.IsActive; entity.UpdatedAt = DateTimeOffset.UtcNow;
             result[item.IdentificationHash] = entity;
         }

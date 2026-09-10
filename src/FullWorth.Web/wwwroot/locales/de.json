@@ -762,7 +762,8 @@
     "health_tan_required": "TAN nötig",
     "enterTan": "TAN eingeben",
     "syncTanRequired": "Die Bank verlangt eine TAN. Gib sie jetzt ein.",
-    "tanUnavailable": "Es wartet keine TAN mehr. Starte den Abgleich neu."
+    "tanUnavailable": "Es wartet keine TAN mehr. Starte den Abgleich neu.",
+    "duplicateOf": "Doppelt zu {name} · zählt nicht im Vermögen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
