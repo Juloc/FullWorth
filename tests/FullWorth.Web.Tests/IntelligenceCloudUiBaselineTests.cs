@@ -66,7 +66,7 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
         // The precise rule: this page calls exactly three paths - read the state, and record the
         // consent decision either way. Anything else appearing here is the Cloud service's surface
         // leaking into the self-hosted app.
-        var called = Regex.Matches(script, """api('(?<path>/[a-z/-]+)'""")
+        var called = Regex.Matches(script, """api\('(?<path>/[a-z/-]+)'""")
             .Select(match => match.Groups["path"].Value)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
