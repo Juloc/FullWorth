@@ -16,6 +16,9 @@ public sealed record AssetValuationView(
     decimal Amount,
     string Currency,
     DateOnly ValuedAt,
+    // Whether ValuedAt is a date somebody named. When false it is the day the row was recorded, kept
+    // so history sorts, and it asserts nothing about an appraisal.
+    bool ValuedAtIsStated,
     string Method,
     decimal? LowEstimate,
     decimal? HighEstimate,
@@ -31,6 +34,8 @@ public sealed record AssetValuationView(
 public sealed record AssetValuationWrite(
     decimal Amount,
     string Currency,
+    // Null means the caller states no as-of date: the value holds as of now, and nothing pretends an
+    // appraisal happened on any particular day.
     DateOnly? ValuedAt = null,
     string? Method = null,
     decimal? LowEstimate = null,
@@ -145,14 +150,6 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
                 // in another currency needs a conversion, and a conversion is a derived value that must
                 // never overwrite the original. Recording it with isAccepted=false still keeps it in the
                 // asset's history.
-                //
-                // NOT checked here: whether the valuation is older than the current one. There is no
-                // trustworthy date to compare against yet - the fullworth_prepare_asset trigger stamps
-                // ValuedAt = CURRENT_DATE whenever the asset row is touched without one, and asset
-                // creation materialises a "current" valuation carrying that same synthetic date. So a
-                // perfectly legitimate appraisal dated last month looks older than a stamp that never
-                // described an appraisal at all. Refusing on it would reject real input; see the
-                // improvement plan.
                 var assetCurrency = await ReadAssetCurrencyAsync(fullWorthSpaceId, assetId, ct);
                 if (!string.IsNullOrWhiteSpace(assetCurrency) &&
                     !string.Equals(assetCurrency, value.Currency, StringComparison.OrdinalIgnoreCase))
@@ -162,6 +159,24 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
                         AssetValuationMutationResult.Invalid,
                         Error: $"This valuation is in {value.Currency}, the asset is held in " +
                                $"{assetCurrency}. Convert it first or record it without accepting it.");
+                }
+
+                // Same for its DATE: replacing the current value with an older statement would move the
+                // asset's present backwards. Only two stated dates are ever compared. A current
+                // valuation whose date was never stated is not evidence of anything - it carries the
+                // day it was recorded - so an appraisal dated before it is real input and is accepted
+                // (that is the flow a naive check used to reject). An incoming valuation with no date
+                // means "as of now", which cannot be stale either.
+                var current = await ReadCurrentValuationAsOfAsync(fullWorthSpaceId, assetId, ct);
+                if (value.ValuedAtIsStated && current is { IsStated: true } accepted &&
+                    value.ValuedAt < accepted.ValuedAt)
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new(
+                        AssetValuationMutationResult.Invalid,
+                        Error: $"This valuation is as of {value.ValuedAt:yyyy-MM-dd}, older than the " +
+                               $"accepted value as of {accepted.ValuedAt:yyyy-MM-dd}. Record it without " +
+                               "accepting it to keep it in the history.");
                 }
 
                 await db.Database.ExecuteSqlRawAsync(
@@ -177,11 +192,16 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
                 // Currency is deliberately not in this SET: it is the asset's unit, checked above, not
                 // something a valuation may change. (An asset that had no currency yet still gets one,
                 // because the check only applies once a value exists.)
+                //
+                // ValuedAt only carries a date somebody stated. An undated valuation clears it instead
+                // of stamping today: the asset then has a value and no claim about when it was
+                // appraised, and ValueRecordedAt - which the trigger stamps - says since when we know
+                // the figure.
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE "Assets"
                     SET "CurrentValue" = {value.Amount},
                         "Currency" = COALESCE(NULLIF("Currency", ''), {value.Currency}),
-                        "ValuedAt" = {value.ValuedAt},
+                        "ValuedAt" = CASE WHEN {value.ValuedAtIsStated} THEN {value.ValuedAt}::date ELSE NULL END,
                         "UpdatedAt" = {now}
                     WHERE "Id" = {assetId} AND "FullWorthSpaceId" = {fullWorthSpaceId};
                     """, ct);
@@ -234,6 +254,33 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
             .Select(asset => asset.Currency)
             .SingleOrDefaultAsync(ct);
 
+    /// <summary>
+    /// The as-of date an accepted valuation would replace, and whether that date was ever stated.
+    /// Null when the asset has no accepted valuation yet.
+    /// </summary>
+    private async Task<CurrentAsOf?> ReadCurrentValuationAsOfAsync(
+        Guid fullWorthSpaceId, Guid assetId, CancellationToken ct)
+    {
+        var connection = db.Database.GetDbConnection();
+        await EnsureOpenAsync(connection, ct);
+        await using var command = connection.CreateCommand();
+        command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT "ValuedAt", "ValuedAtIsStated"
+            FROM "AssetValuations"
+            WHERE "AssetId"=@asset AND "FullWorthSpaceId"=@space AND "IsCurrent" = TRUE AND "IsAccepted" = TRUE
+            LIMIT 1;
+            """;
+        AddParameter(command, "@asset", assetId);
+        AddParameter(command, "@space", fullWorthSpaceId);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct)
+            ? new CurrentAsOf(reader.GetFieldValue<DateOnly>(0), reader.GetBoolean(1))
+            : null;
+    }
+
+    private readonly record struct CurrentAsOf(DateOnly ValuedAt, bool IsStated);
+
     private async Task<bool> LockAssetAsync(Guid fullWorthSpaceId, Guid assetId, CancellationToken ct)
     {
         var connection = db.Database.GetDbConnection();
@@ -263,11 +310,11 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
         command.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = """
             INSERT INTO "AssetValuations"
-                ("Id", "FullWorthSpaceId", "AssetId", "Amount", "Currency", "ValuedAt", "Method",
+                ("Id", "FullWorthSpaceId", "AssetId", "Amount", "Currency", "ValuedAt", "ValuedAtIsStated", "Method",
                  "LowEstimate", "HighEstimate", "Confidence", "ProviderKey", "ProviderDisplayName",
                  "ExternalReference", "InputSummaryJson", "IsCurrent", "IsAccepted", "CreatedByUserId", "CreatedAt")
             VALUES
-                (@id, @space, @asset, @amount, @currency, @valuedAt, @method,
+                (@id, @space, @asset, @amount, @currency, @valuedAt, @valuedAtIsStated, @method,
                  @low, @high, @confidence, @providerKey, @providerName,
                  @externalReference, NULL, @isCurrent, @isAccepted, @createdBy, @createdAt);
             """;
@@ -277,6 +324,7 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
         AddParameter(command, "@amount", value.Amount);
         AddParameter(command, "@currency", value.Currency);
         AddParameter(command, "@valuedAt", value.ValuedAt);
+        AddParameter(command, "@valuedAtIsStated", value.ValuedAtIsStated);
         AddParameter(command, "@method", value.Method);
         AddParameter(command, "@low", value.LowEstimate);
         AddParameter(command, "@high", value.HighEstimate);
@@ -335,7 +383,7 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
     }
 
     private const string SelectSql = """
-        SELECT "Id", "FullWorthSpaceId", "AssetId", "Amount", "Currency", "ValuedAt", "Method",
+        SELECT "Id", "FullWorthSpaceId", "AssetId", "Amount", "Currency", "ValuedAt", "ValuedAtIsStated", "Method",
                "LowEstimate", "HighEstimate", "Confidence", "ProviderKey", "ProviderDisplayName",
                "ExternalReference", "IsCurrent", "IsAccepted", "CreatedByUserId", "CreatedAt"
         FROM "AssetValuations"
@@ -348,17 +396,18 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
         reader.GetDecimal(3),
         reader.GetString(4),
         reader.GetFieldValue<DateOnly>(5),
-        reader.GetString(6),
-        reader.IsDBNull(7) ? null : reader.GetDecimal(7),
+        reader.GetBoolean(6),
+        reader.GetString(7),
         reader.IsDBNull(8) ? null : reader.GetDecimal(8),
         reader.IsDBNull(9) ? null : reader.GetDecimal(9),
-        reader.IsDBNull(10) ? null : reader.GetString(10),
+        reader.IsDBNull(10) ? null : reader.GetDecimal(10),
         reader.IsDBNull(11) ? null : reader.GetString(11),
         reader.IsDBNull(12) ? null : reader.GetString(12),
-        reader.GetBoolean(13),
+        reader.IsDBNull(13) ? null : reader.GetString(13),
         reader.GetBoolean(14),
-        reader.IsDBNull(15) ? null : reader.GetGuid(15),
-        reader.GetFieldValue<DateTimeOffset>(16));
+        reader.GetBoolean(15),
+        reader.IsDBNull(16) ? null : reader.GetGuid(16),
+        reader.GetFieldValue<DateTimeOffset>(17));
 
     private static (NormalizedValuation Value, string? Error) NormalizeAndValidate(AssetValuationWrite request)
     {
@@ -392,11 +441,16 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
         if (providerName?.Length > 200) return (default, "Provider name is too long.");
         if (externalReference?.Length > 500) return (default, "External reference is too long.");
 
+        // No date sent means the caller stated none. The row still needs one to sort by, so it gets the
+        // day it is recorded - flagged as not stated, because "today" is a bookkeeping fact about this
+        // row and not a claim that anybody appraised the asset today.
+        var stated = request.ValuedAt.HasValue;
         var valuedAt = request.ValuedAt ?? DateOnly.FromDateTime(DateTime.UtcNow);
         return (new NormalizedValuation(
             request.Amount,
             currency,
             valuedAt,
+            stated,
             method,
             request.LowEstimate,
             request.HighEstimate,
@@ -425,6 +479,7 @@ public sealed class AssetValuationStore(FullWorthDbContext db, AuditService audi
         decimal Amount,
         string Currency,
         DateOnly ValuedAt,
+        bool ValuedAtIsStated,
         string Method,
         decimal? LowEstimate,
         decimal? HighEstimate,

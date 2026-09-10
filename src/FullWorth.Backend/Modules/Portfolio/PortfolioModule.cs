@@ -14,7 +14,21 @@ public sealed class Asset
     public string Kind { get; set; } = "other";
     public decimal CurrentValue { get; set; }
     public string Currency { get; set; } = "EUR";
+
+    /// <summary>
+    /// The date somebody stated this value holds for — the owner, a document, a provider. NULL means
+    /// nobody ever said, and nothing invents one: a stamped "today" used to be indistinguishable from
+    /// an appraisal and always looked newer than a real one. Use <see cref="ValueRecordedAt"/> for
+    /// "since when do we know this figure".
+    /// </summary>
     public DateOnly? ValuedAt { get; set; }
+
+    /// <summary>
+    /// When FullWorth last learned this value. Maintained by <c>fullworth_prepare_asset</c> and moves
+    /// only when value, currency or stated date change — unlike <see cref="UpdatedAt"/>, which a
+    /// rename also bumps. It says nothing about when the asset was appraised.
+    /// </summary>
+    public DateTimeOffset ValueRecordedAt { get; set; } = DateTimeOffset.UtcNow;
     public decimal? AnnualGrowthRate { get; set; }
     public bool IncludeInNetWorth { get; set; } = true;
     public string? Notes { get; set; }
@@ -63,6 +77,7 @@ public sealed record AssetView(
     decimal CurrentValue,
     string Currency,
     DateOnly? ValuedAt,
+    DateTimeOffset ValueRecordedAt,
     decimal? AnnualGrowthRate,
     bool IncludeInNetWorth,
     string? Notes,
@@ -289,7 +304,8 @@ public sealed class PortfolioStore(FullWorthDbContext db, AuditService? auditSer
     private IQueryable<AssetView> ProjectAssets(IQueryable<Asset> assets) =>
         assets.Select(asset => new AssetView(
             asset.Id, asset.FullWorthSpaceId, asset.Name, asset.Kind, asset.CurrentValue, asset.Currency,
-            asset.ValuedAt, asset.AnnualGrowthRate, asset.IncludeInNetWorth, asset.Notes, asset.CreatedAt, asset.UpdatedAt));
+            asset.ValuedAt, asset.ValueRecordedAt, asset.AnnualGrowthRate, asset.IncludeInNetWorth, asset.Notes,
+            asset.CreatedAt, asset.UpdatedAt));
 
     private IQueryable<LiabilityView> ProjectLiabilities(IQueryable<Liability> liabilities) =>
         liabilities.Select(liability => new LiabilityView(
@@ -331,6 +347,8 @@ public sealed class PortfolioStore(FullWorthDbContext db, AuditService? auditSer
         entity.Kind = string.IsNullOrWhiteSpace(request.Kind) ? "other" : request.Kind.Trim().ToLowerInvariant();
         entity.CurrentValue = request.CurrentValue;
         entity.Currency = request.Currency.Trim().ToUpperInvariant();
+        // A stated date only. No date means no date - ValueRecordedAt is stamped by the database, so a
+        // caller can neither omit nor forge "since when do we know this".
         entity.ValuedAt = request.ValuedAt;
         entity.AnnualGrowthRate = request.AnnualGrowthRate;
         entity.IncludeInNetWorth = request.IncludeInNetWorth;

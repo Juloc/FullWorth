@@ -206,8 +206,8 @@ public sealed class AssetValuationIntegrationTests
         await AssertAssetUnchangedAsync(factory, scenario);
     }
 
-    // An older appraisal recorded WITHOUT accepting it is history and must stay storable. (Accepting an
-    // older one is NOT refused - there is no trustworthy date to compare against; see the module.)
+    // An older appraisal recorded WITHOUT accepting it is history and must stay storable. Accepting one
+    // is a different question and is refused; see AssetValuationAsOfIntegrationTests.
     [Fact]
     public async Task An_older_valuation_can_still_be_recorded_as_history()
     {
