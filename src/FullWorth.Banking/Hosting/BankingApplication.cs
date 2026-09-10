@@ -206,14 +206,9 @@ public static class BankingApplication
             EnableBankingControlPanelRegistrationService registration) =>
         {
             if (!TryGetUser(http, out var userId)) return Results.BadRequest(new { error = "missing_user_context" });
-            try
-            {
-                return Results.Ok(registration.GetStatus(userId, id));
-            }
-            catch (KeyNotFoundException)
-            {
-                return Results.NotFound();
-            }
+            // Never 404: an unknown id is reported as expired so the wizard fails the step instead of
+            // polling a 404 for as long as the page stays open.
+            return Results.Ok(registration.GetStatus(userId, id));
         });
         
         endpoints.MapPost("/api/banking/profile/register/{id}/retry", async (

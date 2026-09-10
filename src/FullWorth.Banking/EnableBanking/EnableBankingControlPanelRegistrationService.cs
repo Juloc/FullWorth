@@ -176,12 +176,22 @@ public sealed class EnableBankingControlPanelRegistrationService
         }
     }
 
+    /// <summary>
+    /// The wizard polls this. A pending registration lives in memory for twenty minutes and holds a
+    /// control-panel refresh token and a private key, which is why it is deliberately NOT persisted -
+    /// but a restart then left the id unknown, the poll answered 404, and the wizard kept polling that
+    /// 404 forever instead of failing the step.
+    ///
+    /// An id we no longer hold IS expired from the user's point of view, so it is reported as such with
+    /// its own reason code. That also removes the 404-versus-200 distinction between "never existed"
+    /// and "expired", which nobody outside needs to be able to tell apart.
+    /// </summary>
     public EnableBankingAutoRegistrationView GetStatus(Guid userId, string id)
     {
         PruneExpired();
 
         if (!_pending.TryGetValue(id, out var pending) || pending.UserId != userId)
-            throw new KeyNotFoundException();
+            return new EnableBankingAutoRegistrationView(id, "expired", "registration_lost", null, false);
 
         if (pending.ExpiresAt <= DateTimeOffset.UtcNow && pending.Status is not ("completed" or "failed"))
             pending.Status = "expired";

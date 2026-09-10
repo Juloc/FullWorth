@@ -679,18 +679,44 @@ anywhere else) can point at without any wiring on this page's side.
   `TimeZoneId = "Europe/Berlin"`, which the platform rules would have had to fix anyway. If predictable
   fixed sync times are wanted later, that is a feature request against `BankSyncWorker` — not a reason to
   keep an unreferenced second scheduler next to the real one.
-- **Automatic Enable Banking registration state is in-memory only** (20-minute TTL), so after a restart
-  the wizard polls a 404 forever instead of failing the step.
+- ~~**Automatic Enable Banking registration state is in-memory only**~~ `DONE` — and staying in memory is
+  the right call, not the defect: a pending registration holds a control-panel refresh token and a
+  freshly generated private key, and neither belongs in the database for the sake of a twenty-minute
+  wizard step the owner can simply start again. The defect was the answer. An id this process no longer
+  holds now reports `status: "expired"`, `errorCode: "registration_lost"` instead of a 404, so the wizard
+  fails the step and says why instead of polling a 404 for as long as the page stays open. It also
+  removes the 404-versus-200 distinction between "never existed" and "expired", so another user's
+  in-flight registration is indistinguishable from one that was never there.
 - **Tenant isolation is 1 293 hand-threaded parameters with no enforcing layer** — every query must
   remember to filter by space, and nothing structural catches a miss.
-- **Cloud enrollment leaves no trace.** A refused external enrollment writes no audit event and no log
-  line, and a successful one does not record which mode let it in.
+- ~~**Cloud enrollment leaves no trace.**~~ `DONE` (fullworth-cloud) — a refused enrollment (missing or
+  invalid token, or a fail-closed deployment) is now audited as `instance_enrollment_refused` and logged
+  as a warning; an accepted one records which of the three enrollment gates let it in
+  (`CloudInstance.EnrollmentMode`: `Token` / `PublicRegistration` / `DevelopmentBypass`) in both the audit
+  row and the log line. Neither ever logs the presented token or an issued credential.
 - **The Cloud has no link-health surface.** `/intelligence/index.html` is the only page with transport
   diagnostics and it is reachable only by typing the URL; the resolved Cloud endpoint appears in no
   response, no UI field and no log; outbox depth and dead-letter count are exposed nowhere.
 - **A failed enrollment reads as success.** `wwwroot/intelligence/cloud.js:136` overwrites the returned
   error with a green success line, and `features/access-setup.js:571` discards the response entirely.
+  Checked against fullworth-cloud: `/v1/instances/register` already answers a real non-2xx status with
+  `{errorCode, message, remediation}` on failure, so the Cloud API is not the cause. The fault is entirely
+  in FullWorth: `IntelligenceAdminEndpoints.cs`'s `POST /cloud/enable` catches `FullWorthCloudException`
+  and stores `ex.ErrorCode` as `CloudConnectionState.LastErrorCode`, but still returns `Results.Ok(...)`
+  regardless of whether registration succeeded — and `cloud.js` renders the fixed success string without
+  ever checking the returned `lastErrorCode`. Fix belongs on the client: `cloud.js`'s `saveDecision()` must
+  branch on `state.lastErrorCode` before showing the green line.
 - **Cloud transport errors are shown as raw snake_case tokens** with no translation and no remediation.
+  `PARTLY DONE` (fullworth-cloud) — every Cloud API error body now also carries a fixed, human-readable
+  `remediation` hint next to the stable `errorCode` (`CloudResults.RemediationFor`), including codes that
+  had none before (`benchmark_metric_invalid`, `price_*_invalid`, `admin_disabled`/`admin_unauthorized`).
+  Still open on the FullWorth side: `FullWorthCloudClient.SendAsync` derives `FullWorthCloudException`'s
+  `ErrorCode` purely from the HTTP status code and never reads the response body at all, so the Cloud's
+  precise code and remediation never reach the client or the UI — two different `401`s (`enrollment_missing`
+  vs `enrollment_invalid`) both collapse into the same generic `cloud_unauthorized`. Fix: read
+  `{errorCode, message, remediation}` from the body (falling back to the status-derived code only when the
+  body cannot be parsed), carry `remediation` on the exception, and have `cloud.js` show it instead of the
+  raw code.
 - ~~**Registration-on-demand runs inside user-facing GET handlers**~~ `DONE` — six read endpoints each
   carried the same twenty-five lines (no secret → register → save → record the transport status), and
   registration goes through the client's 45 s HTTP timeout, so an unreachable Cloud stalled a page load
@@ -716,8 +742,14 @@ anywhere else) can point at without any wiring on this page's side.
   `AiAccess:CodexBridge*` is canonical, `CodexTest:*` still works so a running deployment keeps running,
   and the host logs once which deprecated key is carrying the configuration (**key names only** — the
   bridge key is a secret). Default stays off, and a non-http base URL is refused rather than retried.
-- **The Cloud services have no healthchecks** — including the API, which is the stack's only
-  Caddy-routed upstream. Needs `curl` in the image first.
+- ~~**The Cloud services have no healthchecks**~~ `DONE` (fullworth-cloud) — the API and Web images now
+  install `curl` and declare a `HEALTHCHECK` combining `/health` (liveness, no database) and `/ready`
+  (readiness, database-checked; Web needed its own because it authenticates operators against its own
+  `CloudAdminUser` table). The worker has no HTTP surface, so `WorkerHeartbeatService` touches two files
+  instead (`alive` every tick, `ready` only after a successful database ping) that the image's
+  `HEALTHCHECK` reads via `find`. The deploy repo's `docker-compose.yml` wires the same checks in, and
+  `fullworth-cloud-web` now depends on `fullworth-cloud-api` with `condition: service_healthy` instead of
+  `service_started`.
 - **Test coverage gaps** the owner named explicitly and that genuinely have nothing: import of an IDR or
   any non-EUR account end to end, PayPal, an account without an asset link, several accounts in several
   currencies, historical values under a missing rate, a non-EUR base currency through the real
@@ -739,8 +771,10 @@ anywhere else) can point at without any wiring on this page's side.
 
 - Negative or zero account balances are counted in the Wealth hero figure but excluded from the
   composition donut, so one page shows two different asset totals (`features/networth.js:698`).
-- The Cloud admin Instances view drops `registeredAt`, which the API already returns, and nothing
-  records whether an instance is externally hosted.
+- ~~The Cloud admin Instances view drops `registeredAt`~~ `DONE` (fullworth-cloud) — the admin UI now
+  shows `registeredAt` and a derived `externallyHosted` flag, honestly sourced from the newly tracked
+  `EnrollmentMode` (only `PublicRegistration` is reachable from outside the deployment's own Docker
+  volumes); an instance that registered before this was tracked shows unknown rather than a guessed value.
 - `latest` in the landing repo moves for pre-releases, against the platform's own tag policy.
 - The demo repo's own `compose.yml` still pins the dead split images `fullworth-backend`/`fullworth-web`
   at `1.2.0-rc.9`; its tests assert on that file, so changing it needs the tests changed with it.
