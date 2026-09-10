@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Modules.Transactions;
@@ -32,8 +33,14 @@ public static class ImportParityEndpoints
 
     private static async Task<IResult> Upload(Guid fullWorthSpaceId,HttpRequest request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx"))return Results.BadRequest(new{error="Supported formats are CSV and XLSX."});
-        await using var ms=new MemoryStream(checked((int)file.Length));await file.CopyToAsync(ms,ct);var bytes=ms.ToArray();var sha=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();List<Dictionary<string,string>> rows;try{rows=ext==".csv"?ParseCsv(bytes):ParseXlsx(bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
+        var uid=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx")&&!BankStatementFile.CouldBeStatement(ext))return Results.BadRequest(new{error="Supported formats are CSV, XLSX, MT940 and CAMT XML."});
+        await using var ms=new MemoryStream(checked((int)file.Length));await file.CopyToAsync(ms,ct);var bytes=ms.ToArray();var sha=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        // A statement file (MT940 / CAMT) is not a table of rows, and it carries what a CSV export
+        // almost never does: the closing balance with the date it is valid for. It goes through the same
+        // job, review and commit as every other import - only the reading differs.
+        if(BankStatementFile.CouldBeStatement(ext))
+            return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,db,audit,ct);
+        List<Dictionary<string,string>> rows;try{rows=ext==".csv"?ParseCsv(bytes):ParseXlsx(bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
         var mapping=DetectMapping(rows[0].Keys);if(mapping.Date is null||mapping.Amount is null)return Results.BadRequest(new{error="Could not detect date and amount columns. Rename columns or use common names such as Date/Datum and Amount/Betrag."});var jobId=Guid.NewGuid();var now=DateTimeOffset.UtcNow;var candidates=new List<Candidate>();var errors=0;
         // A file without a currency column states no currency, so the space's own base currency is the
         // honest reading - not a hardcoded EUR, which mislabelled every row for a space that is not in
@@ -47,6 +54,93 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
 """,("@id",c.Id),("@job",jobId),("@account",c.SourceAccount),("@date",c.Date),("@amount",c.Amount),("@currency",c.Currency),("@party",c.Counterparty),("@description",c.Description),("@category",c.Category),("@external",c.ExternalKey),("@fingerprint",c.Fingerprint),("@status",c.Status),("@error",c.Error));await cmd.ExecuteNonQueryAsync(ct);}audit.Record(fullWorthSpaceId,uid,"import.uploaded","ImportJob",jobId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.Ok(new{jobId,fileName=file.FileName,adapter=ext==".csv"?"generic_csv":"generic_xlsx",sourceRows=candidates.Count,ready=candidates.Count-errors,errors,mapping});
     }
 
+    /// <summary>
+    /// Reads an MT940 or CAMT statement into the same candidate table the CSV import uses, and keeps the
+    /// closing balance on the job so the commit can anchor the account with it.
+    /// </summary>
+    private static async Task<IResult> UploadStatementAsync(
+        Guid fullWorthSpaceId,
+        Guid uid,
+        string fileName,
+        byte[] bytes,
+        string sha,
+        FullWorthDbContext db,
+        AuditService audit,
+        CancellationToken ct)
+    {
+        BankStatement statement;
+        try { statement = BankStatementFile.Read(bytes); }
+        catch (Exception exception) when (exception is InvalidDataException or FormatException)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+
+        var jobId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var candidates = statement.Entries
+            .Select(entry => new Candidate(
+                Guid.NewGuid(),
+                statement.AccountIdentifier,
+                entry.BookingDate,
+                entry.Amount,
+                entry.Currency,
+                entry.Counterparty,
+                entry.Description,
+                null,
+                entry.ExternalKey,
+                Fingerprint(entry.BookingDate, entry.Amount, entry.Currency, entry.Counterparty, entry.Description, entry.ExternalKey),
+                "ready",
+                null))
+            .ToList();
+
+        // A statement with a balance but no bookings is a legitimate file: it anchors the account.
+        var status = candidates.Count == 0 && statement.ClosingBalance is null ? "failed" : "ready";
+        var connection = await ParitySql.OpenAsync(db, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await using (var job = ParitySql.Command(
+            connection,
+            "INSERT INTO \"ImportJobs\" (\"Id\",\"FullWorthSpaceId\",\"UserId\",\"FileName\",\"FileSha256\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"UpdatedAt\",\"StatementBalance\",\"StatementBalanceCurrency\",\"StatementBalanceDate\",\"StatementAccount\") VALUES (@id,@space,@uid,@name,@sha,@adapter,@status,@source,@ready,0,0,0,@now,@now,@balance,@balanceCurrency,@balanceDate,@account)",
+            ("@id", jobId), ("@space", fullWorthSpaceId), ("@uid", uid), ("@name", Path.GetFileName(fileName)),
+            ("@sha", sha), ("@adapter", statement.AdapterKey), ("@status", status),
+            ("@source", candidates.Count), ("@ready", candidates.Count), ("@now", now),
+            ("@balance", statement.ClosingBalance?.Amount), ("@balanceCurrency", statement.ClosingBalance?.Currency),
+            ("@balanceDate", statement.ClosingBalance?.AsOf), ("@account", statement.AccountIdentifier)))
+            await job.ExecuteNonQueryAsync(ct);
+
+        foreach (var candidate in candidates)
+        {
+            await using var cmd = ParitySql.Command(
+                connection,
+                "INSERT INTO \"ImportCandidates\" (\"Id\",\"ImportJobId\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"ExternalKey\",\"RowFingerprint\",\"DuplicateStatus\",\"ValidationStatus\") VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@external,@fingerprint,'new','ready')",
+                ("@id", candidate.Id), ("@job", jobId), ("@account", candidate.SourceAccount),
+                ("@date", candidate.Date), ("@amount", candidate.Amount), ("@currency", candidate.Currency),
+                ("@party", candidate.Counterparty), ("@description", candidate.Description),
+                ("@external", candidate.ExternalKey), ("@fingerprint", candidate.Fingerprint));
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        audit.Record(fullWorthSpaceId, uid, "import.uploaded", "ImportJob", jobId);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return Results.Ok(new
+        {
+            jobId,
+            fileName,
+            adapter = statement.AdapterKey,
+            sourceRows = candidates.Count,
+            ready = candidates.Count,
+            errors = 0,
+            statementAccount = statement.AccountIdentifier,
+            statementBalance = statement.ClosingBalance is null
+                ? null
+                : new
+                {
+                    amount = statement.ClosingBalance.Amount,
+                    currency = statement.ClosingBalance.Currency,
+                    asOf = statement.ClosingBalance.AsOf
+                }
+        });
+    }
     private static async Task<IResult> ListJobs(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,$"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid ORDER BY \"CreatedAt\" DESC",("@space",fullWorthSpaceId),("@uid",uid));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(JobRow(r));return Results.Ok(rows);}
     private static async Task<IResult> GetJob(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,$"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid",("@id",id),("@space",fullWorthSpaceId),("@uid",uid));await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?Results.Ok(JobRow(r)):Results.NotFound();}
     private static async Task<IResult> GetCandidates(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"DuplicateStatus\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",("@job",id));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(new{id=ParitySql.Guid(r,"Id"),sourceAccount=ParitySql.NullableString(r,"SourceAccount"),bookingDate=ParitySql.NullableDate(r,"BookingDate"),amount=ParitySql.Decimal(r,"Amount"),currency=ParitySql.String(r,"Currency"),counterparty=ParitySql.NullableString(r,"Counterparty"),description=ParitySql.NullableString(r,"Description"),categoryText=ParitySql.NullableString(r,"CategoryText"),externalKey=ParitySql.NullableString(r,"ExternalKey"),duplicateStatus=ParitySql.String(r,"DuplicateStatus"),validationStatus=ParitySql.String(r,"ValidationStatus"),validationError=ParitySql.NullableString(r,"ValidationError")});return Results.Ok(rows);}
@@ -56,9 +150,83 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
         var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var writable=await ParitySql.WritableAccountIdsAsync(db,uid,fullWorthSpaceId,ct);if(!writable.Contains(request.AccountId))return Results.StatusCode(403);var account=await db.Accounts.SingleAsync(x=>x.Id==request.AccountId,ct);var selected=request.CandidateIds?.ToHashSet();var candidates=await ReadCandidates(db,id,ct);if(selected is not null)candidates=candidates.Where(x=>selected.Contains(x.Id)).ToList();candidates=candidates.Where(x=>x.Status=="ready"&&x.Date.HasValue).ToList();var imported=0;var duplicates=0;var created=new List<FinanceTransaction>();await using var transaction=await db.Database.BeginTransactionAsync(ct);
         foreach(var c in candidates){var normalized=MerchantNormalization.Normalize(c.Counterparty);var exists=await db.Transactions.AsNoTracking().AnyAsync(t=>t.AccountId==account.Id&&(t.BookingDate??t.ValueDate)==c.Date&&t.Amount==c.Amount&&t.Currency==c.Currency&&t.NormalizedCounterparty==normalized,ct);if(exists){duplicates++;await MarkCandidate(db,c.Id,"duplicate",ct);continue;}var external=!string.IsNullOrWhiteSpace(c.ExternalKey)?$"import:{id:N}:{c.ExternalKey}":$"import:{id:N}:{c.Fingerprint}";if(await db.Transactions.AnyAsync(t=>t.AccountId==account.Id&&t.ExternalKey==external,ct)){duplicates++;await MarkCandidate(db,c.Id,"duplicate",ct);continue;}var entity=new FinanceTransaction{AccountId=account.Id,ExternalKey=external,Status="BOOK",BookingDate=c.Date,ValueDate=c.Date,Amount=c.Amount,Currency=c.Currency,Counterparty=c.Counterparty,NormalizedCounterparty=normalized,Description=c.Description,CategorizationSource="none",RawJson=cipher.Protect("{\"source\":\"generic-import\"}")??"{}",FirstSeenAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow};db.Transactions.Add(entity);created.Add(entity);imported++;await MarkCandidate(db,c.Id,"imported",ct);}
         await db.SaveChangesAsync(ct);
-        await ImportTransactionProvenance.LinkAsync(db,id,created.Select(entity=>entity.Id).ToArray(),ct);var conn=await ParitySql.OpenAsync(db,ct);await using(var cmd=ParitySql.Command(conn,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",id)))await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"import.completed","ImportJob",id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{imported,duplicates,total=candidates.Count});
+        // A statement states the account's closing balance; a CSV almost never does. Applying it here
+        // is what turns an imported history into an account with a value, without a bank connection
+        // and without a link to another account.
+        var fileName=await JobFileNameAsync(db,id,ct);
+        var (balanceApplied,balanceSkipped)=await ApplyStatementBalanceAsync(db,id,account,fileName,ct);
+        await ImportTransactionProvenance.LinkAsync(db,id,created.Select(entity=>entity.Id).ToArray(),ct);var conn=await ParitySql.OpenAsync(db,ct);await using(var cmd=ParitySql.Command(conn,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",id)))await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"import.completed","ImportJob",id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{imported,duplicates,total=candidates.Count,balanceApplied,balanceSkipped});
     }
 
+    /// <summary>
+    /// Applies the closing balance an MT940/CAMT statement stated, if it is still the most recent word
+    /// on this account. Returns the reason it was not applied, or null when it was.
+    ///
+    /// Nothing is overwritten and nothing is deleted: a balance is a snapshot, so declining to add one
+    /// simply leaves the existing anchor in place.
+    /// </summary>
+    private static async Task<(bool Applied, string? Reason)> ApplyStatementBalanceAsync(
+        FullWorthDbContext db,
+        Guid jobId,
+        FinanceAccount account,
+        string fileName,
+        CancellationToken ct)
+    {
+        var connection = await ParitySql.OpenAsync(db, ct);
+        decimal amount;
+        string currency;
+        DateOnly asOf;
+        await using (var read = ParitySql.Command(
+            connection,
+            "SELECT \"StatementBalance\",\"StatementBalanceCurrency\",\"StatementBalanceDate\" FROM \"ImportJobs\" WHERE \"Id\"=@id",
+            ("@id", jobId)))
+        {
+            await using var reader = await read.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return (false, null);
+            if (reader.IsDBNull(0) || reader.IsDBNull(1) || reader.IsDBNull(2)) return (false, null);
+            amount = reader.GetDecimal(0);
+            currency = reader.GetString(1);
+            asOf = DateOnly.FromDateTime(reader.GetDateTime(2));
+        }
+
+        var existing = await db.BalanceSnapshots.AsNoTracking()
+            .Where(balance => balance.AccountId == account.Id)
+            .Select(balance => new { balance.Source, balance.Currency, balance.ReferenceDate, balance.CapturedAt })
+            .ToListAsync(ct);
+        var outcome = StatementBalanceAnchor.Decide(
+            new StatementBalance(amount, currency, asOf),
+            account.Currency,
+            existing.Select(balance => new StatementBalanceAnchor.ExistingBalance(
+                balance.Source,
+                balance.Currency,
+                // A row written before as-of dates existed has only its capture time to go on.
+                balance.ReferenceDate ?? DateOnly.FromDateTime(balance.CapturedAt.UtcDateTime))));
+        if (outcome != StatementBalanceOutcome.Apply) return (false, StatementBalanceAnchor.SkipReason(outcome));
+
+        db.BalanceSnapshots.Add(new BalanceSnapshot
+        {
+            AccountId = account.Id,
+            Amount = amount,
+            Currency = currency,
+            BalanceType = "closingBooked",
+            Source = BalanceSources.Import,
+            Note = Path.GetFileName(fileName),
+            ReferenceDate = asOf,
+            CapturedAt = DateTimeOffset.UtcNow
+        });
+
+        // An account kept current by statement import is a real account with a real value, exactly like
+        // one anchored by hand. Leaving it archived and out of the totals is the whole complaint.
+        if (account.BankConnectionId is null && !account.IncludeInNetWorth)
+        {
+            var tracked = await db.Accounts.SingleAsync(x => x.Id == account.Id, ct);
+            tracked.IsActive = true;
+            tracked.IncludeInNetWorth = true;
+            tracked.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        return (true, null);
+    }
     private static async Task<IResult> Cancel(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"UPDATE \"ImportJobs\" SET \"Status\"='cancelled',\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"Status\" NOT IN ('completed','cancelled')",("@now",DateTimeOffset.UtcNow),("@id",id));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"import.cancelled","ImportJob",id);await db.SaveChangesAsync(ct);return Results.NoContent();}
 
     // Depot imports could be undone since provenance links exist; a wrong transaction file had to be
@@ -133,5 +301,12 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
         rollbackAvailable=ParitySql.String(r,"Status")=="completed"&&ParitySql.NullableTimestamp(r,"RolledBackAt") is null&&ParitySql.Int(r,"LinkCount")>0};
     private static async Task<bool> OwnJob(FullWorthDbContext db,Guid id,Guid space,Guid uid,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT 1 FROM \"ImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid",("@id",id),("@space",space),("@uid",uid));return await cmd.ExecuteScalarAsync(ct) is not null;}
     private static async Task<List<Candidate>> ReadCandidates(FullWorthDbContext db,Guid job,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"RowFingerprint\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job",("@job",job));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<Candidate>();while(await r.ReadAsync(ct))rows.Add(new(ParitySql.Guid(r,"Id"),ParitySql.NullableString(r,"SourceAccount"),ParitySql.NullableDate(r,"BookingDate"),ParitySql.Decimal(r,"Amount"),ParitySql.String(r,"Currency"),ParitySql.NullableString(r,"Counterparty"),ParitySql.NullableString(r,"Description"),ParitySql.NullableString(r,"CategoryText"),ParitySql.NullableString(r,"ExternalKey"),ParitySql.String(r,"RowFingerprint"),ParitySql.String(r,"ValidationStatus"),ParitySql.NullableString(r,"ValidationError")));return rows;}
+    private static async Task<string> JobFileNameAsync(FullWorthDbContext db,Guid id,CancellationToken ct)
+    {
+        var connection=await ParitySql.OpenAsync(db,ct);
+        await using var cmd=ParitySql.Command(connection,"SELECT \"FileName\" FROM \"ImportJobs\" WHERE \"Id\"=@id",("@id",id));
+        return await cmd.ExecuteScalarAsync(ct) as string ?? string.Empty;
+    }
+
     private static async Task MarkCandidate(FullWorthDbContext db,Guid id,string status,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@status WHERE \"Id\"=@id",("@status",status),("@id",id));await cmd.ExecuteNonQueryAsync(ct);}
 }

@@ -145,7 +145,7 @@ public sealed class WealthOverviewIntegrationTests
         Assert.False(manualAssets.GetProperty("isComplete").GetBoolean());
         Assert.Equal(
             ["USD"],
-            manualAssets.GetProperty("missingCurrencies").EnumerateArray().Select(item => item.GetString()).ToArray());
+            manualAssets.GetProperty("missingCurrencies").EnumerateArray().Select(item => item.GetString()!).ToArray());
 
         // The USD asset is the only unconvertible figure, so no other component may claim a missing rate.
         Assert.True(root.GetProperty("accounts").GetProperty("isComplete").GetBoolean());
