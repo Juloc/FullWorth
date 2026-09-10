@@ -762,8 +762,33 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   fails the step and says why instead of polling a 404 for as long as the page stays open. It also
   removes the 404-versus-200 distinction between "never existed" and "expired", so another user's
   in-flight registration is indistinguishable from one that was never there.
-- **Tenant isolation is 1 293 hand-threaded parameters with no enforcing layer** — every query must
-  remember to filter by space, and nothing structural catches a miss.
+- **Tenant isolation has no enforcing layer** — `NEEDS DECISION`. Measured on 2026-09-10: **51** entity
+  types carry a `FullWorthSpaceId`, **690** query sites filter on it by hand, **1 327** method
+  signatures thread the space through, and there are **0** EF global query filters. Every query has to
+  remember, and nothing structural catches a miss. Test coverage for the failure mode is thin and
+  uneven: 26 files assert cross-space isolation at all, concentrated in Purchases, Accounts,
+  Transactions and Security, while Analytics, Budgets, Categories, Compensation, Merchants,
+  Notifications, Pension and Tax have none.
+
+  Not attempted in this pass, deliberately: it is a change to every read path in the product, and
+  making it while eight other workstreams were editing the same files would have been reckless. It also
+  needs a decision that is not the implementer’s to make, because the options differ in what they cost
+  and in what they break:
+
+  1. **EF global query filters** driven by an ambient space accessor. The real fix, and the only one
+     that makes a forgotten filter impossible. But background workers, the ingest path and the
+     cross-space admin surfaces legitimately read across spaces, so every one of those needs an
+     explicit `IgnoreQueryFilters()` — and each of those becomes a place where the guarantee is off
+     again, only now silently. Largest change, strongest guarantee.
+  2. **A dev/test EF interceptor** that fails a query touching a space-scoped table with no space
+     predicate. Catches the bug class without changing production behaviour; costs nothing at runtime
+     because it is not enabled there. Weaker: it only catches what a test actually exercises, which is
+     the same coverage problem measured above.
+  3. **Close the coverage gap only** — a cross-space isolation test per module, no architectural
+     change. Cheapest, proves the current state is correct, prevents nothing in future code.
+
+  Options 2 and 3 compose, and together they are a credible answer without touching 690 query sites.
+  Option 1 is the only one that is structural. The choice is the owner’s.
 - ~~**Cloud enrollment leaves no trace.**~~ `DONE` (fullworth-cloud) — a refused enrollment (missing or
   invalid token, or a fail-closed deployment) is now audited as `instance_enrollment_refused` and logged
   as a warning; an accepted one records which of the three enrollment gates let it in
