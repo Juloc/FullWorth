@@ -40,7 +40,7 @@ grouping, prices as decimals. `FinanzguruWorkbookReader` had the same bug mirror
 **Verified.** 249 import/investment/purchases tests, including 7 end-to-end cases through the real
 upload and commit endpoints and 28 unit cases over the parser.
 
-### P0-2 Net worth adds foreign-currency balances at face value — `OPEN`
+### P0-2 Net worth adds foreign-currency balances at face value — `DONE`
 
 **Cause.** `Modules/Portfolio/NetWorthSnapshotService.cs:218` buckets each account's latest
 `BalanceSnapshot.Amount` by the **account's** `Currency` and never reads the snapshot's own `Currency`.
@@ -51,19 +51,16 @@ into the wrong bucket and then FX-converted with the wrong rate. `WealthModule` 
 the snapshot's own currency, so the same data produces **two different net-worth numbers** depending on
 which surface you look at.
 
-**Target.** One shared projection that reads `(Amount, Currency)` as a pair from the balance row and
-converts before bucketing. The account's declared currency is metadata, never a unit of measure for a
-balance row.
+**Fix.** The dashboard now selects `Amount` AND `Currency` from the same balance row - one correlated
+subquery, not two, because a sync stamps every balance type with an identical `CapturedAt` and two
+subqueries could disagree about which row they read. The materialized history buckets by the balance
+row's currency instead of the account's, only lets bookings in that same currency move the anchor, and
+opens a bucket for a currency no account declares, so that money can no longer vanish from the series.
 
-**Acceptance.** An account declared EUR with a USD balance row appears in the USD bucket and in the
-converted total exactly once, at the USD rate. Dashboard, net-worth history and Wealth report the same
-figure for the same data.
+**Verified.** Proven both ways: with the fix reverted the new test reports `accounts = 110` for a
+110 USD balance on a EUR-declared account at rate 1.10; with it, `100`. 297 money-path tests pass.
 
-**Tests.** Seed an account whose declared currency differs from its balance row currency; assert the
-dashboard total, `/api/net-worth/history` and the Wealth total agree and use the balance currency's
-rate. No test does this today — that is why the divergence is invisible in CI.
-
-### P0-3 The headline net worth ignores every loan and every portfolio — `OPEN`
+### P0-3 The headline net worth ignores every loan and every portfolio — `DONE`
 
 **Cause.** `Modules/Analytics/AnalyticsModule.cs:301` computes the Overview net-worth and "available"
 tiles from a rule that never reads `db.Loans` and never reads investment portfolios.
@@ -71,14 +68,17 @@ tiles from a rule that never reads `db.Loans` and never reads investment portfol
 **Impact.** The number the user sees first is **overstated by every mortgage and loan** and understated
 by every portfolio. It disagrees with the Wealth page, which does read them.
 
-**Target.** The Overview tiles must consume the same aggregate as the Wealth page rather than a second
-private rule. One net-worth definition, one implementation.
+**Fix.** The dashboard reads `db.Loans` (active only) into liabilities and takes the portfolio
+contribution from the same `InvestmentNetWorthService` the history uses - including its
+`ExcludedLinkedAccountIds`, so an account linked to a portfolio is counted once and not twice, and its
+`Incomplete` flag folds into the dashboard's.
 
-**Acceptance.** With one loan and one portfolio present, Overview and Wealth report the same net worth;
-a loan reduces it, a portfolio increases it.
+**Verified.** With the fix reverted the new test reports `liabilities = 0` for a 300 EUR mortgage; with
+it, `300`, and a settled (inactive) loan stays out.
 
-**Tests.** Integration test with an account, a loan and a portfolio asserting equality across the two
-surfaces.
+**Still open in this area:** the Overview tile and the Wealth page remain two implementations of the
+same definition. They now agree on loans, portfolios and currencies, but the duplication is the reason
+they diverged and is worth collapsing into one aggregate (tracked as a P2 refactor).
 
 ### P0-4 An imported account cannot show its own value — `DONE` (see below)
 

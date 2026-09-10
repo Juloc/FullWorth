@@ -199,6 +199,9 @@ public sealed class NetWorthSnapshotService(
 
         var currencies = existing.Select(snapshot => snapshot.Currency)
             .Concat(accounts.Select(account => account.Currency))
+            // A balance can be denominated in a currency no account declares; without its own bucket
+            // that money would silently disappear from the history.
+            .Concat(latestBalances.Values.Select(balance => balance.Currency))
             .Concat(currentAssets.Keys)
             .Concat(currentLiabilities.Keys)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -213,17 +216,24 @@ public sealed class NetWorthSnapshotService(
         foreach (var currency in currencies)
         {
             var normalizedCurrency = currency.ToUpperInvariant();
-            var currentAccounts = accounts
-                .Where(account => string.Equals(account.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
-                .Sum(account => latestBalances.TryGetValue(account.Id, out var balance) ? balance.Amount : 0m);
+            // The bucket is the currency the BALANCE is denominated in, not the one the account
+            // declares. Bucketing by account.Currency while summing balance.Amount put a foreign
+            // balance into the wrong series and then converted it with the wrong rate - and WealthModule
+            // reads the balance's own currency, so the two surfaces disagreed on the same data.
+            var anchoredHere = accounts
+                .Where(account => latestBalances.TryGetValue(account.Id, out var balance) &&
+                                  string.Equals(balance.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
+                .Select(account => account.Id)
+                .ToHashSet();
+            var currentAccounts = anchoredHere.Sum(accountId => latestBalances[accountId].Amount);
 
             var dailyDelta = transactions
                 .Where(transaction =>
-                    accountCurrency.TryGetValue(transaction.AccountId, out var nativeCurrency) &&
-                    string.Equals(nativeCurrency, normalizedCurrency, StringComparison.OrdinalIgnoreCase) &&
-                    // Back-casting an account balance is only valid in the account's native currency.
-                    // Foreign booking amounts are intentionally not mixed into the native balance.
-                    string.Equals(transaction.Currency, nativeCurrency, StringComparison.OrdinalIgnoreCase))
+                    // Only bookings on an account anchored in THIS currency, and only bookings in that
+                    // same currency, may move the anchor: subtracting a EUR booking from a USD balance
+                    // would be arithmetic across units.
+                    anchoredHere.Contains(transaction.AccountId) &&
+                    string.Equals(transaction.Currency, normalizedCurrency, StringComparison.OrdinalIgnoreCase))
                 .GroupBy(transaction => transaction.Date)
                 .ToDictionary(group => group.Key, group => group.Sum(transaction => transaction.Amount));
 

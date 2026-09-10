@@ -31,7 +31,10 @@ public sealed record ExpenseAllocation(Guid TransactionId, Guid? CategoryId, dec
 public sealed record ChartPoint(string? Key, string Label, decimal Value);
 public sealed record ChartResult(string Currency, string Measure, string Dimension, bool Incomplete, IReadOnlyList<ChartPoint> Series);
 
-public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Modules.Fx.CurrencyConverter fx)
+public sealed class AnalyticsService(
+    FullWorthDbContext db,
+    FullWorth.Backend.Modules.Fx.CurrencyConverter fx,
+    FullWorth.Backend.Modules.Parity.InvestmentNetWorthService investments)
 {
     public Task<object?> OverviewForUserAsync(
         Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string currency, CancellationToken ct) =>
@@ -218,14 +221,27 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
             return total;
         }
 
+        // A portfolio linked to a bank account replaces that account's balance in every aggregate, so
+        // the account has to be left out here too or the same money is counted twice.
+        var investment = await investments.CalculateAsync(fullWorthSpaceId, userId, today, ct);
+        if (investment.Incomplete) incomplete = true;
+
         var accountBalances = await AccessibleAccounts(userId, fullWorthSpaceId)
             .Where(account => account.IsActive && account.IncludeInNetWorth)
             .Select(account => new
             {
-                account.Currency,
+                AccountId = account.Id,
+                AccountCurrency = account.Currency,
                 // Inlined CurrentFirst ordering — correlated subquery, where EF cannot expand the
                 // extension (see BalanceSnapshotQueries.CurrentFirst). Newest capture, then rank-prefix + type.
-                Amount = db.BalanceSnapshots
+                //
+                // Amount AND Currency come from the SAME row on purpose. This used to select only the
+                // amount and pair it with the ACCOUNT's currency, so a balance reported in another
+                // currency - a PayPal wallet, a provider that reports in the settlement currency - was
+                // converted with the wrong rate. Two separate subqueries would not do either: a sync
+                // stamps every balance type with an identical CapturedAt, so they could disagree about
+                // which row they read.
+                Balance = db.BalanceSnapshots
                     .Where(balance => balance.AccountId == account.Id)
                     .OrderByDescending(balance => balance.CapturedAt)
                     .ThenBy(balance => (balance.BalanceType == "interimAvailable" ? "0"
@@ -233,23 +249,37 @@ public sealed class AnalyticsService(FullWorthDbContext db, FullWorth.Backend.Mo
                                       : balance.BalanceType == "closingBooked" ? "2"
                                       : balance.BalanceType == "interimBooked" ? "3"
                                       : balance.BalanceType == "expected" ? "4" : "5") + balance.BalanceType)
-                    .Select(balance => (decimal?)balance.Amount)
+                    .Select(balance => new { balance.Amount, balance.Currency })
                     .FirstOrDefault()
             })
             .ToListAsync(ct);
-        var accounts = SumInBase(accountBalances.Where(x => x.Amount.HasValue).Select(x => (x.Amount!.Value, x.Currency)));
+        var accounts = SumInBase(accountBalances
+            .Where(row => row.Balance is not null && !investment.ExcludedLinkedAccountIds.Contains(row.AccountId))
+            .Select(row => (row.Balance!.Amount, row.Balance.Currency)));
 
         var assetRows = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
             .Select(asset => new { asset.CurrentValue, asset.Currency })
             .ToListAsync(ct);
-        var assets = SumInBase(assetRows.Select(a => (a.CurrentValue, a.Currency)));
+        var assets = SumInBase(assetRows.Select(a => (a.CurrentValue, a.Currency)))
+            // InvestmentNetWorthService has already converted every portfolio into the space base
+            // currency. Without this the home screen understated net worth by every depot while the
+            // Wealth page, which does read them, showed a different number for the same data.
+            + (investment.Amount == 0m ? 0m : SumInBase([(investment.Amount, investment.BaseCurrency)]));
 
         var liabilityRows = await db.Liabilities.AsNoTracking()
             .Where(liability => liability.FullWorthSpaceId == fullWorthSpaceId && liability.IncludeInNetWorth)
             .Select(liability => new { liability.CurrentBalance, liability.Currency })
             .ToListAsync(ct);
-        var liabilities = SumInBase(liabilityRows.Select(l => (l.CurrentBalance, l.Currency)));
+        // Loans are liabilities too. This read only db.Liabilities, so the headline figure was
+        // overstated by every mortgage and consumer loan - while NetWorthSnapshotService, which feeds
+        // the net-worth history, has always added them.
+        var loanRows = await db.Loans.AsNoTracking()
+            .Where(loan => loan.FullWorthSpaceId == fullWorthSpaceId && loan.IsActive)
+            .Select(loan => new { loan.CurrentBalance, loan.Currency })
+            .ToListAsync(ct);
+        var liabilities = SumInBase(liabilityRows.Select(l => (l.CurrentBalance, l.Currency)))
+            + SumInBase(loanRows.Select(l => (l.CurrentBalance, l.Currency)));
 
         // Current-month income vs expenses for the §8.4 widget, using the same rules as the analytics
         // overview: transfers and 'exclude from statistics' are dropped, a linked refund is not income
