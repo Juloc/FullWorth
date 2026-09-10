@@ -153,6 +153,88 @@ public sealed class CloudIntelligenceStateTests
         Assert.True(await service.HasCurrentActiveConsentAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Resolved_cloud_endpoint_falls_back_to_official_url_without_a_client()
+    {
+        // The link-health surface must degrade cleanly when nothing wires a real cloud client in -
+        // this mirrors what a self-hoster who set no FullWorthCloud:BaseUrl actually resolves to.
+        await using var fixture = await CreateAsync();
+        var service = new CloudIntelligenceStateService(fixture.Db);
+
+        var state = await service.GetAsync(CancellationToken.None);
+
+        Assert.Equal(FullWorthCloudClient.OfficialBaseUrl, state.CloudEndpoint);
+    }
+
+    [Fact]
+    public async Task Resolved_cloud_endpoint_reflects_the_configured_client()
+    {
+        // A self-hoster who points FullWorthCloud:BaseUrl at their own Cloud has no other way to
+        // confirm it took effect - this is the field the diagnostics page reads.
+        await using var fixture = await CreateAsync();
+        var service = new CloudIntelligenceStateService(fixture.Db, new FakeCloudClient("https://cloud.example.org/"));
+
+        var state = await service.GetAsync(CancellationToken.None);
+
+        Assert.Equal("https://cloud.example.org/", state.CloudEndpoint);
+    }
+
+    [Fact]
+    public async Task Outbox_health_is_empty_when_nothing_is_queued()
+    {
+        await using var fixture = await CreateAsync();
+        var service = new CloudIntelligenceStateService(fixture.Db);
+
+        var state = await service.GetAsync(CancellationToken.None);
+
+        Assert.Equal(0, state.Outbox.WaitingCount);
+        Assert.Equal(0, state.Outbox.DeadLetterCount);
+        Assert.Null(state.Outbox.OldestWaitingCreatedAt);
+    }
+
+    [Fact]
+    public async Task Outbox_health_counts_waiting_and_dead_letter_rows_and_reports_the_oldest_waiting_age()
+    {
+        // This is the number that tells an operator whether the link is working at all: consent and
+        // entitlement can look fine while every submission sits stuck because the Cloud is unreachable.
+        await using var fixture = await CreateAsync();
+        var service = new CloudIntelligenceStateService(fixture.Db);
+        var enabled = await service.EnableAsync(
+            Guid.NewGuid(),
+            new EnableCloudIntelligenceRequest(CloudIntelligencePolicy.CurrentVersion, "de", "test"),
+            CancellationToken.None);
+
+        var oldest = DateTimeOffset.UtcNow.AddHours(-3);
+        var newer = DateTimeOffset.UtcNow.AddMinutes(-5);
+        fixture.Db.CloudSubmissionOutbox.AddRange(
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.Queued, oldest),
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.Failed, newer),
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.Sending, newer),
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.Sent, newer),
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.DeadLetter, newer),
+            NewRow(enabled.InstanceId, CloudSubmissionStatuses.DeadLetter, newer));
+        await fixture.Db.SaveChangesAsync();
+
+        var state = await service.GetAsync(CancellationToken.None);
+
+        Assert.Equal(3, state.Outbox.WaitingCount);
+        Assert.Equal(2, state.Outbox.DeadLetterCount);
+        Assert.NotNull(state.Outbox.OldestWaitingCreatedAt);
+        // Sqlite round-trips DateTimeOffset with less precision than the in-memory value, so compare
+        // with a small tolerance rather than requiring bit-for-bit equality.
+        Assert.True((oldest - state.Outbox.OldestWaitingCreatedAt!.Value).Duration() < TimeSpan.FromSeconds(1));
+    }
+
+    private static CloudSubmissionOutbox NewRow(Guid instanceId, string status, DateTimeOffset createdAt) => new()
+    {
+        InstanceId = instanceId,
+        IdempotencyKey = "test:" + Guid.NewGuid().ToString("N"),
+        EventType = "merchant_mapping",
+        PayloadJson = "{}",
+        Status = status,
+        CreatedAt = createdAt
+    };
+
     private static async Task<Fixture> CreateAsync()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -172,5 +254,35 @@ public sealed class CloudIntelligenceStateTests
             await Db.DisposeAsync();
             await connection.DisposeAsync();
         }
+    }
+
+    private sealed class FakeCloudClient(string baseUri) : IFullWorthCloudClient
+    {
+        public Uri BaseUri { get; } = new(baseUri);
+
+        public Task<FullWorthCloudRegistrationResult> RegisterAsync(
+            Guid instanceId, string policyVersion, string clientVersion, string? currentCredential, CancellationToken ct) =>
+            Task.FromResult(new FullWorthCloudRegistrationResult(instanceId, "test-secret", null, "active"));
+
+        public Task<FullWorthCloudRegistrationResult> RotateCredentialAsync(
+            Guid instanceId, string currentCredential, CancellationToken ct) =>
+            Task.FromResult(new FullWorthCloudRegistrationResult(instanceId, "test-secret", null, "active"));
+
+        public Task<FullWorthCloudBatchResult> SubmitBatchAsync(
+            Guid instanceId, string instanceCredential, IReadOnlyList<FullWorthCloudSubmissionEvent> events, CancellationToken ct) =>
+            Task.FromResult(new FullWorthCloudBatchResult("batch-test", 0, 0, 0, []));
+
+        public Task<FullWorthCloudBenchmark?> GetBenchmarkAsync(
+            string instanceCredential, string metricKey, string? currency, string? country, string? regionBucket,
+            string? householdSizeBand, string? incomeBand, string? ageBand, string? observedMonth, CancellationToken ct) =>
+            Task.FromResult<FullWorthCloudBenchmark?>(null);
+
+        public Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
+            string instanceCredential, string? currentVersion, string? region, CancellationToken ct) =>
+            Task.FromResult<KnowledgePackManifest?>(null);
+
+        public Task<byte[]> DownloadKnowledgePackAsync(
+            string instanceCredential, string packId, string version, CancellationToken ct) =>
+            Task.FromResult(Array.Empty<byte>());
     }
 }

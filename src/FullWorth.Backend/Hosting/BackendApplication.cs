@@ -81,6 +81,7 @@ public static class BackendApplication
         });
         builder.Services.AddHttpClient<FullWorthCloudClient>();
         builder.Services.AddScoped<IFullWorthCloudClient>(services => services.GetRequiredService<FullWorthCloudClient>());
+        builder.Services.AddHostedService<CloudEndpointStartupLogger>();
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
         builder.Services.AddScoped<OpenAiCompatibleIntelligenceProvider>();
         builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();

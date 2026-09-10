@@ -2,6 +2,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
 
+/// <summary>
+/// How full the Cloud submission outbox is. This is the number that tells an operator whether the
+/// link is actually working: consent and entitlement can look fine while every submission sits queued
+/// because the Cloud is unreachable, so the depth and the oldest waiting item's age are surfaced
+/// alongside the transport status instead of only in a background-worker log nobody reads.
+/// </summary>
+public sealed record CloudOutboxHealth(
+    int WaitingCount,
+    int DeadLetterCount,
+    DateTimeOffset? OldestWaitingCreatedAt);
+
 public sealed record CloudIntelligenceStateView(
     Guid InstanceId,
     string Mode,
@@ -17,11 +28,18 @@ public sealed record CloudIntelligenceStateView(
     DateTimeOffset? LastSubmissionAt,
     DateTimeOffset? LastKnowledgePackCheckAt,
     string? LastErrorCode,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string CloudEndpoint,
+    CloudOutboxHealth Outbox);
 
 public sealed record EnableCloudIntelligenceRequest(string PolicyVersion, string? Locale, string? ClientVersion);
 
-public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
+/// <param name="cloudClient">
+/// Optional so the many unit tests that construct this service directly against an in-memory context
+/// do not need a full HTTP client. Production always resolves it from the container; a test that omits
+/// it just sees the official endpoint as the resolved one, which is the correct default anyway.
+/// </param>
+public sealed class CloudIntelligenceStateService(IntelligenceDbContext db, IFullWorthCloudClient? cloudClient = null)
 {
     public async Task<CloudIntelligenceStateView> GetAsync(CancellationToken ct)
     {
@@ -30,7 +48,7 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
             .Where(x => x.InstanceId == state.InstanceId)
             .OrderByDescending(x => x.AcceptedAt)
             .FirstOrDefaultAsync(ct);
-        return ToView(state, consent);
+        return ToView(state, consent, ResolveEndpoint(), await GetOutboxHealthAsync(state.InstanceId, ct));
     }
 
     public async Task<CloudIntelligenceStateView> EnableAsync(
@@ -83,7 +101,7 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
         state.LastErrorCode = null;
         state.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        return ToView(state, current);
+        return ToView(state, current, ResolveEndpoint(), await GetOutboxHealthAsync(state.InstanceId, ct));
     }
 
     public Task<CloudIntelligenceStateView> DisableAsync(CancellationToken ct) => DisableAsync(null, ct);
@@ -122,7 +140,7 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
                 .Where(x => x.InstanceId == state.InstanceId)
                 .OrderByDescending(x => x.AcceptedAt)
                 .FirstOrDefaultAsync(ct);
-        return ToView(state, latest);
+        return ToView(state, latest, ResolveEndpoint(), await GetOutboxHealthAsync(state.InstanceId, ct));
     }
 
     public async Task<bool> HasCurrentActiveConsentAsync(CancellationToken ct)
@@ -182,7 +200,11 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
         }
     }
 
-    private static CloudIntelligenceStateView ToView(CloudConnectionState state, CloudIntelligenceConsent? consent)
+    private static CloudIntelligenceStateView ToView(
+        CloudConnectionState state,
+        CloudIntelligenceConsent? consent,
+        string cloudEndpoint,
+        CloudOutboxHealth outbox)
     {
         var hasCurrentActiveConsent = consent is not null &&
                                       consent.PolicyVersion == CloudIntelligencePolicy.CurrentVersion &&
@@ -204,7 +226,38 @@ public sealed class CloudIntelligenceStateService(IntelligenceDbContext db)
             state.LastSubmissionAt,
             state.LastKnowledgePackCheckAt,
             state.LastErrorCode,
-            state.UpdatedAt);
+            state.UpdatedAt,
+            cloudEndpoint,
+            outbox);
+    }
+
+    /// <summary>
+    /// The Cloud this instance actually resolved at startup - see
+    /// <see cref="FullWorthCloudClient.ResolveBaseUri"/>. Surfaced so a self-hoster who pointed
+    /// FullWorthCloud:BaseUrl at their own Cloud can confirm it took effect instead of silently still
+    /// talking to the official one; this is configuration, not a secret, so it is safe to show.
+    /// </summary>
+    private string ResolveEndpoint() =>
+        (cloudClient?.BaseUri ?? new Uri(FullWorthCloudClient.OfficialBaseUrl)).ToString();
+
+    private async Task<CloudOutboxHealth> GetOutboxHealthAsync(Guid instanceId, CancellationToken ct)
+    {
+        var waitingStatuses = new[]
+        {
+            CloudSubmissionStatuses.Queued,
+            CloudSubmissionStatuses.Sending,
+            CloudSubmissionStatuses.Failed
+        };
+        var waitingCreatedAt = await db.CloudSubmissionOutbox.AsNoTracking()
+            .Where(x => x.InstanceId == instanceId && waitingStatuses.Contains(x.Status))
+            .Select(x => x.CreatedAt)
+            .ToListAsync(ct);
+        var deadLetterCount = await db.CloudSubmissionOutbox.AsNoTracking()
+            .CountAsync(x => x.InstanceId == instanceId && x.Status == CloudSubmissionStatuses.DeadLetter, ct);
+        return new CloudOutboxHealth(
+            waitingCreatedAt.Count,
+            deadLetterCount,
+            waitingCreatedAt.Count == 0 ? null : waitingCreatedAt.Min());
     }
 
     private static string NormalizeLocale(string? locale)

@@ -30,6 +30,23 @@ function formatDate(value) {
   return Number.isNaN(parsed.valueOf()) ? '—' : parsed.toLocaleString();
 }
 
+// Outbox depth answers "is the link working at all" better than any status flag: consent and
+// entitlement can look fine while every submission sits queued because the Cloud is unreachable. The
+// oldest waiting item's age is what tells an operator this has been stuck, not merely mid-retry.
+function formatAge(value) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return '—';
+  const ms = Date.now() - parsed.valueOf();
+  if (ms < 60000) return '< 1 Min.';
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 60) return `${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} Std.`;
+  const days = Math.floor(hours / 24);
+  return `${days} Tag${days === 1 ? '' : 'e'}`;
+}
+
 function selectedChoice() {
   if ($('cloud-choice-enabled')?.checked) return 'enabled';
   if ($('cloud-choice-local')?.checked) return 'disabled';
@@ -91,10 +108,15 @@ function renderCloudState(state) {
   $('cloud-consent').checked = false;
   updateConsentVisibility();
 
+  $('cloud-endpoint').textContent = state.cloudEndpoint || '—';
+
   $('cloud-policy').textContent = state.currentPolicyVersion || '—';
   $('cloud-entitlement').textContent = state.entitlementStatus || (enabled ? 'noch nicht geprüft' : '—');
   $('cloud-registration').textContent = formatDate(state.lastRegistrationAt);
   $('cloud-submission').textContent = formatDate(state.lastSubmissionAt);
+  $('cloud-outbox-waiting').textContent = String(state.outbox?.waitingCount ?? 0);
+  $('cloud-outbox-dead-letter').textContent = String(state.outbox?.deadLetterCount ?? 0);
+  $('cloud-outbox-oldest').textContent = formatAge(state.outbox?.oldestWaitingCreatedAt);
   $('cloud-ops').hidden = !state.setupDecisionAt;
 
   if (state.lastErrorCode && enabled) setResult(`Cloud-Status: ${cloudErrorText(state.lastErrorCode)}`, 'bad');

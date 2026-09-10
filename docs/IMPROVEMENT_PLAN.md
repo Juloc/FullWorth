@@ -769,9 +769,19 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   as a warning; an accepted one records which of the three enrollment gates let it in
   (`CloudInstance.EnrollmentMode`: `Token` / `PublicRegistration` / `DevelopmentBypass`) in both the audit
   row and the log line. Neither ever logs the presented token or an issued credential.
-- **The Cloud has no link-health surface.** `/intelligence/index.html` is the only page with transport
-  diagnostics and it is reachable only by typing the URL; the resolved Cloud endpoint appears in no
-  response, no UI field and no log; outbox depth and dead-letter count are exposed nowhere.
+- ~~**The Cloud has no link-health surface.**~~ `PARTIAL` — the resolved Cloud endpoint
+  (`FullWorthCloudClient.ResolveBaseUri`) now appears in `GET /api/intelligence/admin/cloud`
+  (`CloudIntelligenceStateView.CloudEndpoint`) and once in the log at startup
+  (`CloudEndpointStartupLogger`), so a self-hoster who pointed `FullWorthCloud:BaseUrl` at their own
+  Cloud can confirm it took effect without reading the config file back. The same response now carries
+  `Outbox` (`CloudOutboxHealth`: waiting count, dead-letter count, oldest waiting item's age) — the
+  number that tells an operator whether the link works at all, since consent and entitlement can look
+  fine while every submission sits stuck. `/intelligence/index.html` renders both. Still open:
+  `/intelligence/index.html` remains reachable only by typing the URL — the Settings page
+  (`src/FullWorth.Web/wwwroot/index.html`, `#cloud-intelligence-panel`) and its wizard
+  (`src/FullWorth.Web/wwwroot/features/access-setup.js`, `openCloudWizard`) already talk to the same
+  `/api/intelligence/admin/cloud` endpoint and are the natural home for a "Diagnose" link, but both
+  files are outside this module's ownership.
 - ~~**A failed enrollment reads as success.**~~ `DONE` — enabling Cloud Intelligence stores the decision
   and then registers, and registration is deliberately best-effort (a temporarily unreachable Cloud must
   not make setup fail). But the green "ist aktiviert" line was printed either way, so a refused or
