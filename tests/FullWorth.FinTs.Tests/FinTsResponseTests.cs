@@ -49,4 +49,26 @@ public sealed class FinTsResponseTests
         Assert.Equal(-12.34m, tx.Amount);
         Assert.Equal("SUPERMARKT", tx.Counterparty);
     }
+
+    [Fact]
+    public void ResponseParser_PreservesErrorDiagnostics()
+    {
+        var responseBytes = FinTsWire.Serialize([
+            new FinTsSegment([
+                FinTsGroup.Of(FinTsValue.T("HIRMS"), FinTsValue.T("2"), FinTsValue.T("2")),
+                FinTsGroup.Of(
+                    FinTsValue.T("9010"),
+                    FinTsValue.T("3:1"),
+                    FinTsValue.T("Auftrag abgelehnt"))
+            ])
+        ]);
+
+        var response = FinTsResponseParser.Parse(responseBytes);
+        var error = Assert.Throws<FinTsException>(response.ThrowOnError);
+
+        Assert.Equal("bank_error", error.Code);
+        Assert.Equal("9010", error.BankCode);
+        Assert.Equal("3:1", error.SegmentReference);
+        Assert.Equal("Auftrag abgelehnt", error.BankMessage);
+    }
 }
