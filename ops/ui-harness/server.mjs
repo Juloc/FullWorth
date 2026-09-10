@@ -31,6 +31,19 @@ const TYPES = {
 // Injected before app.js so the fetch stub is installed before any module runs.
 const INJECT = '<script src="/__fixtures.js"></script>\n  <script type="module" src="/app.js">';
 
+// The PWA registration is skipped under the harness. Not because of anything in sw.js: the embedded
+// browsers used to look at these pages do not allow service workers at all - registering ANY script,
+// including a trivial correctly-served one, fails with "An unknown error occurred when fetching the
+// script." while a plain fetch of the same URL returns 200. Chrome logs that itself, so the app's own
+// .catch() cannot silence it, and a permanent error in the console makes the one rule this harness
+// exists for - check the console after a frontend change - useless.
+//
+// Only the registration call is removed. Everything else in register-sw.js stays, because that file
+// also loads the Coach shell, which IS real UI worth looking at here.
+const SW_REGISTRATION = "navigator.serviceWorker.register('/sw.js')";
+const SW_REGISTRATION_STUB =
+  "Promise.reject(new Error('ui-harness: service workers are not available in this browser'))";
+
 // The import pages keep their markup in a C# raw string literal, so there is no file in wwwroot to
 // serve. Read both the literal and the routes it is mapped on straight out of the source: hand-copying
 // the HTML once made an edited page look unchanged, and a hardcoded route list would rot silently.
@@ -70,6 +83,13 @@ createServer(async (req, res) => {
     let path = decodeURIComponent(url.pathname);
 
     if (path === '/__fixtures.js') return serveFile(res, join(import.meta.dirname, 'fixtures.js'), false);
+    if (path === '/pwa/register-sw.js') {
+      const source = await readFile(join(ROOT, 'pwa', 'register-sw.js'), 'utf8');
+      if (!source.includes(SW_REGISTRATION))
+        console.warn('[harness] register-sw.js changed: the service-worker stub no longer matches.');
+      res.writeHead(200, { 'content-type': TYPES['.js'], 'cache-control': 'no-store' });
+      return res.end(source.replace(SW_REGISTRATION, SW_REGISTRATION_STUB));
+    }
     const inline = INLINE_PAGES.get(path.replace(/\/$/, ''));
     if (inline) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
