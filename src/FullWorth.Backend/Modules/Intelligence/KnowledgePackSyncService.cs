@@ -347,7 +347,7 @@ public sealed class KnowledgePackSyncService(
         var registration = await cloud.RegisterAsync(
             instanceId,
             CloudIntelligencePolicy.CurrentVersion,
-            typeof(KnowledgePackSyncService).Assembly.GetName().Version?.ToString() ?? "unknown",
+            FullWorthVersion.Full,
             null,
             ct);
         await credentialStore.SaveAsync(registration, ct);
@@ -377,9 +377,12 @@ public sealed class KnowledgePackSyncService(
             !string.Equals(manifest.PackId, expectedPackId, StringComparison.Ordinal))
             throw new KnowledgePackVerificationException("knowledge_pack_id_untrusted");
 
+        // A prerelease label is not orderable, so the comparison uses the numeric version. A build
+        // that set none cannot be judged too old - refusing a pack over a missing version string
+        // would break a self-hoster who builds from source.
         if (!string.IsNullOrWhiteSpace(manifest.MinimumClientVersion) &&
             Version.TryParse(manifest.MinimumClientVersion, out var minimum) &&
-            Version.TryParse(typeof(KnowledgePackSyncService).Assembly.GetName().Version?.ToString(), out var current) &&
+            FullWorthVersion.Numeric is { } current &&
             current < minimum)
             throw new KnowledgePackVerificationException("knowledge_pack_client_too_old");
     }

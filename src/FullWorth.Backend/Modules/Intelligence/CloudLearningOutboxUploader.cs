@@ -218,7 +218,7 @@ public sealed class CloudLearningOutboxUploader(
     }
 
     private static string ClientVersion() =>
-        typeof(CloudLearningOutboxUploader).Assembly.GetName().Version?.ToString() ?? "unknown";
+        FullWorthVersion.Full;
 
     private static string? Trim(string? value, int maxLength)
     {

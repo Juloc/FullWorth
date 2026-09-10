@@ -44,7 +44,7 @@ public static class CloudBenchmarkEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
@@ -128,7 +128,7 @@ public static class CloudBenchmarkEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
@@ -296,7 +296,7 @@ public static class CloudBenchmarkEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);
@@ -438,7 +438,7 @@ public static class CloudBenchmarkEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);

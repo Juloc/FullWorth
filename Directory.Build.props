@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    Nothing set a version, so every assembly built as 1.0.0.0 and every instance reported
+    "clientVersion 1.0.0.0" to the Cloud - which could therefore not tell one client from another, and
+    the minimum-client-version check in KnowledgePackSyncService compared against a constant.
+
+    The release pipeline passes the real version in (`-p:Version=1.3.0-alpha.18`), which MSBuild splits
+    into a numeric AssemblyVersion (1.3.0.0) and the full InformationalVersion including the prerelease
+    label. A local build keeps 0.0.0-dev, which is honest: it is not a release.
+  -->
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+  </PropertyGroup>
+
+</Project>

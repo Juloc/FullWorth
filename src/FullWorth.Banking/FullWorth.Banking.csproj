@@ -5,7 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\Shared\SecretBootstrap.cs" Link="SecretBootstrap.cs" />
+    <Compile Include="..\Shared\SecretBootstrap.cs" Link="SecretBootstrap.cs" />
+    <Compile Include="..\Shared\FullWorthVersion.cs" Link="FullWorthVersion.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />

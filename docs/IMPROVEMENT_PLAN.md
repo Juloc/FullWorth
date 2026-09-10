@@ -599,8 +599,14 @@ gross) and the hover readout plus the metric break out "davon Firmenwagen".
 - **Cloud transport errors are shown as raw snake_case tokens** with no translation and no remediation.
 - **Registration-on-demand runs inside user-facing GET handlers** with a 45 s timeout
   (`CloudBenchmarkEndpoints.cs:44`), so an unreachable Cloud stalls page loads.
-- **No assembly version is set anywhere**, so every instance reports `clientVersion 1.0.0.0` and the
-  manifest's `MinimumClientVersion` gate would lock out all instances at once.
+- ~~**No assembly version is set anywhere**~~ `DONE` — `Directory.Build.props` sets the version
+  (`0.0.0-dev` locally, the real tag in a release), the three .NET Dockerfiles take it as a build arg and
+  copy the props file into the build context, and `release.yml` passes the validated tag to both
+  architectures. The nine hand-rolled `Assembly.GetName().Version` readers became one
+  `FullWorthVersion`: `Full` reports the prerelease label (which is what distinguishes two alphas) with
+  the commit suffix stripped, `Numeric` is what the knowledge-pack minimum-client check compares — and a
+  build that set no version can no longer be judged "too old", which would have broken a self-hoster
+  building from source.
 - **Two Codex configuration namespaces coexist** (`CodexTest:*` and `AiAccess:CodexBridge*`) and
   different consumers read different ones.
 - **The Cloud services have no healthchecks** — including the API, which is the stack's only

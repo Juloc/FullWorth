@@ -1,5 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+# Without this the published assemblies carry the 0.0.0-dev default from Directory.Build.props, and
+# every instance reports that as its client version. The release workflow passes the real tag.
+ARG FULLWORTH_VERSION=0.0.0-dev
+
+# Directory.Build.props sets the version default and has to be inside the build context copy, or
+# MSBuild finds no props file at all when it walks up from the project directory.
+COPY Directory.Build.props .
 
 # Copy project files first so Docker can cache restore independently from source changes.
 COPY src/FullWorth.Web/FullWorth.Web.csproj src/FullWorth.Web/
@@ -15,7 +22,7 @@ COPY src/FullWorth.Compensation.Core/ src/FullWorth.Compensation.Core/
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
-RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -o /app --no-restore /p:UseAppHost=false
+RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app --no-restore /p:UseAppHost=false
 
 # The unified image includes the backend's browser/OCR runtime so Amazon, receipt and PDF features
 # keep working after Web + Backend + Banking move into one process.

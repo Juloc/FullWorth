@@ -155,7 +155,7 @@ public static class CloudMerchantBenchmarkEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudMerchantBenchmarkEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);

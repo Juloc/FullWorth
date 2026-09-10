@@ -5,7 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\Shared\SecretBootstrap.cs" Link="Security\SecretBootstrap.cs" />
+    <Compile Include="..\Shared\SecretBootstrap.cs" Link="Security\SecretBootstrap.cs" />
+    <Compile Include="..\Shared\FullWorthVersion.cs" Link="Security\FullWorthVersion.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FullWorth.Compensation.Core\FullWorth.Compensation.Core.csproj" />

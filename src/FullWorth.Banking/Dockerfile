@@ -1,12 +1,19 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+# Without this the published assemblies carry the 0.0.0-dev default from Directory.Build.props, and
+# every instance reports that as its client version. The release workflow passes the real tag.
+ARG FULLWORTH_VERSION=0.0.0-dev
+
+# Directory.Build.props sets the version default and has to be inside the build context copy, or
+# MSBuild finds no props file at all when it walks up from the project directory.
+COPY Directory.Build.props .
 COPY src/FullWorth.Banking/FullWorth.Banking.csproj src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/FullWorth.FinTs.csproj src/FullWorth.FinTs/
 RUN dotnet restore src/FullWorth.Banking/FullWorth.Banking.csproj
 COPY src/FullWorth.Banking/ src/FullWorth.Banking/
 COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
-RUN dotnet publish src/FullWorth.Banking/FullWorth.Banking.csproj -c Release -o /app /p:UseAppHost=false
+RUN dotnet publish src/FullWorth.Banking/FullWorth.Banking.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 # curl: container HEALTHCHECK; gosu: drop to the non-root app user after staging the key secret.

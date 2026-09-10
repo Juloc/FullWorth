@@ -117,7 +117,7 @@ public static class CloudPriceEndpoints
                     var registration = await cloud.RegisterAsync(
                         state.InstanceId,
                         CloudIntelligencePolicy.CurrentVersion,
-                        typeof(CloudPriceEndpoints).Assembly.GetName().Version?.ToString() ?? "unknown",
+                        FullWorthVersion.Full,
                         null,
                         ct);
                     await credentials.SaveAsync(registration, ct);

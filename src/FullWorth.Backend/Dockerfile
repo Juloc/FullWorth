@@ -1,12 +1,19 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+# Without this the published assemblies carry the 0.0.0-dev default from Directory.Build.props, and
+# every instance reports that as its client version. The release workflow passes the real tag.
+ARG FULLWORTH_VERSION=0.0.0-dev
+
+# Directory.Build.props sets the version default and has to be inside the build context copy, or
+# MSBuild finds no props file at all when it walks up from the project directory.
+COPY Directory.Build.props .
 COPY src/FullWorth.Backend/FullWorth.Backend.csproj src/FullWorth.Backend/
 COPY src/FullWorth.Compensation.Core/FullWorth.Compensation.Core.csproj src/FullWorth.Compensation.Core/
 RUN dotnet restore src/FullWorth.Backend/FullWorth.Backend.csproj
 COPY src/FullWorth.Backend/ src/FullWorth.Backend/
 COPY src/FullWorth.Compensation.Core/ src/FullWorth.Compensation.Core/
 COPY src/Shared/ src/Shared/
-RUN dotnet publish src/FullWorth.Backend/FullWorth.Backend.csproj -c Release -o /app /p:UseAppHost=false
+RUN dotnet publish src/FullWorth.Backend/FullWorth.Backend.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app /p:UseAppHost=false
 
 # Pin the browser runtime to the exact Microsoft.Playwright package version used by the backend.
 # The image contains Chromium plus its Linux dependencies; FullWorth never downloads a browser at runtime.
