@@ -51,7 +51,11 @@ public sealed class ResponsiveLayoutTests
         // Desktop sidebar is hidden; the fixed, safe-area-aware bottom nav takes over.
         Assert.Contains(".sidebar{display:none", tabletDown);
         Assert.Matches(@"#bottom-nav\{display:grid[^}]*position:fixed", tabletDown);
-        Assert.Contains("env(safe-area-inset-bottom)", tabletDown);
+        // The fallback is not cosmetic: without it, a browser that does not support safe-area insets
+        // treats the whole declaration as invalid and drops it, so the bottom nav ends up with no inset
+        // padding at all and covers the last row of the list.
+        Assert.Contains("env(safe-area-inset-bottom,0px)", tabletDown);
+        Assert.DoesNotMatch(@"env(safe-area-inset-[a-z]+)", tabletDown);
         Assert.Matches(@"#bottom-nav button span\{font-size:10px", tabletDown);
     }
 
