@@ -22,3 +22,6 @@ backups/
 *.sqlite
 *.sqlite3
 .DS_Store
+
+# Agent worktrees (created by the Claude Code worktree isolation, never part of the tree).
+.claude/worktrees/
