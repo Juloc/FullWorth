@@ -59,6 +59,26 @@ public sealed class ResponsiveLayoutTests
         Assert.Matches(@"#bottom-nav button span\{font-size:10px", tabletDown);
     }
 
+    /// <summary>
+    /// Every dialog overflowed the viewport as soon as its content held one long string. `.dialog-card`
+    /// is `display:grid` with no `grid-template-columns`, so its single implicit column is `auto`, which
+    /// resolves to MAX-CONTENT — and a `select`'s max-content width is its longest `option`. Measured on
+    /// the booking filter at 375 px: the column came out 435 px and every field sat 76 px past the right
+    /// edge. It looked random because it depends on the data, which is why it went unpinned for so long.
+    /// </summary>
+    [Fact]
+    public void DialogContentIsAllowedToShrinkBelowItsLongestOption()
+    {
+        var css = ReadAsset("dialogs.css");
+
+        // minmax(0,1fr), not 1fr: a grid item's default min-width:auto refuses to go below min-content,
+        // so 1fr alone would not have fixed it.
+        Assert.Contains(".dialog-card{grid-template-columns:minmax(0,1fr)}", css);
+        Assert.Contains(".dialog-card>*{min-width:0}", css);
+        Assert.Contains(".dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}", css);
+        Assert.Contains(".dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}", css);
+    }
+
     [Fact]
     public void BottomNavHasExactlyFivePrimaryDestinations()
     {
@@ -112,6 +132,9 @@ public sealed class ResponsiveLayoutTests
         Assert.NotNull(dir);
         return dir!.FullName;
     }
+
+    private static string ReadAsset(string name) =>
+        File.ReadAllText(Path.Combine(RepoRoot(), "src", "FullWorth.Web", "wwwroot", name));
 
     private static string ReadCss()
     {

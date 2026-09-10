@@ -85,3 +85,19 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 .ai-codex-model label{display:grid;gap:4px}
 .ai-codex-model [data-codex-model-status]{grid-column:1/-1}
 @media(max-width:640px){.ai-codex-model{grid-template-columns:1fr}}
+
+/* Every dialog overflowed the viewport as soon as its content contained one long string.
+
+   .dialog-card is display:grid with no grid-template-columns, so its single implicit column is
+   `auto`, which resolves to MAX-CONTENT - and a <select>'s max-content width is its longest <option>.
+   One long category or merchant name therefore sized the whole card: measured on the booking filter at
+   375 px, the column came out 435 px wide and every field sat 76 px past the right edge of the screen.
+   It looks random because it depends on the data, which is why it was never pinned down.
+
+   The grid rule is the same as everywhere else in this codebase: a column that must be allowed to
+   shrink is minmax(0,1fr), and its items need min-width:0, because a grid item's default
+   min-width:auto refuses to go below min-content. */
+.dialog-card{grid-template-columns:minmax(0,1fr)}
+.dialog-card>*{min-width:0}
+.dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}
+.dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}
