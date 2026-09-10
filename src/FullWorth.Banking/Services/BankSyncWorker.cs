@@ -20,10 +20,16 @@ public sealed class BankSyncWorker(
             {
                 using var scope = scopes.CreateScope();
                 var result = await scope.ServiceProvider.GetRequiredService<BankSyncService>().SyncAllAsync(stoppingToken);
+                // The per-connection reasons are logged by SyncAllAsync itself; this line stays the
+                // summary, now with the reason breakdown so one glance says whether anything is stuck.
+                var reasons = result.Skips is { Count: > 0 } list
+                    ? " (" + string.Join(", ", list.GroupBy(x => x.Reason).OrderBy(g => g.Key).Select(g => $"{g.Key}={g.Count()}")) + ")"
+                    : string.Empty;
                 logger.LogInformation(
-                    "Scheduled bank sync finished: {Synced} synced, {Skipped} skipped, {Failed} failed, alreadyRunning={AlreadyRunning}.",
+                    "Scheduled bank sync finished: {Synced} synced, {Skipped} skipped{Reasons}, {Failed} failed, alreadyRunning={AlreadyRunning}.",
                     result.Synced,
                     result.Skipped,
+                    reasons,
                     result.Failed,
                     result.AlreadyRunning);
             }

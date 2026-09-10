@@ -34,7 +34,33 @@ public sealed record ConnectBankRequest(
     bool? CredentialsAutosubmit = null,
     IReadOnlyList<EnableBankingAccountIdentification>? Accounts = null);
 
-public sealed record BankSyncResult(int Synced, int Skipped, int Failed, bool AlreadyRunning);
+/// <summary>
+/// Why one connection was not synced in a scheduled run. "0 synced, 4 skipped" said nothing about
+/// which four or why, and a connection that needed re-authorization was counted in NEITHER bucket -
+/// the pre-filter dropped it before the loop, so it vanished from the result entirely.
+/// </summary>
+public static class BankSyncSkipReasons
+{
+    /// <summary>Inside our own background cadence, or the provider cooldown has not expired.</summary>
+    public const string NotDue = "not_due";
+    /// <summary>A persisted provider window (usually a rate limit) is still in the future.</summary>
+    public const string RateLimited = "rate_limited";
+    /// <summary>Status is not AUTHORIZED, or the session is gone: the user has to reconnect.</summary>
+    public const string AuthorizationRequired = "authorization_required";
+    /// <summary>The consent has an expiry and it has passed.</summary>
+    public const string Expired = "expired";
+    /// <summary>A FinTS connection parked on a TAN. Syncing would not help; the TAN has to be answered.</summary>
+    public const string TanRequired = "tan_required";
+}
+
+public sealed record BankSyncSkip(Guid ConnectionId, string Institution, string Reason, DateTimeOffset? RetryAt);
+
+public sealed record BankSyncResult(
+    int Synced,
+    int Skipped,
+    int Failed,
+    bool AlreadyRunning,
+    IReadOnlyList<BankSyncSkip>? Skips = null);
 
 /// <summary>
 /// <c>TanRequired</c> is its own outcome on purpose: a FinTS sync that ends in a TAN used to be reported
@@ -382,17 +408,24 @@ public sealed class BankSyncService(
 
         var connections = await backend.ListConnectionsAsync(ct);
         var synced = 0;
-        var skipped = 0;
         var failed = 0;
+        var skips = new List<BankSyncSkip>();
 
-        foreach (var connection in connections.Where(x =>
-                     string.Equals(x.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) &&
-                     !string.IsNullOrWhiteSpace(x.ProviderSessionId) &&
-                     (!x.ValidUntil.HasValue || x.ValidUntil > DateTimeOffset.UtcNow)))
+        // Every connection is accounted for. The old pre-filter dropped the ones that need attention
+        // (not authorized, session gone, consent expired) BEFORE the loop, so they were reported as
+        // neither synced, skipped nor failed - they simply did not exist in the result, which is how a
+        // connection can sit unsynced for weeks without anything saying so.
+        foreach (var connection in connections)
         {
-            if (!CanBackgroundSync(connection, DateTimeOffset.UtcNow))
+            if (ClassifySkip(connection, DateTimeOffset.UtcNow) is { } reason)
             {
-                skipped++;
+                skips.Add(new BankSyncSkip(
+                    connection.Id,
+                    connection.InstitutionName,
+                    reason,
+                    reason == BankSyncSkipReasons.NotDue || reason == BankSyncSkipReasons.RateLimited
+                        ? connection.NextSyncAllowedAt
+                        : null));
                 continue;
             }
 
@@ -414,7 +447,15 @@ public sealed class BankSyncService(
             }
         }
 
-        return new(synced, skipped, failed, false);
+        foreach (var skip in skips)
+            logger.LogInformation(
+                "Skipped {Institution} ({Connection}): {Reason}{RetryAt}.",
+                skip.Institution,
+                skip.ConnectionId,
+                skip.Reason,
+                skip.RetryAt is { } retryAt ? $", retry after {retryAt:O}" : string.Empty);
+
+        return new(synced, skips.Count, failed, false, skips);
     }
 
     public Task<ManualSyncResult> RequestManualSyncAsync(
@@ -675,14 +716,29 @@ public sealed class BankSyncService(
     private async Task<BankConnectionDto?> FindConnectionAsync(Guid connectionId, CancellationToken ct) =>
         (await backend.ListConnectionsAsync(ct)).FirstOrDefault(x => x.Id == connectionId);
 
-    private bool CanBackgroundSync(BankConnectionDto connection, DateTimeOffset now)
+    /// <summary>The reason this connection is not synced now, or null when it is due.</summary>
+    private string? ClassifySkip(BankConnectionDto connection, DateTimeOffset now)
     {
-        if (connection.NextSyncAllowedAt.HasValue && connection.NextSyncAllowedAt.Value > now)
-            return false;
+        // Asked first: a parked TAN is not a broken connection, and reconnecting would discard it.
+        if (IsWaitingForTan(connection)) return BankSyncSkipReasons.TanRequired;
+        if (connection.ValidUntil is { } validUntil && validUntil <= now) return BankSyncSkipReasons.Expired;
+        if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return BankSyncSkipReasons.AuthorizationRequired;
+
+        if (connection.NextSyncAllowedAt is { } next && next > now)
+            return string.Equals(connection.LastError, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+                ? BankSyncSkipReasons.RateLimited
+                : BankSyncSkipReasons.NotDue;
 
         var minimum = TimeSpan.FromMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
-        return !connection.LastAttemptAt.HasValue || connection.LastAttemptAt.Value + minimum <= now;
+        return connection.LastAttemptAt is { } lastAttempt && lastAttempt + minimum > now
+            ? BankSyncSkipReasons.NotDue
+            : null;
     }
+
+    private bool CanBackgroundSync(BankConnectionDto connection, DateTimeOffset now) =>
+        ClassifySkip(connection, now) is null;
 
     private async Task<BankConnectionDto> SyncConnectionCoreAsync(
         BankConnectionDto connection,
