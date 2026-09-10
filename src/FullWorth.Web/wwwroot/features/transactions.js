@@ -308,16 +308,27 @@ export async function renderTransactions(context) {
   updateCoachSelectionBar();
   body.innerHTML = '';
   let lastDate = null;
+  // Pending entries are not booked yet: the API sorts them ahead of every booked row, and they get
+  // their own header so the "today" header below them still means today. Without it a pending row
+  // dated today sat under the today header among real bookings, and one with no booking date at all
+  // opened an unlabelled group above it. Only the leading run is grouped this way - a pending row
+  // further down (non-date sort) stays in its date group.
+  let inPendingGroup = true, pendingHeaderDone = false;
   for (const x of items) {
-    // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
-    // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
-    const day = String(x.bookingDate || '').slice(0, 10);
-    if (day !== lastDate) {
-      lastDate = day;
-      const head = document.createElement('tr');
-      head.className = 'tx-date-head';
-      head.innerHTML = `<td colspan="6"><span>${ctx.esc(dateHeading(day))}</span></td>`;
-      body.appendChild(head);
+    if (inPendingGroup && String(x.status || '').toUpperCase() === 'PDNG') {
+      if (!pendingHeaderDone) {
+        pendingHeaderDone = true;
+        body.appendChild(groupHeaderRow(ctx.get('transactions.pending')));
+      }
+    } else {
+      inPendingGroup = false;
+      // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
+      // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
+      const day = String(x.bookingDate || '').slice(0, 10);
+      if (day !== lastDate) {
+        lastDate = day;
+        body.appendChild(groupHeaderRow(dateHeading(day)));
+      }
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
     const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
@@ -326,7 +337,9 @@ export async function renderTransactions(context) {
     tr.tabIndex = 0;
     tr.dataset.txId = x.id;
     tr.innerHTML =
-      `<td class="tx-date-cell">${ctx.date(x.bookingDate)}</td>` +
+      // A pending entry often has no booking date yet - the bank publishes the value date first, and
+      // that is also what the list is sorted by, so showing an em dash left the row looking broken.
+      `<td class="tx-date-cell">${ctx.date(x.bookingDate || x.valueDate)}</td>` +
       `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
       categoryCell(x, cat) +
       accountCell(x) +
@@ -435,6 +448,13 @@ function quickEditCategory(x) {
       await renderTransactions(ctx);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
+}
+
+function groupHeaderRow(label) {
+  const head = document.createElement('tr');
+  head.className = 'tx-date-head';
+  head.innerHTML = `<td colspan="6"><span>${ctx.esc(label)}</span></td>`;
+  return head;
 }
 
 // Booking-date header: Heute / Gestern / localized date (UX rework §4).

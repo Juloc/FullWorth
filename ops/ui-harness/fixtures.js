@@ -57,12 +57,18 @@
       }
     ],
     'transactions': {
+      // Two pending entries and a booking on the same day: the API sorts pending ahead of everything
+      // booked, so the "Heute" header below them still marks today. The undated one is the shape a card
+      // authorisation arrives in - a status and a value date, no booking date yet.
       items: [
+        { id: 'tp1', bookingDate: iso('2026-09-10'), valueDate: iso('2026-09-10'), amount: -12.40, currency: 'EUR', counterparty: 'Backwerk', description: 'Kartenzahlung', status: 'PDNG', accountId: 'a1', isSplit: false },
+        { id: 'tp2', bookingDate: null, valueDate: iso('2026-09-09'), amount: -64.00, currency: 'EUR', counterparty: 'Tankstelle Nord', description: 'Kartenzahlung', status: 'PDNG', accountId: 'a1', isSplit: false },
+        { id: 't0', bookingDate: iso('2026-09-10'), amount: -9.99, currency: 'EUR', counterparty: 'Spotify', description: 'Abo', categoryId: 'c1', accountId: 'a1', status: 'BOOK', isSplit: false },
         { id: 't1', bookingDate: iso('2026-09-08'), amount: -42.19, currency: 'EUR', counterparty: 'REWE Markt GmbH', description: 'Einkauf', categoryId: 'c1', accountId: 'a1', isSplit: false },
         { id: 't2', bookingDate: iso('2026-09-07'), amount: -18.90, currency: 'EUR', counterparty: 'Trattoria da Enzo mit sehr langem Namen', description: 'Abendessen', categoryId: 'c2', accountId: 'a1', isSplit: false },
         { id: 't3', bookingDate: iso('2026-08-28'), amount: 2810.44, currency: 'EUR', counterparty: 'Arbeitgeber AG', description: 'Gehalt August', categoryId: 'c3', accountId: 'a1', isSplit: false }
       ],
-      total: 3, page: 1, pageSize: 50
+      total: 6, page: 1, pageSize: 50
     },
     'contracts': [
       { id: 'k1', name: 'Stromvertrag', providerName: 'Stadtwerke', monthlyAmount: 78.5, currency: 'EUR', status: 'active', nextDueDate: iso('2026-10-01'), categoryId: 'c1', accountId: 'a1' },

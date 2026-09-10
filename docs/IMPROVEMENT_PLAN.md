@@ -387,10 +387,18 @@ the page limit sends nothing, because a truncated history cannot tell a booked r
 reached. Rows the user has touched - a note, a manual category, a refund or transfer link, a linked
 purchase - are left alone: losing what the user entered is worse than a leftover row.
 
-### O-3 The "today" bar sits above the newest pending row in the booking history — `OPEN`
+### O-3 The "today" bar sits above the newest pending row in the booking history — `DONE`
 
-Ordering/marker placement in the booking history: a pending row dated today (or later) sorts above the
-today marker, so the marker no longer marks today.
+The list ordered purely by booking date, so a pending row dated today landed *underneath* the "Heute"
+header among real bookings, and one with no booking date at all opened an unlabelled `—` group *above*
+it (PostgreSQL sorts NULLs first on a descending order). The header therefore marked neither today nor
+the booked/not-booked boundary.
+
+**Fixed** in the ordering, not the display: the default date sort puts every pending entry ahead of every
+booked one and orders within each block by `BookingDate ?? ValueDate`, so an entry whose booking date the
+bank has not published yet sits at its real position instead of at the very top. The leading pending run
+gets its own "Vorgemerkt" header, which makes the "Heute" header below it mean today again, and a pending
+row with no booking date shows its value date instead of an em dash.
 
 ### O-4 An imported account must be able to get a balance without being connected — `PARTLY DONE`
 

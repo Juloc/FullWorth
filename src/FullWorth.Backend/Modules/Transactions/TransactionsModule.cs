@@ -285,7 +285,19 @@ public sealed class TransactionStore(FullWorthDbContext db)
         {
             "amount" => descending ? q.OrderByDescending(x => x.Amount) : q.OrderBy(x => x.Amount),
             "counterparty" => descending ? q.OrderByDescending(x => x.Counterparty) : q.OrderBy(x => x.Counterparty),
-            _ => descending ? q.OrderByDescending(x => x.BookingDate).ThenByDescending(x => x.UpdatedAt) : q.OrderBy(x => x.BookingDate).ThenBy(x => x.UpdatedAt)
+            // A pending entry is not booked yet, so on the date axis it belongs ahead of everything
+            // that IS booked - including today. Ordering purely by booking date put a pending row
+            // dated today underneath the "today" header among real bookings, and a pending row with
+            // no booking date at all into an unlabelled group above it (PostgreSQL sorts NULLs first
+            // on DESC). Falling back to the value date keeps a row whose booking date the bank has
+            // not published yet in its real place instead of at the very top.
+            _ => descending
+                ? q.OrderByDescending(x => x.Status == "PDNG")
+                    .ThenByDescending(x => x.BookingDate ?? x.ValueDate)
+                    .ThenByDescending(x => x.UpdatedAt)
+                : q.OrderBy(x => x.Status == "PDNG")
+                    .ThenBy(x => x.BookingDate ?? x.ValueDate)
+                    .ThenBy(x => x.UpdatedAt)
         };
 
         var offset = Math.Max(0, request.Offset ?? 0);
