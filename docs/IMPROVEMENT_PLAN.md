@@ -497,6 +497,28 @@ to an unchanged salary now shows as the gross increase it is instead of "nothing
 present from the start is not mistaken for a raise. `ContractualGrossAnnual` keeps its meaning (cash
 gross) and the hover readout plus the metric break out "davon Firmenwagen".
 
+### O-9 A statement (MT940 / CAMT) import had a backend but no way to reach it from the app — `DONE`
+
+Ikano's own account, and any bank a private Enable Banking application is not enabled for, have no live
+connection at all — O-4's balance anchoring cannot help them until something can hand FullWorth the
+bank's own export. `ImportParityModule.UploadStatementAsync` read MT940 and CAMT into the same
+job/candidate tables the CSV import uses and decided when a statement's closing balance may anchor the
+account (`StatementBalanceAnchor`), but nothing in the import centre called any of it.
+
+**Built.** A third flow in `/settings/import` (`data-import-mode="statement"`): pick the file, see what
+the backend found (which account the file names, how many bookings, the closing balance and its date),
+pick the **existing** account it belongs to — never a new one, choosing an account is mandatory — review
+and deselect bookings, commit, and read what happened to the balance in plain German: applied, or one of
+the three reasons it was not (a newer provider or manual balance, or a currency mismatch). It is a fixed
+format, so it never goes through the CSV/XLSX column-mapping step. The job lands in the same
+`api/import-jobs` table as every other import, so it shows up in "Letzte Buchungsimporte" and can be
+rolled back like any other — the history filter was widened so a balance-only statement (legitimately
+zero bookings) is not mistaken for a failed import and hidden.
+
+Reachable directly at `/settings/import?mode=statement` and, with an account already in mind, at
+`/settings/import?mode=statement&accountId={id}` — a normal query-string link the accounts page (or
+anywhere else) can point at without any wiring on this page's side.
+
 ---
 
 ## P2 — misleading, or secondary paths

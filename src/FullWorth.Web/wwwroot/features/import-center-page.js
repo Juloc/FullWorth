@@ -3,24 +3,25 @@ import { snapshotUploadFile } from '../security/secure-fetch.js';
 import { confirmMessage } from '../ui/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
-  de:{subtitle:'Buchungen und Depots aus anderen Apps übernehmen.',back:'Zurück',space:'FullWorth Space',txHint:'Für Bank- und App-Exporte. CSV und XLSX werden zuerst analysiert; du bestätigst Spalten und Zielkonten vor dem Import.',invHint:'Für Parqet, Finanzfluss und andere Depot-Exporte. Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden geprüft.',analyse:'Datei analysieren',review:'Import prüfen',import:'Importieren',importDepot:'Depot importieren',mapping:'Spalten zuordnen',targets:'Konten zuordnen',targetsHint:'Jedes in der Datei gefundene Konto bekommt ein Zielkonto in FullWorth.',securities:'Wertpapiere prüfen',working:'Wird verarbeitet …',needFile:'Bitte zuerst eine CSV- oder XLSX-Datei wählen.',needMapping:'Datum und Betrag müssen zugeordnet sein.',needInvestmentMapping:'Handelsdatum und Transaktionsart müssen zugeordnet sein.',needAccount:'Bitte alle Quellkonten einem Zielkonto zuordnen.',needPortfolio:'Bitte ein Zieldepot wählen.',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Zeilen',ready:'Bereit',errors:'Fehler',imported:'Importiert',duplicates:'Duplikate',newPortfolio:'Neues Import-Depot anlegen',none:'Nicht zuordnen',autoNew:'Automatisch / neu anlegen',matched:'Automatisch erkannt',willCreate:'Wird neu angelegt',noAccounts:'Keine beschreibbaren Konten gefunden.',noPortfolios:'Noch kein Depot vorhanden.',historyEmpty:'Noch keine Depotimporte.',rollback:'Import rückgängig machen',rollbackConfirm:'Diesen Depotimport wirklich rückgängig machen? Spätere abhängige Buchungen schützen den Rollback automatisch.',rolledBack:'Import wurde rückgängig gemacht.',healthy:'Plausibel',checkWarnings:'Hinweise',cash:'Cash',positions:'Positionen',rowsTitle:'Buchungen prüfen',rowsHint:'Wähle ab, was nicht importiert werden soll. Zeilen mit Fehlern sind nicht auswählbar.',selectAll:'Alle auswählen',selectedOf:'{n} von {total} ausgewählt',errorsTitle:'Zeile nicht importierbar',notImportable:'nicht importierbar',noRows:'Keine Zeilen gefunden.',showing:'Angezeigt werden die ersten {n} von {total} Zeilen. Die Auswahl gilt für alle.',noneSelected:'Bitte mindestens eine Buchung auswählen.',duplicate:'Schon vorhanden',dupInFile:'kommt in dieser Datei doppelt vor',dupExternalKey:'Buchungs-ID wurde schon importiert',dupExisting:'gleiches Datum, gleicher Betrag, gleicher Empfänger schon gebucht',dupHint:'{n} Buchungen sind schon vorhanden und deshalb abgewählt.',dupChecking:'Duplikate werden geprüft …',txHistory:'Letzte Buchungsimporte',txHistoryEmpty:'Noch keine Buchungsimporte.',txRollback:'Import rückgängig machen',txRollbackConfirm:'Diesen Import wirklich rückgängig machen? Buchungen, die du danach geteilt, verschlagwortet, geprüft oder mit einem Vertrag verknüpft hast, bleiben erhalten.',txRolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusCancelled:'Abgebrochen',statusFailed:'Fehlgeschlagen',statusRolledBack:'Rückgängig gemacht',categoryTargets:'Kategorien zuordnen',categoryTargetsHint:'Jede Kategorie aus der Datei bekommt eine FullWorth-Kategorie. „Automatisch" nimmt eine gleichnamige Kategorie oder überlässt es den Regeln.',autoCategory:'Automatisch',noCategoriesFound:'Die Datei enthält keine Kategoriespalte.'},
-  en:{subtitle:'Import transactions and portfolios from other apps.',back:'Back',space:'FullWorth Space',txHint:'For bank and finance-app exports. CSV and XLSX are analysed first; you confirm columns and target accounts before committing.',invHint:'For Parqet, Finanzfluss and other portfolio exports. Buys, sells, dividends, interest, fees and taxes are validated.',analyse:'Analyse file',review:'Review import',import:'Import',importDepot:'Import portfolio',mapping:'Map columns',targets:'Map accounts',targetsHint:'Every source account found in the file is mapped to a FullWorth account.',securities:'Review securities',working:'Processing …',needFile:'Choose a CSV or XLSX file first.',needMapping:'Date and amount must be mapped.',needInvestmentMapping:'Trade date and transaction type must be mapped.',needAccount:'Map every source account to a target account.',needPortfolio:'Choose a target portfolio.',done:'Import completed.',error:'Import failed.',rows:'Rows',ready:'Ready',errors:'Errors',imported:'Imported',duplicates:'Duplicates',newPortfolio:'Create new import portfolio',none:'Do not map',autoNew:'Automatic / create new',matched:'Auto matched',willCreate:'Will be created',noAccounts:'No writable accounts found.',noPortfolios:'No portfolio exists yet.',historyEmpty:'No portfolio imports yet.',rollback:'Roll back import',rollbackConfirm:'Really roll back this portfolio import? Later dependent trades automatically block an unsafe rollback.',rolledBack:'Import rolled back.',healthy:'Plausible',checkWarnings:'Warnings',cash:'Cash',positions:'Positions',rowsTitle:'Review bookings',rowsHint:'Uncheck anything you do not want to import. Rows with errors cannot be selected.',selectAll:'Select all',selectedOf:'{n} of {total} selected',errorsTitle:'Row cannot be imported',notImportable:'not importable',noRows:'No rows found.',showing:'Showing the first {n} of {total} rows. The selection applies to all of them.',noneSelected:'Select at least one booking.',duplicate:'Already there',dupInFile:'appears twice in this file',dupExternalKey:'booking id was already imported',dupExisting:'same date, amount and counterparty already booked',dupHint:'{n} bookings already exist and were unchecked.',dupChecking:'Checking for duplicates …',txHistory:'Recent transaction imports',txHistoryEmpty:'No transaction imports yet.',txRollback:'Roll back import',txRollbackConfirm:'Really roll back this import? Bookings you have since split, tagged, reviewed or linked to a contract are kept.',txRolledBack:'{removed} removed, {kept} kept.',statusCompleted:'Completed',statusCancelled:'Cancelled',statusFailed:'Failed',statusRolledBack:'Rolled back',categoryTargets:'Map categories',categoryTargetsHint:'Every category found in the file gets a FullWorth category. "Automatic" takes a category of the same name or leaves it to the rules.',autoCategory:'Automatic',noCategoriesFound:'The file has no category column.'}
+  de:{subtitle:'Buchungen und Depots aus anderen Apps übernehmen.',back:'Zurück',space:'FullWorth Space',txHint:'Für Bank- und App-Exporte. CSV und XLSX werden zuerst analysiert; du bestätigst Spalten und Zielkonten vor dem Import.',invHint:'Für Parqet, Finanzfluss und andere Depot-Exporte. Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden geprüft.',analyse:'Datei analysieren',review:'Import prüfen',import:'Importieren',importDepot:'Depot importieren',mapping:'Spalten zuordnen',targets:'Konten zuordnen',targetsHint:'Jedes in der Datei gefundene Konto bekommt ein Zielkonto in FullWorth.',securities:'Wertpapiere prüfen',working:'Wird verarbeitet …',needFile:'Bitte zuerst eine CSV- oder XLSX-Datei wählen.',needMapping:'Datum und Betrag müssen zugeordnet sein.',needInvestmentMapping:'Handelsdatum und Transaktionsart müssen zugeordnet sein.',needAccount:'Bitte alle Quellkonten einem Zielkonto zuordnen.',needPortfolio:'Bitte ein Zieldepot wählen.',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Zeilen',ready:'Bereit',errors:'Fehler',imported:'Importiert',duplicates:'Duplikate',newPortfolio:'Neues Import-Depot anlegen',none:'Nicht zuordnen',autoNew:'Automatisch / neu anlegen',matched:'Automatisch erkannt',willCreate:'Wird neu angelegt',noAccounts:'Keine beschreibbaren Konten gefunden.',noPortfolios:'Noch kein Depot vorhanden.',historyEmpty:'Noch keine Depotimporte.',rollback:'Import rückgängig machen',rollbackConfirm:'Diesen Depotimport wirklich rückgängig machen? Spätere abhängige Buchungen schützen den Rollback automatisch.',rolledBack:'Import wurde rückgängig gemacht.',healthy:'Plausibel',checkWarnings:'Hinweise',cash:'Cash',positions:'Positionen',rowsTitle:'Buchungen prüfen',rowsHint:'Wähle ab, was nicht importiert werden soll. Zeilen mit Fehlern sind nicht auswählbar.',selectAll:'Alle auswählen',selectedOf:'{n} von {total} ausgewählt',errorsTitle:'Zeile nicht importierbar',notImportable:'nicht importierbar',noRows:'Keine Zeilen gefunden.',showing:'Angezeigt werden die ersten {n} von {total} Zeilen. Die Auswahl gilt für alle.',noneSelected:'Bitte mindestens eine Buchung auswählen.',duplicate:'Schon vorhanden',dupInFile:'kommt in dieser Datei doppelt vor',dupExternalKey:'Buchungs-ID wurde schon importiert',dupExisting:'gleiches Datum, gleicher Betrag, gleicher Empfänger schon gebucht',dupHint:'{n} Buchungen sind schon vorhanden und deshalb abgewählt.',dupChecking:'Duplikate werden geprüft …',txHistory:'Letzte Buchungsimporte',txHistoryEmpty:'Noch keine Buchungsimporte.',txRollback:'Import rückgängig machen',txRollbackConfirm:'Diesen Import wirklich rückgängig machen? Buchungen, die du danach geteilt, verschlagwortet, geprüft oder mit einem Vertrag verknüpft hast, bleiben erhalten.',txRolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusCancelled:'Abgebrochen',statusFailed:'Fehlgeschlagen',statusRolledBack:'Rückgängig gemacht',categoryTargets:'Kategorien zuordnen',categoryTargetsHint:'Jede Kategorie aus der Datei bekommt eine FullWorth-Kategorie. „Automatisch" nimmt eine gleichnamige Kategorie oder überlässt es den Regeln.',autoCategory:'Automatisch',noCategoriesFound:'Die Datei enthält keine Kategoriespalte.',needStatementFile:'Bitte zuerst eine MT940- oder CAMT-Datei wählen.',needStatementAccount:'Bitte ein bestehendes Konto wählen.',stmtHint:'Für Konten, die FullWorth nicht direkt verbinden kann: MT940- oder CAMT-Datei hochladen und das bestehende Konto wählen, zu dem sie gehört.',stmtAccountFromFile:'Konto laut Datei: {account}',stmtNoAccountInFile:'Die Datei nennt kein Konto.',stmtRowsFound:'{n} Buchungen gefunden',stmtBalanceLine:'Schlussstand laut Datei: {amount} zum {date}',stmtNoBalance:'Die Datei enthält keinen Kontostand.',stmtRowsHint:'Wähle ab, was nicht importiert werden soll.',stmtNoRows:'Diese Datei enthält keine Buchungen – nur einen Kontostand.',importStatement:'Kontoauszug importieren',stmtBalanceApplied:'Kontostand übernommen: {amount} zum {date}.',stmtBalanceSkippedNewerProvider:'Kontostand nicht übernommen: die Bank hat für diesen Tag oder später schon einen Stand gemeldet.',stmtBalanceSkippedNewerManual:'Kontostand nicht übernommen: für diesen Tag oder später gibt es schon einen von Hand erfassten Stand.',stmtBalanceSkippedCurrency:'Kontostand nicht übernommen: die Datei nennt eine andere Währung als das Konto.'},
+  en:{subtitle:'Import transactions and portfolios from other apps.',back:'Back',space:'FullWorth Space',txHint:'For bank and finance-app exports. CSV and XLSX are analysed first; you confirm columns and target accounts before committing.',invHint:'For Parqet, Finanzfluss and other portfolio exports. Buys, sells, dividends, interest, fees and taxes are validated.',analyse:'Analyse file',review:'Review import',import:'Import',importDepot:'Import portfolio',mapping:'Map columns',targets:'Map accounts',targetsHint:'Every source account found in the file is mapped to a FullWorth account.',securities:'Review securities',working:'Processing …',needFile:'Choose a CSV or XLSX file first.',needMapping:'Date and amount must be mapped.',needInvestmentMapping:'Trade date and transaction type must be mapped.',needAccount:'Map every source account to a target account.',needPortfolio:'Choose a target portfolio.',done:'Import completed.',error:'Import failed.',rows:'Rows',ready:'Ready',errors:'Errors',imported:'Imported',duplicates:'Duplicates',newPortfolio:'Create new import portfolio',none:'Do not map',autoNew:'Automatic / create new',matched:'Auto matched',willCreate:'Will be created',noAccounts:'No writable accounts found.',noPortfolios:'No portfolio exists yet.',historyEmpty:'No portfolio imports yet.',rollback:'Roll back import',rollbackConfirm:'Really roll back this portfolio import? Later dependent trades automatically block an unsafe rollback.',rolledBack:'Import rolled back.',healthy:'Plausible',checkWarnings:'Warnings',cash:'Cash',positions:'Positions',rowsTitle:'Review bookings',rowsHint:'Uncheck anything you do not want to import. Rows with errors cannot be selected.',selectAll:'Select all',selectedOf:'{n} of {total} selected',errorsTitle:'Row cannot be imported',notImportable:'not importable',noRows:'No rows found.',showing:'Showing the first {n} of {total} rows. The selection applies to all of them.',noneSelected:'Select at least one booking.',duplicate:'Already there',dupInFile:'appears twice in this file',dupExternalKey:'booking id was already imported',dupExisting:'same date, amount and counterparty already booked',dupHint:'{n} bookings already exist and were unchecked.',dupChecking:'Checking for duplicates …',txHistory:'Recent transaction imports',txHistoryEmpty:'No transaction imports yet.',txRollback:'Roll back import',txRollbackConfirm:'Really roll back this import? Bookings you have since split, tagged, reviewed or linked to a contract are kept.',txRolledBack:'{removed} removed, {kept} kept.',statusCompleted:'Completed',statusCancelled:'Cancelled',statusFailed:'Failed',statusRolledBack:'Rolled back',categoryTargets:'Map categories',categoryTargetsHint:'Every category found in the file gets a FullWorth category. "Automatic" takes a category of the same name or leaves it to the rules.',autoCategory:'Automatic',noCategoriesFound:'The file has no category column.',needStatementFile:'Choose an MT940 or CAMT file first.',needStatementAccount:'Choose an existing account.',stmtHint:'For accounts FullWorth cannot connect to directly: upload the MT940 or CAMT file and choose the existing account it belongs to.',stmtAccountFromFile:'Account per file: {account}',stmtNoAccountInFile:'The file names no account.',stmtRowsFound:'{n} bookings found',stmtBalanceLine:'Closing balance per file: {amount} as of {date}',stmtNoBalance:'The file contains no balance.',stmtRowsHint:'Uncheck anything you do not want to import.',stmtNoRows:'This file has no bookings — only a balance.',importStatement:'Import statement',stmtBalanceApplied:'Balance applied: {amount} as of {date}.',stmtBalanceSkippedNewerProvider:'Balance not applied: the bank already reported a balance for this day or later.',stmtBalanceSkippedNewerManual:'Balance not applied: a manually entered balance already exists for this day or later.',stmtBalanceSkippedCurrency:'Balance not applied: the file states a different currency than the account.'}
 }[lang];
 document.documentElement.lang=lang;
 
 const $=id=>document.getElementById(id);
-const state={space:null,accounts:[],categories:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],selected:new Set(),duplicates:new Map(),history:[]},inv:{file:null,detect:null,jobId:null,summary:null,history:[]}};
+const state={space:null,accounts:[],categories:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],selected:new Set(),duplicates:new Map(),history:[]},inv:{file:null,detect:null,jobId:null,summary:null,history:[]},stmt:{file:null,upload:null,jobId:null,candidates:[],selected:new Set(),presetAccountId:null}};
 
 function setText(id,value){const el=$(id);if(el)el.textContent=value}
 setText('page-subtitle',t.subtitle);setText('back-link',t.back);setText('space-label',t.space);setText('tx-hint',t.txHint);setText('inv-hint',t.invHint);
 setText('tx-detect',t.analyse);setText('inv-detect',t.analyse);setText('tx-stage',t.review);setText('inv-stage',t.review);setText('tx-commit',t.import);setText('inv-commit',t.importDepot);
 setText('tx-mapping-title',t.mapping);setText('inv-mapping-title',t.mapping);setText('tx-target-title',t.targets);setText('tx-target-hint',t.targetsHint);setText('inv-security-title',t.securities);setText('inv-type-title',lang==='de'?'Gefundene Buchungstypen':'Detected transaction types');setText('inv-reconciliation-title',lang==='de'?'Depot-Prüfung':'Portfolio check');setText('inv-history-title',lang==='de'?'Letzte Depotimporte':'Recent portfolio imports');setText('tx-history-title',t.txHistory);setText('tx-category-title',t.categoryTargets);setText('tx-category-hint',t.categoryTargetsHint);
+setText('stmt-hint',t.stmtHint);setText('stmt-detect',t.analyse);setText('stmt-commit',t.importStatement);setText('stmt-target-hint',lang==='de'?'Es wird kein neues Konto angelegt.':'No new account is created.');setText('stmt-rows-hint',t.stmtRowsHint);setText('stmt-no-rows',t.stmtNoRows);
 $('main')?.classList.add('ic-polish');
 
 async function api(path,options={}){return sharedApi(path,options)}
 function status(kind,message){setText(`${kind}-status`,message);const el=$(`${kind}-status`);if(el){el.classList.toggle('is-busy',message===t.working);el.classList.toggle('is-done',message===t.done);el.classList.remove('is-error')}}
 function error(kind,err){console.error(err);status(kind,`${t.error} ${err?.message||''}`.trim());$(`${kind}-status`)?.classList.add('is-error')}
-function currentFile(kind){const input=$(kind==='tx'?'tx-file':'inv-file');return input.files?.[0]||null}
+function currentFile(kind){const ids={tx:'tx-file',inv:'inv-file',stmt:'stmt-file'};const input=$(ids[kind]||'tx-file');return input.files?.[0]||null}
 async function formWithFile(file){const uploadFile=await snapshotUploadFile(file);const body=new FormData();body.append('file',uploadFile,file.name);return body}
 function normHeader(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')}
 function findHeader(headers,...aliases){const all=headers||[];for(const alias of aliases){const wanted=normHeader(alias);const match=all.find(header=>normHeader(header)===wanted);if(match)return match}return null}
@@ -99,6 +100,15 @@ function candidateAmount(candidate) {
   const value = Number(candidate.amount ?? 0);
   try { return new Intl.NumberFormat(lang === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency: candidate.currency || 'EUR' }).format(value); }
   catch { return `${value.toFixed(2)} ${candidate.currency || ''}`.trim(); }
+}
+
+// DateOnly serializes as "yyyy-MM-dd"; building the Date from its parts (not parsing the string)
+// keeps the calendar day exact regardless of the browser's own time zone.
+function formatDateOnly(value) {
+  const parts = String(value || '').split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return String(value ?? '');
+  const [y, m, d] = parts;
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US');
 }
 
 const duplicateReasonText = reason => reason === 'in_file' ? t.dupInFile
@@ -329,7 +339,10 @@ function renderTransactionHistory(){
   const root=$('tx-history');
   if(!root)return;
   root.innerHTML='';
-  const items=(state.tx.history||[]).filter(item=>item.importedCount>0||item.status==='rolled_back');
+  // A statement job can complete having imported zero new bookings and still have anchored the
+  // account's balance (see StatementBalanceAnchor) - a real outcome, not "nothing happened", so it
+  // must not be hidden the way an empty CSV import is.
+  const items=(state.tx.history||[]).filter(item=>item.importedCount>0||item.status==='rolled_back'||(item.status==='completed'&&(item.adapterKey==='mt940'||item.adapterKey==='camt')));
   if(!items.length){
     const empty=document.createElement('div');
     empty.className='row-sub';
@@ -348,7 +361,10 @@ function renderTransactionHistory(){
     const sub=document.createElement('div');
     sub.className='row-sub';
     const when=item.createdAt?new Date(item.createdAt).toLocaleString(lang==='de'?'de-DE':'en-US'):'';
-    sub.textContent=[when,`${item.importedCount||0} ${t.imported.toLowerCase()}`,jobStatusLabel(item.status)].filter(Boolean).join(' · ');
+    // A statement's own row also says which format it was, since "0 importiert" alone would read
+    // as a failed import when it is really a balance-only file (see the history filter above).
+    const adapterLabel=item.adapterKey==='mt940'?'MT940':item.adapterKey==='camt'?'CAMT':null;
+    sub.textContent=[when,adapterLabel,`${item.importedCount||0} ${t.imported.toLowerCase()}`,jobStatusLabel(item.status)].filter(Boolean).join(' · ');
     main.append(title,sub);
     row.appendChild(main);
     if(item.rollbackAvailable){
@@ -369,14 +385,14 @@ async function loadTransactionHistory(){
   renderTransactionHistory();
 }
 
-async function rollbackTransactionImport(jobId){
+async function rollbackTransactionImport(jobId,kind='tx'){
   if(!await confirmMessage({message:t.txRollbackConfirm,title:t.txRollback,confirmLabel:t.txRollback,cancelLabel:t.back,destructive:true}))return;
   try{
-    status('tx',t.working);
+    status(kind,t.working);
     const result=await api(`api/import-jobs/${encodeURIComponent(jobId)}/rollback?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST'});
     await loadTransactionHistory();
-    status('tx',fill(t.txRolledBack,{removed:result.removed??0,kept:result.kept??0}));
-  }catch(err){error('tx',err)}
+    status(kind,fill(t.txRolledBack,{removed:result.removed??0,kept:result.kept??0}));
+  }catch(err){error(kind,err)}
 }
 
 async function loadInvestmentHistory(){if(!state.space)return;const q=`fullWorthSpaceId=${encodeURIComponent(state.space.id)}`;state.inv.history=await api(`api/investment-import/history?${q}&limit=25`).catch(()=>[]);renderInvestmentHistory()}
@@ -385,14 +401,260 @@ async function rollbackInvestmentImport(jobId){if(!await confirmMessage({message
 
 function investmentTarget(){const value=$('inv-portfolio').value;if(value&&value!=='__new__')return{portfolioId:value,createPortfolio:null};if(value!=='__new__')throw new Error(t.needPortfolio);const name=$('inv-new-portfolio-name').value.trim();const currency=$('inv-new-portfolio-currency').value.trim().toUpperCase();if(!name||!/^[A-Za-z]{3}$/.test(currency))throw new Error(lang==='de'?'Bitte Depotname und gültige 3-stellige Währung angeben.':'Enter a portfolio name and a valid 3-letter currency.');return{portfolioId:null,createPortfolio:{name,currency,providerName:importProviderName()}}}
 async function commitInvestments(){try{status('inv',t.working);const target=investmentTarget();const mappings={};for(const row of $('inv-security-summary').querySelectorAll('.row')){const value=row.querySelector('select')?.value;if(value)mappings[row.dataset.key]=value}const result=await api(`api/investment-import/jobs/${state.inv.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...target,securityMappings:mappings,createMissingSecurities:$('inv-create-securities').checked,candidateIds:[...state.tx.selected]})});renderResult('inv',result);renderInvestmentReconciliation(result.reconciliation);await Promise.all([loadInvestmentResources(),loadInvestmentHistory()]);status('inv',t.done)}catch(err){error('inv',err)}}
-function renderResult(kind,result){const root=$(kind==='tx'?'tx-result':'inv-result');root.innerHTML='';for(const [label,value,tone] of [[t.imported,result.imported,'pos'],[t.duplicates,result.duplicates,'warn'],[t.rows,result.total,'']]){const row=document.createElement('div');row.className='row ic-result-row';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=label;const amount=document.createElement('strong');amount.className='amount';if(tone==='pos'&&Number(value)>0)amount.classList.add('positive');if(tone==='warn'&&Number(value)>0)amount.classList.add('ic-amt-warn');amount.textContent=String(value??0);main.appendChild(title);row.append(main,amount);root.appendChild(row)}root.hidden=false}
+function renderResult(kind,result){const ids={tx:'tx-result',inv:'inv-result',stmt:'stmt-result'};const root=$(ids[kind]||'tx-result');root.innerHTML='';for(const [label,value,tone] of [[t.imported,result.imported,'pos'],[t.duplicates,result.duplicates,'warn'],[t.rows,result.total,'']]){const row=document.createElement('div');row.className='row ic-result-row';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=label;const amount=document.createElement('strong');amount.className='amount';if(tone==='pos'&&Number(value)>0)amount.classList.add('positive');if(tone==='warn'&&Number(value)>0)amount.classList.add('ic-amt-warn');amount.textContent=String(value??0);main.appendChild(title);row.append(main,amount);root.appendChild(row)}root.hidden=false}
+
+// --- Statement flow (MT940 / CAMT) -------------------------------------------------------------
+// A statement is a fixed format, not a spreadsheet a human laid out, so it never goes through the
+// column-mapping step: it always targets an account chosen from the existing ones (never created)
+// and it is the only import that can carry a closing balance, so the report at the end has to say
+// plainly, in German, what happened to that balance - applied, or why not.
+function statementAccountSelect(source) {
+  const select = document.createElement('select');
+  select.className = 'account-map-select';
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = lang === 'de' ? '— Konto wählen —' : '— choose account —';
+  select.appendChild(empty);
+  const guess = guessAccount(source);
+  for (const account of state.accounts) {
+    const option = document.createElement('option');
+    option.value = account.id;
+    option.textContent = accountLabel(account);
+    if (guess?.id === account.id) option.selected = true;
+    select.appendChild(option);
+  }
+  return select;
+}
+
+function renderStatementAccountField() {
+  const root = $('stmt-target-section');
+  if (!root) return;
+  root.innerHTML = '';
+  const label = document.createElement('label');
+  label.className = 'field';
+  const span = document.createElement('span');
+  span.textContent = lang === 'de' ? 'Zielkonto' : 'Target account';
+  const select = statementAccountSelect(state.stmt.upload?.statementAccount || '');
+  select.id = 'stmt-account-select';
+  if (state.stmt.presetAccountId && Array.from(select.options).some(option => option.value === state.stmt.presetAccountId)) {
+    select.value = state.stmt.presetAccountId;
+  }
+  label.append(span, select);
+  root.appendChild(label);
+  if (!state.accounts.length) {
+    const note = document.createElement('p');
+    note.className = 'row-sub ic-empty';
+    note.textContent = t.noAccounts;
+    root.appendChild(note);
+  }
+}
+
+function renderStatementFound(upload, candidateCount) {
+  const root = $('stmt-found');
+  if (!root) return;
+  root.innerHTML = '';
+  const addRow = (title, sub) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const rowTitle = document.createElement('div');
+    rowTitle.className = 'row-title';
+    rowTitle.textContent = title;
+    const rowSub = document.createElement('div');
+    rowSub.className = 'row-sub';
+    rowSub.textContent = sub;
+    main.append(rowTitle, rowSub);
+    row.appendChild(main);
+    root.appendChild(row);
+  };
+  addRow(
+    upload.adapter === 'mt940' ? 'MT940' : 'CAMT',
+    upload.statementAccount ? fill(t.stmtAccountFromFile, { account: upload.statementAccount }) : t.stmtNoAccountInFile
+  );
+  addRow(lang === 'de' ? 'Buchungen' : 'Bookings', fill(t.stmtRowsFound, { n: candidateCount }));
+  addRow(
+    lang === 'de' ? 'Schlussstand' : 'Closing balance',
+    upload.statementBalance
+      ? fill(t.stmtBalanceLine, {
+          amount: candidateAmount({ amount: upload.statementBalance.amount, currency: upload.statementBalance.currency }),
+          date: formatDateOnly(upload.statementBalance.asOf)
+        })
+      : t.stmtNoBalance
+  );
+  $('stmt-found-section').hidden = false;
+}
+
+function stmtCandidateRow(candidate) {
+  const row = document.createElement('div');
+  row.className = 'row ic-candidate';
+  const label = document.createElement('label');
+  label.className = 'check ic-candidate-label';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.dataset.candidate = candidate.id;
+  box.checked = true;
+  box.addEventListener('change', () => {
+    if (box.checked) state.stmt.selected.add(candidate.id); else state.stmt.selected.delete(candidate.id);
+    updateStmtSelectedCount();
+  });
+  const main = document.createElement('span');
+  main.className = 'row-main';
+  const title = document.createElement('span');
+  title.className = 'row-title';
+  title.textContent = candidate.counterparty || candidate.description || '—';
+  const sub = document.createElement('span');
+  sub.className = 'row-sub';
+  sub.textContent = [candidate.bookingDate, candidate.description && candidate.description !== title.textContent ? candidate.description : null]
+    .filter(Boolean).join(' · ');
+  main.append(title, sub);
+  label.append(box, main);
+  const amount = document.createElement('span');
+  amount.className = 'amount';
+  amount.textContent = candidateAmount(candidate);
+  row.append(label, amount);
+  return row;
+}
+
+function updateStmtSelectedCount() {
+  const total = (state.stmt.candidates || []).length;
+  setText('stmt-selected-count', fill(t.selectedOf, { n: state.stmt.selected.size, total }));
+  const master = $('stmt-select-all');
+  if (!master) return;
+  master.checked = total > 0 && state.stmt.selected.size === total;
+  master.indeterminate = state.stmt.selected.size > 0 && state.stmt.selected.size < total;
+}
+
+function renderStatementCandidates() {
+  const list = $('stmt-candidates');
+  if (!list) return;
+  const all = state.stmt.candidates || [];
+  state.stmt.selected = new Set(all.map(c => c.id));
+  const noRows = $('stmt-no-rows');
+  const wrap = $('stmt-rows-wrap');
+  // A statement that states only a balance and no bookings is legitimate (see the backend
+  // comment on UploadStatementAsync) - there is simply nothing to review here, so the toolbar and
+  // list give way to a short explanation instead of an empty box.
+  if (noRows) noRows.hidden = all.length > 0;
+  if (wrap) wrap.hidden = all.length === 0;
+  list.innerHTML = '';
+  for (const candidate of all) list.appendChild(stmtCandidateRow(candidate));
+  updateStmtSelectedCount();
+}
+
+async function detectStatement() {
+  const file = currentFile('stmt');
+  if (!file) { status('stmt', t.needStatementFile); return; }
+  state.stmt.file = file;
+  status('stmt', t.working);
+  $('stmt-found-section').hidden = true;
+  $('stmt-result').hidden = true;
+  try {
+    const upload = await api(`api/import-jobs/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`, { method: 'POST', body: await formWithFile(file) });
+    state.stmt.upload = upload;
+    state.stmt.jobId = upload.jobId;
+    state.stmt.candidates = await api(`api/import-jobs/${upload.jobId}/candidates?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`);
+    renderStatementFound(upload, state.stmt.candidates.length);
+    renderStatementAccountField();
+    renderStatementCandidates();
+    status('stmt', '');
+  } catch (err) { error('stmt', err); }
+}
+
+function statementBalanceMessage(result) {
+  if (result.balanceApplied) {
+    const balance = state.stmt.upload?.statementBalance;
+    if (!balance) return lang === 'de' ? 'Kontostand übernommen.' : 'Balance applied.';
+    return fill(t.stmtBalanceApplied, {
+      amount: candidateAmount({ amount: balance.amount, currency: balance.currency }),
+      date: formatDateOnly(balance.asOf)
+    });
+  }
+  if (result.balanceSkipped === 'newer_provider_balance') return t.stmtBalanceSkippedNewerProvider;
+  if (result.balanceSkipped === 'newer_manual_balance') return t.stmtBalanceSkippedNewerManual;
+  if (result.balanceSkipped === 'currency_mismatch') return t.stmtBalanceSkippedCurrency;
+  return state.stmt.upload?.statementBalance ? '' : t.stmtNoBalance;
+}
+
+function renderStatementResult(result) {
+  renderResult('stmt', result);
+  const root = $('stmt-result');
+  const row = document.createElement('div');
+  row.className = 'row ic-result-row';
+  const main = document.createElement('div');
+  main.className = 'row-main';
+  const title = document.createElement('div');
+  title.className = 'row-title';
+  title.textContent = lang === 'de' ? 'Kontostand' : 'Balance';
+  const sub = document.createElement('div');
+  sub.className = 'row-sub';
+  sub.textContent = statementBalanceMessage(result);
+  main.append(title, sub);
+  row.appendChild(main);
+  root.appendChild(row);
+  // Only offered when there is something transactional to undo - a balance-only commit leaves no
+  // provenance links, and the backend refuses that rollback anyway (see the "linked==0" check).
+  if (result.imported > 0 && state.stmt.jobId) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost';
+    button.textContent = t.txRollback;
+    button.onclick = () => rollbackTransactionImport(state.stmt.jobId, 'stmt');
+    root.appendChild(button);
+  }
+}
+
+async function commitStatement() {
+  try {
+    const accountId = $('stmt-account-select')?.value;
+    if (!accountId) throw new Error(t.needStatementAccount);
+    status('stmt', t.working);
+    const result = await api(`api/import-jobs/${state.stmt.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, candidateIds: [...state.stmt.selected] })
+    });
+    renderStatementResult(result);
+    await loadTransactionHistory();
+    status('stmt', '');
+  } catch (err) { error('stmt', err); }
+}
 function syncPortfolioTarget(){const creating=$('inv-portfolio').value==='__new__';$('inv-new-portfolio-fields').hidden=!creating;$('inv-new-portfolio-name').required=creating;$('inv-new-portfolio-currency').required=creating}
 function fillPortfolioSelect(){const select=$('inv-portfolio');select.innerHTML='';for(const p of state.portfolios.filter(p=>!p.isArchived)){const option=document.createElement('option');option.value=p.id;option.textContent=`${p.name} · ${p.currency||'EUR'}`;select.appendChild(option)}const add=document.createElement('option');add.value='__new__';add.textContent=t.newPortfolio;select.appendChild(add);if(!state.portfolios.some(p=>!p.isArchived))select.value='__new__';select.onchange=syncPortfolioTarget;syncPortfolioTarget()}
 async function boot(){try{const spaces=await api('api/fullworth-spaces');const saved=localStorage.getItem('finance.space');state.space=spaces.find(s=>s.id===saved)||spaces[0]||null;if(!state.space)throw new Error('No FullWorth Space');setText('space-name',state.space.name||'—');const q=`fullWorthSpaceId=${encodeURIComponent(state.space.id)}`;const [accounts,categories,portfolios,securities,history,transactionHistory]=await Promise.all([api(`api/accounts?${q}`),api(`api/categories?${q}`).catch(()=>[]),api(`api/investments/portfolios?${q}`).catch(()=>[]),api(`api/investments/securities?${q}`).catch(()=>[]),api(`api/investment-import/history?${q}&limit=25`).catch(()=>[]),api(`api/import-jobs?${q}`).catch(()=>[])]);state.accounts=accounts||[];state.categories=categories||[];state.portfolios=portfolios||[];state.securities=securities||[];state.inv.history=history||[];state.tx.history=transactionHistory||[];fillPortfolioSelect();renderInvestmentHistory();renderTransactionHistory()}catch(err){console.error(err);status('tx',t.error);status('inv',t.error)}}
 
-document.querySelectorAll('[data-import-mode]').forEach(button=>button.addEventListener('click',()=>{const mode=button.dataset.importMode;document.querySelectorAll('[data-import-mode]').forEach(x=>x.classList.toggle('active',x===button));$('transaction-import').hidden=mode!=='transactions';$('investment-import').hidden=mode!=='investments';(mode==='transactions'?$('transaction-import'):$('investment-import')).scrollIntoView({behavior:'smooth',block:'start'})}));
+// --- Mode switch (transactions / statement / investments) --------------------------------------
+const modeArticles={transactions:'transaction-import',statement:'statement-import',investments:'investment-import'};
+function activateMode(mode){
+  const button=document.querySelector(`[data-import-mode="${mode}"]`);
+  if(!button)return;
+  document.querySelectorAll('[data-import-mode]').forEach(x=>x.classList.toggle('active',x===button));
+  for(const [key,id] of Object.entries(modeArticles)){const el=$(id);if(el)el.hidden=key!==mode}
+}
+document.querySelectorAll('[data-import-mode]').forEach(button=>button.addEventListener('click',()=>{
+  const mode=button.dataset.importMode;
+  activateMode(mode);
+  $(modeArticles[mode])?.scrollIntoView({behavior:'smooth',block:'start'});
+}));
+
+// The accounts page (and anywhere else) links here to open the statement flow directly, and, once a
+// file has been analysed, to preselect the account it was opened for - a plain query string, so the
+// entry point is a normal link and this page needs no extra wiring for it.
+// Route: /settings/import?mode=statement&accountId={id} (accountId optional).
+const deepLink=new URLSearchParams(location.search);
+if(deepLink.get('accountId'))state.stmt.presetAccountId=deepLink.get('accountId');
+if(deepLink.get('mode')==='statement')activateMode('statement');
+
 $('tx-preset').addEventListener('change',()=>{if(state.tx.detect)renderMapping('tx',txFields)});$('inv-preset').addEventListener('change',()=>{const preset=$('inv-preset').value;if($('inv-portfolio').value==='__new__'){$('inv-new-portfolio-name').value=preset==='traderepublic'?'Trade Republic':preset==='parqet'?'Parqet Import':preset==='finanzfluss'?'Finanzfluss Import':(lang==='de'?'Importiertes Depot':'Imported portfolio')}if(state.inv.detect)renderMapping('inv',invFields)});
 $('tx-detect').addEventListener('click',detectTransactions);$('tx-stage').addEventListener('click',stageTransactions);$('tx-commit').addEventListener('click',commitTransactions);$('inv-detect').addEventListener('click',detectInvestments);$('inv-stage').addEventListener('click',stageInvestments);$('inv-commit').addEventListener('click',commitInvestments);
+$('stmt-detect').addEventListener('click',detectStatement);$('stmt-commit').addEventListener('click',commitStatement);
+$('stmt-select-all')?.addEventListener('change',()=>{
+  const on=$('stmt-select-all').checked;
+  const all=state.stmt.candidates||[];
+  state.stmt.selected=on?new Set(all.map(c=>c.id)):new Set();
+  for(const box of $('stmt-candidates').querySelectorAll('input[data-candidate]')) box.checked=on;
+  updateStmtSelectedCount();
+});
 // Select-all covers every candidate, not just the rendered slice, so a capped list still commits
 // exactly what the count promises.
 $('tx-select-all')?.addEventListener('change',()=>{

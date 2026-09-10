@@ -52,6 +52,9 @@ public static class ImportCenterPageEndpoints
         <a class="panel import-provider" href="/settings/import/broker-pdf">
           <span class="provider-icon" aria-hidden="true">PDF</span><strong id="source-pdf-title">Broker-PDF</strong><span id="source-pdf-hint">Text- und Scan-PDFs lokal erkennen, prüfen und importieren</span>
         </a>
+        <button type="button" class="panel import-provider" data-import-mode="statement">
+          <span class="provider-icon" aria-hidden="true">KTO</span><strong>Kontoauszug</strong><span>MT940 / CAMT - für Banken ohne Verbindung, z. B. Ikano oder PayPal</span>
+        </button>
       </div>
 
       <article id="transaction-import" class="panel import-workflow">
@@ -142,6 +145,38 @@ public static class ImportCenterPageEndpoints
           <h3 id="inv-history-title">Letzte Depotimporte</h3>
           <div id="inv-history" class="rows"></div>
         </section>
+      </article>
+
+      <article id="statement-import" class="panel import-workflow" hidden>
+        <div class="panel-head"><div><h2 id="stmt-title">Kontoauszug importieren</h2><p class="row-sub" id="stmt-hint"></p></div></div>
+        <div class="import-form-grid">
+          <label class="field span-2"><span id="stmt-file-label">Datei</span><input id="stmt-file" type="file" accept=".sta,.mt940,.940,.txt,.xml,.camt"></label>
+        </div>
+        <div class="workflow-actions"><button id="stmt-detect" class="primary-action" type="button">Datei analysieren</button></div>
+        <div id="stmt-status" class="row-sub import-status" role="status" aria-live="polite"></div>
+
+        <section id="stmt-found-section" hidden>
+          <h3 id="stmt-found-title">Gefunden</h3>
+          <div id="stmt-found" class="rows"></div>
+
+          <h3 id="stmt-target-title">Zielkonto</h3>
+          <p class="row-sub" id="stmt-target-hint">Es wird kein neues Konto angelegt.</p>
+          <div id="stmt-target-section" class="import-form-grid"></div>
+
+          <h3 id="stmt-rows-title">Buchungen prüfen</h3>
+          <p class="row-sub" id="stmt-rows-hint">Wähle ab, was nicht importiert werden soll.</p>
+          <p class="row-sub ic-empty" id="stmt-no-rows" hidden>Diese Datei enthält keine Buchungen – nur einen Kontostand.</p>
+          <div id="stmt-rows-wrap">
+            <div class="import-option ic-rows-toolbar">
+              <label class="check"><input id="stmt-select-all" type="checkbox" checked><span>Alle auswählen</span></label>
+              <span class="row-sub" id="stmt-selected-count"></span>
+            </div>
+            <div id="stmt-candidates" class="rows ic-candidates"></div>
+          </div>
+
+          <div class="workflow-actions"><button id="stmt-commit" class="primary-action" type="button">Kontoauszug importieren</button></div>
+        </section>
+        <div id="stmt-result" class="rows" hidden></div>
       </article>
     </section>
   </main>
