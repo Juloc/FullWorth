@@ -140,29 +140,31 @@ cloud tests plus twelve client-side cases.
 
 **Not yet deployed:** image 1.2.6 predates this fix.
 
-### P1-2 The Cloud rate limiter treats the whole internet as one caller — `OPEN` (cloud)
+### P1-2 The Cloud rate limiter treats the whole internet as one caller — `DONE` (cloud a566377)
 
-`FullWorth.Cloud.Api/Program.cs:59` configures `UseForwardedHeaders` with no `KnownProxies` or
-`KnownIPNetworks`, so `X-Forwarded-For` from Caddy is silently ignored and every unauthenticated
-request partitions into **one** bucket keyed by Caddy's container IP. One caller can exhaust the
-registration window for everybody.
+Both hosts called `UseForwardedHeaders` with no known proxy, and the built-in known set is loopback
+only, so `X-Forwarded-For` from Caddy was dropped: the API's anonymous partition collapsed into one
+bucket keyed by Caddy's container address, and the admin UI's 10/min login throttle became a single
+shared bucket a stranger could exhaust to lock the operator out.
 
-**Target.** Trust the proxy explicitly (its container network), so the client IP is the real one.
+`CloudProxyTrust` now resolves the trust set for both. Default: every private range plus loopback (the
+container network the deployment's own proxy runs on) — a public peer is never trusted, so an exposed
+port cannot be used to pick a partition. `Cloud:Proxy:TrustedProxies`/`TrustedNetworks` give an explicit
+set instead, `ForwardLimit` stays at one hop because Caddy appends the real client, and a malformed
+entry throws at startup. No deploy-stack change needed.
 
-**Tests.** Two different `X-Forwarded-For` values behind the trusted proxy get separate buckets; an
-untrusted source cannot spoof the partition.
+### P1-3 Every external instance's contributions are swallowed as duplicates — `DONE` (cloud 46c4f5d)
 
-### P1-3 Every external instance's contributions are swallowed as duplicates — `OPEN` (cloud)
+Idempotency keys were unique across the whole deployment, but clients derive them from the content they
+observed, so two instances that saw the same fact send the same key by construction. The second instance
+got `duplicate`, and no event, observation or candidate evidence was written — so the more instances
+agreed on a fact, the less of it could reach the `DistinctInstances` thresholds promotion and every
+benchmark bucket depend on.
 
-`FullWorth.Cloud.Infrastructure/Persistence/CloudDbContext.cs:117` makes submission idempotency keys
-globally unique instead of unique **per instance**. As soon as a second instance reports the same
-content-derived observation, it is discarded — which also caps the `DistinctInstances` counters the
-entire consensus model is built on.
-
-**Target.** Composite uniqueness `(InstanceId, IdempotencyKey)`.
-
-**Tests.** Two instances submitting the same observation both count; the same instance submitting twice
-counts once.
+Now unique on `(InstanceId, IdempotencyKey)`, with the existence check scoped the same way; a single
+instance repeating a key is still a duplicate. Batch receipts had the same shape of bug (keyed on
+`BatchId` alone, so another instance's receipt was replayed and its own events dropped) and are now keyed
+`(InstanceId, BatchId)`. `CloudDynamicLearningSchemaUpgrade` migrates existing databases.
 
 ### P1-4 External instances can never verify a knowledge pack — `NEEDS DECISION`
 
