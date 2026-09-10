@@ -996,9 +996,16 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   const statusTools=dlg.querySelector('#bank-status-tools'),statusState=statusTools.querySelector('[data-status-state]'),statusConnect=statusTools.querySelector('[data-status-connect]');
   let banks=[],providerStatusState=null;
 
+  // Enable Banking's /aspsps only returns the banks the API application is ENABLED for, so with a
+  // private application a bank that exists at Enable Banking is simply absent here until it has been
+  // added there. An empty list used to read "Keine Einträge", which looks like the bank is not
+  // supported at all - the one thing it does not mean.
+  const emptyHint=()=>`<div class="row-sub">${esc(get('bankingSetup.bankMissingHint'))}<br><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.apiApplications'))} ↗</a></div>`;
   const draw=filter=>{
     box.innerHTML='';
+    let shown=0;
     for(const bank of banks.filter(x=>!filter||(x.name||'').toLowerCase().includes(filter.toLowerCase())).slice(0,100)){
+      shown++;
       const b=document.createElement('button');b.type='button';b.className='bank-option';
       if(bank.logo){
         const logo=document.createElement('img');logo.className='bank-option-logo';logo.src=bank.logo;logo.alt='';
@@ -1024,7 +1031,7 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
       b.onclick=()=>{dlg.close();if(bank.fullworthProvider==='fints')openIngConnectionOptions(reconnectConnection);else openBankConnectionOptions(bank,reconnectConnection?.id||null,status?.profile?.id||null)};
       box.appendChild(b);
     }
-    if(!banks.length)box.innerHTML=`<div class="row-sub">${esc(get('common.empty'))}</div>`;
+    if(!shown)box.innerHTML=emptyHint();
   };
 
   const loadCountry=async()=>{

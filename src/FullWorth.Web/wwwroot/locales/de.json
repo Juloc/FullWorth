@@ -953,6 +953,7 @@
     "openControlPanel": "Enable Banking anmelden",
     "ack": "Ich richte den Zugang für meine eigenen Konten ein.",
     "createApp": "Erstelle im Enable-Banking-Control-Panel eine AIS-Application. Für echte eigene Konten: Production und anschließend Restricted Mode durch Verknüpfen der eigenen Konten.",
+    "bankMissingHint": "Hier erscheinen nur Banken, die in deiner Enable-Banking-Application aktiviert sind. Fehlt eine Bank, aktiviere sie zuerst dort und lade die Liste neu.",
     "apiApplications": "API Applications öffnen",
     "callback": "Redirect URL",
     "applicationId": "Application ID",

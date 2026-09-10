@@ -455,6 +455,17 @@ not exist at all — not because a list filtered them out, but because the ident
 they cannot have. The fix is therefore the same mechanism O-4 still needs: an explicit, user-chosen and
 reversible link between two accounts that does not depend on an IBAN. Both ship together.
 
+### O-8 A bank missing from the picker looked unsupported — `DONE`
+
+Reported while diagnosing Ikano. Enable Banking's `/aspsps?country=..&service=AIS` returns only the
+institutions the calling **API application** is enabled for, so with a private application a bank that
+Enable Banking fully supports is simply absent from FullWorth's picker until it has been added there.
+The picker rendered "Keine Einträge" for that, which reads as "this bank is not supported" — the one
+thing it does not mean, and the reason the owner went looking for a FullWorth bug.
+
+**Fixed**: the empty state (and a search that matches nothing) now says that only institutions enabled
+in your own Enable Banking application appear, and links straight to the API Applications page.
+
 ### O-6 Contracts cannot be merged in practice, and the wealth projection is only a tile — `OPEN`
 
 Two things.

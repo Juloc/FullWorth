@@ -953,6 +953,7 @@
     "openControlPanel": "Sign in to Enable Banking",
     "ack": "I am setting this up for my own accounts.",
     "createApp": "Create an AIS application in the Enable Banking Control Panel. For your own real accounts choose Production, then activate restricted mode by linking your own accounts.",
+    "bankMissingHint": "Only banks enabled in your Enable Banking application appear here. If one is missing, enable it there first and reload the list.",
     "apiApplications": "Open API Applications",
     "callback": "Redirect URL",
     "applicationId": "Application ID",

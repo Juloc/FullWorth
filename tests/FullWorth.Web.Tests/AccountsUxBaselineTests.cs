@@ -171,6 +171,22 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("accounts.needsBalance", js);
     }
 
+    /// <summary>
+    /// Enable Banking's /aspsps only returns the banks the API application is ENABLED for. With a private
+    /// application a bank that exists at Enable Banking is simply absent from the picker until it has been
+    /// added there - and the picker said "Keine Einträge", which reads as "not supported", the one thing
+    /// it does not mean. The empty state has to explain it and link to the application.
+    /// </summary>
+    [Fact]
+    public async Task BankPicker_ExplainsThatOnlyEnabledInstitutionsAppear()
+    {
+        var js = await GetAsync("/features/accounts.js");
+
+        Assert.Contains("bankingSetup.bankMissingHint", js);
+        Assert.Contains("https://enablebanking.com/cp/applications", js);
+        Assert.DoesNotContain("if(!banks.length)box.innerHTML", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);
