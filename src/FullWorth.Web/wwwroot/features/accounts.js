@@ -45,12 +45,16 @@ const ACCT_FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2
 
 function openAccountActionsDialog(account, groups) {
   const isManual = account.provider === 'manual' && !account.bankConnectionId;
+  // Only a link the owner made can be taken back. A row excluded by the automatic same-IBAN rule keeps
+  // offering "link", because saying it out loud is what makes the decision theirs and reversible.
+  const linked = account.duplicateLinkExplicit === true;
   const actions = [
     ['coach', get('accounts.askCoach'), false],
     ['visual', get('accounts.editVisual'), false],
     ...(groups || []).length ? [['move', get('accounts.moveToGroup'), false]] : [],
     ['rename', get('accounts.rename'), false],
     ...(canSetBalance(account) ? [['balance', get('accounts.updateBalance'), false]] : []),
+    [linked ? 'unlink' : 'link', get(linked ? 'accounts.unlinkSame' : 'accounts.linkSame'), false],
     ...(isManual ? [['delete', get('accounts.delete'), true]] : [])
   ];
 
@@ -83,6 +87,10 @@ function openAccountActionsDialog(account, groups) {
       openAccountNameDialog(account);
     } else if (action === 'balance') {
       openBalanceDialog(account);
+    } else if (action === 'link') {
+      openAccountLinkDialog(account).catch(console.error);
+    } else if (action === 'unlink') {
+      unlinkAccount(account).catch(console.error);
     } else if (action === 'delete') {
       deleteAccount(account);
     }
@@ -100,10 +108,11 @@ function accountRow(x,groups){
   const walletsLine=otherWallets.length
     ? `<div class="amount-wallets">${otherWallets.map(b=>esc(money(b.amount,b.currency))).join(' · ')}</div>`
     : '';
-  // The same bank account reached through a second provider stays visible - it brings data the other
-  // connection does not - but it is out of the totals, and the row has to say why.
+  // The same bank account reached through a second provider - or one the owner declared the same as
+  // another - stays visible with everything it holds, but it is out of the totals, and the row has to
+  // say why. A link the owner made says so in their words; the automatic same-IBAN match says "doppelt".
   const duplicateNote=x.duplicateOfDisplayName
-    ? ` · ${esc(get('accounts.duplicateOf').replace('{name}',x.duplicateOfDisplayName))}`
+    ? ` · ${esc(get(x.duplicateLinkExplicit?'accounts.countedAs':'accounts.duplicateOf').replace('{name}',x.duplicateOfDisplayName))}`
     : '';
   // The as-of date is the date the figure is valid FOR; capturedAt is only when it was recorded.
   // A balance anchored from last month's statement has to read as last month's, and a figure the
@@ -166,6 +175,10 @@ async function loadAccountsView(){
   const total=accts=>{
     let sum=0,incomplete=false;
     for(const a of accts){
+      // An account that is out of net worth - a same-IBAN duplicate, or one the owner linked as the
+      // same account - must be out of this subtotal too, or the group header contradicts the totals
+      // right above it and the money still reads as counted twice.
+      if(a.includeInNetWorth===false)continue;
       if(a.baseValue!=null){sum+=Number(a.baseValue);continue}
       if(a.latestBalance&&a.latestBalance.currency===baseCur){sum+=Number(a.latestBalance.amount);continue}
       if(a.latestBalance)incomplete=true;
@@ -272,6 +285,55 @@ async function deleteAccount(account){
   if(!await ctx.confirm(get('accounts.deleteConfirm').replace('{name}',()=>name),{destructive:true,confirmLabel:get('accounts.delete')}))return;
   try{await api(`api/accounts/${account.id}`,{method:'DELETE'});toast(get('accounts.deleted'));await loadAccountsView()}
   catch(err){toast(err.message||get('common.error'))}
+}
+// Two accounts can be the same real-world account without sharing an IBAN: a PayPal, Wise or Revolut
+// wallet, a cash account and a manual one have none at all, so every automatic same-IBAN check is blind
+// to them. This is the owner's own decision, and it is only about counting - the picked account keeps
+// counting, this one stays in the list with all of its bookings and balances and drops out of the
+// totals. The picker therefore offers EVERY other account of the space, wallets included.
+async function openAccountLinkDialog(account){
+  let state;
+  try{state=await api(`api/accounts/${account.id}/link`)}
+  catch(err){toast(err.message||get('common.error'));return}
+  // No chains: an account other rows are already counted as cannot itself become a duplicate. Say that
+  // here instead of letting the server's conflict surface as a raw message.
+  if((state?.linkedToThis||[]).length){toast(get('accounts.linkIsTarget'));return}
+  // A candidate that is itself linked, or already out of the totals, cannot carry the money - the
+  // server refuses both, so they are not offered.
+  const candidates=(state?.candidates||[]).filter(c=>!c.isLinked&&c.includeInNetWorth);
+  if(!candidates.length){toast(get('accounts.linkNoCandidates'));return}
+  const label=c=>{
+    const name=c.displayName||c.institutionName||'';
+    const bank=c.institutionName&&c.institutionName!==name?` · ${c.institutionName}`:'';
+    return `${name}${bank}${c.ibanLast4?` · ${maskIdentifier(c.ibanLast4)}`:''}`;
+  };
+  const opts=candidates.map(c=>`<option value="${esc(c.id)}"${state.duplicateOfAccountId===c.id?' selected':''}>${esc(label(c))}</option>`).join('');
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.linkSame'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div>
+    <p class="row-sub">${esc(get('accounts.linkSameHint'))}</p>
+    <label>${esc(get('accounts.linkTarget'))}<select name="target">${opts}</select></label>
+    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  dlg.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const duplicateOfAccountId=String(new FormData(e.currentTarget).get('target')||'');
+    if(!duplicateOfAccountId)return;
+    try{
+      await api(`api/accounts/${account.id}/link`,{...jsonBody({duplicateOfAccountId}),method:'PUT'});
+      dlg.close();toast(get('accounts.linked'));await loadAccountsView();
+    }catch(err){toast(err.message||get('common.error'))}
+  };
+  dlg.showModal();
+}
+// Undo that decision. Nothing was ever moved, so there is nothing to move back: the account only
+// returns to whatever it counted as before the link.
+async function unlinkAccount(account){
+  const name=account.duplicateOfDisplayName||account.displayName||account.institutionName;
+  if(!await ctx.confirm(get('accounts.unlinkConfirm').replace('{name}',()=>name),{confirmLabel:get('accounts.unlinkSame')}))return;
+  try{
+    await api(`api/accounts/${account.id}/link`,{method:'DELETE'});
+    toast(get('accounts.unlinked'));await loadAccountsView();
+  }catch(err){toast(err.message||get('common.error'))}
 }
 // Create or rename an account group (§8.1).
 async function openGroupDialog(existing){

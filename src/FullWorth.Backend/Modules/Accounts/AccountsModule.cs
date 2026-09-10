@@ -19,6 +19,10 @@ public sealed class FinanceAccount
     public string ProviderAccountId { get; set; } = string.Empty;
     // Import archive accounts can be explicitly and persistently mapped to their canonical account.
     // Null for ordinary accounts and for imports that have not been confirmed by the user yet.
+    // NOTE: this is a MERGE marker, not a counting one - FinanzguruAccountReconciliationService MOVES
+    // the archive's bookings onto the target and keeps doing so on every sync. It is therefore not the
+    // home for "these two accounts are the same"; that is DuplicateOfAccountId below, which never
+    // touches a booking.
     public Guid? ImportLinkedAccountId { get; set; }
     public string InstitutionName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
@@ -34,6 +38,24 @@ public sealed class FinanceAccount
     public string? IbanLookup { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IncludeInNetWorth { get; set; } = true;
+
+    /// <summary>
+    /// The account the owner declared this one to be the same real-world account as. Set only by an
+    /// explicit user decision, never by a sync, and deliberately independent of the IBAN: PayPal, Wise,
+    /// Revolut, cash and manual accounts have no IBAN, so every identity check keyed on that token
+    /// (IbanLookup) can never see them as duplicates of anything.
+    ///
+    /// It is a statement about COUNTING, not a data merge: the linked account keeps every booking and
+    /// balance it has and stays visible, it is only left out of the totals.
+    /// </summary>
+    public Guid? DuplicateOfAccountId { get; set; }
+
+    /// <summary>
+    /// What <see cref="IncludeInNetWorth"/> was immediately before the link was made, so unlinking
+    /// restores the previous state instead of guessing "true". An account that the automatic IBAN rule
+    /// had already excluded at creation goes back to excluded, not to counted.
+    /// </summary>
+    public bool? IncludeInNetWorthBeforeLink { get; set; }
     public int SortOrder { get; set; }
     // Optional user-defined group (§8.1). SetNull on group delete, so accounts are never orphaned.
     public Guid? GroupId { get; set; }
@@ -133,9 +155,11 @@ public static class BalanceSnapshotQueries
 // currency it holds - PayPal, Wise and Revolut report a wallet per currency - and it is what any total
 // must be built from. It used to be one row per account, so every other wallet was invisible.
 // DuplicateOf* names the account this one is the same bank account as, reached through another
-// provider (same IBAN). Both connections are kept on purpose - each brings data the other does not -
-// so the row has to say why one of them is not in the totals.
-public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null);
+// provider (same IBAN) or declared so by the owner. Both connections are kept on purpose - each brings
+// data the other does not - so the row has to say why one of them is not in the totals.
+// DuplicateLinkExplicit separates the two sources: only a link the owner made can be taken back, and
+// the row's actions must not offer "unlink" for a plain IBAN match.
+public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null, bool DuplicateLinkExplicit = false);
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive, bool? IncludeInNetWorth, int? SortOrder);
 // AsOf defaults to today when omitted, so an existing caller keeps its behaviour. Note is the
@@ -145,6 +169,51 @@ public sealed record AccountGroupDto(Guid Id, Guid FullWorthSpaceId, string Name
 public sealed record AccountGroupWrite(string Name, int? SortOrder);
 public sealed record AccountGroupAssignRequest(Guid? GroupId);
 public enum AccountGroupResult { Ok, NotFound, Forbidden }
+
+// --- Explicit "these two accounts are the same" link (O-4 / O-5) ---
+
+/// <summary>The account this one is to be counted as. Any account of the space qualifies, wallets and
+/// cash included - the link is deliberately not keyed on an IBAN.</summary>
+public sealed record AccountLinkRequest(Guid DuplicateOfAccountId);
+
+/// <summary>A candidate for the picker: every other account of the space the caller owns.</summary>
+public sealed record AccountLinkCandidate(
+    Guid Id,
+    string DisplayName,
+    string InstitutionName,
+    string Currency,
+    string? IbanLast4,
+    bool IsActive,
+    bool IncludeInNetWorth,
+    bool IsLinked);
+
+/// <summary>
+/// What the owner needs to decide: whether this account is already linked (and by whom - a decision of
+/// theirs or the automatic IBAN rule), which accounts declare themselves the same as this one, and what
+/// can be picked.
+/// </summary>
+public sealed record AccountLinkState(
+    Guid AccountId,
+    Guid? DuplicateOfAccountId,
+    string? DuplicateOfDisplayName,
+    bool Explicit,
+    IReadOnlyList<AccountLinkCandidate> Candidates,
+    IReadOnlyList<AccountLinkCandidate> LinkedToThis);
+
+public enum AccountLinkResult
+{
+    Ok,
+    NotFound,
+    Forbidden,
+    /// <summary>The picked account is itself declared a duplicate of a third one.</summary>
+    TargetIsLinked,
+    /// <summary>Other accounts are already counted as this one, so it cannot become a duplicate itself.</summary>
+    IsLinkTarget,
+    /// <summary>The picked account is out of the totals, so linking would count the money zero times.</summary>
+    TargetNotCounted,
+    /// <summary>Unlink on an account that carries no explicit link.</summary>
+    NotLinked
+}
 
 public sealed class AccountStore(FullWorthDbContext db, AuditService? auditService = null, FullWorth.Backend.Modules.Fx.CurrencyConverter? fx = null)
 {
@@ -164,41 +233,79 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
     // connection brings data the other does not - but only one of them counts in the totals. The row
     // has to name the other one, or a user seeing an account excluded from their net worth has no way
     // to tell why.
+    //
+    // Two sources, in this order of authority:
+    //   1. DuplicateOfAccountId - the owner said so. It works for every account, wallets and cash
+    //      included, because it is not derived from an identifier those accounts do not have.
+    //   2. The IbanLookup match - the automatic rule, only ever a fallback. A user decision wins.
     private async Task<List<AccountListItem>> WithDuplicateMarkersAsync(
         List<AccountListItem> items, CancellationToken ct)
     {
         var excluded = items.Where(item => !item.IncludeInNetWorth).Select(item => item.Id).ToArray();
         if (excluded.Length == 0) return items;
 
+        var ids = items.Select(item => item.Id).ToArray();
         // IbanLookup is a keyed token, never the IBAN itself, and never leaves the server.
         var identities = await db.Accounts.AsNoTracking()
-            .Where(account => account.IbanLookup != null &&
-                              items.Select(item => item.Id).Contains(account.Id))
-            .Select(account => new { account.Id, account.IbanLookup, account.IncludeInNetWorth })
+            .Where(account => ids.Contains(account.Id))
+            .Select(account => new
+            {
+                account.Id,
+                account.IbanLookup,
+                account.IncludeInNetWorth,
+                account.DuplicateOfAccountId
+            })
             .ToListAsync(ct);
+
+        var explicitLinks = identities
+            .Where(account => !account.IncludeInNetWorth && account.DuplicateOfAccountId is not null)
+            .ToDictionary(account => account.Id, account => account.DuplicateOfAccountId!.Value);
         var counterpartByAccount = identities
-            .Where(account => !account.IncludeInNetWorth)
+            .Where(account => !account.IncludeInNetWorth &&
+                              account.DuplicateOfAccountId is null &&
+                              account.IbanLookup != null)
             .Select(account => new
             {
                 account.Id,
                 Counterpart = identities.FirstOrDefault(other =>
                     other.Id != account.Id &&
                     other.IncludeInNetWorth &&
+                    other.IbanLookup != null &&
                     other.IbanLookup == account.IbanLookup)
             })
             .Where(pair => pair.Counterpart is not null)
             .ToDictionary(pair => pair.Id, pair => pair.Counterpart!.Id);
-        if (counterpartByAccount.Count == 0) return items;
+        if (explicitLinks.Count == 0 && counterpartByAccount.Count == 0) return items;
 
         var nameById = items.ToDictionary(item => item.Id, item => item.DisplayName);
+        // A link may point at an account outside this result set (one the caller does not own, or one
+        // hidden by a space filter). The marker still has to name it, or the row reads as excluded for
+        // no reason at all.
+        var unnamed = explicitLinks.Values.Where(id => !nameById.ContainsKey(id)).Distinct().ToArray();
+        if (unnamed.Length > 0)
+            foreach (var row in await db.Accounts.AsNoTracking()
+                         .Where(account => unnamed.Contains(account.Id))
+                         .Select(account => new { account.Id, account.DisplayName })
+                         .ToListAsync(ct))
+                nameById[row.Id] = row.DisplayName;
+
         return items.Select(item =>
-            counterpartByAccount.TryGetValue(item.Id, out var counterpart)
+        {
+            if (explicitLinks.TryGetValue(item.Id, out var linked))
+                return item with
+                {
+                    DuplicateOfAccountId = linked,
+                    DuplicateOfDisplayName = nameById.GetValueOrDefault(linked),
+                    DuplicateLinkExplicit = true
+                };
+            return counterpartByAccount.TryGetValue(item.Id, out var counterpart)
                 ? item with
                 {
                     DuplicateOfAccountId = counterpart,
                     DuplicateOfDisplayName = nameById.GetValueOrDefault(counterpart)
                 }
-                : item).ToList();
+                : item;
+        }).ToList();
     }
 
     // An account can hold money in several currencies. The projection above can only carry one row per
@@ -511,6 +618,144 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
     /// <summary>The provider of a Finanzguru history import; see FinanzguruImportService.</summary>
     private const string FinanzguruImportProvider = "finanzguru-import";
 
+    // --- Explicit "these two accounts are the same" link (O-4 / O-5) ---
+    //
+    // Every automatic path that decides two accounts are the same is keyed on IbanLookup: the ingest's
+    // count-once rule and the duplicate marker above. PayPal, Wise, Revolut, cash and manual accounts
+    // have no IBAN, so for them that decision could never be made at all - and even where an IBAN
+    // exists it was made once, at creation, with no way for the owner to make it or take it back.
+    //
+    // The link below is that missing decision. It is a statement about COUNTING only: no booking and no
+    // balance is moved or deleted, the linked account stays visible and keeps everything it has, it is
+    // just out of the totals. Unlinking puts IncludeInNetWorth back to the stored previous value.
+
+    /// <summary>
+    /// Everything the owner needs to link this account: its current link (and whether that link is
+    /// theirs or the automatic IBAN rule's), the accounts that are already counted as this one, and the
+    /// candidates. Candidates are deliberately unfiltered by type or IBAN - a PayPal wallet, a cash
+    /// account and a Girokonto are all valid answers to "which account is this really?".
+    /// </summary>
+    public async Task<AccountLinkState?> GetLinkStateAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, CancellationToken ct)
+    {
+        var accounts = await AccessibleAccounts(userId, fullWorthSpaceId)
+            .Select(account => new LinkRow(
+                account.Id, account.DisplayName, account.InstitutionName, account.Currency,
+                account.IbanLast4, account.IsActive, account.IncludeInNetWorth,
+                account.DuplicateOfAccountId))
+            .ToListAsync(ct);
+        var self = accounts.SingleOrDefault(account => account.Id == accountId);
+        if (self is null) return null;
+
+        var candidates = accounts
+            .Where(account => account.Id != accountId)
+            .OrderByDescending(account => account.IsActive)
+            .ThenBy(account => account.InstitutionName, StringComparer.CurrentCulture)
+            .ThenBy(account => account.DisplayName, StringComparer.CurrentCulture)
+            .Select(ToCandidate)
+            .ToList();
+        var linkedToThis = accounts
+            .Where(account => account.DuplicateOfAccountId == accountId)
+            .OrderBy(account => account.DisplayName, StringComparer.CurrentCulture)
+            .Select(ToCandidate)
+            .ToList();
+
+        var duplicateOf = self.DuplicateOfAccountId;
+        string? duplicateOfName = duplicateOf is null
+            ? null
+            : accounts.FirstOrDefault(account => account.Id == duplicateOf.Value)?.DisplayName
+              ?? await db.Accounts.AsNoTracking()
+                  .Where(account => account.Id == duplicateOf.Value)
+                  .Select(account => account.DisplayName)
+                  .FirstOrDefaultAsync(ct);
+
+        return new AccountLinkState(
+            accountId, duplicateOf, duplicateOfName, duplicateOf is not null, candidates, linkedToThis);
+    }
+
+    /// <summary>
+    /// Declares <paramref name="accountId"/> the same real-world account as <paramref name="targetId"/>
+    /// and takes it out of the totals. Owner-gated, and ordered exactly like the manual-balance write:
+    /// not-found → forbidden → conflict.
+    /// </summary>
+    public async Task<AccountLinkResult> LinkAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, Guid targetId, CancellationToken ct)
+    {
+        if (targetId == Guid.Empty) throw new ArgumentException("The account to count this one as is required.");
+        if (targetId == accountId) throw new ArgumentException("An account cannot be linked to itself.");
+
+        var account = await FindOwnAccountAsync(userId, fullWorthSpaceId, accountId, ct);
+        if (account is null) return AccountLinkResult.NotFound;
+        if (!await IsOwnerAsync(userId, accountId, ct)) return AccountLinkResult.Forbidden;
+
+        var target = await FindOwnAccountAsync(userId, fullWorthSpaceId, targetId, ct);
+        if (target is null) return AccountLinkResult.NotFound;
+
+        // No chains and no cycles: a duplicate never becomes someone else's original, and an original
+        // never becomes a duplicate. Both ends have to be resolved by the owner first, so there is
+        // always exactly one account that carries the money.
+        if (target.DuplicateOfAccountId is not null) return AccountLinkResult.TargetIsLinked;
+        if (await db.Accounts.AsNoTracking().AnyAsync(other => other.DuplicateOfAccountId == accountId, ct))
+            return AccountLinkResult.IsLinkTarget;
+
+        // "Counted once" means once, not zero times. Linking into an account that is itself out of the
+        // totals would make the money disappear from net worth with nothing on screen saying so.
+        if (!target.IncludeInNetWorth) return AccountLinkResult.TargetNotCounted;
+
+        if (account.DuplicateOfAccountId == targetId) return AccountLinkResult.Ok;
+
+        // Only remember the pre-link state on the FIRST link. Re-pointing an existing link must not
+        // overwrite it with the "false" this account already carries because of that link.
+        account.IncludeInNetWorthBeforeLink ??= account.IncludeInNetWorth;
+        account.DuplicateOfAccountId = targetId;
+        account.IncludeInNetWorth = false;
+        account.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Record(fullWorthSpaceId, userId, "account.linked_as_duplicate", "Account", accountId);
+        await db.SaveChangesAsync(ct);
+        return AccountLinkResult.Ok;
+    }
+
+    /// <summary>
+    /// Takes the owner's link back and restores <see cref="FinanceAccount.IncludeInNetWorth"/> to the
+    /// value stored when the link was made. Nothing else changes - there was never anything to undo,
+    /// because linking moved no data.
+    /// </summary>
+    public async Task<AccountLinkResult> UnlinkAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, CancellationToken ct)
+    {
+        var account = await FindOwnAccountAsync(userId, fullWorthSpaceId, accountId, ct);
+        if (account is null) return AccountLinkResult.NotFound;
+        if (!await IsOwnerAsync(userId, accountId, ct)) return AccountLinkResult.Forbidden;
+        if (account.DuplicateOfAccountId is null) return AccountLinkResult.NotLinked;
+
+        account.DuplicateOfAccountId = null;
+        // Stored, never guessed. An account the IBAN rule had already excluded at creation goes back to
+        // excluded; one that was counted goes back to counted.
+        account.IncludeInNetWorth = account.IncludeInNetWorthBeforeLink ?? true;
+        account.IncludeInNetWorthBeforeLink = null;
+        account.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Record(fullWorthSpaceId, userId, "account.duplicate_link_removed", "Account", accountId);
+        await db.SaveChangesAsync(ct);
+        return AccountLinkResult.Ok;
+    }
+
+    private sealed record LinkRow(
+        Guid Id, string DisplayName, string InstitutionName, string Currency, string? IbanLast4,
+        bool IsActive, bool IncludeInNetWorth, Guid? DuplicateOfAccountId);
+
+    private static AccountLinkCandidate ToCandidate(LinkRow account) => new(
+        account.Id, account.DisplayName, account.InstitutionName, account.Currency,
+        account.IbanLast4, account.IsActive, account.IncludeInNetWorth,
+        account.DuplicateOfAccountId is not null);
+
+    private Task<FinanceAccount?> FindOwnAccountAsync(Guid userId, Guid fullWorthSpaceId, Guid accountId, CancellationToken ct) =>
+        db.Accounts.SingleOrDefaultAsync(x =>
+            x.Id == accountId &&
+            x.FullWorthSpaceId == fullWorthSpaceId &&
+            db.FullWorthSpaceMembers.Any(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId) &&
+            x.Owners.Any(owner => owner.UserId == userId), ct);
+
+    private Task<bool> IsOwnerAsync(Guid userId, Guid accountId, CancellationToken ct) =>
+        db.Set<AccountOwner>().AsNoTracking().AnyAsync(x =>
+            x.AccountId == accountId && x.UserId == userId && x.OwnershipType == AccountOwnershipTypes.Owner, ct);
+
     // --- Account groups (§8.1). Group CRUD is space-member gated (like account create); assignment is
     // account-owner gated (like the manual-balance write). ---
 
@@ -707,7 +952,18 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             entity.DisplayName = request.DisplayName.Trim();
         }
         if (request.IsActive.HasValue) entity.IsActive = request.IsActive.Value;
-        if (request.IncludeInNetWorth.HasValue) entity.IncludeInNetWorth = request.IncludeInNetWorth.Value;
+        if (request.IncludeInNetWorth.HasValue)
+        {
+            entity.IncludeInNetWorth = request.IncludeInNetWorth.Value;
+            // "Count this one after all" and "this one is a duplicate of that one" are the same decision
+            // stated two ways. Keeping the link while switching the account back on would leave the row
+            // counted AND marked as not counted, so the link goes with it.
+            if (request.IncludeInNetWorth.Value && entity.DuplicateOfAccountId is not null)
+            {
+                entity.DuplicateOfAccountId = null;
+                entity.IncludeInNetWorthBeforeLink = null;
+            }
+        }
         if (request.SortOrder.HasValue) entity.SortOrder = request.SortOrder.Value;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
     }
@@ -768,6 +1024,44 @@ public static class AccountEndpoints
                 return Results.BadRequest(new { error = exception.Message });
             }
         });
+
+        // The explicit, reversible "these two accounts are the same" link (O-4/O-5). Owner-gated and
+        // ordered like the balance PUT: not-found → forbidden → conflict. No IBAN anywhere in sight, so
+        // it works for PayPal, Wise, Revolut, cash and manual accounts too.
+        group.MapGet("/{id:guid}/link", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, AccountStore store, CancellationToken ct) =>
+        {
+            var state = await store.GetLinkStateAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            return state is null ? Results.NotFound() : Results.Ok(state);
+        });
+
+        group.MapPut("/{id:guid}/link", async (Guid id, Guid fullWorthSpaceId, AccountLinkRequest request, CurrentUserContext currentUser, AccountStore store, CancellationToken ct) =>
+        {
+            try
+            {
+                return await store.LinkAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request.DuplicateOfAccountId, ct) switch
+                {
+                    AccountLinkResult.Ok => Results.NoContent(),
+                    AccountLinkResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                    AccountLinkResult.TargetIsLinked => Results.Conflict(new { error = "The chosen account is itself linked to another one. Link to that one instead." }),
+                    AccountLinkResult.IsLinkTarget => Results.Conflict(new { error = "Other accounts are already counted as this one. Remove those links first." }),
+                    AccountLinkResult.TargetNotCounted => Results.Conflict(new { error = "The chosen account is excluded from net worth, so linking would count the money nowhere." }),
+                    _ => Results.NotFound()
+                };
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+        group.MapDelete("/{id:guid}/link", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, AccountStore store, CancellationToken ct) =>
+            await store.UnlinkAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct) switch
+            {
+                AccountLinkResult.Ok => Results.NoContent(),
+                AccountLinkResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                AccountLinkResult.NotLinked => Results.Conflict(new { error = "This account is not linked to another one." }),
+                _ => Results.NotFound()
+            });
 
         // Assign (or clear, groupId=null) an account's group. Dedicated endpoint — PATCH's
         // null-means-unchanged settings semantics can't express "ungroup". Owner-gated like the balance PUT.

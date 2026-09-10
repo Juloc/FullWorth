@@ -769,7 +769,17 @@
     "enterTan": "TAN eingeben",
     "syncTanRequired": "Die Bank verlangt eine TAN. Gib sie jetzt ein.",
     "tanUnavailable": "Es wartet keine TAN mehr. Starte den Abgleich neu.",
-    "duplicateOf": "Doppelt zu {name} · zählt nicht im Vermögen"
+    "duplicateOf": "Doppelt zu {name} · zählt nicht im Vermögen",
+    "countedAs": "Zählt als {name} · nur einmal im Vermögen",
+    "linkSame": "Als dasselbe Konto verknüpfen",
+    "linkSameHint": "Beide Konten bleiben mit allen Buchungen erhalten. Nur das gewählte Konto zählt im Vermögen – dieses hier nicht mehr doppelt. Jederzeit widerrufbar.",
+    "linkTarget": "Zählt als dieses Konto",
+    "linkNoCandidates": "Es gibt kein weiteres Konto, mit dem sich dieses verknüpfen ließe.",
+    "linkIsTarget": "Andere Konten zählen bereits als dieses. Hebe zuerst diese Verknüpfungen auf.",
+    "linked": "Konten verknüpft – die Summe zählt nur einmal.",
+    "unlinkSame": "Verknüpfung aufheben",
+    "unlinkConfirm": "Verknüpfung mit „{name}“ aufheben? Es wurde nichts verschoben, das Konto zählt danach wieder wie vorher.",
+    "unlinked": "Verknüpfung aufgehoben."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

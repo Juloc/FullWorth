@@ -415,7 +415,7 @@ bank has not published yet sits at its real position instead of at the very top.
 gets its own "Vorgemerkt" header, which makes the "Heute" header below it mean today again, and a pending
 row with no booking date shows its value date instead of an em dash.
 
-### O-4 An imported account must be able to get a balance without being connected — `PARTLY DONE`
+### O-4 An imported account must be able to get a balance without being connected — `DONE`
 
 The first half is done. P0-4 opened the server side: `PUT api/accounts/{id}/balance` accepts a balance for
 any account without a bank connection, a `finanzguru-import` account included, and anchoring one makes it
@@ -430,12 +430,9 @@ nothing to discard), and the balance affordance was rendered only for `provider 
 account existed, carried its history, and had no reachable path to a balance anywhere in the app. It is
 listed now, marked "Kontostand hinterlegen", and offers the balance action.
 
-Still open: when an imported account is later matched with a real connected one, the **duplicate has to
-be resolvable — and the resolution has to be reversible and changeable**. P1-14 built the detection and
-the "count it once" rule for the same IBAN across providers, but nothing lets the user say "these two ARE
-the same, merge them" or undo that decision afterwards.
+The second half is done too, together with O-5 below — it is one mechanism, described there.
 
-### O-5 A PayPal account cannot be linked, only a Giro account — `OPEN` (cause found, ships with O-4)
+### O-5 A PayPal account cannot be linked, only a Giro account — `DONE`
 
 The first guess was wrong and is corrected here: **no account picker filters by account type.** The
 contract payment account, the depot settlement account, the loan account, the emergency-fund scope and
@@ -454,6 +451,43 @@ PayPal, Wise, Revolut, cash and manual accounts have no IBAN, so for them linkin
 not exist at all — not because a list filtered them out, but because the identity these paths use is one
 they cannot have. The fix is therefore the same mechanism O-4 still needs: an explicit, user-chosen and
 reversible link between two accounts that does not depend on an IBAN. Both ship together.
+
+**Fixed** with one mechanism for both items: `FinanceAccount.DuplicateOfAccountId` plus
+`IncludeInNetWorthBeforeLink` (migration `20260910230000_AccountDuplicateLink`), and
+`GET`/`PUT`/`DELETE api/accounts/{id}/link`, owner-gated with the same not-found → forbidden → conflict
+ordering as the manual-balance write.
+
+`ImportLinkedAccountId` was checked first and deliberately **not** reused: it means "this Finanzguru
+archive was merged into that account", and `FinanzguruAccountReconciliationService` keeps **moving**
+bookings along it on every sync. A counting link must move nothing, so it needed its own column.
+
+What the link is: a statement about counting, nothing else. The secondary keeps every booking and
+balance, stays in the list, and only leaves the totals (`IncludeInNetWorth=false`, which every
+aggregation already honours). The row's existing `duplicateOfAccountId`/`duplicateOfDisplayName` now
+have two sources, and a new `duplicateLinkExplicit` says which: a user decision wins over the automatic
+IBAN match, and only a user decision offers "Verknüpfung aufheben". Unlinking restores the **stored**
+previous flag — an account the IBAN rule had already excluded at creation goes back to excluded, it is
+not guessed back to counted.
+
+Three rules the implementation enforces rather than assumes: no chains or cycles (a duplicate cannot
+become someone else's original and vice versa), the account that keeps counting must actually be counted
+(otherwise "once" would be "never"), and switching a linked account back on via `PATCH` drops the link
+instead of leaving the row counted *and* marked as not counted. The automatic IBAN rule is unchanged and
+still fires only at creation, so no sync can overrule the owner.
+
+Also fixed on the way: the accounts screen's group subtotal summed every row regardless of
+`IncludeInNetWorth`, so a duplicate stayed counted twice in the header right above the totals that
+excluded it.
+
+Two residuals, both named on purpose:
+
+- Hard-deleting the account that keeps counting (only possible by disconnecting its bank *with* "delete
+  all data") drops the link by `ON DELETE SET NULL` and leaves the survivor excluded until the owner
+  switches it back on. It is visible in the list and one click away; the alternative — cascading — would
+  delete a full account with all its bookings, which is never acceptable.
+- `TransferDetection` is untouched. It also compares `IbanLookup`, but for a different question: which
+  two *bookings* are the two sides of one transfer. Teaching it the account link is its own change, and
+  it does not affect what is counted in net worth.
 
 ### O-8 A bank missing from the picker looked unsupported — `DONE`
 

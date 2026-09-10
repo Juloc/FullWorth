@@ -214,8 +214,14 @@ public sealed class IngestionService(
             // worth. Both connections stay (each brings data the other does not), but the money is
             // counted once: a newly created duplicate starts excluded from totals.
             //
-            // Only ever at creation. An account the user deliberately switched back on must not be
-            // silently switched off again on the next sync.
+            // Only ever at creation, and only where an IBAN exists. Two consequences, both deliberate:
+            //
+            // - An account the user deliberately switched back on, or explicitly unlinked, must not be
+            //   silently switched off again on the next sync. `isNew` is what guarantees that: for an
+            //   account that already exists this block never runs, so no sync can overrule the owner.
+            // - A provider that reports no IBAN (PayPal, Wise, Revolut) cannot be de-duplicated here at
+            //   all, because there is no identity to match on. That case is the owner's explicit
+            //   "these two are the same" link - AccountStore.LinkAsync - which needs no IBAN.
             if (isNew && ibanLookup is not null)
             {
                 var alreadyKnown = await db.Accounts

@@ -769,7 +769,17 @@
     "enterTan": "Enter TAN",
     "syncTanRequired": "The bank is asking for a TAN. Enter it now.",
     "tanUnavailable": "No TAN is waiting any more. Start the sync again.",
-    "duplicateOf": "Duplicate of {name} · not counted in net worth"
+    "duplicateOf": "Duplicate of {name} · not counted in net worth",
+    "countedAs": "Counted as {name} · only once in net worth",
+    "linkSame": "Link as the same account",
+    "linkSameHint": "Both accounts keep every booking they have. Only the account you pick counts towards net worth, so this one is no longer counted twice. Reversible at any time.",
+    "linkTarget": "Counts as this account",
+    "linkNoCandidates": "There is no other account this one could be linked with.",
+    "linkIsTarget": "Other accounts are already counted as this one. Remove those links first.",
+    "linked": "Accounts linked – the money counts once.",
+    "unlinkSame": "Remove link",
+    "unlinkConfirm": "Remove the link with “{name}”? Nothing was moved, so the account simply counts as it did before.",
+    "unlinked": "Link removed."
   },
   "a11y": {
     "skipToContent": "Skip to content"

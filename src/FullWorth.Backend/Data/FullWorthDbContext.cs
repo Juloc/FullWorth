@@ -134,6 +134,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => new { x.FullWorthSpaceId, x.Provider, x.IdentificationHash }).IsUnique();
             e.HasIndex(x => x.BankConnectionId);
             e.HasIndex(x => x.ImportLinkedAccountId);
+            e.HasIndex(x => x.DuplicateOfAccountId);
             e.HasIndex(x => x.FullWorthSpaceId);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.Usage).HasMaxLength(16);
@@ -148,6 +149,10 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<BankConnection>().WithMany().HasForeignKey(x => x.BankConnectionId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.ImportLinkedAccountId).OnDelete(DeleteBehavior.SetNull);
+            // SetNull, never Cascade: the linked account is a full account with its own bookings and
+            // balances. Deleting the account it was declared the same as must drop the link, never the
+            // data behind it.
+            e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.DuplicateOfAccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<AccountGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.SetNull);
         });
 
