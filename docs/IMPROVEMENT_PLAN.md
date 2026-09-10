@@ -370,7 +370,7 @@ the running app). If PayPal reports only a value date, the fix is to fall back t
 than leaving the date empty; if it reports neither, the row must say "date unknown" instead of adopting
 any timestamp.
 
-### O-2 Pending bookings are never resolved when they book or are cancelled — `CONFIRMED`
+### O-2 Pending bookings are never resolved when they book or are cancelled — `DONE`
 
 `IngestionModule.UpsertTransactionsAsync` only ever inserts or updates. A pending row is keyed
 `fp:<fingerprint including status>` (Enable Banking rarely gives a stable `entry_reference` for pending),
@@ -380,10 +380,12 @@ expired authorisation stays forever.
 
 So every pending payment ends up as two rows, and any view that includes pending counts the money twice.
 
-**Target.** The provider feed is authoritative for the window it covers: a pending row on that account
-that was NOT in the payload, and whose date lies inside the fetched window, is either booked or cancelled
-and is removed (an authorisation was never a ledger entry). Only after a complete account sync, never on
-a partial one, and never for pending rows older than the window.
+**Fixed** exactly that way. A complete account sync now sends a `PendingReconciliation` (the pending
+keys the provider still reports plus the window start); the ingest removes the pending rows that are no
+longer in it and lie inside the window, and audits each as `transaction.pending_resolved`. A run that hit
+the page limit sends nothing, because a truncated history cannot tell a booked row from one it never
+reached. Rows the user has touched - a note, a manual category, a refund or transfer link, a linked
+purchase - are left alone: losing what the user entered is worse than a leftover row.
 
 ### O-3 The "today" bar sits above the newest pending row in the booking history — `OPEN`
 

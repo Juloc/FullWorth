@@ -990,6 +990,11 @@ public sealed class BankSyncService(
         var firstPersist = true;
         var maxPages = Math.Max(1, _sync.MaxPagesPerAccount);
         var pageLimitReached = false;
+        // Every pending row the provider still reports, collected across pages. A pending row we
+        // stored but that is no longer in this answer has either booked or been cancelled - see
+        // PendingReconciliation. Only a run that read the WHOLE window may say that, so this is only
+        // sent when the loop finished without hitting the page limit.
+        var seenPending = new List<string>();
 
         for (var page = 0; page < maxPages; page++)
         {
@@ -1037,6 +1042,10 @@ public sealed class BankSyncService(
                     .ToList()
                 : [];
 
+            seenPending.AddRange(parsed
+                .Where(item => string.Equals(item.Status, "PDNG", StringComparison.OrdinalIgnoreCase))
+                .Select(item => item.ExternalKey));
+
             foreach (var chunk in parsed.Chunk(Math.Max(25, _sync.PersistBatchSize)))
             {
                 await backend.IngestAsync(new(
@@ -1071,6 +1080,20 @@ public sealed class BankSyncService(
             if (page == maxPages - 1)
                 pageLimitReached = true;
         }
+
+        // Only a complete read of the window may conclude that a stored pending row is gone. A
+        // truncated history could simply not have reached it.
+        if (!pageLimitReached)
+            await backend.IngestAsync(new(
+                new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
+                    connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
+                    account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
+                    true, account.HasDetails, AccountIdentificationHashes(account),
+                    account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
+                [],
+                [],
+                [new(account.IdentificationHash, seenPending, from)]), ct);
 
         // A balance the provider sent but nobody could read is reported instead of being replaced by a
         // zero: the connection ends up in the error health state, so the UI does not look like the sync

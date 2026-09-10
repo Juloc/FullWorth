@@ -23,7 +23,24 @@ public sealed record BankConnectionBatch(Guid? ConnectionId, string Provider, st
 public sealed record AccountBatchItem(string IdentificationHash, string ProviderAccountId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool HasDetails = true, IReadOnlyList<string>? IdentificationHashes = null, string? Usage = null, string? PsuStatus = null, decimal? CreditLimitAmount = null, string? CreditLimitCurrency = null, string? Iban = null);
 public sealed record BalanceBatchItem(string IdentificationHash, decimal Amount, string Currency, string BalanceType, DateOnly? ReferenceDate, DateTimeOffset CapturedAt);
 public sealed record TransactionBatchItem(string IdentificationHash, string ExternalKey, string? ProviderTransactionId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? EntryReference, string RawJson, string? CounterpartyAccountIdentifier = null);
-public sealed record FinanceIngestBatch(BankConnectionBatch Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions);
+/// <summary>
+/// What the provider still reports as pending for one account, sent once by a COMPLETE account sync.
+///
+/// A pending row is an authorisation, not a ledger entry. It is keyed by a fingerprint that includes the
+/// status (Enable Banking rarely gives a stable entry_reference for pending), so when the same payment
+/// returns as BOOK it arrives under a different key and is inserted as a SECOND row - and nothing ever
+/// removed the pending one. Every pending payment therefore ended up as two rows, counted twice wherever
+/// pending is included, and a cancelled authorisation stayed forever.
+///
+/// So the feed is treated as authoritative for the window it covers: a pending row that is no longer in
+/// it, and that lies inside that window, has either booked or been cancelled.
+/// </summary>
+/// <param name="WindowFrom">
+/// First day the fetch covered, or null for a full initial sync. Pending rows older than this were not
+/// part of the answer and are left alone.
+/// </param>
+public sealed record PendingReconciliation(string IdentificationHash, IReadOnlyList<string> SeenExternalKeys, DateOnly? WindowFrom);
+public sealed record FinanceIngestBatch(BankConnectionBatch Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions, IReadOnlyList<PendingReconciliation>? PendingReconciliations = null);
 
 public sealed class IngestionService(
     FullWorthDbContext db,
@@ -49,6 +66,9 @@ public sealed class IngestionService(
             accountMap,
             batch.Transactions,
             ct);
+
+        var resolvedPending = await ResolveDisappearedPendingAsync(
+            connection.FullWorthSpaceId, accountMap, batch.PendingReconciliations, ct);
 
         if (finanzguruReconciliation is not null)
             await finanzguruReconciliation.ReconcileAsync(connection.FullWorthSpaceId, accountMap.Values, ct);
@@ -275,6 +295,65 @@ public sealed class IngestionService(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Removes the pending rows the provider no longer reports - they have either booked (and arrived as
+    /// a separate BOOK row, because a pending key includes the status) or the authorisation was
+    /// cancelled. Without this every pending payment stayed behind as a second row forever.
+    ///
+    /// Deliberately narrow. Only inside the window the sync actually fetched, and only for rows nobody
+    /// has touched: a pending row that carries a note, a manual category, a split, a refund or transfer
+    /// link, or a linked purchase is left alone, because losing what the user entered is worse than a
+    /// leftover row. Those are reported so the count is never silently short.
+    /// </summary>
+    private async Task<int> ResolveDisappearedPendingAsync(
+        Guid fullWorthSpaceId,
+        Dictionary<string, FinanceAccount> accounts,
+        IReadOnlyList<PendingReconciliation>? reconciliations,
+        CancellationToken ct)
+    {
+        if (reconciliations is null || reconciliations.Count == 0) return 0;
+        var removed = 0;
+
+        foreach (var reconciliation in reconciliations)
+        {
+            if (!accounts.TryGetValue(reconciliation.IdentificationHash, out var account)) continue;
+            var seen = reconciliation.SeenExternalKeys.ToHashSet(StringComparer.Ordinal);
+
+            var candidates = await db.Transactions
+                .Where(transaction =>
+                    transaction.AccountId == account.Id &&
+                    transaction.Status == "PDNG" &&
+                    transaction.CategorizationSource != "manual" &&
+                    transaction.UserNote == null &&
+                    transaction.RefundOfTransactionId == null &&
+                    transaction.TransferGroupId == null &&
+                    !db.Purchases.Any(purchase =>
+                        purchase.TransactionId == transaction.Id ||
+                        purchase.PaymentLinks.Any(link => link.TransactionId == transaction.Id)))
+                .ToListAsync(ct);
+
+            foreach (var candidate in candidates)
+            {
+                if (seen.Contains(candidate.ExternalKey)) continue;
+                // Outside the fetched window the feed says nothing about this row.
+                var date = candidate.BookingDate ?? candidate.ValueDate;
+                if (reconciliation.WindowFrom is { } from && (date is null || date < from)) continue;
+
+                db.Transactions.Remove(candidate);
+                audit.Record(
+                    fullWorthSpaceId,
+                    null,
+                    "transaction.pending_resolved",
+                    "Transaction",
+                    candidate.Id);
+                removed++;
+            }
+        }
+
+        if (removed > 0) await db.SaveChangesAsync(ct);
+        return removed;
     }
 
     private async Task<int> InsertBalancesAsync(Dictionary<string, FinanceAccount> accounts, IReadOnlyList<BalanceBatchItem> items, CancellationToken ct)
