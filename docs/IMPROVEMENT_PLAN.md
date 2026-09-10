@@ -648,7 +648,7 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
 
   Still open: the frontend does not show the rate and its date yet (the wealth page is being edited in
   parallel), so the data reaches the API but not the screen.
-- **A balance never said where it came from.** `DONE` — `BalanceSnapshot` carries `Source`
+- ~~**A balance never said where it came from.**~~ `DONE` — `BalanceSnapshot` carries `Source`
   (`provider`/`manual`/`import`) and the owner's `Note`, and a manual balance finally uses
   `ReferenceDate` as the owner's as-of date instead of always stamping today. So an account anchored
   from last month's statement reads as last month's figure and says it was entered by hand. A future
