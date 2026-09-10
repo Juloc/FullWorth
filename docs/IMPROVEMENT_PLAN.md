@@ -26,12 +26,12 @@ slice moves to the next one rather than holding the release.
 | Release | Contents | What the owner can check |
 | --- | --- | --- |
 | `alpha.17` | The P0/P1/P2 sweep up to and including the FX refresh fix | shipped |
-| `alpha.18` | Sync-skip reason codes, receipt-poll backoff, O-3 pending ordering, O-7 company car on gross | the log says why a sync skipped; "Vorgemerkt" sits above "Heute"; the salary graph counts the car in Brutto |
-| `alpha.19` | Balance provenance (source, as-of, note), manual balance, Finanzguru import balances, unlinked import accounts counting in net worth | an imported or unconnected account shows a real balance and says where it came from |
-| `alpha.20` | Statement import (CSV/MT940/CAMT) into an existing account, explicit reversible account link/unlink — O-4 second half and O-5 | Ikano and PayPal can be kept current without a live connection, and a duplicate can be resolved and undone |
-| `alpha.21` | O-6: contract merge and the wealth projection as a graph | the three "Weg" contracts become one; the projection is a curve, not a tile |
-| `alpha.22` | bAV step 1 per [PENSION.md](PENSION.md): domain, migration, API and the manual entry flow — see O-9 | the Altersvorsorge area exists and can be filled in by hand |
-| `alpha.23`–`alpha.24` | bAV steps 2 and 3: document import with snapshot extraction, then wealth/salary/dashboard/simulation | a statement fills a contract, and the pension shows up in the wealth and salary views |
+| `alpha.18` | Sync-skip reason codes, receipt-poll backoff, O-3 pending ordering, O-7 company car on gross | shipped |
+| `alpha.19` | The parallel round: O-4 + O-5 (reversible IBAN-free account link), O-6 (contract merge and the projection curve), O-9 (statement import, backend and UI), O-10 step 1 (the Altersvorsorge area), balance provenance and balance meaning, FX rate provenance, the PWA offline shell and safe-area fixes, the Cloud error contract and link-health surface, version stamping | an account can be de-duplicated and undone; the three "Weg" contracts merge; the projection is a curve in the first chart; Ikano can be kept current from its own statement; the Altersvorsorge area can be filled in by hand; a balance says what it is, when it is from and where it came from; the installed app works offline |
+| `alpha.20` | bAV step 2 per [PENSION.md](PENSION.md): document upload, extraction and the review screen | a statement fills a contract instead of being typed in |
+| `alpha.21` | bAV step 3: the wealth block, the salary link, the dashboard entry, the projection and the variant comparison | the pension shows up in the wealth and salary views without a projection ever counting as today’s money |
+| `alpha.22` | The dialog rework per [UI_AUDIT.md](UI_AUDIT.md), steps 1–4 | the editors and the booking filter stop being walls of fields |
+| `alpha.23` | UI_AUDIT steps 5–6: one dialog stylesheet, tokens instead of the ~220 hex literals, and the guard | the dialogs look like one product |
 
 ---
 
