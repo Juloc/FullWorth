@@ -737,6 +737,7 @@ public sealed class BankSyncService(
             {
                 AccountSyncOutcome.AccountResolutionFailed => "ACCOUNT_RESOLUTION_FAILED",
                 AccountSyncOutcome.HistoryPageLimitReached => "HISTORY_PAGE_LIMIT_REACHED",
+                AccountSyncOutcome.BalanceUnreadable => "BALANCE_UNREADABLE",
                 _ => null
             };
 
@@ -923,7 +924,8 @@ public sealed class BankSyncService(
 
         var balancesJson = await client.GetBalancesAsync(
             account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
-        var balances = ParseBalances(account, balancesJson);
+        var balanceResult = ParseBalances(account, balancesJson);
+        var balances = balanceResult.Items;
 
         var now = DateOnly.FromDateTime(DateTime.UtcNow);
         DateOnly? from = syncState?.LatestBookingDate is { } latest
@@ -1019,6 +1021,10 @@ public sealed class BankSyncService(
                 pageLimitReached = true;
         }
 
+        // A balance the provider sent but nobody could read is reported instead of being replaced by a
+        // zero: the connection ends up in the error health state, so the UI does not look like the sync
+        // simply found no money.
+        if (balanceResult.Unreadable > 0) return AccountSyncOutcome.BalanceUnreadable;
         return pageLimitReached
             ? AccountSyncOutcome.HistoryPageLimitReached
             : AccountSyncOutcome.Success;
@@ -1205,29 +1211,42 @@ public sealed class BankSyncService(
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-    private static List<BalanceBatchItem> ParseBalances(AccountState account, JsonElement json)
+    /// <param name="Unreadable">
+    /// How many entries of the provider's balances array could not be turned into a number. They are not
+    /// stored: a balance nobody could read must not reach the user as a real 0.
+    /// </param>
+    private sealed record BalanceParseResult(List<BalanceBatchItem> Items, int Unreadable);
+
+    private static BalanceParseResult ParseBalances(AccountState account, JsonElement json)
     {
         var result = new List<BalanceBatchItem>();
         if (json.ValueKind != JsonValueKind.Object ||
             !json.TryGetProperty("balances", out var array) ||
             array.ValueKind != JsonValueKind.Array)
-            return result;
+            return new(result, 0);
 
         var captured = DateTimeOffset.UtcNow;
+        var unreadable = 0;
         foreach (var item in array.EnumerateArray())
         {
+            // Everything in this array was meant to be a balance, so anything we cannot read is a
+            // balance we failed to read - counted, not swallowed.
             if (item.ValueKind != JsonValueKind.Object ||
-                !item.TryGetProperty("balance_amount", out var amount))
+                !item.TryGetProperty("balance_amount", out var amount) ||
+                GetDecimal(amount, "amount") is not { } value)
+            {
+                unreadable++;
                 continue;
+            }
             result.Add(new(
                 account.IdentificationHash,
-                GetDecimal(amount, "amount"),
+                value,
                 GetString(amount, "currency") ?? account.Currency,
                 GetString(item, "balance_type") ?? "",
                 ParseDate(item, "reference_date"),
                 captured));
         }
-        return result;
+        return new(result, unreadable);
     }
 
     private static TransactionBatchItem? ParseTransaction(AccountState account, JsonElement json)
@@ -1236,7 +1255,9 @@ public sealed class BankSyncService(
             !json.TryGetProperty("transaction_amount", out var amountJson))
             return null;
 
-        var amount = GetDecimal(amountJson, "amount");
+        // No readable amount means no transaction. Storing it as 0 put a fake booking in the ledger,
+        // and the fingerprint key made that 0 permanent even once the provider reported the real value.
+        if (GetDecimal(amountJson, "amount") is not { } amount) return null;
         var indicator = GetString(json, "credit_debit_indicator");
         if (string.Equals(indicator, "DBIT", StringComparison.OrdinalIgnoreCase)) amount = -Math.Abs(amount);
         else if (string.Equals(indicator, "CRDT", StringComparison.OrdinalIgnoreCase)) amount = Math.Abs(amount);
@@ -1599,21 +1620,28 @@ public sealed class BankSyncService(
             ? date
             : null;
 
-    private static decimal GetDecimal(JsonElement e, string name)
+    /// <summary>
+    /// Absent is not zero. This used to return <c>0m</c> for a missing or unparseable amount, and that 0
+    /// was persisted as a genuine balance or booking - indistinguishable from a real zero, so an account
+    /// the bank never reported a number for looked empty.
+    /// </summary>
+    private static decimal? GetDecimal(JsonElement e, string name)
     {
-        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty(name, out var v)) return 0m;
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty(name, out var v)) return null;
         if (v.ValueKind == JsonValueKind.Number && v.TryGetDecimal(out var n)) return n;
         return v.ValueKind == JsonValueKind.String &&
                decimal.TryParse(v.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
-            : 0m;
+            : null;
     }
 
+    /// <summary>In-memory only; the highest value across an account loop is the reported error.</summary>
     private enum AccountSyncOutcome
     {
         Success = 0,
         AccountResolutionFailed = 1,
-        HistoryPageLimitReached = 2
+        HistoryPageLimitReached = 2,
+        BalanceUnreadable = 3
     }
 
     private sealed record AccountState(

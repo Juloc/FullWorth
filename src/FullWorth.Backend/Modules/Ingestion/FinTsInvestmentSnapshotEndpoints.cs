@@ -91,7 +91,9 @@ UPDATE "InvestmentPortfolios" SET "Name"=@name,"Currency"=@currency,"IsArchived"
 
             await using (var findSecurity = ParitySql.Command(sql, """
 SELECT "Id" FROM "Securities" WHERE "FullWorthSpaceId"=@space AND
- ((@isin IS NOT NULL AND "Isin"=@isin) OR "ProviderKey"=@providerKey) LIMIT 1
+ -- Casts are required: an untyped NULL parameter leaves Postgres unable to infer a type for the
+ -- IS NOT NULL test, so a holding WITHOUT an ISIN failed the whole depot snapshot with a 500.
+ ((@isin::text IS NOT NULL AND "Isin"=@isin::text) OR "ProviderKey"=@providerKey) LIMIT 1
 """, ("@space", spaceId), ("@isin", CleanUpper(holding.Isin)), ("@providerKey", providerKey)))
             await using (var reader = await findSecurity.ExecuteReaderAsync(ct))
                 securityId = await reader.ReadAsync(ct) ? ParitySql.Guid(reader, "Id") : Guid.Empty;
@@ -120,14 +122,24 @@ UPDATE "Securities" SET "Name"=@name,"Wkn"=COALESCE(@wkn,"Wkn"),"Currency"=@curr
                 await updateSecurity.ExecuteNonQueryAsync(ct);
             }
 
-            if (holding.Price is > 0)
+            // A position is only worth something in any valuation if a price row exists for it, and the
+            // bank does not always send a unit price - it does send the position's market value. Without
+            // this the position was worth NOTHING everywhere, so a depot the bank valued at 40,000 read
+            // as 0. The derived price is the reported market value per unit, in the same currency.
+            var unitPrice = holding.Price is > 0
+                ? holding.Price
+                : holding.MarketValue is > 0 && holding.Quantity > 0
+                    ? decimal.Round(holding.MarketValue.Value / holding.Quantity, 10,
+                        MidpointRounding.ToEven)
+                    : null;
+            if (unitPrice is > 0)
             {
                 var priceDate = holding.PriceDate ?? request.AsOf;
                 await using var price = ParitySql.Command(sql, """
 INSERT INTO "SecurityPrices" ("SecurityId","PriceDate","Price","Currency","Source","CreatedAt")
 VALUES (@security,@date,@price,@currency,'fints',@now)
 ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."Price","Currency"=EXCLUDED."Currency"
-""", ("@security", securityId), ("@date", priceDate), ("@price", holding.Price.Value),
+""", ("@security", securityId), ("@date", priceDate), ("@price", unitPrice.Value),
                     ("@currency", NormalizeCurrency(holding.Currency, request.Currency)), ("@now", now));
                 await price.ExecuteNonQueryAsync(ct);
             }
