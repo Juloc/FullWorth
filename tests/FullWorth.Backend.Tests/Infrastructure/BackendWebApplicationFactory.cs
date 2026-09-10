@@ -11,6 +11,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace FullWorth.Backend.Tests.Infrastructure;
@@ -137,7 +141,19 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
     // classes dominated the suite runtime. Instead we apply the migrations ONCE into a template database
     // and clone it per class with `CREATE DATABASE ... TEMPLATE` (a fast file-level copy). The app's
     // start-up MigrateAsync then finds every migration already applied and no-ops.
-    private const string TemplateDatabaseName = "fullworth_test_template_backend";
+    // The name carries a fingerprint of the migration set, so a schema change gets its own template
+    // instead of silently reusing a stale one - and two working trees with different migrations do
+    // not fight over the same name.
+    private static readonly string TemplateDatabaseName =
+        $"fullworth_test_template_backend_{MigrationFingerprint()}";
+
+    // Set only after a build finished. A template that exists WITHOUT it was interrupted and is
+    // rebuilt rather than cloned in a half-migrated state.
+    private const string ReadyMarkerTable = "__fullworth_template_ready";
+
+    // Any bigint works as long as every test process uses the same one.
+    private const long TemplateBuildLockKey = 0x46575442554C4431; // "FWTBULD1"
+
     private static readonly Lazy<string> TemplateDatabase = new(BuildTemplateDatabase);
 
     private static string CreateConnectionString()
@@ -160,27 +176,101 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
         return $"{baseConnection};Database={database};Maximum Pool Size=10;Minimum Pool Size=0;Connection Idle Lifetime=5;Connection Pruning Interval=2";
     }
 
+    /// <summary>
+    /// Builds the template once, cooperatively.
+    ///
+    /// This used to DROP a fixed-name template on every test process start. With two test processes on
+    /// one server - two working trees, or a filtered run beside a full one - the second dropped the
+    /// first's template mid-run, and every test in the first process died on "relation ... already
+    /// exists" or "database does not exist". That is a large part of what looked like flaky tests.
+    ///
+    /// Now: a PostgreSQL advisory lock serialises the build, the name carries the migration
+    /// fingerprint, and a finished build is reused instead of rebuilt. Processes on the same schema
+    /// share one template; processes on different schemas never touch each other's.
+    /// </summary>
     private static string BuildTemplateDatabase()
     {
         var baseConnection = Environment.GetEnvironmentVariable("FULLWORTH_TEST_POSTGRES")!.TrimEnd(';');
-        // Fixed name, rebuilt from scratch each run so a crashed previous run cannot leave a stale schema.
-        ExecuteMaintenance(baseConnection, $"DROP DATABASE IF EXISTS \"{TemplateDatabaseName}\" WITH (FORCE)");
-        ExecuteMaintenance(baseConnection, $"CREATE DATABASE \"{TemplateDatabaseName}\"");
 
-        // Start a real backend against the template so its schema, migration history and seed data are
-        // exactly what a freshly started backend produces — clones are then indistinguishable from a
-        // database this factory would previously have migrated in place.
-        using (var factory = new BackendWebApplicationFactory($"{baseConnection};Database={TemplateDatabaseName}"))
-        using (factory.CreateClient())
+        // One session for the whole build: an advisory lock belongs to its session, so it must not be
+        // taken through the open-and-close maintenance helper.
+        using var guard = new NpgsqlConnection($"{baseConnection};Database=fullworth_test;Pooling=false");
+        guard.Open();
+        Execute(guard, $"SELECT pg_advisory_lock({TemplateBuildLockKey})");
+        try
         {
+            if (TemplateIsReady(baseConnection)) return TemplateDatabaseName;
+
+            ExecuteMaintenance(baseConnection, $"DROP DATABASE IF EXISTS \"{TemplateDatabaseName}\" WITH (FORCE)");
+            ExecuteMaintenance(baseConnection, $"CREATE DATABASE \"{TemplateDatabaseName}\"");
+
+            // Start a real backend against the template so its schema, migration history and seed data
+            // are exactly what a freshly started backend produces — clones are then indistinguishable
+            // from a database this factory would previously have migrated in place.
+            using (var factory = new BackendWebApplicationFactory($"{baseConnection};Database={TemplateDatabaseName}"))
+            using (factory.CreateClient())
+            {
+            }
+
+            using (var template = new NpgsqlConnection($"{baseConnection};Database={TemplateDatabaseName};Pooling=false"))
+            {
+                template.Open();
+                Execute(template, $"CREATE TABLE IF NOT EXISTS \"{ReadyMarkerTable}\" (\"BuiltAt\" timestamptz NOT NULL)");
+                Execute(template, $"INSERT INTO \"{ReadyMarkerTable}\" (\"BuiltAt\") VALUES (now())");
+            }
+
+            // A TEMPLATE source must have zero live sessions. Release the pool the start-up host used
+            // and terminate any stragglers before the first clone runs.
+            NpgsqlConnection.ClearAllPools();
+            ExecuteMaintenance(baseConnection,
+                $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{TemplateDatabaseName}' AND pid <> pg_backend_pid()");
+            return TemplateDatabaseName;
+        }
+        finally
+        {
+            Execute(guard, $"SELECT pg_advisory_unlock({TemplateBuildLockKey})");
+        }
+    }
+
+    /// <summary>True when a previous build of THIS schema finished and can be cloned.</summary>
+    private static bool TemplateIsReady(string baseConnection)
+    {
+        using var connection = new NpgsqlConnection($"{baseConnection};Database=fullworth_test;Pooling=false");
+        connection.Open();
+        using (var exists = connection.CreateCommand())
+        {
+            exists.CommandText = "SELECT 1 FROM pg_database WHERE datname = @name";
+            exists.Parameters.AddWithValue("name", TemplateDatabaseName);
+            if (exists.ExecuteScalar() is null) return false;
         }
 
-        // A TEMPLATE source must have zero live sessions. Release the pool the start-up host used and
-        // terminate any stragglers before the first clone runs.
-        NpgsqlConnection.ClearAllPools();
-        ExecuteMaintenance(baseConnection,
-            $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{TemplateDatabaseName}' AND pid <> pg_backend_pid()");
-        return TemplateDatabaseName;
+        using var template = new NpgsqlConnection($"{baseConnection};Database={TemplateDatabaseName};Pooling=false");
+        template.Open();
+        using var marker = template.CreateCommand();
+        marker.CommandText = $"SELECT to_regclass('\"{ReadyMarkerTable}\"') IS NOT NULL";
+        return marker.ExecuteScalar() is true;
+    }
+
+    /// <summary>
+    /// A short hash of the applied migration ids, read straight off the assembly. Two checkouts with
+    /// different migrations therefore build different templates instead of overwriting one another.
+    /// </summary>
+    private static string MigrationFingerprint()
+    {
+        var ids = typeof(FullWorthDbContext).Assembly
+            .GetTypes()
+            .Select(type => type.GetCustomAttribute<MigrationAttribute>()?.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Order(StringComparer.Ordinal);
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", ids)));
+        return Convert.ToHexString(hash)[..12].ToLowerInvariant();
+    }
+
+    private static void Execute(NpgsqlConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
     }
 
     private static void CloneDatabase(string baseConnection, string template, string database)

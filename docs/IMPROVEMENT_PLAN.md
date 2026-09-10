@@ -709,6 +709,16 @@ anywhere else) can point at without any wiring on this page's side.
 
 ## P3
 
+- ~~**Two test processes destroyed each other's template database.**~~ `DONE` — `BackendWebApplicationFactory`
+  dropped a **fixed-name** template on every process start, so a second test process (a second working
+  tree, or a filtered run beside a full one) dropped the first one's template mid-run and every test in
+  it died on `relation "AmazonConnections" already exists` or "database does not exist". A large part of
+  what this repo treats as local test flakiness was this. The build is now serialised by a PostgreSQL
+  advisory lock, the template name carries a fingerprint of the migration set, and a finished build is
+  reused instead of rebuilt — so processes on the same schema share one template and processes on
+  different schemas never touch each other's. A template that exists without its ready marker was
+  interrupted and gets rebuilt.
+
 - Negative or zero account balances are counted in the Wealth hero figure but excluded from the
   composition donut, so one page shows two different asset totals (`features/networth.js:698`).
 - The Cloud admin Instances view drops `registeredAt`, which the API already returns, and nothing
