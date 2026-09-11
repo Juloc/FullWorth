@@ -199,6 +199,8 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
         Execute(guard, $"SELECT pg_advisory_lock({TemplateBuildLockKey})");
         try
         {
+            PurgeAbandonedDatabases(guard);
+
             if (TemplateIsReady(baseConnection)) return TemplateDatabaseName;
 
             ExecuteMaintenance(baseConnection, $"DROP DATABASE IF EXISTS \"{TemplateDatabaseName}\" WITH (FORCE)");
@@ -264,6 +266,71 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
             .Order(StringComparer.Ordinal);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", ids)));
         return Convert.ToHexString(hash)[..12].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Drops test databases that no live run can still be using.
+    ///
+    /// Every test class clones the template into its own database and NOTHING ever dropped it again:
+    /// a per-class DROP was measured as a real slowdown, so the clones were simply left behind. On this
+    /// machine that reached 4 241 databases and 61 GB in the test server data directory over five days
+    /// of local runs, filled the disk, and took the Docker engine and PostgreSQL down with it - which
+    /// reads as "my tests suddenly cannot connect", not as a disk problem.
+    ///
+    /// So the cleanup happens once per test process instead of once per class: here, under the advisory
+    /// lock that already serialises the template build, and only for databases that provably belong to
+    /// nobody. Age is the guard. PostgreSQL does not record a creation time in pg_database, so it comes
+    /// from the mtime of the database directory's PG_VERSION file. Six hours is far beyond any suite run
+    /// (minutes), so a database that old with no session on it cannot belong to a concurrent process -
+    /// and a concurrent process on another working tree is exactly the case an eager purge would break.
+    ///
+    /// Templates are excluded: they are keyed by migration fingerprint and are meant to survive.
+    /// Everything here is best-effort. Reading PG_VERSION needs pg_read_server_files, so on a server
+    /// where the test role is not privileged the purge silently does nothing rather than failing a
+    /// test run over housekeeping.
+    /// </summary>
+    private static void PurgeAbandonedDatabases(NpgsqlConnection maintenance)
+    {
+        const string abandoned = """
+            SELECT d.datname
+            FROM pg_database d
+            WHERE starts_with(d.datname, 'fullworth_')
+              AND NOT starts_with(d.datname, 'fullworth_test_template_')
+              AND d.datname <> 'fullworth_test'
+              AND NOT d.datistemplate
+              AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)
+              AND (pg_stat_file('base/' || d.oid || '/PG_VERSION')).modification
+                    < now() - interval '6 hours'
+            """;
+
+        List<string> stale = [];
+        try
+        {
+            using var command = maintenance.CreateCommand();
+            command.CommandText = abandoned;
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) stale.Add(reader.GetString(0));
+        }
+        catch (PostgresException)
+        {
+            return;
+        }
+
+        foreach (var database in stale)
+        {
+            try
+            {
+                // No FORCE: the query already established there is no session on it, and FORCE would
+                // turn a database somebody connected to in the meantime into a killed connection in
+                // their run.
+                Execute(maintenance, $"DROP DATABASE IF EXISTS \"{database}\"");
+            }
+            catch (PostgresException)
+            {
+                // Raced with a process that took it after all, or it is already gone. Either way the
+                // next run tries again; housekeeping must never fail a test.
+            }
+        }
     }
 
     private static void Execute(NpgsqlConnection connection, string sql)
