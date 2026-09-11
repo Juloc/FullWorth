@@ -166,6 +166,27 @@
         createdAt: '2026-07-04T09:00:00Z', updatedAt: '2026-09-02T09:00:00Z'
       }
     ],
+    // Paperless: connected, with the tag/type/correspondent lists the filter builder offers and one
+    // saved preset. Shapes follow PaperlessConnectionView / PaperlessFilterOptionsView /
+    // PaperlessImportPresetView. Without these the Paperless step stayed at "connect" and everything
+    // below it - the whole filter builder - was unreachable in the harness.
+    'purchases/receipt-imports/paperless/connection': {
+      fullWorthSpaceId: SPACE, baseUrl: 'https://paperless.example.local/', configured: true,
+      defaultQuery: null, isEnabled: true, lastSyncAt: '2026-09-11T08:40:00Z', updatedAt: '2026-09-05T19:22:00Z'
+    },
+    'purchases/receipt-imports/paperless/options': {
+      tags: [{ id: 3, name: 'Kassenbon' }, { id: 7, name: 'Rechnung' }, { id: 11, name: 'Garantie' }],
+      documentTypes: [{ id: 1, name: 'Beleg' }, { id: 2, name: 'Vertrag' }],
+      correspondents: [{ id: 4, name: 'REWE' }, { id: 5, name: 'Edeka' }, { id: 9, name: 'Amazon' }],
+      storagePaths: [{ id: 1, name: 'Belege/2026' }],
+      customFields: [{ id: 2, name: 'Betrag' }]
+    },
+    'purchases/receipt-imports/paperless/presets': [
+      { id: 'pp1', fullWorthSpaceId: SPACE, userId: 'u1', name: 'Kassenbons',
+        query: 'tag:3 AND correspondent:4', editorJson: null, autoImport: true, analyzeAutomatically: true,
+        currency: 'EUR', lastSeenDocumentId: 1044, lastCheckedAt: '2026-09-11T08:40:00Z',
+        lastImportedAt: '2026-09-10T18:02:00Z' }
+    ],
     // The Budgets screen renders from analytics/budget-status, not from the budgets list - without this
     // key the screen was empty in the harness and its dialogs unreachable. Field names follow the real
     // records (BudgetStatusItem, BudgetPeriodStatus, BudgetView); a fixture that invents its own shape

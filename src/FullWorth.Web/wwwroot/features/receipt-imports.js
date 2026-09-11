@@ -107,16 +107,8 @@ function paperlessPane() {
   <div class="receipt-import-card receipt-import-step" data-paperless-selection hidden>
     <div class="receipt-import-step-title"><span>2</span><h3>${esc(t('Welche Belege?', 'Which receipts?'))}</h3></div>
 
-    <div class="paperless-preset-bar">
+    <div class="paperless-preset-pick">
       <label><span>${esc(t('Vorlage', 'Preset'))}</span><select data-paperless-preset><option value="">${esc(t('Neue Vorlage', 'New preset'))}</option></select></label>
-      <label><span>${esc(t('Name', 'Name'))}</span><input data-paperless-preset-name type="text" maxlength="100" placeholder="${esc(t('z. B. Kassenbons', 'e.g. Receipts'))}"></label>
-      <button type="button" class="ghost" data-paperless-preset-save>${esc(t('Vorlage speichern', 'Save preset'))}</button>
-      <button type="button" class="danger ghost" data-paperless-preset-delete hidden>${esc(t('Löschen', 'Delete'))}</button>
-    </div>
-
-    <div class="paperless-auto-row">
-      <label class="check inline"><input data-paperless-preset-auto type="checkbox"> ${esc(t('Autoimport stündlich – nur neue Belege ab jetzt', 'Hourly auto-import – only new receipts from now on'))}</label>
-      <span class="row-sub" data-paperless-preset-status></span>
     </div>
 
     <div class="paperless-filter-builder" data-paperless-editor>
@@ -142,9 +134,28 @@ function paperlessPane() {
       <div class="paperless-query-preview"><span>${esc(t('Abfrage', 'Query'))}</span><code data-paperless-query-preview>—</code></div>
     </div>
 
+    <!-- Keeping a filter is a different question from building one, so it waits until there is
+         something to keep. The name, the hourly auto-import and Delete live together with the Save
+         they belong to - and because Save is in here too, none of them can be demanded while
+         invisible. -->
+    <details class="paperless-preset-save">
+      <summary>${esc(t('Als Vorlage speichern', 'Save as preset'))}</summary>
+      <div class="paperless-preset-bar">
+        <label><span>${esc(t('Name', 'Name'))}</span><input data-paperless-preset-name type="text" maxlength="100" placeholder="${esc(t('z. B. Kassenbons', 'e.g. Receipts'))}"></label>
+        <button type="button" class="ghost" data-paperless-preset-save>${esc(t('Vorlage speichern', 'Save preset'))}</button>
+        <button type="button" class="danger ghost" data-paperless-preset-delete hidden>${esc(t('Löschen', 'Delete'))}</button>
+      </div>
+      <div class="paperless-auto-row">
+        <label class="check inline"><input data-paperless-preset-auto type="checkbox"> ${esc(t('Autoimport stündlich – nur neue Belege ab jetzt', 'Hourly auto-import – only new receipts from now on'))}</label>
+        <span class="row-sub" data-paperless-preset-status></span>
+      </div>
+    </details>
+
+    <!-- The setting first, then the two buttons together. It used to sit BETWEEN them, so the two
+         things you can do were separated by a thing you can only set. -->
     <div class="receipt-import-actions">
-      <button type="button" class="ghost" data-paperless-preview>${esc(t('Vorschau', 'Preview'))}</button>
       <label class="check inline"><input data-paperless-auto type="checkbox" checked> ${esc(t('Direkt analysieren', 'Analyze immediately'))}</label>
+      <button type="button" class="ghost" data-paperless-preview>${esc(t('Vorschau', 'Preview'))}</button>
       <button type="button" data-paperless-import>${esc(t('Neue importieren', 'Import new'))}</button>
     </div>
     <div data-paperless-preview-result class="receipt-import-preview"></div>
