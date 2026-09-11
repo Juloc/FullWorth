@@ -74,6 +74,58 @@ public static class ReceiptImportEndpoints
             return batch is null ? Results.NotFound() : Results.Ok(batch);
         });
 
+        group.MapPost("/batches/{batchId:guid}/pause", async (
+            Guid batchId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            var batch = await service.PauseAsync(userId, fullWorthSpaceId, batchId, ct);
+            return batch is null ? Results.NotFound() : Results.Ok(batch);
+        });
+
+        group.MapPost("/batches/{batchId:guid}/resume", async (
+            Guid batchId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            var batch = await service.ResumeAsync(userId, fullWorthSpaceId, batchId, ct);
+            return batch is null ? Results.NotFound() : Results.Ok(batch);
+        });
+
+        // One receipt, on request. Allowed while the batch is paused: pause stops the machine from
+        // taking work by itself, not the owner from asking for exactly one thing.
+        group.MapPost("/batches/{batchId:guid}/items/{itemId:guid}/start", async (
+            Guid batchId,
+            Guid itemId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            try
+            {
+                var batch = await service.StartItemAsync(userId, fullWorthSpaceId, batchId, itemId, ct);
+                return batch is null ? Results.NotFound() : Results.Ok(batch);
+            }
+            catch (ReceiptImportException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         group.MapPost("/batches/{batchId:guid}/retry-failed", async (
             Guid batchId,
             Guid fullWorthSpaceId,

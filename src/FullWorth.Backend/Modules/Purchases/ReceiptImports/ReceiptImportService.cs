@@ -63,7 +63,9 @@ public sealed class ReceiptImportService(
                 item = created.Item;
                 if (!created.Created && created.Item.ReceiptScanJobId.HasValue) continue;
 
-                await QueueFileAsync(userId, fullWorthSpaceId, created.Item, file, currency, autoStart, ct);
+                // The batch has the last word, not the request: uploading into a paused batch adds the
+                // receipt and leaves it waiting. Otherwise a pause lasted exactly until the next file.
+                await QueueFileAsync(userId, fullWorthSpaceId, created.Item, file, currency, autoStart && !batch.IsPaused, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -420,6 +422,63 @@ public sealed class ReceiptImportService(
         return await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
     }
 
+    /// <summary>
+    /// Stops the batch taking new work. What is already in <c>processing</c> finishes — see
+    /// <see cref="ReceiptImportStore.WithdrawQueuedJobsAsync"/> for why interrupting it would be worse.
+    /// </summary>
+    public async Task<ReceiptImportBatchView?> PauseAsync(Guid userId, Guid fullWorthSpaceId, Guid batchId, CancellationToken ct)
+    {
+        var view = await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+        if (view is null) return null;
+        // The flag first, then the withdrawal: in the other order a job finishing in between could
+        // trigger the next one and the batch would keep moving after the user was told it stopped.
+        await store.SetBatchPausedAsync(batchId, DateTimeOffset.UtcNow, ct);
+        await store.WithdrawQueuedJobsAsync(batchId, ct);
+        return await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+    }
+
+    /// <summary>Lifts the pause and starts everything that is waiting — the same path as starting.</summary>
+    public async Task<ReceiptImportBatchView?> ResumeAsync(Guid userId, Guid fullWorthSpaceId, Guid batchId, CancellationToken ct)
+    {
+        var view = await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+        if (view is null) return null;
+        await store.SetBatchPausedAsync(batchId, null, ct);
+        return await StartPendingAsync(userId, fullWorthSpaceId, batchId, ct);
+    }
+
+    /// <summary>
+    /// Starts one receipt, without touching the rest of the batch.
+    ///
+    /// The queue could always do this — <see cref="StartPendingAsync"/> has been calling it per job in a
+    /// loop all along — but the only way in from outside was "start everything pending". That is the
+    /// wrong granularity for the case it is needed in: one receipt out of ninety is the interesting
+    /// one, or one failed differently from the others and deserves a single retry.
+    ///
+    /// Deliberately allowed while the batch is paused. Pause stops the machine from taking work on its
+    /// own; it does not stop the owner from asking for exactly one thing.
+    /// </summary>
+    public async Task<ReceiptImportBatchView?> StartItemAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid batchId, Guid itemId, CancellationToken ct)
+    {
+        var view = await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+        if (view is null) return null;
+        var item = view.Items.FirstOrDefault(x => x.Id == itemId);
+        if (item is null) return null;
+        if (!item.ReceiptScanJobId.HasValue)
+            throw new ReceiptImportException("This receipt has not been uploaded yet, so there is nothing to analyse.");
+
+        var outcome = item.JobStatus == ReceiptScanJobStatuses.Error
+            ? await queue.RetryAsync(userId, fullWorthSpaceId, item.ReceiptScanJobId.Value, ct)
+            : await queue.StartAsync(userId, fullWorthSpaceId, item.ReceiptScanJobId.Value, ct);
+
+        if (outcome.Success && item.PurchaseId.HasValue)
+            await store.MarkQueuedAsync(item.Id, item.ReceiptScanJobId.Value, item.PurchaseId.Value, ct);
+        else if (!outcome.Success)
+            throw new ReceiptImportException(outcome.Error ?? "receipt analysis could not be started.");
+
+        return await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+    }
+
     public async Task<ReceiptImportBatchView?> RetryFailedAsync(Guid userId, Guid fullWorthSpaceId, Guid batchId, CancellationToken ct)
     {
         var view = await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
@@ -489,7 +548,7 @@ public sealed class ReceiptImportService(
         await store.UpdateFingerprintAsync(item.Id, fingerprint, ct);
         download.Content.Position = 0;
         var file = CreateFormFile(download.Content, download.FileName, download.ContentType);
-        await QueueFileAsync(userId, fullWorthSpaceId, item, file, batch.Currency, batch.AutoStart, ct);
+        await QueueFileAsync(userId, fullWorthSpaceId, item, file, batch.Currency, batch.AutoStart && !batch.IsPaused, ct);
         await store.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
     }
 
@@ -513,7 +572,7 @@ public sealed class ReceiptImportService(
 
         await using var stream = new FileStream(source.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var file = CreateFormFile(stream, source.FileName, ContentTypeFor(source.FileName));
-        await QueueFileAsync(userId, fullWorthSpaceId, item, file, batch.Currency, batch.AutoStart, ct);
+        await QueueFileAsync(userId, fullWorthSpaceId, item, file, batch.Currency, batch.AutoStart && !batch.IsPaused, ct);
     }
 
     private async Task QueueFileAsync(

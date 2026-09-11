@@ -87,6 +87,52 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
     public Task MarkFailedAsync(Guid itemId, string error, CancellationToken ct) =>
         UpdateItemAsync(itemId, ReceiptImportItemStatuses.Failed, Cap(error, 1000), null, null, ct);
 
+    /// <summary>Records that the batch is paused, or lifts it. Idempotent on purpose.</summary>
+    public async Task SetBatchPausedAsync(Guid batchId, DateTimeOffset? pausedAt, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ReceiptImportBatches"
+            SET "PausedAt" = {pausedAt}, "UpdatedAt" = {DateTimeOffset.UtcNow}
+            WHERE "Id" = {batchId}
+            """, ct);
+    }
+
+    /// <summary>
+    /// Takes this batch's waiting work back off the queue and returns how many jobs it caught.
+    ///
+    /// A job in <c>processing</c> is deliberately untouched: it is mid-extraction, and stopping it
+    /// there would leave a half-written purchase. The UPDATE is its own race guard — if the worker
+    /// claimed a job a moment earlier its status is no longer <c>queued</c>, the row simply is not
+    /// matched, and that job finishes. Pause means "take no new work", not "undo what is running".
+    /// </summary>
+    public async Task<int> WithdrawQueuedJobsAsync(Guid batchId, CancellationToken ct)
+    {
+        var withdrawn = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ReceiptScanJobs" AS j
+            SET "Status" = 'draft', "Stage" = 'draft', "UpdatedAt" = {DateTimeOffset.UtcNow}
+            FROM "ReceiptImportItems" AS i
+            WHERE i."BatchId" = {batchId} AND i."ReceiptScanJobId" = j."Id" AND j."Status" = 'queued'
+            """, ct);
+
+        // The item follows its job back, otherwise the batch reports work as queued that no worker
+        // will ever pick up - a screen that lies about what is about to happen.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ReceiptImportItems" AS i
+            SET "Status" = 'pending', "UpdatedAt" = {DateTimeOffset.UtcNow}
+            FROM "ReceiptScanJobs" AS j
+            WHERE i."BatchId" = {batchId} AND i."ReceiptScanJobId" = j."Id"
+              AND j."Status" = 'draft' AND i."Status" = 'queued'
+            """, ct);
+
+        return withdrawn;
+    }
+
+    public async Task<ReceiptImportItemRow?> GetItemAsync(Guid batchId, Guid itemId, CancellationToken ct)
+    {
+        var items = await GetItemsAsync(batchId, ct);
+        return items.FirstOrDefault(x => x.Id == itemId);
+    }
+
     public async Task UpdateFingerprintAsync(Guid itemId, string fingerprint, CancellationToken ct)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -109,7 +155,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportBatchProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "SourceType", "SourceName", "Currency", "Status", "AutoStart",
-                   "CreatedAt", "UpdatedAt", "CompletedAt"
+                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt"
             FROM "ReceiptImportBatches"
             WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
             ORDER BY "CreatedAt" DESC
@@ -332,7 +378,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportBatchProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "SourceType", "SourceName", "Currency", "Status", "AutoStart",
-                   "CreatedAt", "UpdatedAt", "CompletedAt"
+                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt"
             FROM "ReceiptImportBatches"
             WHERE "Id" = {batchId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
             LIMIT 1
@@ -447,7 +493,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
             x.LastError, x.CreatedAt, x.UpdatedAt);
 
     private static ReceiptImportBatchRow ToRow(ReceiptImportBatchProjection x) =>
-        new(x.Id, x.FullWorthSpaceId, x.UserId, x.SourceType, x.SourceName, x.Currency, x.Status, x.AutoStart, x.CreatedAt, x.UpdatedAt, x.CompletedAt);
+        new(x.Id, x.FullWorthSpaceId, x.UserId, x.SourceType, x.SourceName, x.Currency, x.Status, x.AutoStart, x.CreatedAt, x.UpdatedAt, x.CompletedAt, x.PausedAt);
 
     private static ReceiptImportItemRow ToRow(ReceiptImportItemProjection x) =>
         new(x.Id, x.BatchId, x.FullWorthSpaceId, x.SourceType, x.ExternalKey, x.DisplayName, x.SourceReference,
@@ -477,6 +523,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
         public DateTimeOffset? CompletedAt { get; set; }
+        public DateTimeOffset? PausedAt { get; set; }
     }
 
     private sealed class ReceiptImportItemProjection

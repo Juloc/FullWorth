@@ -60,7 +60,13 @@ public sealed record ReceiptImportBatchRow(
     bool AutoStart,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    // Trailing and nullable: a batch that was never paused is indistinguishable from one from
+    // before the column existed, which is what a backfill-free migration has to mean.
+    DateTimeOffset? PausedAt = null)
+{
+    public bool IsPaused => PausedAt.HasValue;
+}
 
 public sealed record ReceiptImportItemRow(
     Guid Id,
