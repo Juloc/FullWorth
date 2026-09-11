@@ -144,7 +144,12 @@ public sealed record BavAllocationView(
     string AssetClass,
     string Source,
     string? Note,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // Trailing and defaulted so the store can start reporting them without every caller changing at
+    // once. A position that predates the column has no document, which is the honest state for one
+    // that was typed in by hand.
+    Guid? BavDocumentId = null,
+    bool FromDocument = false);
 
 /// <summary>
 /// The Übersicht figures. Every total is per currency, and a currency that has no rate is reported as
@@ -287,6 +292,8 @@ public sealed record BavAllocationWrite(
     string? AssetClass = null,
     string? Source = null,
     Guid? BavSnapshotId = null,
+    /// <summary>Which document this position was read from. See the entity for why it is here.</summary>
+    Guid? BavDocumentId = null,
     string? Note = null);
 
 public enum BavMutationResult

@@ -263,6 +263,17 @@ public sealed class BavInvestmentAllocation
     public string AssetClass { get; set; } = BavAssetClasses.Other;
 
     public string Source { get; set; } = BavValueSources.Manual;
+
+    /// <summary>
+    /// The document this position was read from. Every other row a document commit writes names it -
+    /// the snapshot, the contribution, the cost - and this was the one place the rule did not hold,
+    /// so a fund position committed from a statement could only say <c>Source = document</c> without
+    /// saying <b>which</b> document. That matters here more than elsewhere: a statement lists the
+    /// fund split for one point in time, and two statements for neighbouring dates produce positions
+    /// that are only distinguishable by their origin.
+    /// </summary>
+    public Guid? BavDocumentId { get; set; }
+
     public string? Note { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

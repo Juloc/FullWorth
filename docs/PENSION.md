@@ -198,10 +198,13 @@ Three decisions that are worth knowing before touching it:
   though the document stated one, and the next statement would no longer match it.
 - **`applied`/`skipped` are machine tokens** (`BavCommitTokens`), bare or `token:detail`. The API has no
   business holding German and the review screen cannot translate an English sentence.
-- **A fund allocation cannot name its document.** `BavAllocationWrite` and
-  `BavInvestmentAllocation` have no `BavDocumentId`, so a committed allocation carries only
-  `Source = document` plus its snapshot link. It is the one place the "every write names its document"
-  rule does not hold; closing it needs a column and a migration.
+- ~~**A fund allocation cannot name its document.**~~ Closed in step 3 by migration
+  `20260911120000_PensionAllocationDocument`: `BavInvestmentAllocations` has a `BavDocumentId` with
+  `ON DELETE SET NULL`, matching `BavCosts`, so deleting a document does not delete values a person
+  reviewed and accepted. It matters more here than for the other three rows a commit writes: a
+  statement lists the fund split for one point in time, so two statements for neighbouring dates
+  produce positions that are otherwise indistinguishable - there was no way to tell which reading a
+  position came from, or to undo one document's positions without touching the other's.
 
 What step 1 had left ready and step 2 used: the `BavDocuments` table with its per-space unique
 `Sha256`, the nullable `BavContractId` (a document is stored before it is matched),

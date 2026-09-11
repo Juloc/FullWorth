@@ -148,6 +148,7 @@ public static class PensionModelConfiguration
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.FullWorthSpaceId);
             e.HasIndex(x => x.BavSnapshotId);
+            e.HasIndex(x => x.BavDocumentId);
             e.HasIndex(x => new { x.BavContractId, x.EffectiveDate }).IsDescending(false, true);
             e.Property(x => x.FundName).IsRequired().HasMaxLength(300);
             e.Property(x => x.Isin).HasMaxLength(12);
@@ -161,6 +162,7 @@ public static class PensionModelConfiguration
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<BavContract>().WithMany().HasForeignKey(x => x.BavContractId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<BavSnapshot>().WithMany().HasForeignKey(x => x.BavSnapshotId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<BavDocument>().WithMany().HasForeignKey(x => x.BavDocumentId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<FullWorthUser>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
         });
 
