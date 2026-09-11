@@ -749,8 +749,15 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   and the chart uses it instead of deriving a share from native asset values. Measured in the harness
   with a 9 000 EUR house next to a 5 000 000 IDR asset: the house showed as **21,56 € (0 %)** before
   and 9 000,00 € (17 %) after.
-- **The demo's PayPal account is seeded flat.** `ShowcaseWorldBuilder.cs:77` gives it a fixed 85.40 EUR
-  and no transaction ever references it, so the shipped public demo reproduces the reported symptom.
+- ~~**The demo's PayPal account is seeded flat.**~~ `DONE` (fullworth-demo `a0a54b6`) — it had a fixed
+  85.40 EUR and not one booking in the whole world referenced it, so the shipped public demo reproduced
+  the reported symptom itself. Every other account was already covered because a transfer books on both
+  sides and links the pair; the wallet was the only account with no row at all. It now has a monthly
+  top-up from the current account (a transfer, not an expense), one to three online orders paid out of
+  it, and a returned order coming back as a refund rather than as income. The orders carry the raw
+  provider descriptor, which also fixes a quieter problem: the Intelligence list ships an accepted
+  mapping for "PP*WARENBOTE 8842" and no transaction carried that descriptor, so the demo advertised
+  the recognition of something that did not exist. Two tests pin both.
 - ~~**The transaction drawer offers "Bankdetails" for transactions that have none.**~~ `DONE`, and it
   was worse than described: `isManual` was **never in the API response at all**, so `!t.isManual` was
   always true — the button rendered for every transaction including manual ones, and the delete action
