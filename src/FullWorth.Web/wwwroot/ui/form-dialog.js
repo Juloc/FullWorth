@@ -146,8 +146,8 @@ function actionsHtml(actions) {
  * keep routing through `ctx.dialog`, and so this is testable without a DOM-less shim.
  *
  * @returns {{dialog: HTMLDialogElement, form: HTMLFormElement, values: () => Record<string, unknown>,
- *   setError: (name: string, message: string) => void, clearErrors: () => void, close: (result?: string) => void,
- *   field: (name: string) => HTMLElement|null}}
+ *   setError: (name: string, message: string) => void, setFormError: (message: string) => void,
+ *   clearErrors: () => void, close: (result?: string) => void, field: (name: string) => HTMLElement|null}}
  */
 export function createFormDialog({
   title,
@@ -159,6 +159,7 @@ export function createFormDialog({
   values = {},
   advancedLabel = 'Mehr',
   closeLabel = 'Schließen',
+  fallbackError = 'Das hat nicht funktioniert.',
   onSubmit,
   create = html => createDialog(html, { className, mobileMode, closeLabel })
 } = {}) {
@@ -176,8 +177,14 @@ export function createFormDialog({
       + rowsHtml(advanced, values) + `</details>`
     : '';
 
+  // Not every failure belongs to a field. A rejected save ("Konto existiert nicht mehr") used to
+  // become a toast that outlived the dialog it came from, or - worse - got pinned to whichever field
+  // the caller guessed. It goes here, next to the button that caused it, and the caller does not
+  // have to invent a field to blame.
+  const formError = `<p class="fw-form-error" data-form-error aria-live="polite"></p>`;
+
   const dialog = create(`<form class="dialog-card fw-form-dialog${className ? ' ' + esc(className) : ''}">`
-    + head + rowsHtml(plain, values) + advancedHtml + actionsHtml(actions) + `</form>`);
+    + head + rowsHtml(plain, values) + advancedHtml + formError + actionsHtml(actions) + `</form>`);
 
   const form = dialog.querySelector('form');
 
@@ -205,6 +212,15 @@ export function createFormDialog({
   const clearErrors = () => {
     form.querySelectorAll('.fw-field-error').forEach(node => { node.textContent = ''; });
     form.querySelectorAll('.fw-field.is-invalid').forEach(node => node.classList.remove('is-invalid'));
+    const banner = form.querySelector('[data-form-error]');
+    if (banner) banner.textContent = '';
+  };
+
+  // Never silently empty: a caller passing a falsy message still gets a visible refusal, because a
+  // dialog that declines to save and says nothing is indistinguishable from a broken button.
+  const setFormError = message => {
+    const banner = form.querySelector('[data-form-error]');
+    if (banner) banner.textContent = message || fallbackError;
   };
 
   const setError = (name, message) => {
@@ -225,14 +241,14 @@ export function createFormDialog({
   for (const action of actions) {
     if (action.submit || typeof action.onClick !== 'function') continue;
     form.querySelector(`[data-action="${CSS.escape(action.name)}"]`)
-      ?.addEventListener('click', () => action.onClick({ values: values_(), setError, clearErrors, close, dialog }));
+      ?.addEventListener('click', () => action.onClick({ values: values_(), setError, setFormError, clearErrors, close, dialog }));
   }
 
   if (typeof onSubmit === 'function') {
     form.addEventListener('submit', event => {
       event.preventDefault();
       clearErrors();
-      onSubmit({ values: values_(), setError, clearErrors, close, dialog });
+      onSubmit({ values: values_(), setError, setFormError, clearErrors, close, dialog });
     });
   }
 
@@ -263,7 +279,7 @@ export function createFormDialog({
   dialog.addEventListener('close', () => { /* createDialog removes the node */ }, { once: true });
   queueMicrotask(() => first?.focus());
 
-  return { dialog, form, values: values_, setError, clearErrors, close, field };
+  return { dialog, form, values: values_, setError, setFormError, clearErrors, close, field };
 }
 
 /** Opens it and returns the same handles, so a caller does not have to remember `showModal`. */

@@ -5,6 +5,7 @@ import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
 import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
 import { balanceMeaningLine } from '../ui/balance-meaning.js';
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
@@ -48,6 +49,7 @@ const COPY = {
     noValuations: 'Noch keine Bewertungen vorhanden.', fxIncomplete: 'Gesamtsumme unvollständig: Für mindestens eine Währung fehlt ein Wechselkurs.',
     fxIncompleteWhich: 'Unvollständig, weil ein Wechselkurs fehlt',
     fxRatesUsed: 'Umgerechnet mit', fxRateAsOf: 'Kurs vom', fxRateStale: 'Kurs ist älter als ein paar Tage',
+    moreDetails: 'Mehr Angaben',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
@@ -85,6 +87,7 @@ const COPY = {
     fxIncomplete: 'Total is incomplete: at least one required FX rate is missing.', dataIncomplete: 'Data incomplete', composition: 'Composition',
     fxIncompleteWhich: 'Incomplete because an FX rate is missing',
     fxRatesUsed: 'Converted at', fxRateAsOf: 'rate of', fxRateStale: 'this rate is more than a few days old',
+    moreDetails: 'More details',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
@@ -1254,19 +1257,74 @@ function openAssetWizard() {
   dlg.showModal();
 }
 
+// The first call site converted to ui/form-dialog.js. It used to be one 1 400-character template
+// literal that re-decided the label markup, the grouping, the actions row and the error handling all
+// by itself - which is what docs/UI_AUDIT.md measured 76 times over. What is left here is what this
+// dialog actually knows: which fields an asset has, which of them carry their weight on a phone, and
+// what to send.
+//
+// Growth rate and notes moved behind the disclosure. "In Gesamtvermögen einbeziehen" did not, even
+// though it is one line: it changes whether this value counts at all, and a default-on switch hidden
+// behind "Mehr" is a switch nobody knows they have.
 function openAssetForm(kind, existing) {
-  const asset = existing || {}; const selectedKind = existing?.kind || kind || 'other'; const currency = asset.currency || lastOverview?.currency || 'EUR';
-  const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><div><h2>${ctx.esc(ctx.get(existing ? 'networth.editAsset' : 'networth.newAsset'))}</h2><div class="row-sub">${ctx.esc(t(selectedKind))}</div></div><button type="button" data-close>×</button></div><label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(asset.name || '')}"></label><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.value'))}<input name="value" type="number" min="0" step="0.01" required value="${asset.currentValue ?? ''}"></label><label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" minlength="3" maxlength="3" required></label></div><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.valuedAt'))}<input name="valuedAt" type="date" value="${dateValue(asset.valuedAt)}"></label><label>${ctx.esc(ctx.get('networth.growth'))}<input name="growth" type="number" step="0.01" value="${asset.annualGrowthRate ?? ''}"></label></div><label class="check"><input type="checkbox" name="include" ${asset.includeInNetWorth === false ? '' : 'checked'}> ${ctx.esc(ctx.get('networth.includeInNetWorth'))}</label><label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="2">${ctx.esc(asset.notes || '')}</textarea></label><div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div></form>`);
-  dlg.querySelector('[data-close]').onclick = dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async event => {
-    event.preventDefault(); const fd = new FormData(event.currentTarget);
-    const body = { name: fd.get('name'), kind: selectedKind, currentValue: Number(fd.get('value')), currency: String(fd.get('currency') || 'EUR').toUpperCase(), valuedAt: fd.get('valuedAt') || null, annualGrowthRate: numberOrNull(fd.get('growth')), includeInNetWorth: event.currentTarget.include.checked, notes: textOrNull(fd.get('notes')) };
-    try { const created = await ctx.api(existing ? `api/assets/${existing.id}` : 'api/assets', jsonBody(body, existing ? 'PUT' : 'POST')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderNetWorth(ctx); if (!existing && selectedKind === 'real_estate' && created?.id) await openRealEstateDetail(ctx, created, () => renderNetWorth(ctx)); }
-    catch (error) { ctx.toast(error.message || ctx.get('common.error')); }
-  };
-  dlg.showModal();
-}
+  const asset = existing || {};
+  const selectedKind = existing?.kind || kind || 'other';
+  const currency = asset.currency || lastOverview?.currency || 'EUR';
 
+  const form = openFormDialog({
+    title: ctx.get(existing ? 'networth.editAsset' : 'networth.newAsset'),
+    subtitle: t(selectedKind),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: t('moreDetails'),
+    fallbackError: ctx.get('common.error'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160 },
+      { name: 'value', kind: FieldKind.Money, label: ctx.get('networth.value'), required: true, min: 0, group: 'amount' },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'amount' },
+      // The as-of date stays visible: a value without one is a value nobody can date.
+      { name: 'valuedAt', kind: FieldKind.Date, label: ctx.get('networth.valuedAt') },
+      { name: 'include', kind: FieldKind.Check, label: ctx.get('networth.includeInNetWorth') },
+      { name: 'growth', kind: FieldKind.Number, label: ctx.get('networth.growth'), step: '0.01', advanced: true },
+      { name: 'notes', kind: FieldKind.Textarea, label: ctx.get('contracts.notes'), maxLength: 1000, advanced: true }
+    ],
+    values: {
+      name: asset.name || '',
+      value: asset.currentValue ?? '',
+      currency,
+      valuedAt: dateValue(asset.valuedAt),
+      include: asset.includeInNetWorth !== false,
+      growth: asset.annualGrowthRate ?? '',
+      notes: asset.notes || ''
+    },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.apply' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close }) => {
+      // An empty number field reads as null here, not as 0 - so "no growth rate given" stays absent
+      // instead of becoming a stated 0 % per year.
+      const body = {
+        name: values.name, kind: selectedKind,
+        currentValue: values.value, currency: String(values.currency || 'EUR').toUpperCase(),
+        valuedAt: values.valuedAt, annualGrowthRate: values.growth,
+        includeInNetWorth: values.include, notes: values.notes
+      };
+      try {
+        const created = await ctx.api(existing ? `api/assets/${existing.id}` : 'api/assets', jsonBody(body, existing ? 'PUT' : 'POST'));
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderNetWorth(ctx);
+        if (!existing && selectedKind === 'real_estate' && created?.id) await openRealEstateDetail(ctx, created, () => renderNetWorth(ctx));
+      } catch (error) {
+        // A rejected save is not one field's fault, so it is not pinned to one field - and it stays
+        // in the dialog rather than becoming a toast that outlives what it refers to.
+        setFormError(error.message || ctx.get('common.error'));
+      }
+    }
+  });
+  return form;
+}
 async function openValuationHistory(asset) {
   let values;
   try { values = await ctx.api(`api/assets/${asset.id}/valuations`); } catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }

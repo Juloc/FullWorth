@@ -133,6 +133,47 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     }
 
     /// <summary>
+    /// Not every failure belongs to a field. A rejected save used to become a toast that outlived the
+    /// dialog it came from, or got pinned to whichever field the caller guessed. And it must never be
+    /// silent: a dialog that declines to save and says nothing is indistinguishable from a broken button.
+    /// </summary>
+    [Fact]
+    public async Task A_rejected_save_is_reported_in_the_dialog_and_never_silently()
+    {
+        var js = await GetAsync("/ui/form-dialog.js");
+        var css = await GetAsync("/dialogs.css");
+        var wealth = await GetAsync("/features/networth.js");
+
+        Assert.Contains("setFormError", js);
+        Assert.Contains("banner.textContent = message || fallbackError", js);
+        Assert.Contains(".fw-form-error", css);
+        Assert.Contains(".fw-form-dialog .fw-form-error:empty{display:none}", css);
+        // The first converted call site uses it instead of blaming a field or firing a toast.
+        Assert.Contains("setFormError(error.message", wealth);
+    }
+
+    /// <summary>
+    /// The first converted call site. The asset editor was one 1 400-character template literal that
+    /// re-decided the label markup, the grouping, the actions row and the error handling by itself.
+    /// What has to stay true after the conversion: the value and its as-of date are visible rather than
+    /// hidden, and so is the switch that decides whether the value counts at all.
+    /// </summary>
+    [Fact]
+    public async Task The_asset_editor_is_built_from_a_field_spec()
+    {
+        var js = await GetAsync("/features/networth.js");
+
+        Assert.Contains("import { openFormDialog, FieldKind } from '../ui/form-dialog.js'", js);
+        Assert.Contains("openFormDialog({", js);
+        // Growth and notes are secondary; the as-of date and the net-worth switch are not.
+        Assert.Contains("label: ctx.get('networth.growth'), step: '0.01', advanced: true", js);
+        Assert.Contains("label: ctx.get('networth.valuedAt') }", js);
+        Assert.Contains("label: ctx.get('networth.includeInNetWorth') }", js);
+        // And the hand-written template is gone rather than left beside its replacement.
+        Assert.DoesNotContain("networth.editAsset'))}</h2>", js);
+    }
+
+    /// <summary>
     /// Step 1 changes no call site on purpose, so it cannot break a screen. This pins that: the module is
     /// served and self-contained, and no feature imports it yet.
     /// </summary>

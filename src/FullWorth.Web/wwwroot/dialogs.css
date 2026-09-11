@@ -118,6 +118,11 @@ dialog.fw-dialog .dialog-actions{min-width:0}
    reflow the card and push the message it just produced off screen. */
 .fw-form-dialog .fw-field-error{font-size:11px;color:var(--negative);line-height:1.4}
 .fw-form-dialog .fw-field-error:empty{display:none}
+
+/* A failure that belongs to no field sits next to the button that caused it, not in a toast that
+   outlives the dialog. */
+.fw-form-dialog .fw-form-error{margin:0;font-size:12px;line-height:1.45;color:var(--negative)}
+.fw-form-dialog .fw-form-error:empty{display:none}
 .fw-form-dialog .fw-field.is-invalid input,
 .fw-form-dialog .fw-field.is-invalid select,
 .fw-form-dialog .fw-field.is-invalid textarea{border-color:var(--negative)}
