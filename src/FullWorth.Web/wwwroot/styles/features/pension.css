@@ -204,6 +204,180 @@
 .pension-fieldset legend { padding: 0 var(--s2); font-size: .85rem; color: var(--text); }
 .pension-fieldset > p { grid-column: 1 / -1; margin: 0; }
 
+/* ---- Dokumente: upload, review, commit (features/pension-documents.js) ----
+
+   The review screen is a PAGE, not a dialog. docs/UI_AUDIT.md measured the dialogs as the app's main
+   usability problem, and this form has far more fields than the worst one it lists. So it renders in
+   the tab, with its own way back, and the only dialog in the whole flow is the commit confirmation. */
+
+.pension-documents { display: grid; gap: var(--s4); }
+
+.pension-doc-upload-card > p { margin: 0 0 var(--s3); }
+
+.pension-doc-kind { max-width: 320px; margin-bottom: var(--s3); }
+
+.pension-doc-drop {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+  text-align: center;
+  padding: var(--s5) var(--s3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.pension-doc-drop.dragging { border-color: var(--accent); background: var(--accent-soft); }
+.pension-doc-drop input { width: 100%; max-width: 320px; min-width: 0; }
+
+.pension-doc-progress { display: grid; gap: var(--s2); margin-top: var(--s3); }
+.pension-doc-bar { width: 100%; }
+
+/* A duplicate file is not an error: the notice stays neutral and carries the way to the document that
+   already holds those pages. */
+.pension-doc-duplicate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s3);
+}
+
+.pension-doc-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s4); }
+.pension-doc-result > div { min-width: 0; }
+.pension-doc-result-list { margin: 0; padding-left: var(--s4); line-height: 1.5; }
+
+.pension-doc-screen { display: grid; gap: var(--s4); }
+
+.pension-doc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.pension-doc-head-main { min-width: 0; flex: 1; }
+.pension-doc-head-main h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+
+.pension-doc-review { display: grid; gap: var(--s4); }
+
+/* Rule 1 of the step, in words, once. It is a statement of fact and not a warning, so it gets the
+   quiet surface rather than the warning tint. */
+.pension-doc-unsaved {
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  line-height: 1.5;
+  font-size: .88rem;
+}
+
+/* An extraction warning is information about what to check, never an alarm - red in this app is
+   reserved for a real problem. */
+.pension-doc-warnings ul { margin: var(--s2) 0 0; padding-left: var(--s4); line-height: 1.5; }
+.pension-doc-quality { margin: 0; }
+.pension-doc-notice { margin: 0 0 var(--s2); line-height: 1.5; }
+
+.pension-doc-block {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--s3);
+  margin: 0;
+  display: grid;
+  gap: var(--s3);
+}
+
+.pension-doc-block legend { padding: 0 var(--s2); font-size: .85rem; color: var(--text); }
+.pension-doc-block > p { margin: 0; }
+
+.pension-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s3);
+}
+
+.pension-doc-grid > * { min-width: 0; }
+
+/* Money that exists today, what is guaranteed, and what is only projected are three separate blocks
+   with three different edges. A projection rendered next to a balance is the single most expensive
+   mistake this feature could make, and CK_BavSnapshots_Projection refuses the same mix in the
+   database - the screen must not undo that. */
+.pension-doc-now { background: var(--surface-2); }
+.pension-doc-guarantee { border-left: 3px solid var(--accent); }
+
+.pension-doc-projection {
+  border-style: dashed;
+  background: transparent;
+}
+
+.pension-doc-match { background: var(--surface-2); }
+.pension-doc-choices { display: grid; gap: var(--s2); }
+.pension-doc-target { max-width: 420px; }
+
+/* Every field says where its value came from. The flag carries the one distinction that matters: a
+   value off a text layer was READ, a value out of OCR was only RECOGNISED. */
+.pension-doc-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+  font-size: .72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pension-doc-flag {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pension-doc-flag-ocr, .pension-doc-flag-ai { background: var(--warning-soft); }
+.pension-doc-flag-missing { background: var(--surface-3); white-space: normal; }
+
+.pension-doc-field-ocr input, .pension-doc-field-ocr select {
+  border-color: var(--warning-border);
+}
+
+/* An unresolved field is empty on purpose and asks for the value, so its edge invites rather than
+   accuses. */
+.pension-doc-field-unresolved input, .pension-doc-field-unresolved select {
+  border-style: dashed;
+}
+
+.pension-doc-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.pension-doc-row > * { min-width: 0; }
+.pension-doc-row:first-child { border-top: 0; padding-top: 0; }
+.pension-doc-row-dropped { opacity: .55; }
+.pension-doc-take { align-self: start; }
+
+.pension-doc-total { display: grid; gap: var(--s2); }
+
+.pension-doc-details > summary { cursor: pointer; font-size: .88rem; margin-bottom: var(--s3); }
+
+.pension-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.pension-doc-actions-main { margin-top: var(--s2); }
+.pension-doc-spacer { flex: 1; }
+
 /* ---- narrow viewports (down to ~360px, so nothing overflows on a phone) ---- */
 
 @media (max-width: 760px) {
@@ -226,4 +400,21 @@
   .pension-facts { grid-template-columns: 1fr; }
   .pension-detail-actions { flex-wrap: wrap; }
   .pension-badge { white-space: normal; }
+
+  /* minmax(0, 1fr) and not 1fr: a grid item's default min-width is auto, so plain 1fr refuses to
+     shrink below an input's min-content width and the whole page starts scrolling sideways. That is
+     the exact declaration the dialog overflow in docs/UI_AUDIT.md came down to. */
+  .pension-doc-grid, .pension-doc-row, .pension-doc-result { grid-template-columns: minmax(0, 1fr); }
+  .pension-doc-kind, .pension-doc-target, .pension-doc-drop input { max-width: none; }
+  .pension-doc-head { align-items: stretch; }
+  .pension-doc-head > .btn { width: 100%; }
+  .pension-doc-duplicate > .btn { width: 100%; }
+
+  .pension-doc-actions-main { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .pension-doc-spacer { display: none; }
+
+  /* Stacked, the destructive action must not end up at the top of the pile. */
+  .pension-doc-actions-main [data-doc-commit] { order: 1; }
+  .pension-doc-actions-main [data-doc-save] { order: 2; }
+  .pension-doc-actions-main [data-doc-delete] { order: 3; }
 }

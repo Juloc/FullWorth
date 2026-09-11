@@ -1,9 +1,9 @@
 // Altersvorsorge (bAV) — the occupational-pension area, per docs/PENSION.md.
 //
-// Three tabs behind one registered view, the way features/tax.js does it: core/router.js resolves a
-// view from the FIRST path segment only, so /pension, /pension/vertraege and /pension/verlauf all land
-// on the 'pension' view and this module reads the full pathname itself to pick the active tab. Back and
-// Forward therefore work between the tabs without a second router.
+// Four tabs behind one registered view, the way features/tax.js does it: core/router.js resolves a
+// view from the FIRST path segment only, so /pension, /pension/vertraege, /pension/verlauf and
+// /pension/dokumente all land on the 'pension' view and this module reads the full pathname itself to
+// pick the active tab. Back and Forward therefore work between the tabs without a second router.
 //
 // Copy lives in this module (like features/networth.js and features/contracts.js) rather than in the
 // shared locale files, so the area ships without touching them.
@@ -13,9 +13,14 @@
 //     every projected figure is rendered in its own block and labelled with its assumption.
 //   - read "beitragsfrei" as cancelled or as cost-free. It is its own state and keeps its costs.
 //
-// The document import (step 2) and the simulation (step 3) plug into this file later; the manual entry
-// flow here is the supported path on an installation with no Cloud and no AI.
+// The document import (step 2) lives in features/pension-documents.js and is mounted as the fourth
+// tab; the simulation (step 3) plugs into this file later. The manual entry flow here stays the
+// supported path on an installation with no Cloud and no AI.
+//
+// The documents module receives this module's copy (`t`, `label`) instead of importing it, so the pair
+// never becomes a circular import.
 import { sectionCard, esc } from '../ui/ux-kit.js';
+import { renderPensionDocuments, resetPensionDocuments } from './pension-documents.js';
 
 let ctx = null;
 let contracts = [];
@@ -25,7 +30,7 @@ let loadError = null;
 const T = {
   de: {
     title: 'Altersvorsorge',
-    tabOverview: 'Übersicht', tabContracts: 'Verträge', tabHistory: 'Verlauf',
+    tabOverview: 'Übersicht', tabContracts: 'Verträge', tabHistory: 'Verlauf', tabDocuments: 'Dokumente',
     add: 'Vertrag hinzufügen',
     empty: 'Noch kein Vertrag erfasst. Trage deine betriebliche Altersvorsorge ein, um Guthaben, Beiträge und Kosten an einem Ort zu sehen.',
     emptyHistory: 'Noch kein Stand erfasst. Ein Stand gehört immer zu einem Datum – so bleibt der Verlauf erhalten.',
@@ -146,7 +151,7 @@ const T = {
   },
   en: {
     title: 'Occupational pension',
-    tabOverview: 'Overview', tabContracts: 'Contracts', tabHistory: 'History',
+    tabOverview: 'Overview', tabContracts: 'Contracts', tabHistory: 'History', tabDocuments: 'Documents',
     add: 'Add contract',
     empty: 'No contract yet. Add your occupational pension to see balance, contributions and costs in one place.',
     emptyHistory: 'No statement recorded yet. A value always belongs to a date, so the history is kept.',
@@ -285,7 +290,8 @@ const ASSET_CLASSES = ['equity', 'bond', 'mixed', 'money_market', 'real_estate',
 const TABS = [
   { key: 'overview', path: '/pension' },
   { key: 'contracts', path: '/pension/vertraege' },
-  { key: 'history', path: '/pension/verlauf' }
+  { key: 'history', path: '/pension/verlauf' },
+  { key: 'documents', path: '/pension/dokumente' }
 ];
 
 function lang() { return (document.documentElement.lang || '').startsWith('en') ? 'en' : 'de'; }
@@ -334,7 +340,10 @@ export async function renderPension(context) {
     <div class="pension-body">${
       loadError
         ? sectionCard(tr().title, `<div class="row-sub">${esc(loadError.message || ctx.get('common.error'))}</div>`)
-        : tab === 'contracts' ? contractsHtml() : tab === 'history' ? historyHtml() : overviewHtml()
+        : tab === 'contracts' ? contractsHtml()
+          : tab === 'history' ? historyHtml()
+            : tab === 'documents' ? '<div class="pension-documents" data-pension-documents></div>'
+              : overviewHtml()
     }</div>`;
 
   host.querySelectorAll('[data-pension-tab]').forEach(button =>
@@ -342,15 +351,27 @@ export async function renderPension(context) {
   host.querySelector('[data-pension-add]')?.addEventListener('click', () => openContractDialog(null));
   host.querySelectorAll('[data-pension-open]').forEach(button =>
     button.addEventListener('click', () => openDetail(button.dataset.pensionOpen)));
+
+  // The Dokumente tab owns its own panel: upload, review and commit all render inside it, so the
+  // review form never has to be squeezed into a dialog.
+  const documentsHost = host.querySelector('[data-pension-documents]');
+  if (documentsHost) await renderPensionDocuments(documentsHost, {
+    ctx, contracts, t: tr(), label, reload: () => renderPension(ctx)
+  });
 }
 
 function tabKey(key) {
-  return key === 'contracts' ? 'tabContracts' : key === 'history' ? 'tabHistory' : 'tabOverview';
+  return key === 'contracts' ? 'tabContracts'
+    : key === 'history' ? 'tabHistory'
+      : key === 'documents' ? 'tabDocuments' : 'tabOverview';
 }
 
 function switchTab(key) {
   const path = pathFor(key);
   if (location.pathname !== path) history.pushState({ view: 'pension' }, '', path);
+  // Leaving the tab leaves its review screen, so Dokumente always opens on the list rather than on a
+  // half-finished review of whatever happened to be open before.
+  resetPensionDocuments();
   renderPension(ctx);
 }
 

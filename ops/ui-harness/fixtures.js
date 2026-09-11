@@ -211,7 +211,211 @@
     'preferences/wealth.emergencyFund': { value: {} },
     'liabilities': [],
     'investments/portfolios': [],
-    'insights': []
+    'insights': [],
+
+    // ---- Altersvorsorge (bAV) ----
+    'pension/overview': {
+      currency: 'EUR', totalBalance: 18342.77, monthlyEmployeeContribution: 169,
+      monthlyEmployerContribution: 169, guaranteedMonthlyAnnuity: 108.98,
+      projectedMonthlyAnnuity: 194.13, isComplete: true, missingCurrencies: [],
+      unconvertedBalances: [], contractsWithoutSnapshot: 1, contractsWithEstimatedCosts: 1
+    },
+    'pension/contracts': [
+      {
+        id: 'bav1', providerName: 'Allianz Lebensversicherung AG',
+        tariffName: 'PrivatRente Perspektive (bAV)', employerName: 'Muster Maschinenbau GmbH',
+        implementationRoute: 'direct_insurance', status: 'active', currency: 'EUR',
+        includeInNetWorth: true, hasPolicyNumber: true, policyNumberLast4: '4711',
+        startDate: '2016-07-01', retirementDate: '2051-08-01', guaranteeQuotaPercent: 80,
+        guaranteedAnnuityFactor: 26.42, snapshotCount: 3, holdsCapital: true, isPaidUp: false,
+        currentSnapshot: {
+          effectiveDate: '2024-12-31', currency: 'EUR', balance: 15980.4, guaranteedBalance: 12740,
+          source: 'document', isCurrent: true, projectionIsSimulation: false,
+          projectionReturnPercent: 5, projectionBasis: 'document_forecast'
+        },
+        currentContribution: { employeeAmount: 169, employerTotalAmount: 169, partsTotalAmount: 338, currency: 'EUR', cycle: 'monthly', validFrom: '2025-01-01' }
+      },
+      {
+        id: 'bav2', providerName: 'Unterstützungskasse der Muster Maschinenbau GmbH e.V.',
+        tariffName: null, employerName: 'Muster Maschinenbau GmbH',
+        implementationRoute: 'provident_fund', status: 'paid_up', currency: 'EUR',
+        includeInNetWorth: true, hasPolicyNumber: false, policyNumberLast4: null,
+        snapshotCount: 0, holdsCapital: true, isPaidUp: true,
+        currentSnapshot: null, currentContribution: null
+      }
+    ],
+
+    // The document list carries every state the Dokumente tab has to render: a rich matched one, an
+    // OCR'd unmatched one with warnings, a failed extraction, and one that is already committed.
+    // Order matters below: the per-document keys must sit BEFORE 'pension/documents', because match()
+    // falls back to the first key the path starts with.
+    'pension/documents/d1': {
+      document: {
+        id: 'd1', bavContractId: null, kind: 'annual_statement',
+        originalFileName: 'Standmitteilung-2025-Allianz.pdf', mediaType: 'application/pdf',
+        byteSize: 486_212, pageCount: 4, extractionStatus: 'parsed', extractionConfidence: 0.86,
+        extractionSource: 'deterministic', textLayerUsed: true, extractionError: null,
+        extractedAt: '2026-09-11T07:12:04Z', reviewedByUserId: null, reviewedAt: null,
+        createdAt: '2026-09-11T07:12:00Z'
+      },
+      draft: {
+        contract: {
+          providerName: 'Allianz Lebensversicherung AG', tariffName: 'PrivatRente Perspektive (bAV)',
+          policyNumber: null, implementationRoute: 'direct_insurance',
+          employerName: 'Muster Maschinenbau GmbH', policyHolderName: 'Muster Maschinenbau GmbH',
+          insuredPersonName: 'Julia Muster', startDate: null, retirementDate: '2051-08-01',
+          currency: 'EUR', guaranteeQuotaPercent: 80, guaranteedAnnuityFactor: 26.42, status: 'active'
+        },
+        snapshot: {
+          effectiveDate: '2025-12-31', currency: 'EUR', balance: 18342.77, guaranteedBalance: 14120.5,
+          surrenderValue: null, securityAssetsAmount: 11230.4, fundAssetsAmount: 7112.37,
+          guaranteedCapitalAtRetirement: 41250, guaranteedMonthlyAnnuity: 108.98,
+          projectedCapitalAtRetirement: 73480, projectedMonthlyAnnuity: 194.13,
+          projectionReturnPercent: 5, projectionBasis: 'document_forecast'
+        },
+        // 169 + 25.35 + 143.65 = 338.00 against a printed 340.00: the mismatch has to be SHOWN and
+        // never summed away or corrected.
+        contribution: {
+          validFrom: '2025-01-01', cycle: 'monthly', currency: 'EUR', employeeAmount: 169,
+          employerSubsidyAmount: 25.35, employerAmount: 143.65, statedTotalAmount: 340
+        },
+        allocations: [
+          { fundName: 'Allianz Strategiefonds Wachstum', isin: 'DE0008476201', weightPercent: 60, amount: 4267.42, currency: 'EUR', ongoingChargesPercent: 1.45, ongoingChargesEstimated: false, assetClass: 'mixed' },
+          { fundName: 'iShares Core MSCI World UCITS ETF mit einem sehr langen Fondsnamen zum Umbruchtest', isin: 'IE00B4L5Y983', weightPercent: 40, amount: 2844.95, currency: 'EUR', ongoingChargesPercent: 0.2, ongoingChargesEstimated: true, assetClass: 'equity' }
+        ],
+        costs: [
+          { kind: 'administration_on_capital', basis: 'percent_of_capital', amount: null, percent: 0.35, timing: 'ongoing', isEstimated: false, estimateBasis: null, continuesWhenPaidUp: true },
+          { kind: 'acquisition', basis: 'percent_of_sum', amount: null, percent: 2.5, timing: 'incurred', isEstimated: true, estimateBasis: 'Aus der Effektivkostenangabe auf Seite 3 abgeleitet.', continuesWhenPaidUp: false }
+        ],
+        provenance: [
+          { field: 'contract.providerName', page: 1, confidence: 0.99, source: 'deterministic', matchedLabel: 'Versicherer' },
+          { field: 'contract.tariffName', page: 1, confidence: 0.94, source: 'deterministic', matchedLabel: 'Tarif' },
+          { field: 'contract.policyNumber', page: 1, confidence: 0.97, source: 'deterministic', matchedLabel: 'Versicherungsnummer' },
+          { field: 'contract.employerName', page: 1, confidence: 0.88, source: 'deterministic', matchedLabel: 'Versicherungsnehmer' },
+          { field: 'contract.insuredPersonName', page: 1, confidence: 0.91, source: 'deterministic', matchedLabel: 'Versicherte Person' },
+          { field: 'contract.retirementDate', page: 2, confidence: 0.93, source: 'deterministic', matchedLabel: 'Rentenbeginn' },
+          { field: 'contract.guaranteeQuotaPercent', page: 3, confidence: 0.71, source: 'codex', matchedLabel: 'Garantieniveau' },
+          { field: 'contract.guaranteedAnnuityFactor', page: 3, confidence: 0.66, source: 'deterministic', matchedLabel: 'Rentenfaktor' },
+          { field: 'snapshot.effectiveDate', page: 2, confidence: 0.98, source: 'deterministic', matchedLabel: 'Stand zum' },
+          { field: 'snapshot.balance', page: 2, confidence: 0.96, source: 'deterministic', matchedLabel: 'Vertragsguthaben' },
+          { field: 'snapshot.guaranteedBalance', page: 2, confidence: 0.9, source: 'deterministic', matchedLabel: 'davon garantiert' },
+          { field: 'snapshot.securityAssetsAmount', page: 2, confidence: 0.84, source: 'deterministic', matchedLabel: 'Sicherungsvermögen' },
+          { field: 'snapshot.fundAssetsAmount', page: 2, confidence: 0.84, source: 'deterministic', matchedLabel: 'Fondsvermögen' },
+          { field: 'snapshot.guaranteedCapitalAtRetirement', page: 2, confidence: 0.92, source: 'deterministic', matchedLabel: 'garantiertes Kapital' },
+          { field: 'snapshot.guaranteedMonthlyAnnuity', page: 2, confidence: 0.92, source: 'deterministic', matchedLabel: 'garantierte Monatsrente' },
+          { field: 'snapshot.projectedCapitalAtRetirement', page: 2, confidence: 0.79, source: 'deterministic', matchedLabel: 'mögliches Kapital bei 5 % Wertentwicklung' },
+          { field: 'snapshot.projectedMonthlyAnnuity', page: 2, confidence: 0.79, source: 'deterministic', matchedLabel: 'mögliche Monatsrente' },
+          { field: 'snapshot.projectionReturnPercent', page: 2, confidence: 0.95, source: 'deterministic', matchedLabel: 'Wertentwicklung' },
+          { field: 'contribution.employeeAmount', page: 3, confidence: 0.89, source: 'deterministic', matchedLabel: 'Entgeltumwandlung' },
+          { field: 'contribution.employerSubsidyAmount', page: 3, confidence: 0.83, source: 'deterministic', matchedLabel: 'Arbeitgeberzuschuss' },
+          { field: 'contribution.employerAmount', page: 3, confidence: 0.8, source: 'deterministic', matchedLabel: 'arbeitgeberfinanziert' },
+          { field: 'contribution.statedTotalAmount', page: 3, confidence: 0.87, source: 'deterministic', matchedLabel: 'Gesamtbeitrag' },
+          { field: 'allocations[0].fundName', page: 4, confidence: 0.81, source: 'deterministic', matchedLabel: 'Fonds' },
+          { field: 'allocations[0].weightPercent', page: 4, confidence: 0.78, source: 'deterministic', matchedLabel: 'Anteil' },
+          { field: 'allocations[1].fundName', page: 4, confidence: 0.62, source: 'codex', matchedLabel: 'Fonds' },
+          { field: 'allocations[1].weightPercent', page: 4, confidence: 0.6, source: 'codex', matchedLabel: 'Anteil' },
+          { field: 'costs[0].percent', page: 3, confidence: 0.74, source: 'deterministic', matchedLabel: 'Verwaltungskosten' },
+          { field: 'costs[1].percent', page: 3, confidence: 0.52, source: 'codex', matchedLabel: 'Effektivkosten' }
+        ],
+        confidence: 0.86, source: 'deterministic', pageCount: 4, textLayerUsed: true,
+        unresolved: ['contract.startDate', 'snapshot.surrenderValue']
+      },
+      match: {
+        matched: true, contractId: 'bav1', matchedOn: 'policy_number',
+        contract: { id: 'bav1', providerName: 'Allianz Lebensversicherung AG', tariffName: 'PrivatRente Perspektive (bAV)', employerName: 'Muster Maschinenbau GmbH', status: 'active', currency: 'EUR' }
+      },
+      warnings: [
+        'Die drei Beitragsanteile ergeben 338,00 €, als Gesamtbeitrag steht 340,00 € im Dokument. Prüfe, welche Zahl stimmt – korrigiert wird hier nichts.',
+        'Die Abschlusskosten stehen nicht ausdrücklich im Dokument und sind aus der Effektivkostenangabe abgeleitet. Sie werden als Schätzung übernommen.'
+      ]
+    },
+    // OCR'd: no text layer, so every value is RECOGNISED and not read, the confidences are low and
+    // four fields could not be filled at all.
+    'pension/documents/d2': {
+      document: {
+        id: 'd2', bavContractId: null, kind: 'annual_statement',
+        originalFileName: 'scan-standmitteilung.jpg', mediaType: 'image/jpeg',
+        byteSize: 2_914_330, pageCount: 2, extractionStatus: 'parsed', extractionConfidence: 0.41,
+        extractionSource: 'codex', textLayerUsed: false, extractionError: null,
+        extractedAt: '2026-09-10T18:40:22Z', reviewedByUserId: null, reviewedAt: null,
+        createdAt: '2026-09-10T18:40:11Z'
+      },
+      draft: {
+        contract: {
+          providerName: 'Volkswohl Bund Lebensversicherung a.G.', tariffName: null, policyNumber: null,
+          implementationRoute: 'direct_insurance', employerName: null, policyHolderName: null,
+          insuredPersonName: 'Julia Muster', startDate: null, retirementDate: null,
+          currency: 'EUR', guaranteeQuotaPercent: null, guaranteedAnnuityFactor: null, status: 'active'
+        },
+        snapshot: {
+          effectiveDate: '2025-12-31', currency: 'EUR', balance: 6120.5, guaranteedBalance: null,
+          surrenderValue: null, securityAssetsAmount: null, fundAssetsAmount: null,
+          guaranteedCapitalAtRetirement: 18400, guaranteedMonthlyAnnuity: null,
+          projectedCapitalAtRetirement: null, projectedMonthlyAnnuity: null,
+          projectionReturnPercent: null, projectionBasis: null
+        },
+        contribution: null,
+        allocations: [],
+        costs: [],
+        provenance: [
+          { field: 'contract.providerName', page: 1, confidence: 0.58, source: 'codex', matchedLabel: 'Versicherer' },
+          { field: 'contract.insuredPersonName', page: 1, confidence: 0.44, source: 'codex', matchedLabel: null },
+          { field: 'snapshot.effectiveDate', page: 1, confidence: 0.51, source: 'deterministic', matchedLabel: 'Stand' },
+          { field: 'snapshot.balance', page: 1, confidence: 0.39, source: 'deterministic', matchedLabel: 'Guthaben' },
+          { field: 'snapshot.guaranteedCapitalAtRetirement', page: 2, confidence: 0.33, source: 'codex', matchedLabel: null }
+        ],
+        confidence: 0.41, source: 'codex', pageCount: 2, textLayerUsed: false,
+        unresolved: ['contract.employerName', 'contract.retirementDate', 'snapshot.guaranteedBalance', 'snapshot.guaranteedMonthlyAnnuity']
+      },
+      match: { matched: false, contractId: null, matchedOn: null, contract: null },
+      warnings: [
+        'Das Dokument hatte keine Textschicht, alle Werte kommen aus der Texterkennung. Prüfe besonders das Guthaben und den Stichtag.',
+        'Zu diesem Dokument wurde kein Beitrag gefunden. Ergänze ihn selbst, wenn er auf dem Papier steht.'
+      ]
+    },
+    // Nothing readable: a photo without recognisable text. The screen has to explain it as a category
+    // and offer the manual path, not show a status code.
+    'pension/documents/d3': {
+      document: {
+        id: 'd3', bavContractId: null, kind: 'certificate',
+        originalFileName: 'foto-versicherungsschein.heic', mediaType: 'image/heic',
+        byteSize: 3_410_002, pageCount: 1, extractionStatus: 'failed', extractionConfidence: null,
+        extractionSource: null, textLayerUsed: false, extractionError: 'no_text',
+        extractedAt: '2026-09-09T20:01:00Z', reviewedByUserId: null, reviewedAt: null,
+        createdAt: '2026-09-09T20:00:55Z'
+      },
+      draft: null,
+      match: null,
+      warnings: []
+    },
+    // Already committed: the draft is gone on purpose, so the same numbers do not sit in two places.
+    'pension/documents/d4': {
+      document: {
+        id: 'd4', bavContractId: 'bav1', kind: 'annual_statement',
+        originalFileName: 'Standmitteilung-2024-Allianz.pdf', mediaType: 'application/pdf',
+        byteSize: 452_004, pageCount: 4, extractionStatus: 'committed', extractionConfidence: 0.9,
+        extractionSource: 'deterministic', textLayerUsed: true, extractionError: null,
+        extractedAt: '2025-02-03T09:00:00Z', reviewedByUserId: 'u1', reviewedAt: '2025-02-03T09:05:00Z',
+        createdAt: '2025-02-03T08:59:40Z'
+      },
+      draft: null,
+      match: null,
+      warnings: []
+    },
+    'pension/documents': [
+      { id: 'd1', bavContractId: null, kind: 'annual_statement', originalFileName: 'Standmitteilung-2025-Allianz.pdf', mediaType: 'application/pdf', byteSize: 486_212, pageCount: 4, extractionStatus: 'parsed', extractionConfidence: 0.86, extractionSource: 'deterministic', textLayerUsed: true, extractionError: null, extractedAt: '2026-09-11T07:12:04Z', reviewedByUserId: null, reviewedAt: null, createdAt: '2026-09-11T07:12:00Z' },
+      { id: 'd2', bavContractId: null, kind: 'annual_statement', originalFileName: 'scan-standmitteilung.jpg', mediaType: 'image/jpeg', byteSize: 2_914_330, pageCount: 2, extractionStatus: 'parsed', extractionConfidence: 0.41, extractionSource: 'codex', textLayerUsed: false, extractionError: null, extractedAt: '2026-09-10T18:40:22Z', reviewedByUserId: null, reviewedAt: null, createdAt: '2026-09-10T18:40:11Z' },
+      { id: 'd3', bavContractId: null, kind: 'certificate', originalFileName: 'foto-versicherungsschein.heic', mediaType: 'image/heic', byteSize: 3_410_002, pageCount: 1, extractionStatus: 'failed', extractionConfidence: null, extractionSource: null, textLayerUsed: false, extractionError: 'no_text', extractedAt: '2026-09-09T20:01:00Z', reviewedByUserId: null, reviewedAt: null, createdAt: '2026-09-09T20:00:55Z' },
+      { id: 'd4', bavContractId: 'bav1', kind: 'annual_statement', originalFileName: 'Standmitteilung-2024-Allianz.pdf', mediaType: 'application/pdf', byteSize: 452_004, pageCount: 4, extractionStatus: 'committed', extractionConfidence: 0.9, extractionSource: 'deterministic', textLayerUsed: true, extractionError: null, extractedAt: '2025-02-03T09:00:00Z', reviewedByUserId: 'u1', reviewedAt: '2025-02-03T09:05:00Z', createdAt: '2025-02-03T08:59:40Z' }
+    ]
+  };
+
+  // What a commit answers: what it wrote AND what it refused. A snapshot whose date already exists is
+  // information, not a failure, so the harness returns one so the screen can be checked saying so.
+  const PENSION_COMMIT = {
+    documentId: 'd1', contractId: 'bav1', snapshotId: 's9', contractCreated: false,
+    applied: ['contract_matched', 'snapshot:2025-12-31', 'contribution:2025-01-01', 'allocations', 'costs'],
+    skipped: ['snapshot_exists:2024-12-31', 'ein_serverseitiger_token_den_das_modul_nicht_kennt']
   };
 
   const KEYS = Object.keys(FIXTURES);
@@ -225,6 +429,24 @@
     return hit ? FIXTURES[hit] : undefined;
   }
 
+  // Two pension-document writes have to answer with something real rather than { ok: true }: the
+  // upload returns the detail the review screen renders (so the screen is reachable at all), and the
+  // commit returns applied/skipped (so the honest "was already there" half can be looked at).
+  // A file whose name contains "doppelt" answers 409 the way the real upload does, so the conflict
+  // path (offer the document that already holds those pages, never a dead error) can be walked.
+  function writeAnswer(method, pathname, init) {
+    const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
+    if (!after.startsWith('pension/documents')) return undefined;
+    if (/\/commit(\?|$)/.test(after)) return { status: 200, body: PENSION_COMMIT };
+    if (method === 'POST' && /^pension\/documents(\?|$)/.test(after)) {
+      const name = init?.body instanceof FormData ? String(init.body.get('document')?.name || '') : '';
+      return /doppelt/i.test(name)
+        ? { status: 409, body: { error: 'Diese Datei ist hier schon eingelesen.', existingDocumentId: 'd1' } }
+        : { status: 200, body: FIXTURES['pension/documents/d1'] };
+    }
+    return undefined;
+  }
+
   const realFetch = window.fetch.bind(window);
 
   window.fetch = async (input, init) => {
@@ -235,10 +457,24 @@
 
     const method = (init?.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
     // Writes succeed with an echo so confirm/save paths can be walked without a backend.
-    const body = method === 'GET' ? (match(url.pathname) ?? []) : { id: 'stub', ok: true };
+    const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
+    const status = write?.status ?? 200;
+    const body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
     window.__harnessCalls = window.__harnessCalls || [];
     window.__harnessCalls.push(`${method} ${url.pathname}`);
-    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    // secure-fetch.js captures globalThis.fetch at module load, and this stub is installed before it -
+    // so this stub IS its nativeFetch and the harness server never sees a write. That makes the server
+    // log useless for reading a payload, and __harnessWrites the only place an audit can check what a
+    // screen really sends (e.g. that a review draft keeps the three contribution shares apart).
+    if (method !== 'GET' && method !== 'HEAD') {
+      window.__harnessWrites = window.__harnessWrites || [];
+      let payload = init?.body;
+      if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* keep the text */ } }
+      else if (payload instanceof FormData) payload = Object.fromEntries([...payload.entries()]
+        .map(([key, value]) => [key, value instanceof File ? `File(${value.name}, ${value.size})` : value]));
+      window.__harnessWrites.push({ method, path: url.pathname, body: payload });
+    }
+    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   };
 
   // The app remembers the active space locally; pre-set it so no picker blocks the first render.

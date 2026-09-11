@@ -84,6 +84,7 @@ const APP_SHELL = [
   '/styles/features/tax.css',
   '/styles/features/tax-review-extra.css',
   '/features/pension.js',
+  '/features/pension-documents.js',
   '/styles/features/pension.css',
   '/features/analytics.js',
   '/features/data-completeness.js',
