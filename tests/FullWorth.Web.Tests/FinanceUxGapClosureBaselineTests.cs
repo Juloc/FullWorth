@@ -17,7 +17,13 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                  })
             Assert.Contains(token, js);
         Assert.Contains("URLSearchParams(location.search)", js);
-        Assert.Contains("tx-filter-sheet", js);
+        // The sheet used to be pinned by its CSS class, which said nothing about the flow and broke the
+        // moment the filter was rebuilt on the shared form dialog (docs/UI_AUDIT.md step 3). What has to
+        // stay true is the flow itself: the filter opens from the list, it is the right-side drawer, and
+        // every key above round-trips through the URL.
+        Assert.Contains("openFilterSheet", js);
+        Assert.Contains("className: 'drawer'", js);
+        Assert.Contains("txReplaceUrl(p)", js);
     }
 
     [Fact]

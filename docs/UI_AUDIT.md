@@ -105,7 +105,15 @@ and the contract editor. Between them they went from 13/13/14/12 controls of equ
 visible ones plus a disclosure, and each one lost code rather than gaining it. These are plain "edit an entity" forms and are the cheapest conversions; each one
 should lose code, not gain it. Convert one, look at it, then do the rest.
 
-**Step 3 — the booking filter, which needs a decision, not just a conversion.** Keep the four filters
+**Step 3 — the booking filter.** `DONE`. Six of the fourteen stay visible (account, group, direction,
+the date range, category); the other eight are behind "Mehr Filter", and the summary counts the ones
+inside it that are actually set — a neutral "Alle" does not count. Verified end to end in the harness:
+filters round-trip through the URL, reopening restores them, the collapsed summary read "Mehr Filter
+(2)" for two hidden set filters, and reset clears both the URL and the badge.
+
+The original plan text, for the record:
+
+Keep the four filters
 that carry their weight visible (account/group, date range, category, direction) and move the other ten
 behind "Mehr Filter". A filter that is set must stay visible even when collapsed — otherwise a hidden
 filter silently changes what the list shows, which is worse than a long form. The existing filter badge

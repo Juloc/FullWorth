@@ -6,6 +6,7 @@
 import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../ui/money.js';
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -119,6 +120,16 @@ function updateFilterBadge(f) {
 // Filter sheet (§5): a compact drawer (bottom sheet on mobile via .drawer CSS) for the advanced filters
 // that don't fit the toolbar — direction, date range, category and the transfer/excluded flags. Applied
 // through the URL (single source of truth) so filters are restorable and agree with the scope banner.
+// Step 3 of docs/UI_AUDIT.md, the worst offender in the census: fourteen controls in one flat list of
+// equal weight - account, group, type, status, from, to, category, merchant, min, max and four
+// checkboxes. On a 375 px screen the two people actually use (date range, category) sat in the middle
+// of a long scroll.
+//
+// Six stay visible: which account or group, which direction, the date range, the category. The other
+// eight move behind "Mehr Filter" - and this is the case the disclosure badge was built for: a filter
+// that is set but out of sight silently changes what the list shows, so the summary counts what is
+// inside it. The neutral "Alle" of a select does not count, which is why each of them declares
+// emptyValue.
 async function openFilterSheet() {
   const params = new URLSearchParams(location.search);
   let catOptions = '', accounts = [], groups = [], merchants = [];
@@ -131,72 +142,117 @@ async function openFilterSheet() {
     ]);
   } catch { /* every lookup is best-effort */ }
 
-  const accountId = params.get('accountId') || '';
-  const groupId = params.get('groupId') || '';
-  const accountOptions = (accounts || []).filter(a => a.isActive !== false).map(a =>
-    `<option value="${ctx.esc(a.id)}"${a.id === accountId ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
-  const groupOptions = (groups || []).map(g =>
-    `<option value="${ctx.esc(g.id)}"${g.id === groupId ? ' selected' : ''}>${ctx.esc(g.name)}</option>`).join('');
+  const all = ctx.get('common.all');
   const merchantIdValue = params.get('merchantId') || '';
   const merchantValue = params.get('merchant') || '';
-  const merchantOptions = (merchants || []).map(m =>
-    `<option value="${ctx.esc(m.id)}"${String(m.id) === merchantIdValue || (!merchantIdValue && m.name === merchantValue) ? ' selected' : ''}>${ctx.esc(m.name)}</option>`).join('');
+  const selectedMerchant = (merchants || [])
+    .find(m => String(m.id) === merchantIdValue || (!merchantIdValue && m.name === merchantValue));
 
-  const dlg = ctx.dialog(`<form class="dialog-card drawer tx-filter-sheet" method="dialog">
-    <div class="panel-head"><h2>${ctx.esc(deLabel('Filter', 'Filters'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('transactions.account'))}<select name="account"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${accountOptions}</select></label>
-    <label>${ctx.esc(deLabel('Kontogruppe', 'Account group'))}<select name="group"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${groupOptions}</select></label>
-    <label>${ctx.esc(ctx.get('transactions.type'))}<select name="direction"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="income"${params.get('direction') === 'income' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.income'))}</option><option value="expense"${params.get('direction') === 'expense' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.expenses'))}</option></select></label>
-    <label>${ctx.esc(deLabel('Status', 'Status'))}<select name="status"><option value="">${ctx.esc(ctx.get('common.all'))}</option><option value="booked"${params.get('status') === 'booked' ? ' selected' : ''}>${ctx.esc(deLabel('Gebucht', 'Booked'))}</option><option value="pending"${params.get('status') === 'pending' ? ' selected' : ''}>${ctx.esc(ctx.get('transactions.pendingOnly'))}</option></select></label>
-    <div class="tx-filter-range"><label>${ctx.esc(deLabel('Von', 'From'))}<input type="date" name="from" value="${ctx.esc(params.get('from') || '')}"></label><label>${ctx.esc(deLabel('Bis', 'To'))}<input type="date" name="to" value="${ctx.esc(params.get('to') || '')}"></label></div>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${catOptions}</select></label>
-    <label>${ctx.esc(deLabel('Händler', 'Merchant'))}<select name="merchantId"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${merchantOptions}</select></label>
-    <div class="tx-filter-range"><label>${ctx.esc(deLabel('Betrag ab', 'Minimum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="minAmount" value="${ctx.esc(params.get('minAmount') || '')}"></label><label>${ctx.esc(deLabel('Betrag bis', 'Maximum amount'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="maxAmount" value="${ctx.esc(params.get('maxAmount') || '')}"></label></div>
-    <label class="check"><input type="checkbox" name="transfersOnly"${params.get('transfersOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.transfersOnly'))}</label>
-    <label class="check"><input type="checkbox" name="ignoredOnly"${params.get('ignoredOnly') === 'true' ? ' checked' : ''}>${ctx.esc(ctx.get('transactions.excludedOnly'))}</label>
-    <label class="check"><input type="checkbox" name="refundOnly"${params.get('refundOnly') === 'true' ? ' checked' : ''}>${ctx.esc(deLabel('Nur Erstattungen', 'Refunds only'))}</label>
-    <label class="check"><input type="checkbox" name="hasReceipt"${params.get('hasReceipt') === 'true' ? ' checked' : ''}>${ctx.esc(deLabel('Mit Beleg', 'Receipt linked'))}</label>
-    <div class="dialog-actions"><button type="button" data-reset class="ghost">${ctx.esc(deLabel('Zurücksetzen', 'Reset'))}</button><button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button></div>
-  </form>`);
-  dlg.classList.add('drawer');
+  const handles = openFormDialog({
+    title: deLabel('Filter', 'Filters'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: deLabel('Mehr Filter', 'More filters'),
+    // A right-side drawer, as before: the filter belongs beside the list it narrows.
+    create: html => ctx.dialog(html, { className: 'drawer' }),
+    fields: [
+      { name: 'account', kind: FieldKind.Select, label: ctx.get('transactions.account'), emptyValue: '',
+        options: [{ value: '', label: all }, ...(accounts || []).filter(x => x.isActive !== false)
+          .map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
+      { name: 'group', kind: FieldKind.Select, label: deLabel('Kontogruppe', 'Account group'), emptyValue: '',
+        options: [{ value: '', label: all }, ...(groups || []).map(x => ({ value: x.id, label: x.name }))] },
+      { name: 'direction', kind: FieldKind.Select, label: ctx.get('transactions.type'), emptyValue: '',
+        options: [{ value: '', label: all },
+          { value: 'income', label: ctx.get('transactions.income') },
+          { value: 'expense', label: ctx.get('transactions.expenses') }] },
+      { name: 'from', kind: FieldKind.Date, label: deLabel('Von', 'From'), group: 'range' },
+      { name: 'to', kind: FieldKind.Date, label: deLabel('Bis', 'To'), group: 'range' },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), emptyValue: '',
+        rawOptions: '<option value="">' + ctx.esc(all) + '</option>' + catOptions },
 
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  const accountSelect = dlg.querySelector('[name="account"]');
-  const groupSelect = dlg.querySelector('[name="group"]');
+      { name: 'status', kind: FieldKind.Select, label: deLabel('Status', 'Status'), advanced: true, emptyValue: '',
+        options: [{ value: '', label: all },
+          { value: 'booked', label: deLabel('Gebucht', 'Booked') },
+          { value: 'pending', label: ctx.get('transactions.pendingOnly') }] },
+      { name: 'merchantId', kind: FieldKind.Select, label: deLabel('Händler', 'Merchant'), advanced: true, emptyValue: '',
+        options: [{ value: '', label: all }, ...(merchants || []).map(x => ({ value: x.id, label: x.name }))] },
+      { name: 'minAmount', kind: FieldKind.Money, label: deLabel('Betrag ab', 'Minimum amount'), min: 0, advanced: true, group: 'amount' },
+      { name: 'maxAmount', kind: FieldKind.Money, label: deLabel('Betrag bis', 'Maximum amount'), min: 0, advanced: true, group: 'amount' },
+      { name: 'transfersOnly', kind: FieldKind.Check, label: ctx.get('transactions.transfersOnly'), advanced: true },
+      { name: 'ignoredOnly', kind: FieldKind.Check, label: ctx.get('transactions.excludedOnly'), advanced: true },
+      { name: 'refundOnly', kind: FieldKind.Check, label: deLabel('Nur Erstattungen', 'Refunds only'), advanced: true },
+      { name: 'hasReceipt', kind: FieldKind.Check, label: deLabel('Mit Beleg', 'Receipt linked'), advanced: true }
+    ],
+    values: {
+      account: params.get('accountId') || '',
+      group: params.get('groupId') || '',
+      direction: params.get('direction') || '',
+      from: params.get('from') || '',
+      to: params.get('to') || '',
+      category: params.get('categoryId') || '',
+      status: params.get('status') || '',
+      merchantId: selectedMerchant ? selectedMerchant.id : '',
+      minAmount: params.get('minAmount') || '',
+      maxAmount: params.get('maxAmount') || '',
+      transfersOnly: params.get('transfersOnly') === 'true',
+      ignoredOnly: params.get('ignoredOnly') === 'true',
+      refundOnly: params.get('refundOnly') === 'true',
+      hasReceipt: params.get('hasReceipt') === 'true'
+    },
+    actions: [
+      { name: 'reset', label: deLabel('Zurücksetzen', 'Reset'), role: 'secondary', onClick: reset },
+      { name: 'apply', label: ctx.get('common.apply'), role: 'primary', submit: true }
+    ],
+    onSubmit: ({ values, close }) => { apply(values); close('applied'); }
+  });
+
+  const form = handles.form;
+  // The category select carries ready <option> markup, so the selection is applied after render.
+  if (params.get('categoryId')) {
+    const select = form.elements.namedItem('category');
+    if (select) select.value = params.get('categoryId');
+  }
+
+  // An account and a group are two ways to ask the same question, so choosing one clears the other.
+  const accountSelect = form.elements.namedItem('account');
+  const groupSelect = form.elements.namedItem('group');
   accountSelect?.addEventListener('change', () => { if (accountSelect.value && groupSelect) groupSelect.value = ''; });
   groupSelect?.addEventListener('change', () => { if (groupSelect.value && accountSelect) accountSelect.value = ''; });
 
-  dlg.querySelector('[data-reset]').onclick = () => {
+  function reset({ close }) {
     const p = new URLSearchParams(location.search);
     ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
     ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
-    dlg.close(); txReplaceUrl(p);
-  };
-  dlg.querySelector('[data-apply]').onclick = () => {
-    const fd = new FormData(dlg.querySelector('form'));
-    const p = new URLSearchParams(location.search);
-    const setOrDel = (k, v) => { const value = String(v || '').trim(); if (value) p.set(k, value); else p.delete(k); };
-    const account = fd.get('account'), group = fd.get('group');
-    setOrDel('accountId', account); setOrDel('groupId', group);
-    if (account) p.delete('groupId'); if (group) p.delete('accountId');
-    setOrDel('direction', fd.get('direction'));
-    setOrDel('status', fd.get('status'));
-    setOrDel('from', fd.get('from')); setOrDel('to', fd.get('to'));
-    const category = fd.get('category');
-    if (category) { p.set('categoryId', category); p.set('includeDescendants', 'true'); } else { p.delete('categoryId'); p.delete('includeDescendants'); }
-    setOrDel('merchantId', fd.get('merchantId'));
-    if (fd.get('merchantId')) p.delete('merchant');
-    setOrDel('minAmount', fd.get('minAmount')); setOrDel('maxAmount', fd.get('maxAmount'));
-    for (const key of ['transfersOnly','ignoredOnly','refundOnly','hasReceipt']) {
-      if (fd.get(key)) p.set(key, 'true'); else p.delete(key);
-    }
-    ctx.$('#tx-direction').value = String(fd.get('direction') || '');
-    ctx.$('#tx-flags').value = '';
-    dlg.close(); txReplaceUrl(p);
-  };
-  dlg.showModal();
-}
+    close('reset');
+    txReplaceUrl(p);
+  }
 
+  function apply(values) {
+    const p = new URLSearchParams(location.search);
+    const setOrDel = (key, value) => {
+      const text = String(value ?? '').trim();
+      if (text) p.set(key, text); else p.delete(key);
+    };
+    setOrDel('accountId', values.account); setOrDel('groupId', values.group);
+    if (values.account) p.delete('groupId');
+    if (values.group) p.delete('accountId');
+    setOrDel('direction', values.direction);
+    setOrDel('status', values.status);
+    setOrDel('from', values.from); setOrDel('to', values.to);
+    if (values.category) { p.set('categoryId', values.category); p.set('includeDescendants', 'true'); }
+    else { p.delete('categoryId'); p.delete('includeDescendants'); }
+    setOrDel('merchantId', values.merchantId);
+    if (values.merchantId) p.delete('merchant');
+    setOrDel('minAmount', values.minAmount); setOrDel('maxAmount', values.maxAmount);
+    for (const key of ['transfersOnly', 'ignoredOnly', 'refundOnly', 'hasReceipt']) {
+      if (values[key]) p.set(key, 'true'); else p.delete(key);
+    }
+    ctx.$('#tx-direction').value = String(values.direction || '');
+    ctx.$('#tx-flags').value = '';
+    txReplaceUrl(p);
+  }
+
+  return handles;
+}
 // Manual booking (UI_UX_SPEC §9.4): hand-enter an income/expense on a MANUAL account. Only manual
 // accounts are offered; the server rejects booking on a synced account. Currency follows the account.
 async function openBookingDialog() {

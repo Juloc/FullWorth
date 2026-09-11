@@ -107,10 +107,7 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
 .tx-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:700;line-height:1}
 #view-transactions .toolbar #tx-direction,#view-transactions .toolbar #tx-flags{display:none}
-.tx-filter-sheet{width:min(440px,94vw);display:flex;flex-direction:column;gap:var(--s3)}
-.tx-filter-range{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
-.tx-filter-sheet label{text-transform:none;letter-spacing:normal;font-size:13px;color:var(--text)}
-.tx-filter-sheet label.check{flex-direction:row;align-items:center;color:var(--muted)}
+
 /* Account/group drill-down affordance (UX rework §3) */
 .row.is-drillable{cursor:pointer}
 .row.is-drillable:hover{background:var(--surface-2)}
@@ -483,7 +480,13 @@ body.locked{overflow:hidden}
 .rule-actions{display:flex;align-items:center;gap:var(--s2)}
 .rule-prio{color:var(--muted);font-size:12px;white-space:nowrap}
 .rule-off{opacity:.6}
-.rule-dialog .rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+/* Unscoped on purpose. This looked like the shared two-column primitive and is used as one in four
+   dialogs, but the rule was scoped under .rule-dialog - so everywhere else a .rule-grid was
+   display:block and its two "columns" silently stacked. minmax(0,1fr) rather than 1fr 1fr, because
+   a 1fr track still refuses to shrink below its content: one long <option> is what pushed every
+   dialog past the right edge of a 375 px screen. */
+.rule-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s3)}
+.rule-grid>*{min-width:0}
 .rule-preview{margin-top:var(--s2);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2,var(--surface))}
 .rule-preview.is-loading{opacity:.6}
 .rule-preview .preview-head{font-weight:600;margin-bottom:var(--s2)}

@@ -142,7 +142,7 @@
   .ic-polish .import-status.is-busy::before{animation-duration:1.6s}
 }
 @media(max-width:560px){
-  .rule-dialog .rule-grid,.tx-filter-range{grid-template-columns:1fr}
+  .rule-grid{grid-template-columns:minmax(0,1fr)}
   .detected-row,.notif-push,.tx-refund{grid-template-columns:1fr}
   .detected-row .row-side,.tx-refund .row-side{justify-content:flex-start;flex-wrap:wrap}
   .budget-detail-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
