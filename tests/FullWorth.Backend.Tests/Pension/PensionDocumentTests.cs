@@ -211,8 +211,10 @@ public sealed class PensionDocumentTests
         Assert.True(result.ContractCreated);
         Assert.NotNull(result.SnapshotId);
         Assert.Empty(result.Skipped);
-        Assert.Contains("contract", result.Applied);
-        Assert.Contains(result.Applied, entry => entry.StartsWith("snapshot:", StringComparison.Ordinal));
+        // Machine tokens, not prose: the review screen does the wording, because the API has no business
+        // holding German and cannot translate an English sentence.
+        Assert.Contains(BavCommitTokens.ContractCreated, result.Applied);
+        Assert.Contains(result.Applied, entry => entry.StartsWith(BavCommitTokens.Snapshot + ":", StringComparison.Ordinal));
 
         await harness.Factory.SeedAsync(async db =>
         {
