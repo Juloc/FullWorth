@@ -74,14 +74,26 @@ try {
 }
 
 // appearance.css and the shared base styles are loaded as render-blocking <link>s in index.html so the
-// page paints once in its final style (no post-load restyle flash). They are intentionally not injected
-// here anymore.
+// page paints once in its final style (no post-load restyle flash). The mobile polish sheet is appended
+// after the base/feature sheets so its cross-app responsive corrections win the cascade consistently.
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const appearance = await import('/ui/appearance.js');
+    if (!document.querySelector('link[data-mobile-polish]')) {
+      const polish = document.createElement('link');
+      polish.rel = 'stylesheet';
+      polish.href = '/styles/mobile-polish.css';
+      polish.dataset.mobilePolish = 'true';
+      document.head.appendChild(polish);
+    }
+
+    const [appearance, mobileInteractions] = await Promise.all([
+      import('/ui/appearance.js'),
+      import('/ui/mobile-interactions.js')
+    ]);
     appearance.initAppearance?.();
+    mobileInteractions.initMobileInteractions?.();
   } catch (error) {
-    console.error('Appearance initialization failed.', error);
+    console.error('Appearance/mobile initialization failed.', error);
   }
 });
