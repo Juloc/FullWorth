@@ -101,3 +101,41 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 .dialog-card>*{min-width:0}
 .dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}
 .dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}
+
+/* The declarative form dialog (ui/form-dialog.js). These rules exist once so the 76 call sites stop
+   each re-deciding label spacing, error position and the actions row. See docs/UI_AUDIT.md. */
+.fw-form-dialog .fw-field{display:grid;gap:4px;min-width:0}
+/* A grouped row is its own grid. .rule-grid looked like the shared two-column primitive but its only
+   base rule is scoped under .rule-dialog, so a bare .rule-grid is display:block - measured: grouped
+   fields stacked instead of sitting side by side. auto-fit keeps two and three-field groups even. */
+.fw-form-dialog .fw-field-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);align-items:start;min-width:0}
+@media(max-width:560px){.fw-form-dialog .fw-field-row{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr)}}
+.fw-form-dialog .fw-field--check{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--s2)}
+.fw-form-dialog .fw-field-required{margin-left:2px;color:var(--muted);font-weight:400}
+.fw-form-dialog .fw-field-hint{font-size:11px;color:var(--muted);line-height:1.4}
+
+/* The error sits under its own field and is always in the DOM, so a failed validation does not
+   reflow the card and push the message it just produced off screen. */
+.fw-form-dialog .fw-field-error{font-size:11px;color:var(--negative);line-height:1.4}
+.fw-form-dialog .fw-field-error:empty{display:none}
+.fw-form-dialog .fw-field.is-invalid input,
+.fw-form-dialog .fw-field.is-invalid select,
+.fw-form-dialog .fw-field.is-invalid textarea{border-color:var(--negative)}
+
+/* Progressive disclosure. A flat list of 14 equally weighted controls was the measured complaint;
+   the fields a caller marks `advanced` live in here. */
+.fw-dialog-advanced{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s2) var(--s3);min-width:0}
+.fw-dialog-advanced>summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);list-style:none}
+.fw-dialog-advanced>summary::-webkit-details-marker{display:none}
+.fw-dialog-advanced>summary::after{content:"▾";margin-left:6px;font-size:10px}
+.fw-dialog-advanced[open]>summary::after{content:"▴"}
+.fw-dialog-advanced[open]>summary{margin-bottom:var(--s2)}
+.fw-dialog-advanced>*+*{margin-top:var(--s2)}
+.fw-advanced-count:not(:empty){margin-left:6px;color:var(--text)}
+
+/* The destructive action is pushed away from the primary one, not merely coloured differently:
+   colour alone still leaves "Löschen" a thumb-slip from "Speichern" on a 375 px screen. */
+.fw-dialog-actions .fw-actions-spacer{flex:1 1 auto;min-width:var(--s3)}
+@media(max-width:560px){
+  .fw-dialog-actions .fw-actions-spacer{flex-basis:100%;min-width:0;height:0}
+}
