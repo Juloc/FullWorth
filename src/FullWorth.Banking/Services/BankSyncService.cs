@@ -1757,13 +1757,33 @@ public sealed class BankSyncService(
             : null;
     }
 
-    private static DateOnly? ParseDate(JsonElement e, string name) =>
-        e.ValueKind == JsonValueKind.Object &&
-        e.TryGetProperty(name, out var v) &&
-        v.ValueKind == JsonValueKind.String &&
-        DateOnly.TryParse(v.GetString(), out var date)
-            ? date
-            : null;
+    /// <summary>
+    /// A provider date, parsed the way the provider writes it. ISO 8601 is what Enable Banking and
+    /// every ASPSP behind it send, and a date part may carry a time.
+    ///
+    /// This used to be a bare <c>DateOnly.TryParse</c>, which parses with the HOST's culture: a value
+    /// like <c>03.04.2026</c> then read as 3 April on a de-DE host and as 4 March everywhere else,
+    /// including the invariant culture a container runs with. Nothing about a stored booking date may
+    /// depend on the machine's locale, and an unreadable date stays null rather than becoming a guess.
+    /// </summary>
+    private static DateOnly? ParseDate(JsonElement e, string name)
+    {
+        if (e.ValueKind != JsonValueKind.Object ||
+            !e.TryGetProperty(name, out var v) ||
+            v.ValueKind != JsonValueKind.String) return null;
+        var text = v.GetString();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        text = text.Trim();
+
+        // An ISO timestamp is an ISO date with a time attached.
+        var separator = text.IndexOfAny(['T', ' ']);
+        if (separator == 10) text = text[..10];
+
+        foreach (var format in (string[])["yyyy-MM-dd", "yyyyMMdd", "dd.MM.yyyy", "dd/MM/yyyy"])
+            if (DateOnly.TryParseExact(text, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                return parsed;
+        return null;
+    }
 
     /// <summary>
     /// Absent is not zero. This used to return <c>0m</c> for a missing or unparseable amount, and that 0

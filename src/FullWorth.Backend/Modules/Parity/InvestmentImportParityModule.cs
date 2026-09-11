@@ -1380,7 +1380,8 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
                 DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal, out var timestamp))
             return DateOnly.FromDateTime(timestamp.Date);
 
-        if (DateOnly.TryParse(text, CultureInfo.CurrentCulture, out var current)) return current;
+        // Not the host's culture: that read a German 03.04.2026 as 4 March everywhere but de-DE.
+        if (ImportDate.TryParse(text, allowExcelSerial: true) is { } shared) return shared;
         throw new FormatException($"Invalid date '{value}'.");
     }
 

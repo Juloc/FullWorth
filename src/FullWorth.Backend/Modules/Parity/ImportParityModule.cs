@@ -281,7 +281,9 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
         if (value is { Length: 3 } && value.All(char.IsAsciiLetterUpper)) return value;
         throw new FormatException($"Unknown currency '{raw!.Trim()}'.");
     }
-    private static DateOnly ParseDate(string? value){if(string.IsNullOrWhiteSpace(value))throw new FormatException("Date is missing.");var formats=new[]{"yyyy-MM-dd","dd.MM.yyyy","d.M.yyyy","dd/MM/yyyy","MM/dd/yyyy"};foreach(var f in formats)if(DateOnly.TryParseExact(value.Trim(),f,CultureInfo.InvariantCulture,DateTimeStyles.None,out var d))return d;if(DateOnly.TryParse(value,CultureInfo.CurrentCulture,out var parsed))return parsed;throw new FormatException($"Invalid date '{value}'.");}
+    // The culture-dependent fallback this used to end with read a German 03.04.2026 as 4 March on any
+    // host that was not de-DE - including the invariant culture a container runs with. See ImportDate.
+    private static DateOnly ParseDate(string? value)=>ImportDate.Parse(value);
     // Statement amounts, so three trailing digits after a single separator mean grouping - see ImportNumber.
     private static decimal ParseAmount(string? value)=>ImportNumber.Parse(value,ImportNumber.ThreeDigitTail.Grouping);
     private static string Fingerprint(DateOnly? date,decimal amount,string currency,string? party,string? desc,string? external)=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{date:yyyy-MM-dd}|{amount}|{currency}|{party}|{desc}|{external}"))).ToLowerInvariant();
