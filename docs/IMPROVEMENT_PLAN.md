@@ -28,10 +28,8 @@ slice moves to the next one rather than holding the release.
 | `alpha.17` | The P0/P1/P2 sweep up to and including the FX refresh fix | shipped |
 | `alpha.18` | Sync-skip reason codes, receipt-poll backoff, O-3 pending ordering, O-7 company car on gross | shipped |
 | `alpha.19` | The parallel round: O-4 + O-5 (reversible IBAN-free account link), O-6 (contract merge and the projection curve), O-9 (statement import, backend and UI), O-10 step 1 (the Altersvorsorge area), balance provenance and balance meaning, FX rate provenance, the PWA offline shell and safe-area fixes, the Cloud error contract and link-health surface, version stamping | an account can be de-duplicated and undone; the three "Weg" contracts merge; the projection is a curve in the first chart; Ikano can be kept current from its own statement; the Altersvorsorge area can be filled in by hand; a balance says what it is, when it is from and where it came from; the installed app works offline |
-| `alpha.20` | bAV step 2 per [PENSION.md](PENSION.md): document upload, extraction and the review screen — **built**; plus dialog steps 1–2 of [UI_AUDIT.md](UI_AUDIT.md) (the form primitive and the first converted editor) | a statement fills a contract instead of being typed in; a dialog stops re-deciding its own layout |
+| `alpha.20` | bAV step 2 per [PENSION.md](PENSION.md): a Standmitteilung is read, reviewed and committed instead of typed in. Plus **all six** dialog steps of [UI_AUDIT.md](UI_AUDIT.md) — the form primitive, five converted editors, the booking filter, the transaction drawer's actions row, one dialog height, one mobile treatment, 22 colours turned into tokens and the guard. Plus three places where content was clipped off the right edge of a phone. | shipped |
 | `alpha.21` | bAV step 3: the wealth block, the salary link, the dashboard entry, the projection and the variant comparison | the pension shows up in the wealth and salary views without a projection ever counting as today’s money |
-| `alpha.22` | The dialog rework per [UI_AUDIT.md](UI_AUDIT.md), steps 1–4 | the editors and the booking filter stop being walls of fields |
-| `alpha.23` | UI_AUDIT steps 5–6: one dialog stylesheet, tokens instead of the ~220 hex literals, and the guard | the dialogs look like one product |
 
 ---
 
