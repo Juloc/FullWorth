@@ -3,14 +3,20 @@
 /* Shared identity sizing: logos and category marks must stay visually readable in every list/card. */
 .fw-ident,
 .tx-ident {
-  width: 42px;
-  height: 42px;
+  width: 42px !important;
+  height: 42px !important;
   min-width: 42px;
   min-height: 42px;
 }
 
 .fw-ident-brand-logo {
   padding: 4px;
+}
+
+.fw-ident-logo {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .fw-ident-cat {
@@ -55,7 +61,7 @@
 }
 
 @media (max-width: 767px) {
-  /* One compact app bar on every mobile page. Page-specific actions stay in the page itself. */
+  /* One compact app bar on every mobile page. */
   .topbar {
     min-height: 56px;
     padding-top: 8px;
@@ -102,10 +108,34 @@
     min-height: 40px;
   }
 
-  /* Large contextual header buttons made the header two rows high. Mobile pages already expose the
-     action in their content; Dashboard editing is entered by long-pressing a widget. */
-  #primary-action {
-    display: none !important;
+  /* Contextual actions stay reachable, but no longer consume a text-button-wide part of the header. */
+  #primary-action:not([hidden]) {
+    display: grid !important;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    margin-left: 0;
+    padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    font-size: 0;
+    color: transparent;
+  }
+
+  #primary-action:not([hidden])::before {
+    content: '+';
+    color: var(--cta-text);
+    font-size: 25px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  #primary-action[data-mobile-kind="edit"]::before {
+    content: '✎';
+    font-size: 20px;
   }
 
   /* Dashboard and other card rows use an explicit three-column grid so long names can never push the
@@ -170,8 +200,8 @@
   /* Larger optical mark on touch screens; wide SVG logos no longer collapse into a thin line. */
   .fw-ident,
   .tx-ident {
-    width: 44px;
-    height: 44px;
+    width: 44px !important;
+    height: 44px !important;
     min-width: 44px;
     min-height: 44px;
   }
