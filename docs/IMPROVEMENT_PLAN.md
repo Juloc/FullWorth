@@ -91,8 +91,19 @@ contribution from the same `InvestmentNetWorthService` the history uses - includ
 it, `300`, and a settled (inactive) loan stays out.
 
 **Still open in this area:** the Overview tile and the Wealth page remain two implementations of the
-same definition. They now agree on loans, portfolios and currencies, but the duplication is the reason
-they diverged and is worth collapsing into one aggregate (tracked as a P2 refactor).
+same definition. Collapsing them into one aggregate is still worth doing (tracked as a P2 refactor),
+but the divergence itself is now pinned: `Dashboard_tile_and_wealth_page_state_the_same_net_worth` and
+`A_foreign_holding_reaches_both_views_the_same_way` ask both endpoints for the same seeded space and
+compare them — the total, the component mapping, and whether a missing FX rate marks both incomplete.
+
+The component mapping is asserted separately from the total on purpose: a total can agree while the
+parts do not, because investments moving from assets into accounts cancels out in the sum and is still
+wrong on screen.
+
+**Verified by reverting:** removing the loan line from the dashboard sum — the exact bug that happened
+here before — fails all three. Restored, all twelve pass. The two views agree today, including the
+case where a USD holding cannot be converted at all: both report incomplete rather than one of them
+quietly dropping it and still calling itself exact.
 
 ### P0-4 An imported account cannot show its own value — `DONE` (see below)
 

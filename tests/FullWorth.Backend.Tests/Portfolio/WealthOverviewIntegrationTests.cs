@@ -371,6 +371,93 @@ public sealed class WealthOverviewIntegrationTests
         });
     }
 
+    /// <summary>
+    /// The home screen's net-worth tile and the Wealth page state the same number.
+    ///
+    /// They are two implementations of one definition — <c>AnalyticsService.DashboardAsync</c> and
+    /// <c>WealthOverviewService</c> — and that duplication is *why* they drifted apart twice already:
+    /// once the tile ignored every depot, once it ignored every loan, and both times the Wealth page
+    /// showed a different number for the same data. Nothing in either build catches that; only a test
+    /// that asks both and compares does.
+    ///
+    /// The component mapping is asserted too, not just the total, because a total can agree while the
+    /// parts disagree — investments moving from assets into accounts would cancel out in the sum and
+    /// still be wrong on screen.
+    /// </summary>
+    [Fact]
+    public async Task Dashboard_tile_and_wealth_page_state_the_same_net_worth()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        using var client = factory.CreateClient();
+
+        var (wealth, dashboard) = await BothViewsAsync(client, scenario);
+
+        Assert.Equal(
+            wealth.GetProperty("netWorth").GetDecimal(),
+            dashboard.GetProperty("netWorth").GetDecimal());
+        Assert.Equal(
+            wealth.GetProperty("accounts").GetProperty("amount").GetDecimal(),
+            dashboard.GetProperty("accounts").GetDecimal());
+        // The tile has one "assets" figure where the page has two components; that is the mapping, and
+        // it is part of the contract rather than an accident of rendering.
+        Assert.Equal(
+            wealth.GetProperty("manualAssets").GetProperty("amount").GetDecimal()
+                + wealth.GetProperty("investments").GetProperty("amount").GetDecimal(),
+            dashboard.GetProperty("assets").GetDecimal());
+        Assert.Equal(
+            wealth.GetProperty("loans").GetProperty("amount").GetDecimal()
+                + wealth.GetProperty("otherLiabilities").GetProperty("amount").GetDecimal(),
+            dashboard.GetProperty("liabilities").GetDecimal());
+    }
+
+    /// <summary>
+    /// A converted foreign holding lands identically in both, and a holding that CANNOT be converted
+    /// makes both say so.
+    ///
+    /// This is the case where a duplicated definition does real damage. If one of the two silently drops
+    /// the unconvertible amount and still reports itself complete, the owner is shown two different net
+    /// worths and told both are exact. A missing rate marks the result incomplete — never 1:1, never 0 —
+    /// and that rule has to hold in both places or it holds in neither.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_foreign_holding_reaches_both_views_the_same_way(bool rateAvailable)
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory, includeUsdAsset: true, includeUsdRate: rateAvailable);
+        using var client = factory.CreateClient();
+
+        var (wealth, dashboard) = await BothViewsAsync(client, scenario);
+
+        Assert.Equal(
+            wealth.GetProperty("netWorth").GetDecimal(),
+            dashboard.GetProperty("netWorth").GetDecimal());
+        Assert.Equal(
+            wealth.GetProperty("isComplete").GetBoolean(),
+            !dashboard.GetProperty("incomplete").GetBoolean());
+        Assert.Equal(rateAvailable, wealth.GetProperty("isComplete").GetBoolean());
+    }
+
+    private static async Task<(JsonElement Wealth, JsonElement Dashboard)> BothViewsAsync(
+        HttpClient client, Scenario scenario)
+    {
+        // Same space, same user, same requested currency: anything left differing between the two is a
+        // difference in the definition, which is the only thing this is looking for.
+        return (
+            await GetAsync(client, $"/api/wealth/overview?fullWorthSpaceId={scenario.Space}&currency=EUR", scenario.Owner),
+            await GetAsync(client, $"/api/analytics/dashboard?fullWorthSpaceId={scenario.Space}&currency=EUR", scenario.Owner));
+    }
+
+    private static async Task<JsonElement> GetAsync(HttpClient client, string path, Guid userId)
+    {
+        using var response = await client.SendAsync(UserRequest(path, userId));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return json.RootElement.Clone();
+    }
+
     private static async Task<Scenario> SeedScenarioAsync(
         BackendWebApplicationFactory factory,
         bool includeUsdAsset = false,
