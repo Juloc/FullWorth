@@ -282,8 +282,15 @@ public sealed class PensionProjectionStoreTests
         Assert.NotNull(row.ProjectedCapital);
         Assert.NotEqual(row.GuaranteedCapital, row.ProjectedCapital);
         Assert.NotEqual(row.GuaranteedMonthlyAnnuity, row.ProjectedMonthlyAnnuity);
-        // Per 10 000 of capital, which is what the stated factor means.
-        Assert.Equal(row.ProjectedCapital!.Value / 10_000m * 30m, row.ProjectedMonthlyAnnuity!.Value, 1);
+        // Per 10 000 of capital, which is what the stated factor means. Compared with a tolerance of one
+        // cent rather than with a decimal-place precision: the store derives the annuity from the
+        // UNROUNDED capital and rounds once, while this line re-derives it from the rounded capital, so
+        // the two legitimately differ in the third decimal - and 512.345460 vs 512.35 happens to straddle
+        // a rounding boundary, which is exactly where a decimal-place comparison reports a failure that
+        // is not one.
+        var expectedAnnuity = row.ProjectedCapital!.Value / 10_000m * 30m;
+        Assert.True(Math.Abs(expectedAnnuity - row.ProjectedMonthlyAnnuity!.Value) <= 0.01m,
+            $"annuity {row.ProjectedMonthlyAnnuity} is not the capital {row.ProjectedCapital} times the stated factor (expected ~{expectedAnnuity})");
     }
 
     /// <summary>
