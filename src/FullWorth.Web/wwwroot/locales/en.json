@@ -380,6 +380,7 @@
     "trend_nodata": "No forecast yet"
   },
   "loans": {
+    "moreDetails": "More details",
     "title": "Loans",
     "new": "Add loan",
     "edit": "Edit loan",

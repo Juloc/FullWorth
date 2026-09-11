@@ -111,7 +111,8 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 .fw-form-dialog .fw-field-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);align-items:start;min-width:0}
 @media(max-width:560px){.fw-form-dialog .fw-field-row{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr)}}
 .fw-form-dialog .fw-field--check{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--s2)}
-.fw-form-dialog .fw-field-required{margin-left:2px;color:var(--muted);font-weight:400}
+.fw-form-dialog .fw-field-label{min-width:0}
+.fw-form-dialog .fw-field-required{color:var(--muted);font-weight:400}
 .fw-form-dialog .fw-field-hint{font-size:11px;color:var(--muted);line-height:1.4}
 
 /* The error sits under its own field and is always in the DOM, so a failed validation does not

@@ -174,6 +174,60 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     }
 
     /// <summary>
+    /// The label and its required marker are one element. <c>.fw-field</c> is a grid, so a bare
+    /// <c>&lt;span&gt;</c> beside the label text became its own row and the asterisk dropped underneath —
+    /// measured on the loan editor: every field 18 px taller than it needed to be, with a stray * under
+    /// each label.
+    /// </summary>
+    [Fact]
+    public async Task The_required_marker_sits_next_to_its_label()
+    {
+        var js = await GetAsync("/ui/form-dialog.js");
+        var css = await GetAsync("/dialogs.css");
+
+        Assert.Contains("class=\"fw-field-label\"", js);
+        Assert.Contains(".fw-form-dialog .fw-field-label", css);
+    }
+
+    /// <summary>
+    /// The loan editor: thirteen controls of equal weight became eight visible plus a disclosure. Which
+    /// fields stayed visible is not a taste call — a field the server requires may not hide behind a
+    /// <c>&lt;details&gt;</c>, because a closed disclosure cannot take focus when native validation
+    /// rejects the form, and the user would face a button that refuses with no message anywhere.
+    /// </summary>
+    [Fact]
+    public async Task The_loan_editor_keeps_every_required_field_out_of_the_disclosure()
+    {
+        var js = await GetAsync("/features/loans.js");
+
+        Assert.Contains("import { openFormDialog, FieldKind } from '../ui/form-dialog.js'", js);
+        // Only the three optional fields moved.
+        Assert.Contains("label: ctx.get('loans.fees'), min: 0, advanced: true", js);
+        Assert.Contains("label: ctx.get('contracts.account'), advanced: true", js);
+        Assert.Contains("label: ctx.get('transactions.category'), advanced: true", js);
+
+        // No single field entry may carry both markers. A field spec never nests braces, so one
+        // non-greedy match is exactly one field.
+        var hidden = System.Text.RegularExpressions.Regex
+            .Matches(js, "\\{ name: '(?<field>[a-zA-Z]+)'[^{}]*\\}")
+            .Where(match => match.Value.Contains("required: true", StringComparison.Ordinal)
+                            && match.Value.Contains("advanced: true", StringComparison.Ordinal))
+            .Select(match => match.Groups["field"].Value)
+            .ToList();
+        Assert.True(hidden.Count == 0, "required fields hidden behind the disclosure: " + string.Join(", ", hidden));
+
+        // The payment and its rhythm are one statement, so they share a row.
+        Assert.Contains("label: ctx.get('loans.payment'), required: true, min: 0, group: 'rate' }", js);
+        Assert.Contains("label: ctx.get('loans.frequency'), group: 'rate',", js);
+
+        // Deleting still asks first, and the refusal stays in the dialog.
+        Assert.Contains("role: 'danger', onClick: remove", js);
+        Assert.Contains("setFormError(err.message", js);
+        // And the hand-written template is gone rather than left beside its replacement.
+        Assert.DoesNotContain("class=\"ghost danger\" data-delete", js);
+    }
+
+    /// <summary>
     /// Step 1 changes no call site on purpose, so it cannot break a screen. This pins that: the module is
     /// served and self-contained, and no feature imports it yet.
     /// </summary>

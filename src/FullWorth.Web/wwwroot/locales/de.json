@@ -380,6 +380,7 @@
     "trend_nodata": "Noch keine Prognose"
   },
   "loans": {
+    "moreDetails": "Mehr Angaben",
     "title": "Kredite",
     "new": "Kredit anlegen",
     "edit": "Kredit bearbeiten",

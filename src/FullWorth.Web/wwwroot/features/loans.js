@@ -4,6 +4,8 @@
 // (GET /api/loans/{id}/amortization). When the loan cannot be projected reliably the drawer says so
 // instead of a misleading number. Loans render as a panel inside the net-worth screen.
 
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+
 let ctx = null;
 const FREQ = ['monthly', 'quarterly', 'yearly', 'weekly'];
 
@@ -129,64 +131,104 @@ function smoothPath(pts) {
   return d.join(' ');
 }
 
+// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). Thirteen controls in one flat list of
+// equal weight became eight visible ones plus a disclosure. What stayed visible is not a taste call: a
+// field the server requires may not hide behind a <details>, because a closed disclosure cannot take
+// focus when native validation rejects the form - the user would face a button that refuses and no
+// message anywhere. Fees, the account and the category are the only optional ones, so they are the
+// only ones that moved.
+//
+// The rhythm sits next to the payment rather than with the dates: "300 EUR" and "monatlich" are one
+// statement, and splitting them is part of why the old list read as thirteen unrelated questions.
 async function openLoanDialog(existing) {
   const l = existing || {};
-  const currency = l.currency || 'EUR';
   let categories, accounts;
   try { categories = await ctx.categoryOptions(l.categoryId); accounts = (await ctx.api('api/accounts')) || []; }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
-  const freqOpts = FREQ.map(f => `<option value="${f}"${(l.paymentFrequency || 'monthly') === f ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.cycle_' + f))}</option>`).join('');
-  const accountOpts = accounts.map(a => `<option value="${a.id}"${l.accountId === a.id ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
   const dv = v => v ? String(v).slice(0, 10) : '';
 
-  const dlg = ctx.dialog(`<form class="dialog-card">
-    <div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'loans.edit' : 'loans.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(l.name || '')}"></label>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('loans.principalOriginal'))}<input name="principal" type="number" step="0.01" min="0" required value="${l.originalPrincipal ?? ''}"></label>
-      <label>${ctx.esc(ctx.get('loans.balance'))}<input name="balance" type="number" step="0.01" min="0" required value="${l.currentBalance ?? ''}"></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('loans.payment'))}<input name="payment" type="number" step="0.01" min="0" required value="${l.paymentAmount ?? ''}"></label>
-      <label>${ctx.esc(ctx.get('loans.rate'))}<input name="rate" type="number" step="0.001" min="0" required value="${l.nominalInterestRate ?? ''}"></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('loans.frequency'))}<select name="frequency">${freqOpts}</select></label>
-      <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" required value="${dv(l.startDate) || dv(new Date().toISOString())}"></label>
-      <label>${ctx.esc(ctx.get('loans.fees'))}<input name="fees" type="number" step="0.01" min="0" value="${l.fees ?? 0}"></label>
-    </div>
-    <label>${ctx.esc(ctx.get('contracts.account'))}<select name="account"><option value="">—</option>${accountOpts}</select></label>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${categories}</select></label>
-    <div class="dialog-actions">${existing ? `<button type="button" class="ghost danger" data-delete>${ctx.esc(ctx.get('common.delete'))}</button>` : ''}<button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
-  </form>`);
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
-    if (!await ctx.confirm(ctx.get('loans.deleteConfirm').replace('{name}', () => existing.name), { destructive: true, confirmLabel: ctx.get('common.delete') })) return;
-    try { await ctx.api(`api/loans/${existing.id}`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('common.deleted')); await renderLoans(ctx); }
-    catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-  });
-  dlg.querySelector('form').onsubmit = async e => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const body = {
-      name: fd.get('name'), originalPrincipal: Number(fd.get('principal')), currentBalance: Number(fd.get('balance')),
-      paymentAmount: Number(fd.get('payment')), nominalInterestRate: Number(fd.get('rate')),
-      startDate: fd.get('start'), endDate: null, fixedTermMonths: null, fees: Number(fd.get('fees') || 0),
-      paymentFrequency: fd.get('frequency'), currency: (fd.get('currency') || 'EUR').toUpperCase(),
-      categoryId: fd.get('category') || null, accountId: fd.get('account') || null, isActive: existing ? existing.isActive !== false : true
-    };
-    try {
-      await ctx.api(existing ? `api/loans/${existing.id}` : 'api/loans', { method: existing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      dlg.close(); ctx.toast(ctx.get('common.saved')); await renderLoans(ctx);
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-  };
-  dlg.showModal();
-}
+  const actions = [];
+  if (existing) actions.push({ name: 'delete', label: ctx.get('common.delete'), role: 'danger', onClick: remove });
+  actions.push({ name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() });
+  actions.push({ name: 'save', label: ctx.get(existing ? 'common.apply' : 'common.create'), role: 'primary', submit: true });
 
+  const form = openFormDialog({
+    title: ctx.get(existing ? 'loans.edit' : 'loans.new'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: ctx.get('loans.moreDetails'),
+    fallbackError: ctx.get('common.error'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160 },
+      { name: 'principal', kind: FieldKind.Money, label: ctx.get('loans.principalOriginal'), required: true, min: 0, group: 'sums' },
+      { name: 'balance', kind: FieldKind.Money, label: ctx.get('loans.balance'), required: true, min: 0, group: 'sums' },
+      { name: 'payment', kind: FieldKind.Money, label: ctx.get('loans.payment'), required: true, min: 0, group: 'rate' },
+      { name: 'frequency', kind: FieldKind.Select, label: ctx.get('loans.frequency'), group: 'rate',
+        options: FREQ.map(f => ({ value: f, label: ctx.get('contracts.cycle_' + f) })) },
+      { name: 'rate', kind: FieldKind.Number, label: ctx.get('loans.rate'), required: true, min: 0, step: '0.001', group: 'terms' },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, maxLength: 3, group: 'terms' },
+      { name: 'start', kind: FieldKind.Date, label: ctx.get('contracts.startDate'), required: true },
+      { name: 'fees', kind: FieldKind.Money, label: ctx.get('loans.fees'), min: 0, advanced: true },
+      { name: 'account', kind: FieldKind.Select, label: ctx.get('contracts.account'), advanced: true,
+        options: [{ value: '', label: '\u2014' }, ...accounts.map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), advanced: true,
+        rawOptions: '<option value="">' + ctx.esc(ctx.get('common.all')) + '</option>' + categories }
+    ],
+    values: {
+      name: l.name || '',
+      principal: l.originalPrincipal ?? '',
+      balance: l.currentBalance ?? '',
+      payment: l.paymentAmount ?? '',
+      frequency: l.paymentFrequency || 'monthly',
+      rate: l.nominalInterestRate ?? '',
+      currency: l.currency || 'EUR',
+      start: dv(l.startDate) || dv(new Date().toISOString()),
+      fees: l.fees ?? '',
+      account: l.accountId || '',
+      category: l.categoryId || ''
+    },
+    actions,
+    onSubmit: async ({ values, setFormError, close }) => {
+      const body = {
+        name: values.name, originalPrincipal: values.principal, currentBalance: values.balance,
+        paymentAmount: values.payment, nominalInterestRate: values.rate,
+        startDate: values.start, endDate: null, fixedTermMonths: null,
+        // An empty fee field means nobody said, and the API wants a number. 0 is what the old form
+        // already sent for it, so this is not a new assumption.
+        fees: values.fees ?? 0,
+        paymentFrequency: values.frequency, currency: String(values.currency || 'EUR').toUpperCase(),
+        categoryId: values.category, accountId: values.account,
+        isActive: existing ? existing.isActive !== false : true
+      };
+      try {
+        await ctx.api(existing ? 'api/loans/' + existing.id : 'api/loans',
+          { method: existing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderLoans(ctx);
+      } catch (err) {
+        setFormError(err.message || ctx.get('common.error'));
+      }
+    }
+  });
+
+  // Deleting still asks first, and a refusal is reported in the dialog rather than in a toast that
+  // outlives it.
+  async function remove({ setFormError, close }) {
+    if (!await ctx.confirm(ctx.get('loans.deleteConfirm').replace('{name}', () => existing.name),
+      { destructive: true, confirmLabel: ctx.get('common.delete') })) return;
+    try {
+      await ctx.api('api/loans/' + existing.id, { method: 'DELETE' });
+      close('deleted');
+      ctx.toast(ctx.get('common.deleted'));
+      await renderLoans(ctx);
+    } catch (err) {
+      setFormError(err.message || ctx.get('common.error'));
+    }
+  }
+
+  return form;
+}
 function stateRow(kind, msg) {
   return `<div class="row state-empty loan-state loan-state-${kind}"><span class="loan-state-ico" aria-hidden="true">${loanIcon()}</span><div class="row-sub">${ctx.esc(msg)}</div></div>`;
 }

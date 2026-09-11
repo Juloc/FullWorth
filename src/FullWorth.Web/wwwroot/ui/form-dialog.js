@@ -68,6 +68,10 @@ function attributes(field) {
 }
 
 function optionsHtml(field, value) {
+  // Escape hatch for the app's own option builders - ctx.categoryOptions() returns ready <option>
+  // markup with the selection already applied, and rebuilding the category tree here would be a second
+  // implementation of it. Only a caller's own trusted helper may fill this; never user input.
+  if (field.rawOptions) return field.rawOptions;
   return (field.options || [])
     .map(option => {
       const optionValue = option.value ?? option;
@@ -83,8 +87,10 @@ function fieldHtml(field, value) {
   // validation fails, and a jumping dialog hides the very message it just produced.
   const error = `<span class="fw-field-error" data-error-for="${esc(field.name)}" aria-live="polite"></span>`;
   const hint = field.hint ? `<span class="fw-field-hint">${esc(field.hint)}</span>` : '';
-  const required = field.required ? '<span class="fw-field-required" aria-hidden="true">*</span>' : '';
-  const label = `${esc(field.label)}${required}`;
+  const required = field.required ? ' <span class="fw-field-required" aria-hidden="true">*</span>' : '';
+  // One element, not two: .fw-field is a grid, so a bare <span> beside the label text becomes its own
+  // row and the asterisk drops under the label instead of sitting next to it.
+  const label = `<span class="fw-field-label">${esc(field.label)}${required}</span>`;
 
   if (field.kind === FieldKind.Check) {
     // A checkbox's label belongs after the box, which is the one case where the order flips.
