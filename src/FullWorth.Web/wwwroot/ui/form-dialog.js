@@ -132,6 +132,26 @@ function rowsHtml(fields, values) {
     .join('');
 }
 
+/**
+ * A run of consecutive fields sharing a `section` renders inside a <fieldset> with that legend.
+ * Sections and groups answer different questions: a group says two fields are one statement on one
+ * row, a section says a handful of them belong to the same subject. The contract editor had both by
+ * hand (Basisdaten / Zahlung), and a conversion that dropped them would have made that dialog worse.
+ */
+function sectionsHtml(fields, values) {
+  const runs = [];
+  for (const field of fields) {
+    const last = runs[runs.length - 1];
+    if (last && last.section === (field.section || null)) last.fields.push(field);
+    else runs.push({ section: field.section || null, fields: [field] });
+  }
+  return runs
+    .map(run => run.section
+      ? `<fieldset class="fw-dialog-section"><legend>${esc(run.section)}</legend>${rowsHtml(run.fields, values)}</fieldset>`
+      : rowsHtml(run.fields, values))
+    .join('');
+}
+
 function actionsHtml(actions) {
   // The destructive action is separated by a spacer rather than merely coloured: colour alone still
   // puts "Löschen" one slip of the thumb away from "Speichern" on a 375 px screen.
@@ -166,6 +186,9 @@ export function createFormDialog({
   advancedLabel = 'Mehr',
   closeLabel = 'Schließen',
   fallbackError = 'Das hat nicht funktioniert.',
+  // A caller's own block that is not a field - the rule dialog's live preview, for instance. Trusted
+  // markup from the caller, never user input, and it sits after the fields so it can comment on them.
+  extraHtml = '',
   onSubmit,
   create = html => createDialog(html, { className, mobileMode, closeLabel })
 } = {}) {
@@ -190,7 +213,7 @@ export function createFormDialog({
   const formError = `<p class="fw-form-error" data-form-error aria-live="polite"></p>`;
 
   const dialog = create(`<form class="dialog-card fw-form-dialog${className ? ' ' + esc(className) : ''}">`
-    + head + rowsHtml(plain, values) + advancedHtml + formError + actionsHtml(actions) + `</form>`);
+    + head + sectionsHtml(plain, values) + advancedHtml + extraHtml + formError + actionsHtml(actions) + `</form>`);
 
   const form = dialog.querySelector('form');
 
@@ -265,7 +288,11 @@ export function createFormDialog({
     const element = form.elements.namedItem(field.name);
     if (!element) return false;
     if (field.kind === FieldKind.Check) return element.checked === true;
-    return String(element.value ?? '').trim() !== '';
+    const value = String(element.value ?? '').trim();
+    // A select whose neutral option means "no restriction" ("Beliebig") is not a set filter, and
+    // counting it made an untouched form announce "Weitere Bedingungen (1)".
+    if (field.emptyValue !== undefined && value === String(field.emptyValue)) return false;
+    return value !== '';
   };
   const counter = form.querySelector('[data-advanced-count]');
   const updateCount = () => {

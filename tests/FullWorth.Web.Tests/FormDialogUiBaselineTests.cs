@@ -228,6 +228,95 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     }
 
     /// <summary>
+    /// The rule builder. Fourteen controls of equal weight became seven visible ones: a rule is written
+    /// by naming it, saying what to match and what to file it as. The amount window, the direction, the
+    /// MCC and the two processing switches are refinements.
+    ///
+    /// "Regel ist aktiv" stays visible even though it is one line, for the same reason the wealth editor
+    /// keeps its net-worth switch: it decides whether the rule does anything at all.
+    /// </summary>
+    [Fact]
+    public async Task The_rule_builder_shows_the_rule_and_hides_the_refinements()
+    {
+        var js = await GetAsync("/features/rules.js");
+
+        Assert.Contains("import { openFormDialog, FieldKind } from '../ui/form-dialog.js'", js);
+        Assert.Contains("label: ctx.get('rules.enabled') }", js);          // visible
+        Assert.Contains("label: ctx.get('rules.markTransfer'), advanced: true", js);
+        Assert.Contains("label: ctx.get('rules.stop'), advanced: true", js);
+        Assert.Contains("label: ctx.get('rules.minAmount'), min: 0, advanced: true", js);
+
+        // The live preview is not a field, so it goes through extraHtml rather than being faked as one.
+        Assert.Contains("extraHtml:", js);
+        Assert.Contains("data-preview", js);
+        // A missing category lands on the select that is empty, not in a toast.
+        Assert.Contains("setError('category', ctx.get('rules.categoryRequired'))", js);
+    }
+
+    /// <summary>
+    /// A select whose neutral option means "no restriction" is not a set filter. Counting it made an
+    /// untouched rule dialog announce "Weitere Bedingungen (1)", which is worse than saying nothing: it
+    /// claims a filter is active when none is.
+    /// </summary>
+    [Fact]
+    public async Task A_neutral_select_value_does_not_count_as_a_set_filter()
+    {
+        var js = await GetAsync("/ui/form-dialog.js");
+        var rules = await GetAsync("/features/rules.js");
+
+        Assert.Contains("field.emptyValue !== undefined && value === String(field.emptyValue)", js);
+        Assert.Contains("emptyValue: 'any'", rules);
+    }
+
+    /// <summary>
+    /// The contract editor was the best-behaved of the four: it already had hand-written
+    /// <c>&lt;fieldset&gt;</c> sections and a <c>&lt;details&gt;</c>. So the conversion had to keep both,
+    /// which is why the primitive gained sections — a conversion that lost them would have made this
+    /// dialog worse rather than better.
+    /// </summary>
+    [Fact]
+    public async Task The_contract_editor_keeps_its_sections()
+    {
+        var js = await GetAsync("/features/contracts.js");
+        var module = await GetAsync("/ui/form-dialog.js");
+        var css = await GetAsync("/dialogs.css");
+
+        Assert.Contains("import { openFormDialog, FieldKind } from '../ui/form-dialog.js'", js);
+        Assert.Contains("section: t('Basisdaten', 'Basics')", js);
+        Assert.Contains("section: t('Zahlung', 'Payment')", js);
+        Assert.Contains("function sectionsHtml", module);
+        Assert.Contains("<fieldset class=\"fw-dialog-section\">", module);
+        Assert.Contains(".fw-form-dialog .fw-dialog-section", css);
+
+        // The double-submit guard survived: a save creates a contract, so a second click creates a second.
+        Assert.Contains("submit.disabled = true", js);
+        // And the hand-written template is gone rather than left beside its replacement.
+        Assert.DoesNotContain("contract-edit-more", js);
+    }
+
+    /// <summary>
+    /// All four editors of step 2 are converted, and none of them hides a field the server requires.
+    /// </summary>
+    [Theory]
+    [InlineData("/features/networth.js")]
+    [InlineData("/features/loans.js")]
+    [InlineData("/features/rules.js")]
+    [InlineData("/features/contracts.js")]
+    public async Task Every_converted_editor_keeps_its_required_fields_visible(string path)
+    {
+        var js = await GetAsync(path);
+
+        Assert.Contains("openFormDialog({", js);
+        var hidden = System.Text.RegularExpressions.Regex
+            .Matches(js, "\\{ name: '(?<field>[a-zA-Z]+)'[^{}]*\\}")
+            .Where(match => match.Value.Contains("required: true", StringComparison.Ordinal)
+                            && match.Value.Contains("advanced: true", StringComparison.Ordinal))
+            .Select(match => match.Groups["field"].Value)
+            .ToList();
+        Assert.True(hidden.Count == 0, path + " hides required fields: " + string.Join(", ", hidden));
+    }
+
+    /// <summary>
     /// Step 1 changes no call site on purpose, so it cannot break a screen. This pins that: the module is
     /// served and self-contained, and no feature imports it yet.
     /// </summary>

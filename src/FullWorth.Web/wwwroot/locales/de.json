@@ -508,6 +508,7 @@
     "markTransfer": "Als Umbuchung markieren",
     "stop": "Weitere Regeln stoppen",
     "matchAll": "Trifft auf alle Buchungen zu",
+    "moreConditions": "Weitere Bedingungen",
     "previewHint": "Bedingung eingeben, um passende Buchungen zu sehen.",
     "previewCount": "Trifft auf {matched} von {evaluated} Buchungen zu",
     "previewCapped": "gedeckelt",

@@ -5,6 +5,8 @@
 // enabled/disabled and re-applied to history. Backend: /api/categorization-rules (GET/POST/PUT),
 // /preview (dry-run of a draft), /reapply (apply the whole set to existing transactions).
 
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+
 let ctx = null;
 
 const FIELDS = ['any', 'counterparty', 'normalized_counterparty', 'description', 'mcc'];
@@ -114,60 +116,100 @@ function jsonRule(draft, method) {
 
 const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
+// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). Fourteen controls of equal weight
+// became seven visible ones plus a disclosure. A rule is written by naming it, saying what to match
+// and what to file it as; the amount window, the direction, the MCC and the two processing switches
+// are refinements, and presenting them with the same weight is what made this the second-worst
+// offender in the census after the booking filter.
+//
+// "Regel ist aktiv" stays visible even though it is one line, for the same reason the wealth editor
+// keeps its net-worth switch: it decides whether the rule does anything at all, and a default-on
+// switch behind "Mehr" is a switch nobody knows they have.
 async function openRuleDialog(existing) {
   let options;
   try { options = await ctx.categoryOptions(); } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   const r = existing || {};
-  const opt = (list, sel, prefix) => list.map(v => `<option value="${v}"${sel === v ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + v))}</option>`).join('');
-  const dlg = ctx.dialog(`<form class="dialog-card rule-dialog">
-    <div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'rules.edit' : 'rules.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(r.name || '')}"></label>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('rules.field'))}<select name="field">${opt(FIELDS, r.matchField || 'any', 'rules.field_')}</select></label>
-      <label>${ctx.esc(ctx.get('rules.mode'))}<select name="mode">${opt(MODES, r.matchMode || 'contains', 'rules.mode_')}</select></label>
-    </div>
-    <label>${ctx.esc(ctx.get('rules.pattern'))}<input name="pattern" maxlength="200" value="${ctx.esc(r.pattern || '')}"></label>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('rules.direction'))}<select name="direction">${opt(DIRECTIONS, r.direction || 'any', 'rules.direction_')}</select></label>
-      <label>${ctx.esc(ctx.get('rules.mcc'))}<input name="mcc" maxlength="8" value="${ctx.esc(r.merchantCategoryCode || '')}"></label>
-    </div>
-    <div class="rule-grid">
-      <label>${ctx.esc(ctx.get('rules.minAmount'))}<input name="minAmount" type="number" step="0.01" min="0" value="${r.minAmount ?? ''}"></label>
-      <label>${ctx.esc(ctx.get('rules.maxAmount'))}<input name="maxAmount" type="number" step="0.01" min="0" value="${r.maxAmount ?? ''}"></label>
-    </div>
-    <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category" required>${options}</select></label>
-    <label>${ctx.esc(ctx.get('rules.priority'))}<input name="priority" type="number" value="${r.priority ?? 100}" required></label>
-    <label class="check"><input type="checkbox" name="markAsTransfer" ${r.markAsTransfer ? 'checked' : ''}> ${ctx.esc(ctx.get('rules.markTransfer'))}</label>
-    <label class="check"><input type="checkbox" name="stopProcessing" ${r.stopProcessing ? 'checked' : ''}> ${ctx.esc(ctx.get('rules.stop'))}</label>
-    <label class="check"><input type="checkbox" name="isEnabled" ${r.isEnabled === false ? '' : 'checked'}> ${ctx.esc(ctx.get('rules.enabled'))}</label>
-    <div class="rule-preview" data-preview><div class="row-sub">${ctx.esc(ctx.get('rules.previewHint'))}</div></div>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
-  </form>`);
-  if (r.categoryId) { const sel = dlg.querySelector('[name=category]'); if (sel) sel.value = r.categoryId; }
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
+  const choice = (list, prefix) => list.map(v => ({ value: v, label: ctx.get(prefix + v) }));
 
-  const form = dlg.querySelector('form');
-  const previewBox = dlg.querySelector('[data-preview]');
+  const handles = openFormDialog({
+    title: ctx.get(existing ? 'rules.edit' : 'rules.new'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: ctx.get('rules.moreConditions'),
+    fallbackError: ctx.get('common.error'),
+    // .rule-dialog is what styles the live preview below the fields.
+    className: 'rule-dialog',
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160 },
+      { name: 'field', kind: FieldKind.Select, label: ctx.get('rules.field'), group: 'match', options: choice(FIELDS, 'rules.field_') },
+      { name: 'mode', kind: FieldKind.Select, label: ctx.get('rules.mode'), group: 'match', options: choice(MODES, 'rules.mode_') },
+      { name: 'pattern', kind: FieldKind.Text, label: ctx.get('rules.pattern'), maxLength: 200 },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), required: true, rawOptions: options },
+      { name: 'priority', kind: FieldKind.Number, label: ctx.get('rules.priority'), required: true },
+      { name: 'isEnabled', kind: FieldKind.Check, label: ctx.get('rules.enabled') },
+      // emptyValue: 'any' means "no restriction", so an untouched direction does not count towards
+      // the disclosure's badge.
+      { name: 'direction', kind: FieldKind.Select, label: ctx.get('rules.direction'), advanced: true, group: 'narrow', emptyValue: 'any', options: choice(DIRECTIONS, 'rules.direction_') },
+      { name: 'mcc', kind: FieldKind.Text, label: ctx.get('rules.mcc'), maxLength: 8, advanced: true, group: 'narrow' },
+      { name: 'minAmount', kind: FieldKind.Money, label: ctx.get('rules.minAmount'), min: 0, advanced: true, group: 'amount' },
+      { name: 'maxAmount', kind: FieldKind.Money, label: ctx.get('rules.maxAmount'), min: 0, advanced: true, group: 'amount' },
+      { name: 'markAsTransfer', kind: FieldKind.Check, label: ctx.get('rules.markTransfer'), advanced: true },
+      { name: 'stopProcessing', kind: FieldKind.Check, label: ctx.get('rules.stop'), advanced: true }
+    ],
+    values: {
+      name: r.name || '',
+      field: r.matchField || 'any',
+      mode: r.matchMode || 'contains',
+      pattern: r.pattern || '',
+      category: r.categoryId || '',
+      priority: r.priority ?? 100,
+      isEnabled: r.isEnabled !== false,
+      direction: r.direction || 'any',
+      mcc: r.merchantCategoryCode || '',
+      minAmount: r.minAmount ?? '',
+      maxAmount: r.maxAmount ?? '',
+      markAsTransfer: r.markAsTransfer === true,
+      stopProcessing: r.stopProcessing === true
+    },
+    extraHtml: '<div class="rule-preview" data-preview><div class="row-sub">' + ctx.esc(ctx.get('rules.previewHint')) + '</div></div>',
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.apply' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ setError, setFormError, close }) => {
+      // readDraft still reads the form by field name, so the shapes the API sees did not change.
+      const draft = readDraft(form);
+      if (!draft.categoryId || draft.categoryId === EMPTY_GUID) {
+        // On the field, not in a toast: the category is the one thing a rule cannot be saved without,
+        // and the message belongs next to the select that is empty.
+        setError('category', ctx.get('rules.categoryRequired'));
+        return;
+      }
+      try {
+        const path = existing ? 'api/categorization-rules/' + existing.id : 'api/categorization-rules';
+        await ctx.api(path, jsonRule(draft, existing ? 'PUT' : 'POST'));
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderRules(ctx);
+      } catch (err) {
+        setFormError(err.message || ctx.get('common.error'));
+      }
+    }
+  });
+
+  const form = handles.form;
+  // The category select carries ready <option> markup, so the selection is applied after render.
+  if (r.categoryId) { const select = form.elements.namedItem('category'); if (select) select.value = r.categoryId; }
+
+  const previewBox = form.querySelector('[data-preview]');
   let timer = null;
   const schedulePreview = () => { clearTimeout(timer); timer = setTimeout(() => runPreview(form, previewBox), 350); };
   form.addEventListener('input', schedulePreview);
   form.addEventListener('change', schedulePreview);
-
-  form.onsubmit = async e => {
-    e.preventDefault();
-    const draft = readDraft(form);
-    if (!draft.categoryId || draft.categoryId === EMPTY_GUID) { ctx.toast(ctx.get('rules.categoryRequired')); return; }
-    try {
-      const path = existing ? `api/categorization-rules/${existing.id}` : 'api/categorization-rules';
-      await ctx.api(path, jsonRule(draft, existing ? 'PUT' : 'POST'));
-      dlg.close(); ctx.toast(ctx.get('common.saved')); await renderRules(ctx);
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-  };
-  dlg.showModal();
   runPreview(form, previewBox);
-}
 
+  return handles;
+}
 function readDraft(form) {
   const fd = new FormData(form);
   const num = v => { const s = String(v ?? '').trim(); return s === '' ? null : Number(s); };

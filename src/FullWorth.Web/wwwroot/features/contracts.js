@@ -8,6 +8,7 @@
 import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../ui/money.js';
 import { onAppEvent } from '../core/event-bus.js';
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -1525,9 +1526,13 @@ function jsonBody(body, method) {
 }
 
 
+// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). This was the best-behaved of the four
+// editors already: it had hand-written <fieldset> sections and a <details> for the dates. So the
+// conversion had to keep both, which is why the primitive gained `section` — a group says two fields
+// are one statement on one row, a section says a handful of them share a subject, and dropping the
+// sections here would have made this dialog worse rather than better.
 async function openContractDialog(existing) {
   const contract = existing || {};
-  const currency = contract.currency || 'EUR';
   let categories, accounts;
   try {
     categories = await ctx.categoryOptions(contract.categoryId);
@@ -1536,84 +1541,93 @@ async function openContractDialog(existing) {
     ctx.toast(err.message || ctx.get('common.error'));
     return;
   }
-
-  const option = (list, selected, prefix) => list.map(value =>
-    `<option value="${value}"${selected === value ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + value))}</option>`
-  ).join('');
-  const accountOptions = accounts.map(account =>
-    `<option value="${account.id}"${contract.accountId === account.id ? ' selected' : ''}>${ctx.esc(account.displayName || account.institutionName)}</option>`
-  ).join('');
+  const choice = (list, prefix) => list.map(value => ({ value, label: ctx.get(prefix + value) }));
   const dateValue = value => value ? String(value).slice(0, 10) : '';
 
-  const dlg = ctx.dialog(`<form class="dialog-card contract-dialog contract-edit-v2">
-    <div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'contracts.edit' : 'contracts.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+  const handles = openFormDialog({
+    title: ctx.get(existing ? 'contracts.edit' : 'contracts.new'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: t('Weitere Vertragsdaten', 'More contract details'),
+    fallbackError: ctx.get('common.error'),
+    className: 'contract-dialog contract-edit-v2',
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160, section: t('Basisdaten', 'Basics') },
+      { name: 'provider', kind: FieldKind.Text, label: ctx.get('contracts.provider'), maxLength: 160, section: t('Basisdaten', 'Basics') },
+      { name: 'kind', kind: FieldKind.Select, label: ctx.get('contracts.kind'), section: t('Basisdaten', 'Basics'), options: choice(KINDS, 'contracts.kind_') },
 
-    <fieldset>
-      <legend>${ctx.esc(t('Basisdaten', 'Basics'))}</legend>
-      <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(contract.name || '')}"></label>
-      <label>${ctx.esc(ctx.get('contracts.provider'))}<input name="provider" maxlength="160" value="${ctx.esc(contract.providerName || '')}"></label>
-      <label>${ctx.esc(ctx.get('contracts.kind'))}<select name="kind">${option(KINDS, contract.kind || 'subscription', 'contracts.kind_')}</select></label>
-    </fieldset>
+      { name: 'amount', kind: FieldKind.Money, label: ctx.get('transactions.amount'), required: true, group: 'money', section: t('Zahlung', 'Payment') },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, maxLength: 3, group: 'money', section: t('Zahlung', 'Payment') },
+      { name: 'cycle', kind: FieldKind.Select, label: ctx.get('contracts.billingCycle'), section: t('Zahlung', 'Payment'), options: choice(CYCLES, 'contracts.cycle_') },
+      { name: 'category', kind: FieldKind.Select, label: t('Kategorie', 'Category'), section: t('Zahlung', 'Payment'),
+        rawOptions: '<option value="">\u2014</option>' + categories },
+      { name: 'account', kind: FieldKind.Select, label: t('Zahlungskonto', 'Payment account'), section: t('Zahlung', 'Payment'),
+        options: [{ value: '', label: '\u2014' }, ...accounts.map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
 
-    <fieldset>
-      <legend>${ctx.esc(t('Zahlung', 'Payment'))}</legend>
-      <div class="rule-grid">
-        <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" step="0.01" inputmode="decimal" required value="${contract.amount ?? ''}"></label>
-        <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-      </div>
-      <label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${option(CYCLES, contract.billingCycle || 'monthly', 'contracts.cycle_')}</select></label>
-      <label>${ctx.esc(t('Kategorie', 'Category'))}<select name="category"><option value="">—</option>${categories}</select></label>
-      <label>${ctx.esc(t('Zahlungskonto', 'Payment account'))}<select name="account"><option value="">—</option>${accountOptions}</select></label>
-    </fieldset>
+      { name: 'nextDue', kind: FieldKind.Date, label: ctx.get('contracts.nextDue'), advanced: true },
+      { name: 'start', kind: FieldKind.Date, label: ctx.get('contracts.startDate'), advanced: true, group: 'term' },
+      { name: 'end', kind: FieldKind.Date, label: ctx.get('contracts.endDate'), advanced: true, group: 'term' },
+      { name: 'notes', kind: FieldKind.Textarea, label: ctx.get('contracts.notes'), maxLength: 1000, rows: 3, advanced: true }
+    ],
+    values: {
+      name: contract.name || '',
+      provider: contract.providerName || '',
+      kind: contract.kind || 'subscription',
+      amount: contract.amount ?? '',
+      currency: contract.currency || 'EUR',
+      cycle: contract.billingCycle || 'monthly',
+      category: contract.categoryId || '',
+      account: contract.accountId || '',
+      nextDue: dateValue(contract.nextDueDate),
+      start: dateValue(contract.startDate),
+      end: dateValue(contract.endDate),
+      notes: contract.notes || ''
+    },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.apply' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close, form }) => {
+      const body = {
+        name: values.name,
+        providerName: values.provider,
+        kind: values.kind,
+        categoryId: values.category,
+        accountId: values.account,
+        amount: values.amount,
+        currency: String(values.currency || 'EUR').toUpperCase(),
+        billingCycle: values.cycle,
+        interval: existing?.interval || 1,
+        startDate: values.start,
+        endDate: values.end,
+        nextDueDate: values.nextDue,
+        isActive: existing ? existing.isActive !== false : true,
+        notes: values.notes
+      };
 
-    <details class="contract-edit-more">
-      <summary>${ctx.esc(t('Weitere Vertragsdaten', 'More contract details'))}</summary>
-      <label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dateValue(contract.nextDueDate)}"></label>
-      <div class="rule-grid">
-        <label>${ctx.esc(ctx.get('contracts.startDate'))}<input name="start" type="date" value="${dateValue(contract.startDate)}"></label>
-        <label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dateValue(contract.endDate)}"></label>
-      </div>
-      <label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="3">${ctx.esc(contract.notes || '')}</textarea></label>
-    </details>
-
-    <div class="dialog-actions"><button type="button" class="btn btn-secondary" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="btn btn-primary">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div>
-  </form>`);
-
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async event => {
-    event.preventDefault();
-    const fd = new FormData(event.currentTarget);
-    const body = {
-      name: fd.get('name'),
-      providerName: fd.get('provider') || null,
-      kind: fd.get('kind'),
-      categoryId: fd.get('category') || null,
-      accountId: fd.get('account') || null,
-      amount: Number(fd.get('amount')),
-      currency: (fd.get('currency') || 'EUR').toUpperCase(),
-      billingCycle: fd.get('cycle'),
-      interval: existing?.interval || 1,
-      startDate: fd.get('start') || null,
-      endDate: fd.get('end') || null,
-      nextDueDate: fd.get('nextDue') || null,
-      isActive: existing ? existing.isActive !== false : true,
-      notes: (fd.get('notes') || '').trim() || null
-    };
-
-    const submit = event.currentTarget.querySelector('[type="submit"]');
-    submit.disabled = true;
-    try {
-      const endpoint = existing ? `api/contracts/${existing.id}` : 'api/contracts';
-      const saved = await ctx.api(endpoint, jsonBody(body, existing ? 'PUT' : 'POST'));
-      dlg.close();
-      ctx.toast(ctx.get('common.saved'));
-      await renderContracts(ctx);
-      if (saved?.id) await openDetail(saved.id);
-    } catch (err) {
-      submit.disabled = false;
-      ctx.toast(err.message || ctx.get('common.error'));
+      // Double-submit guard: the save creates a contract, so a second click creates a second one.
+      const submit = handles.form.querySelector('[data-action="save"]');
+      if (submit) submit.disabled = true;
+      try {
+        const endpoint = existing ? 'api/contracts/' + existing.id : 'api/contracts';
+        const saved = await ctx.api(endpoint, jsonBody(body, existing ? 'PUT' : 'POST'));
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderContracts(ctx);
+        if (saved?.id) await openDetail(saved.id);
+      } catch (err) {
+        if (submit) submit.disabled = false;
+        setFormError(err.message || ctx.get('common.error'));
+      }
+      void form;
     }
-  };
-  dlg.showModal();
+  });
+
+  // The category select carries ready <option> markup, so the selection is applied after render.
+  if (contract.categoryId) {
+    const select = handles.form.elements.namedItem('category');
+    if (select) select.value = contract.categoryId;
+  }
+
+  return handles;
 }

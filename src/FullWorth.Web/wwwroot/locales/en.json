@@ -508,6 +508,7 @@
     "markTransfer": "Mark as transfer",
     "stop": "Stop further rules",
     "matchAll": "Matches every transaction",
+    "moreConditions": "More conditions",
     "previewHint": "Enter a condition to see matching transactions.",
     "previewCount": "Matches {matched} of {evaluated} transactions",
     "previewCapped": "capped",

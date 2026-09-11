@@ -100,8 +100,9 @@ field. A field entry names its kind (`text` / `number` / `money` / `date` / `sel
 render inside a `<details>`, which is a pattern this codebase already uses (the custom range on the
 wealth page). Nothing else changes yet, so this step cannot break a screen.
 
-**Step 2 — convert the four editors.** `IN PROGRESS`: `networth.js` (the asset editor) is converted;
-`rules.js:122`, `contracts.js:1548` and `loans.js:142` are left. These are plain "edit an entity" forms and are the cheapest conversions; each one
+**Step 2 — convert the four editors.** `DONE` — the asset editor, the loan editor, the rule builder
+and the contract editor. Between them they went from 13/13/14/12 controls of equal weight to 7/8/7/8
+visible ones plus a disclosure, and each one lost code rather than gaining it. These are plain "edit an entity" forms and are the cheapest conversions; each one
 should lose code, not gain it. Convert one, look at it, then do the rest.
 
 **Step 3 — the booking filter, which needs a decision, not just a conversion.** Keep the four filters
@@ -123,6 +124,29 @@ nothing and costs every future reader.
 **Step 6 — a guard.** A test in `tests/FullWorth.Web.Tests` that fails when a dialog call site renders
 more than N controls without a `<details>`, and when a hex literal appears outside `tokens.css`. Without
 it this grows straight back: the census went from 73 to 76 call sites during this audit alone.
+
+---
+
+## What step 2 turned out to be worth
+
+Each conversion found something the primitive was missing, which is the argument for converting one and
+looking at it rather than all four at once:
+
+| Editor | Before | After | What it forced into the primitive |
+| --- | --- | --- | --- |
+| `networth.js` asset | 12 controls, one 1 400-char literal | 5 visible + 2 hidden | `setFormError()`; grouped rows need their own grid |
+| `loans.js` | 13 controls, flat | 8 visible + 3 hidden | the required marker belongs *inside* the label; `rawOptions` for `ctx.categoryOptions()` |
+| `rules.js` | 14 controls, flat | 7 visible + 6 hidden | `extraHtml` for the live preview; `emptyValue`, because a neutral "Beliebig" is not a set filter |
+| `contracts.js` | 12 controls, hand-rolled fieldsets | 8 visible + 4 hidden | `section`, so the conversion does not lose legends the dialog already had |
+
+The rule that decided *which* fields stay visible is not taste: **a field the server requires may not
+hide behind a `<details>`**, because a closed disclosure cannot take focus when native validation
+rejects the form — the user would face a button that refuses with no message anywhere. A test enforces
+it by construction across all four: no field spec may carry both `required: true` and `advanced: true`.
+
+Measured after all four, in `ops/ui-harness`: at 375×812 every one of them is a 375 px card with
+`scrollWidth == clientWidth` and zero elements past the right edge; at 1280×900 the grouped pairs sit
+side by side and the contract editor still shows its BASISDATEN / ZAHLUNG legends.
 
 ---
 
