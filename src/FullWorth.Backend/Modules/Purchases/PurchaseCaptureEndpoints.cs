@@ -78,7 +78,6 @@ public static class PurchaseCaptureEndpoints
 
         PurchaseDiscountAnalyticsEndpoints.Map(group);
         ReceiptScanQueueEndpoints.Map(group);
-        CodexReceiptTestEndpoints.Map(group);
         return app;
     }
 

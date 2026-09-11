@@ -314,10 +314,10 @@ Callers:
 - `ReceiptScanQueueProcessor` → `CodexReceiptBridgeClient.TryScanAsync`. Requires
   `CodexTest:Enabled`. HEIC is refused outright so a receipt is never partially interpreted as
   complete; any failure falls through to local OCR.
-- `POST /api/purchases/gpt-test/{status,login,login/{id},logout,models,logs,scan}`
-  (`CodexReceiptTestEndpoints`) — an explicitly experimental debug surface that never persists a
-  purchase and never changes the configured extraction provider. Gated on `CodexTest:Enabled` and on
-  FullWorth Space membership.
+- The `/api/purchases/gpt-test/*` debug surface (`CodexReceiptTestEndpoints`) is **removed**. It was
+  experimental, it shipped, and it was reachable by every authenticated FullWorth Space member —
+  including its own Codex login and a log endpoint. Two receipt paths also meant the one people
+  actually use was the less maintained of the two. The normal scan path is the only path now.
 
 ### Payslip structuring
 
@@ -335,7 +335,7 @@ the two groups of consumers behave differently.
 
 | Key | Read by | Notes |
 | --- | --- | --- |
-| `CodexTest:Enabled` | `CodexReceiptBridgeClient`, `CodexReceiptTestEndpoints`, `PayslipCodexExtractor` | Master switch for receipt scanning, the `/gpt-test` surface and payslip structuring. Defaults to `false` (`FULLWORTH_CODEX_TEST_ENABLED`). |
+| `CodexTest:Enabled` | `CodexReceiptBridgeClient`, `PayslipCodexExtractor` | Master switch for receipt scanning and payslip structuring. Defaults to `false` (`FULLWORTH_CODEX_TEST_ENABLED`). The canonical name is `AiAccess:CodexBridgeEnabled`; this one is still read so an existing deployment keeps working. |
 | `CodexTest:BaseUrl` | the same three, and as fallback for the `AiAccess` readers | Default `http://fullworth-codex:8080` |
 | `CodexTest:BridgeKey` | the same three, and as fallback for the `AiAccess` readers | `FULLWORTH_CODEX_BRIDGE_KEY`, falling back to `FULLWORTH_SECRET` |
 | `AiAccess:CodexBridgeBaseUrl` | `CodexBridgeIntelligenceProvider`, `AiUserAccessEndpoints`, `CoachModelCatalogService` | Falls back to `CodexTest:BaseUrl`, then to `http://fullworth-codex:8080` |
@@ -407,7 +407,7 @@ Codex path the equivalent is the CLI's `--ephemeral` plus the `shell_tool` the w
 | Bridge request body | 96 MiB; per file 20 MiB; per set 60 MiB; max 24 sources incl. PDF pages |
 | Bridge `codex exec` | 180 s for `/execute`, 270 s for `/scan` |
 | Bridge device login | 10 minutes |
-| Backend → bridge HTTP | 11 min (`AiUserAccessEndpoints`), 5 min (receipt scan and `/gpt-test`), 4 min (payslip) |
+| Backend → bridge HTTP | 11 min (`AiUserAccessEndpoints`), 5 min (receipt scan), 4 min (payslip) |
 | OpenAI HttpClient | 60 s |
 | Cloud → bridge | `RequestTimeoutSeconds`, default 120, clamped 2–300 |
 | Cloud → OpenAI | clamped 2–120 s, `max_output_tokens` clamped 100–4000 |
