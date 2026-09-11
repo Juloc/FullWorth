@@ -212,6 +212,40 @@ public sealed class DialogComplexityGuardTests
         Assert.True(offenders.Count == 0, "vh where dvh belongs: " + string.Join(" | ", offenders));
     }
 
+    /// <summary>
+    /// A custom property that is declared nowhere is the quietest styling bug there is: with a fallback
+    /// the fallback renders (so a colour is off-palette but plausible), and without one the whole
+    /// declaration is invalid and silently dropped. Found twelve of them this way —
+    /// <c>var(--surface-elevated, Canvas)</c> rendered the OS canvas colour, <c>var(--mono, monospace)</c>
+    /// rendered the browser default instead of the app face, and <c>border-radius: var(--radius)</c>
+    /// rendered no radius at all.
+    /// </summary>
+    [Fact]
+    public void Every_custom_property_a_stylesheet_reads_is_declared_somewhere()
+    {
+        // Set per element by JavaScript, so they are correctly absent from every stylesheet.
+        string[] inlineOnly = ["--depth", "--ident-h"];
+
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        var sheets = StyleSheets().ToList();
+        foreach (var file in sheets)
+            foreach (var match in Regex.Matches(File.ReadAllText(file), @"(--[a-z0-9-]+)\s*:").Cast<Match>())
+                declared.Add(match.Groups[1].Value);
+
+        var missing = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in sheets)
+            foreach (var match in Regex.Matches(File.ReadAllText(file), @"var\((--[a-z0-9-]+)").Cast<Match>())
+            {
+                var name = match.Groups[1].Value;
+                if (declared.Contains(name) || inlineOnly.Contains(name)) continue;
+                missing.TryAdd(name, Relative(file));
+            }
+
+        Assert.True(missing.Count == 0,
+            "Custom properties read but never declared: "
+            + string.Join(", ", missing.Select(x => $"{x.Key} (in {x.Value})")));
+    }
+
     // ---- the census itself ----
 
     /// <summary>

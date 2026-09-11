@@ -169,8 +169,16 @@ count outside `tokens.css` is **62**, of which **28** are in `account-deletion/d
 standalone page that links only its own stylesheet, no `tokens.css`, so a local palette is correct
 there and it is not a dialog. That leaves **34** across nine files, listed in the guard. Separately,
 seven tokens are referenced that do not exist (`--surface-raised`, `--surface-strong`,
-`--surface-elevated`, `--background`, `--depth`, `--mono`, `--s7`), so in those twelve places the
-fallback is what renders — those are the ones actually off-palette.
+`--surface-elevated`, `--background`, `--mono`, `--s7`) plus `--radius`, so in those places the
+fallback was what rendered — those were the ones actually off-palette, and they are **fixed**:
+raised/elevated → `--surface-2`, strong → `--surface-3`, background → `--bg`, mono → `--font-mono`,
+`--s7` → `--s8` (which is the 32 px the fallback already produced), `--radius` → `--radius-card`.
+
+Two of them were worse than off-palette. `var(--surface-elevated, Canvas)` rendered the operating
+system's canvas colour rather than any app surface, and `border-radius: var(--radius)` rendered no
+radius at all — a declaration whose custom property is undeclared and has no fallback is invalid and
+silently dropped. `--depth` and `--ident-h` stay absent from every stylesheet on purpose: both are set
+per element by JavaScript. The guard now refuses a custom property that is declared nowhere.
 
 **Step 6 — a guard.** `DONE` — `tests/FullWorth.Web.Tests/DialogComplexityGuardTests.cs`, five rules:
 no new dialog with more than six controls in one flat list, no stale entry in that baseline, no new

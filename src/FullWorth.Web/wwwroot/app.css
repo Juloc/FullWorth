@@ -759,7 +759,7 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tx-sk-avatar,.tx-sk-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:tx-sk-shimmer 1.4s ease infinite}
 @keyframes tx-sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .tx-empty{text-align:center}
-.tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s7,32px) var(--s4);color:var(--muted)}
+.tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s8) var(--s4);color:var(--muted)}
 .tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
 .tx-empty-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .tx-empty-title{color:var(--text);font-weight:600;font-size:14px}

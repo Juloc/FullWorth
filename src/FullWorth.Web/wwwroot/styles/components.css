@@ -62,13 +62,13 @@ label.check input{width:auto}
 .field-inline select{flex:1;min-width:0;max-width:100%;text-overflow:ellipsis}
 .field-inline .icon-button{width:34px;height:34px;flex:0 0 auto}
 /* Sharing invite dialog: account picker + generated claim link */
-.share-accounts{border:1px solid var(--line);border-radius:var(--radius);padding:var(--s3);margin:0;display:grid;gap:var(--s2)}
+.share-accounts{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0;display:grid;gap:var(--s2)}
 .share-accounts legend{padding:0 var(--s2);font-size:12px;color:var(--muted)}
 .share-accounts label.check{justify-content:space-between}
 .share-accounts label.check span{flex:1;min-width:0}
 .share-accounts .share-level{flex:0 0 auto;width:auto}
 .share-link-box{margin-top:var(--s3);display:grid;gap:var(--s2)}
-.share-link-box .share-link{font-family:var(--mono,monospace);font-size:12px}
+.share-link-box .share-link{font-family:var(--font-mono);font-size:12px}
 /* §18: a cross-currency total that couldn't fully convert (a rate was missing) — amber, never hidden */
 .fx-incomplete{font-size:11px;color:var(--warning);margin-top:6px}
 /* Marks a sum that had to leave money out because a rate was missing. Inline next to the figure, so
