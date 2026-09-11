@@ -1,5 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
+using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Portfolio;
@@ -456,6 +457,24 @@ public sealed class PensionStore(
         // The asset exists only to carry this contract's value into net worth, so it goes with it —
         // otherwise net worth keeps counting a contract that is gone.
         var assetId = contract.AssetId;
+
+        // The fixed-costs contract is deliberately NOT deleted with it. The asset is a statement about
+        // today's wealth and would double-count a contract that is gone, while the recurring contract is
+        // the record of money that really left the salary every month — deleting it would rewrite the
+        // past. So it is deactivated and its note says it is no longer maintained, which is the same
+        // direction this module takes everywhere else: supersede history, never erase it.
+        if (contract.RecurringContractId is { } detachedId)
+        {
+            var detached = await db.Contracts.SingleOrDefaultAsync(
+                row => row.Id == detachedId && row.FullWorthSpaceId == spaceId, ct);
+            if (detached is not null)
+            {
+                StopEmployeeShareContract(detached, detached.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow));
+                detached.Notes = EmployeeShareDetachedNote;
+                audit.Record(spaceId, userId, "pension.employee_share.detached", "RecurringContract", detached.Id);
+            }
+        }
+
         db.BavContracts.Remove(contract);
         audit.Record(spaceId, userId, "pension.contract.deleted", "BavContract", contractId);
         await db.SaveChangesAsync(ct);
@@ -672,9 +691,143 @@ public sealed class PensionStore(
         db.BavContributions.Add(contribution);
         contract.UpdatedAt = DateTimeOffset.UtcNow;
         audit.Record(spaceId, userId, "pension.contribution.added", "BavContribution", contribution.Id);
+
+        // Written in the same SaveChanges as the contribution, so a contribution can never exist
+        // without the cost side it implies — and never with a cost side the contribution does not state.
+        await SyncEmployeeShareContractAsync(contract, contribution, userId, ct);
+
         await db.SaveChangesAsync(ct);
         return new(BavMutationResult.Success, ToView(contribution));
     }
+
+    // ---- the employee share in fixed costs ----
+
+    /// <summary>The name limit the contracts UI itself enforces, so a synced name is never rejected there.</summary>
+    private const int ContractNameLimit = 160;
+
+    private const string EmployeeShareNote =
+        "Wird automatisch aus dem Vorsorge-Bereich gepflegt: Arbeitnehmeranteil (Entgeltumwandlung) der bAV. "
+        + "Änderungen hier werden beim nächsten Beitrags-Update überschrieben. "
+        + "Der Arbeitgeberanteil ist kein Kostenpunkt und steht bewusst nicht in diesem Betrag.";
+
+    private const string EmployeeShareDetachedNote =
+        "Früherer Arbeitnehmeranteil einer bAV. Der Vorsorge-Vertrag wurde gelöscht; die gezahlten Beiträge "
+        + "bleiben als Historie erhalten. Dieser Eintrag wird nicht mehr automatisch gepflegt.";
+
+    /// <summary>
+    /// Keeps the fixed-costs side of a bAV contract in step with its current contribution arrangement.
+    ///
+    /// docs/PENSION.md, "Money direction": a 338 € contribution made of 169 € employee and 169 €
+    /// employer is not a 338 € outflow. Only the employee's deferred share reduces net pay, so only
+    /// <see cref="BavContribution.EmployeeAmount"/> is ever written to the amount — never the sum of the
+    /// shares, never the document's stated total. The employer share and the §1a subsidy are a benefit:
+    /// they reach the user through the balance, and must appear neither as a cost nor as spendable income.
+    ///
+    /// Contributions are append-only, so the current arrangement is the newest row whose
+    /// <c>ValidFrom</c> has arrived — including a row that only ends the previous one.
+    /// <see cref="Running"/> is deliberately not reused here: it drops an already-ended row, which would
+    /// let the superseded arrangement look like it is still running and keep charging the employee.
+    /// </summary>
+    private async Task SyncEmployeeShareContractAsync(
+        BavContract contract, BavContribution added, Guid userId, CancellationToken ct)
+    {
+        // A one-off payment is not a fixed cost — the same exclusion Running makes for the view.
+        var arrangements = await db.BavContributions.AsNoTracking()
+            .Where(row => row.BavContractId == contract.Id && row.Cycle != BavContributionCycles.OneOff)
+            .ToListAsync(ct);
+        if (added.Cycle != BavContributionCycles.OneOff) arrangements.Add(added);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var current = arrangements
+            .Where(row => row.ValidFrom <= today)
+            .OrderByDescending(row => row.ValidFrom)
+            .ThenByDescending(row => row.CreatedAt)
+            .FirstOrDefault();
+        // An arrangement that has not started yet is not a cost yet, and it must not silently become one.
+        if (current is null) return;
+
+        var linked = contract.RecurringContractId is { } linkedId
+            ? await db.Contracts.SingleOrDefaultAsync(
+                row => row.Id == linkedId && row.FullWorthSpaceId == contract.FullWorthSpaceId, ct)
+            : null;
+
+        // Beitragsfrei is ValidUntil plus EndReason = paid_up, and every other end reason stops the
+        // payments the same way. What stops is only the payment: the contract, the balance and the costs
+        // continue, so the row keeps its amount and its dates and is never deleted. A zero employee share
+        // stops it too — an empty 0 € fixed cost is noise, and a purely employer-financed
+        // Unterstützungskasse has no employee payment at all, so none is created for it either.
+        var ended = current.ValidUntil is { } until && until < today;
+        if (ended || current.EmployeeAmount <= 0)
+        {
+            if (linked is null) return;
+            StopEmployeeShareContract(linked, ended ? current.ValidUntil!.Value : current.ValidFrom);
+            audit.Record(contract.FullWorthSpaceId, userId,
+                "pension.employee_share.stopped", "RecurringContract", linked.Id);
+            return;
+        }
+
+        var (cycle, interval) = BillingCycleOf(current.Cycle);
+        if (linked is null)
+        {
+            linked = new RecurringContract
+            {
+                FullWorthSpaceId = contract.FullWorthSpaceId,
+                // The kinds this module already offers are subscription / contract / insurance / loan /
+                // other; a bAV is an insurance contract, so no new kind is invented here.
+                Kind = "insurance",
+                // Not detected from transactions, and AccountId stays null: an Entgeltumwandlung is
+                // withheld from gross salary and never appears as a payment on any account.
+                AutoDetected = false
+            };
+            db.Contracts.Add(linked);
+            contract.RecurringContractId = linked.Id;
+            audit.Record(contract.FullWorthSpaceId, userId,
+                "pension.employee_share.linked", "RecurringContract", linked.Id);
+        }
+        else
+            audit.Record(contract.FullWorthSpaceId, userId,
+                "pension.employee_share.updated", "RecurringContract", linked.Id);
+
+        // A newer arrangement supersedes the previous one on the SAME row: one bAV contract has one
+        // fixed cost, or the fixed-costs total would count the same deferral twice.
+        linked.Name = Truncate($"{contract.ProviderName} · bAV Eigenanteil", ContractNameLimit);
+        linked.ProviderName = Truncate(contract.ProviderName, ContractNameLimit);
+        linked.Amount = current.EmployeeAmount;
+        linked.Currency = current.Currency;
+        linked.BillingCycle = cycle;
+        linked.Interval = interval;
+        linked.StartDate = current.ValidFrom;
+        linked.EndDate = current.ValidUntil;
+        linked.NextDueDate = ContractCycle.NextOnOrAfter(current.ValidFrom, cycle, interval, today);
+        linked.IsActive = true;
+        linked.Notes = EmployeeShareNote;
+        linked.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Ends the payments without ending the record: the row stays, with the date the deferral stopped,
+    /// so the fixed-costs history still shows what was paid while it ran.
+    /// </summary>
+    private static void StopEmployeeShareContract(RecurringContract linked, DateOnly endDate)
+    {
+        linked.EndDate = endDate;
+        linked.IsActive = false;
+        linked.NextDueDate = null;
+        linked.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// A contribution cycle in the cadence the contracts module speaks. It has no half-yearly cycle, so
+    /// <c>semiannual</c> becomes a six-month interval: <c>ContractCycle.PeriodsPerYear</c> then returns 2
+    /// and the annualised fixed cost is right, which the module's "monthly" default would not be.
+    /// </summary>
+    private static (string Cycle, int Interval) BillingCycleOf(string cycle) => cycle switch
+    {
+        BavContributionCycles.Quarterly => ("quarterly", 1),
+        BavContributionCycles.SemiAnnual => ("monthly", 6),
+        BavContributionCycles.Yearly => ("yearly", 1),
+        _ => ("monthly", 1)
+    };
 
     // ---- cost writes ----
 
