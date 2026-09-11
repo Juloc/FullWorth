@@ -328,6 +328,13 @@
   font-size: .72rem;
   color: var(--muted);
   line-height: 1.4;
+  /* Normal case, and no tracking: .pension-field sets both on its label, and an inherited uppercase
+     made the provenance line as loud as the label it explains. On a review screen with 56 fields that
+     is two shouting lines per field and nothing left to draw the eye - measured: label 13.1px and
+     origin 11.5px, both uppercase, both tracked 0.96px, both --muted. The label keeps the uppercase;
+     the provenance reads as the quiet sentence it is. */
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .pension-doc-flag {
