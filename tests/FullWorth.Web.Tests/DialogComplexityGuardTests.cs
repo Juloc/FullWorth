@@ -28,7 +28,6 @@ public sealed class DialogComplexityGuardTests
     {
         ["features/budgets.js"] = 8,
         ["features/contracts.js"] = 11,
-        ["features/networth.js"] = 11,
         ["features/transactions.js"] = 7,
         ["features/wealth-real-estate-advanced.js"] = 8
     };

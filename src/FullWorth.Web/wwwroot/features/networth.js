@@ -1338,20 +1338,75 @@ async function openValuationHistory(asset) {
   dlg.showModal();
 }
 
+// The twin of openAssetForm, converted for the same reason and on the same screen: leaving one of the
+// two as a 1 200-character template literal is worse than either state, because the two dialogs a user
+// opens from the same page then look and behave differently.
+//
+// The balance is the figure a liability is about, so it stays visible with its currency and with the
+// payment it is serviced by. The interest rate, the dates and the notes are refinements. "In
+// Gesamtvermögen einbeziehen" stays visible for the third time for the same reason: it decides whether
+// the number counts at all.
 function openLiabilityDialog(existing) {
-  const item = existing || {}; const currency = item.currency || lastOverview?.currency || 'EUR';
-  const options = (list, selected, prefix) => list.map(value => `<option value="${value}"${value === selected ? ' selected' : ''}>${ctx.esc(ctx.get(prefix + value))}</option>`).join('');
-  const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get(existing ? 'networth.editLiability' : 'networth.newLiability'))}</h2><button type="button" data-close>×</button></div><label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="160" value="${ctx.esc(item.name || '')}"></label><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.kind'))}<select name="kind">${options(LIABILITY_KINDS, item.kind || 'loan', 'networth.liabilityKind_')}</select></label><label>${ctx.esc(ctx.get('contracts.billingCycle'))}<select name="cycle">${options(CYCLES, item.paymentCycle || 'monthly', 'contracts.cycle_')}</select></label></div><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.balance'))}<input name="balance" type="number" min="0" step="0.01" required value="${item.currentBalance ?? ''}"></label><label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" minlength="3" maxlength="3" required></label></div><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.interestRate'))}<input name="interest" type="number" step="0.001" value="${item.interestRate ?? ''}"></label><label>${ctx.esc(ctx.get('networth.payment'))}<input name="payment" type="number" step="0.01" value="${item.regularPayment ?? ''}"></label></div><div class="rule-grid"><label>${ctx.esc(ctx.get('contracts.nextDue'))}<input name="nextDue" type="date" value="${dateValue(item.nextDueDate)}"></label><label>${ctx.esc(ctx.get('contracts.endDate'))}<input name="end" type="date" value="${dateValue(item.endDate)}"></label></div><label class="check"><input type="checkbox" name="include" ${item.includeInNetWorth === false ? '' : 'checked'}> ${ctx.esc(ctx.get('networth.includeInNetWorth'))}</label><label>${ctx.esc(ctx.get('contracts.notes'))}<textarea name="notes" maxlength="1000" rows="2">${ctx.esc(item.notes || '')}</textarea></label><div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get(existing ? 'common.apply' : 'common.create'))}</button></div></form>`);
-  dlg.querySelector('[data-close]').onclick = dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async event => {
-    event.preventDefault(); const fd = new FormData(event.currentTarget);
-    const body = { name: fd.get('name'), kind: fd.get('kind'), currentBalance: Number(fd.get('balance')), currency: String(fd.get('currency') || 'EUR').toUpperCase(), interestRate: numberOrNull(fd.get('interest')), regularPayment: numberOrNull(fd.get('payment')), paymentCycle: fd.get('cycle'), nextDueDate: fd.get('nextDue') || null, endDate: fd.get('end') || null, includeInNetWorth: event.currentTarget.include.checked, notes: textOrNull(fd.get('notes')) };
-    try { await ctx.api(existing ? `api/liabilities/${existing.id}` : 'api/liabilities', jsonBody(body, existing ? 'PUT' : 'POST')); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderNetWorth(ctx); }
-    catch (error) { ctx.toast(error.message || ctx.get('common.error')); }
-  };
-  dlg.showModal();
-}
+  const item = existing || {};
+  const choice = (list, prefix) => list.map(value => ({ value, label: ctx.get(prefix + value) }));
 
+  return openFormDialog({
+    title: ctx.get(existing ? 'networth.editLiability' : 'networth.newLiability'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: t('moreDetails'),
+    fallbackError: ctx.get('common.error'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160 },
+      { name: 'kind', kind: FieldKind.Select, label: ctx.get('networth.kind'), options: choice(LIABILITY_KINDS, 'networth.liabilityKind_') },
+      { name: 'balance', kind: FieldKind.Money, label: ctx.get('networth.balance'), required: true, min: 0, group: 'sum' },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'sum' },
+      { name: 'payment', kind: FieldKind.Money, label: ctx.get('networth.payment'), group: 'rate' },
+      { name: 'cycle', kind: FieldKind.Select, label: ctx.get('contracts.billingCycle'), group: 'rate', options: choice(CYCLES, 'contracts.cycle_') },
+      { name: 'include', kind: FieldKind.Check, label: ctx.get('networth.includeInNetWorth') },
+      { name: 'interest', kind: FieldKind.Number, label: ctx.get('networth.interestRate'), step: '0.001', advanced: true },
+      { name: 'nextDue', kind: FieldKind.Date, label: ctx.get('contracts.nextDue'), advanced: true, group: 'dates' },
+      { name: 'end', kind: FieldKind.Date, label: ctx.get('contracts.endDate'), advanced: true, group: 'dates' },
+      { name: 'notes', kind: FieldKind.Textarea, label: ctx.get('contracts.notes'), maxLength: 1000, advanced: true }
+    ],
+    values: {
+      name: item.name || '',
+      kind: item.kind || 'loan',
+      balance: item.currentBalance ?? '',
+      currency: item.currency || lastOverview?.currency || 'EUR',
+      payment: item.regularPayment ?? '',
+      cycle: item.paymentCycle || 'monthly',
+      include: item.includeInNetWorth !== false,
+      interest: item.interestRate ?? '',
+      nextDue: dateValue(item.nextDueDate),
+      end: dateValue(item.endDate),
+      notes: item.notes || ''
+    },
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.apply' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close }) => {
+      // Every empty number field reads as null, not 0 - so "no interest rate given" stays absent
+      // instead of becoming a stated 0 % per year.
+      const body = {
+        name: values.name, kind: values.kind,
+        currentBalance: values.balance, currency: String(values.currency || 'EUR').toUpperCase(),
+        interestRate: values.interest, regularPayment: values.payment, paymentCycle: values.cycle,
+        nextDueDate: values.nextDue, endDate: values.end,
+        includeInNetWorth: values.include, notes: values.notes
+      };
+      try {
+        await ctx.api(existing ? 'api/liabilities/' + existing.id : 'api/liabilities', jsonBody(body, existing ? 'PUT' : 'POST'));
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderNetWorth(ctx);
+      } catch (error) {
+        setFormError(error.message || ctx.get('common.error'));
+      }
+    }
+  });
+}
 function assetToWrite(item) { return { name: item.name, kind: item.kind || 'other', currentValue: item.currentValue, currency: item.currency, valuedAt: item.valuedAt || null, annualGrowthRate: item.annualGrowthRate ?? null, includeInNetWorth: item.includeInNetWorth !== false, notes: item.notes || null }; }
 function liabilityToWrite(item) { return { name: item.name, kind: item.kind || 'other', currentBalance: item.currentBalance, currency: item.currency, interestRate: item.interestRate ?? null, regularPayment: item.regularPayment ?? null, paymentCycle: item.paymentCycle || 'monthly', nextDueDate: item.nextDueDate || null, endDate: item.endDate || null, includeInNetWorth: item.includeInNetWorth !== false, notes: item.notes || null }; }
 function jsonBody(body, method = 'POST') { return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
@@ -1359,4 +1414,3 @@ function emptyRow() { return `<div class="row state-empty"><div class="row-sub">
 function dateValue(value) { return value ? String(value).slice(0, 10) : ''; }
 function localDate(value) { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }
 function numberOrNull(value) { const text = String(value ?? '').trim(); return text === '' ? null : Number(text); }
-function textOrNull(value) { const text = String(value ?? '').trim(); return text || null; }

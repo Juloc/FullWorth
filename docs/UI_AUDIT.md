@@ -202,8 +202,10 @@ hardcoded colour, no dialog height outside `dialogs.css`, and no `vh` where `dvh
 
 Both lists are baselines that **may shrink and may never grow** — converting a dialog means deleting
 its line. Demanding that every remaining offender be converted first is how a guard never gets written.
-The remaining five flat dialogs are `budgets.js` (8), `contracts.js` (11), `networth.js` (11),
-`transactions.js` (7) and `wealth-real-estate-advanced.js` (8).
+The remaining four flat dialogs are `budgets.js` (8), `contracts.js` (11), `transactions.js` (7)
+and `wealth-real-estate-advanced.js` (8). `networth.js` came off the list when the liability editor
+was converted - it is the twin of the asset editor and sits on the same screen, so leaving one of the
+two unconverted was worse than either state.
 
 It earned its keep immediately: the `dvh` rule caught six heights this pass had missed, two of them
 added the same day.
