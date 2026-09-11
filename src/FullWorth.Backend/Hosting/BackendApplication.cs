@@ -275,6 +275,10 @@ public static class BackendApplication
         builder.Services.AddScoped<TransferDetectionService>();
         builder.Services.AddScoped<TaxStore>();
         builder.Services.AddScoped<PensionStore>();
+        builder.Services.Configure<PensionStorageOptions>(builder.Configuration.GetSection(PensionStorageOptions.SectionName));
+        // Singletons: the blob store holds the options plus a key derived once, the text source is stateless.
+        builder.Services.AddSingleton<IBavDocumentBlobStore, PensionDocumentBlobStore>();
+        builder.Services.AddSingleton<IBavDocumentTextSource, PensionDocumentTextSource>();
         builder.Services.AddScoped<TaxAnalysisService>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
