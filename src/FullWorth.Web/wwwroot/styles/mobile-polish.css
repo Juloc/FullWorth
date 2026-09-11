@@ -1,0 +1,194 @@
+/* Cross-app mobile polish: compact shell, resilient rows, touch selection and legible identities. */
+
+/* Shared identity sizing: logos and category marks must stay visually readable in every list/card. */
+.fw-ident,
+.tx-ident {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+}
+
+.fw-ident-brand-logo {
+  padding: 4px;
+}
+
+.fw-ident-cat {
+  font-size: 20px;
+}
+
+.fw-ident-cat svg {
+  width: 23px;
+  height: 23px;
+}
+
+/* Generic row hardening. The text column may shrink/wrap; the amount/action column may not. */
+.fw-row,
+.row,
+.widget,
+.widget-body,
+.fw-row-main,
+.row-main,
+.tx-cp-main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-row-title,
+.fw-row-sub,
+.row-title,
+.row-sub {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-row-amt,
+.amount,
+.row-side {
+  min-width: 0;
+}
+
+.fw-row-amt {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+  /* One compact app bar on every mobile page. Page-specific actions stay in the page itself. */
+  .topbar {
+    min-height: 56px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  html.pwa-standalone .topbar {
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+
+  .topbar-title {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .topbar-title h1 {
+    font-size: 22px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+  }
+
+  #page-subtitle {
+    display: none;
+  }
+
+  .topbar-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .topbar-actions .icon-button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* Large contextual header buttons made the header two rows high. Mobile pages already expose the
+     action in their content; Dashboard editing is entered by long-pressing a widget. */
+  #primary-action {
+    display: none !important;
+  }
+
+  /* Dashboard and other card rows use an explicit three-column grid so long names can never push the
+     amount outside the viewport. */
+  .widget .fw-row,
+  .widget .fw-row-plain {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .widget .tx-ident-slot {
+    margin-right: 0;
+  }
+
+  .widget .fw-row-main {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .widget .fw-row-title,
+  .widget .fw-row-sub {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .widget .fw-row-amt {
+    justify-self: end;
+    max-width: min(38vw, 150px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The Coach multi-select checkbox is a desktop affordance. Mobile enters the same selection state
+     with a long press and then toggles rows with normal taps. */
+  #view-transactions .tx-select-wrap {
+    display: none !important;
+  }
+
+  #view-transactions .tx-row.tx-selected {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 2px var(--cta);
+    border-radius: 10px;
+  }
+
+  #view-transactions.tx-mobile-selection-mode .tx-row {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #view-transactions.tx-mobile-selection-mode .tx-row:not(.tx-selected) {
+    background: var(--surface);
+  }
+
+  /* Larger optical mark on touch screens; wide SVG logos no longer collapse into a thin line. */
+  .fw-ident,
+  .tx-ident {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .fw-ident-brand-logo {
+    padding: 3px;
+  }
+
+  .fw-ident-cat svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Dashboard edit mode: long press enters it; the pressed card gets the same selected treatment as
+     mobile list selection instead of adding checkbox chrome. */
+  #view-dashboard .widget.mobile-edit-selected {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 2px var(--cta), var(--shadow);
+  }
+}
