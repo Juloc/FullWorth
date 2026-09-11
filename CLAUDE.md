@@ -33,6 +33,8 @@ export FULLWORTH_TEST_POSTGRES='Host=localhost;Port=5432;Username=fullworth_test
 
 Always filter to the relevant tests; the full suite is 1 840 tests and local Docker struggles under it. Counts: Backend 1147, Web 548, Banking 140, FinTs 5. Banking and FinTs need no database.
 
+**That test server grows.** Each test class clones the migration template into its own database and a per-class DROP was measured as a real slowdown, so clones are left behind — 4 241 of them and 61 GB by 2026-09-11, which filled the disk and took the Docker engine down with it. `BackendWebApplicationFactory.PurgeAbandonedDatabases` now drops leftovers older than six hours once per test process. If the data directory is ever huge again, count `pg_database` before suspecting Docker.
+
 There is **no linter, no formatter and no automated browser/e2e test** in this repo. `ci.yml` is `workflow_dispatch` only — it is **not** a tag gate and does not run on push, so `main` can be red unnoticed. Run it before requesting a release.
 
 ## Frontend rules
