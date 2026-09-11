@@ -202,10 +202,23 @@ hardcoded colour, no dialog height outside `dialogs.css`, and no `vh` where `dvh
 
 Both lists are baselines that **may shrink and may never grow** — converting a dialog means deleting
 its line. Demanding that every remaining offender be converted first is how a guard never gets written.
-The remaining four flat dialogs are `budgets.js` (8), `contracts.js` (11), `transactions.js` (7)
-and `wealth-real-estate-advanced.js` (8). `networth.js` came off the list when the liability editor
-was converted - it is the twin of the asset editor and sits on the same screen, so leaving one of the
-two unconverted was worse than either state.
+`networth.js` came off the list when the liability editor was converted — it is the twin of the asset
+editor and sits on the same screen, so leaving one of the two unconverted was worse than either state.
+
+### The four that are left, and what each one needs
+
+The conversion itself is mechanical by now. What is **not** mechanical is which fields stay visible,
+because that is a statement about what the screen is for — and getting it wrong is a regression no
+test catches. Three of these four need the owner to say, so they are described rather than guessed at:
+
+| Dialog | Controls | What has to be decided |
+| --- | --- | --- |
+| `contracts.js` `openCancellationDialog` ("Laufzeit & Kündigung") | 11 | Status, Kündigungsfrist and Kündigungsfrist-Deadline are plausibly the point of a cancellation dialog; Mindestlaufzeit-Ende, Verlängerung, Auto-Verlängerung, Kundennummer and Anbieter-Kontakt are plausibly the paperwork behind it. Plausibly is not good enough — it is his contract workflow. |
+| `budgets.js` | 8 | Which figure a budget is about first. |
+| `wealth-real-estate-advanced.js` | 8 | Which of a property's many facts belong above the fold. |
+| `transactions.js` (the detail drawer) | 7 | **Probably should not be converted.** It is not a form: it carries the amount display, the status history, the transfer sub-panel and the refund panel, and the primitive would fight all four. Its actual problem was the five-button actions row, and that is fixed (step 4). |
+
+The baseline holds all four, so none of them can get more crowded while the decision is open.
 
 It earned its keep immediately: the `dvh` rule caught six heights this pass had missed, two of them
 added the same day.
