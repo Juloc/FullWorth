@@ -108,7 +108,13 @@ export function tryGptReceiptScan(ctx, file) {
   if (input) input.value = '';
   return addReceiptScanFiles(ctx, files).then(result => {
     if (result) return result;
-    throw new Error(t('Belegscan abgebrochen.', 'Receipt scan cancelled.'));
+    // Throwing is load-bearing: returning null here would let the caller fall through to the legacy
+    // single-file upload, so cancelling the builder would upload the photo anyway. The name lets the
+    // caller tell "the user said no" apart from "it broke" - a cancel used to surface as a toast that
+    // read like an error.
+    const cancelled = new Error(t('Belegscan abgebrochen.', 'Receipt scan cancelled.'));
+    cancelled.name = 'ReceiptScanCancelled';
+    throw cancelled;
   });
 }
 

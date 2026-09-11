@@ -141,7 +141,11 @@ async function scanReceipt() {
     if (p && p.status === 'review') { ctx.toast(ctx.get('purchases.scanned')); await openDetail(p.id); }
     else ctx.toast(ctx.get('purchases.uploaded'));
   }
-  catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
+  catch (err) {
+    // The owner closing the scan set is an answer, not a fault - saying "Belegscan abgebrochen" in
+    // the same place errors appear trains people to ignore that spot.
+    if (err?.name !== 'ReceiptScanCancelled') ctx.toast(err.message || ctx.get('common.error'));
+  }
   finally { input.value = ''; }
 }
 

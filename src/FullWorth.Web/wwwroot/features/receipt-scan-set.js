@@ -83,17 +83,44 @@ function renderDraft(draft) {
     </li>`;
   }).join('');
 
+  // One page is the normal case, and it used to get the whole multi-page apparatus: a numbered list,
+  // disabled ↑/↓ buttons, a remove ×, a file counter, a paragraph explaining section-by-section
+  // photography, and a primary button whose label is a sentence. Nothing there is wrong for four
+  // pages; for one photo it is furniture between the owner and the answer.
+  //
+  // The step itself stays. Seeing the photo before it is analysed is the point: a blurry capture
+  // found here costs one tap, found after the extraction it costs the whole round trip. So the
+  // single-page view keeps the preview and drops everything that only means something with a
+  // second page — including the reorder buttons, which cannot do anything to a list of one.
+  //
+  // "+ Weitere Seite" stays in both views: it is what turns one capture into a multi-page receipt,
+  // and without it the shorter view would quietly cost a capability.
+  const single = files.length === 1;
+  const heading = single
+    ? t('Beleg prüfen', 'Check the receipt')
+    : t('Ein Beleg · mehrere Seiten', 'One receipt · multiple pages');
+  const lead = single
+    ? ''
+    : `<p>${t('Fotografiere einen langen Bon abschnittsweise. Alle Bilder und alle PDF-Seiten werden gemeinsam als ein Einkauf analysiert.', 'Photograph a long receipt section by section. All images and every PDF page are analyzed together as one purchase.')}</p>`;
+  const sources = single
+    ? `<div class="receipt-set-single">${singleRow(files[0])}</div>`
+    : `<ol class="receipt-set-sources">${rows || `<li class="receipt-set-empty">${t('Noch keine Seite ausgewählt.', 'No page selected yet.')}</li>`}</ol>`;
+  const counter = single ? '' : `<span class="row-sub">${files.length}/${MAX_FILES} ${t('Dateien', 'files')}</span>`;
+  const startLabel = files.length === 1
+    ? t('Analysieren', 'Analyze')
+    : t(`${files.length} Dateien als einen Beleg analysieren`, `Analyze ${files.length} files as one receipt`);
+
   dialog.innerHTML = `<div class="dialog-card receipt-set-card">
-    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${t('Ein Beleg · mehrere Seiten', 'One receipt · multiple pages')}</h2></div><button type="button" class="ghost" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
-    <p>${t('Fotografiere einen langen Bon abschnittsweise. Alle Bilder und alle PDF-Seiten werden gemeinsam als ein Einkauf analysiert.', 'Photograph a long receipt section by section. All images and every PDF page are analyzed together as one purchase.')}</p>
-    <ol class="receipt-set-sources">${rows || `<li class="receipt-set-empty">${t('Noch keine Seite ausgewählt.', 'No page selected yet.')}</li>`}</ol>
+    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${heading}</h2></div><button type="button" class="ghost" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
+    ${lead}
+    ${sources}
     <div class="receipt-set-add-row">
       <button type="button" class="ghost" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
-      <span class="row-sub">${files.length}/${MAX_FILES} ${t('Dateien', 'files')}</span>
+      ${counter}
     </div>
     <div class="dialog-actions receipt-set-actions">
       <button type="button" class="ghost" data-cancel>${t('Abbrechen', 'Cancel')}</button>
-      <button type="button" data-start ${files.length ? '' : 'disabled'}>${files.length === 1 ? t('Beleg analysieren', 'Analyze receipt') : t(`${files.length} Dateien als einen Beleg analysieren`, `Analyze ${files.length} files as one receipt`)}</button>
+      <button type="button" data-start ${files.length ? '' : 'disabled'}>${startLabel}</button>
     </div>
   </div>`;
 
@@ -112,6 +139,19 @@ function renderDraft(draft) {
   dialog.querySelectorAll('[data-up]').forEach(button => button.addEventListener('click', () => move(draft, Number(button.dataset.up), -1)));
   dialog.querySelectorAll('[data-down]').forEach(button => button.addEventListener('click', () => move(draft, Number(button.dataset.down), 1)));
   hydratePreviews(dialog, files);
+}
+
+function singleRow(file) {
+  const preview = isImage(file)
+    ? `<img data-file-preview="0" alt="">`
+    : `<div class="receipt-set-pdf">PDF</div>`;
+  return `<div class="receipt-set-single-thumb">${preview}</div>
+    <div class="receipt-set-single-main">
+      <strong>${esc(file.name || t('Foto', 'Photo'))}</strong>
+      <small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small>
+    </div>`;
+  // No remove button here on purpose: with one page, removing it and cancelling are the same act, and
+  // two × in one dialog makes the reader choose between them for nothing.
 }
 
 function move(draft, index, delta) {

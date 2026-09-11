@@ -19,3 +19,10 @@
 @media(max-width:620px){.receipt-set-dialog{max-width:100vw;width:100%;margin:auto 0 0}.receipt-set-card{border-radius:1rem 1rem 0 0;max-height:92dvh}.receipt-set-source{grid-template-columns:auto 48px minmax(0,1fr)}.receipt-set-thumb{width:48px;height:60px}.receipt-set-source-actions{grid-column:2/4;justify-content:flex-end}}
 @media(prefers-reduced-motion:reduce){.receipt-set-spinner{animation:none}}
 @media(max-width:620px){.receipt-set-source-actions button{min-height:44px}}
+/* The single-page view: the preview is the content, so it gets the room the numbered list used to take.
+   Same frame as a multi-page row, because one page and three pages are the same kind of thing. */
+.receipt-set-single{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.8rem;margin:1rem 0;padding:.7rem;border:1px solid var(--border,#d8dde5);border-radius:.65rem}
+.receipt-set-single-thumb{width:96px;height:120px;border-radius:.5rem;overflow:hidden;background:var(--surface-2,#eef1f5);display:grid;place-items:center}
+.receipt-set-single-thumb img{width:100%;height:100%;object-fit:cover}
+.receipt-set-single-main{display:grid;gap:.2rem;min-width:0}
+.receipt-set-single-main strong{overflow-wrap:anywhere}

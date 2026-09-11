@@ -66,6 +66,45 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("submitDraft(draft)", scanSet);
     }
 
+    /// <summary>
+    /// One page is the normal case and gets a view without the multi-page apparatus — but it keeps the
+    /// two things that are not furniture: the preview, because a blurry capture caught here costs one
+    /// tap instead of a whole extraction, and "add page", because that is what turns a single camera
+    /// capture into a multi-page receipt. Drop either and the shorter view costs a capability.
+    /// </summary>
+    [Fact]
+    public void A_single_page_keeps_its_preview_and_the_way_to_add_another()
+    {
+        var scanSet = Read("receipt-scan-set.js");
+
+        Assert.Contains("const single = files.length === 1", scanSet);
+        Assert.Contains("function singleRow(file)", scanSet);
+        Assert.Contains("data-file-preview=\"0\"", scanSet);
+
+        // The add-page button sits outside the single/multi branch, so it is rendered once for both.
+        var addRow = scanSet.IndexOf("receipt-set-add-row", StringComparison.Ordinal);
+        var branch = scanSet.IndexOf("const single = files.length === 1", StringComparison.Ordinal);
+        Assert.True(addRow > branch, "the add-page row must be rendered after the branch, for both views");
+        Assert.Single(
+            System.Text.RegularExpressions.Regex.Matches(scanSet, @"data-add>"),
+            match => true);
+    }
+
+    /// <summary>
+    /// Closing the scan set is an answer, not a fault.
+    ///
+    /// The rejection itself has to stay — returning null would let the caller fall through to the legacy
+    /// single-file upload, so cancelling would upload the photo anyway, which is what
+    /// <see cref="Cancelling_builder_never_falls_through_to_legacy_single_file_upload"/> guards. So the
+    /// cancel carries a name and the caller stays quiet for it instead of showing it where errors go.
+    /// </summary>
+    [Fact]
+    public void Cancelling_the_scan_set_is_not_reported_as_an_error()
+    {
+        Assert.Contains("cancelled.name = 'ReceiptScanCancelled'", Read("purchases-gpt-normal.js"));
+        Assert.Contains("err?.name !== 'ReceiptScanCancelled'", Read("purchases.js"));
+    }
+
     [Fact]
     public void Scan_set_file_limit_matches_backend_upload_contract()
     {
@@ -82,7 +121,10 @@ public sealed class GptPurchasesUiBaselineTests : IClassFixture<FullWorthWebFact
         var purchases = Read("purchases.js");
 
         Assert.Contains("Belegscan abgebrochen.", normal);
-        Assert.Contains("throw new Error", normal);
+        // The rule is "reject, never resolve falsy". It used to be checked as the literal text
+        // "throw new Error", so naming the error broke the test while the rule had not moved.
+        Assert.Contains("if (result) return result;", normal);
+        Assert.Contains("throw cancelled", normal);
         // purchases.js still retains the old compatibility fallback, therefore the wrapper must throw
         // rather than resolve null when the local scan-set is intentionally cancelled.
         Assert.Contains("api/purchases/receipt-scan", purchases);
