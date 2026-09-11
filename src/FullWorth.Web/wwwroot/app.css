@@ -279,6 +279,10 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .nw-hero-metrics strong.negative{color:var(--negative)}
 .nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 .nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
+/* Die Kurszeile ist eine Herkunftsangabe, keine Warnung - sie bekommt die ruhige Muted-Farbe. Nur der
+   veraltete Kurs wird hervorgehoben, und zwar als Markierung am Kurs statt als eigener Satz. */
+.nw-fx-rates{color:var(--muted)}
+.nw-fx-stale{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;margin-left:2px;border-radius:50%;background:var(--warning-soft);color:var(--warning);font-size:10px;font-weight:700;line-height:1;vertical-align:text-top;cursor:help}
 /* The forward preview is part of the trend chart, so its legend sits directly under that chart and its
    controls one disclosure below: change a number, watch the dashed part of the curve move. Muted and
    small on purpose - none of it happened yet, and nothing here may compete with the measured figures. */

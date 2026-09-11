@@ -380,6 +380,33 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains(".nw-alloc-note", css);
     }
 
+    /// <summary>
+    /// A cross-currency total was a bare number: the rate that produced it and the age of that rate
+    /// were nowhere on screen, and the snapshot accepts a fixing up to two weeks old for a day that
+    /// has none - so a stale rate looked exactly like this morning's. The API reports the rate and
+    /// its fixing date per currency; this pins that the page actually renders both.
+    /// </summary>
+    [Fact]
+    public async Task ConvertedSumsNameTheRateAndItsFixingDate()
+    {
+        var js = await GetAsync("/features/networth.js");
+        var css = await GetAsync("/app.css");
+
+        Assert.Contains("ratesUsed", js);
+        Assert.Contains("fxRatesText", js);
+        // The rate itself, its fixing date, and a marker when that fixing is old.
+        Assert.Contains("fxRatesUsed", js);
+        Assert.Contains("fxRateAsOf", js);
+        Assert.Contains("rate.rateDate", js);
+        Assert.Contains("rate.isStale", js);
+        Assert.Contains("nw-fx-stale", js);
+        Assert.Contains(".nw-fx-rates", css);
+        Assert.Contains(".nw-fx-stale", css);
+        // A rate is not money: formatted with significant digits, never rounded to cents.
+        Assert.Contains("fxRateValue", js);
+        Assert.DoesNotContain("money(rate.rate", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await client.GetAsync(path);

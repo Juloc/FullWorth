@@ -47,6 +47,7 @@ const COPY = {
     valueHistory: 'Werthistorie', details: 'Details', updateValue: 'Wert aktualisieren', current: 'Aktuell',
     noValuations: 'Noch keine Bewertungen vorhanden.', fxIncomplete: 'Gesamtsumme unvollständig: Für mindestens eine Währung fehlt ein Wechselkurs.',
     fxIncompleteWhich: 'Unvollständig, weil ein Wechselkurs fehlt',
+    fxRatesUsed: 'Umgerechnet mit', fxRateAsOf: 'Kurs vom', fxRateStale: 'Kurs ist älter als ein paar Tage',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
     real_estate: 'Immobilie', vehicle: 'Fahrzeug', precious_metal: 'Edelmetall', collectible: 'Sammlerstück / Wertgegenstand',
     receivable: 'Forderung / privates Darlehen', business_interest: 'Unternehmensbeteiligung', insurance_pension: 'Versicherung / Vorsorge', other: 'Sonstiger Wert',
@@ -83,6 +84,7 @@ const COPY = {
     valueHistory: 'Value history', details: 'Details', updateValue: 'Update value', current: 'Current', noValuations: 'No valuations yet.',
     fxIncomplete: 'Total is incomplete: at least one required FX rate is missing.', dataIncomplete: 'Data incomplete', composition: 'Composition',
     fxIncompleteWhich: 'Incomplete because an FX rate is missing',
+    fxRatesUsed: 'Converted at', fxRateAsOf: 'rate of', fxRateStale: 'this rate is more than a few days old',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
     real_estate: 'Real estate', vehicle: 'Vehicle', precious_metal: 'Precious metal', collectible: 'Collectible / valuable',
     receivable: 'Receivable / private loan', business_interest: 'Business interest', insurance_pension: 'Insurance / pension', other: 'Other asset',
@@ -506,8 +508,43 @@ function buildHeroCard() {
   const grossAssets = num(overview.totalAssets) + num(overview.accounts?.amount);
   const metrics = `<div class="nw-hero-metrics"><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.assets'))}</span><strong>${ctx.money(grossAssets, currency)}</strong></div><div><span class="nw-metric-label">${ctx.esc(ctx.get('dashboard.liabilities'))}</span><strong class="negative">${ctx.money(num(overview.totalLiabilities), currency)}</strong></div></div>`;
   const fx = overview.isComplete ? '' : `<p class="nw-fx">${fxIncompleteText(overview)}</p>`;
-  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${forecastMarkup()}${metrics}${fx}`;
+  const rates = fxRatesText(overview);
+  const rateLine = rates ? `<p class="nw-fx nw-fx-rates">${rates}</p>` : '';
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${forecastMarkup()}${metrics}${fx}${rateLine}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
+}
+
+// A cross-currency total was a bare number: which rate produced it, and how old that rate was, were
+// nowhere on the screen - and the snapshot accepts a fixing up to two weeks old for a day that has
+// none, so a stale rate looked exactly like this morning's. The backend reports the rate and its
+// fixing date per currency now; this is where the user finally sees it.
+//
+// Only currencies that were actually converted appear: an amount already in the base currency was not
+// converted, so claiming a rate of 1 'as of' some date would invent provenance.
+function fxRatesText(overview) {
+  const used = new Map();
+  for (const key of ['accounts', 'manualAssets', 'investments', 'loans', 'otherLiabilities'])
+    for (const rate of overview[key]?.ratesUsed || [])
+      if (!used.has(rate.currency)) used.set(rate.currency, rate);
+  if (!used.size) return '';
+
+  const parts = [...used.values()]
+    .sort((a, b) => String(a.currency).localeCompare(String(b.currency)))
+    .map(rate => {
+      const asOf = rate.rateDate ? ` · ${t('fxRateAsOf')} ${ctx.date(rate.rateDate)}` : '';
+      const stale = rate.isStale ? ` <span class="nw-fx-stale" title="${ctx.esc(t('fxRateStale'))}">!</span>` : '';
+      return `${ctx.esc(rate.currency)} ${ctx.esc(fxRateValue(rate.rate))}${ctx.esc(asOf)}${stale}`;
+    });
+  return `${ctx.esc(t('fxRatesUsed'))}: ${parts.join(' · ')}`;
+}
+
+// A rate is not money, so it is not formatted as money. Six significant digits keep IDR (0.0000559)
+// readable without printing a wall of zeros for USD (0.862).
+function fxRateValue(rate) {
+  const value = Number(rate);
+  if (!Number.isFinite(value) || value === 0) return '—';
+  const digits = Math.abs(value) >= 1 ? 4 : Math.min(8, 2 - Math.floor(Math.log10(Math.abs(value))) + 3);
+  return value.toLocaleString(isDe() ? 'de-DE' : 'en-GB', { maximumFractionDigits: digits });
 }
 
 // "Gesamtsumme unvollständig" plus a flat list of currencies said that something was missing without

@@ -632,10 +632,11 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
 
 ## P2 — misleading, or secondary paths
 
-- **Sums never state their rate or its date.** `PARTLY DONE` — every component now reports the
+- ~~**Sums never state their rate or its date.**~~ `DONE` — every component now reports the
   currencies **it** could not convert (`WealthComponentView.MissingCurrencies`), and the wealth page
   names the value and the rate together ("Unvollständig, weil ein Wechselkurs fehlt: Konten (IDR)")
-  instead of a flat "something is incomplete" with a list of currencies detached from any figure. Still
+  instead of a flat "something is incomplete" with a list of currencies detached from any figure.
+
   A converted total now also says what it was converted **with**: `FxSnapshot.ConvertToBase` returns the
   effective rate and the fixing date behind it, a cross-rate through EUR reports the **older** of its two
   fixings (a total is only as current as its stalest input), and `WealthComponentView.RatesUsed` carries
@@ -646,8 +647,11 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   new one made an amount **already in the base currency** report "unconvertible", which would have marked
   every total containing base-currency money incomplete.
 
-  Still open: the frontend does not show the rate and its date yet (the wealth page is being edited in
-  parallel), so the data reaches the API but not the screen.
+  The wealth page renders it: "Umgerechnet mit: CHF 1,0431 · Kurs vom 28.8.2026 ! · USD 0,862 · Kurs
+  vom 9.9.2026", muted under the total, with the `!` badge only on a fixing past the stale threshold.
+  Only currencies that were actually converted appear — claiming a rate of 1 "as of" some date for
+  money already in the base currency would invent provenance. A rate is not money, so it is printed
+  with significant digits (0.862 USD, 0.0000559 IDR) rather than rounded to cents.
 - ~~**A balance never said where it came from.**~~ `DONE` — `BalanceSnapshot` carries `Source`
   (`provider`/`manual`/`import`) and the owner's `Note`, and a manual balance finally uses
   `ReferenceDate` as the owner's as-of date instead of always stamping today. So an account anchored

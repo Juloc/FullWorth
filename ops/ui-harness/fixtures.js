@@ -182,7 +182,15 @@
       netWorth: 48250.30, totalAssets: 32000, totalLiabilities: 5000,
       // Incomplete because the IDR wallet (a4) has no rate: the message has to name the value AND the
       // rate, not just say "something is missing".
-      accounts: { amount: 21250.30, isComplete: false, missingCurrencies: ['IDR'] },
+      // USD wurde umgerechnet (Kurs + Fixing-Datum), IDR nicht (kein Kurs) - beide Faelle in einer Zeile.
+      // Der zweite Kurs ist absichtlich veraltet, damit die Stale-Markierung sichtbar ist.
+      accounts: {
+        amount: 21250.30, isComplete: false, missingCurrencies: ['IDR'],
+        ratesUsed: [
+          { currency: 'USD', rate: 0.862, rateDate: iso('2026-09-09'), ageInDays: 1, isStale: false },
+          { currency: 'CHF', rate: 1.0431, rateDate: iso('2026-08-28'), ageInDays: 13, isStale: true }
+        ]
+      },
       currency: 'EUR', isComplete: false, missingCurrencies: ['IDR'],
       // Real estate is its own converted slice of manualAssets, so the allocation donut never has to
       // guess it from native asset values.
