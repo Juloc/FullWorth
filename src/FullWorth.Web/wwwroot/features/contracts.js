@@ -1301,57 +1301,92 @@ async function openCancellationDialog(contract, existing) {
   const unitOptions = selected => ['days', 'weeks', 'months']
     .map(unit => `<option value='${unit}'${selected === unit ? ' selected' : ''}>${ctx.esc(ctx.get('contracts.period_' + unit))}</option>`).join('');
 
-  const dlg = ctx.dialog(`<form class='dialog-card contract-dialog'>
-    <div class='panel-head'><div><h2>${ctx.esc(ctx.get('contracts.manageCancellation'))}</h2><div class='row-sub'>${ctx.esc(contract.name)}</div></div><button type='button' data-close aria-label='${ctx.esc(ctx.get('common.close'))}'>×</button></div>
-    <label>${ctx.esc(ctx.get('contracts.status'))}<select name='status'>${statusOptions}</select></label>
-    <label>${ctx.esc(ctx.get('contracts.minimumTermEnd'))}<input name='minimumTermEnd' type='date' value='${dv(details.minimumTermEnd)}'></label>
-    <label>${ctx.esc(ctx.get('contracts.cancelEffectiveDate'))}<input name='effectiveEndDate' type='date' value='${dv(contract.endDate)}'></label>
-    <div class='rule-grid'>
-      <label>${ctx.esc(ctx.get('contracts.noticePeriod'))}<input name='noticeValue' type='number' min='0' value='${details.noticePeriodValue ?? ''}'></label>
-      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='noticeUnit'>${unitOptions(details.noticePeriodUnit || 'months')}</select></label>
-    </div>
-    <label>${ctx.esc(ctx.get('contracts.cancellationDeadline'))}<input name='deadline' type='date' value='${dv(details.cancellationDeadline)}'></label>
-    <div class='rule-grid'>
-      <label>${ctx.esc(ctx.get('contracts.renewalPeriod'))}<input name='renewalValue' type='number' min='0' value='${details.renewalPeriodValue ?? ''}'></label>
-      <label>${ctx.esc(ctx.get('contracts.periodUnit'))}<select name='renewalUnit'>${unitOptions(details.renewalPeriodUnit || 'months')}</select></label>
-    </div>
-    <label class='check'><input name='autoRenews' type='checkbox'${details.autoRenews ? ' checked' : ''}> ${ctx.esc(ctx.get('contracts.autoRenews'))}</label>
-    <label>${ctx.esc(ctx.get('contracts.customerNumber'))}<input name='customerNumber' maxlength='160' value='${ctx.esc(details.customerNumber || '')}'></label>
-    <label>${ctx.esc(ctx.get('contracts.providerContact'))}<textarea name='providerContact' maxlength='500' rows='2'>${ctx.esc(details.providerContact || '')}</textarea></label>
-    ${details.cancellationSentAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.cancelledOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationSentAt))}</div>` : ''}
-    ${details.cancellationConfirmedAt ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.confirmedOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationConfirmedAt))}</div>` : ''}
-    <div class='dialog-actions'><button type='button' class='btn btn-secondary' data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type='submit' class='btn btn-primary'>${ctx.esc(ctx.get('common.apply'))}</button></div>
-  </form>`);
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-  dlg.querySelector('form').onsubmit = async event => {
-    event.preventDefault();
-    const fd = new FormData(event.currentTarget);
-    const numberOrNull = name => fd.get(name) === '' ? null : Number(fd.get(name));
-    const effectiveEndDate = fd.get('effectiveEndDate') || null;
-    const body = {
-      minimumTermEnd: fd.get('minimumTermEnd') || null,
-      noticePeriodValue: numberOrNull('noticeValue'),
-      noticePeriodUnit: fd.get('noticeUnit') || null,
-      renewalPeriodValue: numberOrNull('renewalValue'),
-      renewalPeriodUnit: fd.get('renewalUnit') || null,
-      autoRenews: fd.get('autoRenews') === 'on',
-      cancellationDeadline: fd.get('deadline') || null,
-      cancellationStatus: fd.get('status') || 'none',
-      customerNumber: (fd.get('customerNumber') || '').trim() || null,
-      providerContact: (fd.get('providerContact') || '').trim() || null
-    };
-    try {
-      await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
-      if (effectiveEndDate !== (contract.endDate || null)) {
-        await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), endDate: effectiveEndDate }, 'PUT'));
+  // Visible: everything that decides WHEN you have to act, and what happens if you do not. The notice
+  // period and its deadline are the point of the screen; the automatic renewal belongs with them,
+  // because it is what makes a missed deadline cost another term rather than nothing.
+  //
+  // In the disclosure: the minimum term (set once at signing), how long a renewal runs (only
+  // interesting once you know it renews at all), and the paperwork - customer number and provider
+  // contact - which you need when writing the letter, not when deciding to write it.
+  const handles = openFormDialog({
+    title: ctx.get('contracts.manageCancellation'),
+    subtitle: contract.name,
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: t('Vertragsbedingungen & Papierkram', 'Terms and paperwork'),
+    fallbackError: ctx.get('common.error'),
+    className: 'contract-dialog',
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'status', kind: FieldKind.Select, label: ctx.get('contracts.status'), rawOptions: statusOptions, emptyValue: 'none' },
+      { name: 'noticeValue', kind: FieldKind.Number, label: ctx.get('contracts.noticePeriod'), min: 0, group: 'notice' },
+      { name: 'noticeUnit', kind: FieldKind.Select, label: ctx.get('contracts.periodUnit'), group: 'notice',
+        rawOptions: unitOptions(details.noticePeriodUnit || 'months') },
+      { name: 'deadline', kind: FieldKind.Date, label: ctx.get('contracts.cancellationDeadline') },
+      { name: 'effectiveEndDate', kind: FieldKind.Date, label: ctx.get('contracts.cancelEffectiveDate') },
+      { name: 'autoRenews', kind: FieldKind.Check, label: ctx.get('contracts.autoRenews') },
+      { name: 'minimumTermEnd', kind: FieldKind.Date, label: ctx.get('contracts.minimumTermEnd'), advanced: true },
+      { name: 'renewalValue', kind: FieldKind.Number, label: ctx.get('contracts.renewalPeriod'), min: 0, advanced: true, group: 'renewal' },
+      // 'months' is the default the select opens on, so counting it would have the closed summary
+      // announce a term nobody entered.
+      { name: 'renewalUnit', kind: FieldKind.Select, label: ctx.get('contracts.periodUnit'), advanced: true, group: 'renewal',
+        rawOptions: unitOptions(details.renewalPeriodUnit || 'months'), emptyValue: 'months' },
+      { name: 'customerNumber', kind: FieldKind.Text, label: ctx.get('contracts.customerNumber'), maxLength: 160, advanced: true },
+      { name: 'providerContact', kind: FieldKind.Textarea, label: ctx.get('contracts.providerContact'), maxLength: 500, rows: 2, advanced: true }
+    ],
+    values: {
+      status: cancellationStatus(details),
+      noticeValue: details.noticePeriodValue ?? '',
+      noticeUnit: details.noticePeriodUnit || 'months',
+      deadline: dv(details.cancellationDeadline),
+      effectiveEndDate: dv(contract.endDate),
+      autoRenews: Boolean(details.autoRenews),
+      minimumTermEnd: dv(details.minimumTermEnd),
+      renewalValue: details.renewalPeriodValue ?? '',
+      renewalUnit: details.renewalPeriodUnit || 'months',
+      customerNumber: details.customerNumber || '',
+      providerContact: details.providerContact || ''
+    },
+    // What already happened is not a field - it cannot be edited and it must not look editable.
+    extraHtml: (details.cancellationSentAt
+        ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.cancelledOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationSentAt))}</div>`
+        : '')
+      + (details.cancellationConfirmedAt
+        ? `<div class='row-sub'>${ctx.esc(ctx.get('contracts.confirmedOn'))}: ${ctx.esc(ctx.dateTime(details.cancellationConfirmedAt))}</div>`
+        : ''),
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get('common.apply'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close }) => {
+      const effectiveEndDate = values.effectiveEndDate || null;
+      const body = {
+        minimumTermEnd: values.minimumTermEnd,
+        noticePeriodValue: values.noticeValue,
+        noticePeriodUnit: values.noticeUnit,
+        renewalPeriodValue: values.renewalValue,
+        renewalPeriodUnit: values.renewalUnit,
+        autoRenews: values.autoRenews,
+        cancellationDeadline: values.deadline,
+        cancellationStatus: values.status || 'none',
+        customerNumber: values.customerNumber,
+        providerContact: values.providerContact
+      };
+      try {
+        await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
+        // The end date lives on the contract, not on its cancellation record, so it is a second call -
+        // and only when it actually changed, because the contract PUT rewrites the whole contract.
+        if (effectiveEndDate !== (contract.endDate || null)) {
+          await ctx.api(`api/contracts/${contract.id}`, jsonBody({ ...contractToWrite(contract), endDate: effectiveEndDate }, 'PUT'));
+        }
+        close('saved');
+        ctx.toast(ctx.get('common.saved'));
+        await renderContracts(ctx);
+      } catch (err) {
+        setFormError(err.message || ctx.get('common.error'));
       }
-      dlg.close();
-      ctx.toast(ctx.get('common.saved'));
-      await renderContracts(ctx);
-    } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-  };
-  dlg.showModal();
+    }
+  });
+  return handles;
 }
 
 // Payment trend as a small SVG polyline (oldest→newest). Masked in privacy mode by hiding the line.

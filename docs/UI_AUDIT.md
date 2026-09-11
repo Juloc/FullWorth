@@ -227,11 +227,22 @@ test catches. Three of these four need the owner to say, so they are described r
 
 | Dialog | Controls | What has to be decided |
 | --- | --- | --- |
-| `contracts.js` `openCancellationDialog` ("Laufzeit & Kündigung") | 11 | Status, Kündigungsfrist and Kündigungsfrist-Deadline are plausibly the point of a cancellation dialog; Mindestlaufzeit-Ende, Verlängerung, Auto-Verlängerung, Kundennummer and Anbieter-Kontakt are plausibly the paperwork behind it. Plausibly is not good enough — it is his contract workflow. |
 | `wealth-real-estate-advanced.js` | 8 | Which of a property's many facts belong above the fold. |
 | `transactions.js` (the detail drawer) | 7 | **Probably should not be converted.** It is not a form: it carries the amount display, the status history, the transfer sub-panel and the refund panel, and the primitive would fight all four. Its actual problem was the five-button actions row, and that is fixed (step 4). |
 
 The baseline holds the rest, so none of them can get more crowded while the decision is open.
+
+**`contracts.js` `openCancellationDialog` is done.** The owner left the split to me. Visible is
+everything that decides *when you have to act and what it costs if you do not*: status, notice period
+with its unit, the deadline, the effective end date, and the automatic renewal — that last one because
+it is what turns a missed deadline into another full term instead of nothing. In the disclosure: the
+minimum term (set once at signing), how long a renewal runs (only interesting once you know it renews),
+and the paperwork, customer number and provider contact, which you need while writing the letter and
+not while deciding to write it. Six visible, five hidden, and the two "cancelled on" / "confirmed on"
+timestamps are `extraHtml` rather than fields, because they are history and must not look editable.
+
+`renewalUnit` defaults to `months`, so it carries `emptyValue` — without it the closed summary of an
+untouched contract announced a renewal term nobody had entered.
 
 **`budgets.js` is done.** The owner's answer was "Betrag pro Zeitraum": visible are the name, the
 amount with its currency, the period and the category — what a budget *is*. The anchor date, the end
@@ -251,6 +262,11 @@ Two things fell out of testing it, neither in the dialog:
   the screen was empty and both of its dialogs unreachable. It now has three budgets — monthly,
   weekly and a custom range — shaped after the real `BudgetStatusItem` / `BudgetPeriodStatus` /
   `BudgetView` records rather than after a guess.
+- A list fixture now answers the details below it by id. Even with longest-key matching, `contracts/k1`
+  fell back to the whole `contracts` array because no detail key existed — so the contract drawer read
+  `.id` and `.name` off an array, showed "0,00 €" for a 78,50 € contract, and went on to call
+  `contracts/undefined`. A screen that merely looks empty while proving nothing is the worst thing a
+  harness can do, because it is indistinguishable from a screen that works.
 - The harness matched a fixture by the **first path segment**, so a list shadowed every detail below
   it: `budgets/b3` was answered with the whole `budgets` array. The edit dialog received an array
   where it expected one budget and rendered every field empty — indistinguishable from a broken

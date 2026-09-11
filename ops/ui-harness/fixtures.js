@@ -227,6 +227,24 @@
         { id: 't-b3-1', bookingDate: '2026-08-22', counterparty: 'Fluggesellschaft', amount: -820, currency: 'EUR', category: 'Reisen' }
       ]
     },
+    // CancellationDetailsView. k1 is a contract mid-cancellation: notice given, deadline known, and a
+    // sent timestamp that the dialog must show as history rather than as an editable field. k2 has
+    // nothing filled in, which is what the endpoint returns for a contract nobody has touched - the
+    // shape the dialog has to survive is 'every field null, status "none"'.
+    'contract-parity/k1/cancellation': {
+      minimumTermEnd: '2026-12-31', noticePeriodValue: 3, noticePeriodUnit: 'months',
+      renewalPeriodValue: 12, renewalPeriodUnit: 'months', autoRenews: true,
+      cancellationDeadline: '2026-09-30', cancellationStatus: 'planned',
+      customerNumber: 'KD-4711-2019', providerContact: 'kundenservice@stadtwerke.example\nTel. 0800 1234567',
+      cancellationSentAt: null, cancellationConfirmedAt: null, updatedAt: '2026-09-05T09:12:00Z'
+    },
+    'contract-parity/k2/cancellation': {
+      minimumTermEnd: null, noticePeriodValue: null, noticePeriodUnit: null,
+      renewalPeriodValue: null, renewalPeriodUnit: null, autoRenews: false,
+      cancellationDeadline: null, cancellationStatus: 'none',
+      customerNumber: null, providerContact: null,
+      cancellationSentAt: null, cancellationConfirmedAt: null, updatedAt: null
+    },
     'notifications': [],
     // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
@@ -671,7 +689,20 @@
     const hit = KEYS
       .filter(key => path === key || path.startsWith(key + '/'))
       .sort((a, b) => b.length - a.length)[0];
-    return hit ? FIXTURES[hit] : undefined;
+    if (!hit) return undefined;
+    const value = FIXTURES[hit];
+    if (path === hit) return value;
+
+    // A list fixture answers the details below it, by id. Without this, 'contracts/k1' was served the
+    // whole 'contracts' ARRAY: the detail screen then read .id and .name off an array, got undefined,
+    // and went on to call 'contracts/undefined' - a screen that looks merely empty while quietly
+    // proving nothing. Only one segment deep; anything further (payments, status, ...) needs its own
+    // key and falls through to the empty answer rather than to a wrong one.
+    const rest = path.slice(hit.length + 1).split('/');
+    if (Array.isArray(value) && rest.length === 1) {
+      return value.find(item => String(item?.id) === rest[0]);
+    }
+    return value;
   }
 
   // Two pension-document writes have to answer with something real rather than { ok: true }: the
