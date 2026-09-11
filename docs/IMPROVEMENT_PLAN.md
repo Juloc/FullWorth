@@ -585,7 +585,7 @@ Reachable directly at `/settings/import?mode=statement` and, with an account alr
 `/settings/import?mode=statement&accountId={id}` — a normal query-string link the accounts page (or
 anywhere else) can point at without any wiring on this page's side.
 
-### O-10 There is no place for the occupational pension (bAV) — `PARTLY DONE` (steps 1 and 2 of 3)
+### O-10 There is no place for the occupational pension (bAV) — ~~`DONE`~~ (all three steps)
 
 The owner's bAV had no home. The balance could only be typed in as a nameless `Asset`, which loses the
 implementation route, the policy holder vs the insured person, the guarantee, the annuity factor and —

@@ -8,14 +8,14 @@ Everything below was checked against the code on 2026-09-10.
 
 ## Build status
 
-The work is cut into three steps. **Steps 1 and 2 are built** (migrations
-`20260910233000_OccupationalPension` and `20260911010000_PensionDocumentExtraction`); step 3 is open.
+**All three steps are built** (migrations `20260910233000_OccupationalPension`,
+`20260911010000_PensionDocumentExtraction` and `20260911120000_PensionAllocationDocument`).
 
 | Step | Contents | State |
 | --- | --- | --- |
 | 1 | Domain model, migration, REST API, the manual entry flow, tests | **DONE** |
 | 2 | Document upload, extraction, review, snapshot commit | **DONE** |
-| 3 | Wealth/salary/dashboard integration, projections and variant comparison | OPEN |
+| 3 | Wealth/salary/dashboard integration, projections and variant comparison | **DONE** |
 
 What exists after step 1:
 
@@ -30,7 +30,7 @@ What exists after step 1:
   owner role; the ordering is not-found → forbidden → conflict.
 - `wwwroot/features/pension.js` + `wwwroot/styles/features/pension.css`, view `pension`, routes
   `/pension`, `/pension/vertraege`, `/pension/verlauf`. Übersicht / Verträge / Verlauf with the full
-  manual entry flow. **No simulation tab yet — that is step 3.**
+  manual entry flow. (Step 2 added `/pension/dokumente`, step 3 `/pension/simulation`.)
 - Tests: `tests/FullWorth.Backend.Tests/Pension/` (18) and
   `tests/FullWorth.Web.Tests/PensionUxBaselineTests.cs` (3).
 
@@ -89,7 +89,12 @@ Links out, so nothing is duplicated:
 - `BavContract.AssetId` → the `Asset` that carries the current balance into net worth.
 - `BavContract.RecurringContractId` → the `RecurringContract` that carries the employee payment into fixed
   costs. Null for a purely employer-financed contract (a Unterstützungskasse typically has no employee
-  payment at all).
+  payment at all). **Written since step 3:** a contribution with an employee share keeps exactly one
+  linked contract in step with the *current* arrangement, and `RecurringContract.Amount` is the
+  employee share alone. Ending the arrangement (`paid_up`) deactivates that contract and sets its end
+  date; it is never deleted, because the money really did leave the salary and deleting it would
+  rewrite the past. Deleting the bAV contract deactivates it for the same reason, while the linked
+  `Asset` is removed — an asset is a claim about today's wealth and would double-count.
 - `BavContract.EmployerName` ties the employer benefit view to the compensation area without a hard FK,
   because an employer is not an entity in FullWorth today.
 
@@ -137,12 +142,14 @@ in the employer-benefit view and the pension totals, never in expenses.
   and projected figures sit in their own columns and never touch the asset. Entering last year's statement
   after this year's does not move the value backwards, because "current" is the newest effective date and
   not the newest insert.
-- The wealth overview gets a `pensionAssets` component, a subset of `manualAssets` converted with the same
-  rates — the same shape as `realEstateAssets`, so the block and the total can never disagree. **Step 3.**
-  `GET /api/pension/overview` already produces the per-currency total with the same
-  incomplete/missing-currency semantics, so the wealth block has something correct to consume.
-- Free vs tied wealth is a display distinction over the same numbers: pension assets are tied, so the wealth
-  page shows both a total and "davon gebunden". **Step 3.**
+- ~~The wealth overview gets a `pensionAssets` component~~ **DONE** — a subset of `manualAssets`
+  converted with the same FX snapshot, the same shape as `realEstateAssets`, so the block and the
+  total can never disagree.
+- ~~Free vs tied wealth~~ **DONE** — the wealth page renders "davon gebunden: … · Altersvorsorge –
+  dieses Guthaben steht erst ab Rentenbeginn zur Verfügung" under the net-worth figure, and the
+  allocation ring gets its own pension slice. There is deliberately **no second API field** for tied
+  wealth: today the tied part is exactly the pension assets, and a second field carrying the same
+  number is a field that drifts. The page labels `pensionAssets`.
 
 ## Snapshots and idempotency — DONE (step 1)
 
@@ -243,7 +250,7 @@ which is what makes "beitragsfrei ≠ cost-free" a stored fact rather than a hop
 badge is neutral — only `terminated` is dimmed — and the detail says in words that contract, balance
 and costs continue.
 
-## Projections and variant comparison — OPEN (step 3), storage DONE
+## Projections and variant comparison — DONE (step 3)
 
 A projection takes today's balance, the future contributions, a return scenario (3 / 5 / 7 / custom) and the
 **known** costs, and reports the guarantee separately. Nothing is presented as guaranteed that is not.
@@ -252,7 +259,32 @@ The comparison must not invent an advantage: with identical return and identical
 338 €. Splitting a contribution across contracts produces no extra compound interest. Differences come from
 costs, guarantees and investment concept, and the comparison names which of the three caused the delta.
 
-The **distinction** a projection needs is already storable and enforced, so step 3 only has to compute:
+`PensionProjectionContracts.cs` fixes the shapes, `PensionProjectionCalculator` does the arithmetic,
+`PensionProjectionStore` reads the facts, `PensionProjectionEndpoints` exposes
+`POST /api/pension/projection` and `/projection/compare`, and `features/pension-projection.js` is the
+Simulation tab. **Nothing in that path writes a row** — not a style preference: step 1 put the
+guarantee/projection split into the database so a scenario cannot become a stored value, and a write
+here would open the door it closed. A test asserts the row counts are unchanged after a projection.
+
+Four decisions worth knowing before touching it:
+
+- **Monthly compounding is the twelfth root of the annual rate, not `annual / 12`.** The latter turns
+  a 7 % assumption into 7.229 %, which over thirty years is real money in the user's favour on screen
+  and not in their account. A test pins it: twelve months at 7 % is exactly 7 %.
+- **Costs are a reduction of the return in percentage points**, because Effektivkosten/RIY is defined
+  that way — "7 % with 1 % costs" is exactly a flat 6 %. `effective_cost` **replaces** the component
+  sum rather than adding to it (`BavCostKinds.IsAggregate`), and costs on the contribution, the
+  contribution sum or the annuity are deliberately **not** folded in: there is no honest conversion
+  into a capital drag, which is why the cost list stays visible beside the projection.
+- **A contract that cannot be projected is returned with a blocker**, never dropped — a silently
+  missing contract makes the total look complete when it is not.
+- **The comparison cannot invent an advantage.** At the same return and the same costs, 50 € + 288 €
+  is 338 €: totals are summed unrounded and rounded once, so the delta is exactly zero by linearity,
+  and `CompareAsync` throws if it ever is not. A 500 on a read-only projection is recoverable; a lying
+  projection is not. The screen says the zero case in words rather than showing a bare "0,00 €".
+
+The **distinction** a projection needs was already storable and enforced, which is why step 3 only had
+to compute:
 `BavSnapshot` keeps `GuaranteedCapitalAtRetirement` / `GuaranteedMonthlyAnnuity` apart from
 `ProjectedCapitalAtRetirement` / `ProjectedMonthlyAnnuity`, and a projected figure cannot exist without
 `ProjectionBasis` (`document_guaranteed` / `document_forecast` / `simulation`) and
