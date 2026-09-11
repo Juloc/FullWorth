@@ -133,7 +133,7 @@ the shape a native settings screen has. Turning it into a bottom-sheet menu woul
 hierarchy into a list. The count was the wrong measure here; a dialog is a menu when its buttons are
 siblings, not when there are many of them.
 
-**Step 5 — one dialog stylesheet.** `PARTLY DONE`.
+**Step 5 — one dialog stylesheet.** `DONE`.
 
 **One height and one mobile treatment: done.** Six features set their own ceiling — 92vh, 90vh, 86vh,
 80vh, `min(88vh,920px)`, `min(900px, 100dvh - 24px)` — so every dialog stopped somewhere else and none
@@ -177,7 +177,21 @@ Eleven stay, each for a reason now written into the guard: the toggle knob (a co
 a coloured track — theming it makes it vanish on one of the two), the barcode scanner's black video
 letterbox, and the sign-in pages' brand gradients, which are deliberately the same in both themes.
 
-**Still open:** unminifying the single-line feature stylesheets.
+**The seven minified stylesheets: done.** `investment-performance`, `purchase-articles-workspace`,
+`tax`, `tax-review-extra`, `wealth-investment-consolidation`, `wealth-real-estate-advanced` and
+`wealth-specialized-assets` were single lines of up to 10 kB — unreviewable in a diff, which is how a
+stylesheet accumulates rules nobody notices. Now one declaration per line, in the same ` {` and
+`property: value` style the hand-written ones use.
+
+The formatter only ever **inserts** characters, so the check is byte-exact: remove exactly what was
+inserted and the original file must come back. On top of that the browser parsed both versions into
+constructable stylesheets and their serialised rules were compared — 248 rules across the seven files,
+identical. Nothing about what renders changed.
+
+It cost one test. `Advanced_styles_never_use_hover_transforms` asserted the literal minified string
+`.pa-chip-remove:hover{transform:none!important`, so reformatting broke a rule that had not moved. It
+now strips whitespace from both sides. A baseline that fails on reformatting is how people learn to
+weaken baselines.
 
 **The "~220 hex literals" figure in this audit was wrong.** It counted `var(--token, #fallback)`, where
 the token exists and the hex therefore never renders — noise, but not a hardcoded colour. The real

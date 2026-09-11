@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -92,10 +93,14 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Advanced_styles_never_use_hover_transforms()
     {
-        var css = Read("styles", "features", "purchase-articles-workspace.css");
-        Assert.Contains(".pa-export-actions .button:hover{transform:none!important", css);
-        Assert.Contains(".pa-chip-remove:hover{transform:none!important", css);
-        Assert.Contains(".pa-fx-blocked:hover{transform:none!important", css);
+        // The rule is "these three never grow or shift under the cursor". It was checked as literal
+        // minified text, so unminifying the stylesheet broke the test while the rule itself was
+        // untouched - and a baseline that fails on reformatting is how people learn to weaken
+        // baselines. Both sides drop their whitespace instead, which asks exactly the same question in
+        // a way the file's layout cannot answer wrongly.
+        var css = WithoutWhitespace(Read("styles", "features", "purchase-articles-workspace.css"));
+        foreach (var selector in new[] { ".pa-export-actions .button", ".pa-chip-remove", ".pa-fx-blocked" })
+            Assert.Contains(WithoutWhitespace($"{selector}:hover{{transform:none!important"), css);
     }
 
     [Fact]
@@ -119,6 +124,8 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         Assert.Contains("/features/receipt-scan-set.js", sw);
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }
+
+    private static string WithoutWhitespace(string value) => Regex.Replace(value, @"\s+", string.Empty);
 
     private string Read(params string[] path)
     {
