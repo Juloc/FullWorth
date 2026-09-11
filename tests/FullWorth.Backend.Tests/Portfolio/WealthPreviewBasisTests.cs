@@ -225,8 +225,8 @@ public sealed class WealthPreviewBasisTests
 
             await db.Database.ExecuteSqlInterpolatedAsync($"""
 INSERT INTO "IncomeSchedules"
-("Id","FullWorthSpaceId","Name","AccountId","NormalizedCounterparty","ExpectedAmount","Currency","Cycle","Interval","AnchorDate","NextExpectedDate","ValueMode","AutoDetected","IsActive","CreatedAt")
-VALUES ({scheduleId},{FullWorthSpaceDefaults.LegacyId},{"Salary"},{accountId},{"employer"},{monthlyIncome},{"EUR"},{"monthly"},{1},{insideWindow},{today.AddDays(10)},{"fixed"},{false},{true},{DateTimeOffset.UtcNow})
+("Id","FullWorthSpaceId","Name","AccountId","NormalizedCounterparty","ExpectedAmount","Currency","Cycle","Interval","AnchorDate","NextExpectedDate","ValueMode","AutoDetected","IsActive","CreatedAt","UpdatedAt")
+VALUES ({scheduleId},{FullWorthSpaceDefaults.LegacyId},{"Salary"},{accountId},{"employer"},{monthlyIncome},{"EUR"},{"monthly"},{1},{insideWindow},{today.AddDays(10)},{"fixed"},{false},{true},{DateTimeOffset.UtcNow},{DateTimeOffset.UtcNow})
 """);
 
             if (linkContractPayment)

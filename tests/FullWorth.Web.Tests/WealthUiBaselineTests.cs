@@ -267,12 +267,21 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task WealthProjectionIsACalculationNotAForecastAndIsTranslatedBothWays()
     {
         var js = await GetAsync("/features/networth.js");
+        var preview = await GetAsync("/features/wealth-preview.js");
         var css = await GetAsync("/app.css");
 
-        // Monthly compounding, because the savings arrive monthly. A yearly formula would silently
-        // overstate the growth on the payments made during the current year.
-        Assert.Contains("/ 100 / 12", js);
-        Assert.Contains("value = value * (1 + rate) + monthlySavings", js);
+        // Monthly compounding, because the money arrives monthly — but from the ANNUAL rate it is the
+        // twelfth root and not a twelfth. This assertion used to pin `/ 100 / 12`, which is the bug:
+        // `(1 + r/12)^12` is more than `1 + r`, so 7 % compounded as 7.229 % and a thirty-year preview
+        // showed growth that never happens. The rule the baseline meant is still the rule; only its
+        // evidence was wrong.
+        Assert.Contains("Math.pow(1 + annual / 100, 1 / 12)", preview);
+        Assert.DoesNotContain("/ 100 / 12", preview);
+        Assert.DoesNotContain("/ 100 / 12", js);
+
+        // And the surplus of THAT month, not of the first one: per-line growth is the only reason a
+        // long preview says anything, and a loop that reuses month 0 quietly throws it away.
+        Assert.Contains("value = value * factor + surplus", preview);
 
         // The inputs and the breakdown are what make it a calculation rather than a promise: paid in,
         // growth, purchasing power. Drop those and the preview becomes a number nobody can check.
