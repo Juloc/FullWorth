@@ -173,7 +173,7 @@ public sealed class WealthPreviewBasisTests
             {
                 FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
                 UserId = userId,
-                Role = FullWorthSpaceRoles.Member
+                Role = FullWorthSpaceRoles.Owner
             });
             db.Accounts.Add(new FinanceAccount
             {
@@ -250,6 +250,9 @@ VALUES ({Guid.NewGuid()},{FullWorthSpaceDefaults.LegacyId},{contractId},{payment
             BookingDate = date,
             ValueDate = date,
             Counterparty = counterparty,
+            // Unique per transaction: IX_Transactions_AccountId_ExternalKey is unique, so two seeded rows
+            // on one account with the same (missing) key collide.
+            ExternalKey = $"preview:{id:N}",
             Status = "BOOK"
         };
 

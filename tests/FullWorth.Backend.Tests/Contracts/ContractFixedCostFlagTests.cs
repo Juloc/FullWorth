@@ -135,7 +135,7 @@ public sealed class ContractFixedCostFlagTests
             {
                 FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
                 UserId = userId,
-                Role = FullWorthSpaceRoles.Member
+                Role = FullWorthSpaceRoles.Owner
             });
             db.Accounts.Add(new FinanceAccount
             {
