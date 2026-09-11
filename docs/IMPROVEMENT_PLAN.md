@@ -897,8 +897,12 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   different schemas never touch each other's. A template that exists without its ready marker was
   interrupted and gets rebuilt.
 
-- Negative or zero account balances are counted in the Wealth hero figure but excluded from the
-  composition donut, so one page shows two different asset totals (`features/networth.js:698`).
+- ~~Negative or zero account balances are counted in the Wealth hero figure but excluded from the
+  composition donut, so one page shows two different asset totals.~~ `DONE` — the donut cannot draw a
+  negative slice, so a netted-negative category is still dropped from the ring, but the ring's total is
+  now labelled "Anlagemix"/"Asset mix" instead of reusing the hero's "Vermögenswerte"/"Assets" wording,
+  and a note appears under the card whenever a category was hidden that way
+  (`features/networth.js`, `app.css`).
 - ~~The Cloud admin Instances view drops `registeredAt`~~ `DONE` (fullworth-cloud) — the admin UI now
   shows `registeredAt` and a derived `externallyHosted` flag, honestly sourced from the newly tracked
   `EnrollmentMode` (only `PublicRegistration` is reachable from outside the deployment's own Docker

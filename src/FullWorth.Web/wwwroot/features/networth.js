@@ -53,7 +53,11 @@ const COPY = {
     manual: 'Manuell', purchase_price: 'Kaufpreis', internal_estimate: 'FullWorth-Schätzung', external_provider: 'Externer Anbieter', appraisal: 'Gutachten', import: 'Import', legacy: 'Übernommen',
     trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
-    window: 'Zeitraum', wealthCap: 'Vermögenswerte', noTrend: 'Noch keine Verlaufsdaten.',
+    window: 'Zeitraum', noTrend: 'Noch keine Verlaufsdaten.',
+    // Deliberately NOT the same word as the hero's "Vermögenswerte": a donut cannot draw a negative
+    // slice, so its total only ever covers the categories it can actually show. Naming it "Vermögenswerte"
+    // too used to put two different numbers on screen under the identical label.
+    assetMix: 'Anlagemix', assetMixNote: 'Werte mit negativem Saldo sind hier ausgeblendet, zählen aber zum Nettovermögen oben.',
     customRange: 'Freier Zeitraum', from: 'Von', to: 'Bis', applyRange: 'Anzeigen', invalidRange: 'Bitte gültigen Zeitraum wählen.',
     bookingActivity: 'Buchungen', bookingHistoryHint: 'Ältere Buchungen sind vorhanden. Ohne bestätigte Kontozuordnung und Kontostand werden sie als Buchungsaktivität gezeigt, nicht als Vermögensstand.',
     bookingOnlyHint: 'Importierte Buchungen sind vorhanden, aber noch kein belastbarer historischer Vermögensstand.',
@@ -85,7 +89,8 @@ const COPY = {
     manual: 'Manual', purchase_price: 'Purchase price', internal_estimate: 'FullWorth estimate', external_provider: 'External provider', appraisal: 'Appraisal', import: 'Import', legacy: 'Migrated',
     trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
-    window: 'Time range', wealthCap: 'Assets', noTrend: 'No history yet.',
+    window: 'Time range', noTrend: 'No history yet.',
+    assetMix: 'Asset mix', assetMixNote: 'Values with a negative balance are hidden here but still count toward the net worth above.',
     customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
     bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a confirmed account mapping and balance they are shown as booking activity, not as net worth.',
     bookingOnlyHint: 'Imported bookings are available, but no reliable historical net-worth value exists yet.',
@@ -914,12 +919,19 @@ function buildAllocationCard() {
   const otherAssets = manualTotal - realEstate;
   const liabilities = num(overview.totalLiabilities);
 
-  const segments = [
+  const categories = [
     { label: t('accounts'), amount: accounts, color: 'var(--cat-2)' },
     { label: t('investments'), amount: investments, color: 'var(--cat-1)' },
     { label: t('realEstate'), amount: realEstate, color: 'var(--cat-3)' },
     { label: t('otherValues'), amount: otherAssets, color: 'var(--cat-4)' }
-  ].filter(segment => segment.amount > 0.005);
+  ];
+  // A donut cannot draw a negative slice, so a category that nets negative (e.g. an overdrawn account
+  // with no offsetting positive one) is left out of the ring - it is not added back in as a positive
+  // amount, and it is not subtracted from the ring's own total either. That total is then honestly this
+  // ring's own sum, labelled as the asset mix rather than reusing the hero's "Vermögenswerte" wording,
+  // so the page never shows two different numbers under the same name.
+  const segments = categories.filter(segment => segment.amount > 0.005);
+  const hasHiddenNegative = categories.some(segment => segment.amount < -0.005);
   const assetSum = segments.reduce((sum, segment) => sum + segment.amount, 0);
 
   if (assetSum <= 0 && liabilities <= 0) {
@@ -928,7 +940,7 @@ function buildAllocationCard() {
 
   // Allocation-first: a soft donut of the asset mix leads, its legend (with shares) sits under it, and
   // debt — which is not part of the asset ring — keeps its own thin bar beneath so it stays legible.
-  const donut = assetSum > 0 ? donutSvg(segments, assetSum, t('wealthCap'), currency) : '';
+  const donut = assetSum > 0 ? donutSvg(segments, assetSum, t('assetMix'), currency) : '';
   const debtBar = liabilities > 0
     ? `<div class="nw-alloc-block"><p class="nw-alloc-cap"><span>${ctx.esc(t('debt'))}</span><strong class="negative">${ctx.money(-liabilities, currency)}</strong></p><div class="fw-alloc nw-alloc-debt" role="img" aria-label="${ctx.esc(t('debt'))}"><span style="width:${Math.min(100, assetSum > 0 ? liabilities / assetSum * 100 : 100).toFixed(2)}%;background:var(--negative)"></span></div></div>`
     : '';
@@ -936,8 +948,9 @@ function buildAllocationCard() {
   const legendItems = segments.map(segment => legendRow(segment.label, segment.amount, segment.color, currency, false, assetSum > 0 ? segment.amount / assetSum * 100 : null));
   if (liabilities > 0) legendItems.push(legendRow(t('debt'), -liabilities, 'var(--negative)', currency, true));
   const legend = `<div class="nw-legend">${legendItems.join('')}</div>`;
+  const hiddenNote = hasHiddenNegative ? `<p class="nw-alloc-note">${ctx.esc(t('assetMixNote'))}</p>` : '';
 
-  return sectionCard(t('allocationTitle'), `${donut}${legend}${debtBar}`, { className: 'nw-allocation' });
+  return sectionCard(t('allocationTitle'), `${donut}${legend}${debtBar}${hiddenNote}`, { className: 'nw-allocation' });
 }
 
 /* ---- Card 3: optional emergency fund / Notgroschen ----------------------------------------- */
