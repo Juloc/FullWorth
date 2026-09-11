@@ -222,7 +222,18 @@ beats posting to a host that answers nothing.
 **Verified.** Proven by reverting: the test asks for `https://cloud.example.org` and the old code
 answered `https://api.fullworth.de`. 12 resolution cases.
 
-**Still open:** the resolved endpoint is still not surfaced anywhere (see the visibility items in P2).
+**Still open, and narrower than this said.** The resolved endpoint IS surfaced:
+`CloudIntelligenceStateView.CloudEndpoint` carries it, `GET /api/intelligence/admin/cloud` returns it,
+and `wwwroot/intelligence/index.html` renders it as "Verbunden mit <code>…</code>". Verified: the page
+answers 200 on the dev stack.
+
+What is actually missing is the way in — **nothing in the app links to `/intelligence/`**, so a
+self-hoster who pointed `FullWorthCloud:BaseUrl` at their own server can only see where the app sends
+data by typing that URL. Fixing it is an owner decision, not a code one: the page is admin-gated
+(`IntelligenceAdminAuthorizer` answers 403), so a link in the settings would be a dead end for
+everyone else unless it is shown conditionally. Putting the endpoint into the AI-access surface
+instead was rejected: that screen is about the AI provider, and the Cloud endpoint is a different
+thing.
 
 ### P1-6 Multi-currency accounts lose every wallet but one — `DONE`
 
