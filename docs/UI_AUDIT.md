@@ -160,8 +160,24 @@ been full-screen all along. One line of it *was* live: `.contract-detail-v2` set
 phone the last row sat under the home indicator. That moved into `dialogs.css` next to the padding it
 has to override.
 
-**Still open:** the ~34 genuinely hardcoded colours (see the count correction below) and unminifying the
-single-line feature stylesheets.
+**The colours: done too, except eleven that should stay.** Of the 34 real ones (see the count
+correction below), 22 became tokens — verified in the browser to resolve to exactly the values they
+replaced, so nothing changed on screen:
+
+| Was | Is | Why it was wrong |
+| --- | --- | --- |
+| `receipt-imports.css` error/ok messages | `--negative-soft` / `--negative`, `--positive-soft` / `--positive` | hand-mixed 9 % tints of colours the palette already has |
+| `receipt-imports.css` active tab text | `--cta-text` | white text on `--accent`, which is what that token means |
+| `investment-performance.css` warning | `--warning-border` / `--warning-soft` | mixed against `Canvas`, the OS colour, not the app surface |
+| `accounts.css` ×3, `app.css` brand logo | `--logo-plate` (new, constant white) | a plate behind third-party artwork: bank logos are drawn for white, so a themed surface makes a dark glyph vanish |
+| `compensation-history.css` ×8 | `--chart-inflation`, `--chart-total` (new) | two series of a chart whose other two lines already used `--accent` and `--positive` |
+| `compensation.css` toast | `--text` / `--surface` / `--shadow-float` | the app's own toast is that inversion; this one was a hardcoded dark chip, so in dark mode it was dark on dark |
+
+Eleven stay, each for a reason now written into the guard: the toggle knob (a constant white circle on
+a coloured track — theming it makes it vanish on one of the two), the barcode scanner's black video
+letterbox, and the sign-in pages' brand gradients, which are deliberately the same in both themes.
+
+**Still open:** unminifying the single-line feature stylesheets.
 
 **The "~220 hex literals" figure in this audit was wrong.** It counted `var(--token, #fallback)`, where
 the token exists and the hex therefore never renders — noise, but not a hardcoded colour. The real

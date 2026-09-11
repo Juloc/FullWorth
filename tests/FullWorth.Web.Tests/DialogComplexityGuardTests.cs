@@ -34,23 +34,28 @@ public sealed class DialogComplexityGuardTests
     };
 
     /// <summary>
-    /// Stylesheets that still hold a raw colour. <c>account-deletion</c> is deliberately not on the
-    /// list to be fixed: it is a standalone page that links only its own stylesheet — no tokens.css —
-    /// so its palette is self-contained by design, and it is not a dialog.
+    /// What is left, and why each one is left.
     ///
     /// A colour written as <c>var(--token, #fallback)</c> does not count: the token exists, so the hex
-    /// never renders. The audit's "~220 hex literals" counted those; the real number is 34 outside the
-    /// standalone pages.
+    /// never renders. The audit's "~220 hex literals" counted those. The real number outside
+    /// <c>tokens.css</c> was 62, of which 28 sit in the standalone <c>account-deletion</c> page — it
+    /// links no <c>tokens.css</c> at all, so a local palette is correct there and it is exempt. Of the
+    /// remaining 34, 22 are now tokens. These eleven stay:
+    ///
+    /// <list type="bullet">
+    ///   <item><c>app.css</c>: the toggle knob is a constant white circle on a coloured track. It is
+    ///         not a surface, and theming it would make it vanish on one of the two tracks.</item>
+    ///   <item><c>purchase-articles-workspace.css</c>: the barcode scanner's video letterbox is black
+    ///         because a camera frame is letterboxed against black, not against a page surface.</item>
+    ///   <item><c>auth.css</c> / <c>passkeys.css</c>: the sign-in pages' brand gradients. They are
+    ///         deliberately outside the theme — the mark and the primary button look the same whichever
+    ///         theme the browser asks for, which is what a sign-in page wants.</item>
+    /// </list>
     /// </summary>
     private static readonly Dictionary<string, int> KnownRawColours = new()
     {
-        ["compensation-history.css"] = 8,
-        ["compensation.css"] = 3,
-        ["styles/features/receipt-imports.css"] = 7,
-        ["styles/features/accounts.css"] = 3,
-        ["app.css"] = 2,
+        ["app.css"] = 1,
         ["styles/features/purchase-articles-workspace.css"] = 1,
-        ["styles/features/investment-performance.css"] = 1,
         ["auth/auth.css"] = 5,
         ["passkeys/passkeys.css"] = 4
     };

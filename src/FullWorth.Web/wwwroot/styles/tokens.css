@@ -59,7 +59,7 @@
   --text-muted:var(--muted);
   --surface-1:var(--surface);
   --surf2:var(--surface-2);
-  --surface-subtle:var(--surface-2);
+  --surface-subtle:var(--surface-2);/* A constant white plate behind third-party artwork. NOT a surface: bank and merchant logos are drawn for white, so a themed background makes a dark glyph vanish in dark mode. Identical in both themes on purpose. */--logo-plate:#ffffff;/* Two series of the salary-history chart. Its other two lines are --accent (gross) and --positive (net); these had no token and sat in the feature stylesheet. Values unchanged. */--chart-inflation:#a3681d;--chart-total:#7c5ac7;
   --border-strong:var(--tint-line-2);
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
   --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
