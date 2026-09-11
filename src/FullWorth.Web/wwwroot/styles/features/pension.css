@@ -385,6 +385,133 @@
 .pension-doc-actions-main { margin-top: var(--s2); }
 .pension-doc-spacer { flex: 1; }
 
+/* ---- Simulation: projection and variant comparison (features/pension-projection.js) ----
+
+   The scenario form is INLINE on the tab, not in a dialog: a return assumption is something the user
+   changes repeatedly, and re-opening a dialog per change is the friction docs/UI_AUDIT.md removed.
+
+   The three result blocks - money that exists today, what is guaranteed, what is only projected - are
+   siblings in a grid, never rows of one table, and they keep the same three edges the Dokumente review
+   screen uses. Consistency is the point: a reader learns the dashed edge once. */
+
+.pension-simulation { display: grid; gap: var(--s4); }
+
+.pension-sim-note { margin: 0 0 var(--s3); line-height: 1.5; }
+
+.pension-sim-scenario {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s3);
+  align-items: end;
+}
+
+.pension-sim-scenario > * { min-width: 0; }
+.pension-sim-return { display: grid; gap: 4px; grid-column: 1 / -1; }
+/* The scenario picker is a button group and cannot be a <label>, so it carries the same typography
+   the shared label role in components.css gives every field label beside it - two labels on one row
+   in two different cases reads as a rendering bug. */
+.pension-sim-return-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 500;
+}
+
+/* components.css uppercases and tracks the whole <label>, hint included. That is right for a label
+   and wrong for the sentence under it: uppercased, a two-line explanation shouts louder than the
+   field it explains - the same finding as .pension-doc-origin below. */
+.pension-sim-scenario .pension-field small { text-transform: none; letter-spacing: normal; }
+.pension-sim-return .fw-cycle { justify-self: start; max-width: 100%; flex-wrap: wrap; }
+.pension-sim-continue { align-self: center; }
+.pension-sim-continue-hint { grid-column: 1 / -1; margin-top: calc(var(--s2) * -1); }
+
+.pension-sim-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.pension-sim-blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s3);
+  align-items: start;
+}
+
+.pension-sim-blocks > * { min-width: 0; }
+.pension-sim-now { background: var(--surface-2); }
+.pension-sim-guarantee { border-left: 3px solid var(--accent); }
+.pension-sim-figure { font-size: 1.15rem; font-weight: 600; }
+.pension-value-block > p { margin: var(--s2) 0 0; }
+
+/* The return assumption travels with every projected figure, so the badge sits in the block head and
+   never wraps away from the title it qualifies. */
+.pension-sim-return-badge { white-space: nowrap; }
+
+/* …and the head is the title plus that assumption, so the two align and break together rather than
+   the badge dropping a line away from the figure it qualifies. */
+.pension-sim-projection .pension-value-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.pension-sim-contracts { display: grid; gap: var(--s3); }
+
+.pension-sim-contract {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.pension-sim-contract:first-child { border-top: 0; padding-top: 0; }
+.pension-sim-contract-head { display: grid; gap: 2px; min-width: 0; }
+
+.pension-sim-contract-blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s3);
+  align-items: start;
+}
+
+.pension-sim-contract-blocks > * { min-width: 0; }
+.pension-sim-contract-facts { padding-top: var(--s1); }
+
+.pension-sim-excluded-row { border-top: 1px solid var(--line); padding: var(--s3) 0; }
+.pension-sim-excluded-row:first-child { border-top: 0; }
+
+.pension-sim-compare-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s3);
+}
+
+.pension-sim-compare-form > * { min-width: 0; }
+.pension-sim-comparison { display: grid; gap: var(--s3); margin-top: var(--s3); }
+
+/* A zero delta is the lesson of this whole screen, so it gets a block and a sentence rather than a
+   bare 0,00 EUR - which would teach nobody that splitting a contribution changes nothing. */
+.pension-sim-same-money { background: var(--surface-2); border-left: 3px solid var(--accent); }
+.pension-sim-sentence { margin: 0; line-height: 1.5; }
+.pension-sim-delta { gap: var(--s2) var(--s4); }
+.pension-sim-causes { display: grid; gap: var(--s2); }
+.pension-sim-cause-list { margin: 0; padding-left: var(--s4); line-height: 1.5; }
+.pension-sim-not-comparable { margin: 0; line-height: 1.5; }
+
+.pension-sim-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s3);
+  align-items: start;
+}
+
+.pension-sim-sides > * { min-width: 0; }
+
 /* ---- narrow viewports (down to ~360px, so nothing overflows on a phone) ---- */
 
 @media (max-width: 760px) {
@@ -424,4 +551,12 @@
   .pension-doc-actions-main [data-doc-commit] { order: 1; }
   .pension-doc-actions-main [data-doc-save] { order: 2; }
   .pension-doc-actions-main [data-doc-delete] { order: 3; }
+
+  /* Same reason as the review grids above: minmax(0, 1fr), because a grid item's default min-width is
+     auto and plain 1fr refuses to shrink below an input's min-content width. */
+  .pension-sim-scenario, .pension-sim-blocks, .pension-sim-contract-blocks,
+  .pension-sim-compare-form, .pension-sim-sides { grid-template-columns: minmax(0, 1fr); }
+  .pension-sim-return .fw-cycle { width: 100%; }
+  .pension-sim-return .fw-cycle button { flex: 1; }
+  .pension-sim-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
 }

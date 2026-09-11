@@ -13,14 +13,15 @@
 //     every projected figure is rendered in its own block and labelled with its assumption.
 //   - read "beitragsfrei" as cancelled or as cost-free. It is its own state and keeps its costs.
 //
-// The document import (step 2) lives in features/pension-documents.js and is mounted as the fourth
-// tab; the simulation (step 3) plugs into this file later. The manual entry flow here stays the
-// supported path on an installation with no Cloud and no AI.
+// The document import (step 2) lives in features/pension-documents.js and the projection / variant
+// comparison (step 3) in features/pension-projection.js; both are mounted as tabs here. The manual
+// entry flow in this file stays the supported path on an installation with no Cloud and no AI.
 //
-// The documents module receives this module's copy (`t`, `label`) instead of importing it, so the pair
-// never becomes a circular import.
+// Both mounted modules receive this module's copy (`t`, `label`, `percent`) instead of importing it,
+// so neither pair ever becomes a circular import.
 import { sectionCard, esc } from '../ui/ux-kit.js';
 import { renderPensionDocuments, resetPensionDocuments } from './pension-documents.js';
+import { renderPensionProjection, resetPensionProjection } from './pension-projection.js';
 
 let ctx = null;
 let contracts = [];
@@ -30,7 +31,8 @@ let loadError = null;
 const T = {
   de: {
     title: 'Altersvorsorge',
-    tabOverview: 'Übersicht', tabContracts: 'Verträge', tabHistory: 'Verlauf', tabDocuments: 'Dokumente',
+    tabOverview: 'Übersicht', tabContracts: 'Verträge', tabHistory: 'Verlauf',
+    tabSimulation: 'Simulation', tabDocuments: 'Dokumente',
     add: 'Vertrag hinzufügen',
     empty: 'Noch kein Vertrag erfasst. Trage deine betriebliche Altersvorsorge ein, um Guthaben, Beiträge und Kosten an einem Ort zu sehen.',
     emptyHistory: 'Noch kein Stand erfasst. Ein Stand gehört immer zu einem Datum – so bleibt der Verlauf erhalten.',
@@ -153,7 +155,8 @@ const T = {
   },
   en: {
     title: 'Occupational pension',
-    tabOverview: 'Overview', tabContracts: 'Contracts', tabHistory: 'History', tabDocuments: 'Documents',
+    tabOverview: 'Overview', tabContracts: 'Contracts', tabHistory: 'History',
+    tabSimulation: 'Simulation', tabDocuments: 'Documents',
     add: 'Add contract',
     empty: 'No contract yet. Add your occupational pension to see balance, contributions and costs in one place.',
     emptyHistory: 'No statement recorded yet. A value always belongs to a date, so the history is kept.',
@@ -294,6 +297,7 @@ const TABS = [
   { key: 'overview', path: '/pension' },
   { key: 'contracts', path: '/pension/vertraege' },
   { key: 'history', path: '/pension/verlauf' },
+  { key: 'simulation', path: '/pension/simulation' },
   { key: 'documents', path: '/pension/dokumente' }
 ];
 
@@ -345,8 +349,9 @@ export async function renderPension(context) {
         ? sectionCard(tr().title, `<div class="row-sub">${esc(loadError.message || ctx.get('common.error'))}</div>`)
         : tab === 'contracts' ? contractsHtml()
           : tab === 'history' ? historyHtml()
-            : tab === 'documents' ? '<div class="pension-documents" data-pension-documents></div>'
-              : overviewHtml()
+            : tab === 'simulation' ? '<div class="pension-simulation" data-pension-simulation></div>'
+              : tab === 'documents' ? '<div class="pension-documents" data-pension-documents></div>'
+                : overviewHtml()
     }</div>`;
 
   host.querySelectorAll('[data-pension-tab]').forEach(button =>
@@ -361,20 +366,31 @@ export async function renderPension(context) {
   if (documentsHost) await renderPensionDocuments(documentsHost, {
     ctx, contracts, t: tr(), label, reload: () => renderPension(ctx)
   });
+
+  // The Simulation tab owns its own panel for the same reason: a return scenario is changed
+  // repeatedly, so its form belongs inline on the tab rather than in a dialog that has to be
+  // re-opened for every change. It computes on read only - nothing it shows is ever stored.
+  const simulationHost = host.querySelector('[data-pension-simulation]');
+  if (simulationHost) await renderPensionProjection(simulationHost, {
+    ctx, contracts, t: tr(), label, percent, reload: () => renderPension(ctx)
+  });
 }
 
 function tabKey(key) {
   return key === 'contracts' ? 'tabContracts'
     : key === 'history' ? 'tabHistory'
-      : key === 'documents' ? 'tabDocuments' : 'tabOverview';
+      : key === 'simulation' ? 'tabSimulation'
+        : key === 'documents' ? 'tabDocuments' : 'tabOverview';
 }
 
 function switchTab(key) {
   const path = pathFor(key);
   if (location.pathname !== path) history.pushState({ view: 'pension' }, '', path);
   // Leaving the tab leaves its review screen, so Dokumente always opens on the list rather than on a
-  // half-finished review of whatever happened to be open before.
+  // half-finished review of whatever happened to be open before. Simulation drops its result for the
+  // same reason: a projection belongs to the scenario that produced it, never to the next visit.
   resetPensionDocuments();
+  resetPensionProjection();
   renderPension(ctx);
 }
 
