@@ -402,10 +402,11 @@ public sealed partial class PensionStatementParser : IBavDocumentParser
     {
         var costs = new List<BavCostDraft>();
 
-        // Effektivkosten / Reduction in Yield is the aggregate the contract's yield is reduced by.
-        // BavCostKinds has no aggregate kind, so it is stored as "other" on a capital basis rather
-        // than folded into one of the named kinds, which would double-count the parts below it.
-        Add(scan, costs, EffectiveCostLabels, BavCostKinds.Other, BavCostBases.PercentOfCapital, BavCostTimings.Ongoing);
+        // Effektivkosten / Reduction in Yield is the aggregate the contract's yield is reduced by: it
+        // contains the kinds below rather than joining them, which is why it has its own kind and why
+        // BavCostKinds.IsAggregate exists. Folding it into a named kind would double-count every part
+        // beneath it in any total.
+        Add(scan, costs, EffectiveCostLabels, BavCostKinds.EffectiveCost, BavCostBases.PercentOfCapital, BavCostTimings.Ongoing);
 
         // Acquisition cost is money that was already charged into the contract, which is why it is
         // "incurred" and not "ongoing"; as a percentage it is a percentage of the Beitragssumme.

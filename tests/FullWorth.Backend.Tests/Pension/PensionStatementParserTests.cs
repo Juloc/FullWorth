@@ -253,7 +253,10 @@ public sealed class PensionStatementParserTests
             Stückkosten: 12,00 € jährlich
             """);
 
-        var effective = Assert.Single(draft.Costs, cost => cost.Kind == BavCostKinds.Other);
+        // Its own kind, not "other": it is the figure a person compares two contracts by, and it is an
+        // aggregate over the kinds below it rather than one more kind beside them.
+        var effective = Assert.Single(draft.Costs, cost => cost.Kind == BavCostKinds.EffectiveCost);
+        Assert.True(BavCostKinds.IsAggregate(effective.Kind));
         Assert.Equal(1.15m, effective.Percent);
         Assert.Equal(BavCostBases.PercentOfCapital, effective.Basis);
         // "ca." makes it an approximation, and an estimate is only storable with its basis.

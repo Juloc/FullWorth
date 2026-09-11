@@ -50,7 +50,7 @@ const CYCLES = ['monthly', 'quarterly', 'semiannual', 'yearly', 'one_off'];
 const PROJECTION_BASES = ['document_forecast', 'document_guaranteed', 'simulation'];
 const COST_KINDS = [
   'acquisition', 'administration_on_contribution', 'administration_on_capital', 'administration_fixed',
-  'fund', 'guarantee', 'risk_premium', 'payout', 'other'
+  'fund', 'guarantee', 'risk_premium', 'payout', 'effective_cost', 'other'
 ];
 const COST_BASES = ['fixed_amount', 'percent_of_contribution', 'percent_of_capital', 'percent_of_sum', 'percent_of_annuity'];
 const COST_TIMINGS = ['ongoing', 'incurred', 'future'];

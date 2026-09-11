@@ -134,7 +134,9 @@ const T = {
       administration_on_capital: 'Verwaltung auf das Guthaben',
       administration_fixed: 'Stückkosten',
       fund: 'Fondskosten', guarantee: 'Garantiekosten', risk_premium: 'Risikobeitrag',
-      payout: 'Kosten in der Rentenphase', other: 'Sonstige Kosten'
+      payout: 'Kosten in der Rentenphase',
+      // The aggregate, and it says so: it contains the kinds above it rather than joining them.
+      effective_cost: 'Effektivkosten (Gesamtwirkung)', other: 'Sonstige Kosten'
     },
     costBases: {
       fixed_amount: 'fester Betrag', percent_of_contribution: '% vom Beitrag',
@@ -255,7 +257,8 @@ const T = {
       administration_on_capital: 'Administration on the capital',
       administration_fixed: 'Fixed administration',
       fund: 'Fund charges', guarantee: 'Guarantee charges', risk_premium: 'Risk premium',
-      payout: 'Payout-phase costs', other: 'Other costs'
+      payout: 'Payout-phase costs',
+      effective_cost: 'Effective cost (total impact)', other: 'Other costs'
     },
     costBases: {
       fixed_amount: 'fixed amount', percent_of_contribution: '% of the contribution',
@@ -281,7 +284,7 @@ const PROJECTION_BASES = ['document_forecast', 'document_guaranteed', 'simulatio
 const TAX_SOURCES = ['document', 'payslip', 'simulation'];
 const COST_KINDS = [
   'acquisition', 'administration_on_contribution', 'administration_on_capital', 'administration_fixed',
-  'fund', 'guarantee', 'risk_premium', 'payout', 'other'
+  'fund', 'guarantee', 'risk_premium', 'payout', 'effective_cost', 'other'
 ];
 const COST_BASES = ['fixed_amount', 'percent_of_contribution', 'percent_of_capital', 'percent_of_sum', 'percent_of_annuity'];
 const COST_TIMINGS = ['ongoing', 'incurred', 'future'];

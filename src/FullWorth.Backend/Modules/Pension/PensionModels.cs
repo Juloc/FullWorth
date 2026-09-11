@@ -508,13 +508,30 @@ public static class BavCostKinds
     public const string Guarantee = "guarantee";                              // Garantiekosten
     public const string RiskPremium = "risk_premium";                         // Risikobeitrag
     public const string Payout = "payout";                                    // Kosten in der Rentenphase
+
+    /// <summary>
+    /// Effektivkosten / Reduction in Yield: the one number a statement prints that says what all the
+    /// others cost together, expressed as the yield they take per year. It is an <b>aggregate over the
+    /// other kinds</b>, not another kind beside them — see <see cref="IsAggregate"/>. It gets its own
+    /// value because mapping it to <see cref="Other"/> left the figure a user actually compares
+    /// contracts by unlabelled on screen.
+    /// </summary>
+    public const string EffectiveCost = "effective_cost";
+
     public const string Other = "other";
 
     public static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
         Acquisition, AdministrationOnContribution, AdministrationOnCapital, AdministrationFixed,
-        Fund, Guarantee, RiskPremium, Payout, Other
+        Fund, Guarantee, RiskPremium, Payout, EffectiveCost, Other
     };
+
+    /// <summary>
+    /// True for a kind that already contains the others. Adding it to a cost total would double-count
+    /// every component beneath it, so any sum over costs has to exclude it and show it beside the
+    /// total instead.
+    /// </summary>
+    public static bool IsAggregate(string? kind) => kind == EffectiveCost;
 }
 
 public static class BavCostBases
