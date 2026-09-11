@@ -354,6 +354,30 @@ public sealed class BavDocument
     /// <summary>See <see cref="BavExtractionSources"/>: the deterministic parser, or the optional AI pass.</summary>
     public string? ExtractionSource { get; set; }
 
+    /// <summary>
+    /// The candidate draft (a serialised <see cref="BavDocumentDraft"/>) between extraction and commit.
+    /// It exists because no extracted value may be stored without review: the draft is what the review
+    /// screen edits, and only a commit turns it into contract, snapshot, contribution and cost rows.
+    /// Cleared once the document is committed - by then the rows are the truth and a stale copy of the
+    /// same numbers (including a policy number) would be a second place to leak from.
+    /// </summary>
+    public string? ExtractionDraftJson { get; set; }
+
+    /// <summary>
+    /// Why extraction produced nothing usable, as a category: <c>no_text</c>, <c>tool_missing</c>,
+    /// <c>unsupported</c>, <c>too_large</c>. Never document content and never a tool's raw output,
+    /// because this string is returned to the browser and may end up in a log.
+    /// </summary>
+    public string? ExtractionError { get; set; }
+
+    public DateTimeOffset? ExtractedAt { get; set; }
+
+    /// <summary>
+    /// True when the text came from the PDF's own text layer, false when it had to be OCR'd. Worth
+    /// storing: an OCR'd number is a recognised number, and the review screen says so.
+    /// </summary>
+    public bool? TextLayerUsed { get; set; }
+
     public Guid? ReviewedByUserId { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
     public Guid? CreatedByUserId { get; set; }

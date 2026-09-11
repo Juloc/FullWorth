@@ -27,6 +27,7 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         AccountDuplicateLinkSnapshot.Apply(modelBuilder);
         OccupationalPensionSnapshot.Apply(modelBuilder);
         AssetValuationAsOfProvenanceSnapshot.Apply(modelBuilder);
+        PensionDocumentExtractionSnapshot.Apply(modelBuilder);
         modelBuilder.Entity("FullWorth.Backend.Modules.Budgets.Budget", entity =>
         {
             entity.Property<bool>("CarryOverOverspend").HasColumnType("boolean");

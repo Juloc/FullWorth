@@ -69,6 +69,7 @@ public static class PensionModelConfiguration
             e.Property(x => x.ExtractionStatus).IsRequired().HasMaxLength(24);
             e.Property(x => x.ExtractionConfidence).HasPrecision(5, 4);
             e.Property(x => x.ExtractionSource).HasMaxLength(24);
+            e.Property(x => x.ExtractionError).HasMaxLength(64);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<BavContract>().WithMany().HasForeignKey(x => x.BavContractId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<FullWorthUser>().WithMany().HasForeignKey(x => x.ReviewedByUserId).OnDelete(DeleteBehavior.SetNull);
