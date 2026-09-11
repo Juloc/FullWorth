@@ -314,6 +314,8 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 /* The budget limit sits beside the average, never inside it - a budget is an intention. */
 .nw-basis-aside{font-size:12px;color:var(--muted);font-style:italic}
 .nw-basis-growth{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--s2);margin-top:var(--s2)}
+/* The heading is a row, not a cell: as an auto-fit child it ate the first column and pushed every input one place to the right. */
+.nw-basis-growth>.nw-basis-head{grid-column:1/-1}
 .nw-basis-growth label{display:grid;gap:3px;min-width:0;font-size:11px;color:var(--muted)}
 .nw-basis-growth label>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nw-basis-switch{margin-top:var(--s2);font-size:12px;color:var(--muted)}

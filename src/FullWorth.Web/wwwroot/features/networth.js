@@ -84,6 +84,7 @@ const COPY = {
     basisObserved: 'Durchschnitt der letzten', basisMonths: 'Monate',
     basisBudget: 'Budgetgrenzen zum Vergleich', basisGrowth: 'Erwartete Steigerung pro Jahr',
     basisUseObserved: 'Stattdessen aus dem Vermögensverlauf schätzen',
+    basisFrom: 'ab',
     basisNoIncome: 'Keine Einnahmen hinterlegt – die Vorschau schätzt aus dem Vermögensverlauf.',
     projectionContributed: 'Eingezahlt', projectionGrowth: 'Wertzuwachs',
     projectionNote: 'Gerechnet mit monatlicher Verzinsung deiner Annahmen. Steuern, Gebühren und Schwankungen sind nicht enthalten. Das ist keine Prognose und keine Anlageempfehlung.'
@@ -128,6 +129,7 @@ const COPY = {
     basisObserved: 'Average of the last', basisMonths: 'months',
     basisBudget: 'Budget limits, for comparison', basisGrowth: 'Expected increase per year',
     basisUseObserved: 'Estimate from the net-worth curve instead',
+    basisFrom: 'from',
     basisNoIncome: 'No income configured - the preview estimates from the net-worth curve.',
     projectionContributed: 'Paid in', projectionGrowth: 'Growth',
     projectionNote: 'Calculated with monthly compounding of your assumptions. Taxes, fees and volatility are not included. This is not a forecast and not investment advice.'
@@ -822,7 +824,11 @@ function percentText(value) {
 
 // The assumption travels with the curve: a preview whose savings rate is not on screen is a promise.
 function assumptionText(settings) {
-  return `${ctx.esc(t('projectionAssumption'))}: ${ctx.money(settings.monthlySavings, nw.currency)} ${ctx.esc(t('projectionPerMonth'))}`
+  // "ab" as soon as any line carries a rate: the surplus is the FIRST month's, not every month's, and
+  // a lead that states it flat is a number that stops being true in month two.
+  const grows = settings.useBasis && Object.values(settings.growth || {}).some(rate => Number(rate) !== 0);
+  const amount = `${grows ? ctx.esc(t('basisFrom')) + ' ' : ''}${ctx.money(settings.monthlySavings, nw.currency)}`;
+  return `${ctx.esc(t('projectionAssumption'))}: ${amount} ${ctx.esc(t('projectionPerMonth'))}`
     + ` · ${ctx.esc(percentText(settings.returnPercent))} ${ctx.esc(t('projectionPerYear'))}`;
 }
 
