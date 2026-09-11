@@ -166,7 +166,67 @@
         createdAt: '2026-07-04T09:00:00Z', updatedAt: '2026-09-02T09:00:00Z'
       }
     ],
-    'budgets': [],
+    // The Budgets screen renders from analytics/budget-status, not from the budgets list - without this
+    // key the screen was empty in the harness and its dialogs unreachable. Field names follow the real
+    // records (BudgetStatusItem, BudgetPeriodStatus, BudgetView); a fixture that invents its own shape
+    // is how a harness starts disagreeing with the API it stands in for.
+    //
+    // Three budgets, one per shape the dialog must handle: monthly (no dates), weekly (needs an anchor)
+    // and a custom range (needs both, and both are required). One shared window, so the combined total
+    // above the list is the honest case.
+    'analytics/budget-status': {
+      items: [
+        { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', period: 'monthly',
+          periodStart: '2026-09-01', periodEnd: '2026-09-30',
+          amount: 450, spent: 318.4, remaining: 131.6, percent: 70.8,
+          baseAmount: 450, carryIn: 0, carryOver: false, carryOverOverspend: false },
+        { id: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', period: 'monthly',
+          periodStart: '2026-09-01', periodEnd: '2026-09-30',
+          amount: 90, spent: 84.2, remaining: 5.8, percent: 93.6,
+          baseAmount: 80, carryIn: 10, carryOver: true, carryOverOverspend: false },
+        { id: 'b3', name: 'Urlaubskasse', categoryId: null, period: 'monthly',
+          periodStart: '2026-09-01', periodEnd: '2026-09-30',
+          amount: 1200, spent: 1340, remaining: -140, percent: 111.7,
+          baseAmount: 1200, carryIn: 0, carryOver: true, carryOverOverspend: true }
+      ]
+    },
+    'budgets': [
+      { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', amount: 450, currency: 'EUR', period: 'monthly',
+        startDate: null, endDate: null, carryOver: false, carryOverOverspend: false, isActive: true },
+      { id: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', amount: 90, currency: 'EUR', period: 'weekly',
+        startDate: '2026-09-07', endDate: null, carryOver: true, carryOverOverspend: false, isActive: true },
+      { id: 'b3', name: 'Urlaubskasse', categoryId: null, amount: 1200, currency: 'EUR', period: 'custom',
+        startDate: '2026-06-01', endDate: '2026-09-30', carryOver: true, carryOverOverspend: true, isActive: true }
+    ],
+    'budgets/b1': { id: 'b1', name: 'Lebensmittel', categoryId: 'c1', amount: 450, currency: 'EUR',
+      period: 'monthly', startDate: null, endDate: null, carryOver: false, carryOverOverspend: false, isActive: true },
+    'budgets/b2': { id: 'b2', name: 'Wocheneinkauf', categoryId: 'c1', amount: 90, currency: 'EUR',
+      period: 'weekly', startDate: '2026-09-07', endDate: null, carryOver: true, carryOverOverspend: false, isActive: true },
+    'budgets/b3': { id: 'b3', name: 'Urlaubskasse', categoryId: null, amount: 1200, currency: 'EUR',
+      period: 'custom', startDate: '2026-06-01', endDate: '2026-09-30', carryOver: true, carryOverOverspend: true, isActive: true },
+    // The detail drawer reads budgetId from here and hands it to the edit dialog, so this key is what
+    // makes "Bearbeiten" reachable at all.
+    'budgets/b1/status': {
+      budgetId: 'b1', name: 'Lebensmittel', categoryId: 'c1', currency: 'EUR', period: 'monthly',
+      periodStart: '2026-09-01', periodEnd: '2026-09-30',
+      budgetAmount: 450, spent: 318.4, remaining: 131.6, percentUsed: 70.8,
+      projectedEndSpend: 468.2, projectedOverUnder: 18.2, trend: 'Rising', partialAccess: false,
+      baseBudgetAmount: 450, carryIn: 0, carryOver: false, carryOverOverspend: false,
+      contributing: [
+        { id: 't-b1-1', bookingDate: '2026-09-08', counterparty: 'Rewe', amount: -64.2, currency: 'EUR', category: 'Lebensmittel' },
+        { id: 't-b1-2', bookingDate: '2026-09-03', counterparty: 'Edeka', amount: -41.9, currency: 'EUR', category: 'Lebensmittel' }
+      ]
+    },
+    'budgets/b3/status': {
+      budgetId: 'b3', name: 'Urlaubskasse', categoryId: null, currency: 'EUR', period: 'custom',
+      periodStart: '2026-06-01', periodEnd: '2026-09-30',
+      budgetAmount: 1200, spent: 1340, remaining: -140, percentUsed: 111.7,
+      projectedEndSpend: 1340, projectedOverUnder: 140, trend: 'Flat', partialAccess: false,
+      baseBudgetAmount: 1200, carryIn: 0, carryOver: true, carryOverOverspend: true,
+      contributing: [
+        { id: 't-b3-1', bookingDate: '2026-08-22', counterparty: 'Fluggesellschaft', amount: -820, currency: 'EUR', category: 'Reisen' }
+      ]
+    },
     'notifications': [],
     // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
@@ -602,9 +662,15 @@
   function match(pathname) {
     // "/bff/backend/api/transactions?x=1" -> "transactions"
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
-    const head = after.split('/')[0].split('?')[0];
-    if (Object.prototype.hasOwnProperty.call(FIXTURES, head)) return FIXTURES[head];
-    const hit = KEYS.find(key => after.startsWith(key));
+    // Longest key wins. Matching the first path segment first meant a list fixture shadowed every
+    // detail below it: 'budgets/b3' was answered with the whole 'budgets' ARRAY, so the edit dialog
+    // received an array where it expected one budget and rendered every field empty - a harness bug
+    // that looks exactly like a broken dialog. It also left the pension fixtures depending on the
+    // order they happen to be written in.
+    const path = after.split('?')[0];
+    const hit = KEYS
+      .filter(key => path === key || path.startsWith(key + '/'))
+      .sort((a, b) => b.length - a.length)[0];
     return hit ? FIXTURES[hit] : undefined;
   }
 

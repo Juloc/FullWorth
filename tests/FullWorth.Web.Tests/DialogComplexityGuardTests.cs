@@ -26,7 +26,6 @@ public sealed class DialogComplexityGuardTests
     /// </summary>
     private static readonly Dictionary<string, int> KnownFlatDialogs = new()
     {
-        ["features/budgets.js"] = 8,
         ["features/contracts.js"] = 11,
         ["features/transactions.js"] = 7,
         ["features/wealth-real-estate-advanced.js"] = 8

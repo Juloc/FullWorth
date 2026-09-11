@@ -228,11 +228,34 @@ test catches. Three of these four need the owner to say, so they are described r
 | Dialog | Controls | What has to be decided |
 | --- | --- | --- |
 | `contracts.js` `openCancellationDialog` ("Laufzeit & Kündigung") | 11 | Status, Kündigungsfrist and Kündigungsfrist-Deadline are plausibly the point of a cancellation dialog; Mindestlaufzeit-Ende, Verlängerung, Auto-Verlängerung, Kundennummer and Anbieter-Kontakt are plausibly the paperwork behind it. Plausibly is not good enough — it is his contract workflow. |
-| `budgets.js` | 8 | Which figure a budget is about first. |
 | `wealth-real-estate-advanced.js` | 8 | Which of a property's many facts belong above the fold. |
 | `transactions.js` (the detail drawer) | 7 | **Probably should not be converted.** It is not a form: it carries the amount display, the status history, the transfer sub-panel and the refund panel, and the primitive would fight all four. Its actual problem was the five-button actions row, and that is fixed (step 4). |
 
-The baseline holds all four, so none of them can get more crowded while the decision is open.
+The baseline holds the rest, so none of them can get more crowded while the decision is open.
+
+**`budgets.js` is done.** The owner's answer was "Betrag pro Zeitraum": visible are the name, the
+amount with its currency, the period and the category — what a budget *is*. The anchor date, the end
+date and the carry-over went into the disclosure; they are set once and then not looked at.
+
+It turned up the one failure mode this primitive can produce. Two of the hidden fields become
+**required** for some periods, and a required control inside a collapsed `<details>` cannot be
+focused — the browser then refuses to submit and reports nothing the user can act on, which reads as
+a dead Save button. So the disclosure opens itself the moment the chosen period needs a date:
+*hidden* may mean "not relevant yet", never "relevant but unreachable". Verified in the harness for
+monthly (closed, nothing required), custom (opens, both dates visible and required) and paycycle
+(opens, anchor visible and pre-filled).
+
+Two things fell out of testing it, neither in the dialog:
+
+- The Budgets screen renders from `analytics/budget-status`, which the harness had no fixture for, so
+  the screen was empty and both of its dialogs unreachable. It now has three budgets — monthly,
+  weekly and a custom range — shaped after the real `BudgetStatusItem` / `BudgetPeriodStatus` /
+  `BudgetView` records rather than after a guess.
+- The harness matched a fixture by the **first path segment**, so a list shadowed every detail below
+  it: `budgets/b3` was answered with the whole `budgets` array. The edit dialog received an array
+  where it expected one budget and rendered every field empty — indistinguishable from a broken
+  dialog, and the same trap was waiting for every other detail screen. Longest matching key wins now,
+  which also removes the pension fixtures' dependence on the order they happen to be written in.
 
 It earned its keep immediately: the `dvh` rule caught six heights this pass had missed, two of them
 added the same day.

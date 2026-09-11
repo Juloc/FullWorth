@@ -1,6 +1,11 @@
 import { state } from '../core/state.js';
 import { ButtonRole, buttonClass } from '../ui/buttons.js';
 import { MoneyVariant, moneyClass } from '../ui/money.js';
+import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+
+// The disclosure label is new with the form-dialog conversion and has no i18n key yet.
+function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
+function bilingual(de, en) { return lang() ? de : en; }
 
 let ctx;
 
@@ -8,6 +13,10 @@ function use(context) {
   ctx = context;
   return context;
 }
+
+// Which periods are anchored to a date rather than to the calendar. The dialog asks this twice -
+// once to decide what to show, once to decide what to send - and the two must not drift apart.
+const USES_ANCHOR = ['weekly', 'biweekly', 'paycycle', 'custom'];
 
 function coachLabel() {
   const translated = ctx.get('coach.title');
@@ -259,41 +268,59 @@ async function openBudgetDialog(existing) {
       </div>
     </div>` : '';
 
-  const dlg = ctx.dialog(`<form class="dialog-card budget-wizard">
-    <h2>${ctx.esc(ctx.get(existing ? 'budgets.edit' : 'budgets.new'))}</h2>
-    ${presets}
-    <div class="budget-wizard-section">
-      <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(existing?.name || '')}"></label>
-      <div class="form-grid">
-        <label>${ctx.esc(ctx.get('transactions.amount'))}<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required value="${existing ? ctx.esc(String(existing.amount)) : ''}"></label>
-        <label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(currency)}" maxlength="3" required></label>
-      </div>
-      <label>${ctx.esc(ctx.get('budgets.period'))}<select name="period">${periods}</select></label>
-      <div class="form-grid budget-cycle-fields">
-        <label data-budget-start>${ctx.esc(ctx.get('budgets.anchorDate'))}<input name="startDate" type="date" value="${ctx.esc(existing?.startDate || '')}"><small class="row-sub" data-budget-anchor-hint></small></label>
-        <label data-budget-end>${ctx.esc(ctx.get('budgets.endDate'))}<input name="endDate" type="date" value="${ctx.esc(existing?.endDate || '')}"></label>
-      </div>
-    </div>
-    <div class="budget-wizard-section">
-      <label>${ctx.esc(ctx.get('transactions.category'))}<select name="category"><option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}</select></label>
-      <label>${ctx.esc(ctx.get('budgets.rollover'))}<select name="rollover">${rolloverOptions}</select><small class="row-sub" data-rollover-hint></small></label>
-    </div>
-    <div class="dialog-actions">
-      ${existing ? `<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete>${ctx.esc(ctx.get('common.delete'))}</button>` : ''}
-      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
-      <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get(existing ? 'common.save' : 'common.create'))}</button>
-    </div>
-  </form>`);
+  // Visible: what a budget IS - a name, an amount, how often, and for what. The anchor date, the end
+  // date and the carry-over are settings you touch once, so they sit in the disclosure.
+  //
+  // The catch is that two of the hidden ones become REQUIRED for some periods, and a required field
+  // inside a collapsed <details> cannot be focused: the browser then refuses to submit and reports
+  // nothing a user can act on. So the disclosure opens itself as soon as the chosen period needs a
+  // date - hidden is allowed to mean "not relevant yet", never "relevant but unreachable".
+  const handles = openFormDialog({
+    title: ctx.get(existing ? 'budgets.edit' : 'budgets.new'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: bilingual('Weitere Einstellungen', 'More settings'),
+    fallbackError: ctx.get('common.error'),
+    className: 'budget-wizard',
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 120 },
+      { name: 'amount', kind: FieldKind.Money, label: ctx.get('transactions.amount'), required: true, min: '0.01', group: 'sum' },
+      { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'sum' },
+      { name: 'period', kind: FieldKind.Select, label: ctx.get('budgets.period'), rawOptions: periods },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'),
+        rawOptions: `<option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}` },
+      { name: 'startDate', kind: FieldKind.Date, label: ctx.get('budgets.anchorDate'), advanced: true, group: 'cycle',
+        hint: ctx.get('budgets.anchorHint_week') },
+      { name: 'endDate', kind: FieldKind.Date, label: ctx.get('budgets.endDate'), advanced: true, group: 'cycle' },
+      // 'reset' is the default, so counting it would make an untouched form announce a setting nobody made.
+      { name: 'rollover', kind: FieldKind.Select, label: ctx.get('budgets.rollover'), advanced: true,
+        rawOptions: rolloverOptions, emptyValue: 'reset', hint: ctx.get('budgets.rolloverHint_' + rollover) }
+    ],
+    values: {
+      name: existing?.name || '',
+      amount: existing ? String(existing.amount) : '',
+      currency,
+      period: selectedPeriod,
+      category: existing?.categoryId || '',
+      startDate: existing?.startDate || '',
+      endDate: existing?.endDate || '',
+      rollover
+    },
+    actions: [
+      ...(existing ? [{ name: 'delete', label: ctx.get('common.delete'), role: 'danger', onClick: () => remove() }] : []),
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.save' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: ({ values, setFormError, close }) => save(values, setFormError, close)
+  });
 
-  const form = dlg.querySelector('form');
-  const periodSelect = form.querySelector('[name="period"]');
-  const rolloverSelect = form.querySelector('[name="rollover"]');
-  const startWrap = form.querySelector('[data-budget-start]');
-  const endWrap = form.querySelector('[data-budget-end]');
-  const startInput = form.querySelector('[name="startDate"]');
-  const endInput = form.querySelector('[name="endDate"]');
-  const anchorHint = form.querySelector('[data-budget-anchor-hint]');
-  const rolloverHint = form.querySelector('[data-rollover-hint]');
+  const form = handles.form;
+  const periodSelect = form.elements.namedItem('period');
+  const rolloverSelect = form.elements.namedItem('rollover');
+  const startInput = form.elements.namedItem('startDate');
+  const nameInput = form.elements.namedItem('name');
+  const disclosure = form.querySelector('details');
+  const hintOf = name => handles.field(name)?.querySelector('.fw-field-hint');
 
   const localIso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const mondayIso = () => {
@@ -305,106 +332,109 @@ async function openBudgetDialog(existing) {
 
   const syncCycleFields = () => {
     const period = periodSelect.value;
-    const needsAnchor = ['weekly','biweekly','paycycle','custom'].includes(period);
-    startWrap.hidden = !needsAnchor;
-    endWrap.hidden = period !== 'custom';
-    startInput.required = period === 'custom';
-    endInput.required = period === 'custom';
-    anchorHint.textContent = ctx.get(
+    const needsAnchor = USES_ANCHOR.includes(period);
+    const needsEnd = period === 'custom';
+    handles.field('startDate').hidden = !needsAnchor;
+    handles.field('endDate').hidden = !needsEnd;
+    startInput.required = needsEnd;
+    form.elements.namedItem('endDate').required = needsEnd;
+    // See above: a required field the user cannot reach is worse than a long form.
+    if (needsAnchor || needsEnd) disclosure?.setAttribute('open', '');
+    const hint = hintOf('startDate');
+    if (hint) hint.textContent = ctx.get(
       period === 'paycycle'
         ? 'budgets.anchorHint_paycycle'
-        : period === 'custom'
+        : needsEnd
           ? 'budgets.anchorHint_custom'
           : 'budgets.anchorHint_week');
     if (period === 'paycycle' && !startInput.value) startInput.value = localIso(new Date());
   };
 
   const syncRolloverHint = () => {
-    rolloverHint.textContent = ctx.get('budgets.rolloverHint_' + rolloverSelect.value);
+    const hint = hintOf('rollover');
+    if (hint) hint.textContent = ctx.get('budgets.rolloverHint_' + rolloverSelect.value);
   };
 
   periodSelect.addEventListener('change', syncCycleFields);
   rolloverSelect.addEventListener('change', syncRolloverHint);
 
-  form.querySelectorAll('[data-budget-preset]').forEach(button => {
-    button.addEventListener('click', () => {
-      const preset = button.dataset.budgetPreset;
-      const name = form.querySelector('[name="name"]');
-
-      if (preset === 'weekly-groceries') {
-        if (!name.value) name.value = ctx.get('budgets.presetName_weeklyGroceries');
-        periodSelect.value = 'weekly';
-        rolloverSelect.value = 'positive';
-        startInput.value = mondayIso();
-      } else if (preset === 'paycycle') {
-        if (!name.value) name.value = ctx.get('budgets.presetName_paycycle');
-        periodSelect.value = 'paycycle';
-        rolloverSelect.value = 'full';
-        startInput.value = localIso(new Date());
-      } else {
-        if (!name.value) name.value = ctx.get('budgets.presetName_monthly');
-        periodSelect.value = 'monthly';
-        rolloverSelect.value = 'reset';
-      }
-
-      syncCycleFields();
-      syncRolloverHint();
-      form.querySelector('[name="amount"]').focus();
+  // The presets belong above the fields they fill, which is before everything the primitive renders.
+  if (presets) {
+    form.querySelector('.panel-head')?.insertAdjacentHTML('afterend', presets);
+    form.querySelectorAll('[data-budget-preset]').forEach(button => {
+      button.addEventListener('click', () => {
+        const preset = button.dataset.budgetPreset;
+        if (preset === 'weekly-groceries') {
+          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_weeklyGroceries');
+          periodSelect.value = 'weekly';
+          rolloverSelect.value = 'positive';
+          startInput.value = mondayIso();
+        } else if (preset === 'paycycle') {
+          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_paycycle');
+          periodSelect.value = 'paycycle';
+          rolloverSelect.value = 'full';
+          startInput.value = localIso(new Date());
+        } else {
+          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_monthly');
+          periodSelect.value = 'monthly';
+          rolloverSelect.value = 'reset';
+        }
+        syncCycleFields();
+        syncRolloverHint();
+        form.elements.namedItem('amount').focus();
+      });
     });
-  });
+  }
 
   syncCycleFields();
   syncRolloverHint();
 
-  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
-
-  dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
+  async function remove() {
     if (!await ctx.confirm(
       ctx.get('budgets.deleteConfirm').replace('{name}', existing.name),
       { destructive: true, confirmLabel: ctx.get('common.delete') })) return;
 
     try {
       await ctx.api(`api/budgets/${existing.id}`, { method: 'DELETE' });
-      dlg.close();
+      handles.close('deleted');
       ctx.toast(ctx.get('common.deleted'));
       await renderBudgets(ctx);
     } catch (error) {
-      ctx.toast(error.message || ctx.get('common.error'));
+      handles.setFormError(error.message || ctx.get('common.error'));
     }
-  });
+  }
 
-  form.onsubmit = async event => {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget);
-    const period = String(values.get('period') || 'monthly');
-    const rolloverMode = String(values.get('rollover') || 'reset');
-    const usesAnchor = ['weekly','biweekly','paycycle','custom'].includes(period);
+  async function save(values, setFormError, close) {
+    const period = String(values.period || 'monthly');
+    const rolloverMode = String(values.rollover || 'reset');
+    // A hidden date still holds whatever a previous period put there, so the period decides what is
+    // sent - otherwise switching from "custom" to "monthly" silently keeps an end date the screen no
+    // longer shows.
+    const usesAnchor = USES_ANCHOR.includes(period);
     const body = ctx.jsonBody({
-      name: values.get('name'),
-      categoryId: values.get('category') || null,
-      amount: Number(values.get('amount')),
-      currency: values.get('currency'),
+      name: values.name,
+      categoryId: values.category || null,
+      amount: values.amount,
+      currency: String(values.currency || 'EUR').toUpperCase(),
       period,
       carryOver: rolloverMode !== 'reset',
       carryOverOverspend: rolloverMode === 'full',
       isActive: true,
-      startDate: usesAnchor ? (values.get('startDate') || null) : null,
-      endDate: period === 'custom' ? (values.get('endDate') || null) : null
+      startDate: usesAnchor ? (values.startDate || null) : null,
+      endDate: period === 'custom' ? (values.endDate || null) : null
     });
 
     try {
       await ctx.api(
         existing ? `api/budgets/${existing.id}` : 'api/budgets',
         existing ? { ...body, method: 'PUT' } : body);
-      dlg.close();
+      close('saved');
       ctx.toast(ctx.get('common.saved'));
       await renderBudgets(ctx);
     } catch (error) {
-      ctx.toast(error.message || ctx.get('common.error'));
+      setFormError(error.message || ctx.get('common.error'));
     }
-  };
-
-  dlg.showModal();
+  }
 }
 
 async function openBudgetEdit(id, closeDrawer) {
