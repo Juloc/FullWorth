@@ -28,18 +28,10 @@ function decorate() {
 async function openDetails(card, button) {
   button.disabled = true;
   try {
-    const importDialog = card.closest('dialog.receipt-import-dialog');
-    const cards = [...(importDialog?.querySelectorAll('.receipt-import-batch') || [])];
-    const index = cards.indexOf(card);
-    if (index < 0) throw new Error(t('Import-Batch nicht gefunden.', 'Import batch not found.'));
-
-    const sourceText = card.querySelector('.receipt-import-batch-main strong')?.textContent?.trim() || '';
-    const dateText = card.querySelector('.receipt-import-batch-main span')?.textContent?.trim() || '';
-    const batches = await api('api/purchases/receipt-imports/batches?limit=10');
-    const batch = batches?.find(candidate =>
-      sourceLabel(candidate?.batch?.sourceType) === sourceText && formatDate(candidate?.batch?.createdAt) === dateText)
-      || batches?.[index];
-    const id = batch?.batch?.id;
+    // The card carries its id. This used to look the batch up by matching the rendered source label
+    // and the formatted date, falling back to the card's position - so two imports from the same
+    // source on the same day were indistinguishable and "Details" could open the wrong one.
+    const id = card.dataset.batchId;
     if (!id) throw new Error(t('Import-Batch nicht gefunden.', 'Import batch not found.'));
 
     const detail = await api(`api/purchases/receipt-imports/batches/${encodeURIComponent(id)}`);
@@ -63,11 +55,31 @@ function showDetailDialog(batch) {
     <div class="receipt-import-batch-dialog-body" data-import-batch-detail-panel></div>
   </div>`, { className:'receipt-import-batch-dialog', closeLabel:t('Schließen','Close') });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  dlg.querySelector('[data-import-batch-detail-panel]').replaceWith(renderPanel(batch));
+  dlg.querySelector('[data-import-batch-detail-panel]').replaceWith(renderPanel(batch, dlg));
   dlg.showModal();
 }
 
-function renderPanel(batch) {
+// Starting one receipt changes what the row may offer next, so the panel is rebuilt from the answer
+// the server already sends back rather than from a guess about the new state.
+async function analyseItem(dlg, batchId, itemId, button) {
+  button.disabled = true;
+  try {
+    const updated = await api(
+      `api/purchases/receipt-imports/batches/${encodeURIComponent(batchId)}/items/${encodeURIComponent(itemId)}/start`,
+      { method: 'POST' });
+    dlg.querySelector('[data-import-batch-detail-panel]')?.replaceWith(renderPanel(updated, dlg));
+  } catch (error) {
+    button.disabled = false;
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = error?.message || t('Analyse konnte nicht gestartet werden.', 'Could not start the analysis.');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+  }
+}
+
+function renderPanel(batch, dlg) {
   const panel = document.createElement('div');
   panel.className = 'receipt-import-batch-detail';
   panel.dataset.importBatchDetailPanel = 'true';
@@ -90,6 +102,13 @@ function renderPanel(batch) {
   const apply = () => applyFilters(panel, statusFilter?.value || '', sourceFilter?.value || '');
   statusFilter?.addEventListener('change', apply);
   sourceFilter?.addEventListener('change', apply);
+
+  const batchId = batch?.batch?.id;
+  if (dlg && batchId) {
+    panel.querySelectorAll('[data-analyse-item]').forEach(button =>
+      button.addEventListener('click', () => analyseItem(dlg, batchId, button.dataset.analyseItem, button)));
+  }
+
   apply();
   return panel;
 }
@@ -103,9 +122,17 @@ function renderItem(item) {
     ? `<a class="ghost receipt-import-item-open" href="${esc(receiptUrl(item.purchaseId))}" target="_blank" rel="noopener noreferrer">${esc(t('Beleg öffnen', 'Open receipt'))}</a>`
     : '';
 
+  // Analysing one receipt is offered exactly where it is useful: something that was never started, or
+  // one that failed differently from the rest. Not on work that is already on its way, because a
+  // second start would be refused and a button that does nothing is worse than no button.
+  const startable = status === 'pending' || status === 'failed';
+  const analyse = startable && item.receiptScanJobId
+    ? `<button type="button" class="ghost" data-analyse-item="${esc(item.id)}">${esc(t('Analysieren', 'Analyse'))}</button>`
+    : '';
+
   return `<div class="receipt-import-batch-item" data-import-batch-item data-status="${esc(status)}" data-source="${esc(source)}">
     <div class="receipt-import-batch-item-main"><strong>${esc(item.displayName || t('Beleg', 'Receipt'))}</strong><span>${esc(statusLabel(status))} · ${esc(sourceLabel(source))}${esc(reference)}</span>${error}</div>
-    <div class="receipt-import-batch-item-actions">${receipt}</div>
+    <div class="receipt-import-batch-item-actions">${analyse}${receipt}</div>
   </div>`;
 }
 

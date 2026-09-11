@@ -36,6 +36,8 @@
 .receipt-import-batch:first-child{border-top:0}
 .receipt-import-batch-main{display:flex;justify-content:space-between;gap:10px}
 .receipt-import-batch-main span{font-size:.8rem;color:var(--text-muted,#707782)}
+/* A paused batch has to say so on the card: the counters keep showing work that is deliberately not moving, and without this the screen looks stuck rather than held. */
+.receipt-import-paused{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--warning);align-self:center}
 .receipt-import-stats{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
 .receipt-import-stats span{font-size:.78rem;padding:4px 7px;border-radius:999px;background:var(--surface-subtle,#f2f4f7);color:var(--text-muted,#707782)}
 .receipt-import-batch-dialog{width:min(860px,calc(100vw - 24px));padding:0;border:0;border-radius:16px;background:var(--surface);color:var(--text)}

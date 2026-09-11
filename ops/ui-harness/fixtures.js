@@ -245,6 +245,45 @@
       customerNumber: null, providerContact: null,
       cancellationSentAt: null, cancellationConfirmedAt: null, updatedAt: null
     },
+    // Three import batches, one per state the card has to render: one running (so Pause is offered),
+    // one paused (Fortsetzen, plus the paused marker, and its items back to pending), and one finished
+    // with a failure (Fehler erneut, and a single receipt that can be analysed on its own).
+    'purchases/receipt-imports/batches': [
+      {
+        batch: { id: 'rb1', fullWorthSpaceId: SPACE, userId: 'u1', sourceType: 'upload', sourceName: 'File upload',
+          currency: 'EUR', status: 'processing', autoStart: true, createdAt: '2026-09-11T09:10:00Z',
+          updatedAt: '2026-09-11T09:14:00Z', completedAt: null, pausedAt: null, isPaused: false },
+        total: 4, queued: 2, processing: 1, completed: 1, needsReview: 0, skippedDuplicates: 0, failed: 0,
+        items: [
+          { id: 'ri1', batchId: 'rb1', sourceType: 'upload', displayName: 'REWE 11.09.png', status: 'processing', receiptScanJobId: 'j1', purchaseId: 'p1' },
+          { id: 'ri2', batchId: 'rb1', sourceType: 'upload', displayName: 'Edeka 10.09.png', status: 'queued', receiptScanJobId: 'j2', purchaseId: 'p2' },
+          { id: 'ri3', batchId: 'rb1', sourceType: 'upload', displayName: 'Apotheke 09.09.png', status: 'queued', receiptScanJobId: 'j3', purchaseId: 'p3' },
+          { id: 'ri4', batchId: 'rb1', sourceType: 'upload', displayName: 'Bahn 08.09.pdf', status: 'done', receiptScanJobId: 'j4', purchaseId: 'p4' }
+        ]
+      },
+      {
+        batch: { id: 'rb2', fullWorthSpaceId: SPACE, userId: 'u1', sourceType: 'paperless', sourceName: 'Paperless-ngx',
+          currency: 'EUR', status: 'processing', autoStart: true, createdAt: '2026-09-10T18:02:00Z',
+          updatedAt: '2026-09-11T08:40:00Z', completedAt: null, pausedAt: '2026-09-11T08:40:00Z', isPaused: true },
+        total: 3, queued: 3, processing: 0, completed: 0, needsReview: 0, skippedDuplicates: 0, failed: 0,
+        items: [
+          { id: 'ri5', batchId: 'rb2', sourceType: 'paperless', displayName: 'Beleg 1042', sourceReference: 'Dok. 1042', status: 'pending', receiptScanJobId: 'j5', purchaseId: 'p5' },
+          { id: 'ri6', batchId: 'rb2', sourceType: 'paperless', displayName: 'Beleg 1043', sourceReference: 'Dok. 1043', status: 'pending', receiptScanJobId: 'j6', purchaseId: 'p6' },
+          { id: 'ri7', batchId: 'rb2', sourceType: 'paperless', displayName: 'Beleg 1044', sourceReference: 'Dok. 1044', status: 'pending', receiptScanJobId: 'j7', purchaseId: 'p7' }
+        ]
+      },
+      {
+        batch: { id: 'rb3', fullWorthSpaceId: SPACE, userId: 'u1', sourceType: 'folder', sourceName: 'Import folder',
+          currency: 'EUR', status: 'completed_with_errors', autoStart: false, createdAt: '2026-09-09T21:30:00Z',
+          updatedAt: '2026-09-09T21:36:00Z', completedAt: '2026-09-09T21:36:00Z', pausedAt: null, isPaused: false },
+        total: 2, queued: 0, processing: 0, completed: 1, needsReview: 0, skippedDuplicates: 0, failed: 1,
+        items: [
+          { id: 'ri8', batchId: 'rb3', sourceType: 'folder', displayName: 'scan-004.jpg', status: 'done', receiptScanJobId: 'j8', purchaseId: 'p8' },
+          { id: 'ri9', batchId: 'rb3', sourceType: 'folder', displayName: 'scan-005.jpg', status: 'failed', receiptScanJobId: 'j9', purchaseId: 'p9',
+            error: 'Die Seite konnte nicht gelesen werden.' }
+        ]
+      }
+    ],
     'notifications': [],
     // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
@@ -674,6 +713,12 @@
     // Same money, same assumptions: the delta MUST be zero. 50 € + 288 € is 338 €.
     return { left, right, capitalDelta: 0, annuityDelta: 0, cause: ['none'], sameMoneySameAssumptions: true };
   }
+
+  // A batch detail answers with exactly one element of the list, and its id sits at batch.id rather
+  // than at the top level - so the generic "find by id" in match() cannot see it. Derived instead of
+  // written twice: two copies of the same three batches would drift apart on the first edit.
+  for (const view of FIXTURES['purchases/receipt-imports/batches'])
+    FIXTURES[`purchases/receipt-imports/batches/${view.batch.id}`] = view;
 
   const KEYS = Object.keys(FIXTURES);
 

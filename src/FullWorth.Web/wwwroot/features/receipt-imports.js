@@ -780,17 +780,30 @@ async function refreshBatches() {
     el.innerHTML = batches.map(renderBatch).join('');
     el.querySelectorAll('[data-start-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.startBatch, 'start-pending'));
     el.querySelectorAll('[data-retry-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.retryBatch, 'retry-failed'));
+    el.querySelectorAll('[data-pause-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.pauseBatch, 'pause'));
+    el.querySelectorAll('[data-resume-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.resumeBatch, 'resume'));
     document.dispatchEvent(new CustomEvent('fullworth:receipt-imports-rendered', { detail:{dialog} }));
   } catch (error) { el.innerHTML = `<div class="row-sub">${esc(error.message)}</div>`; }
+}
+
+// `batch.queued` counts pending AND queued together, which is fine for a summary line and useless
+// for deciding which button to offer: "start" belongs to work nobody has started, "pause" to work
+// already on its way. The items carry the exact status, so count them here rather than widening the
+// view record for the sake of two buttons.
+function countByStatus(batch, status) {
+  return (batch.items || []).filter(item => item.status === status).length;
 }
 
 function renderBatch(batch) {
   const b = batch.batch || {};
   const source = b.sourceType === 'paperless' ? 'Paperless-ngx' : b.sourceType === 'folder' ? t('Importordner', 'Import folder') : t('Dateien', 'Files');
-  return `<div class="receipt-import-batch">
-    <div class="receipt-import-batch-main"><strong>${esc(source)}</strong><span>${formatDate(b.createdAt)}</span></div>
+  const paused = Boolean(b.pausedAt);
+  const pending = countByStatus(batch, 'pending');
+  const inFlight = countByStatus(batch, 'queued') + (batch.processing || 0);
+  return `<div class="receipt-import-batch" data-batch-id="${esc(b.id)}">
+    <div class="receipt-import-batch-main"><strong>${esc(source)}</strong><span>${formatDate(b.createdAt)}</span>${paused ? `<span class="receipt-import-paused">${esc(t('pausiert', 'paused'))}</span>` : ''}</div>
     <div class="receipt-import-stats"><span>${batch.total || 0} ${esc(t('gesamt', 'total'))}</span><span>${batch.processing || 0} ${esc(t('läuft', 'processing'))}</span><span>${batch.completed || 0} ${esc(t('fertig', 'done'))}</span><span>${batch.needsReview || 0} ${esc(t('prüfen', 'review'))}</span><span>${batch.skippedDuplicates || 0} ${esc(t('Duplikate', 'duplicates'))}</span><span>${batch.failed || 0} ${esc(t('Fehler', 'failed'))}</span></div>
-    <div class="receipt-import-actions compact">${batch.queued ? `<button type="button" class="ghost" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="ghost" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}</div>
+    <div class="receipt-import-actions compact">${paused ? `<button type="button" class="ghost" data-resume-batch="${b.id}">${esc(t('Fortsetzen', 'Resume'))}</button>` : inFlight ? `<button type="button" class="ghost" data-pause-batch="${b.id}">${esc(t('Pause', 'Pause'))}</button>` : ''}${pending && !paused ? `<button type="button" class="ghost" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="ghost" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}</div>
   </div>`;
 }
 
