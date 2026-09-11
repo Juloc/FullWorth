@@ -283,6 +283,11 @@ public static class BackendApplication
         // Scoped, not singleton: the AI pass resolves the user's chosen model through IntelligenceDbContext.
         builder.Services.AddScoped<IBavDocumentAiStructurer, PensionDocumentCodexStructurer>();
         builder.Services.AddScoped<PensionDocumentStore>();
+        // The projection is pure arithmetic and holds no state, so a singleton; the store that feeds it
+        // reads through the scoped DbContext. Neither writes a row - that is the rule the whole feature
+        // rests on, see PensionProjectionContracts.
+        builder.Services.AddSingleton<IBavProjectionCalculator, PensionProjectionCalculator>();
+        builder.Services.AddScoped<PensionProjectionStore>();
         builder.Services.AddScoped<TaxAnalysisService>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
@@ -372,6 +377,7 @@ public static class BackendApplication
         endpoints.MapTaxEndpoints();
         endpoints.MapPensionEndpoints();
         endpoints.MapPensionDocumentEndpoints();
+        endpoints.MapPensionProjectionEndpoints();
         endpoints.MapCategoryIntelligenceEndpoints();
         endpoints.MapCategoryEndpoints();
         endpoints.MapContractEndpoints();
