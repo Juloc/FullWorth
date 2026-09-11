@@ -390,6 +390,7 @@ public static class BackendApplication
         endpoints.MapPortfolioEndpoints();
         endpoints.MapAssetValuationEndpoints();
         endpoints.MapWealthEndpoints();
+        endpoints.MapWealthPreviewBasisEndpoints();
         endpoints.MapRealEstateEndpoints();
         endpoints.MapVehicleMetalEndpoints();
         
