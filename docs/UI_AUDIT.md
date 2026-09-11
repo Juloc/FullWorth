@@ -91,7 +91,7 @@ That is why they diverge and why they read as over-complex: nothing shared exist
 Ordered so that each step is shippable on its own and nothing is a rewrite. The existing
 `createDialog` stays; this adds the layer that was missing above it.
 
-**Step 1 — a declarative form dialog (one new module, no call sites changed yet).**
+**Step 1 — a declarative form dialog (one new module, no call sites changed yet).** `DONE`
 `ui/form-dialog.js`: takes a title, a field spec and an actions spec, returns the dialog plus a values
 getter. It owns the label/input markup, the required marker, the inline error position, the actions row
 (primary right, destructive separated), `Enter` to submit, `Escape` to cancel, and focus on the first
@@ -100,8 +100,8 @@ field. A field entry names its kind (`text` / `number` / `money` / `date` / `sel
 render inside a `<details>`, which is a pattern this codebase already uses (the custom range on the
 wealth page). Nothing else changes yet, so this step cannot break a screen.
 
-**Step 2 — convert the four editors.** `rules.js:122`, `contracts.js:1548`, `loans.js:142`,
-`networth.js:1236`. These are plain "edit an entity" forms and are the cheapest conversions; each one
+**Step 2 — convert the four editors.** `IN PROGRESS`: `networth.js` (the asset editor) is converted;
+`rules.js:122`, `contracts.js:1548` and `loans.js:142` are left. These are plain "edit an entity" forms and are the cheapest conversions; each one
 should lose code, not gain it. Convert one, look at it, then do the rest.
 
 **Step 3 — the booking filter, which needs a decision, not just a conversion.** Keep the four filters
@@ -123,6 +123,28 @@ nothing and costs every future reader.
 **Step 6 — a guard.** A test in `tests/FullWorth.Web.Tests` that fails when a dialog call site renders
 more than N controls without a `<details>`, and when a hex literal appears outside `tokens.css`. Without
 it this grows straight back: the census went from 73 to 76 call sites during this audit alone.
+
+---
+
+## What step 1 turned out to be worth
+
+Converting the first editor is what proved the primitive, and it exposed two things the module was
+missing — which is the whole reason the plan converts one and looks at it before doing the rest:
+
+- **A failure that belongs to no field had nowhere to go.** The conversion first pinned server errors
+  onto the name field, which is a lie about which value is wrong. `setFormError()` puts the message
+  next to the button that caused it, and it can never be silent: a falsy message still renders the
+  fallback, because a dialog that declines to save and says nothing is indistinguishable from a broken
+  button. Twelve of the 76 call sites currently answer a failed save with a toast that outlives the
+  dialog it came from; they get this for free when they convert.
+- **`.rule-grid` is not the shared two-column primitive it looks like.** Its only base rule is scoped
+  under `.rule-dialog` (`app.css:486`), so a bare `.rule-grid` is `display:block` — measured: grouped
+  fields silently stacked. Any conversion that reaches for it outside a `.rule-dialog` gets the same
+  surprise, so grouped rows carry their own grid.
+
+The editor itself lost its 1 400-character template literal. Growth rate and notes moved behind the
+disclosure; "In Gesamtvermögen einbeziehen" deliberately did not, because it decides whether the value
+counts at all and a default-on switch behind "Mehr" is a switch nobody knows they have.
 
 ---
 

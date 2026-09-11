@@ -28,7 +28,7 @@ slice moves to the next one rather than holding the release.
 | `alpha.17` | The P0/P1/P2 sweep up to and including the FX refresh fix | shipped |
 | `alpha.18` | Sync-skip reason codes, receipt-poll backoff, O-3 pending ordering, O-7 company car on gross | shipped |
 | `alpha.19` | The parallel round: O-4 + O-5 (reversible IBAN-free account link), O-6 (contract merge and the projection curve), O-9 (statement import, backend and UI), O-10 step 1 (the Altersvorsorge area), balance provenance and balance meaning, FX rate provenance, the PWA offline shell and safe-area fixes, the Cloud error contract and link-health surface, version stamping | an account can be de-duplicated and undone; the three "Weg" contracts merge; the projection is a curve in the first chart; Ikano can be kept current from its own statement; the Altersvorsorge area can be filled in by hand; a balance says what it is, when it is from and where it came from; the installed app works offline |
-| `alpha.20` | bAV step 2 per [PENSION.md](PENSION.md): document upload, extraction and the review screen | a statement fills a contract instead of being typed in |
+| `alpha.20` | bAV step 2 per [PENSION.md](PENSION.md): document upload, extraction and the review screen — **built**; plus dialog steps 1–2 of [UI_AUDIT.md](UI_AUDIT.md) (the form primitive and the first converted editor) | a statement fills a contract instead of being typed in; a dialog stops re-deciding its own layout |
 | `alpha.21` | bAV step 3: the wealth block, the salary link, the dashboard entry, the projection and the variant comparison | the pension shows up in the wealth and salary views without a projection ever counting as today’s money |
 | `alpha.22` | The dialog rework per [UI_AUDIT.md](UI_AUDIT.md), steps 1–4 | the editors and the booking filter stop being walls of fields |
 | `alpha.23` | UI_AUDIT steps 5–6: one dialog stylesheet, tokens instead of the ~220 hex literals, and the guard | the dialogs look like one product |
@@ -587,7 +587,7 @@ Reachable directly at `/settings/import?mode=statement` and, with an account alr
 `/settings/import?mode=statement&accountId={id}` — a normal query-string link the accounts page (or
 anywhere else) can point at without any wiring on this page's side.
 
-### O-10 There is no place for the occupational pension (bAV) — `PARTLY DONE` (step 1 of 3)
+### O-10 There is no place for the occupational pension (bAV) — `PARTLY DONE` (steps 1 and 2 of 3)
 
 The owner's bAV had no home. The balance could only be typed in as a nameless `Asset`, which loses the
 implementation route, the policy holder vs the insured person, the guarantee, the annuity factor and —
@@ -624,9 +624,36 @@ like an IBAN, and returned only as its last four characters. No provider is hard
 guards in `tests/FullWorth.Web.Tests/PensionUxBaselineTests.cs`, plus `FinanceMigrationTests` (the model
 snapshot still matches the model) and the frontend guard suite.
 
-**Open.** Step 2: document upload, extraction and the review screen. Step 3: the `pensionAssets` block
-in the wealth overview, the employee share in cashflow, the dashboard entry, the projection and the
-variant comparison. `PENSION.md` lists both, plus the append-only limitation of contributions/costs.
+**Step 2 — DONE.** A Standmitteilung is read instead of typed. Migration
+`20260911010000_PensionDocumentExtraction` gives `BavDocuments` the four columns a document needs while
+it waits for a person (the draft, an error *category*, when it was extracted, and whether the text came
+from the PDF's text layer or from OCR). `PensionDocumentContracts.cs` declares the pipeline's four
+seams, and each is implemented separately: the blob store (AES-256-GCM per file, key HKDF-derived from
+the data key so a leaked blob key is not a field key), the text source (text layer first, OCR only where
+there is none, **all** pages — the payslip pipeline reads page one), the deterministic parser (amounts
+through `ImportNumber`, dates through `ImportDate`, so the result cannot depend on the host locale), and
+the optional Codex pass, which may only fill what the parser left empty and is a no-op without a bridge.
+
+The rule that shaped the design: **nothing extracted is stored without review.** The pipeline can only
+produce a draft, only a commit turns a draft into rows, and the draft is cleared on commit because the
+rows are the truth afterwards. Three more that are enforced by the types rather than by discipline: the
+contribution draft has no tax-effect fields at all, so no extractor — least of all the AI one — can
+invent one; a projected figure without its return assumption cannot be committed; and the policy number
+is redacted out of the review response, with a null coming back read as *unchanged* rather than
+*delete*, so the number survives the round trip without ever reaching the browser.
+
+The review screen is a **page, not a dialog** (`features/pension-documents.js`): 56 fields in a dialog
+would have been the worst offender in the app. Every field shows its source page and confidence, an
+OCR'd value says it was *recognised* rather than read, a field nothing could fill is empty and asks,
+and the guaranteed and projected figures sit in visually separate blocks with the projection labelled as
+an assumption. `Effektivkosten` gained its own cost kind in the process, marked as an aggregate so a
+later total cannot double-count the components beneath it.
+
+**Open.** Step 3: the `pensionAssets` block in the wealth overview, the employee share in cashflow, the
+dashboard entry, the projection and the variant comparison. `PENSION.md` lists them, plus the
+append-only limitation of contributions/costs and the one rule step 2 could not keep: a fund allocation
+cannot name its document, because neither `BavAllocationWrite` nor `BavInvestmentAllocation` has a
+`BavDocumentId`.
 
 ---
 
