@@ -181,6 +181,32 @@
     // Wealth view. The history rises by a flat 600 per month over exactly 12 months, so the
     // projection card's derived savings rate must come out at 600 - a value that is wrong by any
     // rounding mistake is visible immediately.
+    // The forward preview's basis: 3 200 income, 1 040 of contracts marked as fixed costs, and a
+    // 6-month average of 480 for everything else. Surplus 1 680 - which is what the composition rows
+    // must add up to on screen, so a sign or a rounding mistake is visible immediately. The budget
+    // limit is deliberately HIGHER than the observed average, because that is the interesting case:
+    // it must sit beside the average and never replace it.
+    'wealth/preview-basis': {
+      currency: 'EUR',
+      monthlyIncome: 3200,
+      monthlyFixedCosts: 1040,
+      monthlyVariableSpend: 480,
+      monthlyBudgetLimit: 620,
+      monthlySurplus: 1680,
+      observedMonths: 6,
+      isComplete: true,
+      missingCurrencies: [],
+      lines: [
+        { kind: 'income', id: 'i1', name: 'Gehalt', monthlyAmount: 3200, isEstimate: false },
+        { kind: 'fixed', id: 'c1', name: 'Miete Lindenhof', monthlyAmount: 880, isEstimate: false },
+        { kind: 'fixed', id: 'c2', name: 'Internet & Telefon', monthlyAmount: 39.99, isEstimate: false },
+        { kind: 'fixed', id: 'c3', name: 'Haftpflicht & Hausrat', monthlyAmount: 48.5, isEstimate: false },
+        { kind: 'fixed', id: 'c4', name: 'Monatsticket', monthlyAmount: 49, isEstimate: false },
+        { kind: 'fixed', id: 'c5', name: 'StreamNow', monthlyAmount: 14.99, isEstimate: false },
+        { kind: 'fixed', id: 'c6', name: 'Mobilfunk', monthlyAmount: 7.52, isEstimate: false },
+        { kind: 'variable', id: null, name: 'variable', monthlyAmount: 480, isEstimate: true }
+      ]
+    },
     'wealth/overview': {
       netWorth: 48250.30, totalAssets: 32000, totalLiabilities: 5000,
       // Incomplete because the IDR wallet (a4) has no rate: the message has to name the value AND the

@@ -6,6 +6,7 @@ import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data
 import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
 import { balanceMeaningLine } from '../ui/balance-meaning.js';
 import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { basisSummary, lineKey, projectSeries as projectPreviewSeries, realValue, surplusAt } from './wealth-preview.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
@@ -78,6 +79,12 @@ const COPY = {
     projectionHistoryWas: 'Aus deinem Verlauf ergäbe sich:',
     projectionNoHistory: 'Für eine Sparrate aus dem Verlauf fehlt noch Historie. Trag sie selbst ein.',
     projectionIn: 'In', projectionReal: 'Kaufkraft von heute',
+    basisTitle: 'Woraus die Vorschau rechnet', basisIncome: 'Einnahmen', basisFixed: 'Fixkosten',
+    basisVariable: 'Sonstige Ausgaben', basisSurplus: 'Überschuss pro Monat',
+    basisObserved: 'Durchschnitt der letzten', basisMonths: 'Monate',
+    basisBudget: 'Budgetgrenzen zum Vergleich', basisGrowth: 'Erwartete Steigerung pro Jahr',
+    basisUseObserved: 'Stattdessen aus dem Vermögensverlauf schätzen',
+    basisNoIncome: 'Keine Einnahmen hinterlegt – die Vorschau schätzt aus dem Vermögensverlauf.',
     projectionContributed: 'Eingezahlt', projectionGrowth: 'Wertzuwachs',
     projectionNote: 'Gerechnet mit monatlicher Verzinsung deiner Annahmen. Steuern, Gebühren und Schwankungen sind nicht enthalten. Das ist keine Prognose und keine Anlageempfehlung.'
   },
@@ -116,6 +123,12 @@ const COPY = {
     projectionHistoryWas: 'Your history would suggest:',
     projectionNoHistory: 'Not enough history for a savings rate yet. Enter one yourself.',
     projectionIn: 'In', projectionReal: "In today's purchasing power",
+    basisTitle: 'What the preview is built from', basisIncome: 'Income', basisFixed: 'Fixed costs',
+    basisVariable: 'Other spending', basisSurplus: 'Surplus per month',
+    basisObserved: 'Average of the last', basisMonths: 'months',
+    basisBudget: 'Budget limits, for comparison', basisGrowth: 'Expected increase per year',
+    basisUseObserved: 'Estimate from the net-worth curve instead',
+    basisNoIncome: 'No income configured - the preview estimates from the net-worth curve.',
     projectionContributed: 'Paid in', projectionGrowth: 'Growth',
     projectionNote: 'Calculated with monthly compounding of your assumptions. Taxes, fees and volatility are not included. This is not a forecast and not investment advice.'
   }
@@ -200,7 +213,7 @@ export async function renderNetWorth(context) {
     return;
   }
 
-  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref] = await Promise.all([
+  const [history, bookingActivity, importCompleteness, assets, liabilities, accounts, accountGroups, portfolios, emergencyPref, projectionPref, previewBasis] = await Promise.all([
     loadHistory(nw.windowMonths),
     loadBookingActivity(nw.windowMonths),
     loadFinanzguruCompleteness(ctx.api),
@@ -210,7 +223,8 @@ export async function renderNetWorth(context) {
     ctx.api('api/account-groups').catch(() => []),
     ctx.api('api/investments/portfolios').catch(() => []),
     ctx.api('api/preferences/wealth.emergencyFund').catch(() => ({ value: {} })),
-    ctx.api('api/preferences/wealth.projection').catch(() => ({ value: {} }))
+    ctx.api('api/preferences/wealth.projection').catch(() => ({ value: {} })),
+    ctx.api('api/wealth/preview-basis?months=6').catch(() => null)
   ]);
 
   lastOverview = overview;
@@ -231,6 +245,7 @@ export async function renderNetWorth(context) {
   nw.portfolios = portfolios || [];
   nw.emergency = emergencyPref?.value && typeof emergencyPref.value === 'object' ? emergencyPref.value : {};
   nw.projection = projectionPref?.value && typeof projectionPref.value === 'object' ? projectionPref.value : {};
+  nw.previewBasis = previewBasis || null;
   nw.currency = overview.currency;
 
   paintNetWorth();
@@ -694,9 +709,18 @@ function projectionSettings() {
   const observed = observedMonthlySavings();
   const savings = Number(stored.monthlySavings);
   const storedYears = Number(stored.years);
+  const basis = basisSummary(nw.previewBasis);
+  // The composed surplus wins unless the owner typed a number, because it is the better answer:
+  // income minus what actually leaves, rather than the drift of a curve that includes market moves.
+  // A basis with no configured income cannot carry it, and then the old estimate is more honest than
+  // a confident negative surplus.
+  const useBasis = stored.useBasis !== false && basis?.usable === true;
   return {
-    monthlySavings: Number.isFinite(savings) ? savings : (observed ?? 0),
-    savingsIsObserved: !Number.isFinite(savings) && observed !== null,
+    basis,
+    useBasis,
+    growth: stored.growth && typeof stored.growth === 'object' ? stored.growth : {},
+    monthlySavings: useBasis ? basis.surplus : (Number.isFinite(savings) ? savings : (observed ?? 0)),
+    savingsIsObserved: !useBasis && !Number.isFinite(savings) && observed !== null,
     hasObserved: observed !== null,
     observed,
     returnPercent: Number.isFinite(Number(stored.returnPercent)) ? Number(stored.returnPercent) : PROJECTION_FALLBACK.returnPercent,
@@ -708,15 +732,21 @@ function projectionSettings() {
 
 // value(m+1) = value(m) * (1 + r/12) + savings. Monthly compounding, because the savings arrive
 // monthly; a yearly formula would silently overstate the growth on the current year's payments.
-function projectSeries(start, monthlySavings, returnPercent, months) {
-  const rate = (Number(returnPercent) || 0) / 100 / 12;
-  const series = [start];
-  let value = start;
-  for (let month = 1; month <= months; month++) {
-    value = value * (1 + rate) + monthlySavings;
-    series.push(value);
-  }
-  return series;
+// Delegates to features/wealth-preview.js, which owns two decisions this used to get wrong.
+//
+// It compounded with `1 + r/12`, and `(1 + r/12)^12` is more than `1 + r`: at 7 % it came out as
+// 7.229 % a year. On a 50 000 balance over thirty years that is 405 825 on screen against 380 613 in
+// the account - 25 000 of growth that never happens. The twelfth root is what 7 % means, and it is
+// what the bAV projection uses, so the two cannot disagree about the same rate.
+//
+// And the surplus is no longer one flat number for thirty years: each line of the basis grows at its
+// own rate, so a salary and a rent can rise differently, which is the only way a long preview says
+// anything.
+function projectSeries(start, monthlySavings, returnPercent, months, basis = null, growth = null) {
+  return projectPreviewSeries(start, {
+    basis, growth, returnPercent, months,
+    flatSurplus: basis ? null : monthlySavings
+  });
 }
 
 // Calendar months, clamped at a short month end, so a curve anchored on the 31st does not drift a day
@@ -751,7 +781,9 @@ function forecastModel() {
   const anchor = projectionAnchor();
   if (!anchor || !Number.isFinite(anchor.value) || settings.years <= 0) return null;
   const months = settings.years * 12;
-  const series = projectSeries(anchor.value, settings.monthlySavings, settings.returnPercent, months);
+  const basis = settings.useBasis ? nw.previewBasis : null;
+  const series = projectSeries(
+    anchor.value, settings.monthlySavings, settings.returnPercent, months, basis, settings.growth);
   const step = Math.max(1, Math.ceil(months / PROJECTION_MAX_POINTS));
   const points = [];
   for (let month = 0; month <= months; month += step) points.push({ date: addMonthsIso(anchor.date, month), value: series[month], monthsAhead: month });
@@ -759,11 +791,16 @@ function forecastModel() {
   const usable = points.filter(point => point.date && Number.isFinite(point.value));
   if (usable.length < 2) return null;
   const end = series[months];
-  const contributed = settings.monthlySavings * months;
+  // What was paid in, not what one month was worth times the months: with per-line growth the
+  // contribution rises, so the flat multiplication would understate it and overstate the growth.
+  const contributed = basis
+    ? series.reduce((sum, _value, month) => month < months
+        ? sum + surplusAt(basis, settings.growth, month) : sum, 0)
+    : settings.monthlySavings * months;
   return {
     settings, anchor, months, points: usable, end, contributed,
     growth: end - anchor.value - contributed,
-    real: end / Math.pow(1 + (settings.inflationPercent / 100), settings.years)
+    real: realValue(end, settings.inflationPercent, months)
   };
 }
 
@@ -852,15 +889,66 @@ function forecastMarkup() {
       return `<button type="button" role="tab" data-projection-years="${years}"${active ? ' class="active" aria-selected="true"' : ' aria-selected="false"'}>${ctx.esc(label)}</button>`;
     }).join('')
     + `</div>`;
+  const basis = settings.basis;
+  const composition = settings.useBasis && basis
+    ? `<div class="nw-basis">`
+      + `<div class="nw-basis-head">${ctx.esc(t('basisTitle'))}</div>`
+      + `<div class="nw-basis-rows">`
+      + basisRow(t('basisIncome'), basis.income)
+      + basisRow(t('basisFixed'), -basis.fixedCosts)
+      + basisRow(`${t('basisVariable')} · ${t('basisObserved')} ${basis.observedMonths} ${t('basisMonths')}`, -basis.variableSpend)
+      + basisRow(t('basisSurplus'), basis.surplus, true)
+      + (basis.budgetLimit > 0
+          ? `<div class="nw-basis-row nw-basis-aside"><span>${ctx.esc(t('basisBudget'))}</span><span>${ctx.money(basis.budgetLimit, nw.currency)}</span></div>`
+          : '')
+      + `</div>`
+      + growthFields(settings)
+      + `<label class="check nw-basis-switch"><input type="checkbox" data-projection-use-observed> ${ctx.esc(t('basisUseObserved'))}</label>`
+      + `</div>`
+    : (basis && !basis.usable ? `<p class="nw-projection-observed">${ctx.esc(t('basisNoIncome'))}</p>` : '');
+
+  // The savings field only appears when the preview is NOT composed: with a basis the number is the
+  // sum of the lines above, and an editable copy of a derived figure is a number that silently
+  // stops matching what it claims to be.
+  const savingsField = settings.useBasis
+    ? ''
+    : `<label>${ctx.esc(t('projectionSavings'))}<input type="number" step="10" inputmode="numeric" data-projection-savings value="${ctx.esc(String(settings.monthlySavings))}"></label>`;
+
   const fields = `<div class="nw-projection-fields">`
-    + `<label>${ctx.esc(t('projectionSavings'))}<input type="number" step="10" inputmode="numeric" data-projection-savings value="${ctx.esc(String(settings.monthlySavings))}"></label>`
+    + savingsField
     + `<label>${ctx.esc(t('projectionReturn'))}<input type="number" step="0.1" min="-20" max="20" inputmode="decimal" data-projection-return value="${ctx.esc(String(settings.returnPercent))}"></label>`
     + `<label>${ctx.esc(t('projectionInflation'))}<input type="number" step="0.1" min="0" max="20" inputmode="decimal" data-projection-inflation value="${ctx.esc(String(settings.inflationPercent))}"></label>`
     + `</div>`;
   return `<div class="nw-forecast"><p class="nw-forecast-lead" data-forecast-lead>${forecastLeadInner(model)}</p>`
     + `<details class="nw-forecast-settings"${forecastSettingsOpen ? ' open' : ''}><summary>${ctx.esc(t('projectionAdjust'))}</summary>`
-    + `<div class="nw-forecast-controls">${strip}${fields}<div data-forecast-figures>${forecastFiguresInner(model)}</div>`
+    + `<div class="nw-forecast-controls">${strip}${composition}${fields}<div data-forecast-figures>${forecastFiguresInner(model)}</div>`
     + `<p class="nw-projection-note">${ctx.esc(t('projectionNote'))}</p></div></details></div>`;
+}
+
+function basisRow(label, amount, strong = false) {
+  return `<div class="nw-basis-row${strong ? ' nw-basis-total' : ''}">`
+    + `<span>${ctx.esc(label)}</span>`
+    + `<span class="number ${moneyClass(amount < 0 ? MoneyVariant.Negative : MoneyVariant.Neutral)}">${ctx.money(amount, nw.currency)}</span>`
+    + `</div>`;
+}
+
+// One expected increase per line, because a salary and a rent do not rise at the same rate - and
+// pretending they do is what makes a thirty-year preview meaningless. The inflation assumption is the
+// placeholder, so leaving a line empty is the same as saying "like everything else".
+function growthFields(settings) {
+  const lines = settings.basis && Array.isArray(nw.previewBasis?.lines) ? nw.previewBasis.lines : [];
+  if (!lines.length) return '';
+  return `<div class="nw-basis-growth"><div class="nw-basis-head">${ctx.esc(t('basisGrowth'))}</div>`
+    + lines.map(line => {
+      const key = lineKey(line);
+      const stored = settings.growth?.[key];
+      const value = Number.isFinite(Number(stored)) ? String(Number(stored)) : '';
+      return `<label><span>${ctx.esc(line.kind === 'variable' ? t('basisVariable') : line.name)}</span>`
+        + `<input type="number" step="0.1" min="-20" max="20" inputmode="decimal"`
+        + ` data-projection-growth="${ctx.esc(key)}" value="${ctx.esc(value)}"`
+        + ` placeholder="${ctx.esc(String(settings.inflationPercent))}"></label>`;
+    }).join('')
+    + `</div>`;
 }
 
 // Repaints what an assumption changes: the curve, its scrubber and the derived figures. The inputs and
@@ -932,6 +1020,27 @@ function wireForecast(hero) {
   bind('[data-projection-savings]', 'monthlySavings', finite);
   bind('[data-projection-return]', 'returnPercent', raw => clamp(finite(raw), -20, 20));
   bind('[data-projection-inflation]', 'inflationPercent', raw => clamp(finite(raw), 0, 20));
+
+  block.querySelectorAll('[data-projection-growth]').forEach(input => input.addEventListener('input', () => {
+    const key = input.dataset.projectionGrowth;
+    const parsed = clamp(finite(input.value), -20, 20);
+    const growth = { ...(nw.projection?.growth || {}) };
+    // An emptied field means "no opinion", which is not the same as 0 % - it falls back to the
+    // inflation assumption shown as the placeholder.
+    if (parsed === null) delete growth[key]; else growth[key] = parsed;
+    nw.projection = { ...(nw.projection || {}), growth };
+    persistProjection();
+    repaintForecast(hero);
+  }));
+
+  const useObserved = block.querySelector('[data-projection-use-observed]');
+  if (useObserved) useObserved.addEventListener('change', () => {
+    nw.projection = { ...(nw.projection || {}), useBasis: !useObserved.checked };
+    persistProjection();
+    // A full repaint here, not repaintForecast: switching the basis on or off changes which controls
+    // exist, not only what the curve says.
+    paintNetWorth();
+  });
 }
 
 /* ---- Card 2: "Verteilung deines Vermögens" --------------------------------------------------- */
