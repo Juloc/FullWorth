@@ -907,11 +907,20 @@ variant comparison. `PENSION.md` lists both, plus the append-only limitation of 
   shows `registeredAt` and a derived `externallyHosted` flag, honestly sourced from the newly tracked
   `EnrollmentMode` (only `PublicRegistration` is reachable from outside the deployment's own Docker
   volumes); an instance that registered before this was tracked shows unknown rather than a guessed value.
-- `latest` in the landing repo moves for pre-releases, against the platform's own tag policy.
-- The demo repo's own `compose.yml` still pins the dead split images `fullworth-backend`/`fullworth-web`
-  at `1.2.0-rc.9`; its tests assert on that file, so changing it needs the tests changed with it.
+- ~~`latest` in the landing repo moves for pre-releases~~ `DONE` (fullworth-landing `a3bfda4`) — a
+  pre-release silently became what a fresh `docker compose pull` fetched. The tag list is built in the
+  step that already validates the version, with the same no-dash rule FullWorth's own release.yml uses;
+  the version tag is still published so a pre-release can be deployed deliberately.
+- ~~The demo repo's own `compose.yml` still pins the dead split images~~ `DONE` (fullworth-demo
+  `e6cb1fd`) — those images stopped being built at v1.3.0-alpha.2, so that file could not start at all,
+  and nothing caught it: the existing checks read `compose.yml` but never asserted which images it runs.
+  It now matches the stack that is actually deployed, down to the service name and the AllowedHosts
+  list, with both old aliases kept so the gateway and the seeder need no change. A test pins it. Not
+  deployed — the public demo only ever goes out on an explicit go-ahead.
 - The `Finance*` → `FullWorth*` rename is incomplete in the domain vocabulary (`FinanceAccount` 218
-  references, `FinanceCategory` 252, `FinanceTransaction` 185).
+  references, `FinanceCategory` 252, `FinanceTransaction` 185). **Deliberately not attempted so far**:
+  it is pure churn across nearly every file, so it conflicts with any other work in flight and is only
+  safe to do alone, in one commit, with nothing else running.
 
 ---
 
