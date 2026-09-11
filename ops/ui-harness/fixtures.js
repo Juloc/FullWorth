@@ -305,6 +305,25 @@
         ]
       }
     ],
+    // Recurring income: one confirmed schedule and two detections. Shapes follow the list projection in
+    // CashflowParityEndpoints.ListSchedules and the IncomeCandidate record. The variable one has no
+    // amount on purpose - that is a real case and must not print 0,00 EUR.
+    'income-schedules': [
+      { id: 'is1', name: 'Gehalt Aera GmbH', accountId: 'a1', normalizedCounterparty: 'aera gmbh',
+        expectedAmount: 3200, currency: 'EUR', cycle: 'monthly', interval: 1,
+        anchorDate: '2026-09-01', nextExpectedDate: '2026-10-01', valueMode: 'fixed',
+        autoDetected: true, isActive: true },
+      { id: 'is2', name: 'Nebentätigkeit', accountId: 'a1', normalizedCounterparty: null,
+        expectedAmount: null, currency: 'EUR', cycle: 'monthly', interval: 1,
+        anchorDate: null, nextExpectedDate: null, valueMode: 'variable',
+        autoDetected: false, isActive: true }
+    ],
+    'income-schedules/detection': [
+      { accountId: 'a1', counterparty: 'Miete Untermieter', typicalAmount: 420, currency: 'EUR',
+        cycle: 'monthly', nextExpectedDate: '2026-10-03', confidence: 0.91, occurrences: 11 },
+      { accountId: 'a1', counterparty: 'Aera GmbH Bonus', typicalAmount: 1800, currency: 'EUR',
+        cycle: 'yearly', nextExpectedDate: '2027-03-31', confidence: 0.72, occurrences: 3 }
+    ],
     'notifications': [],
     // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.

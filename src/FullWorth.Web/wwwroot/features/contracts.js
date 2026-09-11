@@ -295,6 +295,7 @@ export async function renderContracts(context) {
   // Contextual alerts: detected subscriptions + price-change suggestions load quietly and surface only
   // when the backend actually has candidates, so they never dominate the header (UX rework §7).
   loadDetected(false);
+  loadIncome(false);
   loadPriceChanges(false);
 }
 
@@ -433,6 +434,7 @@ function viewHtml() {
     ${duplicateReview}
     <div id="contracts-price-changes" class="detected-panel" hidden></div>
     <div id="contracts-detected" class="detected-panel" hidden></div>
+    <div id="contracts-income" class="detected-panel" hidden></div>
     <div class="contracts-listcard">
       ${toolbar}
       ${selectionBar}
@@ -843,6 +845,152 @@ async function loadDetected(interactive) {
     detectedVisibleCount += DETECTED_BATCH_SIZE;
     loadDetected(false);
   });
+}
+
+// Recurring INCOME, on the screen that is about recurring money.
+//
+// The backend has detected it all along — GET /api/income-schedules/detection groups positive
+// bookings by counterparty and cadence exactly the way the cost side does, with the same confidence
+// and the same memory for what was dismissed. Nothing in the frontend ever called it, so a salary
+// was invisible: not in a list, not as a suggestion, and not in the forward preview, which reads its
+// monthly income from these schedules.
+//
+// Deliberately a separate panel rather than rows in the contract list: a contract is money that
+// leaves, and every consumer of that list subtracts it. Putting a salary in there as a negative-of-a
+// -negative is how a wage ends up counted as a fixed cost.
+async function loadIncome(interactive) {
+  const box = ctx.$('#contracts-income');
+  if (!box) return;
+
+  let schedules = [];
+  let candidates = [];
+  try {
+    [schedules, candidates] = await Promise.all([
+      ctx.api('api/income-schedules'),
+      ctx.api('api/income-schedules/detection')
+    ]);
+  } catch (err) {
+    if (interactive) ctx.toast(err.message || ctx.get('common.error'));
+    box.hidden = true;
+    return;
+  }
+  schedules = (schedules || []).filter(schedule => schedule.isActive !== false);
+  candidates = candidates || [];
+
+  if (!schedules.length && !candidates.length) {
+    box.hidden = !interactive;
+    box.innerHTML = interactive
+      ? `<div class="panel-head"><h3>${ctx.esc(t('Einnahmen', 'Income'))}</h3></div>`
+        + `<div class="row-sub">${ctx.esc(t('Keine wiederkehrenden Einnahmen erkannt.', 'No recurring income detected.'))}</div>`
+      : '';
+    return;
+  }
+
+  const known = schedules.map(schedule => {
+    const next = schedule.nextExpectedDate
+      ? ` · ${ctx.esc(t('nächste', 'next'))}: ${ctx.esc(ctx.date(schedule.nextExpectedDate))}`
+      : '';
+    // An amount is optional on a schedule: a variable income is a real case, and printing 0,00 € for
+    // it would state a number nobody entered.
+    const amount = schedule.expectedAmount == null
+      ? `<span class="row-sub">${ctx.esc(t('Betrag schwankt', 'amount varies'))}</span>`
+      : `<span class="${moneyClass(MoneyVariant.Income)}">${ctx.money(schedule.expectedAmount, schedule.currency)}</span>`;
+    return `
+    <div class="detected-row">
+      <div class="row-main detected-main">
+        ${identityIcon(schedule.name)}
+        <div class="detected-copy">
+          <div class="row-title">${ctx.esc(schedule.name)}</div>
+          <div class="row-sub">${ctx.esc(cycleLabel(schedule.cycle))}${next}</div>
+        </div>
+      </div>
+      <div class="row-side detected-side">${amount}</div>
+    </div>`;
+  }).join('');
+
+  const suggested = candidates.map((cand, index) => {
+    const next = cand.nextExpectedDate
+      ? ` · ${ctx.esc(t('nächste', 'next'))}: ${ctx.esc(ctx.date(cand.nextExpectedDate))}`
+      : '';
+    return `
+    <div class="detected-row" data-income-i="${index}">
+      <div class="row-main detected-main">
+        ${identityIcon(cand.counterparty)}
+        <div class="detected-copy">
+          <div class="row-title">${ctx.esc(cand.counterparty)}</div>
+          <div class="row-sub">${ctx.esc(cycleLabel(cand.cycle))}${next}</div>
+        </div>
+      </div>
+      <div class="row-side detected-side">
+        <span class="${moneyClass(MoneyVariant.Income)}">${ctx.money(cand.typicalAmount, cand.currency)}</span>
+        <div class="detected-actions">
+          <button type="button" class="btn btn-secondary" data-income-dismiss>${ctx.esc(ctx.get('contracts.dismiss'))}</button>
+          <button type="button" class="btn btn-primary" data-income-accept>${ctx.esc(ctx.get('contracts.accept'))}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  box.hidden = false;
+  box.innerHTML = `<div class="panel-head"><h3>${ctx.esc(t('Einnahmen', 'Income'))}</h3></div>`
+    + known
+    + (suggested
+      ? `<div class="row-sub contracts-income-suggested">${ctx.esc(t('Aus wiederkehrenden Eingängen erkannt', 'Detected from recurring credits'))}</div>${suggested}`
+      : '');
+
+  box.querySelectorAll('[data-income-i]').forEach(row => {
+    const candidate = candidates[Number(row.dataset.incomeI)];
+    row.querySelector('[data-income-accept]').addEventListener('click', () => acceptIncome(candidate, row));
+    row.querySelector('[data-income-dismiss]').addEventListener('click', () => dismissIncome(candidate, row));
+  });
+}
+
+function cycleLabel(cycle) {
+  // Falls back to the raw value: the detection may learn a cadence this UI has no word for yet, and a
+  // missing translation must not print the key.
+  return ctx.get('contracts.cycle_' + (cycle || 'monthly')) || cycle || '';
+}
+
+async function acceptIncome(candidate, row) {
+  const buttons = row ? [...row.querySelectorAll('button')] : [];
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    await ctx.api('api/income-schedules/detection/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(candidate)
+    });
+    ctx.toast(ctx.get('common.saved'));
+    await loadIncome(false);
+  } catch (err) {
+    buttons.forEach(button => { button.disabled = false; });
+    ctx.toast(err.message || ctx.get('common.error'));
+  }
+}
+
+async function dismissIncome(candidate, row) {
+  const buttons = row ? [...row.querySelectorAll('button')] : [];
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    // The dismissal is keyed by account, counterparty, currency AND cadence - the same signature the
+    // detection suppresses on, so rejecting a monthly salary does not also hide a yearly bonus from
+    // the same employer.
+    await ctx.api('api/income-schedules/detection/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId: candidate.accountId,
+        counterparty: candidate.counterparty,
+        currency: candidate.currency,
+        cycle: candidate.cycle
+      })
+    });
+    ctx.toast(ctx.get('contracts.dismissed'));
+    await loadIncome(false);
+  } catch (err) {
+    buttons.forEach(button => { button.disabled = false; });
+    ctx.toast(err.message || ctx.get('common.error'));
+  }
 }
 
 async function acceptCandidate(candidate, row) {
