@@ -219,7 +219,7 @@ its line. Demanding that every remaining offender be converted first is how a gu
 `networth.js` came off the list when the liability editor was converted — it is the twin of the asset
 editor and sits on the same screen, so leaving one of the two unconverted was worse than either state.
 
-### The four that are left, and what each one needs
+### What is left, and what each one needed
 
 The conversion itself is mechanical by now. What is **not** mechanical is which fields stay visible,
 because that is a statement about what the screen is for — and getting it wrong is a regression no
@@ -227,10 +227,24 @@ test catches. Three of these four need the owner to say, so they are described r
 
 | Dialog | Controls | What has to be decided |
 | --- | --- | --- |
-| `wealth-real-estate-advanced.js` | 8 | Which of a property's many facts belong above the fold. |
 | `transactions.js` (the detail drawer) | 7 | **Probably should not be converted.** It is not a form: it carries the amount display, the status history, the transfer sub-panel and the refund panel, and the primitive would fight all four. Its actual problem was the five-button actions row, and that is fixed (step 4). |
 
 The baseline holds the rest, so none of them can get more crowded while the decision is open.
+
+**`wealth-real-estate-advanced.js` is done, and this audit had it wrong.** The flagged dialog is not
+the energy certificate — it is **Bewertung**, and its eight controls are not one long form but *three
+separate forms with three submit buttons*: enter the value yourself, calculate an estimate from your
+own inputs, ask an external provider. Converting that with the form primitive would mean merging three
+independent actions into one submit, or nesting three dialogs. Neither is an improvement.
+
+What was actually wrong is that all three stood open at once, so the dialog asked "which of these
+three do you want" before it asked for a number. Entering the value yourself now stays open; the other
+two are disclosures carrying the same frame, radius, padding and background their `<section>` sibling
+has — measured in the browser, because collapsing them while making them look flatter would read as
+"these two matter less". Two visible controls instead of eight.
+
+This is also the general escape hatch: a dialog whose problem is *alternatives*, not *length*, is fixed
+by a disclosure per alternative and not by the form primitive. `transactions.js` is the same shape.
 
 **`contracts.js` `openCancellationDialog` is done.** The owner left the split to me. Visible is
 everything that decides *when you have to act and what it costs if you do not*: status, notice period

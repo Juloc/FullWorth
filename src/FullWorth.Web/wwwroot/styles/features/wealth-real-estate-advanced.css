@@ -8,7 +8,10 @@
   gap: 14px
 }
 
+/* Two of the three valuation methods sit in a <details>, so it has to carry the same frame its
+   <section> sibling does - otherwise collapsing them reads as "these two are less real". */
 .property-valuation-methods>section,
+.property-valuation-method,
 .property-estimate-card {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -66,4 +69,29 @@
     width: 100%
   }
 
+}
+
+.property-valuation-method>summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 15px;
+  list-style: none;
+}
+
+.property-valuation-method>summary::-webkit-details-marker {
+  display: none;
+}
+
+.property-valuation-method>summary::after {
+  content: '›';
+  float: right;
+  transition: transform .15s ease;
+}
+
+.property-valuation-method[open]>summary::after {
+  transform: rotate(90deg);
+}
+
+.property-valuation-method[open]>summary {
+  margin-bottom: 10px;
 }
