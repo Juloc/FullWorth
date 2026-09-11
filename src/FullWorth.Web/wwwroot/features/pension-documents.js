@@ -171,7 +171,14 @@ const DOC_T = {
       contract: 'Vertrag', snapshot: 'Stand', contribution: 'Beitrag',
       allocations: 'Fonds', costs: 'Kosten', document: 'Dokument',
       snapshot_exists: 'Stand war für dieses Datum bereits vorhanden',
-      contribution_exists: 'Beitrag war für dieses Datum bereits vorhanden'
+      contribution_exists: 'Beitrag war für dieses Datum bereits vorhanden',
+      // Nothing was written because a date was missing - said plainly, because the user is the one
+      // who can supply it.
+      snapshot_no_figure: 'Kein Wert im Dokument gefunden – nichts gespeichert',
+      snapshot_no_date: 'Ohne Stichtag kein Stand – Datum nachtragen',
+      contribution_no_date: 'Ohne Datum kein Beitrag – „gültig ab" nachtragen',
+      allocations_no_date: 'Ohne Stichtag keine Fonds – Datum nachtragen',
+      costs_no_date: 'Ohne Stichtag keine Kosten – Datum nachtragen'
     }
   },
   en: {
@@ -285,7 +292,12 @@ const DOC_T = {
       contract: 'Contract', snapshot: 'Value', contribution: 'Contribution',
       allocations: 'Funds', costs: 'Costs', document: 'Document',
       snapshot_exists: 'A value already existed for that date',
-      contribution_exists: 'A contribution already existed for that date'
+      contribution_exists: 'A contribution already existed for that date',
+      snapshot_no_figure: 'No value found in the document – nothing stored',
+      snapshot_no_date: 'No effective date, so no value was stored – please add one',
+      contribution_no_date: 'No valid-from date, so no contribution was stored',
+      allocations_no_date: 'No effective date, so the funds were not stored',
+      costs_no_date: 'No effective date, so the costs were not stored'
     }
   }
 };

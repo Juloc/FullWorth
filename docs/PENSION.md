@@ -8,13 +8,13 @@ Everything below was checked against the code on 2026-09-10.
 
 ## Build status
 
-The work is cut into three steps. **Step 1 is built** (migration `20260910233000_OccupationalPension`);
-steps 2 and 3 are open.
+The work is cut into three steps. **Steps 1 and 2 are built** (migrations
+`20260910233000_OccupationalPension` and `20260911010000_PensionDocumentExtraction`); step 3 is open.
 
 | Step | Contents | State |
 | --- | --- | --- |
 | 1 | Domain model, migration, REST API, the manual entry flow, tests | **DONE** |
-| 2 | Document upload, extraction, review, snapshot commit | OPEN |
+| 2 | Document upload, extraction, review, snapshot commit | **DONE** |
 | 3 | Wealth/salary/dashboard integration, projections and variant comparison | OPEN |
 
 What exists after step 1:
@@ -166,10 +166,45 @@ Existing-contract detection on upload matches, in order: policy number (normalis
 employer, then provider + retirement date. A match adds a snapshot; only an unmatched document offers to
 create a contract, and the user confirms either way.
 
-## Extraction — OPEN (step 2)
+## Extraction — DONE (step 2)
 
-Nothing of this is built yet. What step 1 leaves ready for it: the `BavDocuments` table with its
-per-space unique `Sha256`, the nullable `BavContractId` (a document is stored before it is matched),
+Built as sketched. The pipeline and its four seams are declared in
+`Modules/Pension/PensionDocumentContracts.cs`, so each half could be written against a fixed shape:
+
+| Seam | Implementation | Notes |
+| --- | --- | --- |
+| `IBavDocumentBlobStore` | `PensionDocumentBlobStore` | AES-256-GCM per blob under `PensionStorage:RootPath` (`/data/pension`). The key is **HKDF-derived** from the data key under its own label, not the data key itself: blobs sit in a directory a backup job copies wholesale, and a leaked blob key must not be a field key. `yyyy/MM/{id:N}.bin` — a directory listing reveals neither space nor file type. |
+| `IBavDocumentTextSource` | `PensionDocumentTextSource` | `pdftotext -layout` first, OCR only where there is no text layer, **all pages** (capped at 30) — the payslip pipeline reads page one only. Failures surface as a category, never as tool output. |
+| `IBavDocumentParser` | `PensionStatementParser` | Deterministic, pure, locale-independent: amounts through `ImportNumber`, dates through `ImportDate`, plus a German month table. Money/percent/ISIN spans are blanked before the money scan, so `01.01.2026` is not read as 1.01. |
+| `IBavDocumentAiStructurer` | `PensionDocumentCodexStructurer` | Fills only what the parser left empty, never overwrites it, and is a no-op without a bridge. Its confidence is capped below any matched label, and a `0` from the model counts as "not stated". |
+
+`PensionDocumentStore` + `PensionDocumentEndpoints` add
+`POST|GET /api/pension/documents`, `GET|DELETE /documents/{id}`, `GET /documents/{id}/content`,
+`PUT /documents/{id}/review` and `POST /documents/{id}/commit`. The commit runs in one transaction, so a
+partial failure leaves a reviewable document rather than a half-written contract; a snapshot date the
+contract already holds is **skipped and named**, not an error that loses the rest of the document.
+
+`wwwroot/features/pension-documents.js` is the Dokumente tab and the review screen. It is a **page, not
+a dialog** — 56 fields in a dialog would have been the worst offender in the app (docs/UI_AUDIT.md) — and
+the only dialog in the feature is the commit confirmation: one sentence, two buttons, no inputs.
+
+Three decisions that are worth knowing before touching it:
+
+- **The policy number never reaches the browser.** The review draft is an API response, and an API
+  response is the one place a policy number leaks into a cache, a screenshot or a log — the same reason
+  `BavContractView` exposes only the last four characters. The consequence is handled rather than
+  accepted: a null coming back means *unchanged*, not *delete*, so the store puts the stored number back
+  before it commits. Without that, a reviewed draft would create a contract with no policy number even
+  though the document stated one, and the next statement would no longer match it.
+- **`applied`/`skipped` are machine tokens** (`BavCommitTokens`), bare or `token:detail`. The API has no
+  business holding German and the review screen cannot translate an English sentence.
+- **A fund allocation cannot name its document.** `BavAllocationWrite` and
+  `BavInvestmentAllocation` have no `BavDocumentId`, so a committed allocation carries only
+  `Source = document` plus its snapshot link. It is the one place the "every write names its document"
+  rule does not hold; closing it needs a column and a migration.
+
+What step 1 had left ready and step 2 used: the `BavDocuments` table with its per-space unique
+`Sha256`, the nullable `BavContractId` (a document is stored before it is matched),
 `ExtractionStatus`/`ExtractionConfidence`/`ExtractionSource`/`PageCount`/`StoragePath`, the
 `POST /api/pension/contracts/match` detection endpoint, and a `documentSha256` on every snapshot so a
 re-read of the same file creates nothing.

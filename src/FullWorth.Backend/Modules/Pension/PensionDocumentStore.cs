@@ -264,7 +264,33 @@ public sealed class PensionDocumentStore(
                 draft.Contract.EmployerName,
                 draft.Contract.RetirementDate), ct);
 
-        return new BavDocumentDetailView(ToView(document), draft, match, Warnings(document, draft));
+        // The policy number is read for matching and for the commit, and it stays on this side of the
+        // wire. Returning it here would put it in a browser cache, a screenshot and any log that ever
+        // records a response body - the same reason BavContractView only exposes the last four
+        // characters. Its provenance entry survives, so the review screen can say a number WAS found
+        // without showing it, and KeepStoredPolicyNumber puts it back on the way in.
+        return new BavDocumentDetailView(
+            ToView(document), Redacted(draft), match, Warnings(document, draft));
+    }
+
+    /// <summary>The draft as the browser may see it: everything except the policy number.</summary>
+    private static BavDocumentDraft? Redacted(BavDocumentDraft? draft) =>
+        draft is null ? null : draft with { Contract = draft.Contract with { PolicyNumber = null } };
+
+    /// <summary>
+    /// Puts the stored policy number back into a draft that came from the browser. The browser was
+    /// never given it, so a null here means "unchanged", not "delete" — without this, committing a
+    /// reviewed draft would create a contract with no policy number even though the document stated
+    /// one, and the next statement for that contract would no longer match it. A number the reviewer
+    /// actually typed wins, because then it is a correction.
+    /// </summary>
+    private BavDocumentDraft KeepStoredPolicyNumber(BavDocumentDraft draft, BavDocument document)
+    {
+        if (!string.IsNullOrWhiteSpace(draft.Contract.PolicyNumber)) return draft;
+        var stored = Deserialize(document.ExtractionDraftJson)?.Contract.PolicyNumber;
+        return string.IsNullOrWhiteSpace(stored)
+            ? draft
+            : draft with { Contract = draft.Contract with { PolicyNumber = stored } };
     }
 
     /// <summary>
@@ -373,7 +399,7 @@ public sealed class PensionDocumentStore(
 
         // The draft is now a person's statement about the document, not an extractor's, and both the
         // draft and the document say so — the review screen reads the source off the document.
-        var reviewed = request.Draft with { Source = BavExtractionSources.Manual };
+        var reviewed = KeepStoredPolicyNumber(request.Draft, document) with { Source = BavExtractionSources.Manual };
         document.ExtractionDraftJson = JsonSerializer.Serialize(reviewed, DraftJson);
         document.ExtractionStatus = BavExtractionStatuses.Reviewed;
         document.ExtractionSource = BavExtractionSources.Manual;
@@ -417,7 +443,7 @@ public sealed class PensionDocumentStore(
             return new(BavMutationResult.Invalid,
                 Error: "A commit either names the contract this document belongs to or asks for a new one, never both and never neither.");
 
-        var draft = request.Draft;
+        var draft = KeepStoredPolicyNumber(request.Draft, document);
         var invalid = ValidateDraft(draft);
         if (invalid is not null) return new(BavMutationResult.Invalid, Error: invalid);
 
@@ -472,7 +498,7 @@ public sealed class PensionDocumentStore(
 
             contractId = created.Contract.Id;
             contractCreated = true;
-            applied.Add("contract");
+            applied.Add(contractCreated ? BavCommitTokens.ContractCreated : BavCommitTokens.ContractMatched);
         }
         else
         {
@@ -491,9 +517,9 @@ public sealed class PensionDocumentStore(
         var valueDate = draft.Snapshot.EffectiveDate ?? draft.Contribution?.ValidFrom;
 
         if (!HasSnapshotFigure(draft.Snapshot))
-            skipped.Add("snapshot: the draft carries no dated figure");
+            skipped.Add(BavCommitTokens.SnapshotNoFigure);
         else if (draft.Snapshot.EffectiveDate is not { } effectiveDate)
-            skipped.Add("snapshot: the draft has no effective date");
+            skipped.Add(BavCommitTokens.SnapshotNoDate);
         else if (await db.BavSnapshots.AsNoTracking()
                      .AnyAsync(row => row.BavContractId == contractId && row.EffectiveDate == effectiveDate, ct))
         {
@@ -502,7 +528,7 @@ public sealed class PensionDocumentStore(
             // would double the history rather than extend it — PensionStore's own identity rule is
             // (contract, date, hash) and would let a different file through. The rest of the document
             // still commits; saying what was skipped beats a silent success.
-            skipped.Add($"snapshot:{effectiveDate:yyyy-MM-dd} already recorded");
+            skipped.Add($"{BavCommitTokens.SnapshotExists}:{effectiveDate:yyyy-MM-dd}");
         }
         else
         {
@@ -532,12 +558,12 @@ public sealed class PensionDocumentStore(
             {
                 case BavMutationResult.Success:
                     snapshotId = snapshot.Snapshot!.Id;
-                    applied.Add($"snapshot:{effectiveDate:yyyy-MM-dd}");
+                    applied.Add($"{BavCommitTokens.Snapshot}:{effectiveDate:yyyy-MM-dd}");
                     break;
                 case BavMutationResult.Conflict:
                     // Not an error: the contract already holds this dated state, and no field of an
                     // existing snapshot is ever overwritten.
-                    skipped.Add($"snapshot:{effectiveDate:yyyy-MM-dd} already recorded");
+                    skipped.Add($"{BavCommitTokens.SnapshotExists}:{effectiveDate:yyyy-MM-dd}");
                     break;
                 default:
                     await transaction.RollbackAsync(ct);
@@ -548,7 +574,7 @@ public sealed class PensionDocumentStore(
         if (draft.Contribution is { } contributionDraft && HasContributionFigure(contributionDraft))
         {
             var validFrom = contributionDraft.ValidFrom ?? draft.Snapshot.EffectiveDate;
-            if (validFrom is not { } from) skipped.Add("contribution: the draft has no date it is valid from");
+            if (validFrom is not { } from) skipped.Add(BavCommitTokens.ContributionNoDate);
             else
             {
                 var contribution = await contracts.AddContributionAsync(userId, spaceId, contractId, new BavContributionWrite(
@@ -577,13 +603,13 @@ public sealed class PensionDocumentStore(
                     await transaction.RollbackAsync(ct);
                     return new(contribution.Result, Error: contribution.Error);
                 }
-                applied.Add($"contribution:{from:yyyy-MM-dd}");
+                applied.Add($"{BavCommitTokens.Contribution}:{from:yyyy-MM-dd}");
             }
         }
 
         if (draft.Allocations.Count > 0)
         {
-            if (valueDate is not { } allocationDate) skipped.Add("allocations: the draft has no effective date");
+            if (valueDate is not { } allocationDate) skipped.Add(BavCommitTokens.AllocationsNoDate);
             else
                 foreach (var allocationDraft in draft.Allocations)
                 {
@@ -606,13 +632,13 @@ public sealed class PensionDocumentStore(
                         await transaction.RollbackAsync(ct);
                         return new(allocation.Result, Error: allocation.Error);
                     }
-                    applied.Add("allocation");
+                    applied.Add(BavCommitTokens.Allocations);
                 }
         }
 
         if (draft.Costs.Count > 0)
         {
-            if (valueDate is not { } costDate) skipped.Add("costs: the draft has no effective date");
+            if (valueDate is not { } costDate) skipped.Add(BavCommitTokens.CostsNoDate);
             else
                 foreach (var costDraft in draft.Costs)
                 {
@@ -640,7 +666,7 @@ public sealed class PensionDocumentStore(
                         await transaction.RollbackAsync(ct);
                         return new(cost.Result, Error: cost.Error);
                     }
-                    applied.Add($"cost:{costDraft.Kind}");
+                    applied.Add($"{BavCommitTokens.Costs}:{costDraft.Kind}");
                 }
         }
 

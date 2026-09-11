@@ -526,6 +526,56 @@ public sealed class PensionDocumentTests
         });
     }
 
+    /// <summary>
+    /// The policy number is personal data, and an API response is the one place it would leak into a
+    /// browser cache, a screenshot or any log that records a body - which is why BavContractView only
+    /// ever exposes the last four characters. The review draft is such a response, so the number is not
+    /// in it either.
+    ///
+    /// The consequence has to be handled rather than accepted: the browser was never given the number,
+    /// so a null coming back means "unchanged", not "delete". Without that, committing a reviewed draft
+    /// would create a contract with no policy number even though the document stated one - and the next
+    /// statement for that contract would no longer match it, which is the whole point of storing it.
+    /// </summary>
+    [Fact]
+    public async Task The_policy_number_never_reaches_the_browser_and_survives_the_round_trip()
+    {
+        using var harness = Harness.Create();
+        var scenario = await PensionContractIntegrationTests.SeedAsync(harness.Factory);
+        harness.Parser.Result = Draft();
+
+        var uploaded = await harness.UploadAsync(scenario.Owner, scenario.Space, Pdf("policy"));
+        var detail = (BavDocumentDetailView)uploaded.Value!;
+        var documentId = detail.Document.Id;
+
+        // Not in the upload response, and not in the detail the review screen loads.
+        Assert.Null(detail.Draft!.Contract.PolicyNumber);
+        var loaded = await harness.GetAsync(scenario.Owner, scenario.Space, documentId);
+        Assert.Null(loaded!.Draft!.Contract.PolicyNumber);
+        // But the screen can still say a number WAS found, because the match rule reports it fired.
+        Assert.NotNull(loaded.Match);
+
+        // A review that sends the redacted draft back must not erase it.
+        var reviewed = await harness.ReviewAsync(scenario.Owner, scenario.Space, documentId,
+            new BavDocumentReviewRequest(loaded.Draft!));
+        Assert.Equal(BavMutationResult.Success, reviewed.Result);
+        Assert.Null(((BavDocumentDetailView)reviewed.Value!).Draft!.Contract.PolicyNumber);
+
+        var committed = await harness.CommitAsync(scenario.Owner, scenario.Space, documentId,
+            new BavDocumentCommitRequest(loaded.Draft!, CreateContract: true));
+        Assert.Equal(BavMutationResult.Success, committed.Result);
+
+        // The contract carries the number the document stated, encrypted, with only its tail readable.
+        await harness.Factory.SeedAsync(async db =>
+        {
+            var contract = await db.BavContracts.AsNoTracking()
+                .SingleAsync(x => x.FullWorthSpaceId == scenario.Space && x.ProviderName == "Allianz Lebensversicherungs-AG");
+            Assert.False(string.IsNullOrWhiteSpace(contract.PolicyNumberEncrypted));
+            Assert.False(string.IsNullOrWhiteSpace(contract.PolicyNumberLookup));
+            Assert.Equal("4711", contract.PolicyNumberLast4);
+        });
+    }
+
     // ---- drafts ----
 
     /// <summary>The minimum a Standmitteilung states: provider, policy number, a date and a balance.</summary>
@@ -643,6 +693,13 @@ public sealed class PensionDocumentTests
 
         public Task<BavDocumentOutcome> DeleteAsync(Guid userId, Guid spaceId, Guid documentId) =>
             RunAsync(store => store.DeleteAsync(userId, spaceId, documentId, default));
+
+        public async Task<BavDocumentDetailView?> GetAsync(Guid userId, Guid spaceId, Guid documentId)
+        {
+            await using var scope = Factory.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<PensionDocumentStore>()
+                .GetAsync(userId, spaceId, documentId, default);
+        }
 
         public void Dispose() => Factory.Dispose();
     }

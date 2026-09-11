@@ -279,6 +279,10 @@ public static class BackendApplication
         // Singletons: the blob store holds the options plus a key derived once, the text source is stateless.
         builder.Services.AddSingleton<IBavDocumentBlobStore, PensionDocumentBlobStore>();
         builder.Services.AddSingleton<IBavDocumentTextSource, PensionDocumentTextSource>();
+        builder.Services.AddSingleton<IBavDocumentParser, PensionStatementParser>();
+        // Scoped, not singleton: the AI pass resolves the user's chosen model through IntelligenceDbContext.
+        builder.Services.AddScoped<IBavDocumentAiStructurer, PensionDocumentCodexStructurer>();
+        builder.Services.AddScoped<PensionDocumentStore>();
         builder.Services.AddScoped<TaxAnalysisService>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
@@ -367,6 +371,7 @@ public static class BackendApplication
         endpoints.MapCoachEndpoints();
         endpoints.MapTaxEndpoints();
         endpoints.MapPensionEndpoints();
+        endpoints.MapPensionDocumentEndpoints();
         endpoints.MapCategoryIntelligenceEndpoints();
         endpoints.MapCategoryEndpoints();
         endpoints.MapContractEndpoints();

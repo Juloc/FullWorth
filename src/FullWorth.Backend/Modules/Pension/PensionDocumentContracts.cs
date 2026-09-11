@@ -265,6 +265,39 @@ public sealed record BavDocumentCommitResult(
     IReadOnlyList<string> Applied,
     IReadOnlyList<string> Skipped);
 
+/// <summary>
+/// The vocabulary of <see cref="BavDocumentCommitResult.Applied"/> and
+/// <see cref="BavDocumentCommitResult.Skipped"/>. Machine tokens, never prose: the API has no
+/// business holding German, and the review screen cannot translate an English sentence. A token is
+/// either bare or <c>token:detail</c>, where the detail is an ISO date or a vocabulary value the UI
+/// already knows how to render.
+/// </summary>
+public static class BavCommitTokens
+{
+    public const string ContractCreated = "contract_created";
+    public const string ContractMatched = "contract_matched";
+
+    /// <summary>With the effective date: <c>snapshot:2025-12-31</c>.</summary>
+    public const string Snapshot = "snapshot";
+
+    /// <summary>The contract already holds that dated state, so nothing was added to it.</summary>
+    public const string SnapshotExists = "snapshot_exists";
+    public const string SnapshotNoFigure = "snapshot_no_figure";
+    public const string SnapshotNoDate = "snapshot_no_date";
+
+    /// <summary>With the date it is valid from.</summary>
+    public const string Contribution = "contribution";
+    public const string ContributionExists = "contribution_exists";
+    public const string ContributionNoDate = "contribution_no_date";
+
+    public const string Allocations = "allocations";
+    public const string AllocationsNoDate = "allocations_no_date";
+
+    /// <summary>With the cost kind: <c>costs:acquisition</c>.</summary>
+    public const string Costs = "costs";
+    public const string CostsNoDate = "costs_no_date";
+}
+
 public sealed record BavDocumentOutcome(
     BavMutationResult Result,
     object? Value = null,
