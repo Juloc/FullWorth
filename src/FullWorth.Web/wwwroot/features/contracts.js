@@ -1517,7 +1517,10 @@ function contractToWrite(c) {
     categoryId: c.categoryId || null, accountId: c.accountId || null,
     amount: c.amount, currency: c.currency, billingCycle: c.billingCycle || 'monthly',
     interval: c.interval || 1, startDate: c.startDate || null, endDate: c.endDate || null,
-    nextDueDate: c.nextDueDate || null, isActive: c.isActive !== false, notes: c.notes || null
+    nextDueDate: c.nextDueDate || null, isActive: c.isActive !== false, notes: c.notes || null,
+    // Sent explicitly, because the API leaves the stored value alone when the field is absent - and
+    // this helper is what the reactivate and merge paths round-trip through.
+    countsAsFixedCost: c.countsAsFixedCost !== false
   };
 }
 
@@ -1563,6 +1566,13 @@ async function openContractDialog(existing) {
         rawOptions: '<option value="">\u2014</option>' + categories },
       { name: 'account', kind: FieldKind.Select, label: t('Zahlungskonto', 'Payment account'), section: t('Zahlung', 'Payment'),
         options: [{ value: '', label: '\u2014' }, ...accounts.map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
+      // Visible rather than behind the disclosure, and for the same reason the asset editor keeps its
+      // net-worth switch: it decides whether this contract is subtracted from what is available, and a
+      // default-on switch nobody can see is a switch nobody knows they have.
+      { name: 'countsAsFixedCost', kind: FieldKind.Check, label: t('Als Fixkosten z\u00e4hlen', 'Counts as a fixed cost'),
+        hint: t('Wird vom verf\u00fcgbaren Geld abgezogen \u2013 in der Vorschau und im Cashflow. Aus: der Vertrag bleibt in der Liste, z\u00e4hlt aber nicht gegen dein Einkommen.',
+               'Subtracted from what is available \u2013 in the preview and in the cashflow. Off: the contract stays in the list but is not counted against your income.'),
+        section: t('Zahlung', 'Payment') },
 
       { name: 'nextDue', kind: FieldKind.Date, label: ctx.get('contracts.nextDue'), advanced: true },
       { name: 'start', kind: FieldKind.Date, label: ctx.get('contracts.startDate'), advanced: true, group: 'term' },
@@ -1578,6 +1588,7 @@ async function openContractDialog(existing) {
       cycle: contract.billingCycle || 'monthly',
       category: contract.categoryId || '',
       account: contract.accountId || '',
+      countsAsFixedCost: contract.countsAsFixedCost !== false,
       nextDue: dateValue(contract.nextDueDate),
       start: dateValue(contract.startDate),
       end: dateValue(contract.endDate),
@@ -1594,6 +1605,7 @@ async function openContractDialog(existing) {
         kind: values.kind,
         categoryId: values.category,
         accountId: values.account,
+        countsAsFixedCost: values.countsAsFixedCost,
         amount: values.amount,
         currency: String(values.currency || 'EUR').toUpperCase(),
         billingCycle: values.cycle,

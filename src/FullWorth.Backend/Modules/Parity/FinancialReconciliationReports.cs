@@ -235,6 +235,10 @@ public sealed class FinancialReconciliationReportService(
         var contracts = await db.Contracts.AsNoTracking().Where(c =>
             c.FullWorthSpaceId == fullWorthSpaceId &&
             c.IsActive &&
+            // The owner can take a contract out of the fixed costs without deactivating it; both places
+            // that turn contracts into a cost figure have to honour that, or the same contract reduces
+            // what is available in one report and not in the other.
+            c.CountsAsFixedCost &&
             c.MergedIntoContractId == null &&
             c.NextDueDate >= day &&
             c.NextDueDate <= horizon &&

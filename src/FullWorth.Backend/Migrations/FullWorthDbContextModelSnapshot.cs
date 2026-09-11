@@ -35,6 +35,9 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         });
         modelBuilder.Entity("FullWorth.Backend.Modules.Contracts.RecurringContract", entity =>
         {
+            // 20260911140000_ContractCountsAsFixedCost. Added with raw SQL, so the snapshot has to know
+            // it or startup migration trips PendingModelChangesWarning.
+            entity.Property<bool>("CountsAsFixedCost").HasColumnType("boolean");
             entity.Property<Guid?>("MergedIntoContractId").HasColumnType("uuid");
             entity.HasIndex("MergedIntoContractId");
             entity.HasOne("FullWorth.Backend.Modules.Contracts.RecurringContract", null)

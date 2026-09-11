@@ -27,6 +27,22 @@ public sealed class RecurringContract
     public DateOnly? NextDueDate { get; set; }
     public bool AutoDetected { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Whether this contract counts as a fixed cost — against the cashflow, and against the forward
+    /// preview on the wealth page. Default true, because that is what every consumer assumed before
+    /// the flag existed: they treated every active contract as a fixed cost.
+    ///
+    /// It exists because not every recurring contract is money leaving each month in a way that
+    /// should reduce what is available to spend. A contract that is really a savings plan, one whose
+    /// payment is already counted somewhere else, or one the owner simply wants out of the forecast
+    /// had no way to say so — and the alternative, deactivating it, also removes it from the list
+    /// where it belongs.
+    ///
+    /// Turning it off changes no history and no transaction. It only says: do not subtract this from
+    /// what is available.
+    /// </summary>
+    public bool CountsAsFixedCost { get; set; } = true;
     public string? Notes { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -53,7 +69,9 @@ public sealed record ContractView(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     decimal MonthlyEquivalent = 0,
-    decimal AnnualizedAmount = 0);
+    decimal AnnualizedAmount = 0,
+    /// <summary>See the entity: whether this contract is subtracted from what is available.</summary>
+    bool CountsAsFixedCost = true);
 
 public enum ContractAccessLevel
 {
@@ -482,7 +500,8 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             contract.CreatedAt,
             contract.UpdatedAt,
             monthly,
-            annualized);
+            annualized,
+            contract.CountsAsFixedCost);
     }
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
@@ -552,11 +571,17 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         entity.NextDueDate = request.NextDueDate;
         entity.IsActive = request.IsActive;
         entity.Notes = request.Notes?.Trim();
+        // Only when the client actually sent it. A save that omits the flag leaves it alone instead of
+        // resetting it to the default - otherwise every edit from an older client would quietly turn a
+        // contract back into a fixed cost.
+        if (request.CountsAsFixedCost is { } countsAsFixedCost) entity.CountsAsFixedCost = countsAsFixedCost;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
 
-public sealed record ContractWrite(string Name, string? ProviderName, string Kind, Guid? CategoryId, Guid? AccountId, decimal Amount, string Currency, string BillingCycle, int Interval, DateOnly? StartDate, DateOnly? EndDate, DateOnly? NextDueDate, bool IsActive, string? Notes);
+// CountsAsFixedCost is nullable on purpose: a client that does not send it must leave the stored value
+// alone rather than reset it to the default, which is what a plain bool would do on every save.
+public sealed record ContractWrite(string Name, string? ProviderName, string Kind, Guid? CategoryId, Guid? AccountId, decimal Amount, string Currency, string BillingCycle, int Interval, DateOnly? StartDate, DateOnly? EndDate, DateOnly? NextDueDate, bool IsActive, string? Notes, bool? CountsAsFixedCost = null);
 
 public sealed record ContractPayment(Guid Id, DateOnly? Date, decimal Amount, string Currency);
 public sealed record ContractActivity(
