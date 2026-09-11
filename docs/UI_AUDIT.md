@@ -111,9 +111,19 @@ behind "Mehr Filter". A filter that is set must stay visible even when collapsed
 filter silently changes what the list shows, which is worse than a long form. The existing filter badge
 already counts active filters, so the disclosure summary can say how many are set inside it.
 
-**Step 4 — the dialogs that are menus.** `contracts.js:888` and `transactions.js:606` become
-`mobileMode: 'sheet'` menus of row actions, not forms. This is the step the owner's "no clutter, collapse
-into `⋯`" rule asks for directly.
+**Step 4 — the dialogs that are menus.** `PARTLY DONE`, and the plan was wrong about one of the two.
+
+The **transaction drawer** was the real case: five buttons in one actions row — Löschen, Coach fragen,
+Aufteilen, Abbrechen, Anwenden — of which two are not decisions about the drawer at all but
+navigations away from it. They are now rows with a `›`, beside the receipt link that was already one,
+and the actions row holds three: the delete (separated by the shared spacer), Abbrechen, Anwenden.
+
+The **contract detail dialog** was re-examined and deliberately left alone. The census counted it as
+"11 buttons, no inputs", which is true and misleading: it is not a flat menu but a detail screen with
+labelled sections (Vertrag / Einstellungen), `›` affordances and a `<details>` for the extra data —
+the shape a native settings screen has. Turning it into a bottom-sheet menu would flatten a working
+hierarchy into a list. The count was the wrong measure here; a dialog is a menu when its buttons are
+siblings, not when there are many of them.
 
 **Step 5 — one dialog stylesheet.** Fold the per-feature dialog rules into the shared layer, replace the
 ~220 hardcoded hex literals with tokens, and settle on **one** maximum height and **one** mobile

@@ -146,8 +146,11 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 .fw-advanced-count:not(:empty){margin-left:6px;color:var(--text)}
 
 /* The destructive action is pushed away from the primary one, not merely coloured differently:
-   colour alone still leaves "Löschen" a thumb-slip from "Speichern" on a 375 px screen. */
-.fw-dialog-actions .fw-actions-spacer{flex:1 1 auto;min-width:var(--s3)}
+   colour alone still leaves "Löschen" a thumb-slip from "Speichern" on a 375 px screen.
+
+   Scoped to .dialog-actions, not to the generated .fw-dialog-actions, so a hand-written actions row
+   can separate its delete the same way - the transaction drawer does. */
+.dialog-actions .fw-actions-spacer{flex:1 1 auto;min-width:var(--s3)}
 @media(max-width:560px){
-  .fw-dialog-actions .fw-actions-spacer{flex-basis:100%;min-width:0;height:0}
+  .dialog-actions .fw-actions-spacer{flex-basis:100%;min-width:0;height:0}
 }

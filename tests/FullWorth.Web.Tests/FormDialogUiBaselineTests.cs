@@ -86,7 +86,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
         var css = await GetAsync("/dialogs.css");
 
         Assert.Contains("fw-actions-spacer", js);
-        Assert.Contains(".fw-dialog-actions .fw-actions-spacer", css);
+        Assert.Contains(".dialog-actions .fw-actions-spacer", css);
         // Roles only — no hand-rolled button styling anywhere in the module.
         Assert.Contains("buttonClass(", js);
         Assert.DoesNotContain("style=", js);
