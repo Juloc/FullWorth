@@ -1,4 +1,4 @@
-// Mobile-only interaction layer. Desktop controls remain unchanged.
+// Mobile-first interaction layer plus small cross-app identity fallbacks. Desktop controls remain unchanged.
 const MOBILE_QUERY = '(max-width: 767px)';
 const LONG_PRESS_MS = 520;
 const MOVE_TOLERANCE = 12;
@@ -73,8 +73,8 @@ function toggleDashboardWidget(card) {
 
 function enterDashboardEdit(widgetId) {
   if (!dashboardEditing()) {
-    // The desktop header action remains the single edit-mode code path; on mobile it is only visually
-    // hidden, so a long press can invoke it without duplicating dashboard state logic here.
+    // The contextual header action remains the single edit-mode code path; mobile renders it as a compact
+    // icon, and long-pressing a widget invokes exactly the same state transition.
     document.querySelector('#primary-action')?.click();
   }
 
@@ -154,12 +154,44 @@ function captureMobileClick(event) {
   }
 }
 
+function syncPrimaryActionKind() {
+  const button = document.querySelector('#primary-action');
+  if (!button) return;
+  const label = String(button.textContent || '').trim();
+  const edit = /bearbeit|edit|anpass|customi[sz]/i.test(label);
+  button.dataset.mobileKind = edit ? 'edit' : 'add';
+  if (label) button.setAttribute('aria-label', label);
+}
+
+function monogramHue(name) {
+  let hash = 0;
+  for (const ch of String(name || '')) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return hash % 360;
+}
+
+function repairBrokenIdentities() {
+  document.querySelectorAll('.fw-ident.fw-ident-failed').forEach(identity => {
+    if (identity.querySelector('img') || identity.textContent.trim()) return;
+    const scope = identity.closest('.fw-row,.row,.tx-row,.merchant-row,.contract-row') || identity.parentElement;
+    const label = scope?.querySelector('.fw-row-title,.row-title,.tx-cp-main strong,strong')?.textContent?.trim() || '?';
+    identity.textContent = (label[0] || '?').toUpperCase();
+    identity.classList.remove('fw-ident-failed');
+    identity.classList.add('fw-monogram');
+    identity.style.setProperty('--ident-h', String(monogramHue(label)));
+  });
+}
+
 export function initMobileInteractions() {
   document.addEventListener('pointerdown', beginHold, true);
   document.addEventListener('pointermove', moveHold, true);
   document.addEventListener('pointerup', endHold, true);
   document.addEventListener('pointercancel', endHold, true);
   document.addEventListener('click', captureMobileClick, true);
+  document.addEventListener('contextmenu', event => {
+    if (!isMobile()) return;
+    if (event.target.closest('#transactions-body .tx-row,#view-dashboard #dashboard-grid .widget'))
+      event.preventDefault();
+  }, true);
   document.addEventListener('change', event => {
     if (event.target.matches?.('[data-tx-select]')) queueMicrotask(syncTransactionSelectionUi);
   }, true);
@@ -171,6 +203,16 @@ export function initMobileInteractions() {
   if (body) new MutationObserver(() => queueMicrotask(syncTransactionSelectionUi))
     .observe(body, { childList: true, subtree: true });
 
+  const primary = document.querySelector('#primary-action');
+  if (primary) new MutationObserver(syncPrimaryActionKind)
+    .observe(primary, { childList: true, subtree: true, characterData: true });
+
+  const main = document.querySelector('main');
+  if (main) new MutationObserver(() => queueMicrotask(repairBrokenIdentities))
+    .observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
   window.matchMedia(MOBILE_QUERY).addEventListener('change', syncTransactionSelectionUi);
+  syncPrimaryActionKind();
   syncTransactionSelectionUi();
+  repairBrokenIdentities();
 }
