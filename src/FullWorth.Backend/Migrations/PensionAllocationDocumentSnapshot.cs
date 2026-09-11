@@ -14,6 +14,7 @@ namespace FullWorth.Backend.Migrations;
 internal static class PensionAllocationDocumentSnapshot
 {
     private const string Allocation = "FullWorth.Backend.Modules.Pension.BavInvestmentAllocation";
+    private const string Document = "FullWorth.Backend.Modules.Pension.BavDocument";
 
     internal static void Apply(ModelBuilder modelBuilder)
     {
@@ -21,6 +22,10 @@ internal static class PensionAllocationDocumentSnapshot
         {
             b.Property<Guid?>("BavDocumentId").HasColumnType("uuid");
             b.HasIndex("BavDocumentId");
+            // The relationship, not just the column: the configuration declares HasOne<BavDocument>, so a
+            // snapshot that only knows the property still differs from the model and startup migration
+            // trips PendingModelChangesWarning - which is exactly what happened.
+            b.HasOne(Document, null).WithMany().HasForeignKey("BavDocumentId").OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
