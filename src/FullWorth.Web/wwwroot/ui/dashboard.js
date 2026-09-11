@@ -20,12 +20,49 @@ const CATALOG = {
   'budget-focus':  { title: 'dashboard.budget', width: 6 },
   'upcoming':      { title: 'dashboard.upcoming', width: 4 },
   'recent-tx':     { title: 'widgets.recent', width: 8 },
+  'pension':       { title: 'widgets.pension', width: 4, copy: 'title' },
 };
+
+// The pension widget's wording lives here because locales/{de,en}.json have no pension keys yet - the
+// pension module carries its own copy for the same reason (docs/PENSION.md). i18n.get falls back to the
+// raw KEY, so without this the dashboard would print "widgets.pension" at people. `copy` on a catalog
+// entry names the key to fall back to; delete it once the locale files gain the entry.
+const PENSION_COPY = {
+  de: {
+    title: 'Altersvorsorge',
+    balance: 'Guthaben heute',
+    guaranteed: 'Garantierte Rente / Monat',
+    projected: 'Prognose Rente / Monat',
+    projectionNote: 'Die Prognose ist keine Garantie und kein heutiges Vermögen.',
+    incomplete: 'Unvollständig: für {currencies} fehlt ein Wechselkurs. Diese Beträge sind nicht in der Summe enthalten.',
+    empty: 'Noch kein Vorsorgevertrag erfasst.'
+  },
+  en: {
+    title: 'Pension',
+    balance: 'Balance today',
+    guaranteed: 'Guaranteed annuity / month',
+    projected: 'Projected annuity / month',
+    projectionNote: 'A projection is neither a guarantee nor money you have today.',
+    incomplete: 'Incomplete: no FX rate for {currencies}. Those amounts are not part of the total.',
+    empty: 'No pension contract recorded yet.'
+  }
+};
+function pensionCopy(key) {
+  const lang = (document.documentElement.lang || '').startsWith('en') ? 'en' : 'de';
+  return PENSION_COPY[lang][key] || key;
+}
+
+// A translated widget title, or its local copy when the locale file has no entry for it.
+function widgetTitle(ctx, meta) {
+  const translated = ctx.get(meta.title);
+  return (meta.copy && translated === meta.title) ? pensionCopy(meta.copy) : translated;
+}
 const DEFAULT_LAYOUT = [
   { id: 'w1', type: 'net-worth' }, { id: 'w2', type: 'available' },
   { id: 'w3', type: 'accounts' },
   { id: 'w4', type: 'income-expense' }, { id: 'w5', type: 'budget-focus' },
   { id: 'w6', type: 'upcoming' }, { id: 'w7', type: 'recent-tx' },
+  { id: 'w8', type: 'pension' },
 ];
 
 const WIDTHS = [4, 6, 8, 12]; // desktop grid spans offered per widget (LayoutDesktop, §7)
@@ -103,7 +140,7 @@ export async function renderDashboard(ctx) {
     const meta = CATALOG[inst.type];
     if (!meta) return;
     const width = WIDTHS.includes(inst.w) ? inst.w : meta.width;
-    const title = inst.title ? inst.title : ctx.get(meta.title);
+    const title = inst.title ? inst.title : widgetTitle(ctx, meta);
     const card = document.createElement('article');
     card.className = `panel widget span-${width}`;
     card.dataset.id = inst.id;
@@ -144,7 +181,7 @@ async function mutate(ctx, fn) { const next = fn(await loadLayout(ctx)); await s
 function openCatalog(ctx) {
   const current = new Set();
   const options = Object.entries(CATALOG).map(([type, m]) =>
-    `<button type="button" data-add="${type}"><strong>${ctx.esc(ctx.get(m.title))}</strong></button>`).join('');
+    `<button type="button" data-add="${type}"><strong>${ctx.esc(widgetTitle(ctx, m))}</strong></button>`).join('');
   const dlg = ctx.dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get('dashboard.addWidget'))}</h2><button value="cancel" data-close>×</button></div><div class="choice-grid widget-catalog">${options}</div></form>`);
   dlg.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', async () => {
     dlg.close();
@@ -177,7 +214,7 @@ function openWidgetConfig(ctx, inst, meta) {
     extra += `<label>${ctx.esc(ctx.get('dashboard.rowLimit'))}<select name="limit"><option value="">${ctx.esc(ctx.get('dashboard.rowLimit_default'))}</option>${opts}</select></label>`;
   }
   const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get('dashboard.configure'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <label>${ctx.esc(ctx.get('dashboard.widgetTitle'))}<input name="title" maxlength="60" placeholder="${ctx.esc(ctx.get(meta.title))}" value="${ctx.esc(inst.title || '')}"></label>
+    <label>${ctx.esc(ctx.get('dashboard.widgetTitle'))}<input name="title" maxlength="60" placeholder="${ctx.esc(widgetTitle(ctx, meta))}" value="${ctx.esc(inst.title || '')}"></label>
     <label>${ctx.esc(ctx.get('dashboard.width'))}<select name="width">${widthOpts}</select></label>
     ${extra}
     <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
@@ -377,6 +414,29 @@ function renderWidget(type, ctx, body, data, cfg) {
     // Contracts due soon, with the shared brand/category identity (UX rework §4/Phase B).
     const items = d?.upcoming || [];
     body.innerHTML = items.length ? items.slice(0, cfg?.limit || 6).map(x => `<div class="fw-row fw-row-plain"><span class="tx-ident-slot">${identityIcon(x.providerName || x.name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey })}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.name)}</div><div class="fw-row-sub">${ctx.date(x.nextDueDate)}</div></div><div class="fw-row-amt amount negative">${money(x.amount, x.currency)}</div></div>`).join('') : emptyState(ctx, 'dashboard.noUpcoming');
+    return;
+  }
+  if (type === 'pension') {
+    // Own round-trip, like recent-tx: /api/pension/overview is not part of the shared dashboard call,
+    // and fetching it in gatherData would cost every dashboard a request for a widget most layouts
+    // do not carry.
+    body.innerHTML = `<div class="row-sub">${ctx.esc(ctx.get('common.loading'))}</div>`;
+    ctx.api('api/pension/overview').then(o => {
+      if (!o || !Number(o.contractCount)) { body.innerHTML = `<div class="state-empty"><div class="row-sub">${ctx.esc(pensionCopy('empty'))}</div></div>`; return; }
+      const pcur = o.currency || cur;
+      // The balance is money today; the two annuities are NOT, so they live in their own labelled
+      // split below it and the projection carries its own sentence. Guarantee and projection are
+      // separate columns in the database exactly so a screen cannot present one as the other.
+      const annuities = `<div class="widget-split dash-metric-split"><span>${ctx.esc(pensionCopy('guaranteed'))}: ${money(o.guaranteedMonthlyAnnuity ?? 0, pcur)}</span><span>${ctx.esc(pensionCopy('projected'))}: ${money(o.projectedMonthlyAnnuity ?? 0, pcur)}</span></div>`;
+      const incomplete = o.isComplete === false
+        ? `<div class="fx-incomplete">${ctx.esc(pensionCopy('incomplete').replace('{currencies}', (o.missingCurrencies || []).join(', ')))}</div>`
+        : '';
+      body.innerHTML = `<div class="dash-nw" role="button" tabindex="0" data-pension aria-label="${ctx.esc(pensionCopy('title'))}"><div class="widget-metric dash-metric"><strong>${money(o.totalBalance ?? 0, pcur)}</strong></div><div class="row-sub">${ctx.esc(pensionCopy('balance'))}</div>${annuities}<div class="row-sub">${ctx.esc(pensionCopy('projectionNote'))}</div>${incomplete}</div>`;
+      const nav = () => ctx.navScope('pension', '');
+      const el = body.querySelector('[data-pension]');
+      el?.addEventListener('click', nav);
+      el?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nav(); } });
+    }).catch(() => { body.innerHTML = errorState(ctx); });
     return;
   }
   if (type === 'recent-tx') {

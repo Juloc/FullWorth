@@ -172,7 +172,10 @@
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
     'assets': [
       { id: 'as1', name: 'Wohnung', kind: 'real_estate', currentValue: 9000, currency: 'EUR', includeInNetWorth: true },
-      { id: 'as2', name: 'IDR Anlage', kind: 'other', currentValue: 5000000, currency: 'IDR', includeInNetWorth: true }
+      { id: 'as2', name: 'IDR Anlage', kind: 'other', currentValue: 5000000, currency: 'IDR', includeInNetWorth: true },
+      // The asset the bAV contract below owns: one per contract, which is how the balance reaches net
+      // worth without a manual link step.
+      { id: 'as3', name: 'bAV Allianz', kind: 'insurance_pension', currentValue: 2000, currency: 'EUR', includeInNetWorth: true }
     ],
     'networth': { total: 20681.65, series: [], groups: [] },
     // Wealth view. The history rises by a flat 600 per month over exactly 12 months, so the
@@ -195,7 +198,10 @@
       // Real estate is its own converted slice of manualAssets, so the allocation donut never has to
       // guess it from native asset values.
       manualAssets: { amount: 12000, isComplete: true }, investments: { amount: 20000, isComplete: true },
-      realEstateAssets: { amount: 9000 }
+      realEstateAssets: { amount: 9000 },
+      // The bAV balance, a second converted slice of the same manualAssets. It is also what the page
+      // labels "davon gebunden" - there is no separate tied total to keep in sync here.
+      pensionAssets: { amount: 2000, isComplete: true }
     },
     'wealth/history': [
       { date: '2025-09-09', netWorth: 41050.30 }, { date: '2025-10-09', netWorth: 41650.30 },
@@ -215,6 +221,7 @@
 
     // ---- Altersvorsorge (bAV) ----
     'pension/overview': {
+      contractCount: 2, activeCount: 1, paidUpCount: 1,
       currency: 'EUR', totalBalance: 18342.77, monthlyEmployeeContribution: 169,
       monthlyEmployerContribution: 169, guaranteedMonthlyAnnuity: 108.98,
       projectedMonthlyAnnuity: 194.13, isComplete: true, missingCurrencies: [],
