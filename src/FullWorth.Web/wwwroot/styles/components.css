@@ -9,7 +9,12 @@
 .span-2{grid-column:span 2}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
 .panel h2,.panel-head h2,.panel-head h3{font-size:15px;font-weight:600;margin:0}
-.rows{display:grid}
+/* The shared list container, and it had the .dialog-card bug: a grid with no grid-template-columns has
+   one implicit `auto` column, which resolves to MAX-CONTENT. Measured on the contracts duplicate-review
+   card at 375px: the column came out 344px inside a 309px container, so every row overflowed by 35px.
+   Seven feature modules render class="rows", so this was the same defect in seven places. */
+.rows{display:grid;grid-template-columns:minmax(0,1fr)}
+.rows>*{min-width:0}
 .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
 .row-main{min-width:0}

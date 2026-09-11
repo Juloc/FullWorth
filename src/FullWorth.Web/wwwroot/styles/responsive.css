@@ -1,6 +1,10 @@
 @media(max-width:1023px){
   #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
-  #view-transactions table{min-width:0;width:100%}
+  /* table-layout:fixed, because width:100% was being ignored. A CSS table cannot be narrower than its
+     min-content, and this one measured 377px inside a 343px panel - so every row hung 34px past its
+     container and the right ~12px of every amount was clipped off a 375px screen ("-12,40 €" ended at
+     387). Nothing is lost: under 1023px the rows are display:flex, so the table columns size nothing. */
+  #view-transactions table{min-width:0;width:100%;table-layout:fixed}
   #view-transactions thead{display:none}
   #view-transactions .tx-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
   #view-transactions .tx-row>td{display:none;border:0;padding:0}

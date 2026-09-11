@@ -278,6 +278,38 @@ counts at all and a default-on switch behind "Mehr" is a switch nobody knows the
 
 ---
 
+## The re-sweep after the dialog work
+
+All fourteen views, at 1280×900 and 375×812, after everything above. Desktop was clean. On the phone,
+two views had content past the right edge **while the page itself reported no horizontal overflow** —
+which is the worse case: the content is clipped rather than scrollable, so it cannot be reached at all.
+Both were the same root cause as the dialogs, and both are fixed:
+
+- **Transaction amounts were clipped on a phone.** The `<table>` measured 377 px inside a 343 px panel,
+  because a CSS table cannot be narrower than its min-content and therefore ignored its own
+  `width:100%`. Every row hung 34 px past its container and the right ~12 px of every amount was cut
+  off: "-12,40 €" ended at 387 on a 375 px screen. `table-layout:fixed` under 1023 px fixes it — and
+  costs nothing, because below that width the rows are already `display:flex`, so the table columns
+  size nothing. Amounts now end at 353.
+- **The contracts filter button sat 14 px off screen.** `.contracts-listcard` is a grid with no
+  `grid-template-columns`, so its single implicit `auto` column resolved to **max-content** — 361 px
+  inside a 343 px card. Exactly the `.dialog-card` bug, on a page.
+- **And the same bug in the shared list container.** `.rows` — `display:grid` with no columns, rendered
+  by seven feature modules — sized to max-content too: measured 344 px inside a 309 px container on the
+  contracts duplicate-review card. One rule in `components.css` fixed all seven.
+
+After the three fixes: fourteen views, both widths, zero elements past the right edge, zero horizontal
+page overflow, no console output.
+
+**No guard for this one, deliberately.** The pattern is "a grid with no declared columns", and 224 of
+the 350 `display:grid` rules in `wwwroot` declare none. A guard over that would be a 224-entry
+allow-list, which teaches a reader nothing and would be silenced rather than fixed. Most of those
+grids hold short content and never overflow; the defect only appears when a long string meets a narrow
+container, which is a **layout** question, not a source question. The browser sweep above is the tool
+for it — it found all three in one pass.
+
+---
+
 ## Measured layout findings
 
 ### Page bodies: clean
