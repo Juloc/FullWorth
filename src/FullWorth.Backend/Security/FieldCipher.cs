@@ -94,6 +94,20 @@ public sealed class FieldCipher
     }
 
     /// <summary>
+    /// A subkey of the data key for a second at-rest consumer, derived with HKDF under its own
+    /// <paramref name="info"/> label — the same construction the blind-index key already uses. It exists
+    /// so the pension document blob store can encrypt files with a key of its own instead of the data
+    /// key: the blobs live in a bind-mounted directory a backup job can copy wholesale, and HKDF being
+    /// one-way means a leaked blob key yields neither the data key nor an encrypted field. Null when no
+    /// key is configured, mirroring <see cref="Null"/>, so a keyless dev/test host keeps working.
+    /// </summary>
+    public byte[]? DeriveSubKey(string info, int length = 32)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(info);
+        return _key is null ? null : HKDF.DeriveKey(HashAlgorithmName.SHA256, _key, length, info: Encoding.UTF8.GetBytes(info));
+    }
+
+    /// <summary>
     /// Deterministic keyed hash for values that must stay uniquely constrained / looked up by value
     /// after the value itself is encrypted. Identity cipher returns the input so dev/test keep working.
     /// </summary>
