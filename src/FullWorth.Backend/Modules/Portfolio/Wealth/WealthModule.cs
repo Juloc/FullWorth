@@ -64,7 +64,13 @@ public sealed record WealthOverviewView(
     // as its own slice. The frontend used to derive that slice from a ratio of NATIVE asset values,
     // which is meaningless across currencies: one 5 000 000 IDR asset made a 300 000 EUR house look
     // like a rounding error.
-    WealthComponentView? RealEstateAssets = null);
+    WealthComponentView? RealEstateAssets = null,
+    // Also a SUBSET of ManualAssets, same conversion: the occupational-pension balances, so the
+    // allocation chart can name them and the page can say how much of the net worth is tied until
+    // retirement. There is deliberately NO second "tied wealth" field: today the tied part IS this
+    // number, and a second field carrying the same value is a field that drifts the day a third
+    // asset kind becomes tied. Free vs tied is a label the frontend puts on this component.
+    WealthComponentView? PensionAssets = null);
 
 public sealed record WealthHistoryPoint(
     DateOnly Date,
@@ -162,6 +168,10 @@ public sealed class WealthOverviewService(
             .Where(row => string.Equals(row.Kind, AssetKinds.RealEstate, StringComparison.OrdinalIgnoreCase))
             .Select(row => row.Value)
             .ToList();
+        var pensionAssets = manualAssetRows
+            .Where(row => string.Equals(row.Kind, AssetKinds.InsurancePension, StringComparison.OrdinalIgnoreCase))
+            .Select(row => row.Value)
+            .ToList();
 
         var loanRows = await db.Loans.AsNoTracking()
             .Where(loan => loan.FullWorthSpaceId == fullWorthSpaceId && loan.IsActive)
@@ -181,6 +191,11 @@ public sealed class WealthOverviewService(
         // currencies are already in the set from the line above.
         var realEstateView = ConvertComponent(
             realEstateAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        // Same snapshot and same day as the manual-assets total above, for the same reason: the tied
+        // figure is shown next to the total, so a second rate set would let the two contradict each
+        // other on screen. Its missing currencies are already counted by the manualAssets line.
+        var pensionView = ConvertComponent(
+            pensionAssets, targetCurrency, today, fx, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var loansView = ConvertComponent(loanRows, targetCurrency, today, fx, missingCurrencies);
         var otherLiabilitiesView = ConvertComponent(otherLiabilities, targetCurrency, today, fx, missingCurrencies);
 
@@ -256,7 +271,8 @@ public sealed class WealthOverviewService(
                 missingCurrencies.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()).ToArray(),
                 emergencyFund,
                 excludedInvestmentAccounts.Order().ToArray(),
-                realEstateView));
+                realEstateView,
+                pensionView));
     }
 
     public async Task<WealthHistoryOutcome> GetHistoryForUserAsync(

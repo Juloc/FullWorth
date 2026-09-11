@@ -45,6 +45,9 @@ const COPY = {
     investmentHint: 'Aktien, ETFs und andere Wertpapiere werden über ein Depot verwaltet und nicht als manueller Wert angelegt.',
     investmentTotal: 'Investments gesamt', portfolio: 'Depot', active: 'Aktiv',
     realEstate: 'Immobilien', vehicles: 'Fahrzeuge', otherValues: 'Weitere Werte',
+    pensionAssets: 'Altersvorsorge',
+    tiedLabel: 'davon gebunden',
+    tiedNote: 'Altersvorsorge – dieses Guthaben steht erst ab Rentenbeginn zur Verfügung.',
     valueHistory: 'Werthistorie', details: 'Details', updateValue: 'Wert aktualisieren', current: 'Aktuell',
     noValuations: 'Noch keine Bewertungen vorhanden.', fxIncomplete: 'Gesamtsumme unvollständig: Für mindestens eine Währung fehlt ein Wechselkurs.',
     fxIncompleteWhich: 'Unvollständig, weil ein Wechselkurs fehlt',
@@ -83,6 +86,9 @@ const COPY = {
     investmentHint: 'Stocks, ETFs and other securities are managed through an investment portfolio, not as manual assets.',
     investmentTotal: 'Investments total', portfolio: 'Portfolio', active: 'Active',
     realEstate: 'Real estate', vehicles: 'Vehicles', otherValues: 'Other assets',
+    pensionAssets: 'Pension',
+    tiedLabel: 'of which tied',
+    tiedNote: 'Pension — this balance is not available to you before retirement.',
     valueHistory: 'Value history', details: 'Details', updateValue: 'Update value', current: 'Current', noValuations: 'No valuations yet.',
     fxIncomplete: 'Total is incomplete: at least one required FX rate is missing.', dataIncomplete: 'Data incomplete', composition: 'Composition',
     fxIncompleteWhich: 'Incomplete because an FX rate is missing',
@@ -502,6 +508,16 @@ function bindNetWorthScrubber(hero) {
   });
 }
 
+// "davon gebunden": the part of the figure above that cannot be spent before retirement. It reads the
+// SAME component the allocation ring uses - there is deliberately no separate "tied" total in the API,
+// because two fields carrying one number drift apart. Rendered only when there is an amount: a
+// "0,00 € gebunden" row would state a restriction that does not exist.
+function tiedWealthLine(overview, currency) {
+  const tied = num(overview?.pensionAssets?.amount);
+  if (tied <= 0.005) return '';
+  return `<p class="row-sub" data-tied-wealth>${ctx.esc(t('tiedLabel'))}: ${ctx.money(tied, currency)} · ${ctx.esc(t('tiedNote'))}</p>`;
+}
+
 function buildHeroCard() {
   const overview = nw.overview;
   const currency = nw.currency;
@@ -513,7 +529,7 @@ function buildHeroCard() {
   const fx = overview.isComplete ? '' : `<p class="nw-fx">${fxIncompleteText(overview)}</p>`;
   const rates = fxRatesText(overview);
   const rateLine = rates ? `<p class="nw-fx nw-fx-rates">${rates}</p>` : '';
-  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div></div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${forecastMarkup()}${metrics}${fx}${rateLine}`;
+  const body = `<div class="nw-hero-head"><div class="nw-hero-value"><span class="fw-summary-label">${ctx.esc(ctx.get('dashboard.netWorth'))}</span><div class="fw-summary-value">${ctx.money(overview.netWorth, currency)}</div>${tiedWealthLine(overview, currency)}</div><div class="nw-hero-trend">${heroTrendInner()}</div></div>${seg}${custom}<div class="nw-chart">${trendChartSvg(nw.history)}</div>${forecastMarkup()}${metrics}${fx}${rateLine}`;
   return sectionCard(t('trendTitle'), body, { className: 'nw-hero' });
 }
 
@@ -956,13 +972,17 @@ function buildAllocationCard() {
   // subset of. This used to derive the slice from a ratio of NATIVE asset values, which is meaningless
   // across currencies: one 5.000.000 IDR asset made a 300.000 EUR house look like a rounding error.
   const realEstate = Math.min(manualTotal, num(overview.realEstateAssets?.amount));
-  const otherAssets = manualTotal - realEstate;
+  // The pension slice comes from the backend for the same reason, and is clamped against what is left
+  // of the manual total so the ring's slices can never add up to more than the block they came from.
+  const pension = Math.min(Math.max(manualTotal - realEstate, 0), num(overview.pensionAssets?.amount));
+  const otherAssets = manualTotal - realEstate - pension;
   const liabilities = num(overview.totalLiabilities);
 
   const categories = [
     { label: t('accounts'), amount: accounts, color: 'var(--cat-2)' },
     { label: t('investments'), amount: investments, color: 'var(--cat-1)' },
     { label: t('realEstate'), amount: realEstate, color: 'var(--cat-3)' },
+    { label: t('pensionAssets'), amount: pension, color: 'var(--cat-5)' },
     { label: t('otherValues'), amount: otherAssets, color: 'var(--cat-4)' }
   ];
   // A donut cannot draw a negative slice, so a category that nets negative (e.g. an overdrawn account
