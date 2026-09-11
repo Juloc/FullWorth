@@ -249,6 +249,34 @@
         includeInNetWorth: true, hasPolicyNumber: false, policyNumberLast4: null,
         snapshotCount: 0, holdsCapital: true, isPaidUp: true,
         currentSnapshot: null, currentContribution: null
+      },
+      // A contract with a guarantee but NO annuity factor: its projected MONTHLY figure comes back
+      // null, and the screen has to say why rather than blanking the row.
+      {
+        id: 'bav3', providerName: 'Pensionskasse Metall VVaG',
+        tariffName: 'Klassik Garantie', employerName: 'Muster Maschinenbau GmbH',
+        implementationRoute: 'pension_fund', status: 'active', currency: 'EUR',
+        includeInNetWorth: true, hasPolicyNumber: false, policyNumberLast4: null,
+        startDate: '2019-04-01', retirementDate: '2049-05-01', guaranteeQuotaPercent: 100,
+        guaranteedAnnuityFactor: null, snapshotCount: 2, holdsCapital: true, isPaidUp: false,
+        currentSnapshot: {
+          effectiveDate: '2025-12-31', currency: 'EUR', balance: 2362.37, guaranteedBalance: 2362.37,
+          source: 'document', isCurrent: true, projectionIsSimulation: false
+        },
+        currentContribution: { employeeAmount: 50, employerTotalAmount: 0, partsTotalAmount: 50, currency: 'EUR', cycle: 'monthly', validFrom: '2025-01-01' }
+      },
+      // A foreign-currency contract with no rate: it is what makes a projection INCOMPLETE, and the
+      // totals have to say so instead of quietly dropping it.
+      {
+        id: 'bav4', providerName: 'Swiss Life AG', tariffName: 'Vorsorge CH',
+        employerName: 'Muster Schweiz AG', implementationRoute: 'direct_insurance', status: 'active',
+        currency: 'CHF', includeInNetWorth: true, hasPolicyNumber: false, policyNumberLast4: null,
+        startDate: '2021-01-01', retirementDate: '2052-02-01', snapshotCount: 1,
+        holdsCapital: true, isPaidUp: false,
+        currentSnapshot: {
+          effectiveDate: '2025-12-31', currency: 'CHF', balance: 4100, source: 'document', isCurrent: true
+        },
+        currentContribution: null
       }
     ],
 
@@ -425,6 +453,124 @@
     skipped: ['snapshot_exists:2024-12-31', 'ein_serverseitiger_token_den_das_modul_nicht_kennt']
   };
 
+  // ---- Altersvorsorge: the projection (POST, so it never reaches the GET fixture map) ----
+  //
+  // Computed rather than canned, because the point of the Simulation tab is that the figures MOVE
+  // with the scenario: a hardcoded answer would look identical at 3 % and at 7 % and would hide the
+  // one thing the screen is for. The monthly rate is the twelfth root of the annual one, the way
+  // IBavProjectionCalculator states it - annual / 12 overstates a 7 % assumption by ~0.23 pp a year.
+  function grow(balance, monthly, months, annualPercent, annualCostPercent) {
+    const rate = Math.pow(1 + annualPercent / 100, 1 / 12) - 1;
+    const cost = Math.pow(1 - annualCostPercent / 100, 1 / 12) - 1;
+    let value = Number(balance) || 0;
+    for (let index = 0; index < months; index += 1) value = (value + monthly) * (1 + rate) * (1 + cost);
+    return Math.round(value * 100) / 100;
+  }
+  const round2 = value => Math.round(value * 100) / 100;
+
+  // Every case the tab has to render, in one answer: two projectable contracts (one of them without an
+  // annuity factor), one excluded for a missing retirement date, one for a missing rate - which is
+  // also what makes the result incomplete.
+  function pensionProjection(request) {
+    const returnPercent = Number(request?.returnPercent ?? 5);
+    const paying = request?.continueContributions !== false;
+    const ids = request?.contractIds;
+    const wanted = id => !Array.isArray(ids) || ids.length === 0 || ids.includes(id);
+
+    const specs = [
+      {
+        contractId: 'bav1', providerName: 'Allianz Lebensversicherung AG', months: 311,
+        balance: 15980.4, asOf: '2024-12-31', employee: 169, employer: 169, cost: 0.9,
+        guaranteedCapital: 28400, guaranteedAnnuity: 108.98, annuityFactor: 26.42, estimates: true
+      },
+      {
+        contractId: 'bav3', providerName: 'Pensionskasse Metall VVaG', months: 287,
+        balance: 2362.37, asOf: '2025-12-31', employee: 50, employer: 0, cost: 0.6,
+        guaranteedCapital: 19850, guaranteedAnnuity: 61.4, annuityFactor: null, estimates: false
+      }
+    ];
+
+    const projected = specs.filter(spec => wanted(spec.contractId)).map(spec => {
+      const monthly = paying ? spec.employee + spec.employer : 0;
+      const capital = grow(spec.balance, monthly, spec.months, returnPercent, spec.cost);
+      return {
+        contractId: spec.contractId, providerName: spec.providerName, currency: 'EUR',
+        currentBalance: spec.balance, balanceAsOf: spec.asOf,
+        guaranteedCapital: spec.guaranteedCapital, guaranteedMonthlyAnnuity: spec.guaranteedAnnuity,
+        projectedCapital: capital,
+        // Null on purpose where the contract states no factor: a monthly annuity invented from a
+        // capital sum would be the most misleading number on the screen.
+        projectedMonthlyAnnuity: spec.annuityFactor == null ? null : round2(capital / 10000 * spec.annuityFactor),
+        returnPercent, monthsToRetirement: spec.months,
+        employeeContributionsAhead: paying ? round2(spec.employee * spec.months) : 0,
+        employerContributionsAhead: paying ? round2(spec.employer * spec.months) : 0,
+        costsApplied: round2(capital * spec.cost / 100), costsIncludeEstimates: spec.estimates,
+        blocker: null
+      };
+    });
+
+    const excluded = [
+      {
+        contractId: 'bav2', providerName: 'Unterstützungskasse der Muster Maschinenbau GmbH e.V.',
+        currency: 'EUR', currentBalance: null, balanceAsOf: null, guaranteedCapital: null,
+        guaranteedMonthlyAnnuity: null, projectedCapital: null, projectedMonthlyAnnuity: null,
+        returnPercent, monthsToRetirement: 0, employeeContributionsAhead: 0,
+        employerContributionsAhead: 0, costsApplied: 0, costsIncludeEstimates: false,
+        blocker: 'no_retirement_date'
+      },
+      {
+        contractId: 'bav4', providerName: 'Swiss Life AG', currency: 'CHF', currentBalance: 4100,
+        balanceAsOf: '2025-12-31', guaranteedCapital: null, guaranteedMonthlyAnnuity: null,
+        projectedCapital: null, projectedMonthlyAnnuity: null, returnPercent,
+        monthsToRetirement: 316, employeeContributionsAhead: 0, employerContributionsAhead: 0,
+        costsApplied: 0, costsIncludeEstimates: false, blocker: 'missing_rate'
+      }
+    ].filter(item => wanted(item.contractId));
+
+    const sum = key => round2(projected.reduce((total, item) => total + (Number(item[key]) || 0), 0));
+    return {
+      currency: 'EUR', returnPercent, contracts: projected.concat(excluded),
+      totalCurrentBalance: sum('currentBalance'),
+      totalGuaranteedCapital: sum('guaranteedCapital'),
+      totalProjectedCapital: sum('projectedCapital'),
+      totalGuaranteedMonthlyAnnuity: sum('guaranteedMonthlyAnnuity'),
+      totalProjectedMonthlyAnnuity: sum('projectedMonthlyAnnuity'),
+      // A missing rate makes the result incomplete - never 1:1, never 0.
+      isComplete: !excluded.some(item => item.blocker === 'missing_rate'),
+      missingCurrencies: excluded.some(item => item.blocker === 'missing_rate') ? ['CHF'] : [],
+      excluded
+    };
+  }
+
+  // The three comparison verdicts are reachable from the form, so each one can be looked at:
+  //   - both sides on the SAME return         -> sameMoneySameAssumptions, delta 0, the sentence;
+  //   - different returns                     -> different_assumptions, "not comparable as contracts";
+  //   - same return but the guarantee contract-> cause ['costs'], a real, attributed delta.
+  function pensionComparison(request) {
+    const left = pensionProjection(request?.left);
+    const right = pensionProjection(request?.right);
+    const leftReturn = Number(request?.left?.returnPercent ?? 5);
+    const rightReturn = Number(request?.right?.returnPercent ?? 5);
+    if (leftReturn !== rightReturn) {
+      return {
+        left, right,
+        capitalDelta: round2(right.totalProjectedCapital - left.totalProjectedCapital),
+        annuityDelta: round2(right.totalProjectedMonthlyAnnuity - left.totalProjectedMonthlyAnnuity),
+        cause: ['different_assumptions'], sameMoneySameAssumptions: false
+      };
+    }
+    const touchesGuaranteeContract = [request?.left, request?.right]
+      .some(side => (side?.contractIds || []).includes('bav3'));
+    if (touchesGuaranteeContract) {
+      return {
+        left, right, capitalDelta: -4820.55, annuityDelta: -12.73,
+        cause: ['costs'], sameMoneySameAssumptions: false
+      };
+    }
+    // Same money, same assumptions: the delta MUST be zero. 50 € + 288 € is 338 €.
+    return { left, right, capitalDelta: 0, annuityDelta: 0, cause: ['none'], sameMoneySameAssumptions: true };
+  }
+
   const KEYS = Object.keys(FIXTURES);
 
   function match(pathname) {
@@ -443,6 +589,13 @@
   // path (offer the document that already holds those pages, never a dead error) can be walked.
   function writeAnswer(method, pathname, init) {
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
+    if (after.startsWith('pension/projection')) {
+      let body = init?.body;
+      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+      return /^pension\/projection\/compare(\?|$)/.test(after)
+        ? { status: 200, body: pensionComparison(body) }
+        : { status: 200, body: pensionProjection(body) };
+    }
     if (!after.startsWith('pension/documents')) return undefined;
     if (/\/commit(\?|$)/.test(after)) return { status: 200, body: PENSION_COMMIT };
     if (method === 'POST' && /^pension\/documents(\?|$)/.test(after)) {
