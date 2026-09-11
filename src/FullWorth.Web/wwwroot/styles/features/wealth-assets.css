@@ -91,7 +91,7 @@
 }
 
 .wealth-valuations {
-  max-height: min(42vh, 420px);
+  max-height: min(42dvh, 420px);
   overflow: auto;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);

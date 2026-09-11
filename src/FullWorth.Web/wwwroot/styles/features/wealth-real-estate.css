@@ -1,6 +1,6 @@
 .property-dialog {
   width: min(960px, calc(100vw - 28px));
-  max-height: min(90vh, 920px);
+  max-height: min(90dvh, 920px);
   overflow: auto;
 }
 
@@ -117,7 +117,7 @@
 @media (max-width: 760px) {
   .property-dialog {
     width: calc(100vw - 16px);
-    max-height: 94vh;
+    max-height: 94dvh;
   }
 
   .property-metrics,

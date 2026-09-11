@@ -47,7 +47,7 @@
 .budget-detail-trend{display:flex;align-items:center;gap:var(--s2);margin-top:8px;font-size:13px}
 .budget-detail-forecast{display:flex;gap:var(--s4);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
 .budget-detail .row-group{margin-top:var(--s3)}
-.budget-detail-rows{max-height:40vh;overflow:auto}
+.budget-detail-rows{max-height:40dvh;overflow:auto}
 /* Category tree (§10) */
 .panel-head-actions{display:flex;align-items:center;gap:var(--s3)}
 label.check.inline{font-size:12px;color:var(--muted)}
@@ -238,7 +238,7 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .contracts-order{min-width:32px;text-align:center;line-height:1}
 .contract-row.contract-archived{opacity:.6}
 .contracts-empty{color:var(--muted);padding:var(--s4) 4px;text-align:center;font-size:13px}
-.contract-merge-options{display:grid;gap:8px;max-height:min(50vh,420px);overflow:auto;margin:var(--s3) 0}
+.contract-merge-options{display:grid;gap:8px;max-height:min(50dvh,420px);overflow:auto;margin:var(--s3) 0}
 .contract-merge-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer}
 .contract-merge-option input{margin-top:3px;flex:0 0 auto}
 .contract-merge-option>span{display:grid;gap:2px;min-width:0}
@@ -420,7 +420,7 @@ body.locked{overflow:hidden}
 .choice-grid{display:grid;gap:10px;margin-top:var(--s3)}
 .choice-grid button{display:grid;gap:4px;text-align:left;padding:14px;border-radius:12px}
 .choice-grid strong{font-size:15px}.choice-grid span{color:var(--muted);font-size:13px}
-.bank-options{display:grid;gap:2px;max-height:50vh;overflow:auto;margin-top:var(--s2)}
+.bank-options{display:grid;gap:2px;max-height:50dvh;overflow:auto;margin-top:var(--s2)}
 .bank-options button{text-align:left;border:0;background:transparent;padding:10px;border-radius:8px}
 .bank-options button:hover{background:var(--surface-2)}
 .bank-option{display:flex;align-items:center;gap:10px;width:100%}
@@ -585,7 +585,7 @@ button.danger:hover{background:var(--surface-2)}
 .split-remaining.ok{color:var(--positive)}
 .split-remaining.warn{color:var(--negative)}
 .tx-refund{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2);margin-top:var(--s2)}
-.refund-candidates{display:flex;flex-direction:column;max-height:50vh;overflow:auto}
+.refund-candidates{display:flex;flex-direction:column;max-height:50dvh;overflow:auto}
 .candidate-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 /* Loans / amortization (§13/§14.4) */
 .loan-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
@@ -652,7 +652,7 @@ button.danger:hover{background:var(--surface-2)}
 .contracts-group-sum{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;white-space:nowrap;flex:0 0 auto}
 .contracts-group-sum small{color:var(--muted);font-weight:600;font-size:11px;margin-left:4px}
 dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(560px,100vw)}
-.contracts-sortsheet{border-radius:16px 16px 0 0;padding:var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom,0px));max-height:86vh;overflow:auto;gap:var(--s2)}
+.contracts-sortsheet{border-radius:16px 16px 0 0;padding:var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom,0px));max-height:86dvh;overflow:auto;gap:var(--s2)}
 .contracts-sortsheet .panel-head h2{font-size:18px}
 .contracts-sortsheet.dialog-card [data-close]:not(.icon-button){background:var(--surface-3);color:var(--muted)}
 .contracts-sortsheet.dialog-card [data-close]:not(.icon-button):hover{background:var(--surface-3);color:var(--text)}
@@ -1136,8 +1136,8 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .contract-filter-sheet{gap:10px}
 
 /* Contract detail */
-dialog.contracts-detail-dlg{width:min(620px,calc(100vw - 24px));max-height:92vh;margin:auto}
-.contract-detail-v2{max-height:90vh;overflow:auto;padding:0 0 18px;background:var(--surface-2);gap:0}
+dialog.contracts-detail-dlg{width:min(620px,calc(100vw - 24px));margin:auto}
+.contract-detail-v2{overflow:auto;padding:0 0 18px;background:var(--surface-2);gap:0}
 .contract-detail-topbar{position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;padding:12px;background:var(--surface-2)}
 .contract-detail-topbar button,.contract-detail-name button{border:0;background:var(--surface-3);color:var(--text);border-radius:50%;min-width:36px;height:36px;display:grid;place-items:center;cursor:pointer}
 .contract-detail-hero{display:grid;justify-items:center;text-align:center;padding:10px 24px 22px}
@@ -1186,12 +1186,12 @@ dialog.contracts-detail-dlg{width:min(620px,calc(100vw - 24px));max-height:92vh;
 .contract-insight-row{border-bottom:0}
 .contract-insight-row>span:first-child{color:var(--muted);font-size:13px}
 .contract-insight-row strong{font-size:13px}
-.contract-payments-dialog{max-height:80vh;overflow:auto}
+.contract-payments-dialog{overflow:auto}
 .contract-quick-edit{padding-bottom:calc(var(--s5) + env(safe-area-inset-bottom,0px))}
 
 /* Contract analysis */
-dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));max-height:92vh;margin:auto}
-.contract-analysis-dialog{max-height:90vh;overflow:auto;background:var(--surface-2)}
+dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));margin:auto}
+.contract-analysis-dialog{overflow:auto;background:var(--surface-2)}
 .contract-analysis-loading{padding:32px;text-align:center;color:var(--muted)}
 .contract-analysis-card{display:grid;gap:10px;margin:0 0 12px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
 .contract-analysis-card h3{margin:0;font-size:15px}

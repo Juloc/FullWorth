@@ -133,15 +133,56 @@ the shape a native settings screen has. Turning it into a bottom-sheet menu woul
 hierarchy into a list. The count was the wrong measure here; a dialog is a menu when its buttons are
 siblings, not when there are many of them.
 
-**Step 5 — one dialog stylesheet.** Fold the per-feature dialog rules into the shared layer, replace the
-~220 hardcoded hex literals with tokens, and settle on **one** maximum height and **one** mobile
-treatment (full-height sheet under 768 px, centred card above). The minified single-line feature
-stylesheets should be unminified in the same pass — there is no build step, so minified source buys
-nothing and costs every future reader.
+**Step 5 — one dialog stylesheet.** `PARTLY DONE`.
 
-**Step 6 — a guard.** A test in `tests/FullWorth.Web.Tests` that fails when a dialog call site renders
-more than N controls without a `<details>`, and when a hex literal appears outside `tokens.css`. Without
-it this grows straight back: the census went from 73 to 76 call sites during this audit alone.
+**One height and one mobile treatment: done.** Six features set their own ceiling — 92vh, 90vh, 86vh,
+80vh, `min(88vh,920px)`, `min(900px, 100dvh - 24px)` — so every dialog stopped somewhere else and none
+of them agreed with the shared rule. All six are gone; a feature that needs an inner scroll region now
+says `overflow:auto` on that region rather than a second height for the card. Measured at 1024×768
+afterwards: the contract analysis, the contract detail and the contract editor all sit at top 77 px,
+bottom 736 px, ceiling 659.2 px, each scrolling inside its card. At 375×812 all three are 0,0,375,812.
+
+Two real bugs fell out of it:
+
+- **The shared rule did not add up.** It anchored the card at `max(--s8, 10vh)` but capped the height
+  at `100dvh - 2 * --s8`, which only fits when `10vh` happens to be below `--s8`. Measured at 1024×768:
+  top 77 px, bottom 781 px — 13 px past the viewport, on every centred dialog in the app. The anchor is
+  now a custom property used by both declarations, so they cannot drift apart again.
+- **`vh` where `dvh` belongs**, in twelve places. `vh` is the *largest* viewport, so a 94vh dialog on a
+  phone reaches under the browser chrome — the same class of bug as the `100vh` shell fix below. The
+  guard found six of them that this pass had not touched, including two added the same day.
+
+**Dead rules deleted.** `.tx-filter-sheet` / `.tx-filter-range` (the filter is generated now), and the
+mobile bottom-sheet treatment `responsive.css` asked for on the two contract dialogs — which never
+applied, because the shared phone rule outranks a single class on the same element. Those dialogs have
+been full-screen all along. One line of it *was* live: `.contract-detail-v2` sets its own padding in
+`app.css`, which beat the shared card padding and took the safe-area inset with it, so on a notched
+phone the last row sat under the home indicator. That moved into `dialogs.css` next to the padding it
+has to override.
+
+**Still open:** the ~34 genuinely hardcoded colours (see the count correction below) and unminifying the
+single-line feature stylesheets.
+
+**The "~220 hex literals" figure in this audit was wrong.** It counted `var(--token, #fallback)`, where
+the token exists and the hex therefore never renders — noise, but not a hardcoded colour. The real
+count outside `tokens.css` is **62**, of which **28** are in `account-deletion/deletion.css`: a
+standalone page that links only its own stylesheet, no `tokens.css`, so a local palette is correct
+there and it is not a dialog. That leaves **34** across nine files, listed in the guard. Separately,
+seven tokens are referenced that do not exist (`--surface-raised`, `--surface-strong`,
+`--surface-elevated`, `--background`, `--depth`, `--mono`, `--s7`), so in those twelve places the
+fallback is what renders — those are the ones actually off-palette.
+
+**Step 6 — a guard.** `DONE` — `tests/FullWorth.Web.Tests/DialogComplexityGuardTests.cs`, five rules:
+no new dialog with more than six controls in one flat list, no stale entry in that baseline, no new
+hardcoded colour, no dialog height outside `dialogs.css`, and no `vh` where `dvh` belongs.
+
+Both lists are baselines that **may shrink and may never grow** — converting a dialog means deleting
+its line. Demanding that every remaining offender be converted first is how a guard never gets written.
+The remaining five flat dialogs are `budgets.js` (8), `contracts.js` (11), `networth.js` (11),
+`transactions.js` (7) and `wealth-real-estate-advanced.js` (8).
+
+It earned its keep immediately: the `dvh` rule caught six heights this pass had missed, two of them
+added the same day.
 
 ---
 

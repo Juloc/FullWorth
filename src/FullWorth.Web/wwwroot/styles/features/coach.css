@@ -96,7 +96,7 @@ body.coach-dock-resizing{cursor:col-resize;user-select:none}
 .coach-dock-chat{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:var(--s3);padding:var(--s3)}
 .coach-dock .coach-messages{min-height:0;max-height:none;height:100%;padding:0 2px}
 .coach-dock .coach-message{max-width:92%}
-.coach-dock .coach-starters{max-height:min(34vh,260px);overflow:auto}
+.coach-dock .coach-starters{max-height:min(34dvh,260px);overflow:auto}
 body.coach-dock-open .shell{grid-template-columns:var(--sidebar-w) minmax(0,1fr) var(--coach-dock-w)}
 body.coach-dock-open.nav-collapsed .shell,body.coach-dock-open.nav-auto-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr) var(--coach-dock-w)}
 @media(max-width:767px){

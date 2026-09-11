@@ -183,9 +183,15 @@
   .contracts-summary-open{padding:17px}
   .contracts-summary-value{font-size:24px}
   .contracts-summary-meta{display:none}
-  dialog.contracts-detail-dlg,dialog.contracts-analysis-dlg{width:100%;max-width:100vw;max-height:96vh;margin:auto auto 0}
-  .contract-detail-v2,.contract-analysis-dialog{max-height:94vh;border-radius:18px 18px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
-  .contract-analysis-dialog{border-radius:18px 18px 0 0}
+  /* The bottom-sheet treatment these two used to ask for here never applied: the shared phone rule in
+     dialogs.css matches dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet), which outranks a single
+     class on the same element, so both dialogs have been full-screen all along - measured 0,0,375,812.
+     Keeping dead rules that describe a different design is how a reader ends up debugging the wrong
+     one. A dialog that really wants to be a sheet asks for mobileMode: 'sheet'.
+
+     The bottom padding WAS live, and it moved to dialogs.css next to the shared card padding it has to
+     override - this block is 620px wide while the full-screen treatment starts at 767px, so a rule kept
+     here would leave a 147px band without the inset. */
 }
 /* Two colour fields side by side is ~170px each on a phone; the native colour swatch needs room. */
 @media(max-width:620px){

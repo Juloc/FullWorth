@@ -61,6 +61,13 @@ dialog.fw-dialog .dialog-actions{min-width:0}
   }
   dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:25px;height:25px;stroke-width:2.1}
   dialog.fw-dialog:not(.fw-dialog--sheet) .bank-options{max-height:none;overflow:visible}
+
+  /* Two cards set their own padding in app.css, which beats the card padding above and took the
+     safe-area inset with it - measured 18px flat, so on a notched phone the last row of a contract
+     detail sat under the home indicator. They keep their own horizontal padding; only the bottom
+     inset comes back. */
+  dialog.fw-dialog .contract-detail-v2,
+  dialog.fw-dialog .contract-analysis-dialog{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
   dialog.fw-dialog:not(.fw-dialog--sheet) .dialog-actions{
     width:100%;padding-top:var(--s2)
   }
@@ -69,11 +76,22 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 /* Desktop/tablet: anchor non-drawer, non-sheet dialogs near the top instead of letting the
    native dialog auto-center. Async content that grows after open then only extends downward,
    never re-centering (jumping) the whole card. */
+/* This is THE dialog height, and the only one. Six features used to set their own — 92vh, 90vh,
+   86vh, 80vh, min(88vh,920px), min(900px,100dvh-24px) — so every dialog stopped at a different
+   place and none of them agreed with this rule. They are deleted; a feature that needs its own
+   inner scroll region says `overflow:auto` on that region, not a second height for the card.
+
+   dvh, never vh: vh is the LARGEST viewport, so 92vh on a phone reaches under the browser chrome. */
 @media(min-width:768px){
   dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet){
-    margin-top:max(var(--s8),10vh);
+    /* The anchor and the ceiling have to be the same number, or the card hangs off the bottom. They
+       were not: the top was max(--s8,10vh) while the height allowed 100dvh - 2*--s8, which only adds
+       up when 10vh happens to be below --s8. Measured at 1024x768 before this: top 77 px, bottom
+       781 px, 13 px past the viewport - on every centred dialog in the app. */
+    --fw-dialog-top:max(var(--s8),10vh);
+    margin-top:var(--fw-dialog-top);
     margin-bottom:auto;
-    max-height:calc(100dvh - 2 * var(--s8));
+    max-height:calc(100dvh - var(--fw-dialog-top) - var(--s8));
   }
   dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet) .fw-dialog-card{
     max-height:inherit;

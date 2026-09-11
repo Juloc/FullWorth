@@ -119,7 +119,7 @@
 /* ---- detail ---- */
 
 .pension-detail { width: min(760px, 94vw); }
-.pension-detail-body { display: grid; gap: var(--s4); max-height: 66vh; overflow: auto; }
+.pension-detail-body { display: grid; gap: var(--s4); max-height: 66dvh; overflow: auto; }
 .pension-detail-actions { justify-content: space-between; }
 
 .pension-facts {
@@ -177,7 +177,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--s3);
-  max-height: 64vh;
+  max-height: 64dvh;
   overflow: auto;
   padding-right: var(--s1);
 }
