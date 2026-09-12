@@ -1,5 +1,6 @@
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Fx;
+using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Tax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -15,7 +16,9 @@ public sealed record PurgeEntityDescriptor(
     IReadOnlyList<IProperty> HistoricalUserProperties,
     bool IsGlobalAnonymous,
     bool IsUserIdentity,
-    bool IsSpaceRoot)
+    bool IsSpaceRoot,
+    bool IsInstanceScoped = false,
+    bool IsDeletedWithRelatedRoot = false)
 {
     public bool IsSpaceOwned => SpaceOwnershipDepth.HasValue;
     public bool IsClassified =>
@@ -24,7 +27,9 @@ public sealed record PurgeEntityDescriptor(
         HistoricalUserProperties.Count > 0 ||
         IsGlobalAnonymous ||
         IsUserIdentity ||
-        IsSpaceRoot;
+        IsSpaceRoot ||
+        IsInstanceScoped ||
+        IsDeletedWithRelatedRoot;
 }
 
 public static class PersonalDataPurgeManifest
@@ -53,6 +58,66 @@ public static class PersonalDataPurgeManifest
         typeof(FxRate),
         typeof(TaxCategory),
         typeof(TaxRuleDefinition)
+    ];
+
+    /// <summary>
+    /// Intelligence tables that belong to the INSTANCE, not to any person: deleting an account must
+    /// leave them alone, and the ownership heuristics above cannot tell that on their own because the
+    /// absence of a UserId is exactly what an unclassified new table also looks like.
+    ///
+    /// Two kinds, and the difference is the reason rather than the effect:
+    ///
+    /// Reference data that arrives from a signed knowledge pack or an operator-imported brand pack.
+    /// It describes merchants, products and contract providers - the world, not a user.
+    ///
+    /// Instance configuration and machinery: this installation's AI settings, its Cloud credential, its
+    /// job queue and watermarks, its installed packs. Every one is scoped by a literal "instance" key
+    /// or by nothing at all.
+    ///
+    /// Anything NOT on this list and not user- or space-owned fails the guard, which is the point: the
+    /// default for a new table is "somebody has to decide", not "probably fine".
+    /// </summary>
+    private static readonly HashSet<Type> IntelligenceInstanceTypes =
+    [
+        // Pack-sourced reference data.
+        typeof(OfficialBrandAlias),
+        typeof(OfficialBrandAsset),
+        typeof(OfficialContractProvider),
+        typeof(OfficialContractSignature),
+        typeof(OfficialMerchantMapping),
+        typeof(OfficialOntologyAlias),
+        typeof(OfficialOntologyEntity),
+        typeof(OfficialOntologyRedirect),
+        typeof(OfficialProduct),
+        typeof(OfficialProductAlias),
+        typeof(OfficialProductGtin),
+        typeof(CustomBrandPack),
+        typeof(CustomBrandAsset),
+        typeof(CustomBrandAlias),
+        typeof(BrandAssetBlob),
+        typeof(KnowledgePackArchive),
+        typeof(KnowledgePackInstallation),
+        // Instance configuration and machinery.
+        typeof(AiInstanceSettings),
+        typeof(CloudInstanceCredential),
+        typeof(IntelligenceJob),
+        typeof(IntelligenceJobLease),
+        typeof(IntelligenceWatermark)
+    ];
+
+    /// <summary>
+    /// Personal data the heuristics cannot see, because it is reached through a relation rather than
+    /// through a user column.
+    ///
+    /// <see cref="CloudSubmissionOutbox"/> is the case: it carries no UserId, only a FeedbackEventId,
+    /// and <c>AccountPurgeService.PurgeIntelligenceUserDataAsync</c> deletes it by resolving that to the
+    /// user's feedback events first. Listing it here rather than as instance data is deliberate -
+    /// calling it global would be a retention regression, and the row holds a queued submission about
+    /// that user's finances.
+    /// </summary>
+    private static readonly HashSet<Type> DeletedWithRelatedRootTypes =
+    [
+        typeof(CloudSubmissionOutbox)
     ];
 
     public static IReadOnlyList<PurgeEntityDescriptor> Describe(IModel model)
@@ -94,7 +159,9 @@ public static class PersonalDataPurgeManifest
             historical,
             global,
             isUserIdentity,
-            isSpaceRoot);
+            isSpaceRoot,
+            IntelligenceInstanceTypes.Contains(entity.ClrType),
+            DeletedWithRelatedRootTypes.Contains(entity.ClrType));
     }
 
     public static IReadOnlyList<PurgeEntityDescriptor> Unclassified(IModel model) =>

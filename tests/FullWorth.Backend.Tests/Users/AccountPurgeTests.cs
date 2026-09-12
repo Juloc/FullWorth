@@ -2,6 +2,7 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,56 @@ public sealed class AccountPurgeTests
             unclassified.Count == 0,
             "Unclassified purge entities: " +
             string.Join(", ", unclassified.Select(x => x.EntityType.Name)));
+    }
+
+    /// <summary>
+    /// The same guard for the Intelligence model.
+    ///
+    /// Account deletion already walks that model - see AccountPurgeService.PurgeIntelligenceUserDataAsync
+    /// - but nothing checked that every table in it has an account-deletion decision. So a new
+    /// Intelligence table holding personal data would have passed CI green and simply never been
+    /// deleted, which is a retention bug nobody would see until someone asked to be forgotten.
+    /// </summary>
+    [Fact]
+    public async Task PurgeManifest_ClassifiesEveryIntelligenceEntity()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
+
+        var unclassified = PersonalDataPurgeManifest.Unclassified(db.Model);
+
+        Assert.True(
+            unclassified.Count == 0,
+            "Unclassified Intelligence purge entities: " +
+            string.Join(", ", unclassified.Select(x => x.EntityType.ClrType.Name)));
+    }
+
+    /// <summary>
+    /// The queued Cloud submissions of a deleted user are personal data, and must not be filed away as
+    /// instance data because they happen to have no UserId column.
+    ///
+    /// CloudSubmissionOutbox is reached through its FeedbackEventId - AccountPurgeService resolves the
+    /// user's feedback events first and deletes by that. To the ownership heuristics it therefore looks
+    /// exactly like an instance table, and classifying it as one would leave a queued submission about
+    /// a deleted user's finances in the database: a retention regression that nothing else would catch.
+    /// </summary>
+    [Fact]
+    public async Task Queued_cloud_submissions_are_classified_as_personal_not_as_instance_data()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IntelligenceDbContext>();
+
+        var outbox = PersonalDataPurgeManifest
+            .Describe(db.Model)
+            .Single(x => x.EntityType.ClrType == typeof(CloudSubmissionOutbox));
+
+        Assert.True(outbox.IsDeletedWithRelatedRoot);
+        Assert.False(outbox.IsInstanceScoped);
+        Assert.False(outbox.IsGlobalAnonymous);
     }
 
     [Fact]
