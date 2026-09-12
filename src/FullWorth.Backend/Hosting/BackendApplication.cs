@@ -313,6 +313,17 @@ public static class BackendApplication
             // the canonical model. Preserve/rename them before EF evaluates pending feature migrations.
             await PurchaseSchemaCompatibility.PrepareBeforeMigrationsAsync(db, CancellationToken.None);
             await db.Database.MigrateAsync();
+
+            // Before anything is read or written through the cipher. A key that cannot be the one
+            // this database was encrypted with has to stop the start, not decorate it: the container
+            // would otherwise come up healthy with every encrypted column silently unreadable.
+            await FullWorth.Backend.Security.DataEncryptionKeyGuard.EnsureKeyBelongsToInstallationAsync(
+                db,
+                scope.ServiceProvider.GetRequiredService<FullWorth.Backend.Security.FieldCipher>(),
+                app.Configuration.GetValue(
+                    FullWorth.Shared.SecretBootstrap.DataEncryptionKeyCreatedNowKey, false),
+                CancellationToken.None);
+
             var seeder = scope.ServiceProvider.GetRequiredService<FullWorthSeeder>();
             await seeder.SeedAsync(db, CancellationToken.None);
         

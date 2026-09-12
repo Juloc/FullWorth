@@ -57,6 +57,19 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
             entity.HasIndex("ScopeKey").IsUnique();
             entity.ToTable("BankingInstanceSettings");
         });
+
+        modelBuilder.Entity("FullWorth.Backend.Security.InstallationEncryptionMarker", entity =>
+        {
+            // 20260912220000_InstallationEncryptionMarker. Raw SQL again, so the snapshot has to carry
+            // it or startup migration trips PendingModelChangesWarning.
+            entity.Property<Guid>("Id").HasColumnType("uuid");
+            entity.Property<string>("ScopeKey").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)");
+            entity.Property<string>("KeyFingerprint").IsRequired().HasMaxLength(80).HasColumnType("character varying(80)");
+            entity.Property<DateTimeOffset>("FirstSeenAt").HasColumnType("timestamp with time zone");
+            entity.HasKey("Id");
+            entity.HasIndex("ScopeKey").IsUnique();
+            entity.ToTable("InstallationEncryptionMarkers");
+        });
 #pragma warning restore 612, 618
     }
 }

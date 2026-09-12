@@ -91,6 +91,15 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.Property(x => x.Key).HasMaxLength(80);
             e.Property(x => x.ValueJson).HasColumnType("jsonb");
         });
+        b.Entity<FullWorth.Backend.Security.InstallationEncryptionMarker>(e =>
+        {
+            // One row, and the database says so: a second "instance" row would make which key this
+            // installation believes in depend on insertion order.
+            e.ToTable("InstallationEncryptionMarkers");
+            e.HasIndex(x => x.ScopeKey).IsUnique();
+            e.Property(x => x.ScopeKey).HasMaxLength(40);
+            e.Property(x => x.KeyFingerprint).HasMaxLength(80);
+        });
         b.Entity<FullWorth.Backend.Modules.Fx.FxRate>(e =>
         {
             e.HasIndex(x => new { x.Date, x.Currency }).IsUnique();

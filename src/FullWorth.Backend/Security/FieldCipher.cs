@@ -29,6 +29,21 @@ public sealed class FieldCipher
 
     public bool Enabled => _key is not null;
 
+    /// <summary>
+    /// A short, stable name for the key in use — safe to store next to the data it encrypts and safe
+    /// to print in a startup error, which is the whole point: an installation can recognise whether
+    /// the key it was handed is the one its rows were written with.
+    ///
+    /// Derived through HKDF with its own info label rather than hashing the key directly, so this
+    /// value is domain-separated from both the key and the blind-index MAC key above. Nothing about
+    /// the key can be recovered from it.
+    /// </summary>
+    public string? Fingerprint => _key is null
+        ? null
+        : "sha256:" + Convert.ToHexString(HKDF.DeriveKey(
+            HashAlgorithmName.SHA256, _key, 8, info: "fullworth-data-key-fingerprint"u8.ToArray()))
+            .ToLowerInvariant();
+
     public static FieldCipher FromConfiguration(IConfiguration configuration, IHostEnvironment environment)
     {
         var configured = configuration["Security:DataEncryptionKey"];

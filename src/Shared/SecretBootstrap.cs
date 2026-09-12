@@ -73,11 +73,19 @@ public static class SecretBootstrap
     ///
     /// Call BEFORE <see cref="AddSecretFiles"/> - that is what reads the files back in.
     /// </summary>
-    public static void EnsureOwnSecrets() => EnsureOwnSecrets(Environment.GetEnvironmentVariables());
+    /// <returns>
+    /// The variable names whose secret this call CREATED. Empty on every later start, because the
+    /// secrets already exist. That distinction is load-bearing: a data_encryption_key created right
+    /// now, on an installation whose database already holds rows, cannot be the key those rows were
+    /// encrypted with - see <c>DataEncryptionKeyGuard</c>.
+    /// </returns>
+    public static IReadOnlyList<string> EnsureOwnSecrets() =>
+        EnsureOwnSecrets(Environment.GetEnvironmentVariables());
 
     /// <inheritdoc cref="EnsureOwnSecrets()"/>
-    public static void EnsureOwnSecrets(System.Collections.IDictionary environment)
+    public static IReadOnlyList<string> EnsureOwnSecrets(System.Collections.IDictionary environment)
     {
+        var created = new List<string>();
         foreach (var (variable, bytes) in OwnSecrets)
         {
             var path = environment[variable]?.ToString();
@@ -98,14 +106,36 @@ public static class SecretBootstrap
                 var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 File.WriteAllText(temp, secret);
                 File.Move(temp, path, overwrite: false);
+                created.Add(variable);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // A read-only mount, or a sibling won the race. Neither is worth refusing to start
                 // over: the value is simply absent and RequireSecret says so, by name, in Production.
+                // Not counted as created either - a sibling that won the race created it, not us.
             }
         }
+
+        return created;
     }
+
+    /// <summary>
+    /// Configuration key set when <see cref="EnsureOwnSecrets()"/> created the data encryption key in
+    /// THIS start. Carried as configuration rather than static state so it survives the unified host,
+    /// where FullWorth.Web bootstraps the secrets and FullWorth.Backend is the one that has to decide
+    /// whether they can possibly belong to the database it is about to open.
+    /// </summary>
+    public const string DataEncryptionKeyCreatedNowKey = "Security:DataEncryptionKeyCreatedNow";
+
+    /// <summary>Records what <see cref="EnsureOwnSecrets()"/> just created, for later startup checks.</summary>
+    public static void NoteCreatedSecrets(
+        IConfigurationBuilder configuration,
+        IReadOnlyList<string> created) =>
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DataEncryptionKeyCreatedNowKey] =
+                created.Contains("Security__DataEncryptionKey_FILE") ? "true" : "false"
+        });
 
     /// <summary>
     /// Builds the database connection strings from their parts when they are not given whole.

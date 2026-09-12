@@ -83,6 +83,10 @@ public static class PersonalDataPurgeManifest
         // How this installation identifies itself to a bank. The FinTS product id is issued per
         // registered product, so it survives every account deletion - there is no person in it.
         typeof(BankingInstanceSettings),
+        // Which data encryption key this installation's rows belong to. No person in it, and deleting
+        // it would be actively harmful: the guard would re-baseline against whatever key is mounted
+        // next, which is exactly the check it exists to make.
+        typeof(FullWorth.Backend.Security.InstallationEncryptionMarker),
         // Pack-sourced reference data.
         typeof(OfficialBrandAlias),
         typeof(OfficialBrandAsset),
