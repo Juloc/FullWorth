@@ -13,8 +13,11 @@ COPY src/FullWorth.CodexBridge/codex-wrapper.mjs /usr/local/bin/codex
 COPY src/FullWorth.CodexBridge/entrypoint.sh /usr/local/bin/fullworth-codex-entrypoint
 RUN chmod 0755 /usr/local/bin/codex /usr/local/bin/fullworth-codex-entrypoint
 
+# One secret, and only this one: this sidecar parses untrusted uploads, so it must never hold a key
+# that establishes trusted user context. The deploy stack mounts exactly this file.
 ENV NODE_ENV=production \
     PORT=8080 \
+    BRIDGE_KEY_FILE=/run/fullworth-secrets/codex_bridge_key \
     CODEX_HOME=/data/codex \
     CODEX_WORKDIR=/tmp/codex-work
 

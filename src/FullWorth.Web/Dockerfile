@@ -48,6 +48,22 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     ReverseProxy__KnownNetworks__0=172.16.0.0/12 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
+# Where this image expects its secrets. Paths, not values: a deploy stack only has to mount the
+# volume here instead of restating nine paths in its own file. A path that is not mounted is simply
+# skipped (SecretBootstrap only reads files that exist), so a stack that supplies its secrets some
+# other way - the dev stack does - is unaffected.
+#
+# All six are THIS installation's own secrets. Nothing the Cloud owns is listed here on purpose.
+ENV Database__Password_FILE=/run/fullworth-secrets/fullworth_db_password \
+    Security__InternalKey_FILE=/run/fullworth-secrets/backend_internal_key \
+    Security__IngestKey_FILE=/run/fullworth-secrets/ingest_key \
+    Security__ApiKey_FILE=/run/fullworth-secrets/banking_api_key \
+    Security__DataEncryptionKey_FILE=/run/fullworth-secrets/data_encryption_key \
+    Services__BackendInternalKey_FILE=/run/fullworth-secrets/backend_internal_key \
+    Services__BankingApiKey_FILE=/run/fullworth-secrets/banking_api_key \
+    Backend__IngestKey_FILE=/run/fullworth-secrets/ingest_key \
+    AiAccess__CodexBridgeKey_FILE=/run/fullworth-secrets/codex_bridge_key
+
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
   CMD curl -fsS http://localhost:8080/health || exit 1
