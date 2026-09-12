@@ -37,6 +37,10 @@ function openCoachWith(detail) {
 function updateCoachSelectionBar() {
   const view = ctx.$('#view-transactions'); if (!view) return;
   let bar = view.querySelector('#tx-coach-selection');
+  // Mobile renders a selection mode for this view. It is part of the selection state and belongs
+  // here, where that state changes - a MutationObserver on the list used to rediscover it from the
+  // rendered checkboxes instead, which is the repair layer the architecture guard forbids.
+  view.classList.toggle('tx-mobile-selection-mode', selectedForCoach.size > 0);
   if (!selectedForCoach.size) { bar?.remove(); return; }
   if (!bar) {
     bar = document.createElement('div'); bar.id = 'tx-coach-selection'; bar.className = 'tx-coach-selection';
@@ -49,6 +53,12 @@ function updateCoachSelectionBar() {
   bar.querySelector('[data-selection-clear]').onclick = () => {
     selectedForCoach.clear();
     document.querySelectorAll('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
+    // Setting .checked in code fires no change event, so the rows kept their selected styling until
+    // something else came along and removed it. Clear them here, next to the state they follow.
+    document.querySelectorAll('#transactions-body .tx-row.tx-selected').forEach(row => {
+      row.classList.remove('tx-selected');
+      row.setAttribute('aria-selected', 'false');
+    });
     updateCoachSelectionBar();
   };
   bar.querySelector('[data-selection-coach]').onclick = () => {
@@ -408,6 +418,7 @@ export async function renderTransactions(context) {
     tr.querySelector('[data-tx-select]')?.addEventListener('change', e => {
       if (e.target.checked) selectedForCoach.set(String(x.id), x); else selectedForCoach.delete(String(x.id));
       tr.classList.toggle('tx-selected', e.target.checked);
+      tr.setAttribute('aria-selected', String(e.target.checked));
       updateCoachSelectionBar();
     });
     tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });

@@ -100,11 +100,45 @@ function isEmoji(s) { try { return EMOJI_RE.test(String(s || '')); } catch { ret
 // Left identity (UX rework §4): installed cloud/custom brand logo → category icon → category-tinted monogram,
 // with a transfer glyph override. No third-party logo lookup happens from transaction rendering.
 // `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
+/**
+ * Sets the page header's primary action: its label and what KIND of action it is.
+ *
+ * Mobile renders the two kinds differently (an add glyph versus an edit one), and it used to work
+ * that out by running a regular expression over the rendered label - /bearbeit|edit|anpass|customi[sz]/ -
+ * from a MutationObserver on the button. Two failure modes that are not worth carrying: a new label or
+ * a new language silently falls back to 'add', and reading state out of rendered text is exactly the
+ * pattern the frontend architecture guard exists to keep out.
+ *
+ * Every caller already knows which kind it is setting. `kind` is 'add' or 'edit'.
+ */
+export function setPrimaryAction(button, label, kind = 'add') {
+  if (!button) return;
+  button.textContent = label;
+  button.dataset.mobileKind = kind;
+  // Mobile shows the glyph alone, so the label has to survive as the accessible name.
+  if (label) button.setAttribute('aria-label', label);
+}
+
 export function identityIcon(name, opts = {}) {
   if (opts.isTransfer) return `<span class="fw-ident fw-ident-transfer" aria-hidden="true">${opts.isSavings ? '↑' : '⇄'}</span>`;
   const inferredBrandLogo = !opts.logoAssetPath ? brandLogoPath(name) : null;
   const logoAssetPath = opts.logoAssetPath || inferredBrandLogo;
-  if (logoAssetPath) return `<span class="fw-ident"><img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy" onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"></span>`;
+  // The monogram is rendered UNDER the logo, not after it fails.
+  //
+  // The onerror used to remove the image and mark the span failed, which left an empty circle - so a
+  // MutationObserver watched the whole <main> subtree and filled those circles in afterwards. That is
+  // the repair layer the frontend architecture guard forbids, and it was fragile in the obvious way:
+  // anything rendered outside <main>, or before the observer was attached, stayed blank.
+  //
+  // Stacking both in the same grid cell means the fallback is already in place when the image fails.
+  // Removing the image is then the whole error handler, and nothing has to watch the DOM.
+  if (logoAssetPath) {
+    const fallback = (String(name || '?').trim()[0] || '?').toUpperCase();
+    return `<span class="fw-ident fw-ident-stack fw-monogram" style="--ident-h:${monogramHue(name)}" aria-hidden="true">` +
+      `<span class="fw-ident-initial">${esc(fallback)}</span>` +
+      `<img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy" onerror="this.remove()">` +
+      `</span>`;
+  }
   const iconKey = opts.categoryIconKey;
   if (iconKey && isEmoji(iconKey)) return `<span class="fw-ident fw-ident-cat" aria-hidden="true">${esc(iconKey)}</span>`;
   const glyph = categoryGlyph(iconKey);

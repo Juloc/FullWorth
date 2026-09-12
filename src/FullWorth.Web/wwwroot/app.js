@@ -1,6 +1,7 @@
 import { money, setMoneyLocale } from './ui/money.js';
 import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './ui/privacy.js';
 import { confirmDialog } from './ui/confirm.js';
+import { setPrimaryAction } from './ui/ux-kit.js';
 import { initLock } from './ui/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
@@ -50,7 +51,9 @@ const pathForView=router.pathForView;
 const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
 // in-page add control so there is a single code path.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx)],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+// [messageKey, handler, kind]. `kind` drives the mobile glyph; it used to be guessed by matching a
+// regex against the rendered label from a MutationObserver, which a new label or language broke.
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const toastController=createToast($('#toast'));
@@ -102,7 +105,7 @@ function renderPageHeader(){
   // label from the shell and clear the subtitle.
   else{const nav=$(`.sidebar button[data-view="${state.view}"] span`)?.textContent||'';$('#page-title').textContent=nav;$('#page-subtitle').textContent=''}
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
-  if(action){btn.hidden=false;btn.textContent=get(action[0]);btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
+  if(action){btn.hidden=false;setPrimaryAction(btn,get(action[0]),action[2]||'add');btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
 function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',actual==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
 function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
