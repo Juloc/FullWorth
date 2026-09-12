@@ -5,7 +5,13 @@
 # (root-owned) volumes, so hardening an already-deployed stack needs no manual chown.
 set -e
 
-for d in /data/purchases /data/dataprotection; do
+# Created, not just chowned. The image NAMES these paths in its own ENV (DataProtection__KeyPath,
+# PurchaseStorage__RootPath, PensionStorage__RootPath), so it has to be able to run without a volume
+# mounted over them - otherwise the app starts as the non-root user, tries to create /data itself and
+# dies with "Access to the path '/data' is denied" before it reaches a single line of configuration.
+# With a volume mounted this is a no-op on an existing directory and a chown on a fresh one.
+for d in /data/purchases /data/pension /data/dataprotection; do
+  mkdir -p "$d" 2>/dev/null || true
   if [ -d "$d" ]; then
     chown -R app:app "$d" 2>/dev/null || true
   fi
