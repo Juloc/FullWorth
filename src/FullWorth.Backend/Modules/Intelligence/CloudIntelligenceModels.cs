@@ -14,6 +14,18 @@ public static class CloudIntelligencePolicy
     // new data categories after a material policy change.
     public const string CurrentVersion = "2026-09-06.6";
     public const string SubmissionSchemaVersion = "1";
+
+    /// <summary>
+    /// The wire protocol this build speaks, sent at registration. Mirrors the Cloud's
+    /// <c>CloudInstance.ProtocolVersion</c> - there is no compile-time coupling between the
+    /// repositories, so this is a hand-mirrored contract and bumping it needs both sides.
+    ///
+    /// The client used to send nothing, which the Cloud recorded as "1" by default. That made the
+    /// field useless for what it exists for: a Cloud that stops serving an old protocol could not
+    /// tell an outdated instance apart from a current one, so it could only refuse everyone or
+    /// no one.
+    /// </summary>
+    public const string WireProtocolVersion = "1";
 }
 
 public static class CloudSubmissionStatuses

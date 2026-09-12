@@ -177,6 +177,13 @@ public sealed class FullWorthCloudException(
 public sealed class FullWorthCloudClient : IFullWorthCloudClient
 {
     public const string OfficialBaseUrl = "https://api.fullworth.de/";
+
+    /// <summary>
+    /// The Cloud's answer when this build is older than it serves. Nothing about it improves by
+    /// waiting - only an update fixes it - so it is the one registration failure that must not be
+    /// retried on the normal cadence.
+    /// </summary>
+    public const string ClientTooOldErrorCode = "client_too_old";
     public const int MaximumBatchEvents = 500;
     public const int MaximumCompressedBatchBytes = 2 * 1024 * 1024;
     public const int MaximumKnowledgePackBytes = 5 * 1024 * 1024;
@@ -221,7 +228,10 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         {
             instanceId,
             policyVersion,
-            clientVersion
+            clientVersion,
+            // Which wire protocol this build speaks. A Cloud that no longer serves it refuses here,
+            // once, instead of accepting the registration and then failing every later call.
+            protocolVersion = CloudIntelligencePolicy.WireProtocolVersion
         });
         using var response = await SendAsync(request, ct);
         var result = await DeserializeAsync<RegistrationResponse>(response, ct);

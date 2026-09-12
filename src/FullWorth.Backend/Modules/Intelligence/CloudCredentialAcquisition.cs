@@ -58,6 +58,16 @@ public sealed class CloudCredentialAcquisition(
     /// <summary>After a failure the next request reports the same reason at once instead of retrying.</summary>
     public static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// How long to wait after a failure that waiting cannot fix.
+    ///
+    /// A minute is the right answer for a Cloud that is down, because it will come back. It is the
+    /// wrong answer for "this build is older than the Cloud serves": that resolves when someone
+    /// updates FullWorth, and until then every instance in an outdated fleet would ask again every
+    /// minute, forever - load on the Cloud that can only ever produce the same refusal.
+    /// </summary>
+    public static readonly TimeSpan TerminalCooldown = TimeSpan.FromHours(6);
+
     /// <summary>The credential, or the reason there is none. Never throws for a Cloud failure.</summary>
     public async Task<(string? Secret, string? ErrorCode)> TryGetAsync(Guid instanceId, CancellationToken ct)
     {
@@ -101,7 +111,8 @@ public sealed class CloudCredentialAcquisition(
     private async Task<(string?, string?)> FailAsync(Guid instanceId, string? errorCode, CancellationToken ct)
     {
         var code = string.IsNullOrWhiteSpace(errorCode) ? "cloud_unavailable" : errorCode;
-        cooldown.Fail(DateTimeOffset.UtcNow.Add(Cooldown), code);
+        var wait = code == FullWorthCloudClient.ClientTooOldErrorCode ? TerminalCooldown : Cooldown;
+        cooldown.Fail(DateTimeOffset.UtcNow.Add(wait), code);
 
         // Recording the status must not fail the caller: it is diagnostics, not the answer.
         try { await cloudState.SetTransportStatusAsync(instanceId, code, null, null, null, ct); }
