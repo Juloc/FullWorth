@@ -42,6 +42,72 @@ public static class SecretBootstrap
     }
 
     /// <summary>
+    /// Secrets this installation owns, and the number of random bytes each gets.
+    ///
+    /// Deliberately NOT the database password: postgres creates its own before this process starts,
+    /// and a second writer would hand the two halves of this stack different passwords.
+    /// </summary>
+    private static readonly (string Variable, int Bytes)[] OwnSecrets =
+    [
+        ("Security__DataEncryptionKey_FILE", 48),
+        ("Security__InternalKey_FILE", 48),
+        ("Security__IngestKey_FILE", 48),
+        ("Security__ApiKey_FILE", 48),
+        ("AiAccess__CodexBridgeKey_FILE", 48)
+    ];
+
+    /// <summary>
+    /// Creates the secrets this installation owns, on a host that does not have them yet.
+    ///
+    /// This used to be FULLWORTH_SECRET: one value an operator had to invent and put in an .env file,
+    /// which then stood in for EVERY missing secret - so the same string was at once the database
+    /// password, the backend internal key, the ingest key, the banking API key and the Codex bridge
+    /// key. Anything that learned it could act as any user through the internal-context middleware.
+    /// Replacing it with a script an operator had to remember before the first start was no better:
+    /// it turns "docker compose up -d" into "docker compose up -d, but first".
+    ///
+    /// Separate random values per purpose, created by the process that reads them, at no cost.
+    ///
+    /// CREATE-ONLY, and for data_encryption_key that is the whole ballgame: overwriting it makes every
+    /// encrypted column in the database unreadable, and no Postgres backup brings it back.
+    ///
+    /// Call BEFORE <see cref="AddSecretFiles"/> - that is what reads the files back in.
+    /// </summary>
+    public static void EnsureOwnSecrets() => EnsureOwnSecrets(Environment.GetEnvironmentVariables());
+
+    /// <inheritdoc cref="EnsureOwnSecrets()"/>
+    public static void EnsureOwnSecrets(System.Collections.IDictionary environment)
+    {
+        foreach (var (variable, bytes) in OwnSecrets)
+        {
+            var path = environment[variable]?.ToString();
+            if (string.IsNullOrWhiteSpace(path)) continue;
+
+            try
+            {
+                if (File.Exists(path) && new FileInfo(path).Length > 0) continue;
+
+                var directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+
+                var secret = Convert.ToBase64String(
+                    System.Security.Cryptography.RandomNumberGenerator.GetBytes(bytes));
+
+                // Written under a temporary name and moved into place, so a reader never sees half a
+                // secret, and overwrite: false so a racing sibling process cannot clobber the winner.
+                var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllText(temp, secret);
+                File.Move(temp, path, overwrite: false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A read-only mount, or a sibling won the race. Neither is worth refusing to start
+                // over: the value is simply absent and RequireSecret says so, by name, in Production.
+            }
+        }
+    }
+
+    /// <summary>
     /// Builds the database connection strings from their parts when they are not given whole.
     ///
     /// A connection string cannot arrive through the <c>&lt;KEY&gt;_FILE</c> convention, because only a
