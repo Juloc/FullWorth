@@ -265,15 +265,27 @@ if reconstructed bytes fail this gate the client discards them, downloads the fu
 again. Payload fields must echo the manifest, and every collection has a hard row cap (100 000
 merchants, 200 000 product GTINs, 5 000 brand assets, …).
 
-Key resolution order (`ResolvePublicKeyPem`): `FullWorthCloud:KnowledgePackPublicKeyPem` →
-`…Path` (unreadable file falls through) → `…Base64` (malformed value falls through) →
-`KnowledgePackProtocol.OfficialPublicKeyPem`.
+Key resolution order (`KnowledgePackTrustStore`, read once per sync pass):
+`FullWorthCloud:KnowledgePackPublicKeyPem` → `…Path` (unreadable file falls through) → `…Base64`
+(malformed value falls through) → **the key pinned for this Cloud origin** →
+`KnowledgePackProtocol.OfficialPublicKeyPem` (still empty, and no longer load-bearing).
 
-**The shipped key is empty.** `OfficialPublicKeyPem = ""`, so
-`ResolveOfficialPublicKeyPem()` returns `null` and an instance with no explicit override fails closed
-with `knowledge_pack_public_key_missing` on every sync. This is intentional fail-closed behaviour —
-it never trusts an unverifiable pack — but it also means **no instance can install a pack today**
-unless its operator supplies a key out of band. The constant has to be filled in at release time.
+**Where the pin comes from.** An instance with no key asks the Cloud it is already enrolled with —
+`GET /v1/knowledge-packs/public-key` — and stores the answer in `KnowledgePackTrustedKeys`, keyed by
+Cloud origin, create-only. Nothing to run and nothing to copy: that matters because the previous
+answer (a shell script reading a Docker volume shared with the Cloud) only existed on the one host
+running both, so every external instance failed `knowledge_pack_public_key_missing` forever.
+
+**What that trusts.** The fetch is authenticated by TLS to an endpoint that is not configurable
+outside Development, so whoever controls that endpoint at the moment of the first sync decides the
+pinned key. From then on the pin holds: a later different key is recorded on the row
+(`OfferedFingerprint`) and refused, and the sync reports `knowledge_pack_public_key_changed` rather
+than a bare signature failure — the two look identical at the point of failure and need opposite
+answers. Accepting a rotation is an audited admin action (`POST /api/intelligence/admin/cloud/pack-key/accept`),
+never automatic.
+
+A deployment that states its own key overrules all of this, which is the point: the configuration is
+the same decision made by hand.
 
 ### Installation
 

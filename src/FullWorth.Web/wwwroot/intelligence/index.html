@@ -99,6 +99,14 @@
           <span>Wartend <strong id="cloud-outbox-waiting">—</strong></span>
           <span>Dead Letter <strong id="cloud-outbox-dead-letter">—</strong></span>
           <span>Ältester Wartender <strong id="cloud-outbox-oldest">—</strong></span>
+          <span>Signaturschlüssel <strong id="cloud-pack-key">—</strong></span>
+        </div>
+
+        <!-- Sichtbar nur, wenn die Cloud mit einem anderen Schlüssel signiert als dem hinterlegten.
+             Das ist der einzige Moment, in dem hier etwas zu entscheiden ist. -->
+        <div id="cloud-pack-key-changed" class="cloud-required" hidden>
+          <p id="cloud-pack-key-changed-text"></p>
+          <button id="cloud-pack-key-accept" type="button" class="btn btn-danger">Neuen Schlüssel übernehmen</button>
         </div>
       </section>
 

@@ -442,10 +442,16 @@ recovery.
 
 [Cloud](CLOUD.md) documents the instance side: the consent gate, the optional enrollment token
 (currently empty in Compose, so enrollment relies on the Cloud's public registration), what the
-observation outbox is allowed to contain, and knowledge-pack `RSA-PSS-SHA256` verification —
-including the fact that the shipped `KnowledgePackProtocol.OfficialPublicKeyPem` is empty, so an
-instance without an explicit override fails closed with `knowledge_pack_public_key_missing` rather
-than trusting an unverified pack.
+observation outbox is allowed to contain, and knowledge-pack `RSA-PSS-SHA256` verification.
+
+The verification key is **pinned, not shipped**. An instance with none fetches it from the Cloud it
+is enrolled with and stores it per Cloud origin, create-only; configuration still overrules the pin.
+The security property is the pin, not the fetch: after the first sync a different key is recorded and
+refused (`knowledge_pack_public_key_changed`) and only an audited admin action can replace it, so a
+later endpoint compromise cannot make this instance accept another publisher's packs. The first fetch
+itself is trusted on TLS to a non-configurable endpoint — a smaller window than the previous state,
+in which the shipped `OfficialPublicKeyPem` was empty and no external instance could verify anything
+at all.
 
 Two rules bind Cloud to the rest of this document: outbound payloads may carry only anonymous
 aggregates plus the instance id — never a finance user id or e-mail — and account deletion removes

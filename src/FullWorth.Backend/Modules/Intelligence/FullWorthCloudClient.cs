@@ -64,6 +64,13 @@ public sealed record FullWorthCloudPrice(
     decimal Min,
     decimal Max);
 
+/// <summary>
+/// The Cloud's pack verification key, as served by <c>GET /v1/knowledge-packs/public-key</c>. Hand-mirrored
+/// from <c>KnowledgePackPublicKeyDto</c> in the Cloud's Contracts project — there is no shared package
+/// between these repositories, so a renamed property breaks this silently and only at runtime.
+/// </summary>
+public sealed record FullWorthCloudPublicKey(string Algorithm, string Fingerprint, string Pem);
+
 public interface IFullWorthCloudClient
 {
     Uri BaseUri { get; }
@@ -111,6 +118,15 @@ public interface IFullWorthCloudClient
         CancellationToken ct) =>
         Task.FromResult<FullWorthCloudPrice?>(null);
 
+    /// <summary>
+    /// The key this Cloud signs packs with, so the instance can pin it instead of being handed it by an
+    /// operator. Optional with a null default: a test double or an older client that never asks simply
+    /// keeps relying on a configured key.
+    /// </summary>
+    Task<FullWorthCloudPublicKey?> GetKnowledgePackPublicKeyAsync(
+        string instanceCredential,
+        CancellationToken ct) =>
+        Task.FromResult<FullWorthCloudPublicKey?>(null);
     Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(
         string instanceCredential,
         string? currentVersion,
@@ -440,6 +456,17 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
         using var response = await SendAsync(request, ct);
         if (response.StatusCode == HttpStatusCode.NoContent) return null;
         return await DeserializeAsync<FullWorthCloudPrice>(response, ct);
+    }
+
+    public async Task<FullWorthCloudPublicKey?> GetKnowledgePackPublicKeyAsync(
+        string instanceCredential,
+        CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "v1/knowledge-packs/public-key");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", instanceCredential);
+        using var response = await SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await DeserializeAsync<FullWorthCloudPublicKey>(response, ct);
     }
 
     public async Task<KnowledgePackManifest?> GetLatestKnowledgePackManifestAsync(

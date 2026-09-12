@@ -191,7 +191,7 @@ instance repeating a key is still a duplicate. Batch receipts had the same shape
 `BatchId` alone, so another instance's receipt was replayed and its own events dropped) and are now keyed
 `(InstanceId, BatchId)`. `CloudDynamicLearningSchemaUpgrade` migrates existing databases.
 
-### P1-4 External instances can never verify a knowledge pack — `NEEDS DECISION`
+### P1-4 External instances can never verify a knowledge pack — `DONE`
 
 `Modules/Intelligence/KnowledgePackModels.cs:24` ships `OfficialPublicKeyPem = ""`. Every pack sync of
 every external instance fails with `knowledge_pack_public_key_missing`, forever, and the key is
@@ -199,14 +199,25 @@ currently distributed only through the owner's own Docker volume. Worse,
 `KnowledgePackSyncService.cs:79` downloads the pack (up to 5 MB) *before* resolving the key, so a keyless
 instance re-downloads and discards it every 5 minutes — about 288 times a day.
 
-**Decision needed from the owner:** pin the official Cloud's public key into the constant at release
-time (it is a public key; the doc comment says this was the intent), or publish it from the Cloud API.
+**Decided: the Cloud publishes it, the instance pins it.** Not the compiled-in constant — that would
+tie the key's lifetime to the release cadence and make a rotation an app update for everyone.
 
-**Independent of that decision, DONE (96daf74):** the key is resolved before any request, so a keyless
-instance no longer downloads and discards up to 5 MB every five minutes.
+- Cloud: `GET /v1/knowledge-packs/public-key`, instance-authenticated, deliberately **not**
+  entitlement-gated (the key is needed before a pack is worth downloading, and it is a public key).
+- Client: `KnowledgePackTrustStore` fetches it on the first sync that has none and pins it per Cloud
+  origin, create-only. Configuration (`…Pem` / `…Path` / `…Base64`) still wins over any pin.
 
-**Also DONE:** the key can now be obtained at all - the Cloud admin UI shows it with a download and a
-copy button (cloud a14f5d6). What remains is the owner's decision on where it gets pinned.
+**The trust this buys, stated plainly:** the fetch is authenticated only by TLS to an endpoint that is
+not configurable outside Development. Whoever controls that endpoint at the moment of the first sync
+decides which key gets pinned. After that the pin holds — a later, different key is recorded and
+refused, never adopted, and surfaces as `knowledge_pack_public_key_changed` with both fingerprints in
+*Intelligence → FullWorth Cloud*, where an administrator can accept it. So the exposure is one moment
+rather than every sync, against a previous state of verifying nothing at all.
+
+`OfficialPublicKeyPem` stays as the last fallback and stays empty. It is no longer load-bearing.
+
+**Also DONE (96daf74):** the key is resolved before any request, so a keyless instance no longer
+downloads and discards up to 5 MB every five minutes.
 
 ### P1-5 A self-hoster's own Cloud URL is silently ignored — `DONE`, then revised
 

@@ -113,6 +113,7 @@ public static class BackendApplication
         builder.Services.AddScoped<CloudProductPriceContributionService>();
         builder.Services.AddHostedService<CloudProductPriceContributionWorker>();
         builder.Services.AddHostedService<CloudLearningOutboxWorker>();
+        builder.Services.AddScoped<KnowledgePackTrustStore>();
         builder.Services.AddScoped<KnowledgePackSyncService>();
         builder.Services.AddScoped<CloudOperationalRegistryResolver>();
         builder.Services.AddScoped<BrandPackService>();

@@ -160,6 +160,58 @@ public static class IntelligenceAdminEndpoints
             return Results.Ok(state);
         });
 
+        // Which pack verification key this installation trusts, and where it came from. Normally there
+        // is nothing to do here: the key is pinned automatically on first contact with the Cloud. It
+        // becomes interesting exactly once — when the Cloud starts signing with a different key, which
+        // this refuses to adopt on its own.
+        group.MapGet("/cloud/pack-key", async (
+            CurrentUserContext currentUser,
+            IntelligenceAdminAuthorizer authorizer,
+            KnowledgePackTrustStore trust,
+            CancellationToken ct) =>
+        {
+            if (await GetAdminUserIdAsync(currentUser, authorizer, ct) is null)
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            return Results.Ok(await trust.GetViewAsync(ct));
+        });
+
+        // Accepting a rotated Cloud signing key. Deliberately a person's decision and an audited one:
+        // the pin is the whole reason a swapped key cannot quietly make this installation trust another
+        // publisher's packs, so nothing automatic may move it.
+        group.MapPost("/cloud/pack-key/accept", async (
+            CurrentUserContext currentUser,
+            IntelligenceAdminAuthorizer authorizer,
+            IntelligenceDbContext db,
+            CloudIntelligenceStateService cloudState,
+            CloudInstanceCredentialStore credentialStore,
+            KnowledgePackTrustStore trust,
+            CancellationToken ct) =>
+        {
+            var actorUserId = await GetAdminUserIdAsync(currentUser, authorizer, ct);
+            if (actorUserId is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            var state = await cloudState.GetEnabledStateAsync(ct);
+            var credential = state is null ? null : await credentialStore.GetSecretAsync(state.InstanceId, ct);
+            if (string.IsNullOrWhiteSpace(credential))
+                return Results.Conflict(new { error = "cloud_credential_missing" });
+
+            KnowledgePackTrustView view;
+            try
+            {
+                view = await trust.AcceptOfferedKeyAsync(credential, ct);
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.Conflict(new { error = "knowledge_pack_public_key_missing" });
+            }
+
+            IntelligenceAuditWriter.Record(
+                db, actorUserId.Value, "cloud.pack_key_pinned", "KnowledgePackTrustedKey",
+                outcome: view.Fingerprint);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(view);
+        });
+
         group.MapPost("/cloud/sync", async (
             CurrentUserContext currentUser,
             IntelligenceAdminAuthorizer authorizer,

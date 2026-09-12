@@ -308,6 +308,18 @@ public static class KnowledgePackModelConfiguration
             entity.Property(x => x.LastErrorCode).HasMaxLength(120);
         });
 
+        modelBuilder.Entity<KnowledgePackTrustedKey>(entity =>
+        {
+            // One pin per Cloud origin, enforced by the database: a second row for the same endpoint
+            // would make which key this installation trusts depend on insertion order.
+            entity.HasIndex(x => x.Endpoint).IsUnique();
+            entity.Property(x => x.Endpoint).HasMaxLength(400);
+            entity.Property(x => x.Algorithm).HasMaxLength(40);
+            entity.Property(x => x.PublicKeyPem).HasColumnType("text");
+            entity.Property(x => x.Fingerprint).HasMaxLength(120);
+            entity.Property(x => x.OfferedFingerprint).HasMaxLength(120);
+        });
+
         modelBuilder.Entity<KnowledgePackArchive>(entity =>
         {
             entity.HasIndex(x => new { x.PackId, x.Version }).IsUnique();

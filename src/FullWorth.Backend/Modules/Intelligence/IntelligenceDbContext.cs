@@ -34,6 +34,7 @@ public sealed class IntelligenceDbContext(DbContextOptions<IntelligenceDbContext
     public DbSet<CloudSubmissionOutbox> CloudSubmissionOutbox => Set<CloudSubmissionOutbox>();
     public DbSet<KnowledgePackInstallation> KnowledgePackInstallations => Set<KnowledgePackInstallation>();
     public DbSet<KnowledgePackArchive> KnowledgePackArchives => Set<KnowledgePackArchive>();
+    public DbSet<KnowledgePackTrustedKey> KnowledgePackTrustedKeys => Set<KnowledgePackTrustedKey>();
     public DbSet<OfficialMerchantMapping> OfficialMerchantMappings => Set<OfficialMerchantMapping>();
     public DbSet<OfficialBrandAsset> OfficialBrandAssets => Set<OfficialBrandAsset>();
     public DbSet<OfficialBrandAlias> OfficialBrandAliases => Set<OfficialBrandAlias>();

@@ -65,6 +65,8 @@ const CLOUD_ERRORS = {
   cloud_server_error: 'Die Cloud meldet einen Serverfehler. Das liegt nicht an dieser Instanz; es wird erneut versucht.',
   cloud_batch_too_large: 'Ein Beitrag war zu groß für die Cloud. Er wird beim nächsten Versuch kleiner geschnitten.',
   cloud_enrollment_refused: 'Die Cloud hat die Anmeldung dieser Instanz abgelehnt. Prüfe den Enrollment-Token.',
+  knowledge_pack_public_key_missing: 'Diese Instanz kennt noch keinen Signaturschlüssel der Cloud, deshalb können Wissenspakete nicht geprüft werden. Beim nächsten Kontakt mit der Cloud wird einer hinterlegt.',
+  knowledge_pack_public_key_changed: 'Die Cloud signiert Wissenspakete jetzt mit einem anderen Schlüssel als dem hinterlegten. Pakete bleiben ungeprüft, bis der neue Schlüssel hier ausdrücklich übernommen wird.',
   registration_lost: 'Der Vorgang ist abgelaufen. Bitte starte die Einrichtung erneut.'
 };
 
@@ -121,6 +123,56 @@ function renderCloudState(state) {
 
   if (state.lastErrorCode && enabled) setResult(`Cloud-Status: ${cloudErrorText(state.lastErrorCode)}`, 'bad');
   refreshSaveState();
+  if (enabled) loadPackKey();
+}
+
+// Welchen Signaturschlüssel diese Instanz für Wissenspakete akzeptiert. Normalerweise ist hier nichts
+// zu tun: der Schlüssel wird beim ersten Kontakt mit der Cloud automatisch hinterlegt. Interessant
+// wird es genau einmal - wenn die Cloud plötzlich mit einem anderen signiert.
+const PACK_KEY_SOURCES = {
+  configured: 'aus der Konfiguration',
+  pinned: 'automatisch hinterlegt',
+  none: 'noch keiner'
+};
+
+async function loadPackKey() {
+  const label = $('cloud-pack-key');
+  const warning = $('cloud-pack-key-changed');
+  if (!label) return;
+  try {
+    const key = await api('/cloud/pack-key');
+    label.textContent = key.fingerprint
+      ? `${key.fingerprint} (${PACK_KEY_SOURCES[key.source] || key.source})`
+      : 'noch keiner';
+    label.title = key.pinnedAt ? `Hinterlegt am ${formatDate(key.pinnedAt)} für ${key.endpoint}` : key.endpoint;
+
+    if (!warning) return;
+    warning.hidden = !key.offeredFingerprint;
+    if (key.offeredFingerprint) {
+      $('cloud-pack-key-changed-text').textContent =
+        `Die Cloud signiert jetzt mit ${key.offeredFingerprint}, hinterlegt ist ${key.fingerprint}. ` +
+        'Wissenspakete bleiben ungeprüft, bis du den neuen Schlüssel übernimmst. Übernimm ihn nur, wenn ' +
+        'du weißt, dass die Cloud ihren Schlüssel gewechselt hat.';
+    }
+  } catch (error) {
+    if (error.status === 403) return;
+    label.textContent = '—';
+  }
+}
+
+async function acceptPackKey() {
+  const button = $('cloud-pack-key-accept');
+  if (button) button.disabled = true;
+  setResult('Übernimmt den neuen Signaturschlüssel…');
+  try {
+    const key = await api('/cloud/pack-key/accept', { method: 'POST', body: '{}' });
+    setResult(`Der Signaturschlüssel ${key.fingerprint} ist jetzt hinterlegt.`, 'ok');
+    await loadPackKey();
+  } catch (error) {
+    setResult(error.message || 'Der Signaturschlüssel konnte nicht übernommen werden.', 'bad');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function updateConsentVisibility() {
@@ -203,5 +255,6 @@ for (const id of ['cloud-choice-enabled', 'cloud-choice-local']) {
 }
 $('cloud-consent')?.addEventListener('change', refreshSaveState);
 $('cloud-save')?.addEventListener('click', saveDecision);
+$('cloud-pack-key-accept')?.addEventListener('click', acceptPackKey);
 
 loadCloud();

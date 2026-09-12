@@ -20,11 +20,19 @@ public sealed class KnowledgePackSyncService(
     CloudInstanceCredentialStore credentialStore,
     IFullWorthCloudClient cloud,
     BrandPackService brandPacks,
+    KnowledgePackTrustStore trust,
     IConfiguration configuration,
     ILogger<KnowledgePackSyncService> logger)
 {
     public const int MaximumPackBytes = FullWorthCloudClient.MaximumKnowledgePackBytes;
     private const int ArchiveRetention = 3;
+
+    /// <summary>
+    /// The key this pass verifies with, resolved once at its start. Resolving it can hit the Cloud (to
+    /// pin one on first contact), and verification happens deep inside a synchronous check — so it is
+    /// established before anything is downloaded rather than looked up again per pack.
+    /// </summary>
+    private string? verificationKeyPem;
 
     public async Task<KnowledgePackSyncResult> SyncOnceAsync(CancellationToken ct)
     {
@@ -38,17 +46,26 @@ public sealed class KnowledgePackSyncService(
         var installation = await db.KnowledgePackInstallations.SingleOrDefaultAsync(
             x => x.ScopeKey == KnowledgePackProtocol.InstallationScopeKey, ct);
         var now = DateTimeOffset.UtcNow;
+        string? credential = null;
 
         try
         {
             var secret = await EnsureCredentialAsync(state.InstanceId, ct);
             if (string.IsNullOrWhiteSpace(secret))
                 return await FailAsync(installation, state, "cloud_credential_missing", ct);
+            credential = secret;
 
             // Resolve the verification key BEFORE asking for anything. Without it the pack cannot be
             // verified and is therefore useless, and this ran every few minutes: an instance with no key
             // downloaded up to 5 MB and threw it away roughly 288 times a day, on both sides of the wire.
-            if (ResolvePublicKeyPem() is null)
+            //
+            // This is also where an installation that has never held a key gets one: it asks the Cloud it
+            // is already enrolled with and pins the answer. Before, the only way to obtain the key was to
+            // copy it out of a Docker volume shared with the Cloud — impossible for anyone not running
+            // both on the same host, and the shipped fallback key is empty.
+            verificationKeyPem = await trust.EnsurePinnedAsync(secret, ct)
+                ?? KnowledgePackProtocol.ResolveOfficialPublicKeyPem();
+            if (verificationKeyPem is null)
                 return await FailAsync(installation, state, "knowledge_pack_public_key_missing", ct);
 
             var region = NormalizeRegion(configuration["FullWorthCloud:KnowledgePackRegion"]);
@@ -247,8 +264,18 @@ public sealed class KnowledgePackSyncService(
         }
         catch (KnowledgePackVerificationException ex)
         {
-            logger.LogWarning("FullWorth Cloud knowledge pack rejected: {ErrorCode}", ex.ErrorCode);
-            return await FailAsync(installation, state, ex.ErrorCode, ct);
+            // A signature that does not verify and a Cloud that has rotated its signing key look
+            // identical from here, and they need opposite answers: one is a broken pack to retry, the
+            // other is a decision for whoever runs this installation. Ask which key the Cloud signs with
+            // now, and say so when it is not the pinned one. The pin itself is never touched here.
+            var errorCode = ex.ErrorCode;
+            if (errorCode == "knowledge_pack_signature_invalid" &&
+                credential is not null &&
+                await trust.NoteOfferedKeyAsync(credential, ct))
+                errorCode = KnowledgePackTrustStore.KeyChangedErrorCode;
+
+            logger.LogWarning("FullWorth Cloud knowledge pack rejected: {ErrorCode}", errorCode);
+            return await FailAsync(installation, state, errorCode, ct);
         }
         catch (FullWorthCloudException ex)
         {
@@ -1055,43 +1082,13 @@ public sealed class KnowledgePackSyncService(
             db.KnowledgePackArchives.RemoveRange(old);
     }
 
-    private string? ResolvePublicKeyPem()
-    {
-        var pem = configuration["FullWorthCloud:KnowledgePackPublicKeyPem"];
-        if (!string.IsNullOrWhiteSpace(pem))
-            return pem.Replace("\\n", Environment.NewLine, StringComparison.Ordinal);
-
-        var path = configuration["FullWorthCloud:KnowledgePackPublicKeyPath"]?.Trim();
-        if (!string.IsNullOrWhiteSpace(path))
-        {
-            try
-            {
-                if (File.Exists(path))
-                    return File.ReadAllText(path);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Unreadable override: fall through to the shipped official key instead of failing outright.
-            }
-        }
-
-        var encoded = configuration["FullWorthCloud:KnowledgePackPublicKeyBase64"];
-        if (!string.IsNullOrWhiteSpace(encoded))
-        {
-            try
-            {
-                return Encoding.UTF8.GetString(Convert.FromBase64String(encoded.Trim()));
-            }
-            catch (FormatException)
-            {
-                // Malformed override: fall through to the shipped official key.
-            }
-        }
-
-        // No operator override. Use the official verification key that ships with FullWorth, so an external
-        // self-hosted instance needs no private Cloud-server secret volume at all.
-        return KnowledgePackProtocol.ResolveOfficialPublicKeyPem();
-    }
+    /// <summary>
+    /// The key established at the start of this pass — an explicitly configured one, otherwise the one
+    /// pinned for this Cloud, otherwise the key shipped with the build. Reading it here rather than
+    /// resolving again keeps verification synchronous and keeps one pass verifying against one key.
+    /// </summary>
+    private string? ResolvePublicKeyPem() =>
+        verificationKeyPem ?? KnowledgePackProtocol.ResolveOfficialPublicKeyPem();
 
     private static bool IsStrictlyNewerVersion(string candidate, string current)
     {

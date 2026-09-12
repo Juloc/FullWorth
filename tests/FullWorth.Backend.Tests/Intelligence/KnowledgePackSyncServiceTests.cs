@@ -41,6 +41,93 @@ public sealed class KnowledgePackSyncServiceTests
         Assert.Single(await fixture.Db.KnowledgePackArchives.ToListAsync());
     }
 
+    /// <summary>
+    /// The self-hoster's case, end to end: nothing configured, no shared Docker volume, no key.
+    ///
+    /// This is what every external instance looked like. It could enroll, it could download a pack, and
+    /// then it rejected the pack as unverifiable — forever, because the only way to obtain the key was
+    /// to copy a file out of a volume that only exists on the Cloud's own host. Now the instance asks
+    /// the Cloud it is already talking to, pins the answer, and installs the pack.
+    /// </summary>
+    [Fact]
+    public async Task An_instance_that_was_never_given_a_key_obtains_one_and_installs_the_pack()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var pack = BuildPack(rsa, "2026.09.12-1", "ALDI", "food.groceries");
+        var cloud = new FakeCloudClient(pack.Manifest, pack.Payload)
+        {
+            OfferedPublicKey = new FullWorthCloudPublicKey(
+                "RSA-PSS-SHA256",
+                KnowledgePackTrustStore.FingerprintOf(rsa.ExportSubjectPublicKeyInfoPem())!,
+                rsa.ExportSubjectPublicKeyInfoPem())
+        };
+
+        var result = await fixture.CreateService(cloud, rsa, configureKey: false)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("installed", result.Status);
+        var pinned = await fixture.Db.KnowledgePackTrustedKeys.SingleAsync();
+        Assert.Equal("https://cloud.test", pinned.Endpoint);
+    }
+
+    /// <summary>
+    /// A Cloud that serves no key leaves the instance where it was: refusing packs, saying why, and —
+    /// importantly — not downloading five megabytes first to throw them away.
+    /// </summary>
+    [Fact]
+    public async Task An_instance_with_no_key_and_a_cloud_that_offers_none_refuses_before_downloading()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var rsa = RSA.Create(2048);
+        var pack = BuildPack(rsa, "2026.09.12-2", "ALDI", "food.groceries");
+        var cloud = new FakeCloudClient(pack.Manifest, pack.Payload) { OfferedPublicKey = null };
+
+        var result = await fixture.CreateService(cloud, rsa, configureKey: false)
+            .SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal("knowledge_pack_public_key_missing", result.ErrorCode);
+        Assert.Equal(0, cloud.FullDownloadCount);
+        Assert.Empty(await fixture.Db.KnowledgePackTrustedKeys.ToListAsync());
+    }
+
+    /// <summary>
+    /// A pack signed by a key that is not the pinned one is refused, and refused with the RIGHT reason.
+    /// "Signature invalid" and "the Cloud changed its key" look identical at the point of failure and
+    /// need opposite answers: one is a broken pack, the other is a decision for an administrator.
+    /// </summary>
+    [Fact]
+    public async Task A_pack_signed_with_a_rotated_key_is_refused_as_a_key_change()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var pinned = RSA.Create(2048);
+        using var rotated = RSA.Create(2048);
+        var first = BuildPack(pinned, "2026.09.12-3", "ALDI", "food.groceries");
+        var cloud = new FakeCloudClient(first.Manifest, first.Payload)
+        {
+            OfferedPublicKey = KnowledgePackTrustFixture.KeyOf(pinned)
+        };
+        var service = fixture.CreateService(cloud, pinned, configureKey: false);
+        Assert.Equal("installed", (await service.SyncOnceAsync(CancellationToken.None)).Status);
+
+        // The Cloud rotates its signing key and publishes a pack signed with the new one.
+        var second = BuildPack(rotated, "2026.09.12-4", "LIDL", "food.groceries");
+        cloud.SetPack(second.Manifest, second.Payload);
+        cloud.OfferedPublicKey = KnowledgePackTrustFixture.KeyOf(rotated);
+
+        var result = await service.SyncOnceAsync(CancellationToken.None);
+
+        Assert.Equal("failed", result.Status);
+        Assert.Equal(KnowledgePackTrustStore.KeyChangedErrorCode, result.ErrorCode);
+
+        // The pin did not move, and the pack that was already installed is untouched.
+        var row = await fixture.Db.KnowledgePackTrustedKeys.SingleAsync();
+        Assert.Equal(KnowledgePackTrustStore.FingerprintOf(pinned.ExportSubjectPublicKeyInfoPem()), row.Fingerprint);
+        Assert.Equal(KnowledgePackTrustStore.FingerprintOf(rotated.ExportSubjectPublicKeyInfoPem()), row.OfferedFingerprint);
+        Assert.Equal(first.Manifest.Version, (await fixture.Db.KnowledgePackInstallations.SingleAsync()).Version);
+    }
+
     [Fact]
     public async Task Signed_pack_downloads_missing_brand_asset_once_and_installs_aliases()
     {
@@ -751,27 +838,38 @@ public sealed class KnowledgePackSyncServiceTests
             return new Fixture(connection, db, stateService);
         }
 
-        public KnowledgePackSyncService CreateService(FakeCloudClient cloud, RSA rsa)
+        /// <param name="configureKey">
+        /// False builds an installation that was told no key at all — the state every self-hoster is in
+        /// who does not share a Docker volume with the Cloud. It then has to obtain one from the Cloud.
+        /// </param>
+        public KnowledgePackSyncService CreateService(FakeCloudClient cloud, RSA rsa, bool configureKey = true)
         {
-            var pem = rsa.ExportSubjectPublicKeyInfoPem();
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["FullWorthCloud:KnowledgePackPublicKeyBase64"] =
-                        Convert.ToBase64String(Encoding.UTF8.GetBytes(pem)),
-                    ["FullWorthCloud:KnowledgePackId"] = "fullworth-official",
-                    ["FullWorthCloud:KnowledgePackRegion"] = "GLOBAL"
-                })
-                .Build();
-
+            var config = Configuration(configureKey ? rsa : null);
             return new KnowledgePackSyncService(
                 Db,
                 stateService,
                 new CloudInstanceCredentialStore(Db, FieldCipher.Null),
                 cloud,
                 new BrandPackService(Db),
+                CreateTrustStore(cloud, config),
                 config,
                 NullLogger<KnowledgePackSyncService>.Instance);
+        }
+
+        public KnowledgePackTrustStore CreateTrustStore(FakeCloudClient cloud, IConfiguration? config = null) =>
+            new(Db, cloud, config ?? Configuration(null), NullLogger<KnowledgePackTrustStore>.Instance);
+
+        public IConfiguration Configuration(RSA? rsa)
+        {
+            var settings = new Dictionary<string, string?>
+            {
+                ["FullWorthCloud:KnowledgePackId"] = "fullworth-official",
+                ["FullWorthCloud:KnowledgePackRegion"] = "GLOBAL"
+            };
+            if (rsa is not null)
+                settings["FullWorthCloud:KnowledgePackPublicKeyBase64"] =
+                    Convert.ToBase64String(Encoding.UTF8.GetBytes(rsa.ExportSubjectPublicKeyInfoPem()));
+            return new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         }
 
         public async ValueTask DisposeAsync()
@@ -795,7 +893,19 @@ public sealed class KnowledgePackSyncServiceTests
         public int BrandAssetDownloadCount { get; private set; }
         public int FullDownloadCount { get; private set; }
 
+        /// <summary>The key this fake Cloud says it signs with, or null for a Cloud that serves none.</summary>
+        public FullWorthCloudPublicKey? OfferedPublicKey { get; set; }
+        public int PublicKeyRequestCount { get; private set; }
+
         public Uri BaseUri => new("https://cloud.test/");
+
+        public Task<FullWorthCloudPublicKey?> GetKnowledgePackPublicKeyAsync(
+            string instanceCredential,
+            CancellationToken ct)
+        {
+            PublicKeyRequestCount++;
+            return Task.FromResult(OfferedPublicKey);
+        }
 
         public void SetPack(KnowledgePackManifest nextManifest, byte[] nextPayload)
         {
