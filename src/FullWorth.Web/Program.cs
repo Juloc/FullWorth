@@ -45,6 +45,18 @@ FullWorth.Shared.SecretBootstrap.AddComposedConnectionStrings(builder.Configurat
 // Enable Banking redirect and the host pin. A value set by hand still wins for each of them.
 FullWorth.Shared.PublicUrl.AddDerivedSettings(builder.Configuration);
 
+// The stored address, as a reloadable source, inserted BETWEEN appsettings.json and the environment
+// variables. That position is the whole precedence rule: an operator who sets FullWorth__PublicUrl
+// still wins, while appsettings' development defaults (Passkeys:RelyingPartyId = localhost,
+// AllowedHosts = *) lose to what this installation actually learned about itself.
+var publicUrlSource = new InstancePublicUrlConfigurationSource();
+builder.Configuration.Sources.Insert(
+    Math.Max(0, builder.Configuration.Sources.ToList().FindIndex(
+        source => source is Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource)),
+    publicUrlSource);
+builder.Services.AddSingleton(publicUrlSource);
+builder.Services.AddScoped<InstanceSettingsStore>();
+
 var unifiedHost = FullWorth.Shared.UnifiedHost.IsUnified(builder.Configuration);
 
 var configuredAuth = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
@@ -242,12 +254,6 @@ _ = app.Services.GetRequiredService<BackendContextOptions>();
 // to observe - a container with no reachable database died on the connection and never reached it.
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "ConnectionStrings:AuthDatabase", FullWorth.Shared.SecretBootstrap.SecretKind.ConnectionString);
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "Services:BankingApiKey");
-if (app.Environment.IsProduction())
-{
-    var allowedHosts = app.Configuration["AllowedHosts"];
-    if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts.Split(';').Any(h => h.Trim() == "*"))
-        throw new InvalidOperationException("AllowedHosts must be set to the production hostname(s) (not '*') before exposing FullWorth.Web. Set FullWorth:PublicUrl, or AllowedHosts itself.");
-}
 
 if (unifiedHost)
 {
@@ -259,6 +265,26 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await authDb.Database.MigrateAsync();
+
+    // The address this installation learned about itself, published before anything reads a host
+    // pin or a passkey relying party.
+    publicUrlSource.Provider.Publish(
+        await scope.ServiceProvider.GetRequiredService<InstanceSettingsStore>()
+            .GetPublicUrlAsync(CancellationToken.None));
+
+    // The host pin is fail-closed for a deployment that has something to protect. A brand-new one has
+    // no users and no data, and cannot be pinned yet either - it learns its address from the first
+    // registration, which is a human arriving on the real domain. Refusing to start before that would
+    // be a deadlock: no start, no registration, nothing to learn from.
+    if (app.Environment.IsProduction() &&
+        await scope.ServiceProvider.GetRequiredService<UserManager<AuthUser>>().Users.AnyAsync())
+    {
+        var pinned = app.Configuration["AllowedHosts"];
+        if (string.IsNullOrWhiteSpace(pinned) || pinned.Split(';').Any(h => h.Trim() == "*"))
+            throw new InvalidOperationException(
+                "This instance has users but no host pin. Set FullWorth:PublicUrl, or AllowedHosts itself.");
+    }
+
     // After the migration, because it reads the stored providers. An unconfigured remote scheme is
     // not harmless: ASP.NET asks every remote handler on every request whether it wants the path,
     // and building one validates its options - so a Google scheme without a client id makes the

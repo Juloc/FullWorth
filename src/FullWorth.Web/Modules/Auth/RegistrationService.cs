@@ -15,7 +15,9 @@ public sealed class RegistrationService(
     BackendContextOptions backendOptions,
     UserManager<AuthUser> userManager,
     AuthService auth,
-    AuthSessionCoordinator sessions)
+    AuthSessionCoordinator sessions,
+    FullWorth.Web.Modules.Admin.InstanceSettingsStore instanceSettings,
+    FullWorth.Web.Modules.Admin.InstancePublicUrlConfigurationSource publicUrl)
 {
     private static readonly SemaphoreSlim FirstRegistrationGate = new(1, 1);
 
@@ -79,6 +81,8 @@ public sealed class RegistrationService(
             var adminResult = await userManager.UpdateAsync(authUser);
             if (!adminResult.Succeeded)
                 return new RegisterResultDto(false, "registration_failed", null, adminResult.Errors.Select(error => error.Description).ToArray());
+
+            await RememberPublicUrlAsync(context, ct);
         }
 
         var agreement = await AddAgreementClaimsAsync(authUser);
@@ -154,6 +158,8 @@ public sealed class RegistrationService(
             var adminResult = await userManager.UpdateAsync(authUser);
             if (!adminResult.Succeeded)
                 return new RegisterResultDto(false, "registration_failed", null, adminResult.Errors.Select(error => error.Description).ToArray());
+
+            await RememberPublicUrlAsync(context, ct);
         }
 
         var agreement = await AddAgreementClaimsAsync(authUser);
@@ -168,6 +174,34 @@ public sealed class RegistrationService(
         {
             if (registrationGateHeld)
                 FirstRegistrationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Learns the address this installation is reached at, from the request that set it up.
+    ///
+    /// This is the one moment it can be learned honestly: a human is here, on the real domain, through
+    /// the real reverse proxy, and there is not yet a single passkey whose relying party id could be
+    /// invalidated by getting it wrong. It used to be a line an operator had to edit in a compose file,
+    /// along with three more derived from it.
+    ///
+    /// Publishing it immediately is what makes the host pin start applying without a restart: the
+    /// configuration source signals a change and the host-filtering middleware re-binds.
+    ///
+    /// Never fails the registration. Somebody who has just created their account and is told it did not
+    /// work would try again - and the second attempt cannot succeed, because the account exists.
+    /// </summary>
+    private async Task RememberPublicUrlAsync(HttpContext context, CancellationToken ct)
+    {
+        try
+        {
+            // Forwarded headers are applied by the middleware already, so this is the browser view.
+            var origin = $"{context.Request.Scheme}://{context.Request.Host.Value}";
+            publicUrl.Provider.Publish(await instanceSettings.RememberPublicUrlAsync(origin, ct));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The account exists either way, and the address can still come from configuration.
         }
     }
 

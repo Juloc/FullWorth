@@ -17,12 +17,22 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
     public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
     public DbSet<FullWorth.Web.Modules.Admin.ExternalAuthSettings> ExternalAuthSettings => Set<FullWorth.Web.Modules.Admin.ExternalAuthSettings>();
+    public DbSet<FullWorth.Web.Modules.Admin.InstanceSettings> InstanceSettings => Set<FullWorth.Web.Modules.Admin.InstanceSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
         builder.HasDefaultSchema("auth");
+
+        builder.Entity<FullWorth.Web.Modules.Admin.InstanceSettings>(entity =>
+        {
+            // Exactly one row: a second "instance" row would make which address this installation
+            // believes it has depend on insertion order.
+            entity.HasIndex(x => x.ScopeKey).IsUnique();
+            entity.Property(x => x.ScopeKey).IsRequired().HasMaxLength(40);
+            entity.Property(x => x.PublicUrl).IsRequired().HasMaxLength(300);
+        });
 
         builder.Entity<FullWorth.Web.Modules.Admin.ExternalAuthSettings>(entity =>
         {

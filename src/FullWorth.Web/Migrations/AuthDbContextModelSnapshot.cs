@@ -107,6 +107,33 @@ namespace FullWorth.Web.Migrations
                     b.ToTable("ExternalAuthSettings", "auth");
                 });
 
+            modelBuilder.Entity("FullWorth.Web.Modules.Admin.InstanceSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("InstanceSettings", "auth");
+                });
+
             modelBuilder.Entity("FullWorth.Web.Modules.Auth.AuthUser", b =>
                 {
                     b.Property<Guid>("Id")

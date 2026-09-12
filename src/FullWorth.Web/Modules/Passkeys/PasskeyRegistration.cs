@@ -13,9 +13,19 @@ public static class PasskeyRegistration
     {
         services.Configure<PasskeyOptions>(configuration.GetSection(PasskeyOptions.SectionName));
 
-        services.AddSingleton<IFido2>(provider =>
+        // Scoped, and built from the MONITOR rather than a snapshot.
+        //
+        // The relying party id comes from the installation's public address, which a fresh instance
+        // learns from its first registration rather than from a compose file. As a singleton over
+        // IOptions this was fixed for the life of the process, so a just-installed instance would have
+        // kept the development default until somebody restarted it - and passkeys registered against
+        // that default are worthless the moment the real one takes over.
+        //
+        // Validation moves with it: it is the request that needs a usable relying party, not startup,
+        // and a brand-new instance has no address yet and nobody to use a passkey either.
+        services.AddScoped<IFido2>(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<PasskeyOptions>>().Value;
+            var options = provider.GetRequiredService<IOptionsMonitor<PasskeyOptions>>().CurrentValue;
             var environment = provider.GetRequiredService<IHostEnvironment>();
             options.Validate(environment.IsProduction());
             return new Fido2(new Fido2Configuration

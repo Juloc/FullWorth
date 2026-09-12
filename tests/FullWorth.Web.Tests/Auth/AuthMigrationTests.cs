@@ -17,7 +17,8 @@ public sealed class AuthMigrationTests
     private const string AccountDeletionMigration = "20260906100000_AccountDeletion";
     private const string AdminUserManagementMigration = "20260906201500_AdminUserManagement";
     private const string ExternalAuthMigration = "20260912170000_ExternalAuthSettings";
-    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration, ExternalAuthMigration];
+    private const string InstanceSettingsMigration = "20260912190000_InstanceSettings";
+    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration, ExternalAuthMigration, InstanceSettingsMigration];
 
     [Fact]
     public async Task ExistingAuthDatabase_UpgradesThroughAdminUserManagementAndPreservesExistingUser()
@@ -47,6 +48,7 @@ public sealed class AuthMigrationTests
         // ...and on to the newest. The point of this test is that an OLD database arrives at the current
         // schema with its user intact, so it has to keep following the chain as migrations are added.
         await migrator.MigrateAsync(ExternalAuthMigration);
+        await migrator.MigrateAsync(InstanceSettingsMigration);
 
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
@@ -79,6 +81,9 @@ public sealed class AuthMigrationTests
         // Which external sign-in providers this installation offers. Stored rather than deployed, so
         // turning a login button on no longer means editing six environment variables and restarting.
         Assert.True(await TableExistsAsync(database.ConnectionString, "ExternalAuthSettings"));
+        // The address this installation was reached at. Learned from the first registration, not edited
+        // into a compose file.
+        Assert.True(await TableExistsAsync(database.ConnectionString, "InstanceSettings"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Accounts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Transactions"));
         Assert.False(db.Database.HasPendingModelChanges());
