@@ -63,15 +63,22 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
         foreach (var action in new[] { "outbox-retry", "outbox-flush", "outbox-delete", "outbox-resend" })
             Assert.DoesNotContain(action, html);
 
-        // The precise rule: this page calls exactly three paths - read the state, and record the
-        // consent decision either way. Anything else appearing here is the Cloud service's surface
-        // leaking into the self-hosted app.
+        // The precise rule: this page calls exactly these paths. Anything else appearing here is the
+        // Cloud service's surface leaking into the self-hosted app.
+        //
+        // The two pack-key paths act on THIS instance's own trust store - which verification key it
+        // accepts - and never on the Cloud. Reading it is the same kind of local diagnostic as the
+        // outbox depth. Accepting a rotated key is an action, but on a local row, and it is the one
+        // decision a self-hoster has to be able to make here: the alternative is editing configuration
+        // and restarting, which is exactly what the pinned key replaced.
         var called = Regex.Matches(script, """api\('(?<path>/[a-z/-]+)'""")
             .Select(match => match.Groups["path"].Value)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(["/cloud", "/cloud/disable", "/cloud/enable"], called);
+        Assert.Equal(
+            ["/cloud", "/cloud/disable", "/cloud/enable", "/cloud/pack-key", "/cloud/pack-key/accept"],
+            called);
 
         Assert.Contains("state.requiresSetupDecision", script);
     }
