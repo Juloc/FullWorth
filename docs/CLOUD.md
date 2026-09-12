@@ -49,21 +49,30 @@ but nothing in the app links to it — it is only reachable by typing
 `/intelligence/index.html` (there is no `UseDefaultFiles`, so `/intelligence` hits the SPA
 fallback).
 
-## The endpoint, and why `BaseUrl` does not help you
+## The endpoint
 
-`FullWorthCloudClient.OfficialBaseUrl` is the compiled constant `https://api.fullworth.de/`.
+`FullWorthCloudClient.OfficialBaseUrl` is the compiled constant `https://api.fullworth.de/`, and
+outside Development that is the only endpoint this build talks to.
 
-```csharp
-var configured = configuration["FullWorthCloud:BaseUrl"]?.Trim();
-var allowOverride = environment.IsDevelopment() || environment.IsEnvironment("Testing");
-var value = allowOverride && !string.IsNullOrWhiteSpace(configured) ? configured : OfficialBaseUrl;
-```
+The reason is not preference. **The Cloud server is a private repository.** `FullWorthCloud:BaseUrl`
+promised a self-hoster they could point their instance at their own Cloud, and nobody outside can
+build one — so the setting could only ever send finance observations to a host that is not a FullWorth
+Cloud.
 
-**`FullWorthCloud:BaseUrl` is ignored in Production.** A self-hoster who runs their own Cloud cannot
-point their instance at it with configuration; the setting is honoured only under
-`ASPNETCORE_ENVIRONMENT=Development` or `Testing`. In Production a non-HTTPS URL would also be
-rejected outright. This is a hard block on self-hosting the Cloud half, and it is not documented
-anywhere in the operator-facing files.
+Three behaviours were possible and only one is defensible:
+
+| | What happens | |
+|---|---|---|
+| ❌ | Read the value, discard it, keep sending to `api.fullworth.de` | The original bug. The data went somewhere the operator had not chosen, with no error and no warning |
+| ❌ | Honour it | Sends finance observations to a host that cannot be a FullWorth Cloud |
+| ✅ | Refuse it, switch Cloud **off**, say why | `cloud_endpoint_not_configurable` on every call, one warning line at startup |
+
+Switching Cloud off is safe by design: Cloud and AI are optional, so local finance features are
+unaffected. Constructing the client still succeeds — a misconfigured endpoint must not take the
+instance down with it — and `CloudEndpointStartupLogger` writes the reason once at startup.
+
+Development and Testing still point anywhere, including a loopback address: that is where a local
+cloud is the whole point, and where this repository runs its own tests.
 
 Timeout is 45 s. Failures are normalized to a `FullWorthCloudException` with a stable code:
 
@@ -76,8 +85,20 @@ Timeout is 45 s. Failures are normalized to a `FullWorthCloudException` with a s
 | 413 | `cloud_batch_too_large` | no |
 | 429 | `cloud_rate_limited` | yes (honours `Retry-After`) |
 | 5xx | `cloud_server_error` | yes |
+| 426 | `client_too_old` | no — this build is older than the Cloud serves; only an update fixes it |
 | other | `cloud_http_<status>` | no |
 | unparsable body | `cloud_invalid_json` | no |
+| foreign `BaseUrl` configured | `cloud_endpoint_not_configurable` | no — no request is sent at all |
+
+`client_too_old` also gets a far longer back-off than an outage
+(`CloudCredentialAcquisition.TerminalCooldown`): a minute is the right answer for a Cloud that is
+down, because it comes back. For an outdated build it would mean asking again every minute, forever,
+and being refused every time.
+
+This instance declares `CloudIntelligencePolicy.WireProtocolVersion` when it registers, which is what
+lets the Cloud tell an outdated instance from a current one. It is hand-mirrored against the Cloud's
+`CloudInstance.ProtocolVersion` — there is no compile-time coupling between the repositories — so
+bumping it needs both sides and a coordinated release.
 
 The most recent code is written to `CloudConnectionStates.LastErrorCode` and shown in the settings
 row, so an operator sees `cloud_unreachable` or `knowledge_pack_public_key_missing` in the UI.

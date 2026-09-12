@@ -208,19 +208,29 @@ instance no longer downloads and discards up to 5 MB every five minutes.
 **Also DONE:** the key can now be obtained at all - the Cloud admin UI shows it with a download and a
 copy button (cloud a14f5d6). What remains is the owner's decision on where it gets pinned.
 
-### P1-5 A self-hoster's own Cloud URL is silently ignored — `DONE` (96daf74)
+### P1-5 A self-hoster's own Cloud URL is silently ignored — `DONE`, then revised
 
-`Modules/Intelligence/FullWorthCloudClient.cs:480` reads `FullWorthCloud:BaseUrl` and then discards it
-unless the environment is Development or Testing. Someone who points their instance at their own Cloud
-keeps sending to `api.fullworth.de` with no error and no warning. This breaks the product's own rule
-that no deployment may depend on the owner's infrastructure.
+The original defect: `FullWorthCloud:BaseUrl` was read and then discarded outside Development, so an
+operator who pointed their instance at their own Cloud kept sending to `api.fullworth.de` with no error
+and no warning. Their data went somewhere they had not chosen. That part is settled and must never
+come back.
 
-**Fix.** The configured URL is honoured in every environment. Outside Development it must be HTTPS and
-a public host - a loopback or private address there is a copied development setting, and failing loudly
-beats posting to a host that answers nothing.
+**First fix (96daf74):** honour the configured URL everywhere, HTTPS and public-host only outside
+Development.
 
-**Verified.** Proven by reverting: the test asks for `https://cloud.example.org` and the old code
-answered `https://api.fullworth.de`. 12 resolution cases.
+**Revised, because the premise was wrong.** Honouring it assumed a self-hoster could run their own
+Cloud. They cannot — **the Cloud server is a private repository**. The setting therefore promised
+something the product cannot deliver, and could only ever point finance observations at a host that is
+not a FullWorth Cloud.
+
+So: outside Development a non-official endpoint **disables** the Cloud client
+(`cloud_endpoint_not_configurable` on every call, one warning line at startup) rather than being used
+or silently ignored. Constructing the client still succeeds — a misconfigured endpoint must not take
+the instance down — and Cloud being optional means local finance features are untouched.
+
+This narrows the product rule "all Cloud URLs configurable": configurable to a Cloud that exists. If
+the Cloud server is ever published, honouring the setting again is a small change and the tests that
+pin the silent-redirect ban stay valid either way.
 
 **Still open, and narrower than this said.** The resolved endpoint IS surfaced:
 `CloudIntelligenceStateView.CloudEndpoint` carries it, `GET /api/intelligence/admin/cloud` returns it,

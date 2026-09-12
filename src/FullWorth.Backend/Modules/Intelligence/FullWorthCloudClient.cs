@@ -164,19 +164,33 @@ public sealed class FullWorthCloudException(
 }
 
 /// <summary>
-/// Typed client for a FullWorth Platform Cloud. It defaults to the official endpoint, and a
-/// self-hoster may point it at their own by setting FullWorthCloud:BaseUrl.
+/// Typed client for the FullWorth Platform Cloud.
 ///
-/// That configuration used to be read and then thrown away outside Development/Testing, so an operator
-/// who entered their own Cloud kept sending observations to api.fullworth.de with no error and no
-/// warning. This product must not depend on anybody else's infrastructure, so the setting is honoured
-/// in every environment - under two rules: outside Development it must be HTTPS (a plaintext endpoint
-/// for finance observations is not a configuration choice, it is a mistake), and a loopback or private
-/// address is only accepted in Development, where a local cloud is the point.
+/// The endpoint is fixed outside Development, and the reason is not preference: the Cloud SERVER is a
+/// private repository. FullWorthCloud:BaseUrl promised a self-hoster they could point the instance at
+/// their own Cloud, and nobody outside can build one - so the setting could only ever send finance
+/// observations to a host that is not a FullWorth Cloud.
+///
+/// What it must never do is silently redirect. Before this the value was read and then thrown away
+/// outside Development, so an operator who entered their own Cloud kept sending to api.fullworth.de
+/// with no error and no warning - their data went somewhere they had not chosen, which is the worst of
+/// the three possible behaviours. So a configured endpoint that is not the official one now DISABLES
+/// the Cloud client, with a reason the operator can read. The Cloud is optional (see the self-hosted
+/// rules), so switching it off costs local finance features nothing.
+///
+/// Development and Testing still point anywhere - that is where a local cloud is the whole point, and
+/// where this repository's own tests run.
 /// </summary>
 public sealed class FullWorthCloudClient : IFullWorthCloudClient
 {
     public const string OfficialBaseUrl = "https://api.fullworth.de/";
+
+    /// <summary>
+    /// Reported when an instance configured a Cloud endpoint that is not the official one outside
+    /// Development. The client stays constructible and every call fails with this - which is the point:
+    /// the alternative was sending that operator's observations to a Cloud they did not choose.
+    /// </summary>
+    public const string EndpointNotConfigurableErrorCode = "cloud_endpoint_not_configurable";
 
     /// <summary>
     /// The Cloud's answer when this build is older than it serves. Nothing about it improves by
@@ -192,14 +206,38 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
     private readonly HttpClient http;
     private readonly IConfiguration configuration;
     private readonly IHostEnvironment environment;
+    private readonly bool endpointRefused;
 
     public FullWorthCloudClient(HttpClient http, IConfiguration configuration, IHostEnvironment environment)
     {
         this.http = http;
         this.configuration = configuration;
         this.environment = environment;
-        http.BaseAddress = ResolveBaseUri(configuration, environment);
+        // Never throws: a misconfigured Cloud endpoint must not take down the instance with it. The
+        // Cloud is optional, so the honest outcome is a client that refuses to talk and says why.
+        endpointRefused = EndpointIsRefused(configuration, environment);
+        http.BaseAddress = new Uri(OfficialBaseUrl);
+        if (!endpointRefused)
+        {
+            try { http.BaseAddress = ResolveBaseUri(configuration, environment); }
+            catch (InvalidOperationException) { endpointRefused = true; }
+        }
         http.Timeout = TimeSpan.FromSeconds(45);
+    }
+
+    /// <summary>
+    /// Whether this instance configured a Cloud endpoint it may not use. Checked once, in the
+    /// constructor, because configuration does not change under a running process.
+    /// </summary>
+    internal static bool EndpointIsRefused(IConfiguration configuration, IHostEnvironment environment)
+    {
+        if (environment.IsDevelopment() || environment.IsEnvironment("Testing")) return false;
+
+        var configured = configuration["FullWorthCloud:BaseUrl"]?.Trim();
+        if (string.IsNullOrWhiteSpace(configured)) return false;
+
+        return !string.Equals(
+            configured.TrimEnd('/') + "/", OfficialBaseUrl, StringComparison.OrdinalIgnoreCase);
     }
 
     public Uri BaseUri => http.BaseAddress ?? new Uri(OfficialBaseUrl);
@@ -558,6 +596,17 @@ public sealed class FullWorthCloudClient : IFullWorthCloudClient
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        // One guard for every call, because every call goes through here. Not transient: nothing about
+        // a configured endpoint changes by waiting, and a transient error is what the retry loops in
+        // this module are built to keep trying.
+        if (endpointRefused)
+            throw new FullWorthCloudException(EndpointNotConfigurableErrorCode)
+            {
+                Remediation =
+                    "This build talks to the official FullWorth Cloud only. Remove FullWorthCloud:BaseUrl " +
+                    "to use it, or leave Cloud off - local finance features do not need it."
+            };
+
         HttpResponseMessage response;
         try
         {
