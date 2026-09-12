@@ -17,6 +17,19 @@ for d in /data/purchases /data/pension /data/dataprotection; do
   fi
 done
 
+# The secrets directory, for the same reason and one step further: the app CREATES the secrets it owns
+# in here on a host that does not have them. Docker mounts a fresh named volume root-owned, and only
+# the directory's owner may create files in it - so without this the app silently failed to write all
+# five of its own secrets and died on "Services:BackendInternalKey must be configured", which points
+# at configuration rather than at a permission.
+#
+# Only the directory: the files inside are chowned by whoever owns them (postgres writes the database
+# password here and hands it to the app user itself), and taking ownership of a secret this process
+# does not own would be the wrong kind of helpful.
+SECRETS=/run/fullworth-secrets
+mkdir -p "$SECRETS" 2>/dev/null || true
+[ -d "$SECRETS" ] && chown app:app "$SECRETS" 2>/dev/null || true
+
 # Stage the Enable Banking private key so the non-root app can read it regardless of the host
 # secret's owner/mode (a docker file-secret is mounted with the host file's permissions, and a
 # properly-secured 0400 root key would otherwise be unreadable by the app user). Copy to a tmpfs

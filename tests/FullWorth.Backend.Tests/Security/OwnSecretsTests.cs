@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using FullWorth.Shared;
 
 namespace FullWorth.Backend.Tests.Security;
@@ -32,6 +33,47 @@ public sealed class OwnSecretsTests : IDisposable
         // Separate values per purpose is the entire point: one string for all of them is what
         // FULLWORTH_SECRET was.
         Assert.Equal(values.Length, values.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The key this process generates has to be one the app can actually use.
+    ///
+    /// It was not. <c>data_encryption_key</c> was generated with 48 random bytes, and FieldCipher reads
+    /// it as an AES-256 key and refuses anything that is not exactly 32 — so every host that created
+    /// its own key died on "Security:DataEncryptionKey must decode to exactly 32 bytes". Nobody saw it,
+    /// because a fresh host failed one step earlier still, on an external secrets volume compose would
+    /// not create. Two defects hiding behind a third.
+    ///
+    /// This asserts the round trip rather than the length: a number in two files that must agree is
+    /// exactly the thing that silently stops agreeing.
+    /// </summary>
+    [Fact]
+    public void The_generated_data_encryption_key_is_one_the_cipher_accepts()
+    {
+        var environment = Environment("Security__DataEncryptionKey_FILE");
+        SecretBootstrap.EnsureOwnSecrets(environment);
+        var generated = File.ReadAllText((string)environment["Security__DataEncryptionKey_FILE"]!);
+
+        var cipher = FullWorth.Backend.Security.FieldCipher.FromConfiguration(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Security:DataEncryptionKey"] = generated
+                })
+                .Build(),
+            new ProductionEnvironment());
+
+        Assert.True(cipher.Enabled);
+        Assert.Equal("etwas Geheimes", cipher.Unprotect(cipher.Protect("etwas Geheimes")));
+    }
+
+    private sealed class ProductionEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Microsoft.Extensions.Hosting.Environments.Production;
+        public string ApplicationName { get; set; } = "tests";
+        public string ContentRootPath { get; set; } = ".";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 
     /// <summary>

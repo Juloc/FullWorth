@@ -49,7 +49,10 @@ public static class SecretBootstrap
     /// </summary>
     private static readonly (string Variable, int Bytes)[] OwnSecrets =
     [
-        ("Security__DataEncryptionKey_FILE", 48),
+        // Exactly 32, because this one is not an opaque string: FieldCipher reads it as an AES-256 key
+        // and refuses any other length. Generated with 48 it was never usable, and nothing noticed -
+        // a fresh host failed earlier still, on the external secrets volume compose would not create.
+        ("Security__DataEncryptionKey_FILE", 32),
         ("Security__InternalKey_FILE", 48),
         ("Security__IngestKey_FILE", 48),
         ("Security__ApiKey_FILE", 48),
@@ -110,9 +113,18 @@ public static class SecretBootstrap
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // A read-only mount, or a sibling won the race. Neither is worth refusing to start
-                // over: the value is simply absent and RequireSecret says so, by name, in Production.
-                // Not counted as created either - a sibling that won the race created it, not us.
+                // A read-only mount, a directory this process may not write to, or a sibling that won
+                // the race. None is worth refusing to start over here: the value is simply absent and
+                // RequireSecret says so, by name, in Production. Not counted as created either - if a
+                // sibling won the race, it created it, not us.
+                //
+                // But it is worth SAYING. Swallowed silently, a root-owned secrets directory surfaced
+                // three layers later as "Services:BackendInternalKey must be configured with a
+                // sufficiently long secret" - a message about configuration, for a permission problem,
+                // naming a key the operator never configured in the first place.
+                if (!File.Exists(path))
+                    Console.Error.WriteLine(
+                        $"FullWorth could not create {variable} at {path}: {exception.Message}");
             }
         }
 
