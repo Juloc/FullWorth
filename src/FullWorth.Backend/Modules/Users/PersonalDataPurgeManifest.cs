@@ -1,4 +1,5 @@
 using FullWorth.Backend.Modules.FullWorthSpaces;
+using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Tax;
@@ -61,7 +62,7 @@ public static class PersonalDataPurgeManifest
     ];
 
     /// <summary>
-    /// Intelligence tables that belong to the INSTANCE, not to any person: deleting an account must
+    /// Tables that belong to the INSTANCE, not to any person: deleting an account must
     /// leave them alone, and the ownership heuristics above cannot tell that on their own because the
     /// absence of a UserId is exactly what an unclassified new table also looks like.
     ///
@@ -77,8 +78,11 @@ public static class PersonalDataPurgeManifest
     /// Anything NOT on this list and not user- or space-owned fails the guard, which is the point: the
     /// default for a new table is "somebody has to decide", not "probably fine".
     /// </summary>
-    private static readonly HashSet<Type> IntelligenceInstanceTypes =
+    private static readonly HashSet<Type> InstanceScopedTypes =
     [
+        // How this installation identifies itself to a bank. The FinTS product id is issued per
+        // registered product, so it survives every account deletion - there is no person in it.
+        typeof(BankingInstanceSettings),
         // Pack-sourced reference data.
         typeof(OfficialBrandAlias),
         typeof(OfficialBrandAsset),
@@ -160,7 +164,7 @@ public static class PersonalDataPurgeManifest
             global,
             isUserIdentity,
             isSpaceRoot,
-            IntelligenceInstanceTypes.Contains(entity.ClrType),
+            InstanceScopedTypes.Contains(entity.ClrType),
             DeletedWithRelatedRootTypes.Contains(entity.ClrType));
     }
 

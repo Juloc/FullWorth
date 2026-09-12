@@ -45,6 +45,18 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
                 .HasForeignKey("MergedIntoContractId")
                 .OnDelete(DeleteBehavior.Restrict);
         });
+        modelBuilder.Entity("FullWorth.Backend.Modules.BankConnections.BankingInstanceSettings", entity =>
+        {
+            // 20260912130000_BankingInstanceSettings. Created with raw SQL, so the snapshot has to know
+            // it or startup migration trips PendingModelChangesWarning.
+            entity.Property<Guid>("Id").HasColumnType("uuid");
+            entity.Property<string>("ScopeKey").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)");
+            entity.Property<string>("FinTsProductId").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+            entity.Property<DateTimeOffset>("UpdatedAt").HasColumnType("timestamp with time zone");
+            entity.HasKey("Id");
+            entity.HasIndex("ScopeKey").IsUnique();
+            entity.ToTable("BankingInstanceSettings");
+        });
 #pragma warning restore 612, 618
     }
 }

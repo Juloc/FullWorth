@@ -6,6 +6,9 @@
   const iso = d => d;
 
   const FIXTURES = {
+    // Admin-only on the server; the settings row hides itself when the call fails, so the fixture is
+    // what makes the row visible here at all.
+    'banking/instance-settings': { finTsProductId: '' },
     'fullworth-spaces': [{ id: SPACE, name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
     'categories': [
       { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, iconKey: 'groceries' },

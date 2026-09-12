@@ -492,6 +492,44 @@ async function renderEnableBankingSettings(){
   }
 }
 
+// The FinTS product id identifies this INSTALLATION to a bank - ING refuses a dialog without one.
+// It used to be FinTs__ProductId in the deploy stack, so changing it meant editing YAML and
+// restarting the stack. Enable Banking already stored its application id, so this only closes a gap.
+//
+// Admin-only on the server (it changes how the whole installation identifies itself), so the row
+// stays hidden for everyone else rather than offering a button that answers 403.
+async function renderFinTsProductSettings(){
+  const row=$('#fints-product-settings'),sub=$('#fints-product-status');
+  if(!row||!sub)return;
+  let settings;
+  try{settings=await api('api/banking/instance-settings')}catch{row.hidden=true;return}
+  row.hidden=false;
+  const show=value=>sub.textContent=value?get('finTs.configured').replace('{id}',value):get('finTs.notConfigured');
+  show(settings?.finTsProductId);
+  row.onclick=()=>openFinTsProductDialog(settings?.finTsProductId||'',show);
+}
+
+function openFinTsProductDialog(current,onSaved){
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><h2>${esc(get('finTs.productTitle'))}</h2>`+
+    `<button type="button" data-close aria-label="Close">×</button></div>`+
+    `<p class="row-sub">${esc(get('finTs.productHint'))}</p>`+
+    `<form><label><span>${esc(get('finTs.productTitle'))}</span>`+
+    `<input name="productId" maxlength="64" autocomplete="off" spellcheck="false"></label>`+
+    `<div class="dialog-actions"><button type="button" class="btn btn-secondary" data-close>${esc(get('common.cancel'))}</button>`+
+    `<button type="submit" class="btn btn-primary">${esc(get('common.save'))}</button></div></form></div>`);
+  const form=dlg.querySelector('form');
+  form.productId.value=current;
+  dlg.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dlg.close());
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    try{
+      const saved=await api('api/banking/instance-settings',{...jsonBody({finTsProductId:form.productId.value}),method:'PUT'});
+      onSaved(saved.finTsProductId);
+      dlg.close();
+    }catch(err){toast(err.message||get('common.error'))}
+  };
+}
+
 function openEnableBankingWizard(initialStatus,options={}){
   let status=initialStatus;
   let autoPoll=null;
@@ -1178,5 +1216,5 @@ export function openBankingSetup(context, status, options = {}) {
 
 export async function renderBankingSettings(context) {
   use(context);
-  return renderEnableBankingSettings();
+  return Promise.all([renderEnableBankingSettings(), renderFinTsProductSettings()]);
 }

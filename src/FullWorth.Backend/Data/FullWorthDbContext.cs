@@ -32,6 +32,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<AccountOwner> AccountOwners => Set<AccountOwner>();
     public DbSet<BankConnection> BankConnections => Set<BankConnection>();
     public DbSet<EnableBankingProfile> EnableBankingProfiles => Set<EnableBankingProfile>();
+    public DbSet<BankingInstanceSettings> BankingInstanceSettings => Set<BankingInstanceSettings>();
     public DbSet<FinanceAccount> Accounts => Set<FinanceAccount>();
     public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
     public DbSet<BalanceSnapshot> BalanceSnapshots => Set<BalanceSnapshot>();
@@ -104,6 +105,15 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
         b.ApplyConfiguration(new AuditEventConfiguration());
         b.ApplyConfiguration(new MerchantConfiguration());
         b.ApplyConfiguration(new MerchantAliasConfiguration());
+
+        b.Entity<BankingInstanceSettings>(e =>
+        {
+            // Exactly one row, enforced rather than assumed: a second "instance" row would make
+            // which FinTS product id this installation uses depend on insertion order.
+            e.HasIndex(x => x.ScopeKey).IsUnique();
+            e.Property(x => x.ScopeKey).HasMaxLength(40);
+            e.Property(x => x.FinTsProductId).HasMaxLength(64);
+        });
 
         b.Entity<EnableBankingProfile>(e =>
         {

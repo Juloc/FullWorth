@@ -74,6 +74,9 @@ public sealed record CloseConnectionBody(Guid FullWorthSpaceId);
 public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
 public sealed record BankSyncHistoryWrite(DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string Result, string? ErrorCode);
 
+/// <summary>Settings that belong to the installation rather than to a user. No secrets.</summary>
+public sealed record BankingInstanceSettingsDto(string FinTsProductId);
+
 public sealed record EnableBankingProfileDto(
     Guid Id,
     Guid UserId,
@@ -141,6 +144,19 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
             System.Net.HttpStatusCode.Forbidden => BankAuthorizeResult.Forbidden,
             _ => BankAuthorizeResult.NotFound
         };
+    }
+
+    /// <summary>
+    /// What this installation has stored for bank connectivity. Returns null when the backend does
+    /// not answer it - an older backend has no such endpoint, and a banking service that refused to
+    /// connect because of that would be a worse outcome than falling back to configuration.
+    /// </summary>
+    public async Task<BankingInstanceSettingsDto?> GetBankingInstanceSettingsAsync(CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, "/internal/banking/settings");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<BankingInstanceSettingsDto>(cancellationToken: ct);
     }
 
     public async Task<EnableBankingProfileDto?> GetEnableBankingProfileForUserAsync(Guid userId, CancellationToken ct)

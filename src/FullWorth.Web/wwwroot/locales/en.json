@@ -1256,5 +1256,12 @@
       "stale": "Contract data changed. Load a fresh preview before merging.",
       "reload": "Refresh preview"
     }
+  },
+  "finTs": {
+    "productTitle": "FinTS product id",
+    "loading": "Checking …",
+    "configured": "Configured · {id}",
+    "notConfigured": "Not set yet",
+    "productHint": "Banks such as ING require a registered product id for FinTS. You receive it when you register your FullWorth installation as a FinTS product."
   }
 }

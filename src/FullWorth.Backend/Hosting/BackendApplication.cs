@@ -151,6 +151,7 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountService>();
         builder.Services.AddScoped<BankConnectionStore>();
         builder.Services.AddScoped<EnableBankingProfileStore>();
+        builder.Services.AddScoped<BankingInstanceSettingsStore>();
         builder.Services.AddScoped<AccountStore>();
         builder.Services.AddScoped<TransactionStore>();
         builder.Services.AddScoped<SpendingReviewService>();
@@ -369,6 +370,7 @@ public static class BackendApplication
         endpoints.MapFullWorthSpaceEndpoints();
         endpoints.MapBankConnectionEndpoints();
         endpoints.MapEnableBankingProfileEndpoints();
+        endpoints.MapBankingInstanceSettingsEndpoints();
         endpoints.MapAccountEndpoints();
         endpoints.MapAccountGroupEndpoints();
         endpoints.MapTransactionEndpoints();

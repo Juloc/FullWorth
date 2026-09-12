@@ -1256,5 +1256,12 @@
       "stale": "Vertragsdaten haben sich geändert. Lade vor dem Zusammenführen eine neue Vorschau.",
       "reload": "Vorschau aktualisieren"
     }
+  },
+  "finTs": {
+    "productTitle": "FinTS-Produkt-ID",
+    "loading": "Wird geprüft …",
+    "configured": "Eingerichtet · {id}",
+    "notConfigured": "Noch nicht hinterlegt",
+    "productHint": "Banken wie die ING verlangen für FinTS eine registrierte Produkt-ID. Du bekommst sie bei der Registrierung deiner FullWorth-Installation als FinTS-Produkt."
   }
 }

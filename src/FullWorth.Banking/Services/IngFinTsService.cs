@@ -57,7 +57,7 @@ public sealed class IngFinTsService(
     {
         if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.Pin))
             throw new ArgumentException("ING login and PIN/password are required.");
-        var productId = ProductId();
+        var productId = await ProductIdAsync(ct);
         var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, request.ReconnectConnectionId, null, ct);
         if (authorized != BankAuthorizeResult.Authorized)
             throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
@@ -434,11 +434,25 @@ public sealed class IngFinTsService(
             consecutiveFailures: connection.ConsecutiveFailures + 1, lastError: code), ct);
     }
 
-    private string ProductId()
+    /// <summary>
+    /// The FinTS product id this installation identifies itself with.
+    ///
+    /// Stored first, configured second. It is a property of the installation, not of the container
+    /// wiring, so it belongs in Einstellungen - but the configured value has to keep working, or this
+    /// change would break every deployment that set FinTs__ProductId the moment it shipped.
+    ///
+    /// Read here rather than cached: it is read once per CONNECT, which is a human pressing a button,
+    /// and a stale cache would mean an operator fixes the id and still cannot connect.
+    /// </summary>
+    private async Task<string> ProductIdAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_options.ProductId))
-            throw new InvalidOperationException("FinTs:ProductId is not configured. Register FullWorth as a FinTS product and configure its product id.");
-        return _options.ProductId.Trim();
+        var stored = (await backend.GetBankingInstanceSettingsAsync(ct))?.FinTsProductId;
+        if (!string.IsNullOrWhiteSpace(stored)) return stored.Trim();
+        if (!string.IsNullOrWhiteSpace(_options.ProductId)) return _options.ProductId.Trim();
+
+        throw new InvalidOperationException(
+            "No FinTS product id. Register FullWorth as a FinTS product and enter its product id in " +
+            "Einstellungen, or configure FinTs:ProductId.");
     }
 
     private static FinTsCredentials Credentials(FinTsConnectionSecret secret)
