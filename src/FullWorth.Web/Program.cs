@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using FinanceSessionOptions = FullWorth.Web.Modules.Sessions.SessionOptions;
 
 const string SessionInvalidItem = "Finance.SessionInvalid";
@@ -90,36 +91,25 @@ var authentication = builder.Services.AddAuthentication(options =>
 });
 authentication.AddIdentityCookies();
 
-var googleClientId = builder.Configuration["ExternalAuth:Google:ClientId"];
-var googleClientSecret = builder.Configuration["ExternalAuth:Google:ClientSecret"];
-if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
-{
-    authentication.AddGoogle("Google", "Google", options =>
-    {
-        options.ClientId = googleClientId;
-        options.ClientSecret = googleClientSecret;
-        options.SignInScheme = IdentityConstants.ExternalScheme;
-    });
-}
+// Registered unconditionally and filled by ExternalAuthOptionsResolver, which reads configuration
+// first and the stored admin settings second. They used to be registered only if configuration
+// happened to carry the credentials, so turning a login button on meant editing six environment
+// variables in a compose file and restarting the whole stack.
+//
+// A scheme that nobody configured is refused at the sign-in endpoint with a clear answer, rather
+// than throwing out of the handler as a 500 that reads like the app is broken.
+authentication.AddGoogle(ExternalAuthOptionsResolver.GoogleScheme, "Google", options =>
+    options.SignInScheme = IdentityConstants.ExternalScheme);
+authentication.AddAppleID(ExternalAuthOptionsResolver.AppleScheme, "Apple", options =>
+    options.SignInScheme = IdentityConstants.ExternalScheme);
 
-var appleServiceId = builder.Configuration["ExternalAuth:Apple:ServiceId"];
-var appleTeamId = builder.Configuration["ExternalAuth:Apple:TeamId"];
-var applePrivateKeyId = builder.Configuration["ExternalAuth:Apple:PrivateKeyId"];
-var applePrivateKey = DecodeBase64Secret(builder.Configuration["ExternalAuth:Apple:PrivateKeyBase64"]);
-if (!string.IsNullOrWhiteSpace(appleServiceId)
-    && !string.IsNullOrWhiteSpace(appleTeamId)
-    && !string.IsNullOrWhiteSpace(applePrivateKeyId)
-    && !string.IsNullOrWhiteSpace(applePrivateKey))
-{
-    authentication.AddAppleID("Apple", "Apple", options =>
-    {
-        options.ServiceId = appleServiceId;
-        options.TeamId = appleTeamId;
-        options.PrivateKeyId = applePrivateKeyId;
-        options.PrivateKey = applePrivateKey;
-        options.SignInScheme = IdentityConstants.ExternalScheme;
-    });
-}
+builder.Services.AddSingleton<ExternalAuthOptionsResolver>();
+builder.Services.AddSingleton<IConfigureOptions<Microsoft.AspNetCore.Authentication.Google.GoogleOptions>>(
+    services => services.GetRequiredService<ExternalAuthOptionsResolver>());
+builder.Services.AddSingleton<IConfigureOptions<Indice.AspNetCore.Authentication.Apple.AppleOptions>>(
+    services => services.GetRequiredService<ExternalAuthOptionsResolver>());
+builder.Services.AddScoped<ExternalAuthSettingsStore>();
+builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -269,6 +259,11 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var authDb = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await authDb.Database.MigrateAsync();
+    // After the migration, because it reads the stored providers. An unconfigured remote scheme is
+    // not harmless: ASP.NET asks every remote handler on every request whether it wants the path,
+    // and building one validates its options - so a Google scheme without a client id makes the
+    // whole instance answer 500, static files included.
+    await app.Services.GetRequiredService<ExternalAuthSchemeSynchronizer>().SynchronizeAsync();
     await InstanceAdminBootstrapper.EnsureAsync(scope.ServiceProvider, app.Logger, CancellationToken.None);
 }
 
@@ -430,6 +425,7 @@ app.MapGet("/settings/security/passkeys", async (HttpContext context, Cancellati
 app.MapAuthEndpoints();
 app.MapTwoFactorEndpoints();
 app.MapInstanceAdminEndpoints();
+app.MapExternalAuthSettingsEndpoints();
 app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapPasskeyEndpoints();

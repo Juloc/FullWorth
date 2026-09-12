@@ -16,7 +16,8 @@ public sealed class AuthMigrationTests
     private const string PasskeyMigration = "20260812235500_Passkeys";
     private const string AccountDeletionMigration = "20260906100000_AccountDeletion";
     private const string AdminUserManagementMigration = "20260906201500_AdminUserManagement";
-    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration];
+    private const string ExternalAuthMigration = "20260912170000_ExternalAuthSettings";
+    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration, ExternalAuthMigration];
 
     [Fact]
     public async Task ExistingAuthDatabase_UpgradesThroughAdminUserManagementAndPreservesExistingUser()
@@ -43,6 +44,9 @@ public sealed class AuthMigrationTests
 
         await migrator.MigrateAsync(AccountDeletionMigration);
         await migrator.MigrateAsync(AdminUserManagementMigration);
+        // ...and on to the newest. The point of this test is that an OLD database arrives at the current
+        // schema with its user intact, so it has to keep following the chain as migrations are added.
+        await migrator.MigrateAsync(ExternalAuthMigration);
 
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
@@ -72,6 +76,9 @@ public sealed class AuthMigrationTests
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "IsAdmin"));
         Assert.True(await TableExistsAsync(database.ConnectionString, "AdminAuditEvents"));
+        // Which external sign-in providers this installation offers. Stored rather than deployed, so
+        // turning a login button on no longer means editing six environment variables and restarting.
+        Assert.True(await TableExistsAsync(database.ConnectionString, "ExternalAuthSettings"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Accounts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Transactions"));
         Assert.False(db.Database.HasPendingModelChanges());

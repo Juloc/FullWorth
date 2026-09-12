@@ -16,12 +16,29 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
     public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
+    public DbSet<FullWorth.Web.Modules.Admin.ExternalAuthSettings> ExternalAuthSettings => Set<FullWorth.Web.Modules.Admin.ExternalAuthSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
         builder.HasDefaultSchema("auth");
+
+        builder.Entity<FullWorth.Web.Modules.Admin.ExternalAuthSettings>(entity =>
+        {
+            // Exactly one row, enforced rather than assumed: a second "instance" row would make which
+            // sign-in providers this installation offers depend on insertion order.
+            entity.HasIndex(x => x.ScopeKey).IsUnique();
+            entity.Property(x => x.ScopeKey).IsRequired().HasMaxLength(40);
+            entity.Property(x => x.GoogleClientId).IsRequired().HasMaxLength(200);
+            entity.Property(x => x.AppleServiceId).IsRequired().HasMaxLength(200);
+            entity.Property(x => x.AppleTeamId).IsRequired().HasMaxLength(64);
+            entity.Property(x => x.ApplePrivateKeyId).IsRequired().HasMaxLength(64);
+            // text, not a bounded column: these hold data-protection ciphertext, whose length depends
+            // on the key ring rather than on what was typed. An Apple .p8 key is a whole PEM block.
+            entity.Property(x => x.GoogleClientSecretProtected).IsRequired().HasColumnType("text");
+            entity.Property(x => x.ApplePrivateKeyProtected).IsRequired().HasColumnType("text");
+        });
 
         builder.Entity<AuthUser>(entity =>
         {

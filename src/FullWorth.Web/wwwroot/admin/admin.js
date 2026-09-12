@@ -22,6 +22,56 @@ function toast(text){
   clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2500);
 }
 
+// Secrets travel one way. The form never receives a stored value - it only learns THAT one is
+// stored - so an empty field means "leave it alone" rather than "delete it". Without that, saving a
+// changed client id would silently wipe the secret every single time.
+const PROVIDERS='/auth/admin/external-providers';
+
+function describeProviders(view){
+  const google=view.googleClientId&&view.googleClientSecretStored;
+  const apple=view.appleServiceId&&view.appleTeamId&&view.applePrivateKeyId&&view.applePrivateKeyStored;
+  const on=[google?'Google':null,apple?'Apple':null].filter(Boolean);
+  return on.length?`Aktiv: ${on.join(' · ')}`:'Kein Anbieter eingerichtet';
+}
+
+async function loadProviders(){
+  const form=$('#providers-form');
+  if(!form)return;
+  const view=await request(PROVIDERS);
+  form.googleClientId.value=view.googleClientId||'';
+  form.appleServiceId.value=view.appleServiceId||'';
+  form.appleTeamId.value=view.appleTeamId||'';
+  form.applePrivateKeyId.value=view.applePrivateKeyId||'';
+  form.googleClientSecret.placeholder=view.googleClientSecretStored?'gespeichert – leer lassen':'nicht gesetzt';
+  form.applePrivateKey.placeholder=view.applePrivateKeyStored?'gespeichert – leer lassen':'nicht gesetzt';
+  $('#providers-state').textContent=describeProviders(view);
+}
+
+function bindProviders(){
+  const form=$('#providers-form');
+  if(!form)return;
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    // null, not '': an untouched secret field must not clear the stored one.
+    const secret=value=>value===''?null:value;
+    try{
+      const saved=await request(PROVIDERS,{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          googleClientId:form.googleClientId.value,
+          googleClientSecret:secret(form.googleClientSecret.value),
+          appleServiceId:form.appleServiceId.value,
+          appleTeamId:form.appleTeamId.value,
+          applePrivateKeyId:form.applePrivateKeyId.value,
+          applePrivateKey:secret(form.applePrivateKey.value)
+        })});
+      form.googleClientSecret.value='';
+      form.applePrivateKey.value='';
+      $('#providers-state').textContent=describeProviders(saved);
+      toast('Anmeldeanbieter gespeichert');
+    }catch(err){toast(err.message||'Fehler')}
+  });
+}
+
 async function loadOverview(){
   const o=await request('/auth/admin/overview');
   $('#metric-users').textContent=o.users;
@@ -68,7 +118,9 @@ async function loadUsers(){
 }
 
 async function refresh(){
-  await Promise.all([loadOverview(),loadUsers()]);
+  // The provider panel is loaded alongside, and its failure must not take the user list with it: an
+  // admin who cannot see their users because a settings panel threw is worse off than before.
+  await Promise.all([loadOverview(),loadUsers(),loadProviders().catch(()=>{})]);
 }
 
 let detailDialog=null;
@@ -160,6 +212,8 @@ $('#status').addEventListener('change',e=>{state.status=e.target.value;state.off
 $('#refresh').addEventListener('click',()=>refresh().catch(console.error));
 $('#prev').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-state.limit);loadUsers().catch(console.error)});
 $('#next').addEventListener('click',()=>{state.offset+=state.limit;loadUsers().catch(console.error)});
+
+bindProviders();
 
 refresh().catch(error=>{
   if(error.message!=='forbidden'){document.body.innerHTML='<main class="admin-shell"><h1>Admin konnte nicht geladen werden</h1></main>'}

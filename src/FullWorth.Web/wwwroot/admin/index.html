@@ -64,6 +64,32 @@
       </div>
     </section>
 
+    <section class="panel" id="external-providers">
+      <div class="panel-head"><h2>Anmeldeanbieter</h2></div>
+      <p class="row-sub">Google- und Apple-Anmeldung für diese Installation. Wirkt sofort, ohne Neustart.
+        Werte aus der Umgebung haben Vorrang und werden hier nicht überschrieben.</p>
+      <form id="providers-form" class="admin-providers">
+        <fieldset>
+          <legend>Google</legend>
+          <label><span>Client-ID</span><input name="googleClientId" autocomplete="off" spellcheck="false"></label>
+          <label><span>Client-Secret</span><input name="googleClientSecret" type="password" autocomplete="new-password"
+            placeholder="unverändert lassen"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Apple</legend>
+          <label><span>Service-ID</span><input name="appleServiceId" autocomplete="off" spellcheck="false"></label>
+          <label><span>Team-ID</span><input name="appleTeamId" autocomplete="off" spellcheck="false"></label>
+          <label><span>Key-ID</span><input name="applePrivateKeyId" autocomplete="off" spellcheck="false"></label>
+          <label><span>Privater Schlüssel (.p8)</span><textarea name="applePrivateKey" rows="3"
+            autocomplete="off" spellcheck="false" placeholder="unverändert lassen"></textarea></label>
+        </fieldset>
+        <div class="admin-providers-actions">
+          <span id="providers-state" class="row-sub"></span>
+          <button type="submit" class="btn btn-primary">Speichern</button>
+        </div>
+      </form>
+    </section>
+
     <div id="admin-toast" role="status" aria-live="polite"></div>
   </main>
   <script src="/security/browser-fetch.js"></script>

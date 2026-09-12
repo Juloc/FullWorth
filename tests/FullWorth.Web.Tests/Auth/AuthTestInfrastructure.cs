@@ -51,6 +51,9 @@ internal static class AuthTestServices
         services.AddScoped<IRecoveryCodeStore, AuthRecoveryCodeStore>();
         services.AddScoped<IRecoveryUserValidator, AuthRecoveryUserValidator>();
         services.AddScoped<RecoveryService>();
+        // The external sign-in provider settings encrypt their two secrets at rest. Data protection is
+        // already registered above for the auth cookies, so they only need their store.
+        services.AddScoped<FullWorth.Web.Modules.Admin.ExternalAuthSettingsStore>();
     }
 }
 
