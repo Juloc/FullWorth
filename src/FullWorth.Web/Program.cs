@@ -34,6 +34,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // P0.3: allow secrets to arrive as Docker secret files (evaluated at build time, before config reads).
 FullWorth.Shared.SecretBootstrap.AddSecretFiles(builder.Configuration);
+// The database connection strings are assembled from Database:* plus the password file, so no shell
+// entrypoint has to cat a secret into an environment variable first.
+FullWorth.Shared.SecretBootstrap.AddComposedConnectionStrings(builder.Configuration);
 
 var unifiedHost = FullWorth.Shared.UnifiedHost.IsUnified(builder.Configuration);
 

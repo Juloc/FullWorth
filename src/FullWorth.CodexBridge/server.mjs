@@ -2,12 +2,32 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const port = Number(process.env.PORT || 8080);
 const codexRoot = process.env.CODEX_HOME || '/data/codex';
 const workDir = process.env.CODEX_WORKDIR || '/tmp/codex-work';
-const bridgeKey = process.env.BRIDGE_KEY || '';
+// The same <KEY>_FILE convention the .NET services use. This sidecar parses untrusted uploads, so it
+// gets exactly one secret and it arrives as a mounted file rather than as an environment value, where
+// /proc/self/environ and every crash dump could read it. Without this the deploy stack needed a shell
+// entrypoint whose only job was to cat the file into BRIDGE_KEY.
+function secretFrom(name) {
+  const direct = process.env[name];
+  if (direct) return direct;
+  // Not named 'path': that is the node:path module imported above.
+  const file = process.env[name + '_FILE'];
+  if (!file) return '';
+  // Trimmed: a secret written with printf or echo ends in a newline more often than not, and a
+  // trailing newline inside a key surfaces as 'wrong credentials'.
+  try { return readFileSync(file, 'utf8').trim(); }
+  catch (error) {
+    console.error('Cannot read ' + name + '_FILE at ' + file + ': ' + error.message);
+    return '';
+  }
+}
+
+const bridgeKey = secretFrom('BRIDGE_KEY');
 // 60 MiB of raw receipt files expands to roughly 80 MiB as base64 JSON. Keep bounded headroom for
 // source/category metadata while still rejecting unexpectedly large bridge requests.
 const maxBodyBytes = 96 * 1024 * 1024;

@@ -42,6 +42,50 @@ public static class SecretBootstrap
     }
 
     /// <summary>
+    /// Builds the database connection strings from their parts when they are not given whole.
+    ///
+    /// A connection string cannot arrive through the <c>&lt;KEY&gt;_FILE</c> convention, because only a
+    /// fragment of it - the password - is a secret. That is why the deploy stack used to carry a shell
+    /// entrypoint whose whole job was to <c>cat</c> the password file and interpolate it into two
+    /// connection strings. It cost more than it looks: the secret then reached the process as an
+    /// environment value, where <c>/proc/self/environ</c> and every crash dump can read it, and the
+    /// entrypoint lived in a volume rather than in the image.
+    ///
+    /// So host, port, database and user stay plain configuration under <c>Database:*</c> and only the
+    /// password comes from a file, as <c>Database__Password_FILE</c>. An explicitly configured
+    /// <c>ConnectionStrings:*</c> still wins, so every existing deployment and every test that passes
+    /// one keeps working untouched.
+    ///
+    /// Call this AFTER <see cref="AddSecretFiles"/>: the password it needs is what that overlays.
+    /// </summary>
+    public static void AddComposedConnectionStrings(IConfigurationManager configuration)
+    {
+        var password = configuration["Database:Password"];
+        if (string.IsNullOrWhiteSpace(password)) return;
+
+        var host = Value(configuration, "Database:Host", "fullworth-postgres");
+        var port = Value(configuration, "Database:Port", "5432");
+        var database = Value(configuration, "Database:Name", "fullworth");
+        var user = Value(configuration, "Database:User", "fullworth");
+        var composed = $"Host={host};Port={port};Database={database};Username={user};Password={password}";
+
+        var overlay = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        // Both names, one database: the finance model and ASP.NET Identity share it, and the deploy
+        // stack set the same value twice for exactly that reason.
+        foreach (var name in new[] { "ConnectionStrings:FullWorth", "ConnectionStrings:AuthDatabase" })
+            if (string.IsNullOrWhiteSpace(configuration[name]))
+                overlay[name] = composed;
+
+        if (overlay.Count > 0) configuration.AddInMemoryCollection(overlay);
+    }
+
+    private static string Value(IConfiguration configuration, string key, string fallback)
+    {
+        var value = configuration[key];
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    /// <summary>
     /// In Production, throw if <paramref name="key"/> is missing or looks like a development/default
     /// placeholder. Outside Production this is a no-op so dev/test can run with blank/dev secrets.
     /// The offending key name is reported; the secret value is never included in the message.
