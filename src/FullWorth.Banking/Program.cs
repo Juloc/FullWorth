@@ -8,6 +8,9 @@ FullWorth.Shared.SecretBootstrap.AddSecretFiles(builder.Configuration);
 // The database connection strings are assembled from Database:* plus the password file, so no shell
 // entrypoint has to cat a secret into an environment variable first.
 FullWorth.Shared.SecretBootstrap.AddComposedConnectionStrings(builder.Configuration);
+// One public address, four settings derived from it: the passkey relying party and origin, the
+// Enable Banking redirect and the host pin. A value set by hand still wins for each of them.
+FullWorth.Shared.PublicUrl.AddDerivedSettings(builder.Configuration);
 builder.AddFullWorthBanking();
 
 var app = builder.Build();

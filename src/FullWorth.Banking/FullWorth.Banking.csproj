@@ -8,6 +8,7 @@
     <Compile Include="..\Shared\SecretBootstrap.cs" Link="SecretBootstrap.cs" />
     <Compile Include="..\Shared\FullWorthVersion.cs" Link="FullWorthVersion.cs" />
     <Compile Include="..\Shared\UnifiedHost.cs" Link="UnifiedHost.cs" />
+    <Compile Include="..\Shared\PublicUrl.cs" Link="PublicUrl.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />

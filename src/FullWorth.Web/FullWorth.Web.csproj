@@ -8,6 +8,7 @@
     <Compile Include="..\Shared\SecretBootstrap.cs" Link="Security\SecretBootstrap.cs" />
     <Compile Include="..\Shared\FullWorthVersion.cs" Link="Security\FullWorthVersion.cs" />
     <Compile Include="..\Shared\UnifiedHost.cs" Link="Security\UnifiedHost.cs" />
+    <Compile Include="..\Shared\PublicUrl.cs" Link="Security\PublicUrl.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Fido2" Version="4.0.1" />
