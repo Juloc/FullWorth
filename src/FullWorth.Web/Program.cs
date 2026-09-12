@@ -246,20 +246,23 @@ builder.Services.AddHttpClient(FirstRunBootstrapper.BackendClientName, client =>
 var app = builder.Build();
 _ = app.Services.GetRequiredService<BackendContextOptions>();
 
-if (unifiedHost)
-{
-    await app.InitializeFullWorthBackendAsync();
-    app.InitializeFullWorthBanking();
-}
-
-// P0.3 fail-closed + P1.2a host pinning, validated against the fully-merged configuration (Production only).
+// P0.3 fail-closed + P1.2a host pinning, validated against the fully-merged configuration (Production
+// only). BEFORE the unified backend initialises: that migrates a database, and a fail-closed check
+// that runs after a side effect is a check in the wrong place. It also made the host pin impossible
+// to observe - a container with no reachable database died on the connection and never reached it.
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "ConnectionStrings:AuthDatabase", FullWorth.Shared.SecretBootstrap.SecretKind.ConnectionString);
 FullWorth.Shared.SecretBootstrap.RequireSecret(app.Configuration, app.Environment, "Services:BankingApiKey");
 if (app.Environment.IsProduction())
 {
     var allowedHosts = app.Configuration["AllowedHosts"];
     if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts.Split(';').Any(h => h.Trim() == "*"))
-        throw new InvalidOperationException("AllowedHosts must be set to the production hostname(s) (not '*') before exposing FullWorth.Web.");
+        throw new InvalidOperationException("AllowedHosts must be set to the production hostname(s) (not '*') before exposing FullWorth.Web. Set FullWorth:PublicUrl, or AllowedHosts itself.");
+}
+
+if (unifiedHost)
+{
+    await app.InitializeFullWorthBackendAsync();
+    app.InitializeFullWorthBanking();
 }
 
 await using (var scope = app.Services.CreateAsyncScope())

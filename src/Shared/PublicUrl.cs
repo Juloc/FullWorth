@@ -41,7 +41,13 @@ public static class PublicUrl
 
         // Loopback stays allowed alongside the public host: the container's own healthcheck asks
         // http://localhost:8080/health, and pinning the public host alone would fail it.
-        Fill(configuration, overlay, "AllowedHosts", $"{host};127.0.0.1;localhost");
+        //
+        // "*" counts as unset here, unlike everywhere else. It is what appsettings.json ships and what
+        // ASP.NET defaults to - nobody types it to mean "pin the host to anything". Treating it as a
+        // deliberate value made this derivation dead code for the one setting that matters most: the
+        // host pin stayed "*" no matter what FullWorth:PublicUrl said.
+        if (IsUnpinned(configuration["AllowedHosts"]))
+            overlay["AllowedHosts"] = $"{host};127.0.0.1;localhost";
 
         if (overlay.Count > 0) configuration.AddInMemoryCollection(overlay);
     }
@@ -69,6 +75,14 @@ public static class PublicUrl
         origin = uri.GetLeftPart(UriPartial.Authority);
         return host.Length > 0;
     }
+
+    /// <summary>
+    /// Whether the host pin is absent in the only sense that matters: missing, or the wildcard that
+    /// pins nothing. Production refuses to start on either.
+    /// </summary>
+    private static bool IsUnpinned(string? allowedHosts) =>
+        string.IsNullOrWhiteSpace(allowedHosts) ||
+        allowedHosts.Split(';').Any(host => host.Trim() == "*");
 
     /// <summary>Only fills a key nobody set: a hand-written value is always the deliberate one.</summary>
     private static void Fill(

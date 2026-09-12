@@ -111,6 +111,46 @@ public sealed class PublicUrlTests
         Assert.Null(configuration["AllowedHosts"]);
     }
 
+    /// <summary>
+    /// The wildcard counts as UNSET for the host pin, unlike every other setting here.
+    ///
+    /// appsettings.json ships <c>"AllowedHosts": "*"</c> and that is also ASP.NET's own default - nobody
+    /// types it to mean "pin the host to anything". Treating it as somebody's deliberate value made this
+    /// derivation dead code for the one setting that matters most: the pin stayed "*" in the shipped
+    /// image no matter what the public address said, and only the Production startup guard caught it.
+    /// </summary>
+    [Theory]
+    [InlineData("*")]
+    [InlineData(" * ")]
+    [InlineData("web.fullworth.de;*")]
+    public void A_wildcard_host_pin_counts_as_not_pinned_at_all(string shipped)
+    {
+        var configuration = Manager(new()
+        {
+            [PublicUrl.Key] = "https://web.fullworth.de",
+            ["AllowedHosts"] = shipped
+        });
+
+        PublicUrl.AddDerivedSettings(configuration);
+
+        Assert.Equal("web.fullworth.de;127.0.0.1;localhost", configuration["AllowedHosts"]);
+    }
+
+    /// <summary>But a real pin somebody wrote is still theirs.</summary>
+    [Fact]
+    public void A_real_host_pin_is_left_alone()
+    {
+        var configuration = Manager(new()
+        {
+            [PublicUrl.Key] = "https://web.fullworth.de",
+            ["AllowedHosts"] = "legacy.example.org;localhost"
+        });
+
+        PublicUrl.AddDerivedSettings(configuration);
+
+        Assert.Equal("legacy.example.org;localhost", configuration["AllowedHosts"]);
+    }
+
     private static ConfigurationManager Manager(Dictionary<string, string?> values)
     {
         var configuration = new ConfigurationManager();
