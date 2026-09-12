@@ -22,6 +22,10 @@ public static class BankingApplication
                     builder.Services.AddOpenApi();
         builder.Services.Configure<EnableBankingOptions>(builder.Configuration.GetSection(EnableBankingOptions.SectionName));
         builder.Services.Configure<BackendOptions>(builder.Configuration.GetSection(BackendOptions.SectionName));
+        // Blank means "wherever this container keeps its backend", which in the unified image is
+        // loopback. The split-image hostname used to be the hardcoded default here as well.
+        builder.Services.PostConfigure<BackendOptions>(options =>
+            options.BaseUrl = FullWorth.Shared.UnifiedHost.BackendBaseUrlForBanking(builder.Configuration));
         builder.Services.Configure<BankingSyncOptions>(builder.Configuration.GetSection(BankingSyncOptions.SectionName));
         builder.Services.Configure<FinTsOptions>(builder.Configuration.GetSection(FinTsOptions.SectionName));
         builder.Services.AddSingleton<EnableBankingRequestPolicy>();

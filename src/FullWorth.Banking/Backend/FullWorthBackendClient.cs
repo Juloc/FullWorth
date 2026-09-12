@@ -6,7 +6,7 @@ namespace FullWorth.Banking.Backend;
 public sealed class BackendOptions
 {
     public const string SectionName = "Backend";
-    public string BaseUrl { get; set; } = "http://fullworth-backend:8080";
+    public string BaseUrl { get; set; } = FullWorth.Shared.UnifiedHost.LoopbackBaseUrl;
     public string IngestKey { get; set; } = string.Empty;
 }
 

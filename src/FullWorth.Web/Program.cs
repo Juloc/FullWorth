@@ -35,7 +35,7 @@ var builder = WebApplication.CreateBuilder(args);
 // P0.3: allow secrets to arrive as Docker secret files (evaluated at build time, before config reads).
 FullWorth.Shared.SecretBootstrap.AddSecretFiles(builder.Configuration);
 
-var unifiedHost = builder.Configuration.GetValue("FullWorthHost:Unified", false);
+var unifiedHost = FullWorth.Shared.UnifiedHost.IsUnified(builder.Configuration);
 
 var configuredAuth = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
 var bulkReceiptImportMaxRequestBytes = Math.Clamp(
@@ -198,34 +198,40 @@ builder.Services.ConfigureApplicationCookie(cookie =>
 // Banking callback answering "Location: /?bankConnected=…") has to reach the BROWSER, which resolves
 // it against the public origin. With the default auto-follow the handler would chase "/" on the
 // internal service (a 404) and the user would never see the redirect.
-var defaultBackendUrl = unifiedHost ? "http://127.0.0.1:8080" : "http://fullworth-backend:8080";
-var defaultBankingUrl = unifiedHost ? "http://127.0.0.1:8080" : "http://fullworth-banking:8080";
+// Resolved LATE, inside the registration callbacks, and never cached in a local. A test host adds
+// its configuration after these top-level statements have run, so a value read here and stored
+// would be the appsettings one while BackendContextOptions - which loads from DI at request time -
+// sees the test one. Those two disagreeing is not cosmetic: BackendContextOptions.BackendBaseAddress
+// is the single origin the internal key may ever be sent to, so a mismatch silently stops sending it.
+Uri BackendBaseAddress() =>
+    new(FullWorth.Shared.UnifiedHost.BackendBaseUrl(builder.Configuration).TrimEnd('/') + "/");
+Uri BankingBaseAddress() =>
+    new(FullWorth.Shared.UnifiedHost.BankingBaseUrl(builder.Configuration).TrimEnd('/') + "/");
 
 builder.Services.AddHttpClient("backend", client =>
 {
-    client.BaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? defaultBackendUrl).TrimEnd('/') + "/");
+    client.BaseAddress = BackendBaseAddress();
     client.Timeout = TimeSpan.FromMinutes(5);
 }).AddHttpMessageHandler<BackendUserContextHandler>()
   .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-var bankingBaseAddress = new Uri((builder.Configuration["Services:BankingUrl"] ?? defaultBankingUrl).TrimEnd('/') + "/");
 builder.Services.AddHttpClient("banking", client =>
 {
-    client.BaseAddress = bankingBaseAddress;
+    client.BaseAddress = BankingBaseAddress();
     client.Timeout = TimeSpan.FromMinutes(5);
 })
     // Outer: attach the trusted user + requested space from the session (backend re-verifies owner).
     .AddHttpMessageHandler<BankingUserContextHandler>()
     // Inner: the banking API key is attached ONLY here, after the handler's own same-origin check.
-    .AddHttpMessageHandler(() => new ServiceProxyGuardHandler(bankingBaseAddress, "X-FullWorth-Banking-Key", builder.Configuration["Services:BankingApiKey"]))
+    .AddHttpMessageHandler(() => new ServiceProxyGuardHandler(BankingBaseAddress(), "X-FullWorth-Banking-Key", builder.Configuration["Services:BankingApiKey"]))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 // Internal-key-only client (no user context) used solely for first-run admin bootstrap.
-var bootstrapBackendBaseAddress = new Uri((builder.Configuration["Services:BackendUrl"] ?? defaultBackendUrl).TrimEnd('/') + "/");
+
 builder.Services.AddHttpClient(FirstRunBootstrapper.BackendClientName, client =>
 {
-    client.BaseAddress = bootstrapBackendBaseAddress;
+    client.BaseAddress = BackendBaseAddress();
     client.Timeout = TimeSpan.FromSeconds(30);
 })
-    .AddHttpMessageHandler(() => new ServiceProxyGuardHandler(bootstrapBackendBaseAddress))
+    .AddHttpMessageHandler(() => new ServiceProxyGuardHandler(BackendBaseAddress()))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
 var app = builder.Build();

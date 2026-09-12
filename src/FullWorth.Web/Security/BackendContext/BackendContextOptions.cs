@@ -31,7 +31,9 @@ public sealed class BackendContextOptions
         if (environment.IsProduction() && LooksLikePlaceholder(key))
             throw new InvalidOperationException("Services:BackendInternalKey must be replaced with a production secret.");
 
-        var backendUrl = configuration[BackendUrlKey] ?? "http://fullworth-backend:8080";
+        // Must resolve to exactly what Program.cs handed the backend HttpClient: this address is the
+        // SSRF gate, and a gate pointing elsewhere silently stops the internal key from being sent.
+        var backendUrl = FullWorth.Shared.UnifiedHost.BackendBaseUrl(configuration);
         if (!Uri.TryCreate(backendUrl.TrimEnd('/') + "/", UriKind.Absolute, out var baseAddress))
             throw new InvalidOperationException("Services:BackendUrl must be a valid absolute URL.");
 

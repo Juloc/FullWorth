@@ -38,7 +38,14 @@ COPY --from=build /app .
 COPY ops/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# This image IS the unified host: web, backend and banking in one process, talking to themselves
+# over loopback. Declaring it here rather than in every compose file means a deployment never has to
+# restate the shape of the container it is running - and the same assemblies keep behaving as a plain
+# web host when they run embedded in the test suite.
 ENV ASPNETCORE_URLS=http://+:8080 \
+    FullWorthHost__Unified=true \
+    DataProtection__KeyPath=/data/dataprotection \
+    ReverseProxy__KnownNetworks__0=172.16.0.0/12 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 EXPOSE 8080
