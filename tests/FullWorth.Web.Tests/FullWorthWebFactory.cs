@@ -206,9 +206,19 @@ public class FullWorthWebFactory : WebApplicationFactory<FullWorth.Web.WebAssemb
                 request.RequestUri,
                 headers));
 
+            // The bootstrap endpoints are the one place the generic {"ok":true} is not enough: the
+            // registration path reads a financeUserId back and treats an empty one as a failure. A
+            // registration through HTTP could therefore never succeed in this harness, which quietly
+            // put the whole first-run flow out of reach of an integration test.
+            var path = request.RequestUri?.AbsolutePath ?? string.Empty;
+            var body = path.EndsWith("/api/bootstrap/first-admin", StringComparison.Ordinal)
+                || path.EndsWith("/api/bootstrap/register", StringComparison.Ordinal)
+                ? $"{{\"financeUserId\":\"{Guid.NewGuid()}\",\"fullWorthSpaceId\":\"{Guid.NewGuid()}\"}}"
+                : "{\"ok\":true}";
+
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("{\"ok\":true}", Encoding.UTF8, "application/json")
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
             };
             return Task.FromResult(response);
         }
