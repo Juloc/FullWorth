@@ -12,7 +12,9 @@
   #view-transactions .tx-row>td.amount{display:block;flex:0 0 auto;font-size:15px}
   #view-transactions .tx-cp-main{display:flex;min-width:0}
   #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px}
+  /* The panel is overflow:visible here, so the PAGE scrolls and the group header has to clear the
+     app topbar. Above this width the panel scrolls itself and the offset is 0 - see app.css. */
+  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px;top:var(--topbar-h)}
 }
 @media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.nw-custom-range-fields label{flex:1 1 130px}.nw-custom-range-fields input{width:100%;min-width:0}}
