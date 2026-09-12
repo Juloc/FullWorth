@@ -64,6 +64,14 @@ ENV Database__Password_FILE=/run/fullworth-secrets/fullworth_db_password \
     Backend__IngestKey_FILE=/run/fullworth-secrets/ingest_key \
     AiAccess__CodexBridgeKey_FILE=/run/fullworth-secrets/codex_bridge_key
 
+# Where a Cloud pack verification key is expected, if one was handed over. A path, not a secret, and
+# the only thing this image knows about the Cloud stack - which owns the key and publishes it into its
+# own volume. Absent means pack verification fails closed; see the deploy stack's README.
+#
+# Its own ENV, not appended above: a # inside a line continuation is part of the instruction, not a
+# comment, so the whole block would become one long broken variable.
+ENV FullWorthCloud__KnowledgePackPublicKeyPath=/run/fullworth-secrets/cloud-public/public.pem
+
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
   CMD curl -fsS http://localhost:8080/health || exit 1
