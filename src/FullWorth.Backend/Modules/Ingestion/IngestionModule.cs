@@ -194,7 +194,8 @@ public sealed class IngestionService(
 
             var mayRefreshDisplayName = isNew ||
                 string.IsNullOrWhiteSpace(entity.DisplayName) ||
-                string.Equals(entity.DisplayName, entity.InstitutionName, StringComparison.OrdinalIgnoreCase);
+                string.Equals(entity.DisplayName, entity.InstitutionName, StringComparison.OrdinalIgnoreCase) ||
+                LooksProviderGeneratedDisplayName(entity.DisplayName);
 
             entity.BankConnectionId = connection.Id; entity.ProviderAccountId = item.ProviderAccountId; entity.InstitutionName = item.InstitutionName;
             if (item.HasDetails || isNew)
@@ -248,6 +249,13 @@ public sealed class IngestionService(
         await db.SaveChangesAsync(ct);
         await EnsureOrphanedAccountsHaveOwnerAsync(connection, result.Values, ct);
         return result;
+    }
+
+    private static bool LooksProviderGeneratedDisplayName(string? value)
+    {
+        var text = value?.Trim();
+        if (string.IsNullOrWhiteSpace(text) || !text.Contains('_')) return false;
+        return text.All(character => char.IsUpper(character) || char.IsDigit(character) || character == '_');
     }
 
     private static IReadOnlyList<string> AccountHashes(FinanceAccount account)

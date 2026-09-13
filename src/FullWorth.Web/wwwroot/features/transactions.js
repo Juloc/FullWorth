@@ -22,7 +22,7 @@ function coachContextForTransaction(t, label) {
     entityId: t.id,
     entityLabel: label || t.merchantDisplayName || t.counterparty || 'Buchung',
     details: {
-      date: String(t.bookingDate || '').slice(0, 10),
+      date: String(transactionDate(t) || '').slice(0, 10),
       amount: String(t.amount ?? ''),
       currency: t.currency || '',
       merchant: t.merchantDisplayName || t.counterparty || '',
@@ -70,7 +70,7 @@ function updateCoachSelectionBar() {
         id: item.id,
         label: item.merchantDisplayName || item.counterparty || deLabel('Buchung','Transaction'),
         details: {
-          date: String(item.bookingDate || '').slice(0, 10),
+          date: String(transactionDate(item) || '').slice(0, 10),
           amount: String(item.amount ?? ''),
           currency: item.currency || '',
           merchant: item.merchantDisplayName || item.counterparty || '',
@@ -109,6 +109,33 @@ function applySearch() {
 }
 
 function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
+function transactionDate(item) { return item?.bookingDate || item?.valueDate || null; }
+function transactionListPurpose(item, merchantName, categoryName) {
+  const raw = String(item?.description || '').trim();
+  if (!raw) return '';
+  const sepa = raw.match(/(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)/i);
+  const pieces = sepa?.[1] ? [sepa[1]] : raw.split(/\s*\|\s*|\r?\n/);
+  const technical = /^(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM|ENDTOENDID|MANDATE(?:ID)?|TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]/i;
+  const ignored = [merchantName, categoryName, item?.account].map(x => String(x || '').trim().toLowerCase()).filter(Boolean);
+  const result = [];
+  for (const piece of pieces) {
+    const text = String(piece || '').replace(/\s+/g, ' ').trim();
+    if (!text || technical.test(text)) continue;
+    if (/^\d{14,}$/.test(text) || /^[0-9a-f]{20,}$/i.test(text) || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(text)) continue;
+    if (ignored.includes(text.toLowerCase())) continue;
+    if (result.some(x => x.toLowerCase() === text.toLowerCase())) continue;
+    result.push(text);
+    if (result.length === 2) break;
+  }
+  const joined = result.join(' · ');
+  return joined.length <= 160 ? joined : joined.slice(0, 159).trimEnd() + '…';
+}
+function displayAccountName(value) {
+  const text = String(value || '').trim();
+  if (!/^[A-Z0-9]+(?:_[A-Z0-9]+)+$/.test(text)) return text;
+  const special = { PAYPAL: 'PayPal', IBAN: 'IBAN', SEPA: 'SEPA', EUR: 'EUR', USD: 'USD', GBP: 'GBP', IDR: 'IDR', VISA: 'Visa' };
+  return text.split('_').map(part => special[part] || (part.charAt(0) + part.slice(1).toLowerCase())).join(' ');
+}
 function txReplaceUrl(params) {
   const qs = params.toString();
   return ctx.showView('transactions', { query: qs, replace: true });
@@ -390,7 +417,7 @@ export async function renderTransactions(context) {
       inPendingGroup = false;
       // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
       // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
-      const day = String(x.bookingDate || '').slice(0, 10);
+      const day = String(transactionDate(x) || '').slice(0, 10);
       if (day !== lastDate) {
         lastDate = day;
         body.appendChild(groupHeaderRow(dateHeading(day)));
@@ -398,6 +425,7 @@ export async function renderTransactions(context) {
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
     const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
+    const purpose = transactionListPurpose(x, name, cat);
     const tr = document.createElement('tr');
     tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '') + (x.isTransfer ? ' tx-is-transfer' : '');
     tr.tabIndex = 0;
@@ -405,8 +433,8 @@ export async function renderTransactions(context) {
     tr.innerHTML =
       // A pending entry often has no booking date yet - the bank publishes the value date first, and
       // that is also what the list is sorted by, so showing an em dash left the row looking broken.
-      `<td class="tx-date-cell">${ctx.date(x.bookingDate || x.valueDate)}</td>` +
-      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +
+      `<td class="tx-date-cell">${ctx.date(transactionDate(x))}</td>` +
+      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span></td>` +
       categoryCell(x, cat) +
       accountCell(x) +
       `<td class="number ${moneyClass(transactionMoneyVariant(x))}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
@@ -491,7 +519,7 @@ function categoryCell(x, cat) {
 
 // Desktop table: account cell with a small type icon (card for credit/cards, a bank mark otherwise).
 function accountCell(x) {
-  const name = x.account || '';
+  const name = displayAccountName(x.account || '');
   if (!name) return `<td class="tx-acct"></td>`;
   const card = /kredit|card|karte|visa|master|amex/i.test(name);
   const icon = card
@@ -543,7 +571,7 @@ async function renderScope(scope) {
   if (!accountId && !groupId && !categoryId && !query) { bar?.remove(); return; }
   let label = '';
   try {
-    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = a?.displayName || a?.institutionName || ''; }
+    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = displayAccountName(a?.displayName || a?.institutionName || ''); }
     else if (groupId) { const g = (await ctx.api('api/account-groups').catch(() => [])).find(g => String(g.id) === String(groupId)); label = g?.name || ''; }
     else if (categoryId) { const c = (await ctx.api('api/categories').catch(() => [])).find(c => String(c.id) === String(categoryId)); label = c?.name || ''; }
     else if (query) { label = query; }
@@ -671,7 +699,7 @@ async function openDetail(listItem) {
       }).join('')}</div>`
     : '';
   const dlg = ctx.dialog(`<form class="dialog-card tx-detail" method="dialog">
-    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="panel-head tx-detail-head"><div class="tx-detail-id"><span class="tx-ident-slot">${identity}</span><span class="tx-detail-idmain"><h2>${ctx.esc(name)}</h2><span class="tx-detail-sub">${ctx.date(transactionDate(t))} · ${ctx.esc(displayAccountName(t.account || ''))}</span></span></div><button type="button" class="icon-button tx-close" data-close aria-label="${ctx.esc(ctx.get('common.close'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="tx-amount ${moneyClass(transactionMoneyVariant(t))}">${ctx.money(t.amount, t.currency)}</div>
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}
