@@ -19,6 +19,12 @@ ARM_DIR=${CODEX_ARM_DIR:-/tmp/fullworth-codex}
 ARM=$ARM_DIR/arm
 SERVER=${CODEX_SERVER:-/opt/fullworth-codex/server.mjs}
 
+# Exported here and nowhere else. The image cannot carry BRIDGE_KEY_FILE, because SecretBootstrap
+# injects every <NAME>_FILE variable in the environment as configuration - and the application would
+# then try to read a file that belongs to this user and not to it.
+BRIDGE_KEY_FILE=${CODEX_BRIDGE_KEY_PATH:-$ARM_DIR/bridge_key}
+export BRIDGE_KEY_FILE
+
 while [ ! -e "$ARM" ]; do
   sleep 1
 done

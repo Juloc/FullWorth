@@ -121,15 +121,20 @@ ENV FullWorthCloud__KnowledgePackPublicKeyPath=/run/fullworth-secrets/cloud-publ
 # same container. A stack that wants to share the bridge - the Cloud's AI review - sets
 # CODEX_BRIDGE_BIND=0.0.0.0 in its own file, where the decision is visible.
 #
-# BRIDGE_KEY_FILE points at the tmpfs copy the entrypoint places for the codex user, NOT at
+# CODEX_BRIDGE_KEY_PATH points at the tmpfs copy the entrypoint places for the codex user, NOT at
 # /run/fullworth-secrets: that directory is 0700 app:app and Codex cannot even list it.
+#
+# It is deliberately NOT called BRIDGE_KEY_FILE here. SecretBootstrap injects every <NAME>_FILE
+# variable it finds in the environment, so the .NET process would try to read a 0400 codex:codex file
+# and die at startup - measured, in a real container. The launcher exports the _FILE name for the
+# bridge, which is the only process that has any business with it.
 ENV AiAccess__CodexBridgeEnabled=true \
     CODEX_BRIDGE_PORT=8099 \
     CODEX_BRIDGE_BIND=127.0.0.1 \
     CODEX_HOME=/data/codex \
     CODEX_WORKDIR=/tmp/codex-work \
     CODEX_ARM_DIR=/tmp/fullworth-codex \
-    BRIDGE_KEY_FILE=/tmp/fullworth-codex/bridge_key
+    CODEX_BRIDGE_KEY_PATH=/tmp/fullworth-codex/bridge_key
 
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \

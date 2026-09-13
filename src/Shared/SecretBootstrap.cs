@@ -36,7 +36,23 @@ public static class SecretBootstrap
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
             var key = name[..^"_FILE".Length].Replace("__", ":");
             if (key.Length == 0) continue;
-            overlay[key] = File.ReadAllText(path).Trim();
+
+            try
+            {
+                overlay[key] = File.ReadAllText(path).Trim();
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A file this process may not read is not a reason to die here with a stack trace from
+                // line 42 and no idea which variable caused it. This loop sees EVERY <NAME>_FILE in the
+                // environment, including ones that belong to a different user in the same container, so
+                // "unreadable" is a normal state rather than a broken installation.
+                //
+                // Said out loud and then carried on: a secret that really is required fails afterwards
+                // through RequireSecret, which names the key - and this line explains why it was empty.
+                Console.Error.WriteLine(
+                    $"FullWorth could not read {name} at {path}: {exception.Message}");
+            }
         }
         if (overlay.Count > 0) configuration.AddInMemoryCollection(overlay);
     }

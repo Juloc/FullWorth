@@ -52,7 +52,7 @@ done
 CODEX_ARM_DIR=${CODEX_ARM_DIR:-/tmp/fullworth-codex}
 CODEX_HOME=${CODEX_HOME:-/data/codex}
 CODEX_WORKDIR=${CODEX_WORKDIR:-/tmp/codex-work}
-CODEX_KEY=${BRIDGE_KEY_FILE:-$CODEX_ARM_DIR/bridge_key}
+CODEX_KEY=${CODEX_BRIDGE_KEY_PATH:-$CODEX_ARM_DIR/bridge_key}
 
 if id -u codex >/dev/null 2>&1; then
   # The Codex login, and the scratch directory it unpacks uploads into. 0700 codex:codex - the
