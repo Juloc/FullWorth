@@ -163,3 +163,49 @@ jobs:
         run: |
           sh -n ops/docker/fullworth-codex-launcher
           sh -n ops/docker/entrypoint.sh
+
+      # The boundary between the application and Codex is file ownership and nothing else, so it can
+      # only be checked by running the entrypoint and trying. Both holes found so far were invisible
+      # to every other test: secrets written world-readable, and a data-protection key ring a second
+      # uid could list - with which it could forge a sign-in cookie.
+      - name: The entrypoint really establishes the privilege separation
+        run: |
+          cat > Dockerfile.modes <<'DOCKERFILE'
+          FROM debian:bookworm-slim
+          RUN apt-get update \
+           && apt-get install -y --no-install-recommends gosu \
+           && rm -rf /var/lib/apt/lists/* \
+           && groupadd --system app \
+           && useradd --system --gid app --create-home app \
+           && groupadd --system --gid 1990 codex \
+           && useradd --system --uid 1990 --gid codex --no-create-home --home-dir /data/codex codex
+          COPY ops/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+          COPY ops/docker/fullworth-codex-launcher /usr/local/bin/fullworth-codex-launcher
+          COPY ops/docker/verify-privilege-separation.sh /usr/local/bin/verify-privilege-separation
+          RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/fullworth-codex-launcher /usr/local/bin/verify-privilege-separation
+          ENV CODEX_ARM_DIR=/tmp/fullworth-codex \
+              CODEX_HOME=/data/codex \
+              CODEX_WORKDIR=/tmp/codex-work \
+              CODEX_BRIDGE_KEY_PATH=/tmp/fullworth-codex/bridge_key \
+              Security__InternalKey_FILE=/run/fullworth-secrets/backend_internal_key
+          ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+          DOCKERFILE
+          docker build -t fullworth-modes -f Dockerfile.modes .
+
+          cat > verify-modes.sh <<'SCRIPT'
+          set -e
+          # The application's own secrets have to exist first, or "codex cannot read the internal key"
+          # would pass because the file is simply absent.
+          mkdir -p /run/fullworth-secrets
+          head -c 32 /dev/urandom | base64 > /run/fullworth-secrets/backend_internal_key
+          head -c 32 /dev/urandom | base64 > /run/fullworth-secrets/data_encryption_key
+          chown app:app /run/fullworth-secrets/backend_internal_key /run/fullworth-secrets/data_encryption_key
+          chmod 0600 /run/fullworth-secrets/backend_internal_key /run/fullworth-secrets/data_encryption_key
+
+          # Run the entrypoint as a child rather than as the container's entrypoint: it ends in
+          # "exec gosu app", and the checks need to still be root afterwards - gosu refuses to run
+          # for anyone else, so as app every single one of them would fail for the wrong reason.
+          /usr/local/bin/entrypoint.sh /bin/true
+          verify-privilege-separation
+          SCRIPT
+          docker run --rm --entrypoint /bin/sh -v "$PWD/verify-modes.sh:/verify-modes.sh:ro" fullworth-modes /verify-modes.sh

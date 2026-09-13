@@ -10,10 +10,16 @@ set -e
 # mounted over them - otherwise the app starts as the non-root user, tries to create /data itself and
 # dies with "Access to the path '/data' is denied" before it reaches a single line of configuration.
 # With a volume mounted this is a no-op on an existing directory and a chown on a fresh one.
+#
+# 0700, not just chowned. Docker creates a fresh named volume 0755, which was harmless while one user
+# lived in this container and is not any more: /data/dataprotection holds the key ring that signs the
+# sign-in cookies, and a second uid that can read it can forge a session. Measured in a running
+# container, where codex could list that directory although it had no business knowing it exists.
 for d in /data/purchases /data/pension /data/dataprotection; do
   mkdir -p "$d" 2>/dev/null || true
   if [ -d "$d" ]; then
     chown -R app:app "$d" 2>/dev/null || true
+    chmod 0700 "$d" 2>/dev/null || true
   fi
 done
 
