@@ -77,14 +77,15 @@ services:
       # Writable: this process creates the secrets it owns — the data encryption key, the internal
       # key, the ingest key, the banking key and the Codex bridge key.
       - fullworth-secrets:/run/fullworth-secrets
-    shm_size: 1gb
     # The Codex bridge is a second process in this container, so something has to reap it when it
     # exits. Without this the container slowly collects zombies.
     init: true
     security_opt: ["no-new-privileges:true"]
     read_only: true
+    # read_only and this tmpfs are one unit — .NET cannot start without a writable /tmp. The size
+    # replaces shm_size: the only Chromium path passes --disable-dev-shm-usage and writes here.
     tmpfs:
-      - /tmp:mode=1777
+      - /tmp:mode=1777,size=1g
 
 
 volumes:

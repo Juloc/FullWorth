@@ -17,7 +17,8 @@ The normal FullWorth stack is only **2 containers**:
 - `fullworth` — Web, finance backend and banking in one application
 - `fullworth-postgres` — PostgreSQL
 
-The local Codex / ChatGPT bridge is optional and adds one extra container only when enabled.
+Personal AI through a ChatGPT/Codex sign-in is included in the application container — no third
+service and nothing to enable.
 
 You need:
 
@@ -55,18 +56,14 @@ Open `https://finance.example.com`.
 
 On a fresh installation, registration is available for the **first account only**. That account becomes the instance administrator. After it is created, public registration closes automatically.
 
-## Optional Codex / ChatGPT bridge
+## Codex / ChatGPT
 
-The normal stack does not start the Codex container.
+Nothing to start. The bridge is part of the application container, and it only starts a process once
+you actually sign in under *Settings → AI access* — an installation that never does runs nothing
+extra. Your sign-in lives in the `fullworth-codex` volume and belongs to a separate user inside the
+container, which the application itself cannot read.
 
-To enable local Codex / ChatGPT access:
-
-```bash
-docker compose --profile codex pull
-docker compose --profile codex up -d
-```
-
-Without that profile, FullWorth still works normally and can use other configured AI providers.
+FullWorth works normally without it, with your own API key or your own provider.
 
 ## Enable Banking
 
@@ -93,15 +90,12 @@ Update the normal 2-container stack with:
 
 ```bash
 docker compose pull
-docker compose up -d
+docker compose up -d --remove-orphans
 ```
 
-If you use Codex:
-
-```bash
-docker compose --profile codex pull
-docker compose --profile codex up -d
-```
+`--remove-orphans` matters once, when upgrading from a version older than 1.3.0-alpha.36: the Codex
+bridge used to be its own container, and leaving the old one running means two processes writing one
+Codex sign-in.
 
 To stay on a specific version:
 
