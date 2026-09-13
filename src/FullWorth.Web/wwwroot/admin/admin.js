@@ -8,8 +8,19 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const dt=v=>v?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(v)):'—';
 
+// Every request with a body is JSON, so the header is set here rather than remembered at each call
+// site. Forgetting it is invisible until you try: fetch() labels a string body text/plain, ASP.NET
+// refuses that before the endpoint runs, and the panel simply reloads the old value - which reads as
+// "it does not save" and not as "the request was malformed".
+function jsonRequest(options){
+  if(!options?.body)return options;
+  const headers=new Headers(options.headers||undefined);
+  if(!headers.has('Content-Type'))headers.set('Content-Type','application/json');
+  return {...options,headers};
+}
+
 async function request(path,options){
-  const response=await secureFetch(path,options);
+  const response=await secureFetch(path,jsonRequest(options));
   if(response.status===403){location.assign('/');throw new Error('forbidden')}
   if(!response.ok){
     let error=String(response.status);

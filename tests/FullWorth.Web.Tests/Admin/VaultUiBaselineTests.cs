@@ -85,6 +85,30 @@ public sealed class VaultUiBaselineTests
     }
 
     /// <summary>
+    /// Every admin request that carries a body gets a JSON content type, and it is set in one place.
+    ///
+    /// The instance-settings form did not, and the failure was silent in the worst way: fetch() labels
+    /// a string body text/plain, ASP.NET refuses that with 415 before the endpoint runs, the panel
+    /// catches it and reloads — so the field came back empty and looked like a value that refuses to
+    /// save. Nothing in the .NET suite could see it, because every test for that feature called the
+    /// service directly rather than the route.
+    /// </summary>
+    [Fact]
+    public void Admin_requests_with_a_body_declare_json_in_one_place()
+    {
+        using var factory = new FullWorthWebFactory();
+        using var client = factory.CreateClient();
+        var root = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+
+        var shared = File.ReadAllText(Path.Combine(root, "admin", "admin.js"));
+        Assert.Contains("headers.set('Content-Type','application/json')", shared, StringComparison.Ordinal);
+
+        // And it really is the shared helper that every panel goes through, rather than three copies
+        // of the same header that a fourth panel can forget.
+        Assert.Contains("secureFetch(path,jsonRequest(options))", shared, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No table of secret names in a file anyone can fetch. The labels come from the server, which is
     /// also what <c>FrontendBaselineTests</c> enforces from the other side — this asserts the reason
     /// rather than the symptom.

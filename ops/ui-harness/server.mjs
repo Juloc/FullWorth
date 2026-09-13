@@ -77,6 +77,16 @@ async function serveFile(res, path, injectInto) {
   res.end(body);
 }
 
+// The settings panel writes, so its fixture has to remember. Module scope, not per request.
+const instanceSettings = [
+  { key: 'EnableBanking:ApplicationName', section: 'enableBanking', label: 'Anwendungsname', hint: 'So heißt diese Installation gegenüber Enable Banking und den Banken.', kind: 'text', value: 'FullWorth', stored: false, source: 'default', readOnly: false },
+  { key: 'EnableBanking:RedirectUrl', section: 'enableBanking', label: 'Rückleit-Adresse', hint: 'Abgeleitet aus der Adresse, unter der diese Installation erreicht wurde.', kind: 'url', value: 'https://fullworth.local/connect/enable-banking/callback', stored: false, source: 'default', readOnly: true },
+  { key: 'FinTs:ProductId', section: 'banking', label: 'Produkt-ID', hint: 'Banken wie die ING verlangen für FinTS eine registrierte Produkt-ID.', kind: 'text', value: '', stored: false, source: 'default', readOnly: false },
+  { key: 'Sync:IntervalMinutes', section: 'sync', label: 'Aufwachintervall (Minuten)', hint: 'Wie oft der Hintergrunddienst nachsieht.', kind: 'integer', value: '60', stored: true, source: 'stored', readOnly: false, minimum: 5, maximum: 1440 },
+  { key: 'Registration:Enabled', section: 'registration', label: 'Registrierung offen', hint: 'Nach dem ersten Konto schließt sie sich automatisch.', kind: 'boolean', value: 'false', stored: false, source: 'environment', readOnly: true },
+  { key: 'Logging:LogLevel:Default', section: 'logging', label: 'Protokollstufe', hint: 'Wirkt sofort, ohne Neustart.', kind: 'choice', value: 'Information', stored: false, source: 'default', readOnly: false, choices: ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'None'] }
+];
+
 createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -111,11 +121,15 @@ createServer(async (req, res) => {
     // module load, so a page-side fetch override never sees these requests - the server log is the only
     // place the payload a page really sends can be read. This has to sit above the fixture map: put it
     // below and every logged path is exactly the one a fixture already returned, i.e. none of them.
+    let writeBody = '';
     if (req.method !== 'GET' && req.method !== 'HEAD'
       && (path.startsWith('/bff/') || path.startsWith('/api/') || path.startsWith('/auth/'))) {
-      let raw = '';
-      for await (const chunk of req) raw += chunk;
-      console.log(`${req.method} ${path} ${raw.slice(0, 900)}`);
+      for await (const chunk of req) writeBody += chunk;
+      // The content type belongs in this line. A JSON body sent as text/plain is refused by ASP.NET
+      // before the endpoint runs, and the only symptom on screen is a field that reloads empty - so
+      // the header is the first thing worth seeing when a save "does nothing".
+      console.log(
+        `${req.method} ${path} [${req.headers['content-type'] || 'no content-type'}] ${writeBody.slice(0, 900)}`);
     }
 
     const JOB = '22222222-2222-2222-2222-222222222222';
@@ -179,6 +193,14 @@ createServer(async (req, res) => {
     // The admin page talks to /auth/admin/* directly (not through the BFF), so the browser-side stub
     // never sees it. One user is an admin, one is disabled, one is pending deletion.
     if (path.startsWith('/auth/admin/')) {
+      // Before anything is written, because that is where the real check sits. ASP.NET refuses a body
+      // whose content type is not JSON before the endpoint runs at all, and a harness that accepted it
+      // would happily serve the exact request that made the settings form look broken.
+      if (req.method !== 'GET' && !String(req.headers['content-type'] || '').includes('application/json')) {
+        res.writeHead(415, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'unsupported_media_type' }));
+      }
+
       const users = [
         { id: 'u1111111-1111-1111-1111-111111111111', email: 'admin@fullworth.local', isAdmin: true, isDisabled: false, deletionRequestedAt: null, activeSessionCount: 2, twoFactorEnabled: true, createdAt: '2026-01-04T09:00:00Z', lastSessionSeenAt: '2026-09-09T07:45:00Z', deletionScheduledFor: null },
         { id: 'u2222222-2222-2222-2222-222222222222', email: 'eine.sehr.lange.mailadresse.zum.umbruchtest@beispiel-domain.de', isAdmin: false, isDisabled: true, deletionRequestedAt: null, activeSessionCount: 0, twoFactorEnabled: false, createdAt: '2026-03-12T12:00:00Z', lastSessionSeenAt: '2026-08-01T10:00:00Z', deletionScheduledFor: null },
@@ -190,15 +212,20 @@ createServer(async (req, res) => {
       // fall through to the user list below and render as an empty box, which is exactly the kind of
       // "looks fine, is broken" this harness exists to catch.
       if (path.startsWith('/auth/admin/instance-settings')) {
-        return res.end(JSON.stringify([
-          { key: 'EnableBanking:ApplicationName', section: 'enableBanking', label: 'Anwendungsname', hint: 'So heißt diese Installation gegenüber Enable Banking und den Banken.', kind: 'text', value: 'FullWorth', stored: false, source: 'default', readOnly: false },
-          { key: 'EnableBanking:RedirectUrl', section: 'enableBanking', label: 'Rückleit-Adresse', hint: 'Abgeleitet aus der Adresse, unter der diese Installation erreicht wurde.', kind: 'url', value: 'https://fullworth.local/connect/enable-banking/callback', stored: false, source: 'default', readOnly: true },
-          { key: 'FinTs:ProductId', section: 'banking', label: 'Produkt-ID', hint: 'Banken wie die ING verlangen für FinTS eine registrierte Produkt-ID.', kind: 'text', value: '', stored: false, source: 'default', readOnly: false },
-          { key: 'Sync:IntervalMinutes', section: 'sync', label: 'Aufwachintervall (Minuten)', hint: 'Wie oft der Hintergrunddienst nachsieht.', kind: 'integer', value: '60', stored: true, source: 'stored', readOnly: false, minimum: 5, maximum: 1440 },
-          { key: 'Registration:Enabled', section: 'registration', label: 'Registrierung offen', hint: 'Nach dem ersten Konto schließt sie sich automatisch.', kind: 'boolean', value: 'false', stored: false, source: 'environment', readOnly: true },
-          { key: 'Logging:LogLevel:Default', section: 'logging', label: 'Protokollstufe', hint: 'Wirkt sofort, ohne Neustart.', kind: 'choice', value: 'Information', stored: false, source: 'default', readOnly: false, choices: ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'None'] }
-        ]));
+        if (req.method === 'PUT') {
+          // Stored, not echoed. A stub that always answered with the same fixture would show an empty
+          // field after a successful save and look exactly like the bug it is meant to catch.
+          const body = JSON.parse(writeBody || '{}');
+          const target = instanceSettings.find(setting => setting.key === body.key);
+          if (target) {
+            target.value = body.value || '';
+            target.stored = Boolean(body.value);
+            target.source = body.value ? 'stored' : 'default';
+          }
+        }
+        return res.end(JSON.stringify(instanceSettings));
       }
+
 
       if (path === '/auth/admin/vault') {
         return res.end(JSON.stringify({
