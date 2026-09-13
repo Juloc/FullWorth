@@ -67,17 +67,7 @@ function tr(key) {
   return COPY[lang][key] || key;
 }
 
-function ensureStyles() {
-  if (document.querySelector('link[data-wealth-real-estate-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/wealth-real-estate.css';
-  link.dataset.wealthRealEstateCss = '1';
-  document.head.appendChild(link);
-}
-
 export async function openRealEstateDetail(ctx, asset, onChanged) {
-  ensureStyles();
   const id = asset.id;
   let data;
   try {

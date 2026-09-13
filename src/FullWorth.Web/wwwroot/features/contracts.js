@@ -261,7 +261,6 @@ export async function renderContracts(context) {
   selectMode = false;
   selection.clear();
   await ensureOfficialBrandCatalog(ctx.api);
-  injectCss();
   const host = ctx.$('#view-contracts');
   let rows = [];
   try { rows = (await ctx.api('api/contracts')) || []; }
@@ -645,17 +644,6 @@ function sortContracts(list) {
     name: byName,
   }[view.sort] || (() => 0);
   return list.slice().sort((a, b) => dir * cmp(a, b) || byName(a, b));
-}
-
-// The contracts layout CSS lives in app.css. Only the merge/selection surface brings its own file, and
-// it is loaded as a <link> because the CSP blocks an injected inline <style> block.
-function injectCss() {
-  if (document.querySelector('link[data-contracts-merge-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/contracts-merge.css';
-  link.dataset.contractsMergeCss = '1';
-  document.head.appendChild(link);
 }
 
 // Price-change suggestions (UI_UX_SPEC §13): detected jumps in a subscription's recurring amount, shown

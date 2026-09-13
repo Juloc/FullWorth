@@ -4,10 +4,8 @@ const COPY={
 };
 const CATEGORIES=['deed','purchase_contract','energy_certificate','appraisal','insurance','loan','invoice','photo','other'];
 const tr=k=>COPY[(document.documentElement.lang||'de').startsWith('de')?'de':'en'][k]||k;
-function ensureStyles(){if(document.querySelector('link[data-property-advanced-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='/styles/features/wealth-real-estate-advanced.css';l.dataset.propertyAdvancedCss='1';document.head.appendChild(l)}
-
 export async function attachRealEstateAdvanced(ctx,dlg,asset,onChanged){
- if(!dlg||dlg.dataset.propertyAdvancedAttached==='1')return;dlg.dataset.propertyAdvancedAttached='1';ensureStyles();
+ if(!dlg||dlg.dataset.propertyAdvancedAttached==='1')return;dlg.dataset.propertyAdvancedAttached='1';
  let data;try{const [energy,documents,capabilities,valuations]=await Promise.all([
   ctx.api(`api/assets/${asset.id}/real-estate/energy-certificates`),ctx.api(`api/assets/${asset.id}/documents`),ctx.api(`api/assets/${asset.id}/real-estate/valuation-capabilities`),ctx.api(`api/assets/${asset.id}/valuations`).catch(()=>[])
  ]);data={energy,documents,capabilities,valuations}}catch(e){ctx.toast(e.message||ctx.get('common.error'));return}

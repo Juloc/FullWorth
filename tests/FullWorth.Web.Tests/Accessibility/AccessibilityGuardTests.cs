@@ -51,10 +51,19 @@ public sealed class AccessibilityGuardTests
     public void BothNavsSetAriaCurrent()
     {
         var js = Www("app.js");
-        // Desktop sidebar and mobile bottom-nav must both mark the active destination for AT users.
-        var occurrences = System.Text.RegularExpressions.Regex.Matches(js, "aria-current").Count;
-        Assert.True(occurrences >= 2, "aria-current must be set on both the desktop and bottom navigation.");
-        Assert.Contains("#bottom-nav button[data-view]", js);
+        // Seitenleiste und untere Leiste markieren beide das aktive Ziel. Sie tun es inzwischen in
+        // derselben Schleife, weil beide dieselben .nav-item-Elemente aus app/menu.js sind — vorher
+        // waren es zwei Schleifen über zwei getrennte Markup-Bäume, und genau daher kam der
+        // Auseinanderlauf, den MenuParityTests jetzt verhindert.
+        Assert.Contains("aria-current", js);
+        Assert.Contains(".nav-item[data-entry]", js);
+
+        var html = Www("index.html");
+        foreach (var marker in new[] { "nav:generiert", "bottom-nav:generiert" })
+        {
+            var section = html[html.IndexOf(marker, StringComparison.Ordinal)..];
+            Assert.Contains("class=\"nav-item\"", section[..section.IndexOf("<!-- /", StringComparison.Ordinal)]);
+        }
 
         // <html lang> tracking now lives in the shared i18n module (core/i18n.js) rather than app.js
         // directly; the architecture cleanup extracted locale handling out of app.js.

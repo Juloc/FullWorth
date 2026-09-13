@@ -462,10 +462,8 @@ export async function renderTransactions(context) {
 // Period summary strip (Finanzguru-style): income vs expense for the shown range. Transfers are neutral
 // and excluded-from-statistics rows don't count, so the two figures agree with what analytics reports.
 function renderSummary(items) {
-  const view = ctx.$('#view-transactions');
-  const panel = view.querySelector('.table-panel');
-  let bar = view.querySelector('#tx-summary');
-  if (!items.length || !panel) { bar?.remove(); return; }
+  const bar = ctx.$('#tx-summary');
+  if (!items.length) { bar.textContent = ''; return; }
   let income = 0, expense = 0;
   const cur = items[0]?.currency;
   for (const x of items) {
@@ -473,7 +471,6 @@ function renderSummary(items) {
     const amt = Number(x.amount) || 0;
     if (amt >= 0) income += amt; else expense += amt;
   }
-  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-summary'; bar.className = 'tx-summary'; panel.parentNode.insertBefore(bar, panel); }
   const count = deLabel(`${items.length} Buchungen`, `${items.length} transactions`);
   bar.innerHTML =
     `<div class="fw-summary tx-summary-figs">` +
@@ -566,9 +563,11 @@ function dateHeading(day) {
 // with its name and a clear back path (accounts for an account/group drill, all-bookings otherwise).
 async function renderScope(scope) {
   const { accountId, groupId, categoryId, query } = scope;
-  const view = ctx.$('#view-transactions');
-  let bar = view.querySelector('#tx-scopebar');
-  if (!accountId && !groupId && !categoryId && !query) { bar?.remove(); return; }
+  const bar = ctx.$('#tx-scopebar');
+  if (!accountId && !groupId && !categoryId && !query) { bar.hidden = true; return; }
+  // Sichtbar machen, bevor der Name da ist: die Höhe der Leiste hängt nicht am Namen, und wer
+  // erst danach einblendet, schiebt die fertige Liste ein zweites Mal nach unten.
+  bar.hidden = false;
   let label = '';
   try {
     if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = displayAccountName(a?.displayName || a?.institutionName || ''); }
@@ -576,7 +575,6 @@ async function renderScope(scope) {
     else if (categoryId) { const c = (await ctx.api('api/categories').catch(() => [])).find(c => String(c.id) === String(categoryId)); label = c?.name || ''; }
     else if (query) { label = query; }
   } catch { /* label is best-effort; the list itself is already scoped server-side */ }
-  if (!bar) { bar = document.createElement('div'); bar.id = 'tx-scopebar'; bar.className = 'tx-scopebar'; view.prepend(bar); }
   const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
   bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
   bar.querySelector('[data-back]').onclick = () => ctx.navScope(backTo, '');

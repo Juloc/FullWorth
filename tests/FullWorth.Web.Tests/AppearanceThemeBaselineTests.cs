@@ -19,7 +19,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public async Task ThemeInit_AppliesTheBrandColoursBeforeAppBoot()
     {
-        var init = await GetAsync("/theme-init.js");
+        var init = await GetAsync("/app/boot.js");
         // From disk: an unauthenticated request for /index.html gets the auth shell, not the app shell.
         var head = File.ReadAllText(Path.Combine(WwwrootDir(), "index.html"));
 
@@ -40,7 +40,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     {
         var css = await GetAsync("/appearance.css");
         var appearance = await GetAsync("/ui/appearance.js");
-        var init = await GetAsync("/theme-init.js");
+        var init = await GetAsync("/app/boot.js");
 
         foreach (var source in new[] { css, appearance, init })
         {

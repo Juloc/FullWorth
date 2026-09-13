@@ -64,16 +64,7 @@ async function api(path, options = {}) {
 }
 
 function installShell() {
-  if ($('#coach-nav')) return;
-  const nav = $('#nav');
-  const separator = nav?.querySelector('.nav-sep');
-  const button = document.createElement('button');
-  button.id = 'coach-nav';
-  button.type = 'button';
-  button.dataset.coachView = '1';
-  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg><span>Coach</span>';
-  button.addEventListener('click', () => activate(true));
-  if (separator) nav.insertBefore(button, separator); else nav?.appendChild(button);
+  if ($('#view-coach')) return;
 
   const section = document.createElement('section');
   section.id = 'view-coach';
@@ -125,10 +116,13 @@ function installShell() {
     loadAll();
   }, true);
 
-  document.querySelectorAll('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(existing => {
-    existing.addEventListener('click', () => { if (active) deactivate(); }, true);
-  });
-  $('#bottom-more')?.addEventListener('click', () => queueMicrotask(injectMobileMore));
+  // Coach ist noch keine Seite dieser Hülle, deshalb fängt es seinen eigenen Menüeintrag ab -
+  // in der Seitenleiste, in der unteren Leiste und im "Mehr"-Blatt, das denselben Eintrag rendert.
+  document.addEventListener('click', event => {
+    const entry = event.target.closest('[data-view="coach"], [data-go="coach"]');
+    if (entry) { event.preventDefault(); entry.closest('dialog')?.close(); activate(true); return; }
+    if (active && event.target.closest('[data-view], [data-go]')) deactivate();
+  }, true);
   window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
   window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
   window.addEventListener('storage', event => {
@@ -333,7 +327,7 @@ function initDockResize() {
     const legacy=Number(localStorage.getItem('finance.coach.dockWidth'));return legacy>0?legacy:defaultWidth();
   };
   const maxWidth = () => {
-    const sidebar = document.body.classList.contains('nav-collapsed') || document.body.classList.contains('nav-auto-collapsed')
+    const sidebar = document.documentElement.classList.contains('nav-collapsed') || document.documentElement.classList.contains('nav-auto-collapsed')
       ? 72 : document.querySelector('.sidebar')?.getBoundingClientRect().width || 0;
     const minMain = window.innerWidth < 1100 ? 280 : 420;
     return Math.max(minWidth, Math.min(600, window.innerWidth - sidebar - minMain));
@@ -530,16 +524,6 @@ function closeDock() {
   syncQuickAccess();
 }
 
-function injectMobileMore() {
-  const list = [...document.querySelectorAll('dialog .more-list')].at(-1);
-  if (!list || list.querySelector('[data-coach-mobile]')) return;
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.dataset.coachMobile = '1';
-  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg><span>Coach</span>';
-  button.addEventListener('click', () => { button.closest('dialog')?.close(); activate(true); });
-  list.appendChild(button);
-}
 
 function activate(push) {
   if (!isCoachPath()) capturePageContext();
@@ -547,9 +531,9 @@ function activate(push) {
   active = true;
   document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
   $('#view-coach')?.classList.add('active');
-  document.querySelectorAll('.sidebar button').forEach(button => button.classList.remove('active'));
-  $('#coach-nav')?.classList.add('active');
-  $('#coach-nav')?.setAttribute('aria-current', 'page');
+  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+  $('[data-entry="coach"]')?.classList.add('active');
+  $('[data-entry="coach"]')?.setAttribute('aria-current', 'page');
   $('#bottom-more')?.classList.add('active');
   $('#page-title').textContent = 'Coach';
   $('#page-subtitle').textContent = tr('Deine Daten erklären, Ausgaben bewerten und Ziele berechnen.', 'Explain your data, review spending and calculate goals.');
@@ -562,8 +546,8 @@ function activate(push) {
 function deactivate() {
   active = false;
   $('#view-coach')?.classList.remove('active');
-  $('#coach-nav')?.classList.remove('active');
-  $('#coach-nav')?.setAttribute('aria-current', 'false');
+  $('[data-entry="coach"]')?.classList.remove('active');
+  $('[data-entry="coach"]')?.setAttribute('aria-current', 'false');
   syncQuickAccess();
 }
 

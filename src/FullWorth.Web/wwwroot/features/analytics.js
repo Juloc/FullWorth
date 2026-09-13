@@ -32,7 +32,6 @@ export function bindAnalytics(context) {
 export async function renderAnalytics(context) {
   ctx = context;
   await ensureOfficialBrandCatalog(ctx.api);
-  injectCss();
   const view = ctx.$('#view-analytics');
   if (!view) return;
 
@@ -726,12 +725,6 @@ function fxMarker(incomplete) { return incomplete ? `<div class="fx-incomplete">
 // masked figures. When privacy is on, swap the chart body for a neutral placeholder (as the contracts
 // sparkline does). KPI numbers are already masked through ctx.money().
 function chart(build) { return ctx.isPrivate() ? `<div class="an-chart an-chart-private" aria-hidden="true">•••</div>` : build(); }
-
-// One-time CSS for the analytics-only layout primitives (card feet, KPI, merchant/category rows,
-// coloured trend lines, advanced disclosure). Everything else comes from app.css .fw-*/token classes.
-// No-op: the analytics layout CSS lives in app.css (the app CSP blocks injected inline <style>, so this
-// used to be dead). Kept as a stub so the renderAnalytics call site needs no change.
-function injectCss() { }
 
 // ---- Chart builder (§15.2): a bounded measure×dimension query rendered with the existing chart
 // techniques, plus saved analyses persisted in a preference. Demoted below the cards (advancedHtml). ----

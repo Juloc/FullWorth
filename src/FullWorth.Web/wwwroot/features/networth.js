@@ -140,31 +140,15 @@ function isDe() { return !(document.documentElement.lang || '').toLowerCase().st
 function t(key) { return COPY[isDe() ? 'de' : 'en'][key] || key; }
 function num(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
 
-function ensureStyles() {
-  if (document.querySelector('link[data-wealth-assets-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/wealth-assets.css';
-  link.dataset.wealthAssetsCss = '1';
-  document.head.appendChild(link);
-}
-
-// New presentation-layer styles for the trend/allocation/manage cards. Injected once; everything else
-// reuses app.css `.fw-*` primitives and design tokens (--cat-1..--cat-8, --negative, --cta, spacing).
-// No-op: the net-worth layout CSS lives in app.css (the app CSP blocks injected inline <style>).
-function ensureUxStyles() { }
-
 export function bindNetWorth(context) {
   // Just store ctx + ensure the shared asset stylesheet is present. The static index.html add/manage
   // buttons are replaced when renderNetWorth rebuilds #view-networth, so their listeners are (re)wired
   // there on freshly-created elements rather than here.
   ctx = context;
-  ensureStyles();
 }
 
 export function newAsset(context) {
   if (context) ctx = context;
-  ensureStyles();
   return openAssetWizard();
 }
 
@@ -197,8 +181,6 @@ async function loadBookingActivity(months, customFrom = nw.customFrom, customTo 
 
 export async function renderNetWorth(context) {
   ctx = context;
-  ensureStyles();
-  ensureUxStyles();
   if (!Number.isFinite(nw.windowMonths)) nw.windowMonths = 12;
   if (!nw.customTo) nw.customTo = localDate(new Date());
   if (!nw.customFrom) {

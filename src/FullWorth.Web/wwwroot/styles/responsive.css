@@ -58,28 +58,20 @@
   html.pwa-standalone .topbar{padding-top:calc(var(--s6) + env(safe-area-inset-top,0px))}
   html.pwa-standalone #bottom-nav{padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}
   #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
-  #bottom-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
-  #bottom-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-  #bottom-nav button span{font-size:10px;line-height:1}
-  #bottom-nav button.active{color:var(--text);background:var(--surface-2);border-radius:10px}
+  #bottom-nav .nav-item{display:flex;text-decoration:none;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
+  #bottom-nav .nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  #bottom-nav .nav-item span{font-size:10px;line-height:1}
+  #bottom-nav .nav-item.active{color:var(--text);background:var(--surface-2);border-radius:10px}
   .metric-grid{grid-template-columns:repeat(2,1fr)}
   /* Auch als Popover: #toast[popover] ist spezifischer als #toast, sonst bliebe der Toast auf dem
      Handy rechts kleben statt die Breite zu nehmen. */
   #toast,#toast[popover]{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none;inset-block-start:auto}
 }
 @media(max-width:767px){
-  /* Phone: stack the header. Side by side, the five controls claimed 240px and still wrapped onto a
-     second row (94px tall), which squeezed the title column to 124px so title AND subtitle wrapped over
-     several lines - measured 126px total and it read as broken rather than dense. Stacked, the title
-     gets the full 380px on one line and the controls fit one row: measured 110px. */
-  .topbar{padding-top:var(--s4);align-items:stretch;flex-direction:column;gap:var(--s2)}
-  .topbar-title h1{font-size:24px;overflow-wrap:anywhere}
-  /* Decorative on a phone - the title and the bottom nav already say which page this is, and keeping it
-     was what forced the title into a 124px column. */
-  #page-subtitle{display:none}
-  .topbar-actions{flex-wrap:nowrap;justify-content:flex-start;gap:6px}
-  /* Utilities left, the page's own action on the right edge where the thumb sits. */
-  .topbar-actions .primary-action{margin-left:auto;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Die Topbar am Telefon gehört mobile-polish.css. Hier standen vier Regeln dafür, von denen
+     mobile-polish jede einzelne wieder umgesetzt hat - gestapelt statt in einer Zeile, andere
+     Schriftgröße, anderer Abstand. Gewonnen hat immer die spätere Datei, also war dieser Block
+     wirkungslos. */
   .content-grid{grid-template-columns:1fr}
   .dashboard-grid{grid-template-columns:1fr}
   .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}

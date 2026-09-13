@@ -10,7 +10,7 @@ public static class FinanzguruImportPageEndpoints
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>Finanzguru Import</title>
-  <script src="/theme-init.js"></script>
+  <script src="/app/boot.js"></script>
   <!-- The full layer chain, in the same order as index.html. Loading only app.css left every design
        token undefined (--s4, --line, --muted, --surface, --cta all resolved to nothing) and skipped the
        responsive layer entirely, so this page rendered with unstyled 20px form controls on a phone. -->

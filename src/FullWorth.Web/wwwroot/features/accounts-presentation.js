@@ -40,8 +40,13 @@ function bankForAccount(a,bs,connections=[]){const conn=a?.bankConnectionId?(con
 function accountIdentity(a,bs,connections=[]){const overridden=hasVisualOverride('accounts',a.id),v=vis('accounts',a.id,'wallet'),lg=logo(bankForAccount(a,bs,connections)),bankDefault=!!a.bankConnectionId||!!lg;return{node:overridden?identity(v):identity(bankDefault?{icon:'bank',color:'#334155',background:'#eef2f7'}:v,lg,bankDefault,a.institutionName||''),sig:`${a.id}|${overridden?'custom':'default'}|${lg}|${v.icon}|${v.color}|${v.background}`}}
 function identity(v,bankLogo='',bankOnly=false,alt=''){const e=document.createElement('span');e.className=`account-identity-icon${bankOnly?' bank-only':''}`;e.style.color=v.color;e.style.background=v.background;if(!bankOnly)e.insertAdjacentHTML('beforeend',svg(v.icon));if(bankLogo){const i=document.createElement('img');i.src=bankLogo;i.alt=bankOnly?alt:'';i.loading='lazy';i.referrerPolicy='no-referrer';i.className=bankOnly?'account-bank-primary':'account-bank-badge';i.onerror=()=>i.remove();e.append(i)}else if(bankOnly)e.insertAdjacentHTML('beforeend',svg('bank'));return e}
 function iconButton(b,icon,label){if(!b)return;b.classList.add('ux-icon-text-button');if(b.dataset.uxIcon!==icon||!$('.ux-button-label',b)){b.innerHTML=`${svg(icon,'ux-button-icon')}<span class="ux-button-label"></span>`;b.dataset.uxIcon=icon}text($('.ux-button-label',b),label);b.title=label;b.setAttribute('aria-label',label)}
-function ensureCss(){if($('#accounts-ux-css'))return;const l=document.createElement('link');l.id='accounts-ux-css';l.rel='stylesheet';l.href='/styles/features/accounts.css';document.head.append(l)}
-function ensureNav(){const av=$('#view-accounts'),tv=$('#view-transactions'),nav=$('#nav');if(!av||!tv||!nav)return;let grp=$('#accounts-sidebar-group');const ab=nav.querySelector('[data-view="accounts"]'),tb=nav.querySelector('[data-view="transactions"]');if(ab&&!grp){grp=document.createElement('div');grp.id='accounts-sidebar-group';grp.className='accounts-sidebar-group';ab.before(grp);grp.append(ab);const ch=document.createElement('div');ch.className='accounts-sidebar-children';grp.append(ch);if(tb)ch.append(tb);const bb=document.createElement('button');bb.type='button';bb.className='accounts-connections-nav';bb.dataset.accountSubpage='connections';bb.innerHTML=`${svg('link')}<span></span>`;bb.onclick=goConnections;ch.append(bb)}for(const v of[av,tv])if(!$('.accounts-local-nav',v)){const n=document.createElement('nav');n.className='accounts-local-nav';for(const[k,i,fn]of[['accounts','wallet',goAccounts],['transactions','transactions',goTransactions],['connections','link',goConnections]]){const b=document.createElement('button');b.type='button';b.dataset.accountSubpage=k;b.innerHTML=`${svg(i)}<span></span>`;b.onclick=fn;n.append(b)}v.prepend(n)}const labs={accounts:tr().accounts,transactions:tr().transactions,connections:tr().connections};for(const b of $$('[data-account-subpage]'))text($('span',b),labs[b.dataset.accountSubpage])}
+// Die Seitenleiste kommt aus app/menu.js, die lokale Leiste steht in index.html. Hier bleibt nur,
+// was sich mit der Sprache ändert - früher baute diese Funktion beides zur Laufzeit zusammen und
+// war damit sowohl eine zweite Menüquelle als auch eine Sprungquelle.
+function ensureNav(){
+  const labels={accounts:tr().accounts,transactions:tr().transactions,connections:tr().connections};
+  for(const button of $$('[data-account-subpage]'))text($('span',button),labels[button.dataset.accountSubpage]);
+}
 function goAccounts(){return navigate('accounts',{path:'/accounts'})}
 function goTransactions(){return navigate('transactions',{query:''})}
 function goConnections(){return navigate('accounts',{path:'/accounts/connections'})}
@@ -78,15 +83,22 @@ async function markSeen(){try{const items=arr(await req('api/transactions?limit=
 function applyUnread(){for(const b of [...$$('#nav [data-view="transactions"]'),...$$('#bottom-nav [data-view="transactions"]'),...$$('.accounts-local-nav [data-account-subpage="transactions"]')]){const d=$('.nav-unread-dot',b);if(S.hasUnread&&!d)b.insertAdjacentHTML('beforeend',`<span class="nav-unread-dot" aria-label="${tr().newTx}"></span>`);else if(!S.hasUnread)d?.remove()}}
 function manualDialog(target=null){const dialogs=target?[target]:$$('dialog:not([data-ux-manual])');for(const d of dialogs){const f=$('form',d),n=f?.querySelector('[name="name"]'),i=f?.querySelector('[name="institution"]'),bal=f?.querySelector('[name="balance"]');if(!f||!n||!i||!bal)continue;d.dataset.uxManual='1';const fs=fields({icon:'wallet',color:'#334155',background:'#eef2f7'});$('.dialog-actions',f)?.before(fs);f.addEventListener('submit',()=>{sessionStorage.setItem('finance.pending-manual-visual',JSON.stringify({icon:$('.account-icon-choice.selected',fs)?.dataset.icon||'wallet',color:$('[name="iconColor"]',fs).value,background:$('[name="iconBackground"]',fs).value,at:Date.now()}))},{capture:true,once:true})}}
 async function applyManualCreated(a){if(!a?.id)return;const raw=sessionStorage.getItem('finance.pending-manual-visual');if(!raw)return;let p;try{p=JSON.parse(raw)}catch{return}if(!p||Date.now()-Number(p.at||0)>15000){sessionStorage.removeItem('finance.pending-manual-visual');return}await prefs();S.prefs.accounts[a.id]={icon:p.icon,color:p.color,background:p.background};await savePref('accounts');sessionStorage.removeItem('finance.pending-manual-visual');S.bundleAt=0;}
-async function enhance(){if(S.busy)return;S.busy=true;try{ensureCss();reset();ensureNav();toolbar();route();if(S.space){await prefs();const [bb,bs]=await Promise.all([bundle(),banks()]);if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){await decorateAccounts(bb,bs);await decorateConnections(bb,bs)}}await unread();const tx=$('#view-transactions')?.classList.contains('active');if(tx&&!document.body.dataset.transactionsSeenActive){document.body.dataset.transactionsSeenActive='1';await markSeen()}else if(!tx)delete document.body.dataset.transactionsSeenActive}finally{S.busy=false}}
+async function enhance(){if(S.busy)return;S.busy=true;try{reset();ensureNav();toolbar();route();if(S.space){await prefs();const [bb,bs]=await Promise.all([bundle(),banks()]);if($('#view-accounts')?.classList.contains('active')&&!S.groupMode){await decorateAccounts(bb,bs);await decorateConnections(bb,bs)}}await unread();const tx=$('#view-transactions')?.classList.contains('active');if(tx&&!document.body.dataset.transactionsSeenActive){document.body.dataset.transactionsSeenActive='1';await markSeen()}else if(!tx)delete document.body.dataset.transactionsSeenActive}finally{S.busy=false}}
 
 export function bindAccountsPresentation(nextActions = {}) {
   actions = { ...actions, ...nextActions };
   if (bound) return;
   bound = true;
-  ensureCss();
   ensureNav();
   route();
+
+  // Die drei Knöpfe stehen jetzt im Dokument, also wird hier einmal delegiert statt bei jedem
+  // Rendern neu verdrahtet.
+  const go = { accounts: goAccounts, transactions: goTransactions, connections: goConnections };
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-account-subpage]');
+    if (button) go[button.dataset.accountSubpage]();
+  });
 
   window.addEventListener('fullworth:view-change', event => {
     route();

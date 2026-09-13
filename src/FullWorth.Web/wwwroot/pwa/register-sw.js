@@ -12,13 +12,6 @@ if ('serviceWorker' in navigator) {
 function loadCoachExtension() {
   // The auth page registers the service worker too, but must not load authenticated shell modules.
   if (document.body?.classList.contains('auth-body')) return;
-  if (!document.querySelector('link[data-fullworth-coach]')) {
-    const stylesheet = document.createElement('link');
-    stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/styles/features/coach.css';
-    stylesheet.dataset.fullworthCoach = '1';
-    document.head.appendChild(stylesheet);
-  }
   import('/features/coach-shell.js').catch(() => { /* optional shell extension */ });
 }
 

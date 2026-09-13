@@ -68,9 +68,12 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         var html = ReadWebAsset("index.html");
         var navJs = await GetAsync("/features/compensation-nav.js");
 
-        Assert.Contains("data-compensation-link", html);
+        // Gehalt ist ein gewöhnlicher Menüeintrag aus app/menu.js. Er zeigt noch auf ein eigenes
+        // Dokument — das ist der Rest, den der Seitenumzug auflöst —, aber er steht in derselben
+        // Liste wie alle anderen und erscheint damit auch am Telefon, wo er früher fehlte.
+        Assert.Contains("data-entry=\"compensation\"", html);
+        Assert.Contains("href=\"/compensation.html\"", html);
         Assert.Contains("/compensation.html", navJs);
-        Assert.Contains("data-compensation-mobile", navJs);
     }
 
     private string ReadWebAsset(string relative)

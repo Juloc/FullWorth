@@ -40,22 +40,6 @@ button:hover,
   display: none !important;
 }
 
-.accounts-sidebar-group {
-  display: grid;
-  gap: 2px;
-}
-
-.accounts-sidebar-children {
-  display: grid;
-  gap: 2px;
-  padding-left: 12px;
-}
-
-.accounts-sidebar-children button {
-  font-size: .9rem;
-}
-
-.accounts-sidebar-children button svg,
 .accounts-local-nav button svg,
 .ux-button-icon,
 .account-drag-handle svg,
@@ -89,8 +73,7 @@ button:hover,
   white-space: nowrap;
 }
 
-.accounts-local-nav button.active,
-.accounts-connections-nav.active {
+.accounts-local-nav button.active {
   background: var(--accent-soft, rgba(45, 111, 255, .12));
   color: var(--accent, #2d6fff);
 }
@@ -578,10 +561,6 @@ button:hover,
   /* Primary local navigation: the app-wide 44px touch floor applies; the 38px base is desktop. */
   .accounts-local-nav button {
     min-height: 44px;
-  }
-
-  .accounts-sidebar-children {
-    display: none;
   }
 
   .accounts-local-nav {

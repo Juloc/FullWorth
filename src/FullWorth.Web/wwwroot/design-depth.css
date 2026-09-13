@@ -44,7 +44,7 @@ html[data-theme="light"] .brand-mark{
 }
 
 .sidebar button,
-#bottom-nav button,
+#bottom-nav .nav-item,
 .icon-button,
 .primary-action,
 .panel-head button,
@@ -432,7 +432,7 @@ html[data-theme="light"] dialog.drawer .dialog-card{
     box-shadow:0 -8px 28px rgba(16,24,40,.055);
   }
 
-  html[data-theme="light"] #bottom-nav button.active{
+  html[data-theme="light"] #bottom-nav .nav-item.active{
     background:linear-gradient(180deg,var(--tint-surface-2),var(--tint-surface-3));
   }
 
@@ -442,7 +442,7 @@ html[data-theme="light"] dialog.drawer .dialog-card{
     box-shadow:0 -8px 28px rgba(0,0,0,.18);
   }
 
-  html[data-theme="dark"] #bottom-nav button.active{
+  html[data-theme="dark"] #bottom-nav .nav-item.active{
     background:var(--surface-2);
   }
 }

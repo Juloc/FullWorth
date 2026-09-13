@@ -56,7 +56,7 @@ public sealed class ResponsiveLayoutTests
         // padding at all and covers the last row of the list.
         Assert.Contains("env(safe-area-inset-bottom,0px)", tabletDown);
         Assert.DoesNotMatch(@"env(safe-area-inset-[a-z]+)", tabletDown);
-        Assert.Matches(@"#bottom-nav button span\{font-size:10px", tabletDown);
+        Assert.Matches(@"#bottom-nav \.nav-item span\{font-size:10px", tabletDown);
     }
 
     /// <summary>
@@ -86,9 +86,11 @@ public sealed class ResponsiveLayoutTests
         var html = File.ReadAllText(Path.Combine(root, "src", "FullWorth.Web", "wwwroot", "index.html"));
         var nav = html[html.IndexOf("id=\"bottom-nav\"", StringComparison.Ordinal)..];
         nav = nav[..nav.IndexOf("</nav>", StringComparison.Ordinal)];
-        // UI_UX_SPEC §3.2: exactly five visible destinations (four sections + More).
-        var buttons = System.Text.RegularExpressions.Regex.Matches(nav, "<button").Count;
-        Assert.Equal(5, buttons);
+        // UI_UX_SPEC §3.2: genau fünf sichtbare Ziele (vier Bereiche + Mehr). Die vier sind Links auf
+        // ihre eigene Adresse, "Mehr" ist ein Knopf — beide tragen .nav-item, weil sie dasselbe sind.
+        // Welche vier es sind, steht in app/menu.js und prüft MenuParityTests.
+        var entries = System.Text.RegularExpressions.Regex.Matches(nav, "class=\"nav-item\"").Count;
+        Assert.Equal(5, entries);
         Assert.Contains("id=\"bottom-more\"", nav);
     }
 
@@ -117,8 +119,10 @@ public sealed class ResponsiveLayoutTests
         // Every nav view must be routed. loadCurrent (in app.js) used to dispatch through a switch/case;
         // the architecture cleanup replaced that with the shared core/feature-registry.js, so each view
         // is now wired via a `.register('view', ...)` call in app.js. Dead nav entries are still caught.
+        // Coach ist die eine Ansicht, die sich noch selbst baut und deshalb auch selbst aktiviert;
+        // MenuParityTests hält diese Ausnahme namentlich fest.
         var views = System.Text.RegularExpressions.Regex.Matches(html, "data-view=\"([^\"]+)\"")
-            .Select(match => match.Groups[1].Value).Distinct().ToList();
+            .Select(match => match.Groups[1].Value).Distinct().Where(view => view != "coach").ToList();
         Assert.NotEmpty(views);
         foreach (var view in views)
             Assert.Contains($".register('{view}'", appJs);

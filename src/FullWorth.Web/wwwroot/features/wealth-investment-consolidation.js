@@ -24,13 +24,6 @@ function toast(message) {
   el.textContent = message; el.classList.add('show');
   clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 3000);
 }
-function ensureCss() {
-  if ($('link[data-wealth-investments-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet'; link.href = '/styles/features/wealth-investment-consolidation.css'; link.dataset.wealthInvestmentsCss = '1';
-  document.head.appendChild(link);
-}
-
 let lastPortfolioId = null;
 let portfolioCache = null;
 let overviewCache = new Map();
@@ -42,7 +35,6 @@ document.addEventListener('click', event => {
   if (target) lastPortfolioId = target.dataset.portfolio || null;
 }, true);
 
-ensureCss();
 void import('./investment-performance-ui.js');
 
 async function portfolios() {
@@ -200,7 +192,6 @@ function tradeRows(rows, currency) {
 }
 
 export async function refreshInvestmentConsolidation() {
-  ensureCss();
   await enhanceWealthRows();
   const dialog = $$('.ip-dialog').find(item => item.open && !item.classList.contains('wealth-security-dialog'));
   if (dialog) await enhancePortfolioDialog(dialog);

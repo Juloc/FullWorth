@@ -16,7 +16,22 @@
     "notifications": "Benachrichtigungen",
     "settings": "Einstellungen",
     "collapse": "Menü einklappen",
-    "expand": "Menü ausklappen"
+    "expand": "Menü ausklappen",
+    "start": "Start",
+    "insights": "Für dich",
+    "coach": "Coach",
+    "merchants": "Händler",
+    "audit": "Protokoll",
+    "compensation": "Gehalt",
+    "pension": "Altersvorsorge",
+    "admin": "Admin",
+    "group": {
+      "overview": "Übersicht",
+      "finances": "Finanzen",
+      "planning": "Planung",
+      "analysis": "Auswertung",
+      "administration": "Verwaltung"
+    }
   },
   "theme": {
     "system": "System",

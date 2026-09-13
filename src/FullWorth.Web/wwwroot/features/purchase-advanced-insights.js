@@ -26,17 +26,6 @@ function pct(value) {
   return `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
 }
 
-function ensureStyle() {
-  // Production CSP forbids JS-created inline <style> blocks (style-src 'self'); load the module's
-  // CSS as a same-origin linked stylesheet instead, exactly once.
-  if (document.querySelector('link[data-feature-css="purchase-advanced-insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/purchase-advanced-insights.css';
-  link.dataset.featureCss = 'purchase-advanced-insights';
-  document.head.appendChild(link);
-}
-
 function inflationCard(data) {
   const card = document.createElement('div');
   card.className = 'pa-card pa-advanced-insight';
@@ -93,7 +82,6 @@ async function decorate(panel) {
 }
 
 export async function refreshPurchaseAdvancedInsights(detail = {}) {
-  ensureStyle();
   const panel = document.querySelector('.purchase-advanced-panel:not([hidden])');
   const tab = detail.tab || document.querySelector('[data-pa-tab].active')?.dataset.paTab;
   if (panel && tab === 'analytics') await decorate(panel);

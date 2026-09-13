@@ -47,19 +47,9 @@ function tr(key) {
   return COPY[lang][key] || key;
 }
 
-function ensureStyles() {
-  if (document.querySelector('link[data-wealth-real-estate-operations-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/wealth-real-estate-operations.css';
-  link.dataset.wealthRealEstateOperationsCss = '1';
-  document.head.appendChild(link);
-}
-
 export async function attachRealEstateOperations(ctx, dlg, asset, onChanged) {
   if (!dlg || dlg.dataset.propertyOperationsAttached === '1') return;
   dlg.dataset.propertyOperationsAttached = '1';
-  ensureStyles();
 
   const id = asset.id;
   let data;

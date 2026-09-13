@@ -93,11 +93,12 @@
     display: none;
   }
 
+  /* Die letzte Spur ist fest 40px breit - genau der Kreis, zu dem der Aktionsknopf hier wird. Damit
+     ist die Leiste immer gleich breit, egal ob die Seite eine Aktion hat oder nicht, und die drei
+     Symbole daneben bleiben stehen. Vorher schrumpfte sie mit und schob alles um 44px. */
   .topbar-actions {
-    flex: 0 0 auto;
-    margin-left: auto;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
+    width: auto;
+    grid-template-columns: repeat(3, auto) 40px;
     gap: 4px;
   }
 
@@ -126,6 +127,10 @@
   }
 
   #primary-action:not([hidden])::before {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
     content: '+';
     color: var(--cta-text);
     font-size: 25px;

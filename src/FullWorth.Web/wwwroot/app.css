@@ -769,7 +769,7 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .purchase-bar>span{display:block;height:100%;border-radius:inherit;background:var(--k4)}
 
 /* --- Buchungen (tx-*): period summary strip + skeleton + empty state --- */
-#view-transactions .tx-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s4);padding:var(--s3) var(--s4);margin-bottom:var(--s3);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+#view-transactions .tx-summary{display:flex;min-height:70px;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s4);padding:var(--s3) var(--s4);margin-bottom:var(--s3);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
 .tx-summary .tx-summary-figs{gap:var(--s6)}
 .tx-summary .tx-summary-fig{display:flex;flex-direction:column}
 .tx-summary .fw-summary-value{font-size:20px}
@@ -1303,3 +1303,6 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));margin:auto}
   #transactions-body .tx-list-purpose { display: none; }
   #transactions-body .tx-mobile-category { display: block; }
 }
+
+/* "Mehr" auf dem Handy zeigt den kompletten Menübaum, deshalb hat es Gruppenüberschriften. */
+.more-group{margin:var(--s3) 0 var(--s1);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}

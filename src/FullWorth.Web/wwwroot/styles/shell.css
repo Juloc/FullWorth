@@ -2,14 +2,14 @@
 .skip-link:focus{top:8px}
 
 .shell{min-height:100vh;min-height:100dvh;width:100%;min-width:0;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}
-body.nav-collapsed .shell,body.nav-auto-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
+html.nav-collapsed .shell,html.nav-auto-collapsed .shell{grid-template-columns:var(--sidebar-w-collapsed) minmax(0,1fr)}
 
 /* Sidebar (§3.1) */
 .sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:var(--s4) var(--s3);background:var(--surface);border-right:1px solid var(--line);min-width:0}
 .sidebar-resizer{position:absolute;top:0;right:-4px;z-index:8;width:8px;height:100%;cursor:col-resize;touch-action:none}
 .sidebar-resizer::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background-color .15s ease}
 .sidebar-resizer:hover::after,.sidebar-resizer.is-dragging::after{background:var(--k4)}
-body.nav-collapsed .sidebar-resizer,body.nav-auto-collapsed .sidebar-resizer{display:none}
+html.nav-collapsed .sidebar-resizer,html.nav-auto-collapsed .sidebar-resizer{display:none}
 body.sidebar-resizing{cursor:col-resize;user-select:none}
 .brand{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2) var(--s6);position:relative}
 .brand-mark{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:600;flex:0 0 auto}
@@ -25,40 +25,37 @@ html[data-theme="dark"] .brand-logo{content:url("/branding/fullworth-logo-dark.s
 .brand-name{display:inline-flex;align-items:center;gap:7px;min-width:0;line-height:1}
 .beta-label{display:block;margin:0 0 2px;font-size:8px;font-weight:700;line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .brand-beta{display:inline-flex;align-items:center;padding:2px 6px;border:1px solid var(--line);border-radius:var(--radius-pill);font-size:8px;font-weight:700;line-height:1;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-/* Standalone collapse toggle. Uses the #id so it wins over `.sidebar button` (which would otherwise
-   stretch it full-width and strip its border). Always visible so it can re-open a collapsed sidebar. */
+/* Immer sichtbar, damit eine eingeklappte Leiste sich wieder öffnen lässt. */
 #nav-collapse{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);font-size:16px;line-height:1;cursor:pointer}
 #nav-collapse:hover{border-color:var(--cta)}
-body.nav-collapsed .brand strong,body.nav-auto-collapsed .brand strong{display:none}
-body.nav-collapsed .brand-name,body.nav-auto-collapsed .brand-name{display:none}
+html.nav-collapsed .brand strong,html.nav-auto-collapsed .brand strong{display:none}
+html.nav-collapsed .brand-name,html.nav-auto-collapsed .brand-name{display:none}
 /* Collapsed rail (72px): stack the logo above the toggle, both centred, so the toggle stays a real,
    clickable button that can re-open the sidebar (it used to be hidden, trapping the collapsed state). */
-body.nav-collapsed .brand,body.nav-auto-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
-body.nav-collapsed #nav-collapse,body.nav-auto-collapsed #nav-collapse{margin-left:0}
+html.nav-collapsed .brand,html.nav-auto-collapsed .brand{flex-direction:column;gap:var(--s2);padding-bottom:var(--s4)}
+html.nav-collapsed #nav-collapse,html.nav-auto-collapsed #nav-collapse{margin-left:0}
 #nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto}
 .sidebar-foot{margin-top:auto;padding-top:var(--s2);border-top:1px solid var(--line)}
-.sidebar button{display:flex;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:8px;color:var(--muted);font-weight:500;cursor:pointer}
-.sidebar button svg{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.sidebar button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sidebar button:hover{background:var(--surface-2);color:var(--text)}
+.sidebar .nav-item{display:flex;text-decoration:none;align-items:center;gap:var(--s3);width:100%;border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:8px;color:var(--muted);font-weight:500;cursor:pointer}
+.sidebar .nav-item svg{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sidebar .nav-item span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar .nav-item:hover{background:var(--surface-2);color:var(--text)}
 /* Active nav is a plain grey fill with full text contrast — never the CTA colour, so colour stays
    reserved for money statements (a colourful nav would immediately devalue that rule). */
-.sidebar button.active{background:var(--surface-2);color:var(--text);font-weight:600}
-.sidebar button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-body.nav-collapsed .sidebar button,body.nav-auto-collapsed .sidebar button{justify-content:center;padding:10px 0}
-body.nav-collapsed .sidebar button span,body.nav-auto-collapsed .sidebar button span{display:none}
-/* A divider separates the finance areas from the organization areas (categories/rules/settings). */
-.nav-sep{height:1px;background:var(--line);margin:var(--s2) 10px}
+.sidebar .nav-item.active{background:var(--surface-2);color:var(--text);font-weight:600}
+.sidebar .nav-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+html.nav-collapsed .sidebar .nav-item,html.nav-auto-collapsed .sidebar .nav-item{justify-content:center;padding:10px 0}
+html.nav-collapsed .sidebar .nav-item span,html.nav-auto-collapsed .sidebar .nav-item span{display:none}
 /* User block + light/dark toggle at the foot of the sidebar (where account things are expected). */
 .sidebar-user{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) 8px 0}
 .sidebar-avatar{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;flex:0 0 auto}
 .sidebar-user-meta{flex:1;min-width:0}
-.sidebar-user-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sidebar-user-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-user-name{min-height:1lh;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-user-sub{min-height:1lh;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #theme-toggle{width:32px;height:32px;flex:0 0 auto}
-body.nav-collapsed .sidebar-user,body.nav-auto-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-right:0}
-body.nav-collapsed .sidebar-user-meta,body.nav-collapsed #theme-toggle,body.nav-auto-collapsed .sidebar-user-meta,body.nav-auto-collapsed #theme-toggle{display:none}
-body.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
+html.nav-collapsed .sidebar-user,html.nav-auto-collapsed .sidebar-user{justify-content:center;padding-left:0;padding-right:0}
+html.nav-collapsed .sidebar-user-meta,html.nav-collapsed #theme-toggle,html.nav-auto-collapsed .sidebar-user-meta,html.nav-auto-collapsed #theme-toggle{display:none}
+html.nav-auto-collapsed #nav-collapse:disabled{opacity:.45;cursor:default}
 
 /* Main + top header (§3.1) */
 main{min-width:0;padding:0 var(--s6) var(--s8);width:100%;max-width:var(--content-max);margin-inline:auto}
@@ -67,7 +64,13 @@ main:focus{outline:none}
 .topbar-title{min-width:0;flex:1 1 auto}
 .topbar-title h1{font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.08}
 .topbar-title p{margin:4px 0 0;color:var(--muted);font-size:13px}
-.topbar-actions{display:flex;align-items:center;gap:var(--s2);min-width:0;flex:0 1 auto}
+/* Raster statt flex, und die letzte Spalte nimmt den Rest. Damit stehen die drei Symbole an
+   festen Stellen und nur der Aktionsknopf ändert seine Breite. Vorher war die Leiste rechtsbündig
+   und flexibel, also schob jeder Wechsel der Beschriftung ("Dashboard bearbeiten" -> "Buchung") die
+   Symbole zur Seite - auf jeder Seite, bei jedem Laden.
+   Die Drei in repeat(3,auto) sind die drei Symbolknöpfe im Markup; ein vierter braucht hier eine Zahl. */
+.topbar-actions{display:grid;grid-template-columns:repeat(3,auto) minmax(0,1fr);align-items:center;gap:var(--s2);width:300px;min-width:0}
+.topbar-actions #primary-action{justify-self:end;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
 .icon-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button:hover{border-color:var(--cta)}
@@ -81,3 +84,23 @@ main:focus{outline:none}
 .view{display:none}
 .view.active{display:block}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Menügruppen (Übersicht · Finanzen · Planung · Auswertung · Verwaltung).
+   Die Überschrift ist der Schalter, und ihr aria-expanded ist gleichzeitig der Zustand — eine
+   zweite Klasse dafür wäre dieselbe Aussage ein zweites Mal. app/nav-state.js setzt es beim
+   Parsen, also bevor das erste Bild steht. */
+.nav-group-head{display:flex;align-items:center;gap:var(--s1);width:100%;padding:var(--s3) 10px 4px;border:0;background:transparent;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+.nav-group-head:hover{color:var(--text)}
+.nav-group-head svg{width:12px;height:12px;margin-left:auto;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(90deg)}
+.nav-group-head[aria-expanded="false"] svg{transform:none}
+.nav-group-head[aria-expanded="false"]+.nav-group-items{display:none}
+.nav-group-items{display:flex;flex-direction:column;gap:2px}
+/* Auf der Schiene bleibt kein Platz für Überschriften: dort sind alle Einträge sichtbar und die
+   Gruppen nur noch durch einen Strich getrennt. */
+html.nav-collapsed .nav-group-head,html.nav-auto-collapsed .nav-group-head{display:none}
+html.nav-collapsed .nav-group+.nav-group,html.nav-auto-collapsed .nav-group+.nav-group{margin-top:var(--s2);padding-top:var(--s2);border-top:1px solid var(--line)}
+html.nav-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items,html.nav-auto-collapsed .nav-group-head[aria-expanded="false"]+.nav-group-items{display:flex}
+
+/* Der Privatmodus-Schalter erscheint erst, wenn er an ist. app/boot.js setzt das Attribut vor dem
+   ersten Zeichnen, damit die Leiste nie zwei Zustände zeigt. */
+html:not([data-privacy="on"]) #privacy-toggle{display:none}

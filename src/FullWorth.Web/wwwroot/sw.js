@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v114';
+const VERSION = 'v115';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -32,6 +32,8 @@ const APP_SHELL = [
   '/features/compensation.js',
   '/security/browser-fetch.js',
   '/styles/features/compensation-benchmarks.css',
+  '/styles/features/compensation-extended.css',
+  '/styles/mobile-polish.css',
   '/styles/features/compensation-other-income.css',
   '/ui/dashboard.js',
   '/ui/lock.js',
@@ -137,7 +139,9 @@ const APP_SHELL = [
   '/ui/accessibility-release.js',
   '/ui/motion.js',
   '/ui/appearance.js',
-  '/theme-init.js',
+  '/app/boot.js',
+  '/app/menu.js',
+  '/app/nav-state.js',
   '/pwa/standalone-init.js',
   '/manifest.json',
   '/pwa/icon.svg',

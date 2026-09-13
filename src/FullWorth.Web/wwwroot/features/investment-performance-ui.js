@@ -14,12 +14,6 @@ const lang = () => document.documentElement.lang?.startsWith('en') ? 'en' : 'de'
 const text = (de, en) => lang() === 'en' ? en : de;
 const dateText = (value) => value ? new Intl.DateTimeFormat(lang() === 'en' ? 'en-US' : 'de-DE').format(new Date(`${String(value).slice(0,10)}T12:00:00`)) : '—';
 
-function ensureCss(){
-  if(document.querySelector('link[data-investment-performance-css]')) return;
-  const link=document.createElement('link');
-  link.rel='stylesheet';link.href='/styles/features/investment-performance.css';link.dataset.investmentPerformanceCss='1';document.head.appendChild(link);
-}
-ensureCss();
 
 const api=(path,options)=>sharedApi(path,options);
 const json=(method,body)=>jsonBody(body,method);

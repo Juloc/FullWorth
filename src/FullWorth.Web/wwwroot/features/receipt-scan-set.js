@@ -53,7 +53,6 @@ function createDraft(ctx) {
     if (draft.state === 'collecting') cancelDraft(draft);
     else backgroundDraft(draft);
   });
-  ensureCss();
   draft.dialog.showModal();
   return draft;
 }
@@ -291,17 +290,6 @@ function stageLabel(stage, engine) {
   };
   const base = labels[stage] || t('Beleg wird verarbeitet …', 'Processing receipt …');
   return engine && stage === 'ocr' ? `${base} (${engine})` : base;
-}
-
-function ensureCss() {
-  // Production CSP forbids JS-created inline <style> blocks (style-src 'self'); load the module's
-  // CSS as a same-origin linked stylesheet instead, exactly once.
-  if (document.querySelector('link[data-feature-css="receipt-scan-set"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/receipt-scan-set.css';
-  link.dataset.featureCss = 'receipt-scan-set';
-  document.head.appendChild(link);
 }
 
 function isImage(file) { return String(file?.type || '').startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(file?.name || ''); }

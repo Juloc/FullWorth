@@ -34,15 +34,15 @@ import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './ui/toast.js';
 import { openGlobalSearch } from './ui/global-search.js';
 import { installTopbarMetrics } from './ui/topbar-metrics.js';
+import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
-// Mobile bottom nav shows exactly these four + "More" (UX rework §2): Übersicht, Verträge, Analysen,
-// Vermögen. Transactions is reached by tapping an account/group or the "Alle Buchungen" row (never a
-// permanent slot); everything else lives in More.
-const MOBILE_PRIMARY=['dashboard','contracts','analytics','networth'];
-const ALL_VIEWS=['dashboard','insights','transactions','accounts','budgets','contracts','networth','analytics','purchases','tax','pension','categories','rules','notifications','merchants','audit','settings'];
-const MORE_VIEWS=ALL_VIEWS.filter(v=>!MOBILE_PRIMARY.includes(v)&&v!=='insights');
+// Seitenleiste, untere Leiste und "Mehr" kommen alle aus app/menu.js. Coach ist dort ein Eintrag,
+// aber noch keine Seite dieser Hülle - features/coach-shell.js baut sie selbst und meldet sich auf
+// seinen Eintrag. Block 4 macht daraus eine gewöhnliche Seite und diese Ausnahme verschwindet.
+const ALL_VIEWS=VIEWS.filter(view=>view!=='coach');
+const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
 // any of these paths and the app resolves the view from location.pathname on boot.
@@ -56,6 +56,7 @@ const viewFromPath=router.viewFromPath;
 const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
+const root=document.documentElement;
 const toastController=createToast($('#toast'));
 const toast=(text,duration)=>toastController.show(text,duration);
 
@@ -80,7 +81,7 @@ async function loadCapabilities(){
 }
 function syncAdminVisibility(){
   const show=Boolean(state.capabilities?.admin);
-  $('#admin-nav')?.toggleAttribute('hidden',!show);
+  $('[data-entry="admin"]')?.toggleAttribute('hidden',!show);
   $('#admin-settings-link')?.toggleAttribute('hidden',!show);
 }
 function handleConnectRedirect(){
@@ -96,14 +97,14 @@ function handleConnectRedirect(){
 async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
 function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
-  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
+  $$('.nav-item[data-entry]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
   const p=state.messages.pages?.[state.view];
   if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle}
   // A view whose copy lives in its own module has no pages.* entry. Without this it would keep the
   // PREVIOUS screen's heading, which reads as a broken navigation. Fall back to the view's own nav
   // label from the shell and clear the subtitle.
-  else{const nav=$(`.sidebar button[data-view="${state.view}"] span`)?.textContent||'';$('#page-title').textContent=nav;$('#page-subtitle').textContent=''}
+  else{const nav=$(`.sidebar .nav-item[data-entry="${state.view}"] span`)?.textContent||'';$('#page-title').textContent=nav;$('#page-subtitle').textContent=''}
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
   if(action){btn.hidden=false;setPrimaryAction(btn,get(action[0]),action[2]||'add');btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
@@ -130,14 +131,16 @@ function bind(){
   // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
   $('#theme-toggle')?.addEventListener('click',()=>{const order=['system','light','dark'];state.theme=order[(order.indexOf(state.theme)+1)%order.length]||'system';localStorage.setItem('finance.theme',state.theme);applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
-  // `.sidebar button[data-view]` covers both #nav and the sidebar-foot (Settings) entry, so Settings
-  // is reachable on desktop; #bottom-nav is the mobile bar.
-  $$('.sidebar button[data-view], #bottom-nav button[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view,{query:''})));
+  // Jeder Eintrag ist ein echter Link auf seine Adresse. Der Klick wird abgefangen, damit die Seite
+  // nicht neu lädt - mit Strg/Cmd oder Mittelklick bleibt er ein Link und öffnet einen neuen Tab.
+  $$('.nav-item[data-view]').filter(a=>ALL_VIEWS.includes(a.dataset.view)).forEach(a=>a.addEventListener('click',e=>{
+    if(e.metaKey||e.ctrlKey||e.shiftKey||e.button)return;
+    e.preventDefault();showView(a.dataset.view,{query:''});
+  }));
+  $$('.nav-group-head').forEach(head=>head.addEventListener('click',()=>toggleGroup(head)));
   // Browser Back/Forward: restore the view from the URL without pushing a new history entry.
   window.addEventListener('popstate',()=>showView(viewFromPath(location.pathname),{fromHistory:true,path:location.pathname}));
   $('#bottom-more').addEventListener('click',openMoreSheet);
-  $('#admin-nav')?.addEventListener('click',()=>location.assign('/admin'));
-  $('[data-compensation-link]')?.addEventListener('click',()=>location.assign('/compensation.html'));
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
@@ -167,9 +170,10 @@ function bind(){
   document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&!e.target.isContentEditable){e.preventDefault();openSearch()}});
 }
 function syncPrivacyToggle(){const b=$('#privacy-toggle');b.setAttribute('aria-pressed',String(isPrivate()));b.classList.toggle('active',isPrivate());
-  // Only in the topbar while it is ON. A toggle that is off carries no information, and the whole
-  // point of the overflow menu is that the bar shows state, not a fixed row of buttons.
-  b.hidden=!isPrivate();
+  // Nur in der Leiste, solange er AN ist: ein ausgeschalteter Schalter sagt nichts, und genau
+  // dafür gibt es das Überlaufmenü. Das Attribut sitzt am <html>, weil app/boot.js es vor dem
+  // ersten Zeichnen setzt - ein hidden, das JavaScript später nachträgt, schiebt die Leiste.
+  root.dataset.privacy=isPrivate()?'on':'off';
   $('#privacy-default').checked=privacyDefault()}
 
 // The topbar's overflow menu. Same sheet the bottom-nav "more" uses, so there is one menu pattern in
@@ -188,18 +192,25 @@ function openTopbarMenu(){
   dlg.showModal();
 }
 function toggleSidebar(){
-  const collapsed=!document.body.classList.contains('nav-collapsed');
-  document.body.classList.toggle('nav-collapsed',collapsed);
+  const collapsed=!root.classList.contains('nav-collapsed');
+  root.classList.toggle('nav-collapsed',collapsed);
   localStorage.setItem('finance.navCollapsed',collapsed?'1':'0');
-  if(collapsed)document.body.classList.remove('nav-auto-collapsed');
+  if(collapsed)root.classList.remove('nav-auto-collapsed');
   syncResponsiveSidebar();
 }
-function sidebarEffectivelyCollapsed(){return document.body.classList.contains('nav-collapsed')||document.body.classList.contains('nav-auto-collapsed')}
+// Der Zustand steht im aria-expanded der Überschrift - eine zweite Klasse dafür wäre dieselbe
+// Aussage doppelt. app/nav-state.js liest ihn beim Parsen wieder ein, also vor dem ersten Bild.
+function toggleGroup(head){
+  head.setAttribute('aria-expanded',head.getAttribute('aria-expanded')==='false'?'true':'false');
+  const closed=$$('.nav-group-head[aria-expanded="false"]').map(h=>h.dataset.group);
+  localStorage.setItem('finance.navClosedGroups',closed.join(' '));
+}
+function sidebarEffectivelyCollapsed(){return root.classList.contains('nav-collapsed')||root.classList.contains('nav-auto-collapsed')}
 // Point the chevron the way it will move (‹ collapses, › expands) and label it for its next action.
 function syncNavToggle(){
   const b=$('#nav-collapse');if(!b)return;
-  const manual=document.body.classList.contains('nav-collapsed');
-  const autoOnly=document.body.classList.contains('nav-auto-collapsed')&&!manual;
+  const manual=root.classList.contains('nav-collapsed');
+  const autoOnly=root.classList.contains('nav-auto-collapsed')&&!manual;
   const collapsed=manual||autoOnly;
   b.textContent=collapsed?'›':'‹';
   b.disabled=autoOnly;
@@ -210,10 +221,10 @@ function syncNavToggle(){
 }
 function syncResponsiveSidebar(){
   const desktop=window.matchMedia('(min-width:768px)').matches;
-  const manual=document.body.classList.contains('nav-collapsed');
+  const manual=root.classList.contains('nav-collapsed');
   if(!desktop||manual){
-    const changed=document.body.classList.contains('nav-auto-collapsed');
-    document.body.classList.remove('nav-auto-collapsed');
+    const changed=root.classList.contains('nav-auto-collapsed');
+    root.classList.remove('nav-auto-collapsed');
     syncNavToggle();
     if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
     return;
@@ -223,8 +234,8 @@ function syncResponsiveSidebar(){
   const coach=document.body.classList.contains('coach-dock-open')?($('#coach-dock')?.getBoundingClientRect().width||Number(localStorage.getItem(coachKey))||Number(localStorage.getItem('finance.coach.dockWidth'))||0):0;
   const minMain=window.innerWidth<1100?420:520;
   const shouldCollapse=window.innerWidth-desiredSidebar-coach<minMain;
-  const changed=document.body.classList.contains('nav-auto-collapsed')!==shouldCollapse;
-  document.body.classList.toggle('nav-auto-collapsed',shouldCollapse);
+  const changed=root.classList.contains('nav-auto-collapsed')!==shouldCollapse;
+  root.classList.toggle('nav-auto-collapsed',shouldCollapse);
   syncNavToggle();
   if(changed)queueMicrotask(()=>emitAppEvent('layout:clamp-coach'));
 }
@@ -235,7 +246,7 @@ function sidebarWidthKey(){return `finance.sidebar.width.${layoutWidthMode()}`}
 function resetLayout(){
   ['finance.sidebar.width','finance.sidebar.width.desktop','finance.sidebar.width.tablet','finance.coach.dockWidth','finance.coach.dockWidth.desktop','finance.coach.dockWidth.tablet'].forEach(key=>localStorage.removeItem(key));
   localStorage.setItem('finance.navCollapsed','0');
-  document.body.classList.remove('nav-collapsed','nav-auto-collapsed');
+  root.classList.remove('nav-collapsed','nav-auto-collapsed');
   document.documentElement.style.removeProperty('--sidebar-w');
   document.documentElement.style.removeProperty('--coach-dock-w');
   window.dispatchEvent(new CustomEvent('fullworth:layout-reset'));
@@ -322,9 +333,8 @@ async function showView(view,opts={}){
     router.write(view,{query,replace:!!opts.replace||location.pathname+location.search===target,state:{view},path:base});
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
-  $$('.sidebar button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
-  $$('#bottom-nav button[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
-  $('#bottom-more').classList.toggle('active',MORE_VIEWS.includes(view));
+  $$('.nav-item[data-entry]').forEach(b=>{const on=b.dataset.entry===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  $('#bottom-more').classList.toggle('active',MORE.some(entry=>entry.view===view));
   renderPageHeader();
   window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
   await loadCurrent();
@@ -346,24 +356,23 @@ function dialog(html,options={}){return createDialog(html,{closeLabel:get('commo
 // category under multiple parents with the same name is still distinguishable at a glance.
 async function categoryOptions(selected){const categories=await api('api/categories');const byId=new Map(categories.map(c=>[c.id,c]));const path=c=>{const chain=[];let cur=c;while(cur){chain.unshift(cur.name);cur=cur.parentId?byId.get(cur.parentId):null}return chain.join(' › ')};return categories.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${esc(path(c))}</option>`).join('')}
 
+// "Mehr" auf dem Handy zeigt denselben Baum wie die Seitenleiste - beide entstehen aus MENU. Die
+// Fassung davor las die Einträge aus dem Desktop-Markup aus, und genau deshalb fehlten dort Admin
+// und Insights, während Händler und Protokoll nur hier standen.
 function openMoreSheet(){
-  const items=MORE_VIEWS.map(view=>{
-    const source=$(`.sidebar button[data-view="${view}"]`);
-    const icon=source?source.querySelector('svg').outerHTML:'';
-    // Prefer the nav label; fall back to the page title, then to the label the sidebar button already
-    // carries (a view whose copy lives in its own module has neither key), so the sheet never shows a
-    // raw i18n key or a bare view name.
-    const nav=get(`nav.${view}`);
-    const label=view==='transactions'
-      ? get('transactions.allTx')
-      : (nav===`nav.${view}`?(state.messages.pages?.[view]?.title||source?.querySelector('span')?.textContent||view):nav);
-    return `<button type="button" data-go="${view}" class="${state.view===view?'active':''}">${icon}<span>${esc(label)}</span></button>`;
+  const visible=entry=>!entry.admin||state.capabilities?.admin;
+  const groups=MENU.map(group=>{
+    const items=group.items.filter(visible).map(entry=>{
+      const target=entry.href?`data-open="${entry.href}"`:`data-go="${entry.view}"`;
+      const active=state.view===entry.view?' class="active"':'';
+      return `<button type="button" ${target}${active}><svg viewBox="0 0 24 24" aria-hidden="true">${entry.icon}</svg><span>${esc(get(entry.label))}</span></button>`;
+    }).join('');
+    return `<h3 class="more-group">${esc(get(group.label))}</h3><div class="more-list">${items}</div>`;
   }).join('');
-  const compensation=`<button type="button" data-compensation-more><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V8m5 10V5m5 13v-7m5 7V9"/><path d="M3 21h18"/></svg><span>Gehalt &amp; Benefits</span></button>`;
-  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>×</button></div><div class="more-list">${items}${compensation}</div></form>`,{mobileMode:'sheet'});
+  const dlg=dialog(`<form method="dialog" class="dialog-card more-sheet"><div class="panel-head"><h2>${esc(get('nav.more'))}</h2><button value="cancel" data-close>&times;</button></div>${groups}</form>`,{mobileMode:'sheet'});
   dlg.classList.add('more-sheet-dialog');
   dlg.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{dlg.close();showView(b.dataset.go)}));
-  dlg.querySelector('[data-compensation-more]')?.addEventListener('click',()=>{dlg.close();location.assign('/compensation.html')});
+  dlg.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>{dlg.close();location.assign(b.dataset.open)}));
   dlg.showModal();
 }
 
@@ -399,7 +408,6 @@ const featureRegistry=createFeatureRegistry()
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}));
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
-if(localStorage.getItem('finance.navCollapsed')==='1')document.body.classList.add('nav-collapsed');
 initResizableSidebar();
 syncResponsiveSidebar();
 boot();

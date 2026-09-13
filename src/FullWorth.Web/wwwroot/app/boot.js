@@ -1,3 +1,9 @@
+// Was vor dem ersten Zeichnen feststehen muss. Klassisches <script> im <head>, absichtlich kein
+// Modul: ein Modul wird verzögert ausgeführt, und alles hier drin entscheidet über das erste Bild.
+//
+// Regel: hierher gehört nur, was sonst einen Sprung verursacht - Theme, Farben, Schrift, die
+// Breite der Seitenleiste und welche Menügruppen zu sind.
+
 function applyThemeChrome(theme) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'dark' ? '#121416' : '#f5f6f7');
@@ -73,27 +79,45 @@ try {
   applyThemeChrome(actualTheme);
 }
 
-// appearance.css and the shared base styles are loaded as render-blocking <link>s in index.html so the
-// page paints once in its final style (no post-load restyle flash). The mobile polish sheet is appended
-// after the base/feature sheets so its cross-app responsive corrections win the cascade consistently.
+// Die Seitenleiste. Sie stand früher in app.js und wurde damit erst nach dem ersten Bild
+// wiederhergestellt - wer eingeklappt hatte, sah die Hauptspalte um gut 130px springen.
+try {
+  const root = document.documentElement;
+  if (localStorage.getItem('finance.navCollapsed') === '1') root.classList.add('nav-collapsed');
 
-window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    if (!document.querySelector('link[data-mobile-polish]')) {
-      const polish = document.createElement('link');
-      polish.rel = 'stylesheet';
-      polish.href = '/styles/mobile-polish.css';
-      polish.dataset.mobilePolish = 'true';
-      document.head.appendChild(polish);
-    }
+  // Gleicher Schlüssel wie in app.js: die Breite hängt davon ab, ob gerade Desktop oder Tablet.
+  const width = Number(localStorage.getItem('finance.sidebar.width.' + (innerWidth >= 1024 ? 'desktop' : 'tablet')));
+  if (width > 0) root.style.setProperty('--sidebar-w', width + 'px');
 
-    const [appearance, mobileInteractions] = await Promise.all([
-      import('/ui/appearance.js'),
-      import('/ui/mobile-interactions.js')
-    ]);
-    appearance.initAppearance?.();
-    mobileInteractions.initMobileInteractions?.();
-  } catch (error) {
-    console.error('Appearance/mobile initialization failed.', error);
+
+  // Der Privatmodus-Schalter steht nur in der Leiste, solange er AN ist - ein ausgeschalteter
+  // Schalter sagt nichts. Ob er an ist, weiß man hier schon; dieselbe Reihenfolge wie in
+  // ui/privacy.js: erst die Sitzung, dann die Voreinstellung.
+  const session = sessionStorage.getItem('finance.privacy');
+  const privacy = session === 'on' || session === 'off'
+    ? session === 'on'
+    : localStorage.getItem('finance.privacy.default') === 'on';
+  root.dataset.privacy = privacy ? 'on' : 'off';
+
+  // Fredoka ist die einzige Schrift, die nicht mit dem Dokument kommt. Vorladen, aber nur für die
+  // Leute, die sie auch benutzen - sonst wären es 140 kB für nichts.
+  if (root.dataset.font === 'fredoka') {
+    const preload = document.createElement('link');
+    preload.rel = 'preload';
+    preload.as = 'font';
+    preload.type = 'font/ttf';
+    preload.href = '/fonts/Fredoka-Variable.ttf';
+    preload.crossOrigin = 'anonymous';
+    document.head.appendChild(preload);
   }
+} catch { /* Ohne localStorage bleibt es bei den Standardwerten. */ }
+
+// Verhalten, kein Aussehen - das darf warten, bis das Dokument steht.
+window.addEventListener('DOMContentLoaded', async () => {
+  const [appearance, mobileInteractions] = await Promise.all([
+    import('/ui/appearance.js'),
+    import('/ui/mobile-interactions.js')
+  ]);
+  appearance.initAppearance();
+  mobileInteractions.initMobileInteractions();
 });

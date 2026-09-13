@@ -14,7 +14,6 @@ let paperlessPresets = [];
 let activePaperlessPresetId = null;
 
 export function ensureReceiptImportsLauncher() {
-  ensureCss();
   const scan = document.getElementById('scan-receipt');
   if (!scan || document.getElementById('receipt-imports-launch')) return;
   const button = document.createElement('button');
@@ -24,15 +23,6 @@ export function ensureReceiptImportsLauncher() {
   button.textContent = t('Belege importieren', 'Import receipts');
   button.addEventListener('click', openDialog);
   scan.insertAdjacentElement('afterend', button);
-}
-
-function ensureCss() {
-  if (document.getElementById('receipt-imports-css')) return;
-  const link = document.createElement('link');
-  link.id = 'receipt-imports-css';
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/receipt-imports.css';
-  document.head.appendChild(link);
 }
 
 async function openDialog() {

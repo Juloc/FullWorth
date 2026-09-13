@@ -6,43 +6,47 @@ using Microsoft.Playwright;
 namespace FullWorth.Web.Tests.Frontend;
 
 /// <summary>
-/// What the browser actually reports as layout shift, per page, on a desktop and on a phone.
+/// Was der Browser tatsächlich an Layout-Sprung meldet, je Seite, am Desktop und am Telefon.
 ///
-/// Every other frontend guard in this suite compares strings in source files. That catches a rule
-/// somebody wrote down; it cannot catch a page that jumps, because jumping is a property of the
-/// running browser and of nothing else. This one measures it.
+/// Jeder andere Frontend-Wächter in dieser Suite vergleicht Zeichenketten in Quelldateien. Das fängt
+/// eine Regel, die jemand aufgeschrieben hat; es kann keine springende Seite fangen, denn Springen ist
+/// eine Eigenschaft des laufenden Browsers und sonst nichts. Dieser hier misst.
 ///
-/// The budget below is a ratchet, not a target. It starts at what was measured on the day it was
-/// written and may only ever go down — a page that is rebuilt sets its entry to zero and can never
-/// go back. A test that simply demanded zero everywhere would be red for the whole rebuild, and a
-/// permanently red test is one nobody reads.
+/// Das Budget unten ist eine Ratsche, kein Ziel. Es steht auf dem, was am Tag der Messung herauskam,
+/// und darf nur fallen — eine umgebaute Seite setzt ihren Eintrag auf null und kommt nie zurück. Ein
+/// Test, der überall null verlangte, wäre den ganzen Umbau über rot, und einen dauerhaft roten Test
+/// liest niemand.
 /// </summary>
 [Collection(nameof(UiHarnessCollection))]
 public sealed class LayoutStabilityTests(UiHarness harness)
 {
     /// <summary>
-    /// Measured on 2026-09-13 against main over three runs, budget set to the worst observed value
-    /// plus a little. Lower is allowed, higher is a regression. Zero means the page has been rebuilt
-    /// and must stay still.
+    /// Neu gemessen am 2026-09-13, nachdem die Hülle aus einer Menüquelle entsteht und kein Stylesheet
+    /// mehr nach dem Zeichnen nachgeladen wird.
     ///
-    /// For scale: 0.1 is where the metric stops calling a page good. Two of these are over three
-    /// times that, and one culprit appears on every single page — the topbar action button, hidden
-    /// and then shown once the view knows whether it has one.
+    /// Was der Umbau gebracht hat, auf demselben Rechner gemessen:
     ///
-    /// Seven of the ten numbers repeated to three decimals across runs. Only /transactions moved
-    /// (0.012 → 0.056 here, 0.099 on the CI runner), which fits what it does: it prepends a summary
-    /// bar and a scope bar once its fetch returns, so the score depends on when that lands relative
-    /// to paint — and a slower machine lands it later. Its budget is therefore set from CI, not from
-    /// this laptop; every other entry measured the same in both places.
+    ///   /               0,008 / 0,033   ->   0,000 / 0,000
+    ///   /accounts       0,340 / 0,220   ->   0,320 / 0,183
+    ///   /transactions   0,056 / 0,096   ->   0,000 / 0,003
+    ///   /contracts      0,127 / 0,368   ->   0,117 / 0,310
+    ///   /settings       0,020 / 0,036   ->   0,000 / 0,003
+    ///
+    /// Drei der fünf Seiten stehen am Desktop still, gemessen null. Was bleibt, sind /accounts und
+    /// /contracts, und beide aus demselben Grund: sie schieben ihre Zeilen und Karten erst nach der
+    /// Antwort des Servers in eine bereits gezeichnete Seite. Das löst nicht die Hülle, sondern der
+    /// Umzug dieser Seiten — danach steht auch hier eine Null.
+    ///
+    /// Zum Vergleich: bei 0,1 hört die Kennzahl auf, eine Seite gut zu nennen.
     /// </summary>
     private static readonly (string Path, double Desktop, double Mobile)[] Budget =
     [
-        //                 desktop  mobile      worst seen        what moves
-        ("/",                 0.02,   0.05), // 0.008 / 0.033   topbar-actions, ::before
-        ("/accounts",         0.36,   0.24), // 0.340 / 0.220   identity icons inserted per row
-        ("/transactions",     0.12,   0.12), // 0.099 / 0.096   summary and scope bars prepended
-        ("/contracts",        0.15,   0.39), // 0.127 / 0.368   four panels above the list
-        ("/settings",         0.04,   0.05)  // 0.020 / 0.036   admin row appears in sidebar-foot
+        //                 desktop  mobile      gemessen        was sich bewegt
+        ("/",                0.005,  0.005), // 0.000 / 0.000   nichts mehr
+        ("/accounts",         0.33,   0.19), // 0.320 / 0.183   Zeilen und Symbole je Konto
+        ("/transactions",    0.005,   0.01), // 0.000 / 0.003   Zusammenfassung bricht am Telefon um
+        ("/contracts",        0.13,   0.32), // 0.117 / 0.310   vier Felder über der Liste
+        ("/settings",        0.005,   0.01)  // 0.000 / 0.003   Überschrift bricht am Telefon um
     ];
 
     public static TheoryData<string, bool> Pages()
@@ -68,13 +72,13 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         Assert.True(
             score <= allowed,
             $"{path} ({(mobile ? "mobile" : "desktop")}) shifted {score:F3}, budget {allowed:F3}. "
-            + $"Moved: {string.Join(", ", culprits)}");
+            + $"Moved:{Environment.NewLine}  {string.Join(Environment.NewLine + "  ", culprits)}");
     }
 }
 
 /// <summary>
-/// The ui-harness serving the real wwwroot against fixtures, plus a browser. Started once for the
-/// whole class — both are expensive and neither carries state between pages.
+/// Die ui-harness, die das echte wwwroot gegen Fixtures ausliefert, plus ein Browser. Einmal für die
+/// ganze Klasse gestartet — beides ist teuer und keines trägt Zustand von Seite zu Seite.
 /// </summary>
 public sealed class UiHarness : IAsyncLifetime
 {
@@ -88,8 +92,8 @@ public sealed class UiHarness : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // Its own port, passed as the argument the harness reads: a developer usually has one
-        // running on the default 8095 already, and the test must not take it over or depend on it.
+        // Eigener Port, als Argument übergeben: auf einem Entwicklungsrechner läuft meistens schon
+        // einer auf der 8095, und der Test darf ihn weder übernehmen noch von ihm abhängen.
         _server = Process.Start(new ProcessStartInfo("node", $"ops/ui-harness/server.mjs {Port}")
         {
             WorkingDirectory = Root,
@@ -112,8 +116,12 @@ public sealed class UiHarness : IAsyncLifetime
     }
 
     /// <summary>
-    /// Opens the page and returns the summed layout-shift score plus the elements that moved.
-    /// Shifts that follow a user interaction are excluded, exactly as the metric defines.
+    /// Öffnet die Seite und liefert die Summe der Layout-Sprünge plus das, was sich bewegt hat, je als
+    /// "Element von -> nach". Die Rechtecke sind das, was eine Fehlermeldung brauchbar macht: ein Name
+    /// allein sagt, dass sich etwas bewegt hat, die zwei Kästen sagen, ob es gewachsen ist, ob etwas
+    /// darüber eingefügt wurde oder ob es zur Seite gerutscht ist.
+    ///
+    /// Sprünge nach einer Eingabe zählen nicht, genau wie die Kennzahl es definiert.
     /// </summary>
     public async Task<(double Score, string[] Culprits)> MeasureAsync(string path, bool mobile)
     {
@@ -123,24 +131,28 @@ public sealed class UiHarness : IAsyncLifetime
         });
         var page = await context.NewPageAsync();
 
-        // Installed before anything loads: an observer added afterwards misses the shifts that
-        // happen while the page is still assembling itself, which are all of the interesting ones.
+        // Vor allem anderen eingebaut: ein später hinzugefügter Beobachter verpasst die Sprünge, die
+        // passieren, während die Seite sich noch zusammensetzt — also alle interessanten.
         await page.AddInitScriptAsync("""
             window.__shifts = [];
+            const name = node => node ? (node.id || node.className || node.tagName) : '?';
+            const box = rect => Math.round(rect.x) + ',' + Math.round(rect.y)
+              + ' ' + Math.round(rect.width) + 'x' + Math.round(rect.height);
             new PerformanceObserver(list => {
               for (const entry of list.getEntries()) {
                 if (entry.hadRecentInput) continue;
                 window.__shifts.push({
                   value: entry.value,
-                  sources: (entry.sources || []).map(s => s.node ? (s.node.id || s.node.className || s.node.tagName) : '?')
+                  sources: (entry.sources || []).map(
+                    source => name(source.node) + ' ' + box(source.previousRect) + ' -> ' + box(source.currentRect))
                 });
               }
             }).observe({ type: 'layout-shift', buffered: true });
             """);
 
         await page.GotoAsync($"http://127.0.0.1:{Port}{path}", new() { WaitUntil = WaitUntilState.NetworkIdle });
-        // Late work settles here: deferred modules, fetches the harness answers instantly, and the
-        // stylesheets this app still appends after paint.
+        // Hier legt sich die späte Arbeit: verzögerte Module und die Abrufe, die die Harness sofort
+        // beantwortet.
         await page.WaitForTimeoutAsync(1500);
 
         var raw = await page.EvaluateAsync<JsonElement>("JSON.stringify(window.__shifts)");
@@ -148,7 +160,7 @@ public sealed class UiHarness : IAsyncLifetime
 
         return (
             shifts.Sum(shift => shift.Value),
-            shifts.SelectMany(shift => shift.Sources).Distinct().Take(6).ToArray());
+            shifts.SelectMany(shift => shift.Sources).Distinct().Take(8).ToArray());
     }
 
     private sealed record Shift(double Value, string[] Sources);

@@ -38,9 +38,9 @@ public sealed class AdminPageDesignSystemGuardTests
             Array.IndexOf(loaded, "/app.css") < Array.IndexOf(loaded, "/styles/responsive.css"),
             "responsive.css must come after app.css or its mobile rules cannot win.");
 
-        // Without theme-init.js the page falls back to the OS preference, so a user on a light theme
+        // Without app/boot.js the page falls back to the OS preference, so a user on a light theme
         // with a dark OS got a dark admin page.
-        Assert.Contains("/theme-init.js", html);
+        Assert.Contains("/app/boot.js", html);
     }
 
     [Fact]

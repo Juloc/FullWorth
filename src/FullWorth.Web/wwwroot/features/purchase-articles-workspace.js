@@ -82,15 +82,6 @@ function fmtDate(value) {
   catch { return value; }
 }
 
-function ensureStyle() {
-  if (document.querySelector('#purchase-articles-style')) return;
-  const link = document.createElement('link');
-  link.id = 'purchase-articles-style';
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/purchase-articles-workspace.css';
-  document.head.appendChild(link);
-}
-
 export function ensurePurchaseArticlesWorkspace() {
   if (installed) return;
   host = document.querySelector('#view-purchases');
@@ -98,7 +89,6 @@ export function ensurePurchaseArticlesWorkspace() {
   originalPanel = document.querySelector('#purchases-list')?.closest('.panel');
   if (!host || !originalToolbar || !originalPanel) return;
   installed = true;
-  ensureStyle();
 
   const nav = document.createElement('div');
   nav.className = 'purchase-subnav';

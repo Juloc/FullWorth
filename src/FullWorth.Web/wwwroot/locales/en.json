@@ -16,7 +16,22 @@
     "notifications": "Notifications",
     "settings": "Settings",
     "collapse": "Collapse menu",
-    "expand": "Expand menu"
+    "expand": "Expand menu",
+    "start": "Start",
+    "insights": "For you",
+    "coach": "Coach",
+    "merchants": "Merchants",
+    "audit": "Activity log",
+    "compensation": "Salary",
+    "pension": "Pension",
+    "admin": "Admin",
+    "group": {
+      "overview": "Overview",
+      "finances": "Finances",
+      "planning": "Planning",
+      "analysis": "Analysis",
+      "administration": "Administration"
+    }
   },
   "theme": {
     "system": "System",

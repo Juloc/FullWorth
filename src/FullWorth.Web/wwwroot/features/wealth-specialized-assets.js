@@ -49,15 +49,6 @@ function date(value) { if (!value) return '—'; try { return new Intl.DateTimeF
 function num(value) { return value === '' || value == null ? null : Number(value); }
 const toast = message => showToast(message, 2600);
 
-function ensureCss() {
-  if (document.querySelector('link[data-specialized-wealth-css]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = '/styles/features/wealth-specialized-assets.css';
-  link.dataset.specializedWealthCss = '1';
-  document.head.appendChild(link);
-}
-
 const api=(path,options)=>sharedApi(path,options);
 const json=(method,body)=>jsonBody(body,method);
 
@@ -70,7 +61,6 @@ function orderedAssets(assets) {
 }
 
 export async function refreshSpecializedAssets() {
-  ensureCss();
   await enhanceRows();
 }
 
@@ -121,7 +111,6 @@ function tabs(dlg) {
 }
 
 async function openSpecializedAsset(asset) {
-  ensureCss();
   const endpoint = asset.kind === 'vehicle' ? `api/assets/${asset.id}/vehicle` : `api/assets/${asset.id}/precious-metal`;
   let detail = null, valuations = [], debts = [], loans = [], liabilities = [];
   try {

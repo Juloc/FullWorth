@@ -41,7 +41,7 @@ public sealed class TypographyAppearanceTests
     [Fact]
     public void ThemeInitRestoresTypographyBeforePaint()
     {
-        var script = File.ReadAllText(WebRootFile("theme-init.js"));
+        var script = File.ReadAllText(WebRootFile("app/boot.js"));
 
         Assert.Contains("applyStoredTypography()", script);
         Assert.Contains("finance.typography.baseSize", script);
