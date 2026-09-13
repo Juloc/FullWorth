@@ -57,7 +57,7 @@ public sealed class IngFinTsService(
     {
         if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.Pin))
             throw new ArgumentException("ING login and PIN/password are required.");
-        var productId = await ProductIdAsync(ct);
+        var productId = ProductId();
         var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, request.ReconnectConnectionId, null, ct);
         if (authorized != BankAuthorizeResult.Authorized)
             throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
@@ -435,49 +435,18 @@ public sealed class IngFinTsService(
     }
 
     /// <summary>
-    /// The FinTS product id this installation identifies itself with.
-    ///
-    /// It is a property of the installation, not of the container wiring, so it belongs in the admin
-    /// menu - and it is there now, through the instance-settings catalogue, which publishes it into
-    /// configuration. Hence: configuration first, the older per-installation store as a fallback.
-    ///
-    /// Read here rather than cached: it is read once per CONNECT, which is a human pressing a button,
-    /// and a stale cache would mean an operator fixes the id and still cannot connect.
+    /// The FinTS product id this installation identifies itself with. The installation settings in
+    /// the admin menu publish the canonical FinTs:ProductId value into reloadable configuration.
     /// </summary>
-    private async Task<string> ProductIdAsync(CancellationToken ct)
+    private string ProductId()
     {
-        var configured = _options.CurrentValue.ProductId;
-        // Only asked for when configuration has nothing, so an installation that set the id in the
-        // admin menu does not pay for a backend round trip on every connect.
-        var legacy = string.IsNullOrWhiteSpace(configured)
-            ? (await backend.GetBankingInstanceSettingsAsync(ct))?.FinTsProductId
-            : null;
-
-        return ResolveProductId(configured, legacy)
+        return ResolveProductId(_options.CurrentValue.ProductId)
             ?? throw new InvalidOperationException(
-                "No FinTS product id. Register FullWorth as a FinTS product and enter its product id " +
-                "in the admin menu, or configure FinTs:ProductId.");
+                "No FinTS product id. Register FullWorth as a FinTS product and enter its product id in the admin menu.");
     }
 
-    /// <summary>
-    /// Configuration first, the older per-installation store second.
-    ///
-    /// That order is a deliberate flip and the reason is the admin menu: the id is settable there now,
-    /// and what is typed there is published into configuration between appsettings and the environment
-    /// variables. So "configured" means "an environment variable, or what an administrator typed", and
-    /// an explicitly stated value has to win over one somebody stored long ago.
-    ///
-    /// Nothing is lost by the flip. FullWorth.Banking's appsettings.json does not ship
-    /// (CopyToPublishDirectory="Never"), so at runtime this is empty unless somebody set it — and the
-    /// legacy store is kept as a fallback rather than migrated, because bank access is not the place
-    /// to discover that a data migration missed a row.
-    /// </summary>
-    internal static string? ResolveProductId(string? configured, string? legacyStored)
-    {
-        if (!string.IsNullOrWhiteSpace(configured)) return configured.Trim();
-        if (!string.IsNullOrWhiteSpace(legacyStored)) return legacyStored.Trim();
-        return null;
-    }
+    internal static string? ResolveProductId(string? configured)
+        => string.IsNullOrWhiteSpace(configured) ? null : configured.Trim();
 
     private static FinTsCredentials Credentials(FinTsConnectionSecret secret)
         => new(secret.UserId, secret.Pin, secret.ProductId);
