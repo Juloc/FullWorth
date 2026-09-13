@@ -1,6 +1,7 @@
 import { confirmMessage } from '../ui/confirm.js';
 import { createDialog } from '../ui/dialog.js';
 import { secureFetch } from '../security/secure-fetch.js';
+import { createInstanceSettingsPanel } from './instance-settings.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -117,10 +118,18 @@ async function loadUsers(){
   $('#next').disabled=state.offset+state.limit>=state.total;
 }
 
+const instanceSettings=createInstanceSettingsPanel({request,esc,toast});
+
 async function refresh(){
-  // The provider panel is loaded alongside, and its failure must not take the user list with it: an
-  // admin who cannot see their users because a settings panel threw is worse off than before.
-  await Promise.all([loadOverview(),loadUsers(),loadProviders().catch(()=>{})]);
+  // The settings panels are loaded alongside, and their failure must not take the user list with
+  // them: an admin who cannot see their users because a settings panel threw is worse off than
+  // before.
+  await Promise.all([
+    loadOverview(),
+    loadUsers(),
+    loadProviders().catch(()=>{}),
+    instanceSettings.load().catch(()=>{})
+  ]);
 }
 
 let detailDialog=null;

@@ -76,3 +76,42 @@
 .admin-providers label > span { font-size: 13px; color: var(--muted); }
 .admin-providers textarea { resize: vertical; font-family: inherit; }
 .admin-providers-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* ---- Einstellungen dieser Installation --------------------------------------------------------
+   One generic form over a server-side catalogue, so the layout has to work for a text box, a number,
+   a checkbox and a select without knowing which is which. */
+.setting-section { margin-bottom: var(--s4) }
+.setting-section h3 { margin: 0 0 var(--s2); font-size: 14px }
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 22rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.setting-row input[type="checkbox"] { justify-self: start; width: auto }
+.setting-source { color: var(--muted); font-size: 12px; white-space: nowrap }
+
+/* A disabled control still has to be readable: this is how a value the environment pinned is shown,
+   and "you cannot change this here" must not read as "this is switched off". */
+.setting-row :disabled { opacity: .75; cursor: not-allowed }
+
+.setting-warning {
+  grid-column: 1 / -1;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .setting-row { grid-template-columns: 1fr }
+  .setting-source { white-space: normal }
+}

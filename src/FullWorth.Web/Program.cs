@@ -123,6 +123,8 @@ builder.Services.AddSingleton<IConfigureOptions<Microsoft.AspNetCore.Authenticat
 builder.Services.AddSingleton<IConfigureOptions<Indice.AspNetCore.Authentication.Apple.AppleOptions>>(
     services => services.GetRequiredService<ExternalAuthOptionsResolver>());
 builder.Services.AddScoped<ExternalAuthSettingsStore>();
+builder.Services.AddScoped<InstanceConfigurationStore>();
+builder.Services.AddScoped<InstanceConfigurationService>();
 builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 
 builder.Services.AddAuthorization(options =>
@@ -273,6 +275,12 @@ await using (var scope = app.Services.CreateAsyncScope())
     publicUrlSource.Provider.Publish(
         await scope.ServiceProvider.GetRequiredService<InstanceSettingsStore>()
             .GetPublicUrlAsync(CancellationToken.None));
+
+    // And the settings an administrator changed in the browser. Published here rather than left to
+    // the next save: without this a stored value would sit in the database doing nothing until
+    // somebody happened to edit it again, which reads exactly like "the setting does not work".
+    await scope.ServiceProvider.GetRequiredService<InstanceConfigurationService>()
+        .RepublishAsync(CancellationToken.None);
 
     // The host pin is fail-closed for a deployment that has something to protect. A brand-new one has
     // no users and no data, and cannot be pinned yet either - it learns its address from the first
@@ -454,6 +462,7 @@ app.MapAuthEndpoints();
 app.MapTwoFactorEndpoints();
 app.MapInstanceAdminEndpoints();
 app.MapExternalAuthSettingsEndpoints();
+app.MapInstanceConfigurationEndpoints();
 app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapPasskeyEndpoints();

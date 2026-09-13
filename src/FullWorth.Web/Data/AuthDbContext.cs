@@ -18,6 +18,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
     public DbSet<FullWorth.Web.Modules.Admin.ExternalAuthSettings> ExternalAuthSettings => Set<FullWorth.Web.Modules.Admin.ExternalAuthSettings>();
     public DbSet<FullWorth.Web.Modules.Admin.InstanceSettings> InstanceSettings => Set<FullWorth.Web.Modules.Admin.InstanceSettings>();
+    public DbSet<FullWorth.Web.Modules.Admin.InstanceConfigurationValue> InstanceConfigurationValues => Set<FullWorth.Web.Modules.Admin.InstanceConfigurationValue>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -32,6 +33,17 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             entity.HasIndex(x => x.ScopeKey).IsUnique();
             entity.Property(x => x.ScopeKey).IsRequired().HasMaxLength(40);
             entity.Property(x => x.PublicUrl).IsRequired().HasMaxLength(300);
+        });
+
+        builder.Entity<FullWorth.Web.Modules.Admin.InstanceConfigurationValue>(entity =>
+        {
+            // One row per key, enforced by the database: a second row for the same key would make the
+            // value in force depend on insertion order.
+            entity.HasIndex(x => x.Key).IsUnique();
+            entity.Property(x => x.Key).IsRequired().HasMaxLength(200);
+            // text, not a bounded column: a Secret-kind value holds data-protection ciphertext, whose
+            // length depends on the key ring rather than on what was typed.
+            entity.Property(x => x.Value).IsRequired().HasColumnType("text");
         });
 
         builder.Entity<FullWorth.Web.Modules.Admin.ExternalAuthSettings>(entity =>

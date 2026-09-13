@@ -27,8 +27,21 @@ public sealed class InstancePublicUrlConfigurationSource : IConfigurationSource
     public IConfigurationProvider Build(IConfigurationBuilder builder) => Provider;
 }
 
+/// <summary>
+/// Everything this installation knows about itself that did not come from a file: the address it
+/// learned, and the settings an administrator changed in the browser.
+///
+/// Two contributors, kept apart on purpose. They arrive at different moments — the address at the
+/// first registration, the settings whenever somebody saves one — and a single dictionary would mean
+/// each publish silently erased the other's keys.
+/// </summary>
 public sealed class InstancePublicUrlProvider : ConfigurationProvider
 {
+    private IReadOnlyDictionary<string, string?> _derived =
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, string?> _stored =
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Publishes the address and everything derived from it, then signals the change so bound options
     /// re-bind. Null or blank publishes nothing at all: an absent pin is a different thing from a pin of
@@ -48,10 +61,33 @@ public sealed class InstancePublicUrlProvider : ConfigurationProvider
             data["AllowedHosts"] = $"{host};127.0.0.1;localhost";
         }
 
+        _derived = data;
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Publishes the stored instance settings. Called once at startup and again after every save, so
+    /// a changed log level or Enable Banking value applies without a restart.
+    /// </summary>
+    public void PublishStored(IReadOnlyDictionary<string, string?> stored)
+    {
+        _stored = stored;
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        var data = new Dictionary<string, string?>(_derived, StringComparer.OrdinalIgnoreCase);
+        // A stored value wins over a derived one: somebody typed it. In practice they never collide,
+        // because the derived keys are marked read-only in the catalogue - EnableBanking:RedirectUrl
+        // has to match the Control Panel registration character for character, and the passkey
+        // relying party id cannot change without invalidating every registered passkey.
+        foreach (var (key, value) in _stored) data[key] = value;
+
         Data = data;
         OnReload();
     }
 
-    /// <summary>Nothing to load from: the value arrives through <see cref="Publish"/>.</summary>
+    /// <summary>Nothing to load from: values arrive through the two publish methods.</summary>
     public override void Load() { }
 }
