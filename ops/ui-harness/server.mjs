@@ -9,13 +9,12 @@
 // hide when it cannot answer (see the X-Harness-Fallback header below), and keep its own copy of any
 // page - the pages whose HTML is inlined in C# are read out of the source at startup.
 import { createServer } from 'node:http';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const ROOT = process.argv[3] || join(REPO_ROOT, 'src', 'FullWorth.Web', 'wwwroot');
 const PORT = Number(process.argv[2] || 8095);
-const INLINE_PAGE_DIR = join(REPO_ROOT, 'src', 'FullWorth.Web', 'Modules', 'Import');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -44,25 +43,10 @@ const SW_REGISTRATION = "navigator.serviceWorker.register('/sw.js')";
 const SW_REGISTRATION_STUB =
   "Promise.reject(new Error('ui-harness: service workers are not available in this browser'))";
 
-// The import pages keep their markup in a C# raw string literal, so there is no file in wwwroot to
-// serve. Read both the literal and the routes it is mapped on straight out of the source: hand-copying
-// the HTML once made an edited page look unchanged, and a hardcoded route list would rot silently.
-async function loadInlinePages() {
-  const pages = new Map();
-  let files = [];
-  try { files = (await readdir(INLINE_PAGE_DIR)).filter(name => name.endsWith('Page.cs')); }
-  catch { return pages; }
-  for (const name of files) {
-    const source = await readFile(join(INLINE_PAGE_DIR, name), 'utf8');
-    const literal = source.match(/=\s*"""\r?\n([\s\S]*?)\r?\n""";/);
-    if (!literal) continue;
-    const routes = [...source.matchAll(/MapGet\("([^"]+)"/g)].map(match => match[1]);
-    for (const route of routes) pages.set(route.replace(/\/$/, ''), literal[1]);
-  }
-  return pages;
-}
-
-const INLINE_PAGES = await loadInlinePages();
+// Die Import-Seiten hielten ihr Markup einmal in C#-Stringliteralen, und diese Harness las die
+// Literale samt ihrer Routen aus dem Quelltext - damit eine bearbeitete Seite hier auch bearbeitet
+// ankam. Seit sie unter pages/settings/import/ liegen, ist das nicht mehr nötig: sie werden
+// ausgeliefert wie jede andere Seite.
 
 async function serveFile(res, path, injectInto) {
   const body = await readFile(path);
@@ -99,11 +83,6 @@ createServer(async (req, res) => {
         console.warn('[harness] register-sw.js changed: the service-worker stub no longer matches.');
       res.writeHead(200, { 'content-type': TYPES['.js'], 'cache-control': 'no-store' });
       return res.end(source.replace(SW_REGISTRATION, SW_REGISTRATION_STUB));
-    }
-    const inline = INLINE_PAGES.get(path.replace(/\/$/, ''));
-    if (inline) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      return res.end(inline.replace('<script type="module" src="/app.js">', INJECT));
     }
     // secure-fetch.js requires a { token } payload before any write, so the harness must answer this
     // like the real host does or every POST fails before it reaches a fixture.

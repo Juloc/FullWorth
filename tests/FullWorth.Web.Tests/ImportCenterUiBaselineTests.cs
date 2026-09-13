@@ -1,5 +1,4 @@
-using System.Reflection;
-using FullWorth.Web.Modules.Import;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +19,10 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void ImportCenter_ExposesTransactionInvestmentFinanzguruAndPdfFlows()
     {
-        var html = EmbeddedHtml(typeof(ImportCenterPageEndpoints));
+        var html = PageMarkup();
 
-        Assert.Contains("Daten importieren", html);
+        // Die Überschrift steht in locales/de.json unter pages.import — die Kopfzeile gehört der Hülle.
+        Assert.Contains("\"title\": \"Daten importieren\"", Locale("de"));
         Assert.Contains("data-import-mode=\"transactions\"", html);
         Assert.Contains("data-import-mode=\"investments\"", html);
         Assert.Contains("/settings/import/finanzguru/xlsx", html);
@@ -64,29 +64,27 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public void FinanzguruProviderPage_ReturnsToImportCenter()
     {
-        var html = EmbeddedHtml(typeof(FinanzguruImportPageEndpoints));
+        var html = PageMarkup("finanzguru", "xlsx");
 
         Assert.Contains("id=\"finanzguru-form\"", html);
         Assert.Contains("id=\"import-link-list\"", html);
         Assert.Contains("href=\"/accounts\"", html);
-        Assert.Contains("href=\"/settings/import\"", html);
     }
 
     [Fact]
     public void BrokerPdfProviderPage_UsesReviewBeforeCommit()
     {
-        var html = EmbeddedHtml(typeof(BrokerPdfImportPageEndpoints));
+        var html = PageMarkup("broker-pdf");
 
         Assert.Contains("id=\"pdf-detect\"", html);
         Assert.Contains("id=\"pdf-stage\"", html);
         Assert.Contains("id=\"pdf-commit\"", html);
-        Assert.Contains("href=\"/settings/import\"", html);
     }
 
     [Fact]
     public async Task ImportJavascript_UsesBackendBffOnlyAndRealPresetMappings()
     {
-        foreach (var path in new[] { "/features/import-center-page.js", "/features/broker-pdf-import-page.js" })
+        foreach (var path in new[] { "/pages/settings/import/page.js", "/pages/settings/import/broker-pdf/page.js" })
         {
             using var response = await client.GetAsync(path);
             response.EnsureSuccessStatusCode();
@@ -98,13 +96,14 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
             // new file (neither of these is on its shrink-only allow-list) from reintroducing a raw
             // '/bff/(backend|banking)/' literal, so asserting indirection through the shared client is
             // the stronger, current form of this invariant.
-            Assert.Contains("import { api as sharedApi } from '../core/services.js';", js);
+            Assert.Contains("import { api as sharedApi } from '", js);
+            Assert.Contains("core/services.js';", js);
             Assert.DoesNotContain("/bff/backend/", js);
             Assert.False(js.Contains("http://fullworth-backend", StringComparison.OrdinalIgnoreCase));
             Assert.False(js.Contains("X-FullWorth-Key", StringComparison.OrdinalIgnoreCase));
         }
 
-        using var center = await client.GetAsync("/features/import-center-page.js");
+        using var center = await client.GetAsync("/pages/settings/import/page.js");
         var centerJs = await center.Content.ReadAsStringAsync();
         Assert.Contains("api/import-mapping/detect", centerJs);
         Assert.Contains("api/investment-import/detect", centerJs);
@@ -131,7 +130,7 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("tx-preset').addEventListener('change'", centerJs);
         Assert.Contains("inv-preset').addEventListener('change'", centerJs);
 
-        using var pdf = await client.GetAsync("/features/broker-pdf-import-page.js");
+        using var pdf = await client.GetAsync("/pages/settings/import/broker-pdf/page.js");
         var pdfJs = await pdf.Content.ReadAsStringAsync();
         Assert.Contains("api/investment-import/pdf/detect", pdfJs);
         Assert.Contains("api/investment-import/pdf/ocr-detect", pdfJs);
@@ -142,7 +141,7 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task FinanzguruProviderPage_SupportsExplicitAccountLinkingAndBalanceAnchors()
     {
-        using var response = await client.GetAsync("/features/finanzguru-import-page.js");
+        using var response = await client.GetAsync("/pages/settings/import/finanzguru/xlsx/page.js");
         response.EnsureSuccessStatusCode();
         var js = await response.Content.ReadAsStringAsync();
 
@@ -168,7 +167,7 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         // features/import-center-page.js (merged with transactions + broker-pdf under the Import
         // Center, see ImportJavascript_UsesBackendBffOnlyAndRealPresetMappings for its full mapping
         // coverage).
-        foreach (var path in new[] { "/features/finanzguru-import-page.js", "/features/import-center-page.js" })
+        foreach (var path in new[] { "/pages/settings/import/finanzguru/xlsx/page.js", "/pages/settings/import/page.js" })
         {
             using var response = await client.GetAsync(path);
             response.EnsureSuccessStatusCode();
@@ -195,9 +194,16 @@ public sealed class ImportCenterUiBaselineTests : IClassFixture<FullWorthWebFact
         }
     }
 
-    private static string EmbeddedHtml(Type pageType)
+    private string Locale(string language) => File.ReadAllText(Path.Combine(
+        factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath, "locales", language + ".json"));
+
+    // Die Import-Seiten liegen unter pages/settings/import/. Ihr Markup stand einmal in einem
+    // C#-Stringliteral, und dieser Leser holte es per Reflexion aus dem Feld "Html". Jetzt ist es eine
+    // Datei wie jede andere — gelesen aus der Quelle, weil die Adresse die ganze Hülle liefert.
+    private string PageMarkup(params string[] folder)
     {
-        var field = pageType.GetField("Html", BindingFlags.NonPublic | BindingFlags.Static);
-        return Assert.IsType<string>(field?.GetRawConstantValue());
+        var root = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+        var parts = new[] { root, "pages", "settings", "import" }.Concat(folder).Append("page.html").ToArray();
+        return File.ReadAllText(Path.Combine(parts));
     }
 }

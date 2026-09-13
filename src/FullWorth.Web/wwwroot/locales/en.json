@@ -118,6 +118,18 @@
     "compensation": {
       "title": "Salary & benefits",
       "subtitle": "Net pay, company car, pension, purchasing power and scenarios"
+    },
+    "import": {
+      "title": "Import data",
+      "subtitle": "CSV, XLSX, Finanzguru, portfolios and broker PDFs"
+    },
+    "import-finanzguru-xlsx": {
+      "title": "Finanzguru import",
+      "subtitle": "Take over every transaction from the .xlsx export"
+    },
+    "import-broker-pdf": {
+      "title": "Broker PDF",
+      "subtitle": "Recognise, review and import statements locally"
     }
   },
   "dashboard": {

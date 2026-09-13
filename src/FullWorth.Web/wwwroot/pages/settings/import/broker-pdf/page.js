@@ -1,5 +1,5 @@
-import { api as sharedApi } from '../core/services.js';
-import { snapshotUploadFile } from '../security/secure-fetch.js';
+import { api as sharedApi } from '../../../../core/services.js';
+import { snapshotUploadFile } from '../../../../security/secure-fetch.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
   de:{subtitle:'Broker-Abrechnungen lokal auslesen und vor dem Import prüfen – auch Scan-PDFs per OCR.',back:'Zurück',space:'FullWorth Space',hint:'FullWorth versucht zuerst den eingebetteten PDF-Text. Bei Scan-PDFs oder mehreren Abrechnungen läuft automatisch lokales OCR mit Poppler und Tesseract. Es wird nichts automatisch gebucht: Erkennung, Wertpapier-Zuordnung und Zieldepot werden vor dem Commit angezeigt.',portfolio:'Zieldepot',file:'Broker-Abrechnung als PDF',analyse:'PDF analysieren',review:'Import prüfen',security:'Wertpapiere prüfen',create:'Fehlende Wertpapiere automatisch anlegen',commit:'Ins Depot importieren',working:'Wird verarbeitet …',ocr:'Lokale OCR läuft …',needFile:'Bitte zuerst eine PDF-Datei wählen.',needPortfolio:'Bitte ein Zieldepot wählen.',newPortfolio:'Neues PDF-Import-Depot anlegen',broker:'Erkannter Broker',confidence:'Erkennungssicherheit',extraction:'Auslesemethode',textExtraction:'PDF-Text',ocrExtraction:'Lokale OCR',warnings:'Hinweise',rows:'Zeilen',ready:'Bereit',errors:'Fehler',matched:'Automatisch erkannt',autoNew:'Automatisch / neu anlegen',imported:'Importiert',duplicates:'Duplikate',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.'},
@@ -33,4 +33,14 @@ async function ensurePortfolio(){const value=$('pdf-portfolio').value;if(value&&
 async function commitPdf(){status(t.working);try{const portfolioId=await ensurePortfolio();const mappings={};for(const row of $('pdf-security-summary').querySelectorAll('.row')){const value=row.querySelector('select')?.value;if(value)mappings[row.dataset.key]=value}const result=await api(`api/investment-import/jobs/${state.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({portfolioId,securityMappings:mappings,createMissingSecurities:$('pdf-create-securities').checked,candidateIds:null})});renderResult(result);status(t.done)}catch(err){fail(err)}}
 function renderResult(result){const root=$('pdf-result');root.innerHTML='';for(const [label,value] of [[t.imported,result.imported],[t.duplicates,result.duplicates],[t.rows,result.total]]){const row=document.createElement('div');row.className='row';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=label;main.appendChild(title);const strong=document.createElement('strong');strong.textContent=String(value??0);row.append(main,strong);root.appendChild(row)}root.hidden=false}
 async function boot(){try{const spaces=await api('api/fullworth-spaces');const saved=localStorage.getItem('finance.space');state.space=spaces.find(s=>s.id===saved)||spaces[0]||null;if(!state.space)throw new Error('No FullWorth Space');setText('pdf-space',state.space.name||'—');const q=`fullWorthSpaceId=${encodeURIComponent(state.space.id)}`;[state.portfolios,state.securities]=await Promise.all([api(`api/investments/portfolios?${q}`).catch(()=>[]),api(`api/investments/securities?${q}`).catch(()=>[])]);fillPortfolioSelect()}catch(err){fail(err)}}
-$('pdf-detect').addEventListener('click',detectPdf);$('pdf-stage').addEventListener('click',stagePdf);$('pdf-commit').addEventListener('click',commitPdf);await boot();
+let bound = false;
+
+export async function renderBrokerPdfImport() {
+  if (!bound) {
+    bound = true;
+    $('pdf-detect').addEventListener('click', detectPdf);
+    $('pdf-stage').addEventListener('click', stagePdf);
+    $('pdf-commit').addEventListener('click', commitPdf);
+  }
+  await boot();
+}

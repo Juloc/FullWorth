@@ -1,0 +1,25 @@
+    <section id="view-import-finanzguru-xlsx" class="view">
+
+      <article class="panel import-card">
+        <div class="panel-head"><h2 id="import-heading">Alle Buchungen importieren</h2></div>
+        <p class="row-sub panel-intro" id="import-hint"></p>
+        <div class="rows import-info">
+          <div class="row"><div class="row-main"><div class="row-title" id="import-space-label">FullWorth Space</div><div class="row-sub" id="import-space">—</div></div></div>
+          <div class="row"><div class="row-main"><div class="row-title" id="import-safety-title"></div><div class="row-sub" id="import-safety"></div></div></div>
+        </div>
+        <form id="finanzguru-form" class="import-form">
+          <label class="field"><span id="import-file-label">Finanzguru .xlsx Export</span><input id="finanzguru-file" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+          <button id="finanzguru-submit" class="primary-action" type="submit">Importieren</button>
+        </form>
+        <div id="import-status" class="row-sub import-status" role="status" aria-live="polite"></div>
+        <div id="import-result" class="rows" hidden></div>
+      </article>
+
+      <article class="panel import-card import-link-card">
+        <div class="panel-head"><h2 id="import-link-heading"></h2></div>
+        <p class="row-sub panel-intro" id="import-link-hint"></p>
+        <div id="import-link-status" class="row-sub import-status" role="status" aria-live="polite"></div>
+        <div id="import-link-list" class="import-link-list"></div>
+        <p class="row-sub import-link-footer"><a href="/accounts" id="import-link-accounts"></a></p>
+      </article>
+    </section>

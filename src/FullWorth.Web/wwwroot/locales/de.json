@@ -118,6 +118,18 @@
     "compensation": {
       "title": "Gehalt & Benefits",
       "subtitle": "Netto, Firmenwagen, bAV, Kaufkraft und Szenarien"
+    },
+    "import": {
+      "title": "Daten importieren",
+      "subtitle": "CSV, XLSX, Finanzguru, Depots und Broker-PDFs"
+    },
+    "import-finanzguru-xlsx": {
+      "title": "Finanzguru-Import",
+      "subtitle": "Alle Buchungen aus dem .xlsx-Export übernehmen"
+    },
+    "import-broker-pdf": {
+      "title": "Broker-PDF",
+      "subtitle": "Abrechnungen lokal erkennen, prüfen und importieren"
     }
   },
   "dashboard": {

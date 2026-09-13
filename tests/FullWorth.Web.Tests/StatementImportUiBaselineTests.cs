@@ -1,5 +1,5 @@
-using System.Reflection;
-using FullWorth.Web.Modules.Import;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Hosting;
 
 namespace FullWorth.Web.Tests;
 
@@ -14,17 +14,19 @@ namespace FullWorth.Web.Tests;
 /// </summary>
 public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebFactory>
 {
+    private readonly FullWorthWebFactory factory;
     private readonly HttpClient client;
 
     public StatementImportUiBaselineTests(FullWorthWebFactory factory)
     {
+        this.factory = factory;
         client = factory.CreateClient();
     }
 
     [Fact]
     public void ImportCenter_ExposesTheStatementFlowWithTheRightFileTypes()
     {
-        var html = EmbeddedHtml(typeof(ImportCenterPageEndpoints));
+        var html = PageMarkup();
 
         Assert.Contains("data-import-mode=\"statement\"", html);
         Assert.Contains("id=\"statement-import\"", html);
@@ -42,7 +44,7 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public async Task StatementFlow_NeverGoesThroughColumnMappingAndUsesImportJobsOnly()
     {
-        using var response = await client.GetAsync("/features/import-center-page.js");
+        using var response = await client.GetAsync("/pages/settings/import/page.js");
         response.EnsureSuccessStatusCode();
         var js = await response.Content.ReadAsStringAsync();
 
@@ -66,7 +68,7 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public async Task StatementFlow_OnlyTargetsExistingAccountsAndExplainsTheBalanceOutcome()
     {
-        using var response = await client.GetAsync("/features/import-center-page.js");
+        using var response = await client.GetAsync("/pages/settings/import/page.js");
         var js = await response.Content.ReadAsStringAsync();
 
         // The target account picker is built from state.accounts (the space's existing accounts) -
@@ -91,7 +93,7 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public async Task StatementJob_AppearsInTheSharedImportHistoryAndCanBeRolledBack()
     {
-        using var response = await client.GetAsync("/features/import-center-page.js");
+        using var response = await client.GetAsync("/pages/settings/import/page.js");
         var js = await response.Content.ReadAsStringAsync();
 
         // The history list is the generic api/import-jobs one (loadTransactionHistory /
@@ -119,7 +121,7 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
 
     private string ReadScriptFile()
     {
-        using var response = client.GetAsync("/features/import-center-page.js").GetAwaiter().GetResult();
+        using var response = client.GetAsync("/pages/settings/import/page.js").GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
         return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
     }
@@ -142,9 +144,13 @@ public sealed class StatementImportUiBaselineTests : IClassFixture<FullWorthWebF
         throw new InvalidOperationException($"Unbalanced braces reading the body of '{signature}'.");
     }
 
-    private static string EmbeddedHtml(Type pageType)
+    // Die Import-Seiten liegen unter pages/settings/import/. Ihr Markup stand einmal in einem
+    // C#-Stringliteral, und dieser Leser holte es per Reflexion aus dem Feld "Html". Jetzt ist es eine
+    // Datei wie jede andere — gelesen aus der Quelle, weil die Adresse die ganze Hülle liefert.
+    private string PageMarkup(params string[] folder)
     {
-        var field = pageType.GetField("Html", BindingFlags.NonPublic | BindingFlags.Static);
-        return Assert.IsType<string>(field?.GetRawConstantValue());
+        var root = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+        var parts = new[] { root, "pages", "settings", "import" }.Concat(folder).Append("page.html").ToArray();
+        return File.ReadAllText(Path.Combine(parts));
     }
 }

@@ -128,7 +128,7 @@ public sealed class FrontendStructureGuardTests
     /// <summary>
     /// Keine Stylesheets in der Wurzel.
     ///
-    /// Sie sind der Ort, an dem etwas landet, wenn niemand entscheidet, wohin es gehört. Die sechs,
+    /// Sie sind der Ort, an dem etwas landet, wenn niemand entscheidet, wohin es gehört. Die vier,
     /// die noch dort liegen, stehen hier namentlich — die Liste darf kürzer werden, nie länger.
     /// </summary>
     [Fact]
@@ -142,6 +142,36 @@ public sealed class FrontendStructureGuardTests
         Assert.True(extra.Length == 0,
             "Neue Stylesheets in der Wurzel. Sie gehören nach styles/, zu ihrer Seite oder zu ihrer Komponente:"
             + Environment.NewLine + string.Join(Environment.NewLine, extra!));
+    }
+
+    /// <summary>
+    /// Eine Seite bringt keinen eigenen Kopf mit.
+    ///
+    /// Hier stand einmal ein eigener Wächter dafür — ImportPageStylesheetGuardTests —, weil drei
+    /// Seiten ihren &lt;head&gt; von Hand schrieben und dabei nur app.css luden: jedes Token löste zu
+    /// nichts auf und die responsive Schicht fehlte ganz, also bekam ein Telefon unformatierte 20px
+    /// große Formularfelder. Der Wächter zählte die acht Stylesheets in der richtigen Reihenfolge ab.
+    ///
+    /// Das Problem gibt es nicht mehr, weil es den zweiten Kopf nicht mehr gibt. Was bleibt, ist die
+    /// Regel, die das sicherstellt: eine page.html ist ein Ausschnitt, kein Dokument.
+    /// </summary>
+    [Fact]
+    public void A_page_brings_no_head_of_its_own()
+    {
+        var offenders = Directory
+            .EnumerateFiles(Path.Combine(WebRoot, "pages"), "page.html", SearchOption.AllDirectories)
+            .Where(path => File.ReadAllText(path) is var markup
+                && (markup.Contains("<head", StringComparison.OrdinalIgnoreCase)
+                 || markup.Contains("<html", StringComparison.OrdinalIgnoreCase)
+                 || markup.Contains("<link", StringComparison.OrdinalIgnoreCase)
+                 || markup.Contains("<script", StringComparison.OrdinalIgnoreCase)))
+            .Select(Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0,
+            "Diese Seiten bringen einen eigenen Kopf mit:" + Environment.NewLine
+            + string.Join(Environment.NewLine, offenders));
     }
 
     /// <summary>

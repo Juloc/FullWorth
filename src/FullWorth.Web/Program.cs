@@ -472,6 +472,22 @@ app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct
 // Seitenleiste, und die Adresse zeigt, wo die Seite hingehört.
 // Gehalt war einmal ein eigenes Dokument unter /compensation.html. Wer sich das gemerkt hat, soll
 // nicht ins Leere laufen — die Seite heißt jetzt /compensation und liegt in der Hülle.
+// Die Import-Seiten liegen unter pages/settings/import/. Sie hielten ihr Markup zuletzt in
+// C#-Stringliteralen - drei eigene Dokumente mit eigener Kopfzeile, eigener Stil-Kette und einem
+// "Zurück"-Link statt eines Seitenmenüs.
+foreach (var importRoute in new[]
+         {
+             "/settings/import", "/settings/import/finanzguru",
+             "/settings/import/finanzguru/xlsx", "/settings/import/broker-pdf"
+         })
+{
+    app.MapGet(importRoute, async (HttpContext context, CancellationToken ct) =>
+    {
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(appShellPath, ct);
+    }).RequireAuthorization();
+}
+
 app.MapGet("/compensation.html", () => Results.Redirect("/compensation", permanent: true)).AllowAnonymous();
 
 app.MapGet("/settings/security/passkeys", async (HttpContext context, CancellationToken ct) =>
@@ -490,7 +506,6 @@ app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapPasskeyEndpoints();
 app.MapPinEndpoints();
-FullWorth.Web.Modules.Import.FinanzguruImportPageEndpoints.MapFinanzguruImportPageEndpoints(app);
 FullWorth.Web.Modules.Purchases.ShareReceiptEndpoints.MapShareReceiptEndpoints(app);
 
 // The BFF proxy accepts ONLY relative paths under an explicit allowlist. The final URI is built

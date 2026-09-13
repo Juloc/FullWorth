@@ -38,6 +38,11 @@ import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { renderAdmin } from './pages/admin/page.js';
 import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
 import { renderCompensation } from './pages/compensation/page.js';
+import { renderImportCenter } from './pages/settings/import/page.js';
+import { renderBrokerPdfImport } from './pages/settings/import/broker-pdf/page.js';
+// Der Finanzguru-Import ist nur Formular und Ereignisse - er hat nichts zu laden und deshalb auch
+// nichts zu zeichnen.
+import './pages/settings/import/finanzguru/xlsx/page.js';
 import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
@@ -47,7 +52,12 @@ const get=path=>i18n.get(path);
 // seinen Eintrag. Block 4 macht daraus eine gewöhnliche Seite und diese Ausnahme verschwindet.
 // Seiten, die unter einer anderen liegen. Sie stehen nicht im Menü — sonst wäre es wieder überfüllt —,
 // haben aber eine Adresse, die zeigt, wo sie hingehören, und markieren im Menü ihre Elternseite.
-const SUBPAGES={passkeys:{path:'/settings/security/passkeys',parent:'settings'}};
+const SUBPAGES={
+  passkeys:{path:'/settings/security/passkeys',parent:'settings'},
+  import:{path:'/settings/import',parent:'settings'},
+  'import-finanzguru-xlsx':{path:'/settings/import/finanzguru/xlsx',parent:'settings'},
+  'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'}
+};
 const ALL_VIEWS=[...VIEWS.filter(view=>view!=='coach'),...Object.keys(SUBPAGES)];
 const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
 const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));
@@ -422,6 +432,9 @@ const featureRegistry=createFeatureRegistry()
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
   .register('admin',()=>renderAdmin())
   .register('passkeys',()=>renderPasskeys(ctx))
+  .register('import',()=>renderImportCenter())
+  .register('import-broker-pdf',()=>renderBrokerPdfImport())
+  .register('import-finanzguru-xlsx',()=>{})
   .register('compensation',()=>renderCompensation());
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 

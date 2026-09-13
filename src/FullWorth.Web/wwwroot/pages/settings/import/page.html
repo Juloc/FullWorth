@@ -1,40 +1,5 @@
-namespace FullWorth.Web.Modules.Import;
+    <section id="view-import" class="view import-center-view">
 
-public static class ImportCenterPageEndpoints
-{
-    private const string Html = """
-<!doctype html>
-<html lang="de" data-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
-  <title>Daten importieren · FullWorth</title>
-  <script src="/app/boot.js"></script>
-  <!-- The full layer chain, in the same order as index.html. Loading only app.css left every design
-       token undefined (--s4, --line, --muted, --surface, --cta all resolved to nothing) and skipped the
-       responsive layer entirely, so this page rendered with unstyled 20px form controls on a phone. -->
-  <link rel="stylesheet" href="/styles/tokens.css">
-  <link rel="stylesheet" href="/styles/reset.css">
-  <link rel="stylesheet" href="/appearance.css">
-  <link rel="stylesheet" href="/styles/shell.css">
-  <link rel="stylesheet" href="/styles/components.css">
-  <link rel="stylesheet" href="/app.css">
-  <link rel="stylesheet" href="/styles/responsive.css">
-  <!-- These pages open confirm dialogs (ui/confirm.js). Without dialogs.css the .dialog-card has no
-       background, border or padding at all, so the dialog rendered as bare text on the backdrop. -->
-  <link rel="stylesheet" href="/design-depth.css">
-  <link rel="stylesheet" href="/dialogs.css">
-  <link rel="stylesheet" href="/styles/features/import-center-page.css">
-</head>
-<body>
-  <main id="main" class="import-center" tabindex="-1">
-    <header class="topbar import-center-topbar">
-      <div class="topbar-title"><h1 id="page-title">Daten importieren</h1><p id="page-subtitle"></p></div>
-      <div class="topbar-actions"><a class="ghost import-back" href="/settings" id="back-link">Zurück</a></div>
-    </header>
-
-    <section class="view active import-center-view">
       <div class="import-context panel">
         <div class="row"><div class="row-main"><div class="row-title" id="space-label">FullWorth Space</div><div class="row-sub" id="space-name">—</div></div></div>
       </div>
@@ -179,21 +144,3 @@ public static class ImportCenterPageEndpoints
         <div id="stmt-result" class="rows" hidden></div>
       </article>
     </section>
-  </main>
-  <script src="/security/browser-fetch.js"></script>
-  <script type="module" src="/features/import-center-page.js"></script>
-</body>
-</html>
-""";
-
-    public static IEndpointRouteBuilder MapImportCenterPageEndpoints(this IEndpointRouteBuilder app)
-    {
-        app.MapGet("/settings/import", () => Results.Content(Html, "text/html; charset=utf-8"))
-            .RequireAuthorization();
-        // Keep the already-shipped settings entry working while it is renamed in the main shell:
-        // the old Finanzguru link now opens the import center, not a provider-specific dead end.
-        app.MapGet("/settings/import/finanzguru", () => Results.Content(Html, "text/html; charset=utf-8"))
-            .RequireAuthorization();
-        return app;
-    }
-}

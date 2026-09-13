@@ -1,6 +1,6 @@
-import { api as sharedApi, jsonBody } from '../core/services.js';
-import { snapshotUploadFile } from '../security/secure-fetch.js';
-import { confirmMessage } from '../components/confirm.js';
+import { api as sharedApi, jsonBody } from '../../../../../core/services.js';
+import { snapshotUploadFile } from '../../../../../security/secure-fetch.js';
+import { confirmMessage } from '../../../../../components/confirm.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const text={
   de:{
