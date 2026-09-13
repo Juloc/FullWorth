@@ -111,8 +111,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # Ohne LayoutStability: die Messung braucht einen Browser, den dieser Shard bewusst nicht
+      # installiert. Sie laeuft im eigenen Job "Layout stability".
       - name: Test Web
-        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --filter "FullyQualifiedName!~LayoutStability"
 
       - name: Test Banking
         run: dotnet test tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj --configuration Release

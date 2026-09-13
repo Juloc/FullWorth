@@ -30,15 +30,17 @@ public sealed class LayoutStabilityTests(UiHarness harness)
     /// and then shown once the view knows whether it has one.
     ///
     /// Seven of the ten numbers repeated to three decimals across runs. Only /transactions moved
-    /// (0.012 → 0.056 on desktop), which fits what it does: it prepends a summary bar and a scope
-    /// bar once its fetch returns, so the score depends on when that lands relative to paint.
+    /// (0.012 → 0.056 here, 0.099 on the CI runner), which fits what it does: it prepends a summary
+    /// bar and a scope bar once its fetch returns, so the score depends on when that lands relative
+    /// to paint — and a slower machine lands it later. Its budget is therefore set from CI, not from
+    /// this laptop; every other entry measured the same in both places.
     /// </summary>
     private static readonly (string Path, double Desktop, double Mobile)[] Budget =
     [
         //                 desktop  mobile      worst seen        what moves
         ("/",                 0.02,   0.05), // 0.008 / 0.033   topbar-actions, ::before
         ("/accounts",         0.36,   0.24), // 0.340 / 0.220   identity icons inserted per row
-        ("/transactions",     0.08,   0.12), // 0.056 / 0.096   summary and scope bars prepended
+        ("/transactions",     0.12,   0.12), // 0.099 / 0.096   summary and scope bars prepended
         ("/contracts",        0.15,   0.39), // 0.127 / 0.368   four panels above the list
         ("/settings",         0.04,   0.05)  // 0.020 / 0.036   admin row appears in sidebar-foot
     ];
