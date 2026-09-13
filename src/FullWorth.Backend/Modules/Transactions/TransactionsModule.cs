@@ -193,8 +193,8 @@ public sealed class TransactionStore(FullWorthDbContext db)
             }
         }
 
-        if (request.From.HasValue) q = q.Where(x => x.BookingDate >= request.From.Value);
-        if (request.To.HasValue) q = q.Where(x => x.BookingDate <= request.To.Value);
+        if (request.From.HasValue) q = q.Where(x => (x.BookingDate ?? x.ValueDate) >= request.From.Value);
+        if (request.To.HasValue) q = q.Where(x => (x.BookingDate ?? x.ValueDate) <= request.To.Value);
         if (request.Direction == "income") q = q.Where(x => x.Amount > 0);
         if (request.Direction == "expense") q = q.Where(x => x.Amount < 0);
 

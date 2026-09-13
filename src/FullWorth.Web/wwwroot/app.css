@@ -1296,3 +1296,10 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));margin:auto}
 .appearance-preset-name{font-size:12px;white-space:nowrap}
 .appearance-swatch{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);background:var(--cta)}
 .appearance-swatch[data-preset-slot="--preset-b"]{background:var(--accent)}
+
+/* Transaction list metadata normalization */
+#transactions-body .tx-mobile-category { display: none; }
+@media (max-width: 760px) {
+  #transactions-body .tx-list-purpose { display: none; }
+  #transactions-body .tx-mobile-category { display: block; }
+}

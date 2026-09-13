@@ -1232,11 +1232,12 @@ public sealed class BankSyncService(
         var hash = GetString(json, "identification_hash");
         if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(hash)) return null;
         var product = GetString(json, "product");
-        var display = GetString(json, "details") ?? product;
+        var rawDisplay = GetString(json, "details") ?? product;
+        var display = NormalizeAccountDisplayName(connection.InstitutionName, rawDisplay, product);
         return new(
             hash,
             uid,
-            display ?? connection.InstitutionName,
+            display,
             product,
             GetString(json, "cash_account_type"),
             // No fallback: a provider that does not state a currency has not stated one. Reading that
@@ -1247,7 +1248,7 @@ public sealed class BankSyncService(
             GetIbanLast4(json),
             IdentificationHashes: GetIdentificationHashes(json, hash),
             Iban: GetIban(json),
-            HasDetails: display is not null,
+            HasDetails: rawDisplay is not null,
             Usage: GetString(json, "usage"),
             PsuStatus: GetString(json, "psu_status"),
             CreditLimitAmount: GetNestedDecimal(json, "credit_limit", "amount"),
@@ -1294,7 +1295,10 @@ public sealed class BankSyncService(
             IdentificationHashes = MergeIdentificationHashes(
                 AccountIdentificationHashes(account),
                 GetIdentificationHashes(details, primary)),
-            DisplayName = GetString(details, "details") ?? GetString(details, "product") ?? account.DisplayName,
+            DisplayName = NormalizeAccountDisplayName(
+                account.DisplayName,
+                GetString(details, "details") ?? GetString(details, "product"),
+                GetString(details, "product")),
             Product = GetString(details, "product") ?? account.Product,
             AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
             Usage = GetString(details, "usage") ?? account.Usage,
@@ -1407,10 +1411,14 @@ public sealed class BankSyncService(
         if (string.Equals(indicator, "DBIT", StringComparison.OrdinalIgnoreCase)) amount = -Math.Abs(amount);
         else if (string.Equals(indicator, "CRDT", StringComparison.OrdinalIgnoreCase)) amount = Math.Abs(amount);
 
-        var booking = ParseDate(json, "booking_date");
-        var value = ParseDate(json, "value_date");
+        var providerBooking = ParseDate(json, "booking_date");
+        var transactionDate = ParseDate(json, "transaction_date");
+        var providerValue = ParseDate(json, "value_date");
+        var booking = providerBooking ?? transactionDate ?? providerValue;
+        var value = providerValue;
         var counterparty = GetCounterparty(json);
-        var description = GetDescription(json);
+        var rawDescription = GetProviderDescription(json);
+        var description = NormalizeDescription(rawDescription, counterparty);
         var transactionId = GetString(json, "transaction_id");
         var entryReference = GetString(json, "entry_reference");
         var status = (GetString(json, "status") ?? "BOOK").ToUpperInvariant();
@@ -1422,7 +1430,7 @@ public sealed class BankSyncService(
         // transaction_id is only a pointer to the details resource and can change between retrievals.
         var key = !string.IsNullOrWhiteSpace(entryReference)
             ? $"er:{entryReference}"
-            : $"fp:{Fingerprint(account.IdentificationHash, status, booking, value, amount, currency, counterparty, description)}";
+            : $"fp:{Fingerprint(account.IdentificationHash, status, providerBooking, providerValue, amount, currency, counterparty, rawDescription)}";
 
         return new(
             account.IdentificationHash,
@@ -1448,7 +1456,7 @@ public sealed class BankSyncService(
             ?? GetNestedString(json, debit ? "debtor" : "creditor", "name");
     }
 
-    private static string? GetDescription(JsonElement json)
+    private static string? GetProviderDescription(JsonElement json)
     {
         if (json.TryGetProperty("remittance_information", out var lines) &&
             lines.ValueKind == JsonValueKind.Array)
@@ -1461,6 +1469,85 @@ public sealed class BankSyncService(
         }
         return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
     }
+
+    private static string? NormalizeDescription(string? raw, string? counterparty)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        var sepaPurpose = TryExtractSepaPurpose(raw);
+        if (!string.IsNullOrWhiteSpace(sepaPurpose)) return LimitPurpose(sepaPurpose);
+
+        var candidates = new List<string>();
+        foreach (var piece in raw.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var text = NormalizePurposePart(piece);
+            if (string.IsNullOrWhiteSpace(text) || IsTechnicalPurpose(text)) continue;
+            if (!string.IsNullOrWhiteSpace(counterparty) &&
+                string.Equals(text, NormalizePurposePart(counterparty), StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (candidates.Contains(text, StringComparer.OrdinalIgnoreCase)) continue;
+            candidates.Add(text);
+            if (candidates.Count == 2) break;
+        }
+
+        return candidates.Count == 0 ? null : LimitPurpose(string.Join(" · ", candidates));
+    }
+
+    private static string? TryExtractSepaPurpose(string raw)
+    {
+        var match = Regex.Match(
+            raw,
+            @"(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline,
+            TimeSpan.FromMilliseconds(100));
+        return match.Success ? NormalizePurposePart(match.Groups[1].Value) : null;
+    }
+
+    private static string? NormalizePurposePart(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = Regex.Replace(value.Trim(), @"\s+", " ");
+        return normalized.Length == 0 ? null : normalized;
+    }
+
+    private static bool IsTechnicalPurpose(string value)
+    {
+        var text = value.Trim();
+        if (Regex.IsMatch(
+                text,
+                @"^(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM|ENDTOENDID|MANDATE(?:ID)?|TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]",
+                RegexOptions.IgnoreCase,
+                TimeSpan.FromMilliseconds(100)))
+            return true;
+        if (Guid.TryParse(text, out _)) return true;
+        if (Regex.IsMatch(text, @"^\d{14,}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))) return true;
+        if (Regex.IsMatch(text, @"^[0-9A-F]{20,}$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100))) return true;
+        return false;
+    }
+
+    private static string LimitPurpose(string value)
+    {
+        var normalized = NormalizePurposePart(value) ?? string.Empty;
+        const int max = 180;
+        return normalized.Length <= max ? normalized : normalized[..(max - 1)].TrimEnd() + "…";
+    }
+
+    private static string NormalizeAccountDisplayName(string fallback, string? candidate, string? product)
+    {
+        var display = NormalizePurposePart(candidate);
+        var normalizedProduct = NormalizePurposePart(product);
+        if (!string.IsNullOrWhiteSpace(display) && !LooksMachineGeneratedDisplayName(display)) return display;
+        if (!string.IsNullOrWhiteSpace(normalizedProduct) && !LooksMachineGeneratedDisplayName(normalizedProduct))
+            return normalizedProduct;
+        return fallback;
+    }
+
+    private static bool LooksMachineGeneratedDisplayName(string value) =>
+        Regex.IsMatch(
+            value,
+            @"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$",
+            RegexOptions.CultureInvariant,
+            TimeSpan.FromMilliseconds(100));
 
     private static IReadOnlyList<string> GetRemittanceInformation(JsonElement json)
     {
