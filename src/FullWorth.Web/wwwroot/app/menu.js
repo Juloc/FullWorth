@@ -33,8 +33,8 @@ const icon = {
   admin: '<path d="M12 3 19 6v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6Z"/><path d="M9.5 12h5M12 9.5v5"/>'
 };
 
-// view: der Name der Ansicht. href: solange sie noch ein eigenes Dokument ist — das gilt nur noch
-// für Gehalt. admin: der Eintrag bleibt verborgen, solange die Sitzung keine Adminrechte hat.
+// view: der Name der Ansicht. admin: der Eintrag bleibt verborgen, solange die Sitzung keine
+// Adminrechte hat. Ein href gibt es nicht mehr — jeder Eintrag führt in dieselbe Hülle.
 // admin: true blendet den Eintrag aus, solange die Sitzung keine Adminrechte hat.
 export const MENU = [
   { id: 'overview', label: 'nav.group.overview', items: [
@@ -51,7 +51,7 @@ export const MENU = [
   { id: 'planning', label: 'nav.group.planning', items: [
     { view: 'budgets', label: 'nav.budgets', icon: icon.budgets },
     { view: 'contracts', label: 'nav.contracts', icon: icon.contracts },
-    { view: 'compensation', label: 'nav.compensation', icon: icon.compensation, href: '/compensation.html' },
+    { view: 'compensation', label: 'nav.compensation', icon: icon.compensation },
     { view: 'pension', label: 'nav.pension', icon: icon.pension },
     { view: 'tax', label: 'nav.tax', icon: icon.tax }
   ] },

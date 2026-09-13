@@ -470,6 +470,10 @@ app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct
 
 // Passkeys ist eine Seite unter Einstellungen, kein eigenes Dokument: dieselbe Hülle, dieselbe
 // Seitenleiste, und die Adresse zeigt, wo die Seite hingehört.
+// Gehalt war einmal ein eigenes Dokument unter /compensation.html. Wer sich das gemerkt hat, soll
+// nicht ins Leere laufen — die Seite heißt jetzt /compensation und liegt in der Hülle.
+app.MapGet("/compensation.html", () => Results.Redirect("/compensation", permanent: true)).AllowAnonymous();
+
 app.MapGet("/settings/security/passkeys", async (HttpContext context, CancellationToken ct) =>
 {
     context.Response.ContentType = "text/html; charset=utf-8";

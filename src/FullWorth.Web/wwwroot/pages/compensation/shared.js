@@ -1,7 +1,7 @@
 // Shared compensation module. Single source of truth for everything the calculator, history and extended
 // (optimizer/payslips) views had triplicated: DOM/format helpers, the profile <-> form mapping, company-car
 // factor derivation, benefit rows and the API/toast wrappers. Feature files import from here — no copies.
-import { api as backendApi, jsonBody as sharedJsonBody } from '../core/services.js';
+import { api as backendApi, jsonBody as sharedJsonBody } from '../../core/services.js';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];

@@ -21,10 +21,10 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task CompensationPage_CanEnterAPartialEmploymentYearAndSaysWhenItDoes()
     {
-        var html = await GetAsync("/compensation.html");
-        var shared = await GetAsync("/features/compensation-shared.js");
-        var baseJs = await GetAsync("/features/compensation.js");
-        var css = await GetAsync("/compensation.css");
+        var html = await PageFileAsync("page.html");
+        var shared = await PageFileAsync("shared.js");
+        var baseJs = await PageFileAsync("page.js");
+        var css = await PageFileAsync("page.css");
 
         Assert.Contains("id=\"employment-start\"", html);
         Assert.Contains("id=\"employment-end\"", html);
@@ -34,30 +34,32 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         Assert.Contains("setVal('employment-end'", shared);
         Assert.Contains("monthsEmployedInYear", baseJs);
         Assert.Contains("comp-partial-year", baseJs);
-        // The rule has to live in the sheet the page actually loads - compensation.html loads
-        // /compensation.css, not styles/features/compensation.css.
+        // Die Regel muss in dem Stylesheet stehen, das die Seite mitbringt: pages/compensation/page.css.
         Assert.Contains(".comp-partial-year", css);
     }
 
     [Fact]
     public async Task CompensationPage_LoadsAllFeatureModules()
     {
-        var html = await GetAsync("/compensation.html");
-        var baseJs = await GetAsync("/features/compensation.js");
-        var extendedJs = await GetAsync("/features/compensation-extended.js");
-        var historyJs = await GetAsync("/features/compensation-history.js");
-        var historyCss = await GetAsync("/compensation-history.css");
+        var baseJs = await PageFileAsync("page.js");
+        var extendedJs = await PageFileAsync("extended.js");
+        var historyJs = await PageFileAsync("history.js");
+        var css = await PageFileAsync("page.css");
 
-        Assert.Contains("/features/compensation.js", html);
-        Assert.Contains("/features/compensation-extended.js", html);
-        Assert.Contains("/features/compensation-history.js", html);
-        Assert.Contains("/compensation-history.css", html);
+        // Die Module hängen nicht mehr als sechs <script>-Zeilen an einem eigenen Dokument, sondern
+        // werden von page.js statisch importiert. Damit ist beim ersten Besuch alles schon da, und
+        // die Reihenfolge - erst die Reiter, dann die Module, die sich daran hängen - steht an einer
+        // Stelle statt in einer HTML-Datei.
+        Assert.Contains("import './extended.js'", baseJs);
+        Assert.Contains("import './history.js'", baseJs);
+        Assert.Contains("import './other-income.js'", baseJs);
+        Assert.Contains("import './benchmarks.js'", baseJs);
         Assert.Contains("api/compensation/calculate", baseJs);
         Assert.Contains("api/compensation/insights", extendedJs);
         Assert.Contains("api/compensation/payslips/extract", extendedJs);
         Assert.Contains("api/compensation/history", historyJs);
         Assert.Contains("api/compensation/timeline", historyJs);
-        Assert.Contains("history-chart", historyCss);
+        Assert.Contains("history-chart", css);
     }
 
     [Fact]
@@ -66,14 +68,29 @@ public sealed class CompensationUiBaselineTests : IClassFixture<FullWorthWebFact
         // "/" is served by MapFallbackToFile("index.html").RequireAuthorization(), so an unauthenticated
         // client is redirected to the auth login shell. Read the shipped index.html shell directly.
         var html = ReadWebAsset("index.html");
-        var navJs = await GetAsync("/features/compensation-nav.js");
+        var menu = ReadWebAsset(Path.Combine("app", "menu.js"));
 
-        // Gehalt ist ein gewöhnlicher Menüeintrag aus app/menu.js. Er zeigt noch auf ein eigenes
-        // Dokument — das ist der Rest, den der Seitenumzug auflöst —, aber er steht in derselben
-        // Liste wie alle anderen und erscheint damit auch am Telefon, wo er früher fehlte.
+        // Gehalt ist ein gewöhnlicher Eintrag aus app/menu.js und eine gewöhnliche Ansicht.
+        //
+        // Es hatte einmal eine handkopierte Seitenleiste in features/compensation-nav.js — dreizehn
+        // Einträge als HTML-Literal, die schon veraltet waren: ohne Altersvorsorge, ohne
+        // Einstellungen, ohne Coach, und "Mehr" sprang einfach auf die Startseite. Genau dafür gibt
+        // es jetzt eine Menüquelle, und diese Datei ist gelöscht.
+        Assert.Contains("{ view: 'compensation'", menu);
+        Assert.DoesNotContain("href: '/compensation.html'", menu);
         Assert.Contains("data-entry=\"compensation\"", html);
-        Assert.Contains("href=\"/compensation.html\"", html);
-        Assert.Contains("/compensation.html", navJs);
+        Assert.Contains("id=\"view-compensation\"", html);
+        Assert.False(File.Exists(Path.Combine(
+            _factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath,
+            "features", "compensation-nav.js")));
+    }
+
+    // Eine Datei der Seite, aus der Quelle gelesen. Über die Adresse geholt käme immer die ganze
+    // Hülle zurück, und darin stünde jede Zusicherung auch dann, wenn sie diese Seite nichts angeht.
+    private async Task<string> PageFileAsync(string name)
+    {
+        var root = _factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+        return await File.ReadAllTextAsync(Path.Combine(root, "pages", "compensation", name));
     }
 
     private string ReadWebAsset(string relative)

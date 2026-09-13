@@ -114,6 +114,10 @@
     "passkeys": {
       "title": "Passkeys",
       "subtitle": "Password-free sign-in for this device"
+    },
+    "compensation": {
+      "title": "Salary & benefits",
+      "subtitle": "Net pay, company car, pension, purchasing power and scenarios"
     }
   },
   "dashboard": {

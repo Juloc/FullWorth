@@ -65,12 +65,6 @@ export async function secureFetch(input, init = {}) {
     resetAntiforgeryToken();
   }
 
-  // Compensation is a standalone authenticated surface. Preserve its explicit expired-session redirect.
-  if (response.status === 401 && location.pathname === '/compensation.html' && url.pathname.startsWith('/bff/')) {
-    const returnUrl = `${location.pathname}${location.search}${location.hash}`;
-    location.assign(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}&status=session-expired`);
-  }
-
   return response;
 }
 

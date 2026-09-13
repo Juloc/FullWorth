@@ -68,10 +68,14 @@ public sealed class PwaOfflineShellCoverageTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void The_salary_page_works_offline()
     {
+        // Gehalt ist eine Seite der Hülle geworden, also ist "die Gehaltsseite offline" dasselbe wie
+        // "die Hülle offline" plus die Module dieser Seite. Der Einstieg ist index.html.
         var precached = PrecachedPaths();
-        var reachable = ReachableFrom("compensation.html");
+        var reachable = ReachableFrom("index.html")
+            .Where(path => path.StartsWith("/pages/compensation/", StringComparison.Ordinal))
+            .ToArray();
 
-        Assert.Contains("/compensation.html", precached);
+        Assert.NotEmpty(reachable);
         var missing = reachable.Where(path => !precached.Contains(path)).Order(StringComparer.Ordinal).ToArray();
         Assert.True(
             missing.Length == 0,

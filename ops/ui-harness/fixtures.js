@@ -6,6 +6,12 @@
   const iso = d => d;
 
   const FIXTURES = {
+    // Gehalt. Bewusst ein TEILJAHR (vier Monate) - das ist der Fall, dessen Hinweis leicht
+    // vergessen wird. Ohne diese Einträge rechnete die Seite gegen den allgemeinen
+    // Schreib-Stub und zeigte NaN, was in der Harness wie ein Fehler der Seite aussah.
+    'compensation/profile': null,
+    'compensation/scenarios': [],
+    'compensation/history': [],
     // Admin-only on the server; the settings row hides itself when the call fails, so the fixture is
     // what makes the row visible here at all.
     'fullworth-spaces': [{ id: SPACE, name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
@@ -792,6 +798,23 @@
     return value;
   }
 
+  const COMPENSATION_RESULT = {
+    name: 'Aktuelles Gehalt', monthsEmployedInYear: 4, salaryPaymentsInYear: 4,
+    contractualGrossAnnual: 60000, bonusAnnual: 0, cashGrossAnnual: 20000,
+    estimatedCashNetAnnual: 12800, estimatedCashNetMonthly: 3200,
+    estimatedAverageCashNetMonthly: 3200, estimatedNetRatioPercent: 64,
+    employerTotalCostAnnual: 23900, fullWorthCompensationValueAnnual: 13100,
+    marginalNetFromNext100Gross: 51.4, effectiveNetValuePerWorkingHour: 18.46,
+    taxes: { estimatedIncomeTaxAnnual: 2900, estimatedSolidaritySurchargeAnnual: 0, estimatedChurchTaxAnnual: 0 },
+    socialInsurance: { pensionAnnual: 1860, unemploymentAnnual: 260, healthAnnual: 1580, careAnnual: 600 },
+    benefits: [],
+    // Beide sind im Vertrag NICHT optional (CompanyCarAnalysis / OccupationalPensionAnalysis sind
+    // keine Nullable-Felder). Ein null hier hätte eine Fehlerquelle vorgetäuscht, die es nicht gibt.
+    companyCar: { taxableBenefitMonthly: 0, taxableBenefitAnnual: 0, employeeContributionAnnual: 0, employerCostAnnual: 0, privateAlternativeValueAnnual: 0, estimatedNetCashImpactAnnual: 0, estimatedEffectivePersonalValueAnnual: 0 },
+    occupationalPension: { employeeContributionAnnual: 0, employerContributionAnnual: 0, taxExemptEmployeeContributionAnnual: 0, socialInsuranceExemptEmployeeContributionAnnual: 0, estimatedCurrentNetSacrificeAnnual: 0, totalInvestedAnnual: 0, benefitEfficiency: 0, projectedValue: 0 },
+    assumptions: ['Harness-Fixture, keine echte Berechnung.']
+  };
+
   // Two pension-document writes have to answer with something real rather than { ok: true }: the
   // upload returns the detail the review screen renders (so the screen is reachable at all), and the
   // commit returns applied/skipped (so the honest "was already there" half can be looked at).
@@ -799,6 +822,7 @@
   // path (offer the document that already holds those pages, never a dead error) can be walked.
   function writeAnswer(method, pathname, init) {
     const after = pathname.replace(/^\/bff\/(backend|banking)\//, '').replace(/^api\//, '');
+    if (after.startsWith('compensation/calculate')) return { status: 200, body: COMPENSATION_RESULT };
     if (after.startsWith('pension/projection')) {
       let body = init?.body;
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }

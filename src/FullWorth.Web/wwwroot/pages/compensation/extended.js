@@ -1,9 +1,9 @@
-import { confirmMessage } from '../components/confirm.js';
+import { confirmMessage } from '../../components/confirm.js';
 import {
   $, $$, euro2 as euro, euro as euro0, esc, attr, val as value, num as number, setVal as set,
   spaceId, monthLabel as month, signedEuro, api, json, notify as showMessage,
   readProfile, fillProfile
-} from './compensation-shared.js';
+} from './shared.js';
 
 init();
 

@@ -37,6 +37,7 @@ import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { renderAdmin } from './pages/admin/page.js';
 import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
+import { renderCompensation } from './pages/compensation/page.js';
 import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
@@ -420,7 +421,8 @@ const featureRegistry=createFeatureRegistry()
   .register('audit',()=>renderAudit(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
   .register('admin',()=>renderAdmin())
-  .register('passkeys',()=>renderPasskeys(ctx));
+  .register('passkeys',()=>renderPasskeys(ctx))
+  .register('compensation',()=>renderCompensation());
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

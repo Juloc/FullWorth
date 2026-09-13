@@ -1,20 +1,33 @@
-import { confirmMessage } from '../components/confirm.js';
+import { confirmMessage } from '../../components/confirm.js';
 import {
   $, $$, euro as money, euro2 as money2, pct, signedEuro as signedMoney, signedPct,
   esc, attr, val as value, num as number, setVal as set, fmtDate as date, localIsoDate,
   api, json, notify, readProfile, fillProfile, deriveCarFactor, hybridMinimumRange,
   addBenefitRow as addBenefit, readBenefits,
   addOneOffFromPreset as addOneOff, fillOneOffPresets, syncAgeFields
-} from './compensation-shared.js';
+} from './shared.js';
+
+// Die vier Module daneben gehören zu dieser Seite: sie hängen sich an ihre Reiter und bringen eigene
+// mit. Statisch importiert, damit beim ersten Besuch nichts nachgeladen wird, und hier statt in
+// app.js, weil nur diese Seite weiß, dass sie dazugehören.
+import './extended.js';
+import './history.js';
+import './other-income.js';
+import './benchmarks.js';
+
 const state={spaces:[],space:null,result:null,scenarios:[],selected:[]};
 // Months employed can be fractional - a month entered mid-month counts 15/30 - so 4 and 4,5 both have
 // to read naturally.
 const monthsFormat=new Intl.NumberFormat('de-DE',{maximumFractionDigits:2});
 
-boot();
+let bound=false;
 
-async function boot(){
-  bind();
+export async function renderCompensation(){
+  if(!bound){bound=true;bind()}
+  await load();
+}
+
+async function load(){
   try{
     state.spaces=await api('api/fullworth-spaces');
     const saved=localStorage.getItem('finance.space');
@@ -27,7 +40,9 @@ async function boot(){
 }
 
 function bind(){
-  $$('.comp-tabs button').forEach(button=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
+  // [data-tab], nicht jeder Knopf: die Module daneben hängen eigene Reiter in dieselbe Leiste, und
+  // die tragen ihren eigenen Namen. Ohne die Einschränkung bekäme showTab ein undefined.
+  $$('.comp-tabs button[data-tab]').forEach(button=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
   $('#space-select').addEventListener('change',async event=>{
     state.space=state.spaces.find(s=>s.id===event.target.value)||null;
     if(state.space)localStorage.setItem('finance.space',state.space.id);

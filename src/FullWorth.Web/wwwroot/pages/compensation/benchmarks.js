@@ -13,7 +13,7 @@
 import {
   $, $$, euro, pct, esc, attr, val as value, num as number, setVal as set,
   signedEuro0 as signedMoney, api, notify, readProfile
-} from './compensation-shared.js';
+} from './shared.js';
 
 const STORE_KEY = 'fullworth.compensation.benchmark';
 const GROUP_LABELS = {

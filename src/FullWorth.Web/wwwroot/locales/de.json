@@ -114,6 +114,10 @@
     "passkeys": {
       "title": "Passkeys",
       "subtitle": "Anmeldung ohne Passwort für dieses Gerät"
+    },
+    "compensation": {
+      "title": "Gehalt & Benefits",
+      "subtitle": "Netto, Firmenwagen, bAV, Kaufkraft und Szenarien"
     }
   },
   "dashboard": {

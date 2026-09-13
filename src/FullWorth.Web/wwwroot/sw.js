@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v118';
+const VERSION = 'v119';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -21,16 +21,6 @@ const APP_SHELL = [
   // does not reach it. It is precached because the payroll engine is pure client-side maths and
   // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
   // one of them needs the server to do anything, so caching them would only fake availability.
-  '/compensation.html',
-  '/compensation-history.css',
-  '/compensation.css',
-  '/features/compensation-benchmarks.js',
-  '/features/compensation-extended.js',
-  '/features/compensation-history.js',
-  '/features/compensation-nav.js',
-  '/features/compensation-other-income.js',
-  '/features/compensation-shared.js',
-  '/features/compensation.js',
   '/security/browser-fetch.js',
   '/styles/features/compensation-benchmarks.css',
   '/styles/features/compensation-extended.css',
@@ -142,6 +132,13 @@ const APP_SHELL = [
   '/app/appearance.js',
   '/app/boot.js',
   '/app/menu.js',
+  '/pages/compensation/page.js',
+  '/pages/compensation/page.css',
+  '/pages/compensation/shared.js',
+  '/pages/compensation/extended.js',
+  '/pages/compensation/history.js',
+  '/pages/compensation/other-income.js',
+  '/pages/compensation/benchmarks.js',
   '/pages/settings/security/passkeys/page.js',
   '/pages/settings/security/passkeys/page.css',
   '/pages/admin/page.js',

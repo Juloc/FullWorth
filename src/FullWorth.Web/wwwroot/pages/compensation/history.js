@@ -1,10 +1,10 @@
-import { confirmMessage } from '../components/confirm.js';
+import { confirmMessage } from '../../components/confirm.js';
 import {
   $ as H$, $$ as H$$, euro as heuro, euro2 as heuro2, esc, attr, val as hval, num as hnum, setVal as hset,
   spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,
   signedEuro0 as signedMoney, readProfile as readHistoryProfile, fillProfile as fillHistoryProfile,
   loadOtherIncomeTypes, otherIncomeTypeOptions, otherIncomeName, otherIncomeActiveOn
-} from './compensation-shared.js';
+} from './shared.js';
 // The history view intentionally shows one decimal on percentages (the calculator allows two).
 const hpct=v=>`${Number(v||0).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} %`;
 

@@ -162,20 +162,6 @@ createServer(async (req, res) => {
       // Must stay ABOVE 'import-jobs': the rollback path contains that substring too.
       'rollback': { jobId: JOB, removed: 3, kept: 1 },
       'commit': { imported: 3, duplicates: 0, total: 3 },
-      // Enough of a CompensationCalculationResult for the Gehalt page to render. Deliberately a
-      // PARTIAL year (four months) - that is the case whose note is easy to forget.
-      'compensation/calculate': {
-        name: 'Aktuelles Gehalt', monthsEmployedInYear: 4, salaryPaymentsInYear: 4,
-        contractualGrossAnnual: 60000, bonusAnnual: 0, cashGrossAnnual: 20000,
-        estimatedCashNetAnnual: 12800, estimatedCashNetMonthly: 3200,
-        estimatedAverageCashNetMonthly: 3200, estimatedNetRatioPercent: 64,
-        employerTotalCostAnnual: 23900, fullWorthCompensationValueAnnual: 13100,
-        marginalNetFromNext100Gross: 51.4, effectiveNetValuePerWorkingHour: 18.46,
-        taxes: { estimatedIncomeTaxAnnual: 2900, estimatedSolidaritySurchargeAnnual: 0, estimatedChurchTaxAnnual: 0 },
-        socialInsurance: { pensionAnnual: 1860, unemploymentAnnual: 260, healthAnnual: 1580, careAnnual: 600 },
-        benefits: [], companyCar: null, occupationalPension: null,
-        assumptions: ['Harness-Fixture, keine echte Berechnung.']
-      },
       'import-jobs': [
         { id: JOB, fileName: 'umsaetze.csv', adapterKey: 'mapped_csv', status: 'completed', sourceRowCount: 5, readyCount: 4, duplicateCount: 2, importedCount: 3, errorCount: 1, createdAt: '2026-09-09T08:12:00Z', completedAt: '2026-09-09T08:12:30Z', rolledBackAt: null, rollbackAvailable: true },
         { id: '33333333-3333-3333-3333-333333333333', fileName: 'alter-export.csv', adapterKey: 'mapped_csv', status: 'rolled_back', sourceRowCount: 2, readyCount: 2, duplicateCount: 0, importedCount: 2, errorCount: 0, createdAt: '2026-09-01T10:00:00Z', completedAt: '2026-09-01T10:00:20Z', rolledBackAt: '2026-09-02T10:00:00Z', rollbackAvailable: false }
