@@ -1,9 +1,11 @@
+@AGENTS.md
+
 # FullWorth
 
 Self-hosted personal finance platform: .NET 10 backend + **vanilla-JS** frontend (no framework, no build step). Public repo `Juloc/FullWorth`. German UI.
 
-System-wide context across all FullWorth repos: `../CLAUDE.md`. The single active work list:
-[docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md).
+Cross-agent workflow, coordination and backlog rules come from `AGENTS.md`. This file keeps FullWorth-specific durable operating context.
+`docs/IMPROVEMENT_PLAN.md` is a transitional legacy backlog while issue #102 migrates remaining live items to GitHub Issues. Do not add new work there.
 
 ## Repo layout
 
