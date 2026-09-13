@@ -51,7 +51,7 @@ There is **no linter, no formatter and no automated browser/e2e test** in this r
 Two ways, neither needs credentials:
 
 - `node ops/ui-harness/server.mjs` → <http://127.0.0.1:8095> serves the real `wwwroot` against fixtures. Use this to measure layout and open dialogs.
-- The `fullworth-dev` stack (`~/git/docker/fullworth-dev`) serves <http://127.0.0.1:8098> and **bind-mounts `src/FullWorth.Web/wwwroot`**, so frontend edits are live immediately — no rebuild, no redeploy.
+- A local dev stack sits next to this repo (`../local`) and serves <http://127.0.0.1:8100>; it **bind-mounts `src/FullWorth.Web/wwwroot`**, so frontend edits are live immediately — no rebuild, no redeploy.
 
 Check the browser console for module errors after any frontend refactor. Measure, do not eyeball: `position:fixed` elements have `offsetParent === null`, so that is not a visibility test.
 
@@ -78,9 +78,9 @@ Since v1.3.0-alpha.2 the app ships as **one unified container** (`FullWorthHost_
 
 ## Deploy
 
-Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-cloud/`, `fullworth-dev/` (local), `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09. Bump the `FULLWORTH_VERSION` default in the compose files; the server may additionally pin it via its own `.env`.
+Deploy repo is `Juloc/docker` at `~/git/docker` (separate repo). FullWorth stacks: `fullworth/` (production, web.fullworth.de), `fullworth-demo/`, `fullworth-cloud/`, `fullworth-landing/` (also serves the apex). The `finance/` stack was retired on 2026-09-09. Bump the `FULLWORTH_VERSION` default in the compose files; the server may additionally pin it via its own `.env`.
 
-`fullworth-platform-secrets` is an **external** volume shared by the app and cloud stacks and holds `data_encryption_key` — never `docker volume prune`, never `docker compose down -v` in a folder that mounts it.
+`fullworth-platform-secrets` belongs to the **app stack alone** — the cloud stack shares nothing with it any more. It holds `data_encryption_key`: never `docker volume prune`, never `docker compose down -v` in a folder that mounts it. It is no longer `external`, so a fresh host needs no preparation; `DataEncryptionKeyGuard` refuses to start when the key cannot be the one this database was encrypted with.
 
 ## Conventions
 
