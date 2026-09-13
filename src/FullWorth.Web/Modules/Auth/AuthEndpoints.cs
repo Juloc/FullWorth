@@ -44,10 +44,16 @@ public static class AuthEndpoints
         IOptions<RegistrationOptions> registration,
         UserManager<AuthUser> userManager)
     {
-        var registrationEnabled = registration.Value.Enabled || !await userManager.Users.AnyAsync();
+        // An installation nobody has registered on yet is a different situation from a login, and it
+        // was presented as the same one: a fresh instance showed a bare sign-in form, so the person
+        // who just started the container had to work out that the way in is "register". Saying so is
+        // the whole fix - the emptiness was already known here, it simply was not reported.
+        var firstRun = !await userManager.Users.AnyAsync();
+        var registrationEnabled = registration.Value.Enabled || firstRun;
         return Results.Ok(new
         {
             registrationEnabled,
+            firstRun,
             google = await schemes.GetSchemeAsync("Google") is not null,
             apple = await schemes.GetSchemeAsync("Apple") is not null
         });

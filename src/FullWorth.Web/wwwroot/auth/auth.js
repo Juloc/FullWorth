@@ -25,6 +25,7 @@ const state = {
   pendingLogin: null,
   capabilities: {
     registrationEnabled: false,
+    firstRun: false,
     google: false,
     apple: false
   }
@@ -34,6 +35,13 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 
 function resolveView() {
+  return requestedView() ?? 'login';
+}
+
+/// The view the URL actually asked for, or null when it asked for nothing and we fell back to the
+/// sign-in form. First run needs that difference: it may redirect the default landing to
+/// registration, but must never override a link somebody followed on purpose.
+function requestedView() {
   const queryView = new URLSearchParams(location.search).get('view');
   if (queryView && supportedViews.has(queryView)) return queryView;
 
@@ -41,7 +49,7 @@ function resolveView() {
   const last = path.split('/').at(-1);
   if (supportedViews.has(last)) return last;
 
-  return 'login';
+  return null;
 }
 
 async function boot() {
@@ -50,6 +58,7 @@ async function boot() {
   applyTheme();
   await loadMessages();
   await loadCapabilities();
+  applyFirstRun();
   bind();
   showView(state.view);
   applyCapabilities();
@@ -81,12 +90,39 @@ async function loadCapabilities() {
     const payload = await response.json();
     state.capabilities = {
       registrationEnabled: payload?.registrationEnabled === true,
+      firstRun: payload?.firstRun === true,
       google: payload?.google === true,
       apple: payload?.apple === true
     };
   } catch {
     // Email/password and passkeys remain available if provider discovery fails.
   }
+}
+
+/// An installation with no account in it is being set up, not signed into.
+///
+/// It used to present a plain sign-in form, so the first thing a self-hoster saw after starting the
+/// container was a login they could not possibly pass - the way in was "Registrieren", a link in the
+/// corner. Nothing was broken; it simply never said what was going on.
+function applyFirstRun() {
+  if (!state.capabilities.firstRun) return;
+
+  // "login" counts as the default, not as a choice: visiting "/" redirects to
+  // /auth/login?returnUrl=%2F, so treating that path as a deliberate request would skip this in
+  // exactly the case it exists for. Every OTHER named view - a password reset, a claim, a recovery
+  // code - was followed on purpose and keeps winning. And on an installation with no account there
+  // is nothing to sign in to anyway.
+  const requested = requestedView();
+  if (requested === null || requested === 'login') state.view = 'register';
+
+  // Re-point the translation keys rather than writing the text once: the language toggle re-runs
+  // renderTranslations(), which would otherwise put "Registrieren" straight back.
+  const heading = document.querySelector('[data-auth-view="register"] .auth-heading');
+  const title = heading?.querySelector('[data-auth-page-title]');
+  const subtitle = heading?.querySelector('p');
+  if (title) title.dataset.i18n = 'auth.pages.firstRun.title';
+  if (subtitle) subtitle.dataset.i18n = 'auth.pages.firstRun.subtitle';
+  renderTranslations();
 }
 
 function applyCapabilities() {

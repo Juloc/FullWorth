@@ -79,6 +79,22 @@ export function createAccessSetup(ctx, openBankingWizard) {
     }
   }
 
+  // Codex stays on offer even when it is not deployed - it is a real choice, and hiding it would
+  // leave a self-hoster wondering why the option they read about is missing. What it must not do is
+  // answer with a token. Each known code gets a sentence and the next step; an unknown one still
+  // shows what the server said, because that is more use than silence.
+  const CODEX_ERRORS = {
+    codex_bridge_unavailable: 'aiAccess.codexNotDeployed',
+    codex_bridge_invalid: 'aiAccess.codexNotReachable',
+    codex_bridge_timeout: 'aiAccess.codexTimedOut'
+  };
+
+  function codexErrorText(error) {
+    const key = CODEX_ERRORS[error?.detail?.error];
+    if (key) return get(key);
+    return error?.message || get('aiAccess.codexUnavailable');
+  }
+
   function openAiAccessWizard(initialStatus, options = {}) {
     let status = initialStatus;
     let closed = false;
@@ -303,8 +319,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
       try {
         session = await api('api/intelligence/access/codex/login', jsonBody({}));
       } catch (error) {
-        step.querySelector('[data-codex-status]').textContent =
-          error.message || get('aiAccess.codexUnavailable');
+        // The bridge answers with a machine code, and showing it raw ("codex_bridge_unavailable")
+        // tells the person in front of the screen nothing and offers no way out. On a default stack
+        // that code means exactly one thing: the Codex container is profile-gated and not running.
+        step.querySelector('[data-codex-status]').textContent = codexErrorText(error);
         return;
       }
       if (!session?.id) {
@@ -354,7 +372,9 @@ export function createAccessSetup(ctx, openBankingWizard) {
             return;
           }
         } catch (error) {
-          statusElement.textContent = error.message || get('aiAccess.codexUnavailable');
+          // Same rule while polling: the container can go away mid-login, and "codex_bridge_unavailable"
+          // is no more readable here than it was at the start.
+          statusElement.textContent = codexErrorText(error);
           activeAiPoll = null;
           return;
         }

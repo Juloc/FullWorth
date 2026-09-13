@@ -265,6 +265,35 @@ public sealed class AuthIntegrationTests
         }
     }
 
+    /// <summary>
+    /// An installation nobody has registered on yet says so.
+    ///
+    /// It was presented as an ordinary sign-in: a self-hoster who had just started the container met
+    /// a login form they could not possibly pass, with the way in hidden behind a "Registrieren" link
+    /// in the corner. The emptiness was already known right here - it computes it to decide whether
+    /// registration is allowed - it simply was never reported, so the page could not say it.
+    /// </summary>
+    [Fact]
+    public async Task Providers_ReportsFirstRunUntilSomebodyHasRegistered()
+    {
+        await using var factory = new FullWorthWebFactory();
+        using var client = CreateClient(factory);
+
+        using (var response = await client.GetAsync("/auth/providers"))
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.True(json.RootElement.GetProperty("firstRun").GetBoolean());
+        }
+
+        _ = await CreateUserAsync(factory);
+
+        using (var response = await client.GetAsync("/auth/providers"))
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(json.RootElement.GetProperty("firstRun").GetBoolean());
+        }
+    }
+
     [Fact]
     public async Task UnknownExternalProvider_ReturnsNotFound()
     {

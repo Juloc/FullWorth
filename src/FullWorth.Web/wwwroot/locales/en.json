@@ -628,6 +628,10 @@
       "two-factor": {
         "title": "Two-factor code",
         "subtitle": "Enter the 6-digit code from Google Authenticator or your TOTP app."
+      },
+      "firstRun": {
+        "title": "Set up this instance",
+        "subtitle": "This FullWorth instance is new and has no account yet. Create the administrator account now — the setup assistant then walks you through AI, banking and the rest."
       }
     },
     "continueGoogle": "Continue with Google",
@@ -1073,7 +1077,7 @@
     "mode_none": "Not configured",
     "chooseHint": "Choose how FullWorth should run your personal AI features.",
     "codexTitle": "Sign in with ChatGPT / Codex",
-    "codexHint": "Signs this FullWorth user in through Codex. No API key required.",
+    "codexHint": "Signs this FullWorth user in through Codex. No API key required — but it needs the Codex container, which is not started by default.",
     "apiKeyTitle": "OpenAI API key",
     "apiKeyHint": "Use your own OpenAI API key. The key is stored encrypted.",
     "customTitle": "Custom OpenAI-compatible endpoint",
@@ -1102,6 +1106,9 @@
     "codexExplain": "FullWorth starts a personal Codex sign-in. Open the displayed sign-in page and confirm the code with your ChatGPT/OpenAI account.",
     "startingLogin": "Starting Codex sign-in…",
     "codexUnavailable": "Codex sign-in is not available on this FullWorth instance.",
+    "codexNotDeployed": "The Codex service is not running on this instance. It is a separate container and off by default — start it from the stack folder with \"docker compose --profile codex up -d\" and try again. Without it, \"Own API key\" and \"Own provider\" work normally.",
+    "codexNotReachable": "The Codex service is configured but does not answer. Check whether its container is running.",
+    "codexTimedOut": "The Codex service did not answer in time. Please try again.",
     "codexConnected": "Connected with Codex / ChatGPT",
     "codexDisconnected": "Codex sign-in is no longer valid",
     "codexStatus_waiting": "Waiting for your sign-in…",

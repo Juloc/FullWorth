@@ -628,6 +628,10 @@
       "two-factor": {
         "title": "Zwei-Faktor-Code",
         "subtitle": "Gib den 6-stelligen Code aus Google Authenticator oder deiner TOTP-App ein."
+      },
+      "firstRun": {
+        "title": "Instanz einrichten",
+        "subtitle": "Diese FullWorth-Instanz ist neu und hat noch kein Konto. Lege jetzt das Administrator-Konto an — danach führt dich der Einrichtungsassistent durch KI, Bank und den Rest."
       }
     },
     "continueGoogle": "Mit Google fortfahren",
@@ -1073,7 +1077,7 @@
     "mode_none": "Nicht eingerichtet",
     "chooseHint": "Wähle, wie FullWorth deine persönlichen KI-Funktionen ausführen soll.",
     "codexTitle": "Mit ChatGPT / Codex anmelden",
-    "codexHint": "Meldet diesen FullWorth-Nutzer über den Codex-Login an. Kein API-Key nötig.",
+    "codexHint": "Meldet diesen FullWorth-Nutzer über den Codex-Login an. Kein API-Key nötig — braucht aber den Codex-Container, der standardmäßig nicht mitläuft.",
     "apiKeyTitle": "OpenAI API-Key",
     "apiKeyHint": "Nutze deinen eigenen OpenAI API-Key. Der Key wird verschlüsselt gespeichert.",
     "customTitle": "Eigener OpenAI-kompatibler Endpoint",
@@ -1102,6 +1106,9 @@
     "codexExplain": "FullWorth startet einen persönlichen Codex-Login. Öffne die angezeigte Anmeldeseite und bestätige den Code mit deinem ChatGPT/OpenAI-Konto.",
     "startingLogin": "Codex-Anmeldung wird gestartet…",
     "codexUnavailable": "Codex-Anmeldung ist auf dieser FullWorth-Instanz nicht verfügbar.",
+    "codexNotDeployed": "Der Codex-Dienst läuft auf dieser Instanz nicht. Er ist ein eigener Container und standardmäßig ausgeschaltet — starte ihn im Stack-Ordner mit „docker compose --profile codex up -d“ und versuche es dann erneut. Ohne ihn funktionieren „Eigener API-Key“ und „Eigener Anbieter“ ganz normal.",
+    "codexNotReachable": "Der Codex-Dienst ist eingerichtet, antwortet aber nicht. Prüfe, ob sein Container läuft.",
+    "codexTimedOut": "Der Codex-Dienst hat nicht rechtzeitig geantwortet. Versuche es noch einmal.",
     "codexConnected": "Mit Codex / ChatGPT verbunden",
     "codexDisconnected": "Codex-Anmeldung nicht mehr gültig",
     "codexStatus_waiting": "Warte auf deine Anmeldung…",
