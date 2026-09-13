@@ -1,0 +1,83 @@
+name: Fix transaction normalization regexes
+
+on:
+  push:
+    branches:
+      - fix/transaction-display-normalization
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/transaction-display-normalization
+          fetch-depth: 0
+
+      - name: Correct regex escaping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replacements(path, pairs):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f'missing expected pattern in {path}: {old}')
+                  text = text.replace(old, new)
+              p.write_text(text, encoding='utf-8')
+
+          replacements('src/FullWorth.Banking/Services/BankSyncService.cs', [
+              (r'@"(?:^|\\s)SVWZ\\+(.*?)(?=\\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\\+|\\s*\\|\\s*|$)"',
+               r'@"(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)"'),
+              (r'@"\\s+"', r'@"\s+"'),
+              (r'TRANSACTION(?:\\s+ID)?|TXID|REFERENCE|REF)\\s*[:+=]',
+               r'TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]'),
+              (r'@"^\\d{14,}$"', r'@"^\d{14,}$"'),
+          ])
+
+          replacements('src/FullWorth.Web/wwwroot/features/transactions.js', [
+              (r'/(?:^|\\s)SVWZ\\+(.*?)(?=\\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\\+|\\s*\\|\\s*|$)/i',
+               r'/(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)/i'),
+              (r'raw.split(/\\s*\\|\\s*|\\r?\\n/)', r'raw.split(/\s*\|\s*|\r?\n/)'),
+              (r'TRANSACTION(?:\\s+ID)?|TXID|REFERENCE|REF)\\s*[:+=]',
+               r'TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]'),
+              (r"replace(/\\s+/g, ' ')", r"replace(/\s+/g, ' ')"),
+              (r'/^\\d{14,}$/', r'/^\d{14,}$/'),
+          ])
+          PY
+
+      - name: Verify sanitizer patterns
+        run: |
+          grep -F 'SVWZ\+' src/FullWorth.Banking/Services/BankSyncService.cs
+          grep -F 'SVWZ\+' src/FullWorth.Web/wwwroot/features/transactions.js
+          ! grep -F 'SVWZ\\+' src/FullWorth.Banking/Services/BankSyncService.cs
+          ! grep -F 'SVWZ\\+' src/FullWorth.Web/wwwroot/features/transactions.js
+
+      - name: Check JavaScript syntax
+        run: node --check src/FullWorth.Web/wwwroot/features/transactions.js
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build FullWorth.slnx --configuration Release
+
+      - name: Banking tests
+        run: dotnet test tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj --configuration Release --no-build
+
+      - name: Commit source correction and remove workflow
+        run: |
+          rm .github/workflows/fix-transaction-normalization-regex.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: correct transaction sanitizer regex escaping"
+          git push origin HEAD:fix/transaction-display-normalization
