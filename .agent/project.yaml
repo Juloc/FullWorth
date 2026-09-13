@@ -1,0 +1,19 @@
+project: FullWorth
+repository: Juloc/FullWorth
+coordination:
+  repository: Juloc/agent-control
+  issue: 1
+  hubUrl: null
+relatedRepositories:
+  - Juloc/fullworth-cloud
+  - Juloc/docker
+validation:
+  - dotnet build FullWorth.slnx -c Release --nologo
+protectedPaths:
+  - ops/release-request.txt
+  - src/Shared/SecretBootstrap.cs
+notes:
+  - Read CLAUDE.md for durable FullWorth-specific architecture, build, UI, money, release and deployment rules.
+  - Run the relevant targeted tests described in CLAUDE.md before completing code changes.
+  - docs/IMPROVEMENT_PLAN.md is a transitional legacy backlog; do not add new work there. New work belongs in GitHub Issues.
+  - Do not delete or retire the legacy plan until all still-relevant open items have been migrated to Issues.
