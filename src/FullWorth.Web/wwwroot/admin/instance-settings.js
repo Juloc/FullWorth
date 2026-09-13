@@ -75,8 +75,16 @@ export function createInstanceSettingsPanel({ request, esc, toast }) {
       const rows = settings
         .filter(setting => setting.section === section)
         .map(setting =>
+          // The name first, the configuration key underneath. The key is not decoration: it is what
+          // an operator needs when they would rather pin the same value with an environment variable,
+          // and it is the only thing that connects this screen to docs/BANKING.md. But it is not a
+          // label - "ENABLEBANKING:APPLICATIONNAME" is a thing to decipher, not to read.
           '<label class="setting-row">' +
-            '<span class="setting-key">' + esc(setting.key) + '</span>' +
+            '<span class="setting-name">' +
+              '<span class="setting-label">' + esc(setting.label || setting.key) + '</span>' +
+              '<span class="setting-key">' + esc(setting.key) + '</span>' +
+              (setting.hint ? '<span class="setting-hint">' + esc(setting.hint) + '</span>' : '') +
+            '</span>' +
             control(setting) +
             '<span class="setting-source">' + esc(SOURCE_NOTES[setting.source] || setting.source) + '</span>' +
             warningFor(setting) +

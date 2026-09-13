@@ -92,9 +92,14 @@
   border-bottom: 1px solid var(--line);
 }
 
+.setting-name { display: grid; gap: 2px; min-width: 0 }
+.setting-label { font-weight: 600 }
+.setting-hint { color: var(--muted); font-size: 12px }
+
 .setting-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 11px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 

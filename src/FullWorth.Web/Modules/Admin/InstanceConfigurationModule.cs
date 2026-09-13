@@ -29,6 +29,8 @@ public sealed class InstanceConfigurationValue
 /// </param>
 public sealed record InstanceSettingView(
     string Key,
+    string Label,
+    string Hint,
     string Section,
     string Kind,
     string? Value,

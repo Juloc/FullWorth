@@ -185,6 +185,36 @@ createServer(async (req, res) => {
         { id: 'u3333333-3333-3333-3333-333333333333', email: 'weg@beispiel.de', isAdmin: false, isDisabled: false, deletionRequestedAt: '2026-09-05T08:00:00Z', activeSessionCount: 1, twoFactorEnabled: false, createdAt: '2026-05-20T08:00:00Z', lastSessionSeenAt: '2026-09-04T18:20:00Z', deletionScheduledFor: '2026-09-12T08:00:00Z' }
       ];
       res.writeHead(200, { 'content-type': 'application/json' });
+
+      // The two panels that are driven entirely by their server response. Without stubs they would
+      // fall through to the user list below and render as an empty box, which is exactly the kind of
+      // "looks fine, is broken" this harness exists to catch.
+      if (path.startsWith('/auth/admin/instance-settings')) {
+        return res.end(JSON.stringify([
+          { key: 'EnableBanking:ApplicationName', section: 'enableBanking', label: 'Anwendungsname', hint: 'So heißt diese Installation gegenüber Enable Banking und den Banken.', kind: 'text', value: 'FullWorth', stored: false, source: 'default', readOnly: false },
+          { key: 'EnableBanking:RedirectUrl', section: 'enableBanking', label: 'Rückleit-Adresse', hint: 'Abgeleitet aus der Adresse, unter der diese Installation erreicht wurde.', kind: 'url', value: 'https://fullworth.local/connect/enable-banking/callback', stored: false, source: 'default', readOnly: true },
+          { key: 'FinTs:ProductId', section: 'banking', label: 'Produkt-ID', hint: 'Banken wie die ING verlangen für FinTS eine registrierte Produkt-ID.', kind: 'text', value: '', stored: false, source: 'default', readOnly: false },
+          { key: 'Sync:IntervalMinutes', section: 'sync', label: 'Aufwachintervall (Minuten)', hint: 'Wie oft der Hintergrunddienst nachsieht.', kind: 'integer', value: '60', stored: true, source: 'stored', readOnly: false, minimum: 5, maximum: 1440 },
+          { key: 'Registration:Enabled', section: 'registration', label: 'Registrierung offen', hint: 'Nach dem ersten Konto schließt sie sich automatisch.', kind: 'boolean', value: 'false', stored: false, source: 'environment', readOnly: true },
+          { key: 'Logging:LogLevel:Default', section: 'logging', label: 'Protokollstufe', hint: 'Wirkt sofort, ohne Neustart.', kind: 'choice', value: 'Information', stored: false, source: 'default', readOnly: false, choices: ['Trace', 'Debug', 'Information', 'Warning', 'Error', 'None'] }
+        ]));
+      }
+
+      if (path === '/auth/admin/vault') {
+        return res.end(JSON.stringify({
+          factor: 'totp',
+          elevated: false,
+          revealsLeft: 0,
+          elevatedUntil: null,
+          entries: [
+            { reference: 'infra.data-encryption-key', group: 'Infrastruktur', label: 'Datenschlüssel', description: 'Entschlüsselt jede verschlüsselte Spalte dieser Installation.', stored: true, requiresFreshFactor: true, hint: null },
+            { reference: 'infra.banking-key', group: 'Infrastruktur', label: 'Banking-API-Schlüssel', description: 'Der Schlüssel zwischen Anwendung und Banking-Modul.', stored: true, requiresFreshFactor: false, hint: null },
+            { reference: 'signin.google-client-secret', group: 'Anmeldeanbieter', label: 'Google Client Secret', description: 'Aus der Google Cloud Console, verschlüsselt gespeichert.', stored: false, requiresFreshFactor: false, hint: 'nicht gesetzt' },
+            { reference: 'bank.fints.0000', group: 'Bankzugänge', label: 'FinTS-Zugang · ING', description: 'Anmeldename und PIN, mit denen sich diese Installation bei der Bank meldet.', stored: true, requiresFreshFactor: false, hint: null }
+          ]
+        }));
+      }
+
       if (path.endsWith('/overview')) {
         return res.end(JSON.stringify({ users: 3, active: 2, disabled: 1, pendingDeletion: 1, failedDeletion: 0, admins: 1 }));
       }

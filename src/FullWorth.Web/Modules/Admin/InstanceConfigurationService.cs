@@ -35,6 +35,8 @@ public sealed class InstanceConfigurationService(
 
                 return new InstanceSettingView(
                     descriptor.Key,
+                    descriptor.Label,
+                    descriptor.Hint,
                     descriptor.Section,
                     descriptor.Kind.ToString().ToLowerInvariant(),
                     // A secret never travels back, in any state. Everything else does, because seeing

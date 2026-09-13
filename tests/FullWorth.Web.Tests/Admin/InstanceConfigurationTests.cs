@@ -229,6 +229,16 @@ public sealed class InstanceConfigurationTests
             Assert.Equal(descriptor.Key.Trim(), descriptor.Key);
         });
 
+        // Every setting has a name a person can read. The form used to show the raw configuration key
+        // in monospace - ENABLEBANKING:APPLICATIONNAME - which is a thing to decipher, not a label, and
+        // the miss was invisible in every test because the key was genuinely there.
+        Assert.All(InstanceSettingCatalogue.All, descriptor =>
+        {
+            Assert.NotEqual(descriptor.Key, descriptor.Label);
+            Assert.False(string.IsNullOrWhiteSpace(descriptor.Label));
+            Assert.DoesNotContain(":", descriptor.Label, StringComparison.Ordinal);
+        });
+
         // And no duplicates - a second entry for one key would make the form show it twice and the
         // later one win at random.
         Assert.Equal(
