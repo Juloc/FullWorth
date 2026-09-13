@@ -76,6 +76,36 @@ public sealed class SetupUiBaselineTests
         }
     }
 
+
+    /// <summary>
+    /// Every password field gets the show/hide eye, and none of them carries its own copy of it.
+    ///
+    /// It existed exactly once - hand-written into the sign-in markup as a wrapper, two inline SVGs
+    /// and four ARIA attributes - so the other fifteen password inputs in this app had none,
+    /// registration included. The answer is not fifteen more copies: ui/password-toggle.js upgrades
+    /// an ordinary <input type="password"> in place, so a template string stays a template string.
+    /// </summary>
+    [Fact]
+    public void The_password_eye_lives_in_one_module_and_not_in_the_markup()
+    {
+        var auth = ReadSource(Path.Combine("auth", "index.html"));
+        var module = ReadSource(Path.Combine("ui", "password-toggle.js"));
+        var formDialog = ReadSource(Path.Combine("ui", "form-dialog.js"));
+
+        // The markup carries plain inputs again - no wrapper, no button, no inline eye.
+        Assert.DoesNotContain("password-toggle", auth, StringComparison.Ordinal);
+        Assert.DoesNotContain("pw-eye", auth, StringComparison.Ordinal);
+        Assert.Contains("type=\"password\"", auth, StringComparison.Ordinal);
+
+        // The module owns the button, and the auth page has no imports of the app bundle to rely on.
+        Assert.Contains("export function enhancePasswordInputs", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("import ", module, StringComparison.Ordinal);
+
+        // And a dialog field of kind Password gets it without the caller doing anything.
+        Assert.Contains("Password: 'password'", formDialog, StringComparison.Ordinal);
+        Assert.Contains("enhancePasswordInputs(form, passwordLabels)", formDialog, StringComparison.Ordinal);
+    }
+
     private static string ReadSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -104,3 +104,44 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 .progress.near>.forecast{background:repeating-linear-gradient(45deg,var(--warning),var(--warning) 3px,transparent 3px,transparent 7px)}
 .progress.over>.forecast{background:repeating-linear-gradient(45deg,var(--negative),var(--negative) 3px,transparent 3px,transparent 7px)}
 .chart-empty{min-height:220px;display:grid;place-items:center;color:var(--muted)}
+
+/* ---- password fields ---------------------------------------------------------------------------
+   Shared by the auth page and the app: both load this file. The eye used to be hand-written into the
+   sign-in markup alone, which is why fifteen other password inputs never had one. See
+   ui/password-toggle.js, which produces the button; this only says what it looks like. */
+.password-control { position: relative; display: grid }
+.password-control input { width: 100%; padding-right: 42px }
+
+.password-toggle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 6px;
+  margin-block: auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-input);
+  cursor: pointer;
+  transition: color .18s ease, background-color .18s ease;
+}
+
+.password-toggle:hover { color: var(--text); background: var(--surface-2) }
+.password-toggle .pw-eye-off { display: none }
+.password-toggle[aria-pressed="true"] .pw-eye-open { display: none }
+.password-toggle[aria-pressed="true"] .pw-eye-off { display: block }
+
+/* The same 44px touch floor the auth fields get on small screens. It lived in auth.css, which the
+   app never loads - so a dialog's eye stayed 32px on a phone. */
+@media (max-width: 640px) {
+  .password-toggle { width: 44px; height: 44px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .password-toggle { transition: none !important }
+}

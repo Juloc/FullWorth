@@ -1,6 +1,7 @@
 import { ButtonRole, buttonClass } from './buttons.js';
 import { createDialog } from './dialog.js';
 import { esc } from './ux-kit.js';
+import { enhancePasswordInputs } from './password-toggle.js';
 
 /**
  * The form primitive the dialogs never had.
@@ -36,11 +37,13 @@ export const FieldKind = Object.freeze({
   Date: 'date',
   Select: 'select',
   Check: 'check',
+  Password: 'password',
   Textarea: 'textarea'
 });
 
 function inputType(kind) {
   if (kind === FieldKind.Number || kind === FieldKind.Money) return 'number';
+  if (kind === FieldKind.Password) return 'password';
   if (kind === FieldKind.Date) return 'date';
   return 'text';
 }
@@ -185,6 +188,9 @@ export function createFormDialog({
   values = {},
   advancedLabel = 'Mehr',
   closeLabel = 'Schließen',
+  // Translated by the caller, like every other label here - this module owns layout and behaviour,
+  // never wording.
+  passwordLabels = { show: 'Passwort anzeigen', hide: 'Passwort verbergen' },
   fallbackError = 'Das hat nicht funktioniert.',
   // A caller's own block that is not a field - the rule dialog's live preview, for instance. Trusted
   // markup from the caller, never user input, and it sits after the fields so it can comment on them.
@@ -216,6 +222,11 @@ export function createFormDialog({
     + head + sectionsHtml(plain, values) + advancedHtml + extraHtml + formError + actionsHtml(actions) + `</form>`);
 
   const form = dialog.querySelector('form');
+
+  // Any password field gets the show/hide eye, from the one module that owns it. Hand-writing the
+  // wrapper and the two SVGs per call site is how fifteen of this app's password inputs ended up
+  // without one.
+  enhancePasswordInputs(form, passwordLabels);
 
   const values_ = () => {
     const data = {};

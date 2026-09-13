@@ -1,4 +1,5 @@
 import { initializePasskeyLogin } from '../passkeys/passkeys.js';
+import { enhancePasswordInputs } from '../ui/password-toggle.js';
 
 const preferences = {
   language: localStorage.getItem('finance.language') || ((navigator.language || 'de').startsWith('de') ? 'de' : 'en'),
@@ -171,6 +172,10 @@ function renderTranslations() {
     element.title = get(element.dataset.i18nTitle);
   });
   renderRemainingCount();
+  enhancePasswordInputs(document, {
+    show: get('auth.showPassword'),
+    hide: get('auth.hidePassword')
+  });
 }
 
 function updateDocumentTitle() {
@@ -233,9 +238,6 @@ function bind() {
     });
   });
 
-  $$('[data-auth-action="toggle-password"]').forEach(button => {
-    button.addEventListener('click', togglePassword);
-  });
 
   loadAppVersion();
 
@@ -592,20 +594,6 @@ async function loadAppVersion() {
   } catch {
     /* Version is decorative; on failure the footer simply shows the product name. */
   }
-}
-
-function togglePassword(event) {
-  const button = event.currentTarget;
-  const input = document.getElementById(button.dataset.target);
-  if (!input) return;
-
-  const show = input.type === 'password';
-  input.type = show ? 'text' : 'password';
-  button.setAttribute('aria-pressed', String(show));
-  const key = show ? 'auth.hidePassword' : 'auth.showPassword';
-  button.setAttribute('aria-label', get(key));
-  button.title = get(key);
-  input.focus({ preventScroll: true });
 }
 
 function showView(view) {

@@ -56,7 +56,12 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("id=\"login-password\"", html);
         Assert.Contains("type=\"password\"", html);
         Assert.Contains("autocomplete=\"current-password\"", html);
-        Assert.Contains("data-auth-action=\"toggle-password\"", html);
+
+        // The reveal control is no longer IN this markup, and that is the point: hand-written here, it
+        // existed on this one field and on none of the other fifteen password inputs in the app.
+        // ui/password-toggle.js adds it to every password input instead, which is what
+        // SetupUiBaselineTests.The_password_eye_lives_in_one_module_and_not_in_the_markup guards.
+        Assert.Contains("auth.js", html);
     }
 
     [Fact]
