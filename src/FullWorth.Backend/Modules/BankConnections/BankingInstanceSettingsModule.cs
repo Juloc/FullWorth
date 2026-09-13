@@ -21,7 +21,7 @@ public sealed class BankingInstanceSettings
 /// Compile-time marker for the pre-cutover host registration. It intentionally exposes no read/write
 /// operation. The registration and historical entity are removed with the #104 baseline squash.
 /// </summary>
-public sealed class BankingInstanceSettingsStore;
+public sealed class BankingInstanceSettingsStore { }
 
 public static class BankingInstanceSettingsEndpoints
 {
