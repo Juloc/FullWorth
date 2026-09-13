@@ -374,7 +374,7 @@ app.Use(async (context, next) =>
         return;
     }
 
-    if ((context.Request.Path.Equals("/index.html") || context.Request.Path.Equals("/passkeys/index.html"))
+    if (context.Request.Path.Equals("/index.html")
         && context.User.Identity?.IsAuthenticated != true)
     {
         await context.ChallengeAsync(IdentityConstants.ApplicationScheme);
@@ -468,11 +468,12 @@ app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct
     await context.Response.SendFileAsync(accountDeletionShellPath, ct);
 }).RequireAuthorization();
 
-var passkeyShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "passkeys", "index.html");
+// Passkeys ist eine Seite unter Einstellungen, kein eigenes Dokument: dieselbe Hülle, dieselbe
+// Seitenleiste, und die Adresse zeigt, wo die Seite hingehört.
 app.MapGet("/settings/security/passkeys", async (HttpContext context, CancellationToken ct) =>
 {
     context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(passkeyShellPath, ct);
+    await context.Response.SendFileAsync(appShellPath, ct);
 }).RequireAuthorization();
 
 app.MapAuthEndpoints();

@@ -36,6 +36,7 @@ import { openGlobalSearch } from './components/global-search.js';
 import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { renderAdmin } from './pages/admin/page.js';
+import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
 import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
@@ -43,12 +44,16 @@ const get=path=>i18n.get(path);
 // Seitenleiste, untere Leiste und "Mehr" kommen alle aus app/menu.js. Coach ist dort ein Eintrag,
 // aber noch keine Seite dieser Hülle - features/coach-shell.js baut sie selbst und meldet sich auf
 // seinen Eintrag. Block 4 macht daraus eine gewöhnliche Seite und diese Ausnahme verschwindet.
-const ALL_VIEWS=VIEWS.filter(view=>view!=='coach');
+// Seiten, die unter einer anderen liegen. Sie stehen nicht im Menü — sonst wäre es wieder überfüllt —,
+// haben aber eine Adresse, die zeigt, wo sie hingehören, und markieren im Menü ihre Elternseite.
+const SUBPAGES={passkeys:{path:'/settings/security/passkeys',parent:'settings'}};
+const ALL_VIEWS=[...VIEWS.filter(view=>view!=='coach'),...Object.keys(SUBPAGES)];
+const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
 const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
 // only client state). dashboard is the root; the server's MapFallbackToFile serves index.html for
 // any of these paths and the app resolves the view from location.pathname on boot.
-const router=createRouter({views:ALL_VIEWS,defaultView:'dashboard'});
+const router=createRouter({views:ALL_VIEWS,defaultView:'dashboard',paths:SUBPAGE_PATHS});
 const pathForView=router.pathForView;
 const viewFromPath=router.viewFromPath;
 // Contextual primary action per section (UI_UX_SPEC §3.1 header). Maps to the same handler as the
@@ -146,7 +151,12 @@ function bind(){
   $('#nav-collapse').addEventListener('click',toggleSidebar);
   $('#privacy-toggle').addEventListener('click',()=>togglePrivacy());
   $('#global-search').addEventListener('click',()=>openGlobalSearch(ctx));
-  $$('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewJump)));
+  // preventDefault, weil ein Sprung auch ein echter Link sein darf: mit Strg oder Mittelklick
+  // öffnet er einen neuen Tab, beim normalen Klick bleibt die Anwendung stehen und wechselt.
+  $$('[data-view-jump]').forEach(b=>b.addEventListener('click',event=>{
+    if(event.metaKey||event.ctrlKey||event.shiftKey)return;
+    event.preventDefault();showView(b.dataset.viewJump);
+  }));
   $('#topbar-more').addEventListener('click',openTopbarMenu);
   bindTransactions(ctx);
   bindAccounts(ctx);
@@ -335,7 +345,8 @@ async function showView(view,opts={}){
     router.write(view,{query,replace:!!opts.replace||location.pathname+location.search===target,state:{view},path:base});
   }
   $$('.view').forEach(v=>v.classList.remove('active'));$(`#view-${view}`)?.classList.add('active');
-  $$('.nav-item[data-entry]').forEach(b=>{const on=b.dataset.entry===view;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
+  const marked=SUBPAGES[view]?.parent||view;
+  $$('.nav-item[data-entry]').forEach(b=>{const on=b.dataset.entry===marked;b.classList.toggle('active',on);b.setAttribute('aria-current',on?'page':'false')});
   $('#bottom-more').classList.toggle('active',MORE.some(entry=>entry.view===view));
   renderPageHeader();
   window.dispatchEvent(new CustomEvent('fullworth:view-change',{detail:{view,path:location.pathname+location.search}}));
@@ -408,7 +419,8 @@ const featureRegistry=createFeatureRegistry()
   .register('merchants',()=>renderMerchants(ctx))
   .register('audit',()=>renderAudit(ctx))
   .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
-  .register('admin',()=>renderAdmin());
+  .register('admin',()=>renderAdmin())
+  .register('passkeys',()=>renderPasskeys(ctx));
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

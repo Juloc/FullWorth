@@ -211,9 +211,8 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PasskeyImplementation_IsExternalModuleBasedWithoutEvalOrInlineHandlers()
     {
-        var html = await GetAsync("/passkeys/index.html");
+        var html = await PageMarkupAsync();
         var content = await GetPasskeyContentAsync();
-        Assert.Contains("<script type=\"module\" src=\"/passkeys/management.js\"></script>", html);
         AssertNotContains(html, "onclick=");
         AssertNotContains(html, "<script>");
         AssertNotContains(content, "eval(");
@@ -245,7 +244,7 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task CredentialListUi_ExistsAndUsesSafeDisplayFields()
     {
-        var html = await GetAsync("/passkeys/index.html");
+        var html = await PageMarkupAsync();
         var js = await GetAsync("/passkeys/passkeys.js");
         Assert.Contains("id=\"passkey-list\"", html);
         Assert.Contains("credential.displayName", js);
@@ -280,13 +279,16 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccessibilityBasics_ArePresent()
     {
-        var html = await GetAsync("/passkeys/index.html");
-        var css = await GetAsync("/passkeys/passkeys.css");
+        var html = await PageMarkupAsync();
         Assert.Contains("<button type=\"button\"", html);
         Assert.Contains("<label for=\"passkey-name\">", html);
         Assert.Contains("aria-live=\"polite\"", html);
         Assert.Contains("role=\"status\"", html);
-        Assert.Contains(":focus-visible", css);
+
+        // Der Fokusring kommt aus den geteilten Komponenten. Er stand hier einmal ein zweites Mal,
+        // solange die Seite ihre Knöpfe selbst baute — und wäre damit eine Kopie gewesen, die man
+        // hätte vergessen können.
+        Assert.Contains(":focus-visible", await GetAsync("/styles/components.css"));
     }
 
     [Fact]
@@ -319,16 +321,18 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ManagementShell_UsesExistingThemeAndLanguagePreferenceKeysOnlyForDisplay()
     {
-        var js = await GetAsync("/passkeys/management.js");
-        Assert.Contains("localStorage.getItem('finance.language')", js);
-        Assert.Contains("localStorage.getItem('finance.theme')", js);
+        // Die Seite liest Sprache und Theme nicht mehr selbst — die Hülle hat beide längst gesetzt,
+        // bevor diese Seite überhaupt sichtbar wird. Was bleibt, ist die eigentliche Aussage: kein
+        // Passkey-Code schreibt in den Speicher des Browsers.
+        var js = await PageScriptAsync();
         AssertNotContains(js, "localStorage.setItem");
+        AssertNotContains(js, "localStorage.getItem");
     }
 
     [Fact]
     public async Task RegistrationLabel_IsClientLimitedAndSentInsideServerContract()
     {
-        var html = await GetAsync("/passkeys/index.html");
+        var html = await PageMarkupAsync();
         var js = await GetAsync("/passkeys/passkeys.js");
         Assert.Contains("maxlength=\"80\"", html);
         Assert.Contains("slice(0, 80)", js);
@@ -348,19 +352,28 @@ public sealed class PasskeyUiTests : IClassFixture<FullWorthWebFactory>
         return string.Join('\n',
             await GetAsync("/passkeys/base64url.js"),
             await GetAsync("/passkeys/passkeys.js"),
-            await GetAsync("/passkeys/management.js"),
-            await GetAsync("/passkeys/index.html"),
-            await GetAsync("/passkeys/passkeys.css"));
+            await PageScriptAsync(),
+            await PageMarkupAsync(),
+            await PageStyleAsync());
+    }
+
+    // Die Seite liegt unter pages/settings/security/passkeys/, und ihr Markup steht im einen Dokument.
+    // Gelesen wird es hier aus der Quelle statt über die Adresse geholt: /settings/security/passkeys
+    // liefert die ganze Hülle, und darin stünde jede Zusicherung auch dann, wenn sie mit dieser Seite
+    // gar nichts zu tun hat.
+    private Task<string> PageMarkupAsync() => PageFileAsync("page.html");
+    private Task<string> PageScriptAsync() => PageFileAsync("page.js");
+    private Task<string> PageStyleAsync() => PageFileAsync("page.css");
+
+    private async Task<string> PageFileAsync(string name)
+    {
+        var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
+        return await File.ReadAllTextAsync(
+            Path.Combine(environment.WebRootPath, "pages", "settings", "security", "passkeys", name));
     }
 
     private async Task<string> GetAsync(string path)
     {
-        if (path == "/passkeys/index.html")
-        {
-            var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
-            return await File.ReadAllTextAsync(Path.Combine(environment.WebRootPath, "passkeys", "index.html"));
-        }
-
         using var response = await _client.GetAsync(path);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();

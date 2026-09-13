@@ -1,0 +1,9 @@
+/* Passkeys.
+   Von 32 Zeilen auf vier. Der Rest war eine eigene Hülle mit eigenem Hintergrundverlauf, eigenen
+   Karten samt Schatten und Einblend-Animation, eigenen Knöpfen mit eigenem Farbverlauf und eigenem
+   Dunkelmodus, eigenen Eingabefeldern und einer eigenen Ausnahme für reduzierte Bewegung — alles in
+   rgba-Literalen statt in Tokens, und alles davon gibt es in .panel und .btn schon. */
+.passkey-status:empty{display:none}
+.passkey-status{padding:var(--s3) var(--s4);border:1px solid var(--line);border-radius:var(--radius-card);margin:0 0 var(--s4);background:var(--surface)}
+.passkey-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:var(--s3) 0;border-top:1px solid var(--line)}
+.passkey-row:first-child{border-top:0}

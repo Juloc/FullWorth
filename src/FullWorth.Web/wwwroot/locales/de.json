@@ -110,6 +110,10 @@
     "admin": {
       "title": "Admin",
       "subtitle": "Nutzer, Anmeldeanbieter, Einstellungen der Installation und Schlüssel"
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "subtitle": "Anmeldung ohne Passwort für dieses Gerät"
     }
   },
   "dashboard": {

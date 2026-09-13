@@ -1,0 +1,22 @@
+    <section id="view-passkeys" class="view">
+      <article class="panel">
+        <div class="panel-head"><h2 data-i18n="passkeys.add"></h2></div>
+        <p class="row-sub panel-intro" data-i18n="passkeys.explanation"></p>
+        <div class="settings-grid">
+          <label for="passkey-name">
+            <span data-i18n="passkeys.name"></span>
+            <input id="passkey-name" type="text" maxlength="80" autocomplete="off" data-i18n-placeholder="passkeys.namePlaceholder">
+          </label>
+          <button type="button" class="btn btn-primary" data-passkey-action="add" data-i18n="passkeys.add"></button>
+        </div>
+      </article>
+
+      <!-- visibility statt hidden: die Meldung erscheint nach einer Eingabe, und ein Kasten, der
+           dabei erst entsteht, schiebt die Liste darunter nach unten. -->
+      <div id="passkey-management-status" class="passkey-status" role="status" aria-live="polite"></div>
+
+      <article class="panel">
+        <div class="panel-head"><h2 data-i18n="passkeys.yourPasskeys"></h2></div>
+        <div id="passkey-list" class="passkey-list rows" aria-live="polite"></div>
+      </article>
+    </section>

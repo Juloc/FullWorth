@@ -1,6 +1,7 @@
 import { decodeBase64Url, encodeBase64Url } from './base64url.js';
 import { secureFetch } from '../security/secure-fetch.js';
 import { confirmMessage } from '../components/confirm.js';
+import { emptyRow } from '../components/empty.js';
 
 const endpoints = {
   loginBegin: '/auth/passkeys/login/begin',
@@ -162,22 +163,23 @@ export function initializePasskeyManagement({ root, message, locale = 'de' }) {
       const credentials = await requestJson(endpoints.credentials);
       list.textContent = '';
       if (!credentials?.length) {
-        const empty = document.createElement('div');
-        empty.className = 'passkey-empty';
-        empty.textContent = message('passkeys.empty');
-        list.appendChild(empty);
+        list.innerHTML = emptyRow(message('passkeys.empty'));
         return;
       }
       for (const credential of credentials) {
         const row = document.createElement('article');
-        row.className = 'passkey-item';
+        row.className = 'row passkey-row';
         const details = document.createElement('div');
-        const title = document.createElement('strong');
+        details.className = 'row-main';
+        const title = document.createElement('div');
+        title.className = 'row-title';
         title.textContent = credential.displayName || credential.name || message('passkeys.unnamed');
-        const meta = document.createElement('span');
+        const meta = document.createElement('div');
+        meta.className = 'row-sub';
         meta.textContent = `${message('passkeys.created')}: ${formatDate(credential.createdAt)} · ${message('passkeys.lastUsed')}: ${formatDate(credential.lastUsedAt)}`;
         details.append(title, meta);
         const remove = document.createElement('button');
+        remove.className = 'btn btn-secondary';
         remove.type = 'button';
         remove.dataset.passkeyAction = 'remove';
         remove.dataset.managementId = credential.id;
@@ -235,4 +237,9 @@ export function initializePasskeyManagement({ root, message, locale = 'de' }) {
   }
 
   void load();
+
+  // Die Liste zurückgeben, damit ein erneuter Besuch sie neu laden kann, ohne die Knöpfe ein
+  // zweites Mal zu verdrahten. Genau das passierte, solange diese Seite ein eigenes Dokument war -
+  // dort gab es keinen zweiten Besuch, sondern immer einen neuen Ladevorgang.
+  return load;
 }

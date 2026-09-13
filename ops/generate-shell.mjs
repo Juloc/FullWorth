@@ -63,20 +63,32 @@ const more = '  <button id="bottom-more" class="nav-item" type="button">'
   + svg('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>')
   + `<span data-i18n="nav.more">${text('nav.more')}</span></button>`;
 
-// Die Seiten, alphabetisch. Die Reihenfolge im Dokument ist gleichgültig — sichtbar ist immer nur
-// eine —, aber sie muss stabil sein, sonst meldet --check bei jedem Lauf eine Änderung.
-const pagesDir = new URL('pages/', root);
-const pages = existsSync(pagesDir)
-  ? readdirSync(pagesDir, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
-  : [];
+// Die Seiten. Ein Ordner mit einer page.html ist eine Seite, und der Pfad des Ordners ist die
+// Adresse: pages/settings/security/passkeys liegt unter Einstellungen, und genau das sagt auch die
+// Adresse im Browser. Alphabetisch, damit --check nicht bei jedem Lauf eine Änderung meldet.
+function findPages(prefix = '') {
+  const dir = new URL(`pages/${prefix}`, root);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
+    .flatMap(name => {
+      const path = prefix + name;
+      const own = existsSync(new URL(`pages/${path}/page.html`, root)) ? [path] : [];
+      return [...own, ...findPages(path + '/')];
+    });
+}
+
+const pages = findPages();
 
 const pageMarkup = pages
-  .map(name => readFileSync(new URL(`pages/${name}/page.html`, root), 'utf8').trimEnd())
+  .map(path => readFileSync(new URL(`pages/${path}/page.html`, root), 'utf8').trimEnd())
   .join(NL);
 
 const pageStyles = pages
-  .filter(name => existsSync(new URL(`pages/${name}/page.css`, root)))
-  .map(name => `  <link rel="stylesheet" href="/pages/${name}/page.css">`)
+  .filter(path => existsSync(new URL(`pages/${path}/page.css`, root)))
+  .map(path => `  <link rel="stylesheet" href="/pages/${path}/page.css">`)
   .join(NL);
 
 function replace(html, id, body) {
