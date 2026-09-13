@@ -475,6 +475,16 @@ app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct
 // Die Import-Seiten liegen unter pages/settings/import/. Sie hielten ihr Markup zuletzt in
 // C#-Stringliteralen - drei eigene Dokumente mit eigener Kopfzeile, eigener Stil-Kette und einem
 // "Zurück"-Link statt eines Seitenmenüs.
+// AI & Intelligence liegt unter pages/settings/intelligence/. Wer die alte Adresse gespeichert hat,
+// landet auf der neuen.
+app.MapGet("/intelligence", () => Results.Redirect("/settings/intelligence", permanent: true)).AllowAnonymous();
+app.MapGet("/intelligence/index.html", () => Results.Redirect("/settings/intelligence", permanent: true)).AllowAnonymous();
+app.MapGet("/settings/intelligence", async (HttpContext context, CancellationToken ct) =>
+{
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(appShellPath, ct);
+}).RequireAuthorization();
+
 foreach (var importRoute in new[]
          {
              "/settings/import", "/settings/import/finanzguru",

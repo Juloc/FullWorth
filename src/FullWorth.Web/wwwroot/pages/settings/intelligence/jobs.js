@@ -1,4 +1,4 @@
-import { api as sharedApi, jsonBody } from '../core/services.js';
+import { api as sharedApi, jsonBody } from '../../../core/services.js';
 const list = document.getElementById('job-list');
 const refresh = document.getElementById('refresh-jobs');
 

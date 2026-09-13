@@ -130,6 +130,10 @@
     "import-broker-pdf": {
       "title": "Broker-PDF",
       "subtitle": "Abrechnungen lokal erkennen, prüfen und importieren"
+    },
+    "intelligence": {
+      "title": "AI & Intelligence",
+      "subtitle": "Lokale KI-Einstellungen, Cloud-Anbindung und Marken-Pakete"
     }
   },
   "dashboard": {

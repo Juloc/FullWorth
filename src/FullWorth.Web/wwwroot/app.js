@@ -39,6 +39,7 @@ import { renderAdmin } from './pages/admin/page.js';
 import { renderPasskeys } from './pages/settings/security/passkeys/page.js';
 import { renderCompensation } from './pages/compensation/page.js';
 import { renderImportCenter } from './pages/settings/import/page.js';
+import { renderIntelligence } from './pages/settings/intelligence/page.js';
 import { renderBrokerPdfImport } from './pages/settings/import/broker-pdf/page.js';
 // Der Finanzguru-Import ist nur Formular und Ereignisse - er hat nichts zu laden und deshalb auch
 // nichts zu zeichnen.
@@ -56,7 +57,8 @@ const SUBPAGES={
   passkeys:{path:'/settings/security/passkeys',parent:'settings'},
   import:{path:'/settings/import',parent:'settings'},
   'import-finanzguru-xlsx':{path:'/settings/import/finanzguru/xlsx',parent:'settings'},
-  'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'}
+  'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'},
+  intelligence:{path:'/settings/intelligence',parent:'settings'}
 };
 const ALL_VIEWS=[...VIEWS.filter(view=>view!=='coach'),...Object.keys(SUBPAGES)];
 const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
@@ -433,6 +435,7 @@ const featureRegistry=createFeatureRegistry()
   .register('admin',()=>renderAdmin())
   .register('passkeys',()=>renderPasskeys(ctx))
   .register('import',()=>renderImportCenter())
+  .register('intelligence',()=>renderIntelligence())
   .register('import-broker-pdf',()=>renderBrokerPdfImport())
   .register('import-finanzguru-xlsx',()=>{})
   .register('compensation',()=>renderCompensation());

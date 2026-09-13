@@ -13,8 +13,8 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Intelligence_page_exposes_one_reciprocal_cloud_choice_without_download_only_mode()
     {
-        var html = Read("intelligence", "index.html");
-        var script = Read("intelligence", "cloud.js");
+        var html = Read("pages", "settings", "intelligence", "page.html");
+        var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         Assert.Contains("FullWorth Cloud Intelligence", html);
         Assert.Contains("cloud-choice-enabled", html);
@@ -31,8 +31,8 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Cloud_opt_in_requires_explicit_checkbox_and_current_policy_version()
     {
-        var html = Read("intelligence", "index.html");
-        var script = Read("intelligence", "cloud.js");
+        var html = Read("pages", "settings", "intelligence", "page.html");
+        var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         Assert.Contains("cloud-consent", html);
         Assert.Contains("$('cloud-consent').checked", script);
@@ -44,8 +44,8 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Minimal_cloud_client_has_no_contribution_sync_or_outbox_ui()
     {
-        var html = Read("intelligence", "index.html");
-        var script = Read("intelligence", "cloud.js");
+        var html = Read("pages", "settings", "intelligence", "page.html");
+        var script = Read("pages", "settings", "intelligence", "cloud.js");
 
         // The self-hosted app ships only the minimal consent/connection client; the contribution
         // sync + outbox MANAGEMENT UI lives in the private cloud service, not here.
@@ -86,8 +86,8 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Intelligence_page_exposes_local_custom_brand_pack_management()
     {
-        var html = Read("intelligence", "index.html");
-        var script = Read("intelligence", "brand-packs.js");
+        var html = Read("pages", "settings", "intelligence", "page.html");
+        var script = Read("pages", "settings", "intelligence", "brand-packs.js");
 
         Assert.Contains("Eigene Brand-Packs", html);
         Assert.Contains("brand-pack-file", html);
@@ -104,11 +104,13 @@ public sealed class IntelligenceCloudUiBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void Cloud_setup_uses_dedicated_responsive_styles()
     {
-        var html = Read("intelligence", "index.html");
-        var css = Read("intelligence", "cloud.css");
+        var html = Read("pages", "settings", "intelligence", "page.html");
+        var css = Read("pages", "settings", "intelligence", "page.css");
 
-        Assert.Contains("/intelligence/cloud.css", html);
-        Assert.Contains("/intelligence/cloud.js", html);
+        // Das Stylesheet und das Modul stehen nicht mehr im Markup der Seite: sie kommt als Ausschnitt
+        // ins eine Dokument, und page.js importiert cloud.js statisch. Was hier bleibt, ist die Frage,
+        // ob die Stile dieser Seite noch da sind.
+        Assert.Contains("import './cloud.js'", Read("pages", "settings", "intelligence", "page.js"));
         Assert.Contains(".cloud-choices", css);
         Assert.Contains(".cloud-consent", css);
         Assert.Contains(".cloud-ops", css);

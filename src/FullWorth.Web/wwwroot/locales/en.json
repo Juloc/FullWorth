@@ -130,6 +130,10 @@
     "import-broker-pdf": {
       "title": "Broker PDF",
       "subtitle": "Recognise, review and import statements locally"
+    },
+    "intelligence": {
+      "title": "AI & intelligence",
+      "subtitle": "Local AI settings, cloud connection and brand packs"
     }
   },
   "dashboard": {

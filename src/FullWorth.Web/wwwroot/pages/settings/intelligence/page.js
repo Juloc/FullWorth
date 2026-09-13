@@ -1,5 +1,11 @@
-import { api as sharedApi } from '../core/services.js';
-import { confirmMessage } from '../components/confirm.js';
+import { api as sharedApi } from '../../../core/services.js';
+import { confirmMessage } from '../../../components/confirm.js';
+
+// Die drei Nachbarn gehören zu dieser Seite. Statisch importiert, damit beim ersten Besuch nichts
+// nachgeladen wird; sie verdrahten sich beim Laden selbst und laden ihre eigenen Daten.
+import './cloud.js';
+import './brand-packs.js';
+import './jobs.js';
 const $ = id => document.getElementById(id);
 
 let overview = null;
@@ -422,4 +428,8 @@ $('save-settings').addEventListener('click', saveSettings);
 $('credential-form').addEventListener('submit', addCredential);
 $('run-smoke').addEventListener('click', runSmokeTest);
 $('refresh-suggestions').addEventListener('click', refreshSuggestions);
-reload();
+
+// Bei jedem Besuch neu laden. Als eigenes Dokument gab es keinen zweiten Besuch.
+export function renderIntelligence() {
+  reload();
+}

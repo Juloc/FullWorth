@@ -1,4 +1,4 @@
-import { api as sharedApi } from '../core/services.js';
+import { api as sharedApi } from '../../../core/services.js';
 const $ = id => document.getElementById(id);
 
 let cloudState = null;
