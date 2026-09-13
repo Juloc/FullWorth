@@ -106,13 +106,15 @@ public sealed class BankSyncService(
     EnableBankingClient provider,
     FullWorthBackendClient backend,
     BankSyncConcurrencyGate syncGate,
-    IOptions<EnableBankingOptions> providerOptions,
+    IOptionsMonitor<EnableBankingOptions> providerOptions,
     IOptions<BankingSyncOptions> syncOptions,
     ILogger<BankSyncService> logger,
     EnableBankingClientResolver? providerResolver = null,
     IngFinTsService? finTs = null)
 {
-    private readonly EnableBankingOptions _providerOptions = providerOptions.Value;
+    // See EnableBankingProfileService. BankSyncWorker resolves this service right after
+    // ApplicationStarted, so a cached snapshot was taken at every boot and never updated again.
+    private EnableBankingOptions _providerOptions => providerOptions.CurrentValue;
     private readonly BankingSyncOptions _sync = syncOptions.Value;
 
     // Kept for unit tests/legacy installations. Browser endpoints should use the caller-aware overload.

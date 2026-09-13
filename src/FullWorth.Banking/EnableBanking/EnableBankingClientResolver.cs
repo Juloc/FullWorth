@@ -12,11 +12,13 @@ public sealed class EnableBankingProfileNotConfiguredException(string message) :
 /// </summary>
 public sealed class EnableBankingClientResolver(
     IHttpClientFactory httpClientFactory,
-    IOptions<EnableBankingOptions> options,
+    IOptionsMonitor<EnableBankingOptions> options,
     EnableBankingRequestPolicy requestPolicy,
     FullWorthBackendClient backend)
 {
-    private readonly EnableBankingOptions _options = options.Value;
+    // See EnableBankingProfileService: a snapshot cached in a field is why a learned RedirectUrl
+    // needed a restart to take effect.
+    private EnableBankingOptions _options => options.CurrentValue;
 
     public bool LegacyConfigured =>
         !string.IsNullOrWhiteSpace(_options.ApplicationId) &&

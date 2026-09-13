@@ -44,18 +44,23 @@ public sealed class EnableBankingControlPanelRegistrationService
     private readonly ConcurrentDictionary<string, PendingRegistration> _pending = new(StringComparer.Ordinal);
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly EnableBankingOptions _options;
+    private readonly IOptionsMonitor<EnableBankingOptions> _optionsMonitor;
     private readonly ILogger<EnableBankingControlPanelRegistrationService> _logger;
+
+    // A SINGLETON reading a snapshot: the value it captured here was the one from process start, and
+    // the address this installation learns at its first registration never reached it. The property
+    // keeps every use site below unchanged.
+    private EnableBankingOptions _options => _optionsMonitor.CurrentValue;
 
     public EnableBankingControlPanelRegistrationService(
         IHttpClientFactory httpClientFactory,
         IServiceScopeFactory scopeFactory,
-        IOptions<EnableBankingOptions> options,
+        IOptionsMonitor<EnableBankingOptions> options,
         ILogger<EnableBankingControlPanelRegistrationService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _scopeFactory = scopeFactory;
-        _options = options.Value;
+        _optionsMonitor = options;
         _logger = logger;
     }
 

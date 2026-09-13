@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using FullWorth.Banking.Backend;
@@ -41,7 +42,7 @@ public sealed class EnableBankingClientResolverTests
         {
             BaseAddress = new Uri("https://provider.test/")
         };
-        var options = Options.Create(new EnableBankingOptions
+        var options = StaticOptionsMonitor.For(new EnableBankingOptions
         {
             BaseUrl = "https://provider.test",
             RedirectUrl = "https://finance.test/connect/enable-banking/callback"

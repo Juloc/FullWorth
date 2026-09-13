@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -54,7 +55,7 @@ public sealed class EnableBankingControlPanelRegistrationServiceTests
         using var providerHttp = new HttpClient(provider) { BaseAddress = new Uri("https://provider.test/") };
         using var backendHttp = new HttpClient(backendHandler) { BaseAddress = new Uri("https://backend.test/") };
 
-        var options = Options.Create(new EnableBankingOptions
+        var options = StaticOptionsMonitor.For(new EnableBankingOptions
         {
             BaseUrl = "https://provider.test",
             ControlPanelBaseUrl = "https://enablebanking.test",
@@ -77,7 +78,9 @@ public sealed class EnableBankingControlPanelRegistrationServiceTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IHttpClientFactory>(factory);
-        services.AddSingleton(options);
+        // As the interface, not the concrete helper: EnableBankingClientResolver asks for
+        // IOptionsMonitor<T>, and AddSingleton(options) would only register StaticOptionsMonitor<T>.
+        services.AddSingleton<IOptionsMonitor<EnableBankingOptions>>(options);
         services.AddSingleton(new EnableBankingRequestPolicy());
         services.AddSingleton(backend);
         services.AddScoped<EnableBankingClientResolver>();

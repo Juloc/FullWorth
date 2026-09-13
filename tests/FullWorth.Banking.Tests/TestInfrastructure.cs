@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -246,7 +247,7 @@ internal sealed class TestBankingEnvironment : IDisposable
             provider,
             backend,
             gate ?? new BankSyncConcurrencyGate(),
-            Options.Create(providerOptions),
+            StaticOptionsMonitor.For(providerOptions),
             Options.Create(sync ?? new BankingSyncOptions()),
             NullLogger<BankSyncService>.Instance);
     }

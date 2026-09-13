@@ -33,20 +33,20 @@ public static class BankingApplication
         
         builder.Services.AddHttpClient("enable-banking", (sp, client) =>
         {
-            var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
+            var options = sp.GetRequiredService<IOptionsMonitor<EnableBankingOptions>>().CurrentValue;
             client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(90);
         });
         builder.Services.AddHttpClient("enable-banking-control-panel", (sp, client) =>
         {
-            var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
+            var options = sp.GetRequiredService<IOptionsMonitor<EnableBankingOptions>>().CurrentValue;
             client.BaseAddress = new Uri(options.ControlPanelBaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(90);
         });
         // Legacy/global provider remains injectable for old connections and tests. New connections use resolver.
         builder.Services.AddHttpClient<EnableBankingClient>((sp, client) =>
         {
-            var options = sp.GetRequiredService<IOptions<EnableBankingOptions>>().Value;
+            var options = sp.GetRequiredService<IOptionsMonitor<EnableBankingOptions>>().CurrentValue;
             client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(90);
         });

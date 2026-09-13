@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using FullWorth.Banking.Backend;
@@ -134,8 +135,8 @@ public sealed class EnableBankingControlPanelStatusServiceTests
             IngestKey = "test-ingest-key"
         }));
 
-    private static IOptions<EnableBankingOptions> BankingOptions() =>
-        Options.Create(new EnableBankingOptions
+    private static IOptionsMonitor<EnableBankingOptions> BankingOptions() =>
+        StaticOptionsMonitor.For(new EnableBankingOptions
         {
             ControlPanelBaseUrl = "https://enablebanking.test",
             RedirectUrl = Callback

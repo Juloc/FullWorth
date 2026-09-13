@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -179,7 +180,7 @@ public sealed class EnableBankingProfileServiceTests
                     IngestKey = "test-ingest-key"
                 }));
 
-            var options = Options.Create(new EnableBankingOptions
+            var options = StaticOptionsMonitor.For(new EnableBankingOptions
             {
                 BaseUrl = "https://provider.test",
                 RedirectUrl = Callback,

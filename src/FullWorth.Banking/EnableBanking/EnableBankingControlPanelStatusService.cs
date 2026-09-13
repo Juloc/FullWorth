@@ -48,13 +48,16 @@ public sealed record EnableBankingProviderStatusConnectCallbackResult(
 public sealed class EnableBankingControlPanelStatusService(
     IHttpClientFactory httpClientFactory,
     FullWorthBackendClient backend,
-    IOptions<EnableBankingOptions> options,
+    IOptionsMonitor<EnableBankingOptions> options,
     ILogger<EnableBankingControlPanelStatusService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly ConcurrentDictionary<Guid, CachedToken> _tokenCache = new();
     private readonly ConcurrentDictionary<string, PendingStatusConnection> _pendingConnections = new(StringComparer.Ordinal);
-    private readonly EnableBankingOptions _options = options.Value;
+    // Monitor, not IOptions, and a property rather than a cached field: this service is a SINGLETON,
+    // so a snapshot taken in its constructor was the value from process start, for the life of the
+    // process. IOptionsSnapshot would be worse still - a scoped dependency captured by a singleton.
+    private EnableBankingOptions _options => options.CurrentValue;
 
     public async Task<EnableBankingProviderStatusConnectStart> StartConnectionAsync(
         Guid userId,

@@ -28,9 +28,13 @@ public sealed record EnableBankingSetupStatus(
 public sealed class EnableBankingProfileService(
     EnableBankingClientResolver resolver,
     FullWorthBackendClient backend,
-    IOptions<EnableBankingOptions> options)
+    IOptionsMonitor<EnableBankingOptions> options)
 {
-    private readonly EnableBankingOptions _options = options.Value;
+    // A property, not a field. IOptions<T> is a process-lifetime snapshot, and caching .Value in a
+    // field pins it twice over - so RedirectUrl, which this installation LEARNS from its first
+    // registration, only arrived after a restart. Reading CurrentValue here keeps every use site
+    // below unchanged and makes all of them live.
+    private EnableBankingOptions _options => options.CurrentValue;
 
     public async Task<EnableBankingSetupStatus> GetStatusAsync(Guid userId, CancellationToken ct)
     {

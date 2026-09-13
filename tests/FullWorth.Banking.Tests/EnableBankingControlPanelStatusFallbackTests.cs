@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using FullWorth.Banking.Backend;
@@ -56,7 +57,7 @@ public sealed class EnableBankingControlPanelStatusFallbackTests
         var service = new EnableBankingControlPanelStatusService(
             new NamedFactory(controlPanelHttp),
             Backend(backendHttp),
-            Options.Create(new EnableBankingOptions
+            StaticOptionsMonitor.For(new EnableBankingOptions
             {
                 ControlPanelBaseUrl = "https://enablebanking.test",
                 RedirectUrl = "https://finance.test/connect/enable-banking/callback"

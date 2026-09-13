@@ -1,3 +1,4 @@
+using FullWorth.Banking.Tests.Infrastructure;
 using FullWorth.Banking.EnableBanking;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,7 +45,7 @@ public sealed class EnableBankingRegistrationLostTests
 
     private static EnableBankingControlPanelRegistrationService CreateService()
     {
-        var options = Options.Create(new EnableBankingOptions
+        var options = StaticOptionsMonitor.For(new EnableBankingOptions
         {
             BaseUrl = "https://api.enablebanking.test",
             ControlPanelBaseUrl = "https://enablebanking.test",
