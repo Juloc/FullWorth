@@ -4,18 +4,19 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.BankConnections;
 
 using FullWorth.Backend.Tests.Infrastructure;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Backend.Tests.BankConnections;
 
 /// <summary>
-/// The FinTS product id is a property of this INSTALLATION, so it lives in the database rather than in a
-/// compose file.
+/// The FinTS product id is set in the admin menu now, as one entry among the other installation
+/// settings. What is left here is the fallback for installations that stored it before that existed.
 ///
-/// It used to be <c>FinTs__ProductId</c> in the deploy stack, which meant editing YAML and restarting the
-/// stack to change a value the app could simply ask for. Enable Banking already stored its application id
-/// this way, so this closes a gap rather than inventing a pattern.
+/// These tests pin the two things that still have to be true: the value keeps being readable, and the
+/// table cannot be written any more. The second one is the point — a second way to change how this
+/// installation identifies itself to every bank is exactly the kind of quiet disagreement that makes
+/// an admin form save happily and change nothing.
 /// </summary>
 public sealed class BankingInstanceSettingsTests
 {
@@ -34,58 +35,20 @@ public sealed class BankingInstanceSettingsTests
     }
 
     /// <summary>
-    /// There is exactly one row, and the database enforces it. A second "instance" row would make which
-    /// product id this installation uses depend on insertion order.
+    /// The banking service reads the fallback over the internal API when it opens a FinTS dialog and
+    /// nothing is configured. An id stored by the old accounts-page form still arrives.
     /// </summary>
     [Fact]
-    public async Task Setting_it_twice_updates_the_one_row_rather_than_adding_another()
+    public async Task An_id_stored_before_the_admin_menu_existed_is_still_readable()
     {
         using var factory = new BackendWebApplicationFactory();
         using var client = factory.CreateClient();
 
-        await using (var scope = factory.Services.CreateAsyncScope())
+        await using (var seed = factory.Services.CreateAsyncScope())
         {
-            var store = scope.ServiceProvider.GetRequiredService<BankingInstanceSettingsStore>();
-            await store.SetAsync(new BankingInstanceSettingsDto("FIRST-ID"), CancellationToken.None);
-            await store.SetAsync(new BankingInstanceSettingsDto("SECOND-ID"), CancellationToken.None);
-        }
-
-        await using var check = factory.Services.CreateAsyncScope();
-        var db = check.ServiceProvider.GetRequiredService<FullWorthDbContext>();
-        var rows = await db.BankingInstanceSettings.AsNoTracking().ToListAsync();
-
-        Assert.Equal("SECOND-ID", Assert.Single(rows).FinTsProductId);
-    }
-
-    [Fact]
-    public async Task Surrounding_whitespace_is_not_part_of_the_id()
-    {
-        using var factory = new BackendWebApplicationFactory();
-        using var client = factory.CreateClient();
-        await using var scope = factory.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<BankingInstanceSettingsStore>();
-
-        var saved = await store.SetAsync(new BankingInstanceSettingsDto("  PRODUCT-1  "), CancellationToken.None);
-
-        // A product id pasted out of a bank's registration mail carries whitespace often enough, and a
-        // stray space surfaces as the bank refusing the dialog.
-        Assert.Equal("PRODUCT-1", saved.FinTsProductId);
-    }
-
-    /// <summary>
-    /// The banking service reads it over the internal API, which is how it learns the id when it opens a
-    /// FinTS dialog. That endpoint is read-only on purpose: the value is an operator decision.
-    /// </summary>
-    [Fact]
-    public async Task The_banking_service_can_read_it_over_the_internal_api()
-    {
-        using var factory = new BackendWebApplicationFactory();
-        using var client = factory.CreateClient();
-
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var store = scope.ServiceProvider.GetRequiredService<BankingInstanceSettingsStore>();
-            await store.SetAsync(new BankingInstanceSettingsDto("INTERNAL-READ"), CancellationToken.None);
+            var db = seed.ServiceProvider.GetRequiredService<FullWorthDbContext>();
+            db.Add(new BankingInstanceSettings { FinTsProductId = "LEGACY-ID" });
+            await db.SaveChangesAsync();
         }
 
         using var read = new HttpRequestMessage(HttpMethod.Get, "/internal/banking/settings");
@@ -94,18 +57,47 @@ public sealed class BankingInstanceSettingsTests
         response.EnsureSuccessStatusCode();
         var settings = await response.Content.ReadFromJsonAsync<BankingInstanceSettingsDto>();
 
-        Assert.Equal("INTERNAL-READ", settings!.FinTsProductId);
+        Assert.Equal("LEGACY-ID", settings!.FinTsProductId);
+    }
 
-        // Read-only: changing how this installation identifies itself to every bank is not something the
-        // banking service gets to do on its own.
+    /// <summary>
+    /// The internal route is GET-only. 405 rather than 404: the route exists and deliberately refuses
+    /// the verb, which is a clearer answer than pretending the endpoint is not there.
+    /// </summary>
+    [Fact]
+    public async Task The_banking_service_cannot_write_it_back()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+
         using var write = new HttpRequestMessage(HttpMethod.Put, "/internal/banking/settings")
         {
             Content = JsonContent.Create(new BankingInstanceSettingsDto("FROM-BANKING"))
         };
         write.Headers.Add("X-FullWorth-Ingest-Key", BackendWebApplicationFactory.IngestKey);
         var refused = await client.SendAsync(write);
-        // 405, not 404: the route exists and is deliberately GET-only, which is a clearer answer
-        // than pretending the endpoint is not there.
+
         Assert.Equal(HttpStatusCode.MethodNotAllowed, refused.StatusCode);
+    }
+
+    /// <summary>
+    /// The admin route the accounts page used is gone entirely. Asserted against the routing table and
+    /// not through a request, because every /api route answers 401 before routing has a say — which
+    /// would let a route that still exists pass for one that does not.
+    ///
+    /// It mattered beyond tidiness: that route authorised against the Intelligence admin grant, which is
+    /// bootstrapped onto the oldest finance user and never follows a demotion in auth.
+    /// </summary>
+    [Fact]
+    public void The_admin_route_on_the_accounts_page_no_longer_exists()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+
+        var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText ?? string.Empty);
+
+        Assert.DoesNotContain(routes, route => route.Contains("instance-settings", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -31,12 +31,21 @@ Payment initiation is not implemented on either route. FinTS exposes no payment/
 
 ## Configuration
 
-Read from the `EnableBanking`, `FinTs` and `Sync` sections (`src/FullWorth.Banking/appsettings.json`),
-overridden by the `EnableBanking__*` / `FinTs__*` / `Sync__*` variables in `docker-compose.yml`.
+Read from the `EnableBanking`, `FinTs` and `Sync` sections (`src/FullWorth.Banking/appsettings.json`).
+
+**Most of these are set in the admin menu, not in a file.** "Einstellungen dieser Installation"
+publishes them into configuration immediately before the environment variables, so the order is
+appsettings < stored < `EnableBanking__*`/`FinTs__*`/`Sync__*`. A key an environment variable pins is
+shown read-only there and says so. A change takes effect without a restart, because every consumer
+reads `IOptionsMonitor<T>.CurrentValue` at the use site.
+
+`EnableBanking:RedirectUrl` is the exception that is shown but not editable: it is derived from the
+public address this installation learned, and it has to match the Control Panel registration
+character for character.
 
 | Key | Default | Effect |
 |---|---|---|
-| `EnableBanking:RedirectUrl` | empty | **required.** Compose derives `https://${FULLWORTH_DOMAIN}/connect/enable-banking/callback`. Without it `/connect` and profile verification fail. |
+| `EnableBanking:RedirectUrl` | derived | **required**, derived from the public address learned at the first registration. Read-only in the admin menu. Without it `/connect` and profile verification fail. |
 | `EnableBanking:BaseUrl` | `https://api.enablebanking.com` | AIS API |
 | `EnableBanking:ControlPanelBaseUrl` | `https://enablebanking.com` | Control Panel (registration + bank-status feed) |
 | `EnableBanking:ApplicationId`, `PrivateKeyPath`, `PrivateKeyBase64` | empty / `/run/secrets/enable-banking-private-key.pem` | legacy global credentials; used only by pre-BYO connections that have no `EnableBankingProfileId` |
@@ -44,7 +53,7 @@ overridden by the `EnableBanking__*` / `FinTs__*` / `Sync__*` variables in `dock
 | `EnableBanking:MinimumRequestSpacingMilliseconds` | 1000 (clamped 250–10000) | spacing between provider calls |
 | `EnableBanking:TransientRetryCount` | 2 (clamped 0–3) | retries for 408/500/502/503/504 |
 | `EnableBanking:ApplicationName`, `ApplicationDescription`, `PrivacyUrl`, `TermsUrl` | `FullWorth`, `Private finance web app`, `https://fullworth.de/privacy/`, `https://fullworth.de/terms/` | sent when FullWorth registers the application automatically |
-| `FinTs:ProductId` | empty | **required for FinTS.** Not set means every ING connect returns HTTP 503 `fints_not_configured`. |
+| `FinTs:ProductId` | empty | **required for FinTS**, set in the admin menu. Not set means every ING connect returns HTTP 503 `fints_not_configured`. An id stored by the older accounts-page form is still read as a fallback. |
 | `FinTs:HistoryDays` | 90 (clamped 1–90) | FinTS `HKKAZ` window |
 | `FinTs:MaxPages` | 50 | FinTS touchdown page fuse |
 | `Sync:IntervalMinutes` | 15 (clamped 5–60) | worker wake-up only |
