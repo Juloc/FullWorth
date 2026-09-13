@@ -1,1 +1,1852 @@
-TEMP
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using FullWorth.Banking.Backend;
+using FullWorth.Banking.EnableBanking;
+using Microsoft.Extensions.Options;
+
+namespace FullWorth.Banking.Services;
+
+public sealed class BankingSyncOptions
+{
+    public const string SectionName = "Sync";
+    public int IntervalMinutes { get; set; } = 15;
+    public int MinimumBackgroundSyncIntervalMinutes { get; set; } = 360;
+    public int RateLimitCooldownMinutes { get; set; } = 360;
+    public int OverlapDays { get; set; } = 7;
+    public int PersistBatchSize { get; set; } = 250;
+    public int MaxPagesPerAccount { get; set; } = 250;
+}
+
+public sealed record ConnectBankRequest(
+    string InstitutionName,
+    string? Country,
+    int? ValidDays,
+    string? AuthMethod,
+    string? PsuId,
+    Dictionary<string, string>? Credentials,
+    Guid? ReconnectConnectionId = null,
+    Guid? EnableBankingProfileId = null,
+    string? PsuType = null,
+    string? Language = null,
+    bool? CredentialsAutosubmit = null,
+    IReadOnlyList<EnableBankingAccountIdentification>? Accounts = null);
+
+/// <summary>
+/// Why one connection was not synced in a scheduled run. "0 synced, 4 skipped" said nothing about
+/// which four or why, and a connection that needed re-authorization was counted in NEITHER bucket -
+/// the pre-filter dropped it before the loop, so it vanished from the result entirely.
+/// </summary>
+public static class BankSyncSkipReasons
+{
+    /// <summary>Inside our own background cadence, or the provider cooldown has not expired.</summary>
+    public const string NotDue = "not_due";
+    /// <summary>A persisted provider window (usually a rate limit) is still in the future.</summary>
+    public const string RateLimited = "rate_limited";
+    /// <summary>Status is not AUTHORIZED, or the session is gone: the user has to reconnect.</summary>
+    public const string AuthorizationRequired = "authorization_required";
+    /// <summary>The consent has an expiry and it has passed.</summary>
+    public const string Expired = "expired";
+    /// <summary>A FinTS connection parked on a TAN. Syncing would not help; the TAN has to be answered.</summary>
+    public const string TanRequired = "tan_required";
+}
+
+public sealed record BankSyncSkip(Guid ConnectionId, string Institution, string Reason, DateTimeOffset? RetryAt);
+
+public sealed record BankSyncResult(
+    int Synced,
+    int Skipped,
+    int Failed,
+    bool AlreadyRunning,
+    IReadOnlyList<BankSyncSkip>? Skips = null);
+
+/// <summary>
+/// <c>TanRequired</c> is its own outcome on purpose: a FinTS sync that ends in a TAN used to be reported
+/// as a generic error, so the user got "sync failed" with no hint that a TAN was waiting for them.
+/// </summary>
+public enum ManualSyncStatus { Started, PartialHistory, Error, Cooldown, AlreadyRunning, ReauthorizationRequired, TanRequired, NotFound }
+public sealed record ManualSyncResult(ManualSyncStatus Status, DateTimeOffset? NextSyncAllowedAt = null);
+
+public enum DisconnectStatus { Deleted, ClosedDataRetained, NotFound, ProviderFailed }
+
+public sealed record ProviderTransactionDetailsView(
+    string? TransactionId,
+    string? EntryReference,
+    string? Status,
+    DateOnly? BookingDate,
+    DateOnly? ValueDate,
+    decimal? Amount,
+    string? Currency,
+    string? CreditDebitIndicator,
+    string? Creditor,
+    string? Debtor,
+    string? CreditorAccountLast4,
+    string? DebtorAccountLast4,
+    IReadOnlyList<string> RemittanceInformation,
+    string? MerchantCategoryCode,
+    string? BankTransactionCode,
+    string? BankTransactionDescription);
+
+/// <summary>Trusted caller identity for banking write operations, set by FullWorth.Web from the session.</summary>
+public sealed record BankingCaller(Guid UserId, Guid FullWorthSpaceId);
+
+public sealed class BankAccessException(bool forbidden) : Exception
+{
+    public bool Forbidden { get; } = forbidden;
+}
+
+public sealed class BankReauthorizationRequiredException : InvalidOperationException
+{
+    public BankReauthorizationRequiredException() : base("Bank connection requires reauthorization.") { }
+}
+
+public sealed class BankSyncService(
+    EnableBankingClient provider,
+    FullWorthBackendClient backend,
+    BankSyncConcurrencyGate syncGate,
+    IOptionsMonitor<EnableBankingOptions> providerOptions,
+    IOptions<BankingSyncOptions> syncOptions,
+    ILogger<BankSyncService> logger,
+    EnableBankingClientResolver? providerResolver = null,
+    IngFinTsService? finTs = null)
+{
+    // See EnableBankingProfileService. BankSyncWorker resolves this service right after
+    // ApplicationStarted, so a cached snapshot was taken at every boot and never updated again.
+    private EnableBankingOptions _providerOptions => providerOptions.CurrentValue;
+    private readonly BankingSyncOptions _sync = syncOptions.Value;
+
+    // Kept for unit tests/legacy installations. Browser endpoints should use the caller-aware overload.
+    public Task<JsonElement> GetInstitutionsAsync(string? country, CancellationToken ct) =>
+        provider.GetInstitutionsAsync((country ?? _providerOptions.DefaultCountry).ToUpperInvariant(), ct);
+
+    public async Task<JsonElement> GetInstitutionsAsync(
+        string? country,
+        string? psuType,
+        BankingCaller caller,
+        CancellationToken ct)
+    {
+        var normalizedCountry = NormalizeCountry(country ?? _providerOptions.DefaultCountry);
+        var normalizedPsuType = NormalizeOptionalPsuType(psuType);
+        var (client, _) = providerResolver is null
+            ? (provider, (EnableBankingProfileDto?)null)
+            : await providerResolver.ResolveForUserAsync(caller.UserId, null, requireActive: true, ct);
+        return await client.GetInstitutionsAsync(normalizedCountry, normalizedPsuType, ct);
+    }
+
+    public async Task<string> StartConnectionAsync(ConnectBankRequest request, BankingCaller caller, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.InstitutionName) || request.InstitutionName.Trim().Length > 200)
+            throw new ArgumentException("InstitutionName is required and must not exceed 200 characters.");
+
+        var country = NormalizeCountry(request.Country ?? _providerOptions.DefaultCountry);
+        // New connections default to private/personal accounts; business must be selected explicitly.
+        var desiredPsuType = NormalizePsuType(request.PsuType ?? "personal");
+
+        var requestedProfileId = request.EnableBankingProfileId;
+        var authorized = await backend.AuthorizeAsync(
+            caller.UserId,
+            caller.FullWorthSpaceId,
+            request.ReconnectConnectionId,
+            requestedProfileId,
+            ct);
+        if (authorized != BankAuthorizeResult.Authorized)
+            throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
+
+        BankConnectionDto? existing = request.ReconnectConnectionId is { } reconnectId
+            ? await FindConnectionAsync(reconnectId, ct)
+            : null;
+        if (request.ReconnectConnectionId.HasValue && existing is null)
+            throw new BankAccessException(false);
+
+        var profileId = existing?.EnableBankingProfileId ?? requestedProfileId;
+        EnableBankingClient client;
+        EnableBankingProfileDto? profile;
+        if (providerResolver is null)
+        {
+            client = provider;
+            profile = null;
+        }
+        else
+        {
+            (client, profile) = await providerResolver.ResolveForUserAsync(
+                caller.UserId,
+                profileId,
+                requireActive: true,
+                ct);
+            profileId = profile?.Id;
+        }
+
+        var redirectUrl = _providerOptions.RedirectUrl;
+        if (string.IsNullOrWhiteSpace(redirectUrl))
+            throw new InvalidOperationException("EnableBanking:RedirectUrl is not configured.");
+
+        var list = await client.GetInstitutionsAsync(country, desiredPsuType, ct);
+        var institution = FindInstitution(list, request.InstitutionName);
+        if (institution.ValueKind == JsonValueKind.Undefined)
+            throw new InvalidOperationException($"Institution '{request.InstitutionName}' was not returned for {country}.");
+
+        var supportedPsuTypes = GetStringArray(institution, "psu_types");
+        if (supportedPsuTypes.Count > 0 && !supportedPsuTypes.Contains(desiredPsuType, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Institution '{request.InstitutionName}' does not support PSU type '{desiredPsuType}'.");
+
+        ValidateAuthMethod(institution, request.AuthMethod, desiredPsuType);
+        ValidateCredentials(institution, request.AuthMethod, desiredPsuType, request.Credentials, request.CredentialsAutosubmit == true);
+        if (request.Credentials is { Count: > 0 } && string.IsNullOrWhiteSpace(request.AuthMethod))
+            throw new InvalidOperationException("Credentials require an explicit Enable Banking auth method.");
+
+        var maximumSupportedSeconds = (long)TimeSpan.FromDays(365).TotalSeconds;
+        var maxSeconds = institution.TryGetProperty("maximum_consent_validity", out var max) &&
+                         max.ValueKind == JsonValueKind.Number &&
+                         max.TryGetInt64(out var seconds) &&
+                         seconds > 0
+            ? Math.Min(seconds, maximumSupportedSeconds)
+            : (long)TimeSpan.FromDays(90).TotalSeconds;
+        var requested = TimeSpan.FromDays(Math.Clamp(request.ValidDays ?? 365, 1, 365));
+        var providerMaximum = TimeSpan.FromSeconds(maxSeconds);
+        var validity = requested < providerMaximum ? requested : providerMaximum;
+        var validUntil = DateTimeOffset.UtcNow.Add(validity);
+
+        var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        var stateExpiresAt = DateTimeOffset.UtcNow.AddMinutes(
+            Math.Clamp(_providerOptions.AuthorizationStateTtlMinutes, 1, 60));
+        var language = NormalizeLanguage(request.Language);
+        var psuId = BuildPseudonymousPsuId(caller.UserId, client.ApplicationId);
+
+        var result = await client.StartAuthorizationAsync(
+            GetString(institution, "name") ?? request.InstitutionName,
+            country,
+            redirectUrl,
+            state,
+            validUntil,
+            request.AuthMethod,
+            psuId,
+            request.Credentials,
+            ct,
+            desiredPsuType,
+            language,
+            request.CredentialsAutosubmit,
+            request.Accounts);
+
+        var requiredPsuHeaders = GetStringArray(institution, "required_psu_headers");
+        await backend.UpsertConnectionAsync(new(
+            Id: request.ReconnectConnectionId,
+            Provider: "enable-banking",
+            InstitutionName: GetString(institution, "name") ?? request.InstitutionName,
+            Country: country,
+            AuthorizationState: state,
+            AuthorizationId: result.AuthorizationId,
+            ProviderSessionId: existing?.ProviderSessionId,
+            // Reauthorization is staged beside the current connection. A valid/expired old session
+            // keeps its real status until the new callback succeeds; abandoning the bank flow must
+            // not silently turn an existing connection into PENDING forever.
+            Status: existing?.Status ?? "PENDING_AUTHORIZATION",
+            ValidUntil: existing?.ValidUntil ?? validUntil,
+            LastAttemptAt: existing?.LastAttemptAt,
+            LastSyncedAt: existing?.LastSyncedAt,
+            NextSyncAllowedAt: existing?.NextSyncAllowedAt,
+            ConsecutiveFailures: existing?.ConsecutiveFailures ?? 0,
+            LastError: existing?.LastError,
+            FullWorthSpaceId: caller.FullWorthSpaceId,
+            AuthorizationUserId: caller.UserId,
+            AuthorizationStateExpiresAt: stateExpiresAt,
+            EnableBankingProfileId: profileId,
+            PsuType: desiredPsuType,
+            AuthMethod: request.AuthMethod,
+            RequiredPsuHeadersJson: JsonSerializer.Serialize(requiredPsuHeaders)), ct);
+
+        return result.Url;
+    }
+
+    public async Task<bool> HandleAuthorizationErrorAsync(
+        string state,
+        string? providerError,
+        CancellationToken ct)
+    {
+        var connection = await backend.ConsumeStateAsync(state, ct);
+        if (connection is null) return false;
+
+        // A reconnect attempt is staged on top of an existing provider session. StartConnectionAsync
+        // intentionally preserved that old status, so cancelling the new flow only consumes the
+        // one-time state and leaves the previous connection untouched.
+        if (!string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return true;
+
+        var cancelled = string.Equals(providerError, "access_denied", StringComparison.OrdinalIgnoreCase) ||
+                        (providerError?.Contains("cancel", StringComparison.OrdinalIgnoreCase) ?? false);
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            status: cancelled ? "CANCELLED" : "INVALID",
+            clearNextSyncAllowedAt: true,
+            consecutiveFailures: 0,
+            lastError: cancelled ? "AUTHORIZATION_CANCELLED" : "AUTHORIZATION_FAILED"), ct);
+        return true;
+    }
+
+    public Task<BankConnectionDto> CompleteConnectionAsync(string state, string code, CancellationToken ct) =>
+        CompleteConnectionAsync(state, code, null, ct);
+
+    public async Task<BankConnectionDto> CompleteConnectionAsync(
+        string state,
+        string code,
+        PsuContext? psuContext,
+        CancellationToken ct)
+    {
+        var connection = await backend.ConsumeStateAsync(state, ct)
+            ?? throw new InvalidOperationException("Unknown or expired authorization state.");
+
+        EnableBankingClient client;
+        var previousSessionId = connection.ProviderSessionId;
+        JsonElement session;
+        try
+        {
+            client = await ResolveProviderForConnectionAsync(connection, ct);
+            session = await client.AuthorizeSessionAsync(code, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            await MarkAuthorizationCompletionFailureAsync(connection, ct);
+            throw;
+        }
+
+        var sessionId = GetString(session, "session_id");
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            await MarkAuthorizationCompletionFailureAsync(connection, CancellationToken.None);
+            throw new InvalidOperationException("Enable Banking did not return session_id.");
+        }
+
+        if (session.ValueKind != JsonValueKind.Object ||
+            !session.TryGetProperty("access", out var access) ||
+            access.ValueKind != JsonValueKind.Object ||
+            !access.TryGetProperty("valid_until", out var valid) ||
+            valid.ValueKind != JsonValueKind.String ||
+            !DateTimeOffset.TryParse(valid.GetString(), out var validUntil))
+        {
+            try
+            {
+                await client.DeleteSessionAsync(
+                    sessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Malformed Enable Banking session could not be closed.");
+            }
+
+            await MarkAuthorizationCompletionFailureAsync(connection, CancellationToken.None);
+            throw new InvalidOperationException("Enable Banking did not return a valid access.valid_until.");
+        }
+
+        connection = await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            providerSessionId: sessionId,
+            status: "AUTHORIZED",
+            validUntil: validUntil,
+            lastError: null,
+            consecutiveFailures: 0), ct);
+
+        // Reauthorization may replace a still-live old session. The new session is already durable,
+        // so closing the previous consent is best-effort and can never roll back a successful reconnect.
+        if (!string.IsNullOrWhiteSpace(previousSessionId) &&
+            !string.Equals(previousSessionId, sessionId, StringComparison.Ordinal))
+        {
+            try
+            {
+                await client.DeleteSessionAsync(
+                    previousSessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
+            }
+            catch (EnableBankingApiException ex) when (
+                ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
+            {
+                // Already closed/missing is equivalent to success.
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Old Enable Banking session for {Institution} could not be closed after reauthorization.",
+                    connection.InstitutionName);
+            }
+        }
+
+        using var lease = await syncGate.EnterAsync(ct);
+        try
+        {
+            // The user has just returned from the ASPSP. Treat the first retrieval as online when the
+            // BFF supplied a complete PSU context; otherwise PsuContext itself falls back to no headers.
+            return await SyncConnectionCoreAsync(connection, bypassCadence: true, psuContext, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception,
+                "Initial sync after connecting {Institution} failed; the authorization remains valid and the worker will retry.",
+                connection.InstitutionName);
+            return connection;
+        }
+    }
+
+    public async Task<BankSyncResult> SyncAllAsync(CancellationToken ct)
+    {
+        using var lease = await syncGate.TryEnterAsync(ct);
+        if (lease is null)
+            return new(0, 0, 0, true);
+
+        var connections = await backend.ListConnectionsAsync(ct);
+        var synced = 0;
+        var failed = 0;
+        var skips = new List<BankSyncSkip>();
+
+        // Every connection is accounted for. The old pre-filter dropped the ones that need attention
+        // (not authorized, session gone, consent expired) BEFORE the loop, so they were reported as
+        // neither synced, skipped nor failed - they simply did not exist in the result, which is how a
+        // connection can sit unsynced for weeks without anything saying so.
+        foreach (var connection in connections)
+        {
+            if (ClassifySkip(connection, DateTimeOffset.UtcNow) is { } reason)
+            {
+                skips.Add(new BankSyncSkip(
+                    connection.Id,
+                    connection.InstitutionName,
+                    reason,
+                    reason == BankSyncSkipReasons.NotDue || reason == BankSyncSkipReasons.RateLimited
+                        ? connection.NextSyncAllowedAt
+                        : null));
+                continue;
+            }
+
+            try
+            {
+                // Scheduled retrieval is deliberately PSU-header free.
+                var completed = await SyncConnectionCoreAsync(connection, bypassCadence: false, null, ct);
+                if (string.IsNullOrWhiteSpace(completed.LastError)) synced++;
+                else failed++;
+            }
+            catch (EnableBankingApiException)
+            {
+                failed++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                logger.LogError(ex, "Sync failed for {Institution}", connection.InstitutionName);
+            }
+        }
+
+        foreach (var skip in skips)
+            logger.LogInformation(
+                "Skipped {Institution} ({Connection}): {Reason}{RetryAt}.",
+                skip.Institution,
+                skip.ConnectionId,
+                skip.Reason,
+                skip.RetryAt is { } retryAt ? $", retry after {retryAt:O}" : string.Empty);
+
+        return new(synced, skips.Count, failed, false, skips);
+    }
+
+    public Task<ManualSyncResult> RequestManualSyncAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        bool force,
+        CancellationToken ct) =>
+        RequestManualSyncAsync(connectionId, caller, force, null, ct);
+
+    public async Task<ManualSyncResult> RequestManualSyncAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        bool force,
+        PsuContext? psuContext,
+        CancellationToken ct)
+    {
+        var authorized = await backend.AuthorizeAsync(
+            caller.UserId,
+            caller.FullWorthSpaceId,
+            connectionId,
+            null,
+            ct);
+        if (authorized != BankAuthorizeResult.Authorized) return new(ManualSyncStatus.NotFound);
+
+        var connection = await FindConnectionAsync(connectionId, ct);
+        if (connection is null) return new(ManualSyncStatus.NotFound);
+
+        var now = DateTimeOffset.UtcNow;
+        // Asked BEFORE the authorization check: a connection parked on a TAN is not authorized, so it was
+        // answered with "reconnect needed" - and reconnecting discards the challenge the bank is waiting
+        // for. The user has to be pointed at the TAN instead.
+        if (IsWaitingForTan(connection)) return new(ManualSyncStatus.TanRequired);
+        if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
+            (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= now))
+            return new(ManualSyncStatus.ReauthorizationRequired);
+
+        // User force may bypass our ordinary 6h background cadence, but never a persisted provider
+        // rate-limit window.
+        if (connection.NextSyncAllowedAt is { } next && next > now &&
+            (!force || string.Equals(connection.LastError, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)))
+            return new(ManualSyncStatus.Cooldown, next);
+
+        using var lease = await syncGate.TryEnterAsync(ct);
+        if (lease is null) return new(ManualSyncStatus.AlreadyRunning);
+
+        var current = await FindConnectionAsync(connectionId, ct) ?? connection;
+        if (current.NextSyncAllowedAt is { } currentNext && currentNext > DateTimeOffset.UtcNow &&
+            (!force || string.Equals(current.LastError, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)))
+            return new(ManualSyncStatus.Cooldown, currentNext);
+
+        try
+        {
+            await SyncConnectionCoreAsync(current, bypassCadence: force, psuContext, ct);
+        }
+        catch (EnableBankingApiException)
+        {
+            var afterFailure = await FindConnectionAsync(connectionId, ct);
+            if (IsWaitingForTan(afterFailure)) return new(ManualSyncStatus.TanRequired);
+            if (RequiresReauthorization(afterFailure))
+                return new(ManualSyncStatus.ReauthorizationRequired);
+            if (string.Equals(
+                    afterFailure?.LastError,
+                    "ASPSP_RATE_LIMIT_EXCEEDED",
+                    StringComparison.OrdinalIgnoreCase))
+                return new(ManualSyncStatus.Cooldown, afterFailure?.NextSyncAllowedAt);
+            return new(ManualSyncStatus.Error, afterFailure?.NextSyncAllowedAt);
+        }
+        catch
+        {
+            var afterFailure = await FindConnectionAsync(connectionId, ct);
+            if (IsWaitingForTan(afterFailure)) return new(ManualSyncStatus.TanRequired);
+            return new(ManualSyncStatus.Error, afterFailure?.NextSyncAllowedAt);
+        }
+
+        var afterSync = await FindConnectionAsync(connectionId, ct);
+        // Before the reauthorization check: a TAN_REQUIRED connection is not authorized any more, so it
+        // would otherwise be reported as "reconnect needed" - and reconnecting is exactly the wrong
+        // action, it throws the pending challenge away.
+        if (IsWaitingForTan(afterSync)) return new(ManualSyncStatus.TanRequired);
+        if (RequiresReauthorization(afterSync))
+            return new(ManualSyncStatus.ReauthorizationRequired);
+        if (string.Equals(afterSync?.LastError, "HISTORY_PAGE_LIMIT_REACHED", StringComparison.Ordinal))
+            return new(ManualSyncStatus.PartialHistory, afterSync?.NextSyncAllowedAt);
+        if (!string.IsNullOrWhiteSpace(afterSync?.LastError))
+            return new(ManualSyncStatus.Error, afterSync?.NextSyncAllowedAt);
+        return new(ManualSyncStatus.Started, afterSync?.NextSyncAllowedAt);
+    }
+
+    public Task<DisconnectStatus> DisconnectAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        PsuContext? psuContext,
+        CancellationToken ct) =>
+        DisconnectAsync(connectionId, caller, psuContext, deleteLocalData: true, ct);
+
+    public async Task<DisconnectStatus> DisconnectAsync(
+        Guid connectionId,
+        BankingCaller caller,
+        PsuContext? psuContext,
+        bool deleteLocalData,
+        CancellationToken ct)
+    {
+        var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, connectionId, null, ct);
+        if (authorized != BankAuthorizeResult.Authorized) return DisconnectStatus.NotFound;
+
+        var connection = await FindConnectionAsync(connectionId, ct);
+        if (connection is null) return DisconnectStatus.NotFound;
+
+        if (!string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+        {
+            var client = await ResolveProviderForConnectionAsync(connection, ct);
+            try
+            {
+                await client.DeleteSessionAsync(
+                    connection.ProviderSessionId,
+                    psuContext,
+                    RequiredPsuHeaders(connection),
+                    ct);
+            }
+            catch (EnableBankingApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
+            {
+                // Already gone is an idempotent successful disconnect.
+            }
+            catch (EnableBankingApiException ex)
+            {
+                var classification = EnableBankingErrorClassifier.Classify(ex);
+                if (IsTerminalSessionStatus(connection.Status) ||
+                    classification.Category == BankErrorCategory.ConsentExpired)
+                {
+                    // The consent is already known to be unusable/closed. A provider refusing DELETE
+                    // for that stale session must not prevent the user's local disconnect/data policy.
+                    logger.LogInformation(
+                        "Remote session for {Institution} is already terminal ({Code}); continuing local disconnect.",
+                        connection.InstitutionName,
+                        classification.Code);
+                }
+                else
+                {
+                    logger.LogWarning("Remote consent close failed for {Institution}: {Code}", connection.InstitutionName, ex.ErrorCode);
+                    return DisconnectStatus.ProviderFailed;
+                }
+            }
+        }
+
+        if (deleteLocalData)
+            return await backend.DeleteConnectionDataAsync(connectionId, caller.UserId, caller.FullWorthSpaceId, ct)
+                ? DisconnectStatus.Deleted
+                : DisconnectStatus.NotFound;
+
+        return await backend.CloseConnectionRetainingDataAsync(
+            connectionId,
+            caller.UserId,
+            caller.FullWorthSpaceId,
+            ct)
+            ? DisconnectStatus.ClosedDataRetained
+            : DisconnectStatus.NotFound;
+    }
+
+    public async Task<ProviderTransactionDetailsView> GetTransactionDetailsAsync(
+        Guid transactionId,
+        BankingCaller caller,
+        PsuContext? psuContext,
+        CancellationToken ct)
+    {
+        var pointer = await backend.GetTransactionProviderPointerAsync(
+            transactionId,
+            caller.UserId,
+            caller.FullWorthSpaceId,
+            ct) ?? throw new BankAccessException(false);
+
+        if (string.IsNullOrWhiteSpace(pointer.ProviderTransactionId))
+            throw new InvalidOperationException("This transaction has no provider transaction detail identifier.");
+
+        var connection = await FindConnectionAsync(pointer.ConnectionId, ct)
+            ?? throw new BankAccessException(false);
+        if (string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("FinTS transaction details are already part of the imported transaction.");
+        if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(connection.ProviderSessionId) ||
+            (connection.ValidUntil.HasValue && connection.ValidUntil.Value <= DateTimeOffset.UtcNow))
+            throw new BankReauthorizationRequiredException();
+
+        var client = await ResolveProviderForConnectionAsync(connection, ct);
+        JsonElement json;
+        try
+        {
+            json = await client.GetTransactionDetailsAsync(
+                pointer.ProviderAccountId,
+                pointer.ProviderTransactionId,
+                psuContext,
+                RequiredPsuHeaders(connection),
+                ct);
+        }
+        catch (EnableBankingApiException ex)
+        {
+            var classification = EnableBankingErrorClassifier.Classify(ex);
+            if (classification.Category is BankErrorCategory.AuthRequired or
+                BankErrorCategory.ConsentExpired or
+                BankErrorCategory.RateLimit)
+            {
+                await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
+                var afterFailure = await FindConnectionAsync(pointer.ConnectionId, ct);
+                if (RequiresReauthorization(afterFailure))
+                    throw new BankReauthorizationRequiredException();
+            }
+
+            // A missing/rejected single transaction detail, PSU-context issue or transient detail
+            // failure must not poison the health/cooldown of an otherwise working bank connection.
+            throw;
+        }
+
+        JsonElement amount = default;
+        var hasAmount = json.ValueKind == JsonValueKind.Object &&
+                        json.TryGetProperty("transaction_amount", out amount) &&
+                        amount.ValueKind == JsonValueKind.Object;
+        return new(
+            GetString(json, "transaction_id"),
+            GetString(json, "entry_reference"),
+            GetString(json, "status"),
+            ParseDate(json, "booking_date"),
+            ParseDate(json, "value_date"),
+            hasAmount ? GetDecimal(amount, "amount") : null,
+            hasAmount ? GetString(amount, "currency") : null,
+            GetString(json, "credit_debit_indicator"),
+            GetNestedString(json, "creditor", "name"),
+            GetNestedString(json, "debtor", "name"),
+            GetPartyAccountLast4(json, "creditor_account"),
+            GetPartyAccountLast4(json, "debtor_account"),
+            GetRemittanceInformation(json),
+            GetString(json, "merchant_category_code"),
+            GetNestedString(json, "bank_transaction_code", "code"),
+            GetNestedString(json, "bank_transaction_code", "description"));
+    }
+
+    private async Task MarkAuthorizationCompletionFailureAsync(
+        BankConnectionDto connection,
+        CancellationToken ct)
+    {
+        // Reauthorization failure leaves the existing session/status untouched. A brand-new
+        // connection has no usable session after its one-time state was consumed, so make that
+        // terminal instead of leaving an unreachable PENDING_AUTHORIZATION row behind.
+        if (!string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return;
+
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            status: "INVALID",
+            clearNextSyncAllowedAt: true,
+            consecutiveFailures: 0,
+            lastError: "AUTHORIZATION_FAILED"), ct);
+    }
+
+    private async Task<EnableBankingClient> ResolveProviderForConnectionAsync(BankConnectionDto connection, CancellationToken ct) =>
+        providerResolver is null ? provider : await providerResolver.ResolveForConnectionAsync(connection, ct);
+
+    private async Task<BankConnectionDto?> FindConnectionAsync(Guid connectionId, CancellationToken ct) =>
+        (await backend.ListConnectionsAsync(ct)).FirstOrDefault(x => x.Id == connectionId);
+
+    /// <summary>The reason this connection is not synced now, or null when it is due.</summary>
+    private string? ClassifySkip(BankConnectionDto connection, DateTimeOffset now)
+    {
+        // Asked first: a parked TAN is not a broken connection, and reconnecting would discard it.
+        if (IsWaitingForTan(connection)) return BankSyncSkipReasons.TanRequired;
+        if (connection.ValidUntil is { } validUntil && validUntil <= now) return BankSyncSkipReasons.Expired;
+        if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return BankSyncSkipReasons.AuthorizationRequired;
+
+        if (connection.NextSyncAllowedAt is { } next && next > now)
+            return string.Equals(connection.LastError, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+                ? BankSyncSkipReasons.RateLimited
+                : BankSyncSkipReasons.NotDue;
+
+        var minimum = TimeSpan.FromMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        return connection.LastAttemptAt is { } lastAttempt && lastAttempt + minimum > now
+            ? BankSyncSkipReasons.NotDue
+            : null;
+    }
+
+    private bool CanBackgroundSync(BankConnectionDto connection, DateTimeOffset now) =>
+        ClassifySkip(connection, now) is null;
+
+    private async Task<BankConnectionDto> SyncConnectionCoreAsync(
+        BankConnectionDto connection,
+        bool bypassCadence,
+        PsuContext? psuContext,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(connection.ProviderSessionId))
+            return connection;
+
+        if (string.Equals(connection.Provider, "fints", StringComparison.OrdinalIgnoreCase))
+        {
+            if (finTs is not null)
+                return await finTs.SyncConnectionAsync(connection, bypassCadence, ct);
+
+            var missingStartedAt = DateTimeOffset.UtcNow;
+            var missing = await backend.UpsertConnectionAsync(ToWrite(
+                connection,
+                consecutiveFailures: connection.ConsecutiveFailures + 1,
+                lastError: "FINTS_NOT_CONFIGURED"), ct);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, missingStartedAt, "error", "FINTS_NOT_CONFIGURED", CancellationToken.None);
+            return missing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (!bypassCadence && !CanBackgroundSync(connection, now))
+            return connection;
+
+        var startedAt = now;
+        var nextAllowed = now.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        connection = await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            lastAttemptAt: now,
+            nextSyncAllowedAt: nextAllowed), ct);
+
+        try
+        {
+            var client = await ResolveProviderForConnectionAsync(connection, ct);
+            var session = await client.GetSessionAsync(connection.ProviderSessionId, ct);
+            var status = (GetString(session, "status") ?? connection.Status).ToUpperInvariant();
+            if (!string.Equals(status, "AUTHORIZED", StringComparison.Ordinal))
+            {
+                var errorCode = SessionError(status);
+                var updated = await backend.UpsertConnectionAsync(ToWrite(
+                    connection,
+                    status: status,
+                    nextSyncAllowedAt: IsTerminalSessionStatus(status) ? null : nextAllowed,
+                    clearNextSyncAllowedAt: IsTerminalSessionStatus(status),
+                    lastError: errorCode,
+                    consecutiveFailures: 0), ct);
+                await RecordSyncHistorySafeAsync(
+                    connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+                return updated;
+            }
+
+            var accounts = ParseSessionAccounts(connection, session);
+            var outcome = AccountSyncOutcome.Success;
+            foreach (var account in accounts)
+            {
+                try
+                {
+                    var accountOutcome = await SyncAccountAsync(client, connection, account, psuContext, ct);
+                    if (accountOutcome > outcome) outcome = accountOutcome;
+                }
+                catch (EnableBankingApiException exception) when (IsSingleAccountProblem(exception))
+                {
+                    // One account failing is not the connection failing. This used to escape the loop,
+                    // so every account AFTER the failing one was skipped entirely and kept showing its
+                    // last known balance - a wallet the bank refuses (common on PayPal-style multi-
+                    // account setups) silently froze all the others.
+                    //
+                    // Connection-level problems - an expired consent, a revoked session, the bank rate
+                    // limiting us - still abort: continuing would hammer the provider and every
+                    // remaining account would fail the same way. Those are re-thrown by the guard.
+                    logger.LogWarning(
+                        exception,
+                        "Account {Account} of connection {Connection} failed to sync ({Code}); continuing with the remaining accounts.",
+                        account.ProviderAccountId,
+                        connection.Id,
+                        exception.ErrorCode);
+                    if (AccountSyncOutcome.AccountFailed > outcome) outcome = AccountSyncOutcome.AccountFailed;
+                }
+            }
+
+            var error = outcome switch
+            {
+                AccountSyncOutcome.AccountResolutionFailed => "ACCOUNT_RESOLUTION_FAILED",
+                AccountSyncOutcome.HistoryPageLimitReached => "HISTORY_PAGE_LIMIT_REACHED",
+                AccountSyncOutcome.BalanceUnreadable => "BALANCE_UNREADABLE",
+                AccountSyncOutcome.AccountFailed => "ACCOUNT_SYNC_FAILED",
+                _ => null
+            };
+
+            var completed = await backend.UpsertConnectionAsync(ToWrite(
+                connection,
+                status: status,
+                // A partial account/history result must not advance the user-visible successful-sync
+                // timestamp. Preserve the previous completed sync until every account finishes.
+                lastSyncedAt: error is null ? DateTimeOffset.UtcNow : connection.LastSyncedAt,
+                nextSyncAllowedAt: nextAllowed,
+                consecutiveFailures: error is null ? 0 : connection.ConsecutiveFailures + 1,
+                lastError: error), ct);
+            await RecordSyncHistorySafeAsync(
+                connection.Id,
+                startedAt,
+                error is null ? "success" : "partial",
+                error,
+                CancellationToken.None);
+            return completed;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", "CANCELLED", CancellationToken.None);
+            throw;
+        }
+        catch (EnableBankingApiException ex)
+        {
+            var errorCode = EnableBankingErrorClassifier.Classify(ex).Code;
+            await HandleProviderFailureAsync(connection, ex, CancellationToken.None);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", errorCode, CancellationToken.None);
+            throw;
+        }
+        catch
+        {
+            await MarkFailureAsync(connection, "SYNC_FAILED", CancellationToken.None);
+            await RecordSyncHistorySafeAsync(
+                connection.Id, startedAt, "error", "SYNC_FAILED", CancellationToken.None);
+            throw;
+        }
+    }
+
+    private async Task RecordSyncHistorySafeAsync(
+        Guid connectionId,
+        DateTimeOffset startedAt,
+        string result,
+        string? errorCode,
+        CancellationToken ct)
+    {
+        try
+        {
+            await backend.RecordSyncHistoryAsync(
+                connectionId,
+                new BankSyncHistoryWrite(startedAt, DateTimeOffset.UtcNow, result, errorCode),
+                ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // History is observability metadata. A history-write outage must never turn a completed
+            // bank retrieval into a failed financial sync.
+            logger.LogWarning(ex, "Could not persist sync history for connection {ConnectionId}.", connectionId);
+        }
+    }
+
+    private async Task HandleProviderFailureAsync(BankConnectionDto connection, EnableBankingApiException ex, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var classification = EnableBankingErrorClassifier.Classify(ex);
+
+        var terminalStatus = classification.Category switch
+        {
+            BankErrorCategory.ConsentExpired when string.Equals(classification.Code, "SESSION_REVOKED", StringComparison.OrdinalIgnoreCase)
+                => "REVOKED",
+            BankErrorCategory.ConsentExpired when string.Equals(classification.Code, "SESSION_CLOSED", StringComparison.OrdinalIgnoreCase)
+                => "CLOSED",
+            BankErrorCategory.ConsentExpired => "EXPIRED",
+            BankErrorCategory.AuthRequired => "INVALID",
+            _ => null
+        };
+
+        if (terminalStatus is not null)
+        {
+            logger.LogWarning(
+                "Bank sync for {Institution} requires reauthorization ({Category}).",
+                connection.InstitutionName,
+                classification.Code);
+
+            await backend.UpsertConnectionAsync(ToWrite(
+                connection,
+                status: terminalStatus,
+                clearNextSyncAllowedAt: true,
+                consecutiveFailures: connection.ConsecutiveFailures + 1,
+                lastError: classification.Code), ct);
+            return;
+        }
+
+        var minimumCooldown = now.AddMinutes(
+            string.Equals(classification.Code, "ASPSP_RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(360, _sync.RateLimitCooldownMinutes)
+                : Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        var retryAt = ex.RetryAt.HasValue && ex.RetryAt.Value > minimumCooldown
+            ? ex.RetryAt.Value
+            : minimumCooldown;
+
+        logger.LogWarning(
+            "Bank sync for {Institution} stopped ({Category}); next background attempt not before {RetryAt}.",
+            connection.InstitutionName,
+            classification.Code,
+            retryAt);
+
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            nextSyncAllowedAt: retryAt,
+            consecutiveFailures: connection.ConsecutiveFailures + 1,
+            lastError: classification.Code), ct);
+    }
+
+    private async Task MarkFailureAsync(BankConnectionDto connection, string error, CancellationToken ct)
+    {
+        var retryAt = DateTimeOffset.UtcNow.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes));
+        await backend.UpsertConnectionAsync(ToWrite(
+            connection,
+            nextSyncAllowedAt: retryAt,
+            consecutiveFailures: connection.ConsecutiveFailures + 1,
+            lastError: error), ct);
+    }
+
+    private async Task<AccountSyncOutcome> SyncAccountAsync(
+        EnableBankingClient client,
+        BankConnectionDto connection,
+        AccountState account,
+        PsuContext? psuContext,
+        CancellationToken ct)
+    {
+        var requiredPsuHeaders = RequiredPsuHeaders(connection);
+        var detailsFetched = false;
+
+        if (account.NeedsHashResolution)
+        {
+            var resolved = await TryGetAccountDetailsAsync(client, connection, account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
+            var realHash = resolved is { } json ? GetString(json, "identification_hash") : null;
+            if (string.IsNullOrWhiteSpace(realHash))
+            {
+                logger.LogWarning(
+                    "Skipping account {Uid} of {Institution}: identification_hash could not be resolved.",
+                    account.ProviderAccountId,
+                    connection.InstitutionName);
+                return AccountSyncOutcome.AccountResolutionFailed;
+            }
+            account = ApplyDetails(account, resolved!.Value) with
+            {
+                IdentificationHash = realHash,
+                IdentificationHashes = GetIdentificationHashes(resolved.Value, realHash),
+                NeedsHashResolution = false,
+                HasDetails = true
+            };
+            detailsFetched = true;
+        }
+
+        var syncState = await FindAccountSyncStateAsync(connection.Id, AccountIdentificationHashes(account), ct);
+
+        // If the primary hash changed, /details may reveal the previous hash in identification_hashes.
+        // Resolve that alias before deciding this is a brand-new account and doing another longest import.
+        if (!detailsFetched && syncState is null)
+        {
+            var details = await TryGetAccountDetailsAsync(
+                client, connection, account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
+            if (details is { } json)
+            {
+                account = ApplyDetails(account, json) with { HasDetails = true };
+                detailsFetched = true;
+                if (syncState is null)
+                    syncState = await FindAccountSyncStateAsync(
+                        connection.Id, AccountIdentificationHashes(account), ct);
+            }
+        }
+
+        var initialSync = syncState?.LatestBookingDate is null;
+
+        var balancesJson = await client.GetBalancesAsync(
+            account.ProviderAccountId, psuContext, requiredPsuHeaders, ct);
+        var balanceResult = ParseBalances(account, balancesJson);
+        var balances = balanceResult.Items;
+
+        // The currency the money actually arrived in, when the provider did not name one. Last resort
+        // stays EUR - an account has to be storable even with nothing to go on - but it is now only
+        // reached when the provider named no currency AND sent no readable balance, and it is logged
+        // instead of passing silently.
+        if (string.IsNullOrWhiteSpace(account.Currency))
+        {
+            var reported = balances.Select(balance => balance.Currency)
+                .FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency));
+            if (string.IsNullOrWhiteSpace(reported))
+                logger.LogWarning(
+                    "Account {Account} reported no currency and no readable balance; defaulting to EUR.",
+                    account.ProviderAccountId);
+            account = account with { Currency = reported ?? "EUR" };
+        }
+
+        var now = DateOnly.FromDateTime(DateTime.UtcNow);
+        DateOnly? from = syncState?.LatestBookingDate is { } latest
+            ? latest.AddDays(-Math.Max(0, _sync.OverlapDays))
+            : null;
+        if (from.HasValue && from.Value > now)
+            from = now.AddDays(-Math.Max(0, _sync.OverlapDays));
+        DateOnly? to = initialSync ? null : now;
+
+        string? continuation = null;
+        var firstPersist = true;
+        var maxPages = Math.Max(1, _sync.MaxPagesPerAccount);
+        var pageLimitReached = false;
+        // Every pending row the provider still reports, collected across pages. A pending row we
+        // stored but that is no longer in this answer has either booked or been cancelled - see
+        // PendingReconciliation. Only a run that read the WHOLE window may say that, so this is only
+        // sent when the loop finished without hitting the page limit.
+        var seenPending = new List<string>();
+
+        for (var page = 0; page < maxPages; page++)
+        {
+            JsonElement response;
+            try
+            {
+                response = await client.GetTransactionsAsync(
+                    account.ProviderAccountId,
+                    from,
+                    to,
+                    initialSync,
+                    continuation,
+                    psuContext,
+                    requiredPsuHeaders,
+                    ct);
+            }
+            catch (EnableBankingApiException ex) when (
+                !initialSync &&
+                page == 0 &&
+                string.Equals(ex.ErrorCode, "WRONG_TRANSACTIONS_PERIOD", StringComparison.OrdinalIgnoreCase) &&
+                from.HasValue &&
+                from.Value < now.AddDays(-90))
+            {
+                // Some ASPSPs only allow a bounded online/history period after the initial retrieval.
+                // Narrow once to 90 days; never loop/retry the same rejected period.
+                from = now.AddDays(-90);
+                response = await client.GetTransactionsAsync(
+                    account.ProviderAccountId,
+                    from,
+                    to,
+                    initialSync: false,
+                    continuationKey: null,
+                    psuContext,
+                    requiredPsuHeaders,
+                    ct);
+            }
+
+            var parsed = response.ValueKind == JsonValueKind.Object &&
+                         response.TryGetProperty("transactions", out var txs) &&
+                         txs.ValueKind == JsonValueKind.Array
+                ? txs.EnumerateArray()
+                    .Select(x => ParseTransaction(account, x))
+                    .Where(x => x is not null)
+                    .Cast<TransactionBatchItem>()
+                    .ToList()
+                : [];
+
+            seenPending.AddRange(parsed
+                .Where(item => string.Equals(item.Status, "PDNG", StringComparison.OrdinalIgnoreCase))
+                .Select(item => item.ExternalKey));
+
+            foreach (var chunk in parsed.Chunk(Math.Max(25, _sync.PersistBatchSize)))
+            {
+                await backend.IngestAsync(new(
+                    new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
+                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                    [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
+                        account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
+                        true, account.HasDetails, AccountIdentificationHashes(account),
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
+                    firstPersist ? balances : [],
+                    chunk), ct);
+                firstPersist = false;
+            }
+
+            if (parsed.Count == 0 && firstPersist)
+            {
+                await backend.IngestAsync(new(
+                    new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
+                        connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                    [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
+                        account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
+                        true, account.HasDetails, AccountIdentificationHashes(account),
+                        account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
+                    balances,
+                    []), ct);
+                firstPersist = false;
+            }
+
+            continuation = GetString(response, "continuation_key");
+            if (string.IsNullOrWhiteSpace(continuation))
+                break;
+            if (page == maxPages - 1)
+                pageLimitReached = true;
+        }
+
+        // Only a complete read of the window may conclude that a stored pending row is gone. A
+        // truncated history could simply not have reached it.
+        if (!pageLimitReached)
+            await backend.IngestAsync(new(
+                new(connection.Id, connection.Provider, connection.InstitutionName, connection.Country,
+                    connection.ProviderSessionId, "AUTHORIZED", connection.ValidUntil, DateTimeOffset.UtcNow, null),
+                [new(account.IdentificationHash, account.ProviderAccountId, connection.InstitutionName,
+                    account.DisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4,
+                    true, account.HasDetails, AccountIdentificationHashes(account),
+                    account.Usage, account.PsuStatus, account.CreditLimitAmount, account.CreditLimitCurrency, account.Iban)],
+                [],
+                [],
+                [new(account.IdentificationHash, seenPending, from)]), ct);
+
+        // A balance the provider sent but nobody could read is reported instead of being replaced by a
+        // zero: the connection ends up in the error health state, so the UI does not look like the sync
+        // simply found no money.
+        if (balanceResult.Unreadable > 0) return AccountSyncOutcome.BalanceUnreadable;
+        return pageLimitReached
+            ? AccountSyncOutcome.HistoryPageLimitReached
+            : AccountSyncOutcome.Success;
+    }
+
+    private static BankConnectionWrite ToWrite(
+        BankConnectionDto connection,
+        string? providerSessionId = null,
+        string? status = null,
+        DateTimeOffset? validUntil = null,
+        DateTimeOffset? lastAttemptAt = null,
+        DateTimeOffset? lastSyncedAt = null,
+        DateTimeOffset? nextSyncAllowedAt = null,
+        bool clearNextSyncAllowedAt = false,
+        int? consecutiveFailures = null,
+        string? lastError = null)
+        => new(
+            connection.Id,
+            connection.Provider,
+            connection.InstitutionName,
+            connection.Country,
+            connection.AuthorizationState,
+            connection.AuthorizationId,
+            providerSessionId ?? connection.ProviderSessionId,
+            status ?? connection.Status,
+            validUntil ?? connection.ValidUntil,
+            lastAttemptAt ?? connection.LastAttemptAt,
+            lastSyncedAt ?? connection.LastSyncedAt,
+            clearNextSyncAllowedAt ? null : nextSyncAllowedAt ?? connection.NextSyncAllowedAt,
+            consecutiveFailures ?? connection.ConsecutiveFailures,
+            lastError,
+            AuthorizationUserId: connection.AuthorizationUserId,
+            AuthorizationStateExpiresAt: connection.AuthorizationStateExpiresAt,
+            EnableBankingProfileId: connection.EnableBankingProfileId,
+            PsuType: connection.PsuType,
+            AuthMethod: connection.AuthMethod,
+            RequiredPsuHeadersJson: connection.RequiredPsuHeadersJson);
+
+    private static List<AccountState> ParseSessionAccounts(BankConnectionDto connection, JsonElement session)
+    {
+        if (session.ValueKind != JsonValueKind.Object) return [];
+
+        var accounts = new List<AccountState>();
+        if (session.TryGetProperty("accounts_data", out var data) && data.ValueKind == JsonValueKind.Array)
+        {
+            accounts.AddRange(data.EnumerateArray()
+                .Select(item => ParseAccount(connection, item))
+                .Where(item => item is not null)
+                .Cast<AccountState>());
+        }
+
+        if (session.TryGetProperty("accounts", out var array) && array.ValueKind == JsonValueKind.Array)
+        {
+            var known = accounts.Select(account => account.ProviderAccountId).ToHashSet(StringComparer.Ordinal);
+            accounts.AddRange(array.EnumerateArray()
+                .Select(item => item.ValueKind switch
+                {
+                    JsonValueKind.Object => ParseAccount(connection, item),
+                    JsonValueKind.String => ParseAccountFromUid(connection, item.GetString()),
+                    _ => null
+                })
+                .Where(item => item is not null && known.Add(item!.ProviderAccountId))
+                .Cast<AccountState>());
+        }
+
+        return accounts;
+    }
+
+    private static AccountState? ParseAccount(BankConnectionDto connection, JsonElement json)
+    {
+        if (json.ValueKind != JsonValueKind.Object) return null;
+        var uid = GetString(json, "uid");
+        var hash = GetString(json, "identification_hash");
+        if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(hash)) return null;
+        var product = GetString(json, "product");
+        var display = GetString(json, "details") ?? product;
+        return new(
+            hash,
+            uid,
+            display ?? connection.InstitutionName,
+            product,
+            GetString(json, "cash_account_type"),
+            // No fallback: a provider that does not state a currency has not stated one. Reading that
+            // silence as EUR labelled real accounts with a currency nobody reported, and every amount
+            // on them was then converted with the wrong rate. SyncAccountAsync resolves it from the
+            // balances that actually arrive.
+            GetString(json, "currency"),
+            GetIbanLast4(json),
+            IdentificationHashes: GetIdentificationHashes(json, hash),
+            Iban: GetIban(json),
+            HasDetails: display is not null,
+            Usage: GetString(json, "usage"),
+            PsuStatus: GetString(json, "psu_status"),
+            CreditLimitAmount: GetNestedDecimal(json, "credit_limit", "amount"),
+            CreditLimitCurrency: GetNestedString(json, "credit_limit", "currency"));
+    }
+
+    private static AccountState? ParseAccountFromUid(BankConnectionDto connection, string? uid)
+    {
+        if (string.IsNullOrWhiteSpace(uid)) return null;
+        // A placeholder for an account whose details could not be read at all - flagged HasDetails:false
+        // so the backend never overwrites stored metadata with it. Its currency is unknown, not EUR.
+        return new($"uid:{uid}", uid, connection.InstitutionName, null, null, null, null,
+            IdentificationHashes: [], HasDetails: false, NeedsHashResolution: true);
+    }
+
+    private async Task<JsonElement?> TryGetAccountDetailsAsync(
+        EnableBankingClient client,
+        BankConnectionDto connection,
+        string providerAccountId,
+        PsuContext? psuContext,
+        IReadOnlyCollection<string> requiredPsuHeaders,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await client.GetAccountAsync(providerAccountId, psuContext, requiredPsuHeaders, ct);
+        }
+        catch (EnableBankingApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            logger.LogInformation(
+                "Account details for {Uid} of {Institution} are unavailable (404); continuing with session data.",
+                providerAccountId,
+                connection.InstitutionName);
+            return null;
+        }
+    }
+
+    private static AccountState ApplyDetails(AccountState account, JsonElement details)
+    {
+        var primary = GetString(details, "identification_hash") ?? account.IdentificationHash;
+        return account with
+        {
+            IdentificationHash = primary,
+            IdentificationHashes = MergeIdentificationHashes(
+                AccountIdentificationHashes(account),
+                GetIdentificationHashes(details, primary)),
+            DisplayName = GetString(details, "details") ?? GetString(details, "product") ?? account.DisplayName,
+            Product = GetString(details, "product") ?? account.Product,
+            AccountType = GetString(details, "cash_account_type") ?? account.AccountType,
+            Usage = GetString(details, "usage") ?? account.Usage,
+            PsuStatus = GetString(details, "psu_status") ?? account.PsuStatus,
+            CreditLimitAmount = GetNestedDecimal(details, "credit_limit", "amount") ?? account.CreditLimitAmount,
+            CreditLimitCurrency = GetNestedString(details, "credit_limit", "currency") ?? account.CreditLimitCurrency,
+            Currency = GetString(details, "currency") ?? account.Currency,
+            IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4,
+            Iban = GetIban(details) ?? account.Iban
+        };
+    }
+
+    private async Task<AccountSyncState?> FindAccountSyncStateAsync(
+        Guid connectionId,
+        IReadOnlyList<string> identificationHashes,
+        CancellationToken ct)
+    {
+        foreach (var hash in identificationHashes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        {
+            var state = await backend.GetAccountSyncStateAsync(connectionId, hash, ct);
+            if (state is not null) return state;
+        }
+        return null;
+    }
+
+    private static IReadOnlyList<string> GetIdentificationHashes(JsonElement json, string primary)
+    {
+        var hashes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primary)) hashes.Add(primary);
+        if (json.ValueKind == JsonValueKind.Object &&
+            json.TryGetProperty("identification_hashes", out var aliases) &&
+            aliases.ValueKind == JsonValueKind.Array)
+            hashes.AddRange(aliases.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>());
+        return hashes.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<string> AccountIdentificationHashes(AccountState account) =>
+        MergeIdentificationHashes(
+            [account.IdentificationHash],
+            account.IdentificationHashes ?? []);
+
+    private static IReadOnlyList<string> MergeIdentificationHashes(
+        IEnumerable<string> first,
+        IEnumerable<string> second) =>
+        first.Concat(second)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <param name="Unreadable">
+    /// How many entries of the provider's balances array could not be turned into a number. They are not
+    /// stored: a balance nobody could read must not reach the user as a real 0.
+    /// </param>
+    private sealed record BalanceParseResult(List<BalanceBatchItem> Items, int Unreadable);
+
+    private static BalanceParseResult ParseBalances(AccountState account, JsonElement json)
+    {
+        var result = new List<BalanceBatchItem>();
+        if (json.ValueKind != JsonValueKind.Object ||
+            !json.TryGetProperty("balances", out var array) ||
+            array.ValueKind != JsonValueKind.Array)
+            return new(result, 0);
+
+        var captured = DateTimeOffset.UtcNow;
+        var unreadable = 0;
+        foreach (var item in array.EnumerateArray())
+        {
+            // Everything in this array was meant to be a balance, so anything we cannot read is a
+            // balance we failed to read - counted, not swallowed.
+            // A balance with no currency - neither on the row nor on the account - has no unit, so it
+            // is a number nobody can use. Counted as unreadable rather than stamped with a guess.
+            var currency = item.ValueKind == JsonValueKind.Object &&
+                           item.TryGetProperty("balance_amount", out var amountForCurrency)
+                ? GetString(amountForCurrency, "currency") ?? account.Currency
+                : account.Currency;
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("balance_amount", out var amount) ||
+                GetDecimal(amount, "amount") is not { } value ||
+                string.IsNullOrWhiteSpace(currency))
+            {
+                unreadable++;
+                continue;
+            }
+            result.Add(new(
+                account.IdentificationHash,
+                value,
+                currency,
+                GetString(item, "balance_type") ?? "",
+                ParseDate(item, "reference_date"),
+                captured));
+        }
+        return new(result, unreadable);
+    }
+
+    private static TransactionBatchItem? ParseTransaction(AccountState account, JsonElement json)
+    {
+        if (json.ValueKind != JsonValueKind.Object ||
+            !json.TryGetProperty("transaction_amount", out var amountJson))
+            return null;
+
+        // No readable amount means no transaction. Storing it as 0 put a fake booking in the ledger,
+        // and the fingerprint key made that 0 permanent even once the provider reported the real value.
+        if (GetDecimal(amountJson, "amount") is not { } amount) return null;
+        var indicator = GetString(json, "credit_debit_indicator");
+        if (string.Equals(indicator, "DBIT", StringComparison.OrdinalIgnoreCase)) amount = -Math.Abs(amount);
+        else if (string.Equals(indicator, "CRDT", StringComparison.OrdinalIgnoreCase)) amount = Math.Abs(amount);
+
+        var booking = ParseDate(json, "booking_date");
+        var value = ParseDate(json, "value_date");
+        var counterparty = GetCounterparty(json);
+        var description = GetDescription(json);
+        var transactionId = GetString(json, "transaction_id");
+        var entryReference = GetString(json, "entry_reference");
+        var status = (GetString(json, "status") ?? "BOOK").ToUpperInvariant();
+        var currency = GetString(amountJson, "currency") ?? account.Currency;
+        // Same rule as a balance: an amount without a unit is not a booking.
+        if (string.IsNullOrWhiteSpace(currency)) return null;
+
+        // Enable Banking: entry_reference is the stable account-scoped cross-retrieval identifier.
+        // transaction_id is only a pointer to the details resource and can change between retrievals.
+        var key = !string.IsNullOrWhiteSpace(entryReference)
+            ? $"er:{entryReference}"
+            : $"fp:{Fingerprint(account.IdentificationHash, status, booking, value, amount, currency, counterparty, description)}";
+
+        return new(
+            account.IdentificationHash,
+            key,
+            transactionId,
+            status,
+            booking,
+            value,
+            amount,
+            currency,
+            counterparty,
+            description,
+            GetString(json, "merchant_category_code"),
+            entryReference,
+            json.GetRawText(),
+            GetCounterpartyAccountIdentifier(json));
+    }
+
+    private static string? GetCounterparty(JsonElement json)
+    {
+        var debit = string.Equals(GetString(json, "credit_debit_indicator"), "DBIT", StringComparison.OrdinalIgnoreCase);
+        return GetNestedString(json, debit ? "creditor" : "debtor", "name")
+            ?? GetNestedString(json, debit ? "debtor" : "creditor", "name");
+    }
+
+    private static string? GetDescription(JsonElement json)
+    {
+        if (json.TryGetProperty("remittance_information", out var lines) &&
+            lines.ValueKind == JsonValueKind.Array)
+        {
+            var text = string.Join(" | ", lines.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (!string.IsNullOrWhiteSpace(text)) return text;
+        }
+        return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
+    }
+
+    private static IReadOnlyList<string> GetRemittanceInformation(JsonElement json)
+    {
+        if (json.ValueKind != JsonValueKind.Object ||
+            !json.TryGetProperty("remittance_information", out var lines) ||
+            lines.ValueKind != JsonValueKind.Array)
+            return [];
+        return lines.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .ToArray();
+    }
+
+    private static string? GetPartyAccountIdentifier(JsonElement json, string child)
+    {
+        if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty(child, out var account))
+            return null;
+        return NormalizeAccountIdentifier(
+            GetString(account, "iban")
+            ?? GetString(account, "bban")
+            ?? GetString(account, "masked_pan")
+            ?? GetString(account, "pan"));
+    }
+
+    private static string? GetCounterpartyAccountIdentifier(JsonElement json)
+    {
+        var debit = string.Equals(GetString(json, "credit_debit_indicator"), "DBIT", StringComparison.OrdinalIgnoreCase);
+        return GetPartyAccountIdentifier(json, debit ? "creditor_account" : "debtor_account");
+    }
+
+    private static string? GetPartyAccountLast4(JsonElement json, string child)
+    {
+        var normalized = GetPartyAccountIdentifier(json, child);
+        return normalized is { Length: >= 4 } ? normalized[^4..] : normalized;
+    }
+
+    private static string? GetIban(JsonElement json) =>
+        NormalizeAccountIdentifier(GetNestedString(json, "account_id", "iban"));
+
+    private static string? GetIbanLast4(JsonElement json)
+    {
+        var iban = GetIban(json);
+        return iban is { Length: >= 4 } ? iban[^4..] : null;
+    }
+
+    private static string? NormalizeAccountIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = new string(value.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        return normalized.Length == 0 ? null : normalized;
+    }
+
+    private static string Fingerprint(
+        string accountHash,
+        string status,
+        DateOnly? booking,
+        DateOnly? valueDate,
+        decimal amount,
+        string currency,
+        string? counterparty,
+        string? description)
+    {
+        var source =
+            $"{accountHash}|{status}|{booking:yyyy-MM-dd}|{valueDate:yyyy-MM-dd}|{amount.ToString(CultureInfo.InvariantCulture)}|{currency}|{counterparty}|{description}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+    }
+
+    private static JsonElement FindInstitution(JsonElement list, string institutionName)
+    {
+        if (list.ValueKind != JsonValueKind.Object ||
+            !list.TryGetProperty("aspsps", out var aspsps) ||
+            aspsps.ValueKind != JsonValueKind.Array)
+            return default;
+
+        return aspsps.EnumerateArray().FirstOrDefault(x =>
+            string.Equals(GetString(x, "name"), institutionName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void ValidateAuthMethod(JsonElement institution, string? requestedMethod, string desiredPsuType)
+    {
+        if (string.IsNullOrWhiteSpace(requestedMethod)) return;
+        if (!institution.TryGetProperty("auth_methods", out var methods) || methods.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException($"Enable Banking auth method '{requestedMethod}' is not supported by this institution.");
+
+        var found = methods.EnumerateArray().Any(method =>
+        {
+            if (method.ValueKind == JsonValueKind.String)
+                return string.Equals(method.GetString(), requestedMethod, StringComparison.OrdinalIgnoreCase);
+            if (method.ValueKind != JsonValueKind.Object) return false;
+
+            var name = GetString(method, "name") ?? GetString(method, "id");
+            if (!string.Equals(name, requestedMethod, StringComparison.OrdinalIgnoreCase)) return false;
+            if (method.TryGetProperty("hidden_method", out var hidden) && hidden.ValueKind == JsonValueKind.True)
+                return false;
+
+            var methodPsuType = GetString(method, "psu_type");
+            return string.IsNullOrWhiteSpace(methodPsuType) ||
+                   string.Equals(methodPsuType, desiredPsuType, StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (!found)
+            throw new InvalidOperationException(
+                $"Enable Banking auth method '{requestedMethod}' is not available for PSU type '{desiredPsuType}'.");
+    }
+
+    private static void ValidateCredentials(
+        JsonElement institution,
+        string? requestedMethod,
+        string desiredPsuType,
+        IReadOnlyDictionary<string, string>? supplied,
+        bool autosubmit)
+    {
+        if (supplied is null || supplied.Count == 0) return;
+        if (supplied.Count > 20)
+            throw new ArgumentException("Too many Enable Banking credential fields.");
+        foreach (var (name, value) in supplied)
+        {
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 128)
+                throw new ArgumentException("Invalid Enable Banking credential field name.");
+            if (value is null || value.Length > 4096)
+                throw new ArgumentException($"Credential '{name}' exceeds the allowed size.");
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedMethod))
+            throw new InvalidOperationException("Enable Banking credentials require an auth method.");
+        if (!institution.TryGetProperty("auth_methods", out var methods) || methods.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("The selected Enable Banking auth method has no credential schema.");
+
+        JsonElement selected = default;
+        var found = false;
+        foreach (var method in methods.EnumerateArray())
+        {
+            if (method.ValueKind != JsonValueKind.Object) continue;
+            if (!string.Equals(GetString(method, "name"), requestedMethod, StringComparison.OrdinalIgnoreCase)) continue;
+            var methodPsuType = GetString(method, "psu_type");
+            if (!string.IsNullOrWhiteSpace(methodPsuType) &&
+                !string.Equals(methodPsuType, desiredPsuType, StringComparison.OrdinalIgnoreCase))
+                continue;
+            selected = method;
+            found = true;
+            break;
+        }
+        if (!found)
+            throw new InvalidOperationException("The selected Enable Banking auth method is unavailable.");
+
+        var schema = new Dictionary<string, (bool Required, string? Template)>(StringComparer.Ordinal);
+        if (selected.TryGetProperty("credentials", out var fields) && fields.ValueKind == JsonValueKind.Array)
+            foreach (var field in fields.EnumerateArray())
+            {
+                if (field.ValueKind != JsonValueKind.Object) continue;
+                var name = GetString(field, "name");
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                var required = field.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.True;
+                schema[name] = (required, GetString(field, "template"));
+            }
+
+        foreach (var (name, value) in supplied)
+        {
+            if (!schema.TryGetValue(name, out var definition))
+                throw new InvalidOperationException($"Credential '{name}' is not accepted by the selected Enable Banking auth method.");
+            if (string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException($"Credential '{name}' cannot be empty.");
+            if (!string.IsNullOrWhiteSpace(definition.Template))
+            {
+                try
+                {
+                    if (!Regex.IsMatch(value, definition.Template, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250)))
+                        throw new InvalidOperationException($"Credential '{name}' does not match the bank-required format.");
+                }
+                catch (ArgumentException)
+                {
+                    // Enable Banking templates are PCRE. Unsupported .NET constructs are validated
+                    // by Enable Banking/ASPSP rather than turning a valid provider schema into a 500.
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    throw new InvalidOperationException($"Credential '{name}' format validation timed out.");
+                }
+            }
+        }
+
+        if (autosubmit)
+            foreach (var (name, definition) in schema)
+                if (definition.Required && (!supplied.TryGetValue(name, out var value) || string.IsNullOrWhiteSpace(value)))
+                    throw new InvalidOperationException(
+                        $"Credential '{name}' is required when credentials_autosubmit is enabled.");
+    }
+
+    private static IReadOnlyList<string> GetStringArray(JsonElement root, string name) =>
+        root.ValueKind == JsonValueKind.Object &&
+        root.TryGetProperty(name, out var value) &&
+        value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray()
+                .Where(x => x.ValueKind == JsonValueKind.String)
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .ToArray()
+            : [];
+
+    private static IReadOnlyCollection<string> RequiredPsuHeaders(BankConnectionDto connection)
+    {
+        if (string.IsNullOrWhiteSpace(connection.RequiredPsuHeadersJson)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(connection.RequiredPsuHeadersJson)
+                ?.Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray() ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string BuildPseudonymousPsuId(Guid userId, string applicationId)
+    {
+        // Stable for the same FullWorth user + Enable Banking application even if the local
+        // EnableBankingProfile row is deleted/re-created. Contains no email/name/direct identifier.
+        var source = $"{applicationId.Trim()}|{userId:D}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+    }
+
+    private static string NormalizePsuType(string? value)
+    {
+        var psuType = (value ?? string.Empty).Trim().ToLowerInvariant();
+        return psuType switch
+        {
+            "personal" => "personal",
+            "business" => "business",
+            _ => throw new ArgumentException("PSU type must be either 'personal' or 'business'.")
+        };
+    }
+
+    private static string? NormalizeOptionalPsuType(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : NormalizePsuType(value);
+
+    private static string NormalizeCountry(string? value)
+    {
+        var country = (value ?? string.Empty).Trim().ToUpperInvariant();
+        if (country.Length != 2 || country.Any(character => character is < 'A' or > 'Z'))
+            throw new ArgumentException("Country must be a two-letter ISO 3166-1 alpha-2 code.");
+        return country;
+    }
+
+    private static string? NormalizeLanguage(string? value)
+    {
+        var language = value?.Trim().ToLowerInvariant();
+        return language is { Length: 2 } && language.All(char.IsAsciiLetter) ? language : null;
+    }
+
+    private static bool IsTerminalSessionStatus(string? status) =>
+        status is not null && status.ToUpperInvariant() is "EXPIRED" or "REVOKED" or "CLOSED" or "CANCELLED" or "INVALID";
+
+    private static bool RequiresReauthorization(BankConnectionDto? connection) =>
+        connection is not null &&
+        (IsTerminalSessionStatus(connection.Status) ||
+         connection.LastError is "SESSION_EXPIRED" or "SESSION_REVOKED" or "SESSION_CLOSED" or "AUTHORIZATION_FAILED");
+
+    private static string? SessionError(string status) => status switch
+    {
+        "EXPIRED" => "SESSION_EXPIRED",
+        "REVOKED" => "SESSION_REVOKED",
+        "CLOSED" => "SESSION_CLOSED",
+        "CANCELLED" => "AUTHORIZATION_CANCELLED",
+        "INVALID" => "AUTHORIZATION_FAILED",
+        _ => null
+    };
+
+    private static string? GetString(JsonElement e, string name) =>
+        e.ValueKind == JsonValueKind.Object &&
+        e.TryGetProperty(name, out var v) &&
+        v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
+
+    private static string? GetNestedString(JsonElement e, string child, string name) =>
+        e.ValueKind == JsonValueKind.Object && e.TryGetProperty(child, out var c)
+            ? GetString(c, name)
+            : null;
+
+    private static decimal? GetNestedDecimal(JsonElement e, string child, string name)
+    {
+        if (e.ValueKind != JsonValueKind.Object ||
+            !e.TryGetProperty(child, out var nested) ||
+            nested.ValueKind != JsonValueKind.Object ||
+            !nested.TryGetProperty(name, out var value))
+            return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String &&
+               decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    /// <summary>
+    /// A provider date, parsed the way the provider writes it. ISO 8601 is what Enable Banking and
+    /// every ASPSP behind it send, and a date part may carry a time.
+    ///
+    /// This used to be a bare <c>DateOnly.TryParse</c>, which parses with the HOST's culture: a value
+    /// like <c>03.04.2026</c> then read as 3 April on a de-DE host and as 4 March everywhere else,
+    /// including the invariant culture a container runs with. Nothing about a stored booking date may
+    /// depend on the machine's locale, and an unreadable date stays null rather than becoming a guess.
+    /// </summary>
+    private static DateOnly? ParseDate(JsonElement e, string name)
+    {
+        if (e.ValueKind != JsonValueKind.Object ||
+            !e.TryGetProperty(name, out var v) ||
+            v.ValueKind != JsonValueKind.String) return null;
+        var text = v.GetString();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        text = text.Trim();
+
+        // An ISO timestamp is an ISO date with a time attached.
+        var separator = text.IndexOfAny(['T', ' ']);
+        if (separator == 10) text = text[..10];
+
+        foreach (var format in (string[])["yyyy-MM-dd", "yyyyMMdd", "dd.MM.yyyy", "dd/MM/yyyy"])
+            if (DateOnly.TryParseExact(text, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                return parsed;
+        return null;
+    }
+
+    /// <summary>
+    /// Absent is not zero. This used to return <c>0m</c> for a missing or unparseable amount, and that 0
+    /// was persisted as a genuine balance or booking - indistinguishable from a real zero, so an account
+    /// the bank never reported a number for looked empty.
+    /// </summary>
+    private static decimal? GetDecimal(JsonElement e, string name)
+    {
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty(name, out var v)) return null;
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetDecimal(out var n)) return n;
+        return v.ValueKind == JsonValueKind.String &&
+               decimal.TryParse(v.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    /// <summary>In-memory only; the highest value across an account loop is the reported error.</summary>
+    /// <summary>
+    /// Whether this failure belongs to ONE account rather than the whole connection. An expired consent,
+    /// a revoked session or a rate limit affects every account, so those keep aborting the run.
+    /// </summary>
+    private static bool IsSingleAccountProblem(EnableBankingApiException exception) =>
+        EnableBankingErrorClassifier.Classify(exception).Category is
+            BankErrorCategory.TransientProvider or
+            BankErrorCategory.InvalidRequest or
+            BankErrorCategory.TransactionsPeriod or
+            BankErrorCategory.Unknown;
+
+    /// <summary>A FinTS sync parked a TAN challenge on the connection and is waiting for an answer.</summary>
+    private static bool IsWaitingForTan(BankConnectionDto? connection) =>
+        connection is not null &&
+        (string.Equals(connection.Status, "TAN_REQUIRED", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(connection.LastError, "FINTS_TAN_REQUIRED", StringComparison.OrdinalIgnoreCase));
+
+    private enum AccountSyncOutcome
+    {
+        Success = 0,
+        AccountResolutionFailed = 1,
+        HistoryPageLimitReached = 2,
+        BalanceUnreadable = 3,
+        AccountFailed = 4
+    }
+
+    private sealed record AccountState(
+        string IdentificationHash,
+        string ProviderAccountId,
+        string DisplayName,
+        string? Product,
+        string? AccountType,
+        /// <summary>
+        /// What the PROVIDER said, or null when it said nothing. Resolved from the arriving balances
+        /// before the account is stored; never guessed here.
+        /// </summary>
+        string? Currency,
+        string? IbanLast4,
+        IReadOnlyList<string>? IdentificationHashes = null,
+        bool HasDetails = true,
+        bool NeedsHashResolution = false,
+        string? Usage = null,
+        string? PsuStatus = null,
+        decimal? CreditLimitAmount = null,
+        string? CreditLimitCurrency = null,
+        string? Iban = null);
+}
