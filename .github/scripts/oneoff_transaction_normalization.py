@@ -10,9 +10,16 @@ def replace_once(path: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-# 1) Banking ingestion: use an effective date without changing the stable fingerprint,
-#    normalize provider account labels, and store only a concise human-facing purpose.
+def replace_optional(path: str, old: str, new: str) -> None:
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    if old in text:
+        p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
 bank = "src/FullWorth.Banking/Services/BankSyncService.cs"
+
+# Provider account labels: do not surface machine enum values such as PAYPAL_PREMIER_ACCOUNT.
 replace_once(
     bank,
     '''        var product = GetString(json, "product");
@@ -28,10 +35,7 @@ replace_once(
             hash,
             uid,
             display,''')
-replace_once(
-    bank,
-    '            HasDetails: display is not null,',
-    '            HasDetails: rawDisplay is not null,')
+replace_once(bank, '            HasDetails: display is not null,', '            HasDetails: rawDisplay is not null,')
 replace_once(
     bank,
     '            DisplayName = GetString(details, "details") ?? GetString(details, "product") ?? account.DisplayName,',
@@ -39,16 +43,16 @@ replace_once(
                 account.DisplayName,
                 GetString(details, "details") ?? GetString(details, "product"),
                 GetString(details, "product")),''')
+
+# Effective date: provider booking date first, then actual transaction date, then value date.
+# Keep the original provider dates for the fingerprint so normalization cannot create duplicates.
 replace_once(
     bank,
     '''        var booking = ParseDate(json, "booking_date");
         var value = ParseDate(json, "value_date");
         var counterparty = GetCounterparty(json);
         var description = GetDescription(json);''',
-    '''        // Keep the provider's original booking/value dates for the stable fingerprint, but use
-        // the best actual transaction date for display/filtering. Some providers (notably wallets and
-        // card feeds) legitimately leave booking_date/value_date null and only send transaction_date.
-        var providerBooking = ParseDate(json, "booking_date");
+    '''        var providerBooking = ParseDate(json, "booking_date");
         var transactionDate = ParseDate(json, "transaction_date");
         var providerValue = ParseDate(json, "value_date");
         var booking = providerBooking ?? transactionDate ?? providerValue;
@@ -59,9 +63,9 @@ replace_once(
 replace_once(
     bank,
     '            : $"fp:{Fingerprint(account.IdentificationHash, status, booking, value, amount, currency, counterparty, description)}";',
-    '''            // Fingerprint with the RAW provider dates/description so this normalization does not
-            // turn an already imported row into a second transaction on the next sync.
-            : $"fp:{Fingerprint(account.IdentificationHash, status, providerBooking, providerValue, amount, currency, counterparty, rawDescription)}";''')
+    '''            : $"fp:{Fingerprint(account.IdentificationHash, status, providerBooking, providerValue, amount, currency, counterparty, rawDescription)}";''')
+
+# Raw provider text remains available in RawJson/provider details. Description becomes a concise purpose.
 replace_once(
     bank,
     '''    private static string? GetDescription(JsonElement json)
@@ -78,9 +82,7 @@ replace_once(
         return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
     }
 ''',
-    '''    // Exact provider text used for deduplication and retained in RawJson. Do not prettify this
-    // before the fingerprint or the same transaction can receive a new external key after an update.
-    private static string? GetProviderDescription(JsonElement json)
+    r'''    private static string? GetProviderDescription(JsonElement json)
     {
         if (json.TryGetProperty("remittance_information", out var lines) &&
             lines.ValueKind == JsonValueKind.Array)
@@ -94,15 +96,12 @@ replace_once(
         return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
     }
 
-    // The compact transaction list needs a purpose, not a dump of every provider reference. Keep the
-    // full payload in RawJson/provider details, while Description becomes a short human-facing field.
     private static string? NormalizeDescription(string? raw, string? counterparty)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
         var sepaPurpose = TryExtractSepaPurpose(raw);
-        if (!string.IsNullOrWhiteSpace(sepaPurpose))
-            return LimitPurpose(sepaPurpose);
+        if (!string.IsNullOrWhiteSpace(sepaPurpose)) return LimitPurpose(sepaPurpose);
 
         var candidates = new List<string>();
         foreach (var piece in raw.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -177,8 +176,7 @@ replace_once(
             TimeSpan.FromMilliseconds(100));
 ''')
 
-# 2) Existing technical account names must be allowed to refresh on the next sync, while ordinary
-#    user-renamed accounts stay untouched.
+# Existing provider-generated account names may refresh; user-friendly/custom names remain sticky.
 ingestion = "src/FullWorth.Backend/Modules/Ingestion/IngestionModule.cs"
 replace_once(
     ingestion,
@@ -203,16 +201,16 @@ replace_once(
     private static IReadOnlyList<string> AccountHashes(FinanceAccount account)
     {''')
 
-# 3) Date filters should also work for legacy rows that have only ValueDate populated.
-transactions_backend = "src/FullWorth.Backend/Modules/Transactions/TransactionsModule.cs"
+# Legacy rows with only a value date must still participate in date filters.
+backend_tx = "src/FullWorth.Backend/Modules/Transactions/TransactionsModule.cs"
 replace_once(
-    transactions_backend,
+    backend_tx,
     '        if (request.From.HasValue) q = q.Where(x => x.BookingDate >= request.From.Value);\n        if (request.To.HasValue) q = q.Where(x => x.BookingDate <= request.To.Value);',
     '        if (request.From.HasValue) q = q.Where(x => (x.BookingDate ?? x.ValueDate) >= request.From.Value);\n        if (request.To.HasValue) q = q.Where(x => (x.BookingDate ?? x.ValueDate) <= request.To.Value);')
 
-# 4) Compact list rendering: mobile shows the category, desktop may show only a short meaningful purpose.
-#    The helper also protects already stored legacy descriptions before they are re-synced.
 web = "src/FullWorth.Web/wwwroot/features/transactions.js"
+
+# Frontend fallback protects already stored legacy descriptions until they are re-synced.
 replace_once(
     web,
     "function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }\n",
@@ -245,61 +243,46 @@ function displayAccountName(value) {
   return text.split('_').map(part => special[part] || (part.charAt(0) + part.slice(1).toLowerCase())).join(' ');
 }
 ''')
-replace_once(
-    web,
-    "          date: String(t.bookingDate || '').slice(0, 10),",
-    "          date: String(transactionDate(t) || '').slice(0, 10),")
-replace_once(
-    web,
-    "          date: String(item.bookingDate || '').slice(0, 10),",
-    "          date: String(transactionDate(item) || '').slice(0, 10),")
-replace_once(
-    web,
-    "          .map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },",
-    "          .map(x => ({ value: x.id, label: displayAccountName(x.displayName || x.institutionName) }))] },")
-replace_once(
-    web,
-    "  const accountOptions = accounts.map(a => `<option value=\"${a.id}\" data-currency=\"${ctx.esc(a.currency)}\">${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');",
-    "  const accountOptions = accounts.map(a => `<option value=\"${a.id}\" data-currency=\"${ctx.esc(a.currency)}\">${ctx.esc(displayAccountName(a.displayName || a.institutionName))}</option>`).join('');")
-replace_once(
-    web,
-    "      const day = String(x.bookingDate || '').slice(0, 10);",
-    "      const day = String(transactionDate(x) || '').slice(0, 10);")
+
+# List grouping/date display use one consistent date fallback.
+replace_once(web, "String(x.bookingDate || '').slice(0, 10)", "String(transactionDate(x) || '').slice(0, 10)")
+replace_once(web, "ctx.date(x.bookingDate || x.valueDate)", "ctx.date(transactionDate(x))")
+
+# Compact row: desktop gets only a sanitized purpose; mobile gets the category instead of raw provider text.
 replace_once(
     web,
     "    const cat = x.categoryName || x.category || ctx.get('common.uncategorized');\n    const tr = document.createElement('tr');",
     "    const cat = x.categoryName || x.category || ctx.get('common.uncategorized');\n    const purpose = transactionListPurpose(x, name, cat);\n    const tr = document.createElement('tr');")
 replace_once(
     web,
-    '''      `<td class="tx-date-cell">${ctx.date(x.bookingDate || x.valueDate)}</td>` +
-      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span></td>` +''',
-    '''      `<td class="tx-date-cell">${ctx.date(transactionDate(x))}</td>` +
-      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span></td>` +''')
-replace_once(
+    '''<span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}<span class="row-sub">${ctx.esc(x.description || cat)}</span></span>''',
+    '''<span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span>''')
+
+# Stale machine labels are at least humanized immediately; the next sync replaces them at the data layer.
+replace_once(web, "  const name = x.account || '';", "  const name = displayAccountName(x.account || '');")
+
+# Nice-to-have fallbacks outside the main list are intentionally optional so source formatting changes
+# cannot block the core fix.
+replace_optional(web, "String(t.bookingDate || '').slice(0, 10)", "String(transactionDate(t) || '').slice(0, 10)")
+replace_optional(web, "String(item.bookingDate || '').slice(0, 10)", "String(transactionDate(item) || '').slice(0, 10)")
+replace_optional(web, "ctx.date(t.bookingDate)", "ctx.date(transactionDate(t))")
+replace_optional(web, "ctx.esc(t.account || '')", "ctx.esc(displayAccountName(t.account || ''))")
+replace_optional(
     web,
-    "  const name = x.account || '';",
-    "  const name = displayAccountName(x.account || '');")
-replace_once(
-    web,
-    "    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = a?.displayName || a?.institutionName || ''; }",
-    "    if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = displayAccountName(a?.displayName || a?.institutionName || ''); }")
-replace_once(
-    web,
-    "<span class=\"tx-detail-sub\">${ctx.date(t.bookingDate)} · ${ctx.esc(t.account || '')}</span>",
-    "<span class=\"tx-detail-sub\">${ctx.date(transactionDate(t))} · ${ctx.esc(displayAccountName(t.account || ''))}</span>")
+    "label = a?.displayName || a?.institutionName || '';",
+    "label = displayAccountName(a?.displayName || a?.institutionName || '');")
 
 css = Path("src/FullWorth.Web/wwwroot/app.css")
 css_text = css.read_text(encoding="utf-8")
 marker = "/* Transaction list metadata normalization */"
 if marker not in css_text:
     css.write_text(
-        css_text.rstrip() + "\n\n" + marker + r'''
-#transactions-body .tx-mobile-category { display: none; }
-@media (max-width: 760px) {
-  #transactions-body .tx-list-purpose { display: none; }
-  #transactions-body .tx-mobile-category { display: block; }
-}
-''' + "\n",
+        css_text.rstrip() + "\n\n" + marker + "\n"
+        "#transactions-body .tx-mobile-category { display: none; }\n"
+        "@media (max-width: 760px) {\n"
+        "  #transactions-body .tx-list-purpose { display: none; }\n"
+        "  #transactions-body .tx-mobile-category { display: block; }\n"
+        "}\n",
         encoding="utf-8")
 
 print("transaction normalization patch applied")
