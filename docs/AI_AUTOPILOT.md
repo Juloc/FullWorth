@@ -223,12 +223,29 @@ not just the Coach.
 ## The Codex bridge
 
 `src/FullWorth.CodexBridge` is a ~750-line Node 22 service (`server.mjs`, no dependencies beyond the
-standard library) that owns a ChatGPT/Codex login and runs the `@openai/codex` CLI sandboxed. Image
-`ghcr.io/juloc/fullworth-codex`, built for amd64 and arm64 by `.github/workflows/release.yml` alongside
-the main `fullworth` image. `Dockerfile` pins `CODEX_VERSION=0.151.0`, installs `poppler-utils` for
-PDF rendering, and `entrypoint.sh` drops to the `node` user with `gosu`. In `docker-compose.yml` the
-service sits behind `profiles: ["codex"]`, is `read_only` with a tmpfs `/tmp`, and persists only
-`/data/codex`.
+standard library) that owns a ChatGPT/Codex login and runs the `@openai/codex` CLI sandboxed.
+
+Since 1.3.0-alpha.36 it is **not a separate container**. `src/FullWorth.Web/Dockerfile` has a
+`node:22-bookworm-slim` stage that installs `@openai/codex` (pinned `CODEX_VERSION=0.151.0`) and
+copies Node plus that package into the runtime image. There is one image, one release build and
+nothing for an operator to wire up.
+
+Three things make that safe and cheap:
+
+| | |
+|---|---|
+| **Own user** | The bridge runs as `codex` (uid 1990), never as `app`. `/run/fullworth-secrets` is `0700 app:app`; the bridge gets the bridge key as a `0400 codex:codex` copy on tmpfs and can reach nothing else. `/data/codex` is `0700 codex:codex`, so the application cannot read a user's ChatGPT session either. |
+| **Lazy start** | `ops/docker/fullworth-codex-launcher` runs as `codex` from container start and sleeps until `/tmp/fullworth-codex/arm` appears. On an installation that never signed in there is **no Node process at all** — the cost of shipping Codex is one dormant shell. |
+| **Loopback** | `CODEX_BRIDGE_BIND=127.0.0.1`, `CODEX_BRIDGE_PORT=8099`. Narrower than the sidecar, which listened on `0.0.0.0:8080` on the compose network. A stack that shares the bridge (the Cloud's AI review) sets `CODEX_BRIDGE_BIND=0.0.0.0` in its own file. |
+
+Who writes the arm file is a decision, not an accident: `CodexBridgeSupervisor` exposes two named
+HTTP clients. The **arming** one is used by the paths a person triggers (the AI access screens, the
+coach's model list); the **passive** one by the background pipelines (receipts, payslips, pension
+documents), which fall back to local OCR. Without that split, a flag set without a ChatGPT login would
+keep a bridge running forever that can only answer "not signed in".
+
+The entrypoint arms it immediately when `/data/codex` already holds a login, so on a signed-in
+installation the bridge is up before the first request.
 
 ### Authentication: two headers, both required
 
@@ -336,9 +353,9 @@ the two groups of consumers behave differently.
 | Key | Read by | Notes |
 | --- | --- | --- |
 | `CodexTest:Enabled` | `CodexReceiptBridgeClient`, `PayslipCodexExtractor` | Master switch for receipt scanning and payslip structuring. Defaults to `false` (`FULLWORTH_CODEX_TEST_ENABLED`). The canonical name is `AiAccess:CodexBridgeEnabled`; this one is still read so an existing deployment keeps working. |
-| `CodexTest:BaseUrl` | the same three, and as fallback for the `AiAccess` readers | Default `http://fullworth-codex:8080` |
+| `CodexTest:BaseUrl` | the same three, and as fallback for the `AiAccess` readers | Default `http://127.0.0.1:8099` |
 | `CodexTest:BridgeKey` | the same three, and as fallback for the `AiAccess` readers | `FULLWORTH_CODEX_BRIDGE_KEY`, falling back to `FULLWORTH_SECRET` |
-| `AiAccess:CodexBridgeBaseUrl` | `CodexBridgeIntelligenceProvider`, `AiUserAccessEndpoints`, `CoachModelCatalogService` | Falls back to `CodexTest:BaseUrl`, then to `http://fullworth-codex:8080` |
+| `AiAccess:CodexBridgeBaseUrl` | `CodexBridgeIntelligenceProvider`, `AiUserAccessEndpoints`, `CoachModelCatalogService` | Falls back to `CodexTest:BaseUrl`, then to `http://127.0.0.1:8099` — the bridge in this same container |
 | `AiAccess:CodexBridgeKey` | the same three | Falls back to `CodexTest:BridgeKey` |
 
 The consequence a reader has to know: **the Coach's Codex login, model list and `/execute` calls read

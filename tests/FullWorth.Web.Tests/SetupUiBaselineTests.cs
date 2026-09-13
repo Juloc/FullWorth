@@ -71,8 +71,12 @@ public sealed class SetupUiBaselineTests
             var text = ai.GetProperty("codexNotDeployed").GetString();
 
             Assert.False(string.IsNullOrWhiteSpace(text));
-            // It has to name the way out, not merely state the problem.
-            Assert.Contains("--profile codex", text!, StringComparison.Ordinal);
+            // It has to name the way out, not merely state the problem. It used to say "start the
+            // second container with --profile codex"; there is no second container any more, and a
+            // message telling an operator to start one would send them looking for something that
+            // does not exist. What it can honestly say is: it starts itself, wait, then read the log.
+            Assert.DoesNotContain("--profile codex", text!, StringComparison.Ordinal);
+            Assert.Contains("fullworth-codex", text!, StringComparison.Ordinal);
         }
     }
 

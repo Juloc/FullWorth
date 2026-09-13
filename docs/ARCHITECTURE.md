@@ -11,8 +11,9 @@ Related documents: [Security architecture](SECURITY_ARCHITECTURE.md) (trust boun
 
 `ghcr.io/juloc/fullworth` runs `FullWorth.Web.dll` with `FullWorthHost__Unified=true`. Web,
 Backend and Banking are three code modules in one Kestrel process on `:8080` (published to
-`127.0.0.1:8098` by default). The split `fullworth-web` / `-backend` / `-banking` images are not
-built any more; `release.yml` publishes exactly two images, `fullworth` and `fullworth-codex`.
+`127.0.0.1:8080` by default). The split `fullworth-web` / `-backend` / `-banking` images are not
+built any more, and neither is `fullworth-codex`: the Codex bridge is a second process in this same
+image since 1.3.0-alpha.36. `release.yml` publishes exactly one image, `fullworth`.
 
 Composition happens in `src/FullWorth.Web/Program.cs`:
 

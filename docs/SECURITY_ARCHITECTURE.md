@@ -9,9 +9,18 @@ The module composition and the loopback hops are described in
 [Architecture](ARCHITECTURE.md). What matters for security:
 
 - `docker-compose.yml` publishes only
-  `${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080`. PostgreSQL and the optional
-  `fullworth-codex` bridge have no published port at all. Both application containers run
-  `read_only: true` with `no-new-privileges:true` and a tmpfs `/tmp`.
+  `${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8080}:8080`. PostgreSQL has no published
+  port at all, and the Codex bridge binds `127.0.0.1:8099` **inside** the application container, so
+  it has no address on any Docker network unless a stack sets `CODEX_BRIDGE_BIND` deliberately. Both
+  containers run `read_only: true` with `no-new-privileges:true` and a tmpfs `/tmp`.
+- **Codex runs in the application container as its own user (`codex`, uid 1990), and file ownership
+  is the entire boundary.** `/run/fullworth-secrets` is `0700 app:app`, so Codex cannot even list
+  the store that holds `data_encryption_key`, `backend_internal_key` and the database password. It
+  receives exactly one value, the bridge key, as a `0400 codex:codex` copy on tmpfs. The reverse
+  holds too: `/data/codex` is `0700 codex:codex`, so the application cannot read a user's ChatGPT
+  session. `ops/docker/entrypoint.sh` establishes this; it is the only process in the container that
+  is root. The application cannot cross the line by itself — it is not root, and
+  `no-new-privileges` blocks setuid.
 - Running Web, Backend and Banking in one process does **not** merge the trust boundaries. Their
   middleware pipelines are branched in by path and still demand their own keys and user context, and
   the Web module still reaches them as HTTP clients — over loopback, through the same guards the

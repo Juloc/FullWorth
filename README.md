@@ -122,7 +122,7 @@ Always back up:
 - `fullworth-pension` — uploaded pension statements
 - `fullworth-dataprotection` — the key ring that signs your sign-in cookies
 
-If you use the optional Codex bridge, also back up `fullworth-codex` — it holds your Codex sign-in.
+If you sign in to Codex, also back up `fullworth-codex` — it holds that sign-in.
 
 A backup of the database alone is not a backup. `fullworth-secrets` and `fullworth-data` belong
 together: either without the other is unreadable.

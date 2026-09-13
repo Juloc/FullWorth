@@ -39,9 +39,6 @@ jobs:
           - service: fullworth
             image: fullworth
             dockerfile: src/FullWorth.Web/Dockerfile
-          - service: codex
-            image: fullworth-codex
-            dockerfile: src/FullWorth.CodexBridge/Dockerfile
 
     steps:
       - uses: actions/checkout@v6
@@ -116,9 +113,6 @@ jobs:
           - service: fullworth
             image: fullworth
             dockerfile: src/FullWorth.Web/Dockerfile
-          - service: codex
-            image: fullworth-codex
-            dockerfile: src/FullWorth.CodexBridge/Dockerfile
 
     steps:
       - uses: actions/checkout@v6
@@ -214,8 +208,6 @@ jobs:
         include:
           - service: fullworth
             image: fullworth
-          - service: codex
-            image: fullworth-codex
 
     steps:
       - uses: docker/setup-buildx-action@v3

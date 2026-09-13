@@ -333,7 +333,7 @@ public sealed class CodexBridgeIntelligenceProvider(
 
         try
         {
-            var response = await clients.CreateClient().SendAsync(
+            var response = await clients.CreateClient(CodexBridgeSupervisor.PassiveClient).SendAsync(
                 message,
                 HttpCompletionOption.ResponseContentRead,
                 ct);

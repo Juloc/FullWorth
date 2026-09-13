@@ -5,7 +5,15 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const port = Number(process.env.PORT || 8080);
+// Where to listen. CODEX_BRIDGE_PORT/CODEX_BRIDGE_BIND come first, PORT stays the fallback so this
+// file still runs standalone the way it always did.
+//
+// Inside the FullWorth container the bridge is a loopback service: the only caller is the .NET process
+// in the same container, and the image sets 127.0.0.1:8099. A stack that deliberately shares it - the
+// Cloud's AI review does - sets CODEX_BRIDGE_BIND=0.0.0.0 and says so in its own compose file. Loopback
+// as the default, sharing as a decision somebody wrote down.
+const port = Number(process.env.CODEX_BRIDGE_PORT || process.env.PORT || 8080);
+const bindAddress = process.env.CODEX_BRIDGE_BIND || '0.0.0.0';
 const codexRoot = process.env.CODEX_HOME || '/data/codex';
 const workDir = process.env.CODEX_WORKDIR || '/tmp/codex-work';
 // The same <KEY>_FILE convention the .NET services use. This sidecar parses untrusted uploads, so it
@@ -769,4 +777,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, '0.0.0.0', () => addLog(null, 'system', 'startup', 'system', `Finance Codex bridge listening on ${port}`));
+server.listen(port, bindAddress, () => addLog(null, 'system', 'startup', 'system', `Finance Codex bridge listening on ${bindAddress}:${port}`));

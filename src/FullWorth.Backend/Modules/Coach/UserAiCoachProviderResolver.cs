@@ -324,7 +324,8 @@ public sealed class CoachModelCatalogService(
         request.Headers.Add("X-FullWorth-Internal-Key", key);
         request.Headers.Add("X-FullWorth-Codex-Scope", ownerScope);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await clients.CreateClient().SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+        using var response = await clients.CreateClient(Intelligence.CodexBridgeSupervisor.ArmingClient)
+            .SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
         if (!response.IsSuccessStatusCode) return [];
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));

@@ -32,12 +32,22 @@ docker compose up -d
 A fresh installation allows registration for exactly the first account. That account becomes the
 instance administrator; public registration then closes automatically.
 
-### Optional Codex bridge
+### Codex
+
+Nothing to start. The Codex bridge is a process in the application container since
+1.3.0-alpha.36, and it stays asleep until somebody signs in to Codex in the AI settings - an
+installation that never does runs no Node process at all.
+
+Upgrading from a stack that still has the `fullworth-codex` service, use `--remove-orphans`:
 
 ```bash
-docker compose --profile codex pull
-docker compose --profile codex up -d
+docker compose pull
+docker compose up -d --remove-orphans
 ```
+
+Without it the old sidecar keeps running, and two writers on one `CODEX_HOME` is the one reliable way
+to lose the Codex sign-in. The `fullworth-codex` volume keeps its name and is mounted on the
+application service now, so the sign-in itself survives the move.
 
 ## Enable Banking
 

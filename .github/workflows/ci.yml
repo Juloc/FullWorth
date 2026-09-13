@@ -119,3 +119,47 @@ jobs:
 
       - name: Test FinTs
         run: dotnet test tests/FullWorth.FinTs.Tests/FullWorth.FinTs.Tests.csproj --configuration Release
+
+  # The Codex bridge lives in the application image now, under its own user. Nothing in the .NET suite
+  # can see that: the users, the file modes and the fact that Codex resolves its own native binary are
+  # properties of the IMAGE, and the one time they were wrong (a symlink COPY dereferenced into the
+  # wrong directory) everything still compiled and every test still passed.
+  #
+  # Only the Codex stage is built here, not the whole image - the .NET publish and the Playwright base
+  # are already covered, and this job has to stay cheap enough to run on every CI invocation.
+  codex-image:
+    name: Codex in the image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build the Codex stage
+        run: docker build --target codex -t fullworth-codex-stage -f src/FullWorth.Web/Dockerfile .
+
+      - name: Assemble the runtime layout
+        run: |
+          cat > Dockerfile.codex-check <<'DOCKERFILE'
+          FROM fullworth-codex-stage AS codex
+          FROM debian:bookworm-slim
+          RUN (getent group app || groupadd --system app) \
+           && (id -u app || useradd --system --gid app --create-home app) \
+           && (getent group codex || groupadd --system --gid 1990 codex) \
+           && (id -u codex || useradd --system --uid 1990 --gid codex --no-create-home --home-dir /data/codex codex)
+          COPY --from=codex /usr/local/bin/node /usr/local/bin/node
+          COPY --from=codex /usr/local/lib/node_modules/@openai /usr/local/lib/node_modules/@openai
+          RUN ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex-real
+          DOCKERFILE
+          docker build -t fullworth-codex-check -f Dockerfile.codex-check .
+
+      - name: Node, Codex and the codex user are all really there
+        run: |
+          docker run --rm fullworth-codex-check node --version
+          docker run --rm fullworth-codex-check ldd /usr/local/bin/node
+          docker run --rm fullworth-codex-check id codex
+          # The one that actually catches a broken copy: the CLI has to find its own platform binary.
+          docker run --rm fullworth-codex-check codex-real --version
+
+      - name: The launcher and the entrypoint are valid POSIX shell
+        run: |
+          sh -n ops/docker/fullworth-codex-launcher
+          sh -n ops/docker/entrypoint.sh

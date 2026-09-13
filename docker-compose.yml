@@ -4,6 +4,9 @@
 #
 #   docker compose up -d
 #
+# Personal AI through a ChatGPT/Codex sign-in is included — no second service, no profile. It only
+# starts a process once you actually sign in, so an installation that never uses it pays nothing.
+#
 # Every secret this installation needs is created by the service that reads it, the first time it
 # starts without one. The public address, the passkey relying party, the Enable Banking redirect and
 # the host pin are learned from your first registration. Sign-in providers, the FinTS product id and
@@ -68,47 +71,21 @@ services:
       - fullworth-purchases:/data/purchases
       - fullworth-pension:/data/pension
       - fullworth-dataprotection:/data/dataprotection
+      # Your Codex sign-in, if you use one. Inside the container it belongs to a separate user that
+      # the application itself cannot read.
+      - fullworth-codex:/data/codex
       # Writable: this process creates the secrets it owns — the data encryption key, the internal
       # key, the ingest key, the banking key and the Codex bridge key.
       - fullworth-secrets:/run/fullworth-secrets
     shm_size: 1gb
+    # The Codex bridge is a second process in this container, so something has to reap it when it
+    # exits. Without this the container slowly collects zombies.
+    init: true
     security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs:
       - /tmp:mode=1777
 
-  # Optional: personal AI through a ChatGPT/Codex sign-in, in its own container.
-  #   docker compose --profile codex up -d
-  # Without it, "own API key" and "own provider" in the AI settings work normally.
-  fullworth-codex:
-    profiles: ["codex"]
-    image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-latest}
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      # One file, and only this one. This sidecar parses untrusted uploads, so it must never hold a
-      # key that establishes trusted user context.
-      BRIDGE_KEY_FILE: /run/fullworth-secrets/codex_bridge_key
-      CODEX_HOME: /data/codex
-      CODEX_WORKDIR: /tmp/codex-work
-    volumes:
-      - fullworth-codex:/data/codex
-      - type: volume
-        source: fullworth-secrets
-        target: /run/fullworth-secrets/codex_bridge_key
-        read_only: true
-        volume:
-          subpath: codex_bridge_key
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    security_opt: ["no-new-privileges:true"]
-    read_only: true
-    tmpfs:
-      - /tmp:mode=1777
 
 volumes:
   fullworth-data:
@@ -118,6 +95,8 @@ volumes:
   # original statements behind every pension snapshot.
   fullworth-pension:
   fullworth-dataprotection:
+  # Your Codex sign-in. Separate from the rest because it belongs to a different user inside the
+  # container: whoever holds this volume can act as you in ChatGPT.
   fullworth-codex:
   # Holds data_encryption_key, without which every encrypted column in the database is unreadable —
   # and no PostgreSQL backup restores it, because what was lost never lived in PostgreSQL. Back this

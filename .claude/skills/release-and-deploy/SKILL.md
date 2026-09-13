@@ -44,7 +44,6 @@ Then **verify the images actually exist** before deploying:
 
 ```bash
 docker manifest inspect ghcr.io/juloc/fullworth:1.3.0-alpha.N >/dev/null && echo PUBLISHED
-docker manifest inspect ghcr.io/juloc/fullworth-codex:1.3.0-alpha.N >/dev/null && echo PUBLISHED
 ```
 
 Never bump a deploy stack to a tag you have not verified exists.
@@ -65,7 +64,7 @@ Stacks and what they are:
 | `fullworth-cloud/` | private cloud API/worker | own `fullworth-cloud*` images |
 | `fullworth-landing/` | landing page | own image |
 
-Bump the `FULLWORTH_VERSION` default (it appears on both the `fullworth` and `fullworth-codex` image lines):
+Bump the `FULLWORTH_VERSION` default. From 1.3.0-alpha.36 there is one image line per stack - the Codex bridge moved into the main image, and `fullworth-codex` is no longer built:
 
 ```bash
 sed -i 's/1\.3\.0-alpha\.OLD/1.3.0-alpha.NEW/g' fullworth/docker-compose.yml finance/docker-compose.yml

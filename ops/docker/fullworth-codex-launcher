@@ -1,0 +1,43 @@
+#!/bin/sh
+# Keeps the Codex bridge alive inside the FullWorth container, under the "codex" user.
+#
+# Codex used to be its own container. Folding it into this image is what makes "always ready" possible
+# without an operator wiring a second service - but an installation that never signed Codex in should
+# not carry a Node process that can only answer "not signed in". So this script sleeps until the arm
+# file appears. Until then the whole cost of having Codex in the image is one dormant shell.
+#
+# Who writes the arm file: either the entrypoint, when this installation already has a Codex login, or
+# the application itself the first time a person opens the Codex screens (CodexBridgeSupervisor). The
+# background pipelines deliberately do not - they fall back to local OCR.
+#
+# Run as "codex", never as "app". The two users cannot read each other's files: the application's
+# secrets are out of reach here, and the Codex login under /data/codex is out of reach there. That
+# separation is the reason this runs as its own process rather than inside the application.
+set -eu
+
+ARM_DIR=${CODEX_ARM_DIR:-/tmp/fullworth-codex}
+ARM=$ARM_DIR/arm
+SERVER=${CODEX_SERVER:-/opt/fullworth-codex/server.mjs}
+
+while [ ! -e "$ARM" ]; do
+  sleep 1
+done
+
+echo "fullworth-codex: armed, starting the bridge" >&2
+
+backoff=1
+while :; do
+  # Not exec: this loop has to outlive the bridge, or a crash would leave the application talking to
+  # nothing until the whole container is restarted.
+  node "$SERVER" || true
+
+  echo "fullworth-codex: bridge exited, restarting in ${backoff}s" >&2
+  sleep "$backoff"
+
+  # Backing off rather than spinning: a bridge that cannot start at all - a corrupt CODEX_HOME, a
+  # missing key file - would otherwise burn a core and fill the container log with the same line.
+  backoff=$(( backoff * 2 ))
+  if [ "$backoff" -gt 30 ]; then
+    backoff=30
+  fi
+done

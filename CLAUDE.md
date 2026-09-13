@@ -13,7 +13,7 @@ System-wide context across all FullWorth repos: `../CLAUDE.md`. The single activ
 - `src/FullWorth.Compensation.Core` — the German payroll engine, **deliberately dependency-free** so it also compiles to WASM
 - `src/FullWorth.Compensation.Wasm` — browser bundle of that engine for the landing page; **not in `FullWorth.slnx` and not in any Dockerfile** (needs the `wasm-tools` workload)
 - `src/Shared/SecretBootstrap.cs` — not a project; `<Compile Include>`-linked into Backend, Web and Banking. Docker-secret file config source + fail-closed `RequireSecret`
-- `src/FullWorth.CodexBridge` — Node sidecar (`server.mjs`) that runs `codex exec`; exposes `POST /execute` (`{systemInstruction, inputJson, jsonSchema, model}` → `{success, outputJson}`), `POST /scan`, `GET /status`, `POST /auth/start`, `GET /auth/{id}`, `POST /logout`, `GET /models`, `GET /logs/recent`. Auth: `X-FullWorth-Internal-Key` + `X-FullWorth-Codex-Scope` (64-hex sha256)
+- `src/FullWorth.CodexBridge` — the Node Codex bridge (`server.mjs`) that runs `codex exec`. **Not a separate container since alpha.36:** `src/FullWorth.Web/Dockerfile` builds it into the app image, it runs as the `codex` user on `127.0.0.1:8099`, and `ops/docker/fullworth-codex-launcher` keeps it asleep until something arms it. Exposes `POST /execute` (`{systemInstruction, inputJson, jsonSchema, model}` → `{success, outputJson}`), `POST /scan`, `GET /status`, `POST /auth/start`, `GET /auth/{id}`, `POST /logout`, `GET /models`, `GET /logs/recent`. Auth: `X-FullWorth-Internal-Key` + `X-FullWorth-Codex-Scope` (64-hex sha256)
 - `tests/FullWorth.{Backend,Web,Banking,FinTs}.Tests`
 - `ops/release-request.txt` — release trigger (see below)
 - `ops/ui-harness/` — serves the real `wwwroot` against fixtures, no login needed
@@ -69,7 +69,7 @@ Check the browser console for module errors after any frontend refactor. Measure
 ## Release
 
 1. Bump `ops/release-request.txt` to `vX.Y.Z-alpha.N`, commit, push to `main`.
-2. `Alpha Release Request` workflow creates the tag → `Release` workflow publishes `ghcr.io/juloc/fullworth` and `ghcr.io/juloc/fullworth-codex`, amd64 + arm64 (~4–16 min).
+2. `Alpha Release Request` workflow creates the tag → `Release` workflow publishes `ghcr.io/juloc/fullworth`, amd64 + arm64 (~4–16 min). `fullworth-codex` is no longer built — the bridge is in the main image.
 3. Verify: `gh run list`, then `docker manifest inspect ghcr.io/juloc/fullworth:1.3.0-alpha.N`.
 
 **A failed release burns its tag** (alpha.11 was lost that way). The Dockerfiles copy projects one by one, so a new project fails the image build *after* CI is green — check both before bumping.

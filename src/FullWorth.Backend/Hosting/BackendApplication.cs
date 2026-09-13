@@ -85,6 +85,15 @@ public static class BackendApplication
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiIntelligenceProvider>());
         builder.Services.AddScoped<OpenAiCompatibleIntelligenceProvider>();
         builder.Services.AddScoped<CodexBridgeIntelligenceProvider>();
+
+        // Two clients for one bridge, because the difference between them is who is allowed to start it.
+        // See CodexBridgeSupervisor: the arming one is for paths a human triggered, the passive one for
+        // pipelines that fall back to local OCR and must not keep a signed-out bridge running.
+        builder.Services.AddSingleton<CodexBridgeSupervisor>();
+        builder.Services.AddTransient<CodexBridgeArmingHandler>();
+        builder.Services.AddHttpClient(CodexBridgeSupervisor.ArmingClient)
+            .AddHttpMessageHandler<CodexBridgeArmingHandler>();
+        builder.Services.AddHttpClient(CodexBridgeSupervisor.PassiveClient);
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<OpenAiCompatibleIntelligenceProvider>());
         builder.Services.AddScoped<IIntelligenceProvider>(services => services.GetRequiredService<CodexBridgeIntelligenceProvider>());
         builder.Services.AddScoped<IntelligenceProviderRegistry>();

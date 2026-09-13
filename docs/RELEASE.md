@@ -26,10 +26,14 @@ Also review authentication, authorization, uploads, backups and live-bank checks
 
 ## Images
 
-A release publishes only the deployment images:
+A release publishes one deployment image:
 
-- `ghcr.io/juloc/fullworth` — unified Web + Backend + Banking host
-- `ghcr.io/juloc/fullworth-codex` — optional Codex / ChatGPT bridge
+- `ghcr.io/juloc/fullworth` — unified Web + Backend + Banking host, with the Codex bridge as a
+  second process under its own user
+
+`ghcr.io/juloc/fullworth-codex` is no longer built. Tags up to 1.3.0-alpha.35 stay in GHCR, so a
+deployment pinned to one of those keeps working; from alpha.36 the sidecar service is removed from the
+compose files instead (`--remove-orphans` on the upgrade, or two writers share one `CODEX_HOME`).
 
 Backend and Banking remain separate projects internally for module boundaries and tests, but they are not separate containers in the canonical deployment.
 

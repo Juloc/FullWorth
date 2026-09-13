@@ -55,7 +55,7 @@ public sealed class PayslipCodexExtractor(
             message.Headers.Add("X-FullWorth-Codex-Scope", BridgeScope(userId));
             message.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
-            var client = clients.CreateClient();
+            var client = clients.CreateClient(Intelligence.CodexBridgeSupervisor.PassiveClient);
             client.Timeout = TimeSpan.FromMinutes(4);
             using var response = await client.SendAsync(message, HttpCompletionOption.ResponseContentRead, ct);
             var raw = await response.Content.ReadAsStringAsync(ct);

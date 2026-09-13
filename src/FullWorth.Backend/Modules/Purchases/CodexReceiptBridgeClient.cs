@@ -89,7 +89,7 @@ public sealed class CodexReceiptBridgeClient(
             message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             message.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            var client = clients.CreateClient();
+            var client = clients.CreateClient(Intelligence.CodexBridgeSupervisor.PassiveClient);
             client.Timeout = TimeSpan.FromMinutes(5);
             using var response = await client.SendAsync(message, HttpCompletionOption.ResponseContentRead, ct);
             var body = await response.Content.ReadAsStringAsync(ct);

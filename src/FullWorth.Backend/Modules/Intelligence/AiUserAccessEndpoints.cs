@@ -467,7 +467,7 @@ public static class AiUserAccessEndpoints
 
         try
         {
-            var client = clients.CreateClient();
+            var client = clients.CreateClient(CodexBridgeSupervisor.ArmingClient);
             client.Timeout = TimeSpan.FromMinutes(11);
             using var response = await client.SendAsync(message, HttpCompletionOption.ResponseContentRead, ct);
             var body = await response.Content.ReadAsStringAsync(ct);

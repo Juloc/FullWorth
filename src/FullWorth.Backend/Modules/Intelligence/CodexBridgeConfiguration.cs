@@ -15,8 +15,13 @@ namespace FullWorth.Backend.Modules.Intelligence;
 /// </summary>
 internal static class CodexBridgeConfiguration
 {
-    /// <summary>The sidecar's address inside the compose network. Not a production domain.</summary>
-    internal const string DefaultBaseUrl = "http://fullworth-codex:8080";
+    /// <summary>
+    /// Loopback, because the bridge now runs inside this container rather than beside it. Not a
+    /// production domain, and narrower than the old <c>http://fullworth-codex:8080</c>: the bridge
+    /// binds 127.0.0.1 by default, so nothing on any Docker network can reach it unless a stack says
+    /// so deliberately (the Cloud's AI review does, with its own alias and CODEX_BRIDGE_BIND).
+    /// </summary>
+    internal const string DefaultBaseUrl = "http://127.0.0.1:8099";
 
     private const string CanonicalEnabled = "AiAccess:CodexBridgeEnabled";
     private const string CanonicalBaseUrl = "AiAccess:CodexBridgeBaseUrl";

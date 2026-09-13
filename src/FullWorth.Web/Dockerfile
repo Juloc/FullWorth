@@ -24,19 +24,60 @@ COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
 RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app --no-restore /p:UseAppHost=false
 
+# Codex and the Node runtime it needs. Built here rather than relied upon in the base image:
+# mcr.microsoft.com/playwright/dotnet makes no promise about shipping Node, and it has changed which
+# tools it carries between minors before.
+#
+# What this costs, measured rather than guessed: 125 MB for Node plus 332 MB for the Codex CLI and
+# the native binary it ships, uncompressed, paid by every installation including the ones that never
+# use Codex. In exchange the second image disappears entirely, so the registry shrinks overall and the
+# release matrix loses two of its four builds.
+FROM node:22-bookworm-slim AS codex
+ARG CODEX_VERSION=0.151.0
+RUN npm install --global "@openai/codex@${CODEX_VERSION}"
+
 # The unified image includes the backend's browser/OCR runtime so Amazon, receipt and PDF features
 # keep working after Web + Backend + Banking move into one process.
 FROM mcr.microsoft.com/playwright/dotnet:v1.62.0-noble
+
+# Two users, and the difference between them is the entire access control between the application and
+# Codex. Codex parses untrusted uploads: it must never be able to read the data encryption key or the
+# internal key, and the application must not be able to read the ChatGPT session under /data/codex.
+#
+# codex is created after app and with a fixed id, so app keeps the uid that every existing volume is
+# already chowned to. The modes that make this real are set in the entrypoint, which is the only
+# process here that is root.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl gosu tesseract-ocr tesseract-ocr-deu poppler-utils \
  && (getent group app >/dev/null 2>&1 || groupadd --system app) \
  && (id -u app >/dev/null 2>&1 || useradd --system --gid app --create-home app) \
+ && (getent group codex >/dev/null 2>&1 || groupadd --system --gid 1990 codex) \
+ && (id -u codex >/dev/null 2>&1 || useradd --system --uid 1990 --gid codex --no-create-home --home-dir /data/codex codex) \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=build /app .
 COPY ops/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Node plus the Codex CLI. The @openai tree is copied whole, because the CLI's platform binary lives
+# in a nested optional dependency underneath it - but only that tree: npm and corepack are build-time
+# tools and nothing here installs a package at runtime.
+COPY --from=codex /usr/local/bin/node /usr/local/bin/node
+COPY --from=codex /usr/local/lib/node_modules/@openai /usr/local/lib/node_modules/@openai
+
+# The bridge itself, and the wrapper the bridge invokes as "codex" - it is what pins the sandbox and
+# approval flags, so the real binary is never reachable under that name by accident.
+COPY src/FullWorth.CodexBridge/server.mjs /opt/fullworth-codex/server.mjs
+COPY src/FullWorth.CodexBridge/codex-wrapper.mjs /usr/local/bin/codex
+COPY ops/docker/fullworth-codex-launcher /usr/local/bin/fullworth-codex-launcher
+# codex-real is linked here rather than copied from the build stage. COPY --from dereferences a
+# symlink it is given by name, and a codex.js sitting in /usr/local/bin resolves its own package from
+# the wrong directory and dies with "Missing optional dependency @openai/codex-linux-x64" - measured
+# in a probe image, not guessed.
+RUN ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex-real \
+ && chmod 0755 /usr/local/bin/codex /usr/local/bin/fullworth-codex-launcher \
+ && chmod 0644 /opt/fullworth-codex/server.mjs
 
 # This image IS the unified host: web, backend and banking in one process, talking to themselves
 # over loopback. Declaring it here rather than in every compose file means a deployment never has to
@@ -71,6 +112,24 @@ ENV Database__Password_FILE=/run/fullworth-secrets/fullworth_db_password \
 # Its own ENV, not appended above: a # inside a line continuation is part of the instruction, not a
 # comment, so the whole block would become one long broken variable.
 ENV FullWorthCloud__KnowledgePackPublicKeyPath=/run/fullworth-secrets/cloud-public/public.pem
+
+# Where Codex lives in this container. Enabled by default now that it IS this container: the launcher
+# does not start Node until somebody needs it, so "enabled" costs a dormant shell rather than a second
+# service an operator has to wire up.
+#
+# 127.0.0.1 is deliberately narrower than the sidecar was. The only caller is the .NET process in this
+# same container. A stack that wants to share the bridge - the Cloud's AI review - sets
+# CODEX_BRIDGE_BIND=0.0.0.0 in its own file, where the decision is visible.
+#
+# BRIDGE_KEY_FILE points at the tmpfs copy the entrypoint places for the codex user, NOT at
+# /run/fullworth-secrets: that directory is 0700 app:app and Codex cannot even list it.
+ENV AiAccess__CodexBridgeEnabled=true \
+    CODEX_BRIDGE_PORT=8099 \
+    CODEX_BRIDGE_BIND=127.0.0.1 \
+    CODEX_HOME=/data/codex \
+    CODEX_WORKDIR=/tmp/codex-work \
+    CODEX_ARM_DIR=/tmp/fullworth-codex \
+    BRIDGE_KEY_FILE=/tmp/fullworth-codex/bridge_key
 
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \

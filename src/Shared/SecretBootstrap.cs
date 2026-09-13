@@ -108,6 +108,18 @@ public static class SecretBootstrap
                 // secret, and overwrite: false so a racing sibling process cannot clobber the winner.
                 var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 File.WriteAllText(temp, secret);
+
+                // Owner-only, and set BEFORE the move so the file is never readable by anyone else, not
+                // even for the instant between appearing and being tightened.
+                //
+                // These used to be created with the default 0644 - world-readable. That was harmless
+                // while one uid existed in the container and a hole the moment a second one did: Codex
+                // now runs beside the app under its own uid, and it must not be able to read the data
+                // encryption key or the internal key by walking the directory. Only codex_bridge_key
+                // crosses that line, and the entrypoint widens exactly that one file on purpose.
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
                 File.Move(temp, path, overwrite: false);
                 created.Add(variable);
             }
