@@ -1,5 +1,6 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { showToast } from '../ui/toast.js';
 import { confirmMessage } from '../ui/confirm.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
@@ -821,8 +822,7 @@ function renderBatch(batch) {
 async function batchAction(id, action) {
   try { await api(`api/purchases/receipt-imports/batches/${id}/${action}`, { method: 'POST' }); await refreshBatches(); }
   catch (error) {
-    const toast=document.getElementById('toast');
-    if(toast){toast.textContent=error.message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3200);}
+    showToast(error.message);
   }
 }
 

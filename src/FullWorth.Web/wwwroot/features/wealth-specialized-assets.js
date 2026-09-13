@@ -1,5 +1,6 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { showToast } from '../ui/toast.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
 
@@ -46,7 +47,7 @@ function money(value, currency) {
 }
 function date(value) { if (!value) return '—'; try { return new Intl.DateTimeFormat(lang() === 'de' ? 'de-DE' : 'en-US').format(new Date(`${String(value).slice(0, 10)}T12:00:00`)); } catch { return String(value); } }
 function num(value) { return value === '' || value == null ? null : Number(value); }
-function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
+const toast = message => showToast(message, 2600);
 
 function ensureCss() {
   if (document.querySelector('link[data-specialized-wealth-css]')) return;

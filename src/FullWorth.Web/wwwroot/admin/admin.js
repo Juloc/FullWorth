@@ -3,6 +3,7 @@ import { createDialog } from '../ui/dialog.js';
 import { secureFetch } from '../security/secure-fetch.js';
 import { createInstanceSettingsPanel } from './instance-settings.js';
 import { createVaultPanel } from './vault.js';
+import { createToast } from '../ui/toast.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -30,10 +31,10 @@ async function request(path,options){
   return response.status===204?null:response.json();
 }
 
-function toast(text){
-  const el=$('#admin-toast');el.textContent=text;el.classList.add('show');
-  clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2500);
-}
+// The shared controller, so a message raised from inside a dialog reaches the top layer and is
+// actually on screen. See ui/toast.js.
+const adminToast=createToast(document.querySelector('#admin-toast'),{defaultDuration:2500});
+const toast=text=>adminToast.show(text);
 
 // Secrets travel one way. The form never receives a stored value - it only learns THAT one is
 // stored - so an empty field means "leave it alone" rather than "delete it". Without that, saving a

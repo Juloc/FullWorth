@@ -63,7 +63,9 @@
   #bottom-nav button span{font-size:10px;line-height:1}
   #bottom-nav button.active{color:var(--text);background:var(--surface-2);border-radius:10px}
   .metric-grid{grid-template-columns:repeat(2,1fr)}
-  #toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
+  /* Auch als Popover: #toast[popover] ist spezifischer als #toast, sonst bliebe der Toast auf dem
+     Handy rechts kleben statt die Breite zu nehmen. */
+  #toast,#toast[popover]{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:none;inset-block-start:auto}
 }
 @media(max-width:767px){
   /* Phone: stack the header. Side by side, the five controls claimed 240px and still wrapped onto a

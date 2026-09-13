@@ -3,6 +3,7 @@ import { onPrivacyChange } from '../ui/privacy.js';
 import { bindChartScrubber } from '../ui/chart-scrubber.js';
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { showToast } from '../ui/toast.js';
 import { confirmMessage } from '../ui/confirm.js';
 import { ButtonRole, buttonClass } from '../ui/buttons.js';
 
@@ -22,7 +23,7 @@ ensureCss();
 
 const api=(path,options)=>sharedApi(path,options);
 const json=(method,body)=>jsonBody(body,method);
-function toast(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),3200)}
+const toast=message=>showToast(message);
 function modal(title){
   const dialog=createDialog(
     `<div class="dialog-card fp-dialog-card ip-card"><div class="panel-head fp-dialog-head ip-head"><div><h2>${esc(title)}</h2><div data-ip-subtitle class="fp-muted"></div></div></div><div data-ip-root></div></div>`,

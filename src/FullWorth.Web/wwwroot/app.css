@@ -494,6 +494,10 @@ body.locked{overflow:hidden}
 /* Toast */
 #toast{position:fixed;right:20px;bottom:20px;background:var(--text);color:var(--surface);padding:10px 14px;border-radius:9px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s;max-width:min(420px,calc(100vw - 40px));z-index:90}
 #toast.show{opacity:1;transform:none}
+/* In der Top-Layer, damit die Meldung ueber einem modalen Dialog steht - siehe ui/toast.js.
+   Der Popover-Standardstil zentriert das Element (inset:0;margin:auto) und gibt ihm einen Rahmen;
+   beides hier zurueckgenommen, damit der Toast bleibt, wo er war. */
+#toast[popover]{position:fixed;inset:auto 20px 20px auto;margin:0;border:0;padding:10px 14px;overflow:visible;color:var(--surface);background:var(--text)}
 
 /* Mobile bottom nav (§3.2) — hidden on desktop */
 #bottom-nav{display:none}

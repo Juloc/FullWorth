@@ -46,6 +46,9 @@
 
 #admin-toast{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--text);color:var(--bg);border-radius:var(--radius-input);padding:10px 14px;opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s;z-index:60}
 #admin-toast.show{opacity:1;transform:none}
+/* In the top layer, so a message raised from inside a dialog is visible - see ui/toast.js. The
+   popover default style centres the element and gives it a border; both undone here. */
+#admin-toast[popover]{position:fixed;inset:auto 20px calc(20px + env(safe-area-inset-bottom,0px)) auto;margin:0;border:0;padding:10px 14px;overflow:visible;background:var(--text);color:var(--bg)}
 
 @media(max-width:900px){
   .admin-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -58,7 +61,8 @@
   .admin-user{grid-template-columns:minmax(0,1fr) auto}
   .admin-user>:nth-child(2),.admin-user>:nth-child(3),.admin-user>:nth-child(4){display:none}
   .admin-detail-grid{grid-template-columns:1fr}
-  #admin-toast{left:var(--s3);right:var(--s3)}
+  /* Same specificity note as the app: #admin-toast[popover] would otherwise win. */
+  #admin-toast,#admin-toast[popover]{left:var(--s3);right:var(--s3);inset-block-start:auto}
 }
 
 /* The provider form. Same two-column label pattern as the settings grid in the app, so nothing new is

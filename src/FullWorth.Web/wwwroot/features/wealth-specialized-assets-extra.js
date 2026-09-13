@@ -1,5 +1,6 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { showToast } from '../ui/toast.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
 
@@ -43,7 +44,7 @@ function money(value, currency) {
 function fmtDate(value) { if (!value) return '—'; try { return new Intl.DateTimeFormat(lang() === 'de' ? 'de-DE' : 'en-US').format(new Date(`${String(value).slice(0, 10)}T12:00:00`)); } catch { return String(value); } }
 function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function num(value) { return value === '' || value == null ? null : Number(value); }
-function toast(message) { const el = document.querySelector('#toast'); if (!el) return; el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
+const toast = message => showToast(message, 2600);
 const json=(method,body)=>jsonBody(body,method);
 function opts(values, selected) { return values.map(value => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(value)}</option>`).join(''); }
 

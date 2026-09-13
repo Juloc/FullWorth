@@ -1,5 +1,6 @@
 import { api as sharedApi, apiClient } from '../core/services.js';
 import { createDialog } from '../ui/dialog.js';
+import { showToast } from '../ui/toast.js';
 // Detail explorer for bulk receipt import batches. The core importer owns polling and batch actions;
 // this module only enriches rendered cards and loads details after an explicit user action.
 
@@ -37,8 +38,7 @@ async function openDetails(card, button) {
     const detail = await api(`api/purchases/receipt-imports/batches/${encodeURIComponent(id)}`);
     showDetailDialog(detail);
   } catch (error) {
-    const toast=document.getElementById('toast');
-    if(toast){toast.textContent=error?.message || t('Details konnten nicht geladen werden.','Could not load details.');toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3200);}
+    showToast(error?.message || t('Details konnten nicht geladen werden.', 'Could not load details.'));
   } finally {
     button.disabled = false;
   }
@@ -70,12 +70,7 @@ async function analyseItem(dlg, batchId, itemId, button) {
     dlg.querySelector('[data-import-batch-detail-panel]')?.replaceWith(renderPanel(updated, dlg));
   } catch (error) {
     button.disabled = false;
-    const toast = document.getElementById('toast');
-    if (toast) {
-      toast.textContent = error?.message || t('Analyse konnte nicht gestartet werden.', 'Could not start the analysis.');
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3200);
-    }
+    showToast(error?.message || t('Analyse konnte nicht gestartet werden.', 'Could not start the analysis.'));
   }
 }
 
