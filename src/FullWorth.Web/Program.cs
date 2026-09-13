@@ -51,10 +51,20 @@ FullWorth.Shared.PublicUrl.AddDerivedSettings(builder.Configuration);
 // variables. That position is the whole precedence rule: an operator who sets FullWorth__PublicUrl
 // still wins, while appsettings' development defaults (Passkeys:RelyingPartyId = localhost,
 // AllowedHosts = *) lose to what this installation actually learned about itself.
+// FindLAST, and never position 0 as a fallback. There are TWO environment-variable sources: the host
+// one the builder adds before anything else (DOTNET_/ASPNETCORE_ prefixed) and the application one it
+// adds last. Taking the first put this source at index 1 - above appsettings.json instead of below it
+// - so the learned address lost to the development defaults it exists to override, AllowedHosts
+// stayed "*", and a Production instance with users restart-looped on "no host pin" with its own
+// address sitting in its own database. It was masked for as long as the deploy stack still set
+// AllowedHosts by hand.
+//
+// And if there is no environment source at all, append: -1 must not silently mean "before everything".
 var publicUrlSource = new InstancePublicUrlConfigurationSource();
+var environmentSourceIndex = builder.Configuration.Sources.ToList().FindLastIndex(
+    source => source is Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource);
 builder.Configuration.Sources.Insert(
-    Math.Max(0, builder.Configuration.Sources.ToList().FindIndex(
-        source => source is Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource)),
+    environmentSourceIndex >= 0 ? environmentSourceIndex : builder.Configuration.Sources.Count,
     publicUrlSource);
 builder.Services.AddSingleton(publicUrlSource);
 builder.Services.AddScoped<InstanceSettingsStore>();
@@ -295,7 +305,10 @@ await using (var scope = app.Services.CreateAsyncScope())
         var pinned = app.Configuration["AllowedHosts"];
         if (string.IsNullOrWhiteSpace(pinned) || pinned.Split(';').Any(h => h.Trim() == "*"))
             throw new InvalidOperationException(
-                "This instance has users but no host pin. Set FullWorth:PublicUrl, or AllowedHosts itself.");
+                "This instance has users but no host pin, so it refuses to start. It normally learns "
+                + "its address from the first registration; if that never happened, state it once: "
+                + "FULLWORTH__PUBLICURL=https://your.domain (or AllowedHosts=your.domain;127.0.0.1;localhost). "
+                + "It is stored on the next start and the variable can be removed again.");
     }
 
     // After the migration, because it reads the stored providers. An unconfigured remote scheme is

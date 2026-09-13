@@ -17,7 +17,8 @@ public sealed class RegistrationService(
     AuthService auth,
     AuthSessionCoordinator sessions,
     FullWorth.Web.Modules.Admin.InstanceSettingsStore instanceSettings,
-    FullWorth.Web.Modules.Admin.InstancePublicUrlConfigurationSource publicUrl)
+    FullWorth.Web.Modules.Admin.InstancePublicUrlConfigurationSource publicUrl,
+    ILogger<RegistrationService> logger)
 {
     private static readonly SemaphoreSlim FirstRegistrationGate = new(1, 1);
 
@@ -201,7 +202,14 @@ public sealed class RegistrationService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // The account exists either way, and the address can still come from configuration.
+            // The account exists either way, and the address can still come from configuration - so
+            // this must not fail the registration. But it must not be silent either: the host pin is
+            // fail-closed, so an installation that never learns its address works perfectly until the
+            // next restart and then refuses to start, with nothing anywhere saying why.
+            logger.LogError(
+                exception,
+                "Could not remember this installation's public address. It will refuse to start after "
+                + "the next restart unless FULLWORTH__PUBLICURL is set.");
         }
     }
 
