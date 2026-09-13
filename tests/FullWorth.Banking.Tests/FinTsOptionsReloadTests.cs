@@ -7,7 +7,7 @@ namespace FullWorth.Banking.Tests;
 public sealed class FinTsOptionsReloadTests
 {
     [Fact]
-    public async Task Product_id_uses_the_latest_reloaded_configuration()
+    public void Product_id_uses_the_latest_reloaded_configuration()
     {
         var monitor = new MutableOptionsMonitor<FinTsOptions>(new FinTsOptions());
         var service = new IngFinTsService(
@@ -17,18 +17,16 @@ public sealed class FinTsOptionsReloadTests
             Options.Create(new BankingSyncOptions()),
             null!);
 
-        // This models the admin menu publishing FinTs:ProductId after the service/options were first
-        // resolved. IOptions<T> used to snapshot the empty value, so ProductIdAsync fell through to
-        // the deprecated backend store and reported "No FinTS product id" until a restart.
+        // This models the admin menu publishing FinTs:ProductId after options were first resolved.
+        // The old IOptions<T> snapshot kept the empty value until restart; IOptionsMonitor must not.
         monitor.CurrentValue = new FinTsOptions { ProductId = "FROM-ADMIN" };
 
         var method = typeof(IngFinTsService).GetMethod(
-            "ProductIdAsync",
+            "ProductId",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = Assert.IsType<Task<string>>(method.Invoke(service, [CancellationToken.None]));
-        Assert.Equal("FROM-ADMIN", await task);
+        Assert.Equal("FROM-ADMIN", Assert.IsType<string>(method.Invoke(service, null)));
     }
 
     private sealed class MutableOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>
