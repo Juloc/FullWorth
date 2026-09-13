@@ -161,7 +161,11 @@ function accountRow(x,groups){
 }
 async function loadAccountsView(){
   const [accounts,connections,groups]=await Promise.all([api('api/accounts'),api('api/bank-connections'),api('api/account-groups').catch(()=>[])]);
-  const list=$('#accounts-view-list');list.innerHTML='';
+  // Die Liste entsteht außerhalb des Dokuments und wird erst eingesetzt, wenn sie fertig ist -
+  // samt Symbolen und Knöpfen. Vorher wurden die Zeilen gezeichnet und danach geschmückt, und jede
+  // wuchs dabei von 73 auf 125 Pixel; die Seite sprang um 0,32.
+  const list=$('#accounts-view-list');
+  const staging=document.createElement('div');
   // Archived accounts (IsActive=false, e.g. a deleted manual account) are hidden from the list -
   // except an imported one. A Finanzguru export carries only bookings, no balance, so the import
   // creates the account archived and out of net worth until it is given one. Hiding it meant there
@@ -208,18 +212,18 @@ async function loadAccountsView(){
     head.querySelector('[data-group-open]').addEventListener('click',()=>{if(g)ctx.showView('transactions',{query:'groupId='+encodeURIComponent(g.id)});else toggle();});
     head.querySelector('[data-rename]')?.addEventListener('click',()=>openGroupDialog(g));
     head.querySelector('[data-delgroup]')?.addEventListener('click',()=>deleteGroup(g));
-    list.appendChild(head);
-    if(!isCollapsed)for(const a of accts)list.appendChild(accountRow(a,groupList));
+    staging.appendChild(head);
+    if(!isCollapsed)for(const a of accts)staging.appendChild(accountRow(a,groupList));
   };
   if(!groupList.length){
     // No groups defined: keep the flat list (unchanged for users who don't use groups).
-    for(const x of visibleAccounts)list.appendChild(accountRow(x,groupList));
+    for(const x of visibleAccounts)staging.appendChild(accountRow(x,groupList));
   }else{
     for(const g of groupList)renderBucket(g,byGroup.get(g.id)||[]);
     const ungrouped=byGroup.get('')||[];
     if(ungrouped.length)renderBucket(null,ungrouped);
   }
-  if(!visibleAccounts.length)empty(list);
+  if(!visibleAccounts.length)empty(staging);
   const conns=$('#connections-list');conns.innerHTML='';
   for(const x of connections||[]){
     const health=x.healthStatus||'authorized';
@@ -240,6 +244,10 @@ async function loadAccountsView(){
     conns.appendChild(row);
   }
   if(!(connections||[]).length)empty(conns);
+  // Erst schmücken, dann einsetzen. Der zweite Aufruf danach ist für alles, was am Dokument hängt -
+  // die Bankverbindungen, die Leiste und die Ungelesen-Punkte.
+  await enhanceAccountsPresentation(staging);
+  list.replaceChildren(...staging.childNodes);
   await enhanceAccountsPresentation();
 }
 async function openSyncHistory(connection){

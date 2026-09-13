@@ -13,40 +13,49 @@ namespace FullWorth.Web.Tests.Frontend;
 /// eine Eigenschaft des laufenden Browsers und sonst nichts. Dieser hier misst.
 ///
 /// Das Budget unten ist eine Ratsche, kein Ziel. Es steht auf dem, was am Tag der Messung herauskam,
-/// und darf nur fallen — eine umgebaute Seite setzt ihren Eintrag auf null und kommt nie zurück. Ein
-/// Test, der überall null verlangte, wäre den ganzen Umbau über rot, und einen dauerhaft roten Test
-/// liest niemand.
+/// und darf nur fallen — eine umgebaute Seite setzt ihren Eintrag herunter und kommt nie zurück. Ein
+/// Test, der überall null verlangt hätte, wäre den ganzen Umbau über rot gewesen, und einen dauerhaft
+/// roten Test liest niemand.
+///
+/// Jetzt steht es fast auf null, und das ist kein Ziel, sondern ein Messwert.
 /// </summary>
 [Collection(nameof(UiHarnessCollection))]
 public sealed class LayoutStabilityTests(UiHarness harness)
 {
     /// <summary>
-    /// Neu gemessen am 2026-09-13, nachdem die Hülle aus einer Menüquelle entsteht und kein Stylesheet
-    /// mehr nach dem Zeichnen nachgeladen wird.
-    ///
-    /// Was der Umbau gebracht hat, auf demselben Rechner gemessen:
+    /// Gemessen am 2026-09-14, desktop / mobil, gegen die Werte vom Anfang des Umbaus:
     ///
     ///   /               0,008 / 0,033   ->   0,000 / 0,000
-    ///   /accounts       0,340 / 0,220   ->   0,320 / 0,183
-    ///   /transactions   0,056 / 0,096   ->   0,000 / 0,003
-    ///   /contracts      0,127 / 0,368   ->   0,117 / 0,310
+    ///   /accounts       0,340 / 0,220   ->   0,000 / 0,003
+    ///   /transactions   0,056 / 0,096   ->   0,001 / 0,003
+    ///   /contracts      0,127 / 0,368   ->   0,000 / 0,000
     ///   /settings       0,020 / 0,036   ->   0,000 / 0,003
     ///
-    /// Drei der fünf Seiten stehen am Desktop still, gemessen null. Was bleibt, sind /accounts und
-    /// /contracts, und beide aus demselben Grund: sie schieben ihre Zeilen und Karten erst nach der
-    /// Antwort des Servers in eine bereits gezeichnete Seite. Das löst nicht die Hülle, sondern der
-    /// Umzug dieser Seiten — danach steht auch hier eine Null.
+    /// Vier Ursachen, in der Reihenfolge, in der sie gefunden wurden:
     ///
-    /// Zum Vergleich: bei 0,1 hört die Kennzahl auf, eine Seite gut zu nennen.
+    /// 1. Sechzehn Module hängten ihr Stylesheet erst beim ersten Besuch ihrer Ansicht an den Kopf,
+    ///    mobile-polish.css sogar erst nach dem ersten Bild. Jede Ansicht zeichnete einmal ungestylt.
+    /// 2. Die Breite und der eingeklappte Zustand der Seitenleiste wurden erst nach dem ersten Bild
+    ///    wiederhergestellt — wer eingeklappt hatte, sah die Hauptspalte um gut 130px springen.
+    /// 3. Die Aktionsleiste oben wuchs mit ihrer Beschriftung, der Privatmodus-Schalter wurde
+    ///    nachträglich versteckt, die Zusammenfassung über der Buchungstabelle schob sich davor.
+    /// 4. Die Kontenliste wurde gezeichnet und DANACH geschmückt. Eine Zeile wuchs dabei von 73 auf
+    ///    125 Pixel. Sie entsteht jetzt außerhalb des Dokuments und wird fertig eingesetzt.
+    ///
+    /// Zum Vergleich: bei 0,1 hört die Kennzahl auf, eine Seite gut zu nennen. Die schlechteste hier
+    /// lag bei 0,368.
+    ///
+    /// Die 0,005 sind Luft für den CI-Rechner, nicht für neue Sprünge: die schlechteste gemessene
+    /// Zahl ist 0,003, und die kommt vom Umbruch einer Beschriftung am Telefon.
     /// </summary>
     private static readonly (string Path, double Desktop, double Mobile)[] Budget =
     [
-        //                 desktop  mobile      gemessen        was sich bewegt
-        ("/",                0.005,  0.005), // 0.000 / 0.000   nichts mehr
-        ("/accounts",         0.33,   0.19), // 0.320 / 0.183   Zeilen und Symbole je Konto
-        ("/transactions",    0.005,   0.01), // 0.000 / 0.003   Zusammenfassung bricht am Telefon um
-        ("/contracts",        0.13,   0.32), // 0.117 / 0.310   vier Felder über der Liste
-        ("/settings",        0.005,   0.01)  // 0.000 / 0.003   Überschrift bricht am Telefon um
+        //                 desktop  mobile      gemessen        was sich noch bewegt
+        ("/",                0.005,  0.005), // 0.000 / 0.000   nichts
+        ("/accounts",        0.005,  0.005), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
+        ("/transactions",    0.005,  0.005), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
+        ("/contracts",       0.005,  0.005), // 0.000 / 0.000   nichts
+        ("/settings",        0.005,  0.005)  // 0.000 / 0.003   Überschrift bricht am Telefon um
     ];
 
     public static TheoryData<string, bool> Pages()
