@@ -1,6 +1,6 @@
 import { decodeBase64Url, encodeBase64Url } from './base64url.js';
 import { secureFetch } from '../security/secure-fetch.js';
-import { confirmMessage } from '../ui/confirm.js';
+import { confirmMessage } from '../components/confirm.js';
 
 const endpoints = {
   loginBegin: '/auth/passkeys/login/begin',

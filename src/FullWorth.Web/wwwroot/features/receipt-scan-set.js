@@ -1,4 +1,4 @@
-import { createDialog } from '../ui/dialog.js';
+import { createDialog } from '../components/dialog.js';
 // FullWorth receipt scan-set builder.
 //
 // One logical receipt may contain several independently captured photos or one/more PDFs. Files are

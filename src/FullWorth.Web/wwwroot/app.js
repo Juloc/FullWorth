@@ -1,9 +1,9 @@
-import { money, setMoneyLocale } from './ui/money.js';
-import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './ui/privacy.js';
-import { confirmDialog } from './ui/confirm.js';
-import { setPrimaryAction } from './ui/ux-kit.js';
-import { initLock } from './ui/lock.js';
-import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './ui/dashboard.js';
+import { money, setMoneyLocale } from './components/money.js';
+import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './components/privacy.js';
+import { confirmDialog } from './components/confirm.js';
+import { setPrimaryAction } from './components/ux-kit.js';
+import { initLock } from './app/lock.js';
+import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './app/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
 import { renderCategories, bindCategories, newCategory } from './features/categories.js';
 import { renderRules, bindRules, newRule } from './features/rules.js';
@@ -24,17 +24,18 @@ import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderB
 import { bindSettings, renderSettings } from './features/settings.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './features/budgets.js';
 
-import { createDialog } from './ui/dialog.js';
+import { createDialog } from './components/dialog.js';
 import { apiClient, api, bankApi, i18n, jsonBody } from './core/services.js';
 import { state } from './core/state.js';
 import { createRouter } from './core/router.js';
 import { createFeatureRegistry } from './core/feature-registry.js';
 import { installNavigation, navigate } from './core/navigation.js';
 import { emitAppEvent, onAppEvent } from './core/event-bus.js';
-import { createToast } from './ui/toast.js';
-import { openGlobalSearch } from './ui/global-search.js';
-import { installTopbarMetrics } from './ui/topbar-metrics.js';
+import { createToast } from './components/toast.js';
+import { openGlobalSearch } from './components/global-search.js';
+import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
+import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
@@ -348,8 +349,8 @@ async function loadCurrent(){
 }
 function date(value){if(!value)return'—';return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US').format(new Date(`${String(value).slice(0,10)}T12:00:00`))}
 function dateTime(value){if(!value)return'—';const raw=String(value);if(!/[T ]\d{2}:\d{2}/.test(raw))return date(value);const parsed=new Date(raw);if(Number.isNaN(parsed.getTime()))return date(value);return new Intl.DateTimeFormat(state.lang==='de'?'de-DE':'en-US',{dateStyle:'medium',timeStyle:'medium'}).format(parsed)}
-function empty(el,message){el.innerHTML=`<div class="row state-empty"><div class="row-sub">${esc(message||get('common.empty'))}</div></div>`}
-function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar"></div><div class="skel-bar short"></div></div>`).join('')}
+function empty(el,message){el.innerHTML=emptyRow(message||get('common.empty'))}
+function skeleton(el,rows=4){el.innerHTML=Array.from({length:rows},()=>`<div class="row skel"><div class="skel-bar shimmer"></div><div class="skel-bar short shimmer"></div></div>`).join('')}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function dialog(html,options={}){return createDialog(html,{closeLabel:get('common.close'),...options})}
 // §10.5: options show the full path ("Groceries > Supermarket"), not just the leaf name, so a

@@ -487,9 +487,8 @@ body.locked{overflow:hidden}
 /* Loading / empty states (§24) */
 .state-empty{border-bottom:0}
 .skel{border-bottom:1px solid var(--line)}
-.skel-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:skel 1.2s ease-in-out infinite;margin:6px 0}
+.skel-bar{height:12px;border-radius:6px;margin:6px 0}
 .skel-bar.short{width:45%}
-@keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* Toast */
 #toast{position:fixed;right:20px;bottom:20px;background:var(--text);color:var(--surface);padding:10px 14px;border-radius:9px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s;max-width:min(420px,calc(100vw - 40px));z-index:90}
@@ -786,8 +785,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tx-sk-md{width:96px}
 .tx-sk-lg{width:150px;height:12px}
 .tx-sk-amt{display:inline-block}
-.tx-sk-avatar,.tx-sk-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:tx-sk-shimmer 1.4s ease infinite}
-@keyframes tx-sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .tx-empty{text-align:center}
 .tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s8) var(--s4);color:var(--muted)}
 .tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
@@ -982,11 +979,8 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .merchants-empty .merchants-empty-icon svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .merchants-empty .row-sub{margin-top:0}
 .merchant-skeleton{pointer-events:none}
-.merchant-skeleton .fw-ident{background:var(--surface-2)}
-.merchants-sk-line{display:block;height:11px;border-radius:var(--radius-pill);background:var(--surface-2);max-width:min(100%,220px)}
+.merchants-sk-line{display:block;height:11px;border-radius:var(--radius-pill);max-width:min(100%,220px)}
 .merchants-sk-line.short{width:120px;margin-top:var(--s2)}
-.merchant-skeleton .fw-ident,.merchants-sk-line{animation:merchants-sk-pulse 1.2s ease-in-out infinite}
-@keyframes merchants-sk-pulse{0%,100%{opacity:1}50%{opacity:.5}}
 
 /* --- Prüfprotokoll (audit.js): monochrome timeline --- */
 #audit-list .audit-row{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;column-gap:var(--s3);padding:var(--s3) 0;border-bottom:0}
@@ -1024,12 +1018,11 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 #nw-loans .loan-state-ico svg{width:19px;height:19px;display:block}
 #nw-loans .loan-state-error .loan-state-ico{color:var(--negative);background:var(--negative-soft)}
 #nw-loans .loan-skel{pointer-events:none}
-#nw-loans .loan-skel-box{display:block;border-radius:var(--radius-input);background:linear-gradient(90deg,var(--surface-2) 0%,var(--surface-3) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:loan-shimmer 1.2s ease-in-out infinite}
+#nw-loans .loan-skel-box{display:block;border-radius:var(--radius-input)}
 #nw-loans .loan-skel .loan-ident.loan-skel-box{border-radius:50%}
 #nw-loans .loan-skel-title{width:44%;height:13px}
 #nw-loans .loan-skel-sub{width:66%;height:10px;margin-top:6px}
 #nw-loans .loan-skel-amt{width:72px;height:14px;justify-self:end}
-@keyframes loan-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* --- Import-Center (import-center-page.js, scope .ic-polish on <main>) --- */
 .ic-polish .import-center-view{gap:var(--s5)}

@@ -5,7 +5,7 @@
 // enabled/disabled and re-applied to history. Backend: /api/categorization-rules (GET/POST/PUT),
 // /preview (dry-run of a draft), /reapply (apply the whole set to existing transactions).
 
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 
 let ctx = null;
 
@@ -116,7 +116,7 @@ function jsonRule(draft, method) {
 
 const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
-// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). Fourteen controls of equal weight
+// Converted to components/form-dialog.js (step 2 of docs/UI_AUDIT.md). Fourteen controls of equal weight
 // became seven visible ones plus a disclosure. A rule is written by naming it, saying what to match
 // and what to file it as; the amount window, the direction, the MCC and the two processing switches
 // are refinements, and presenting them with the same weight is what made this the second-worst

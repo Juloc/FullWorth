@@ -1,6 +1,6 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
-import { createDialog } from '../ui/dialog.js';
-import { showToast } from '../ui/toast.js';
+import { createDialog } from '../components/dialog.js';
+import { showToast } from '../components/toast.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
 

@@ -1,4 +1,5 @@
-import { ButtonRole, buttonClass } from '../ui/buttons.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
+import { emptyRow } from '../components/empty.js';
 // Category tree (UI_UX_SPEC §10). Hierarchical view with expand/collapse; each node can be renamed,
 // re-iconed and MOVED to another parent (accessible explicit Move via the edit dialog, §10.2), or
 // archived (§10.4). Archived categories stay on history and are hidden unless "Show archived" is on.
@@ -78,7 +79,7 @@ export async function renderCategories(context) {
 
   tree.innerHTML = '';
   const roots = byParent.get('__root') || [];
-  if (!roots.length) { tree.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; return; }
+  if (!roots.length) { tree.innerHTML = emptyRow(ctx.get('common.empty')); return; }
   const frag = document.createDocumentFragment();
   frag.appendChild(summaryStrip(all, roots));
   let catSeq = 0;

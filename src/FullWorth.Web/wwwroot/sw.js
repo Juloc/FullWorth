@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v115';
+const VERSION = 'v116';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -14,8 +14,9 @@ const APP_SHELL = [
   // only fails once there is no connection - PwaOfflineShellCoverageTests walks the real import
   // graph so the list cannot fall behind again.
   '/security/secure-fetch.js',
-  '/ui/money.js',
-  '/ui/balance-meaning.js',
+  '/components/money.js',
+  '/components/empty.js',
+  '/components/balance-meaning.js',
   // The Gehalt page is its own HTML page rather than an SPA view, so the shell import graph above
   // does not reach it. It is precached because the payroll engine is pure client-side maths and
   // genuinely works offline. Auth, admin, intelligence and passkeys are deliberately NOT here: every
@@ -35,13 +36,13 @@ const APP_SHELL = [
   '/styles/features/compensation-extended.css',
   '/styles/mobile-polish.css',
   '/styles/features/compensation-other-income.css',
-  '/ui/dashboard.js',
-  '/ui/lock.js',
-  '/ui/privacy.js',
-  '/ui/category-picker.js',
-  '/ui/combobox.js',
-  '/ui/chart-scrubber.js',
-  '/ui/topbar-metrics.js',
+  '/app/dashboard.js',
+  '/app/lock.js',
+  '/components/privacy.js',
+  '/components/category-picker.js',
+  '/components/combobox.js',
+  '/components/chart-scrubber.js',
+  '/components/topbar-metrics.js',
   '/features/access-setup.js',
   '/features/audit.js',
   '/features/categories.js',
@@ -72,14 +73,14 @@ const APP_SHELL = [
   '/core/services.js',
   '/core/navigation.js',
   '/core/event-bus.js',
-  '/ui/toast.js',
-  '/ui/global-search.js',
-  '/ui/buttons.js',
-  '/ui/confirm.js',
-  '/ui/dialog.js',
-  '/ui/form-dialog.js',
-  '/ui/password-toggle.js',
-  '/ui/ux-kit.js',
+  '/components/toast.js',
+  '/components/global-search.js',
+  '/components/buttons.js',
+  '/components/confirm.js',
+  '/components/dialog.js',
+  '/components/form-dialog.js',
+  '/components/password-toggle.js',
+  '/components/ux-kit.js',
   '/features/budgets.js',
   '/features/contracts.js',
   '/styles/features/contracts-merge.css',
@@ -136,9 +137,9 @@ const APP_SHELL = [
   '/features/purchase-receipt-source-review.js',
   '/features/coach-shell.js',
   '/styles/features/coach.css',
-  '/ui/accessibility-release.js',
-  '/ui/motion.js',
-  '/ui/appearance.js',
+  '/components/accessibility-release.js',
+  '/app/motion.js',
+  '/app/appearance.js',
   '/app/boot.js',
   '/app/menu.js',
   '/app/nav-state.js',

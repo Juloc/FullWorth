@@ -1,4 +1,4 @@
-import { confirmMessage } from '../ui/confirm.js';
+import { confirmMessage } from '../components/confirm.js';
 import {
   $, $$, euro as money, euro2 as money2, pct, signedEuro as signedMoney, signedPct,
   esc, attr, val as value, num as number, setVal as set, fmtDate as date, localIsoDate,

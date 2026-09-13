@@ -4,7 +4,7 @@
 // (GET /api/loans/{id}/amortization). When the loan cannot be projected reliably the drawer says so
 // instead of a misleading number. Loans render as a panel inside the net-worth screen.
 
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 
 let ctx = null;
 const FREQ = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -131,7 +131,7 @@ function smoothPath(pts) {
   return d.join(' ');
 }
 
-// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). Thirteen controls in one flat list of
+// Converted to components/form-dialog.js (step 2 of docs/UI_AUDIT.md). Thirteen controls in one flat list of
 // equal weight became eight visible ones plus a disclosure. What stayed visible is not a taste call: a
 // field the server requires may not hide behind a <details>, because a closed disclosure cannot take
 // focus when native validation rejects the form - the user would face a button that refuses and no
@@ -238,6 +238,6 @@ function errorRow() { return stateRow('error', ctx.get('common.error')); }
 
 // Calm skeleton shown while the loan list loads (rows shaped like the real ones so layout does not jump).
 function loadingRows() {
-  const row = `<div class="row loan-row loan-rowcard loan-skel" aria-hidden="true"><span class="fw-ident loan-ident loan-skel-box"></span><div class="row-main loan-rowcard-main"><span class="loan-skel-box loan-skel-title"></span><span class="loan-skel-box loan-skel-sub"></span></div><span class="loan-skel-box loan-skel-amt"></span></div>`;
+  const row = `<div class="row loan-row loan-rowcard loan-skel" aria-hidden="true"><span class="fw-ident loan-ident loan-skel-box shimmer"></span><div class="row-main loan-rowcard-main"><span class="loan-skel-box loan-skel-title shimmer"></span><span class="loan-skel-box loan-skel-sub shimmer"></span></div><span class="loan-skel-box loan-skel-amt shimmer"></span></div>`;
   return `<div class="loan-loading" role="status" aria-label="${ctx.esc(ctx.get('common.loading'))}">${row}${row}${row}</div>`;
 }

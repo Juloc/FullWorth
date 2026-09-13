@@ -11,8 +11,9 @@
 // Year-review checklist, CSV/JSON export, per-candidate document upload and the advanced analysis
 // toggles live in tax-review-extra.js and are composed in directly below — no MutationObserver
 // polling, no cross-view DOM patching (FrontendArchitectureGuardTests forbids both).
-import { sectionCard, esc } from '../ui/ux-kit.js';
+import { sectionCard, esc } from '../components/ux-kit.js';
 import { renderTaxYearPanel, renderAdvancedSettings, wireDocumentUploads } from './tax-review-extra.js';
+import { emptyRow } from '../components/empty.js';
 
 let ctx = null;
 let year = null; // sticky across re-renders (tab switch, decide, analyze) until the user picks another
@@ -185,7 +186,7 @@ function viewHtml(reviewOnly) {
     <article class="panel tax-cases">
       <div class="panel-head"><h2 id="tax-list-title">${esc(reviewOnly ? tr().openCases : tr().allCases)}</h2></div>
       <div id="tax-candidate-list" class="tax-review-list">
-        <div class="tax-loading"></div><div class="tax-loading"></div><div class="tax-loading"></div>
+        <div class="tax-loading shimmer"></div><div class="tax-loading shimmer"></div><div class="tax-loading shimmer"></div>
       </div>
     </article>
     <p class="tax-disclaimer">${esc(tr().disclaimer)}</p>`;
@@ -234,7 +235,7 @@ async function loadData(host, reviewOnly) {
   } catch (err) {
     const breakdownCard = host.querySelector('#tax-breakdown-card');
     if (breakdownCard) breakdownCard.hidden = true;
-    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${esc(err.message || ctx.get('common.error'))}</div></div>`;
+    list.innerHTML = emptyRow(err.message || ctx.get('common.error'));
   }
 }
 
@@ -260,7 +261,7 @@ function sourceTypeLabel(sourceType) {
 function drawCandidates(host, items) {
   const list = host.querySelector('#tax-candidate-list');
   if (!items.length) {
-    list.innerHTML = `<div class="row state-empty"><div class="row-sub">${esc(tr().none)}</div></div>`;
+    list.innerHTML = emptyRow(tr().none);
     return;
   }
   list.innerHTML = '';

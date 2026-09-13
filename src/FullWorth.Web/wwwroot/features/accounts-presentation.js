@@ -1,8 +1,8 @@
-import { money, percent } from '../ui/money.js';
-import { createDialog } from '../ui/dialog.js';
+import { money, percent } from '../components/money.js';
+import { createDialog } from '../components/dialog.js';
 import { apiClient } from '../core/services.js';
 import { navigate } from '../core/navigation.js';
-import { setPrimaryAction } from '../ui/ux-kit.js';
+import { setPrimaryAction } from '../components/ux-kit.js';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const S={space:'',prefs:null,bundle:null,bundleAt:0,banks:null,unread:new Set(),hasUnread:false,unreadAt:0,groupMode:false,busy:false};

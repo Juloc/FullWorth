@@ -1,12 +1,13 @@
 import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
-import { sectionCard, trendBadge, esc, identityIcon } from '../ui/ux-kit.js';
-import { bindChartScrubber } from '../ui/chart-scrubber.js';
+import { sectionCard, trendBadge, esc, identityIcon } from '../components/ux-kit.js';
+import { bindChartScrubber } from '../components/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
-import { MoneyVariant, moneyClass, maskIdentifier } from '../ui/money.js';
-import { balanceMeaningLine } from '../ui/balance-meaning.js';
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { MoneyVariant, moneyClass, maskIdentifier } from '../components/money.js';
+import { balanceMeaningLine } from '../components/balance-meaning.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 import { basisSummary, lineKey, projectSeries as projectPreviewSeries, realValue, surplusAt } from './wealth-preview.js';
+import { emptyRow } from '../components/empty.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
@@ -193,7 +194,7 @@ export async function renderNetWorth(context) {
   try { overview = await ctx.api('api/wealth/overview'); }
   catch {
     const host = ctx.$('#view-networth');
-    if (host) host.innerHTML = sectionCard(t('trendTitle'), `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`, { className: 'nw-hero' });
+    if (host) host.innerHTML = sectionCard(t('trendTitle'), emptyRow(ctx.get('common.error')), { className: 'nw-hero' });
     return;
   }
 
@@ -1092,7 +1093,7 @@ function buildAllocationCard() {
   const assetSum = segments.reduce((sum, segment) => sum + segment.amount, 0);
 
   if (assetSum <= 0 && liabilities <= 0) {
-    return sectionCard(t('allocationTitle'), emptyRow(), { className: 'nw-allocation' });
+    return sectionCard(t('allocationTitle'), emptyRow(ctx.get('common.empty')), { className: 'nw-allocation' });
   }
 
   // Allocation-first: a soft donut of the asset mix leads, its legend (with shares) sits under it, and
@@ -1242,7 +1243,7 @@ function manageMarkup() {
 
 function renderAccounts(accounts) {
   const el = ctx.$('#nw-accounts'); if (!el) return; el.innerHTML = '';
-  if (!accounts.length) { el.innerHTML = emptyRow(); return; }
+  if (!accounts.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
   const groups = new Map();
   for (const account of accounts) {
     const key = account.institutionName || ctx.get('accounts.manual');
@@ -1279,7 +1280,7 @@ function renderAccounts(accounts) {
 
 function renderAssets(assets) {
   const el = ctx.$('#assets-list'); if (!el) return; el.innerHTML = '';
-  if (!assets.length) { el.innerHTML = emptyRow(); return; }
+  if (!assets.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
   const groups = [
     [t('realEstate'), assets.filter(item => item.kind === 'real_estate')],
     [t('vehicles'), assets.filter(item => item.kind === 'vehicle')],
@@ -1334,7 +1335,7 @@ function assetRow(asset) {
 
 function renderLiabilities(liabilities) {
   const el = ctx.$('#liabilities-list'); if (!el) return; el.innerHTML = '';
-  if (!liabilities.length) { el.innerHTML = emptyRow(); return; }
+  if (!liabilities.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
   const frag = document.createDocumentFragment();
   for (const item of liabilities) {
     const row = document.createElement('div'); row.className = `row nw-item${item.includeInNetWorth ? '' : ' nw-excluded'}`;
@@ -1374,7 +1375,7 @@ function openAssetWizard() {
   dlg.showModal();
 }
 
-// The first call site converted to ui/form-dialog.js. It used to be one 1 400-character template
+// The first call site converted to components/form-dialog.js. It used to be one 1 400-character template
 // literal that re-decided the label markup, the grouping, the actions row and the error handling all
 // by itself - which is what docs/UI_AUDIT.md measured 76 times over. What is left here is what this
 // dialog actually knows: which fields an asset has, which of them carry their weight on a phone, and
@@ -1527,7 +1528,6 @@ function openLiabilityDialog(existing) {
 function assetToWrite(item) { return { name: item.name, kind: item.kind || 'other', currentValue: item.currentValue, currency: item.currency, valuedAt: item.valuedAt || null, annualGrowthRate: item.annualGrowthRate ?? null, includeInNetWorth: item.includeInNetWorth !== false, notes: item.notes || null }; }
 function liabilityToWrite(item) { return { name: item.name, kind: item.kind || 'other', currentBalance: item.currentBalance, currency: item.currency, interestRate: item.interestRate ?? null, regularPayment: item.regularPayment ?? null, paymentCycle: item.paymentCycle || 'monthly', nextDueDate: item.nextDueDate || null, endDate: item.endDate || null, includeInNetWorth: item.includeInNetWorth !== false, notes: item.notes || null }; }
 function jsonBody(body, method = 'POST') { return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }; }
-function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; }
 function dateValue(value) { return value ? String(value).slice(0, 10) : ''; }
 function localDate(value) { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }
 function numberOrNull(value) { const text = String(value ?? '').trim(); return text === '' ? null : Number(text); }

@@ -6,8 +6,8 @@ import {
 import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';
 import { mountReceiptSourceReview } from './purchase-receipt-source-review.js';
 import { api as sharedApi, apiClient } from '../core/services.js';
-import { createDialog } from '../ui/dialog.js';
-import { confirmMessage } from '../ui/confirm.js';
+import { createDialog } from '../components/dialog.js';
+import { confirmMessage } from '../components/confirm.js';
 import { openPurchaseWorkspace, openProduct } from './purchase-articles-workspace.js';
 
 // Adapter between the existing purchase workspace and the secondary advanced-actions module. It avoids

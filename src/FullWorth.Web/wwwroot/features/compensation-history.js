@@ -1,4 +1,4 @@
-import { confirmMessage } from '../ui/confirm.js';
+import { confirmMessage } from '../components/confirm.js';
 import {
   $ as H$, $$ as H$$, euro as heuro, euro2 as heuro2, esc, attr, val as hval, num as hnum, setVal as hset,
   spaceId, fmtDate, localIsoDate, api as hapi, json as hjson, notify as hmessage,

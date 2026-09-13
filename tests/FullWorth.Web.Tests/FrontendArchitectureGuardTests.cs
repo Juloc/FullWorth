@@ -45,13 +45,13 @@ public sealed class FrontendArchitectureGuardTests
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "ui/dialog.js"
+            "components/dialog.js"
         };
 
         AssertNoNewViolations(
             new Regex(@"createElement\s*\(\s*['""]dialog['""]\s*\)", RegexOptions.Compiled),
             allowed,
-            "Create dialogs through ui/dialog.js. Do not add feature-local native dialog factories.");
+            "Create dialogs through components/dialog.js. Do not add feature-local native dialog factories.");
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class FrontendArchitectureGuardTests
         AssertNoNewViolations(
             new Regex(@"(?<![\.\w])confirm\s*\(|window\.confirm\s*\(", RegexOptions.Compiled),
             allowed,
-            "Use ui/confirm.js instead of native confirm().");
+            "Use components/confirm.js instead of native confirm().");
     }
 
     [Fact]
@@ -99,9 +99,9 @@ public sealed class FrontendArchitectureGuardTests
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             // Shared infrastructure observers are explicitly reviewed and scoped.
-            "ui/accessibility-release.js",
-            "ui/appearance.js",
-            "ui/motion.js"
+            "components/accessibility-release.js",
+            "app/appearance.js",
+            "app/motion.js"
         };
 
         AssertNoNewViolations(

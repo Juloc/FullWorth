@@ -5,9 +5,10 @@
 // a collapsed "Erweitert / Eigene Analyse" section. All money is privacy-masked via ctx.money(); SVG
 // bar widths are set from JS (no source inline style) to keep the CSP audit at one.
 
-import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
-import { bindChartScrubber } from '../ui/chart-scrubber.js';
+import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { bindChartScrubber } from '../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
+import { emptyRow } from '../components/empty.js';
 
 let ctx = null;
 // Kept for backwards compatibility with the builder period presets (and the required export).
@@ -468,7 +469,7 @@ function fillSpending(el, o, averageOverview) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
-  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
+  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(ctx.get('common.empty')); return; }
   // Trend = the active bucket vs the previous bucket (month-over-month), not window-over-window — with
   // one-bucket stepping the trailing windows overlap by all but one bucket, so a window delta is ~0.
   const trend = pct(Math.abs(Number(rows[rows.length - 1]?.expenses) || 0), Math.abs(Number(rows[rows.length - 2]?.expenses) || 0));
@@ -500,7 +501,7 @@ function fillInout(el, o) {
   if (!el) return;
   const cur = o?.currency || 'EUR';
   const rows = o?.byPeriod || o?.byMonth || [];
-  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(); return; }
+  if (!rows.length) { el.innerHTML = fxMarker(o?.incomplete) + emptyRow(ctx.get('common.empty')); return; }
   // Active-bucket KPIs = the concrete selected period (the last bucket of the history window), not the
   // window average; the bar chart still shows the surrounding history. Trend compares to the prev bucket.
   const active = rows[rows.length - 1] || {};
@@ -546,7 +547,7 @@ function fillCategory(el, result, catIcon) {
   // keeping the list, donut and total on one disjoint hierarchy level.
   const rows = cats.filter(category => !category.parentId).slice(0, 6);
   const cur = result?.currency || 'EUR';
-  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
+  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(ctx.get('common.empty')); return; }
   const max = Math.max(1, ...rows.map(r => Math.abs(Number(r.current) || 0)));
   // True window spend = sum of ROOT categories only (each root's `current` already rolls up its whole
   // subtree and roots are disjoint) + the Uncategorized row — NOT the sum of the top-N rows, which would
@@ -637,7 +638,7 @@ function fillMerchant(el, result) {
   if (!el) return;
   const rows = (result?.merchants || []).slice(0, 6);
   const cur = result?.currency || 'EUR';
-  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(); return; }
+  if (!rows.length) { el.innerHTML = fxMarker(result?.incomplete) + emptyRow(ctx.get('common.empty')); return; }
   const total = rows.reduce((s, r) => s + Math.abs(Number(r.currentSpend) || 0), 0);
   // Canonical merchant identity is preferred; unresolved counterparties keep a text fallback.
   const list = rows.map(r => `<div class="an-mrow is-drillable" role="button" tabindex="0" data-merchant="${esc(r.merchant || '')}" data-merchant-id="${esc(r.merchantId || '')}">${identityIcon(r.merchant, { logoAssetPath: r.logoAssetPath })}<div class="row-main"><div class="row-title">${esc(r.merchant)}</div><div class="row-sub">${Number(r.currentCount) || 0} × · Ø ${ctx.money(r.currentAverage, cur)}</div></div><div class="an-mrow-side"><span class="amount">${ctx.money(r.currentSpend, cur)}</span>${trendBadge(r.trendPercent, false)}</div></div>`).join('');
@@ -656,7 +657,7 @@ function fillMerchant(el, result) {
 // 5) Net-worth development — history as a trend line with the latest value + change over the window.
 function fillNetWorth(el, history, currency) {
   if (!el) return;
-  if (!history || !history.length) { el.innerHTML = emptyRow(); return; }
+  if (!history || !history.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
   const vals = history.map(x => Number(x.netWorth) || 0);
   const last = vals[vals.length - 1], first = vals[0];
   el.innerHTML = chart(() => nwLine(vals)) + `<div class="an-card-foot">${kpi(ctx.money(last, currency), esc(t('Aktuelles Vermögen', 'Current net worth')))}${trendBadge(pct(last, first), true)}</div>`;
@@ -677,7 +678,7 @@ function fillForecast(el, forecast) {
   if (!el) return;
   const points = (forecast?.points || []).slice(0, 6);
   const cur = forecast?.currency || 'EUR';
-  if (!points.length) { el.innerHTML = fxMarker(forecast?.incomplete) + emptyRow(); return; }
+  if (!points.length) { el.innerHTML = fxMarker(forecast?.incomplete) + emptyRow(ctx.get('common.empty')); return; }
   el.innerHTML = fxMarker(forecast?.incomplete) + `<div class="row-sub an-estimate">${esc(ctx.get('analytics.estimateHint'))}</div>` +
     points.map(p => `<div class="row"><div class="row-main"><div class="row-title">${esc(ctx.date(p.date))}</div><div class="row-sub">${esc(ctx.get('analytics.estimate'))}</div></div><div class="amount">${ctx.money(p.estimatedNetWorth, cur)}</div></div>`).join('');
 }
@@ -693,7 +694,6 @@ function categoryColorIndex(key) {
   return (hash % 8) + 1;
 }
 
-function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${esc(ctx.get('common.empty'))}</div></div>`; }
 
 // Catmull-Rom → cubic-bézier smoothing: turns [[x,y],…] into a soft SVG path `d` so the line/area charts
 // read as gentle curves instead of hard polylines (paired with stroke-linecap/-linejoin:round in CSS).
@@ -786,7 +786,7 @@ async function runBuilder(context) {
 function renderSeries(el, r, cfg) {
   const series = r?.series || [];
   const marker = r?.incomplete ? fxMarker(true) : '';
-  if (!series.length) { el.innerHTML = marker + emptyRow(); return; }
+  if (!series.length) { el.innerHTML = marker + emptyRow(ctx.get('common.empty')); return; }
   const isMoney = cfg.measure !== 'count';
   const fmt = v => isMoney ? ctx.money(v, r.currency || 'EUR') : String(Math.round(Number(v) || 0));
   if (cfg.chartType === 'hbar') {
@@ -847,7 +847,7 @@ function lineChart(series, fmt) {
 function donutChart(series, fmt) {
   const positives = series.filter(p => Number(p.value) > 0);
   const total = positives.reduce((s, p) => s + Number(p.value), 0);
-  if (!total) return emptyRow();
+  if (!total) return emptyRow(ctx.get('common.empty'));
   const r = 60, cx = 90, cy = 90, circ = 2 * Math.PI * r, gap = 8;
   let offset = 0, arcs = '';
   for (const p of positives) {

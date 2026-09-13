@@ -1,5 +1,6 @@
 import { initializePurchaseEnhancements, tryGptReceiptScan } from './purchases-gpt-normal.js';
-import { identityIcon, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { emptyRow } from '../components/empty.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank
@@ -25,7 +26,7 @@ export async function renderPurchases(context) {
   const el = ctx.$('#purchases-list');
   el.innerHTML = '';
   await refreshAmazonButton().catch(() => {});
-  if (!rows.length) { el.innerHTML = emptyRow(); return; }
+  if (!rows.length) { el.innerHTML = emptyRow(ctx.get('common.empty')); return; }
 
   const needsReview = rows.filter(r => r.status !== 'confirmed' || (r.source !== 'amazon' && !r.transactionId));
   const reviewIds = new Set(needsReview.map(r => r.id));
@@ -555,4 +556,3 @@ function amazonStatusLabel(status) {
 }
 
 function t(de, en) { return (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? de : en; }
-function emptyRow() { return `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`; }

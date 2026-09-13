@@ -31,7 +31,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("--accent", init);
         // A light primary must not get white text on it, so contrast is derived here too.
         Assert.Contains("0.2126", init);
-        Assert.Contains("/ui/appearance.js", init);
+        Assert.Contains("/app/appearance.js", init);
         Assert.Contains("/appearance.css", head);
     }
 
@@ -39,7 +39,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     public async Task CuteThemeIsGoneEverywhere()
     {
         var css = await GetAsync("/appearance.css");
-        var appearance = await GetAsync("/ui/appearance.js");
+        var appearance = await GetAsync("/app/appearance.js");
         var init = await GetAsync("/app/boot.js");
 
         foreach (var source in new[] { css, appearance, init })
@@ -83,7 +83,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public async Task ColourPickerDrivesTheTokensTheAppAlreadyReads()
     {
-        var appearance = await GetAsync("/ui/appearance.js");
+        var appearance = await GetAsync("/app/appearance.js");
         var css = await GetAsync("/app.css");
 
         // primary -> --cta (buttons), secondary -> --accent (links, focus rings, chart strokes).
@@ -107,7 +107,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     public async Task AppearanceSettings_KeepColorModeAndBrandColoursIndependent()
     {
         var app = await GetAsync("/app.js");
-        var appearance = await GetAsync("/ui/appearance.js");
+        var appearance = await GetAsync("/app/appearance.js");
 
         Assert.Contains("finance.theme", app);
         Assert.Contains("finance.color.primary", appearance);
@@ -126,7 +126,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("'/styles/shell.css'", sw);
         Assert.Contains("'/styles/components.css'", sw);
         Assert.DoesNotContain("/parity-completion.css", sw);
-        Assert.Contains("'/ui/appearance.js'", sw);
+        Assert.Contains("'/app/appearance.js'", sw);
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         Assert.Contains("'/features/wealth-real-estate.js'", sw);
         Assert.Contains("'/styles/features/wealth-real-estate.css'", sw);

@@ -7,7 +7,7 @@ namespace FullWorth.Web.Tests.Pwa;
 /// <summary>
 /// The existing PWA tests check that everything the service worker lists exists on disk. Nothing checked
 /// the other direction — that everything the app shell needs is listed — and 52 of the 137 stylesheets
-/// and modules in wwwroot were not, including ten `ui/` modules the shell itself imports.
+/// and modules in wwwroot were not, including ten `components/` modules the shell itself imports.
 ///
 /// The fetch handler is network-first with a cache fallback, so online this is invisible: an asset is
 /// cached the first time it is fetched. Offline it is not. An installed PWA that cold-starts without a

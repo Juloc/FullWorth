@@ -115,8 +115,8 @@ try {
 // Verhalten, kein Aussehen - das darf warten, bis das Dokument steht.
 window.addEventListener('DOMContentLoaded', async () => {
   const [appearance, mobileInteractions] = await Promise.all([
-    import('/ui/appearance.js'),
-    import('/ui/mobile-interactions.js')
+    import('/app/appearance.js'),
+    import('/components/mobile-interactions.js')
   ]);
   appearance.initAppearance();
   mobileInteractions.initMobileInteractions();

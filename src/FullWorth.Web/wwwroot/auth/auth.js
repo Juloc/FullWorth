@@ -1,5 +1,5 @@
 import { initializePasskeyLogin } from '../passkeys/passkeys.js';
-import { enhancePasswordInputs } from '../ui/password-toggle.js';
+import { enhancePasswordInputs } from '../components/password-toggle.js';
 
 const preferences = {
   language: localStorage.getItem('finance.language') || ((navigator.language || 'de').startsWith('de') ? 'de' : 'en'),

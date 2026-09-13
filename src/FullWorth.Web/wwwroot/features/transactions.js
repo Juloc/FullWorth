@@ -3,10 +3,10 @@
 // category, exclude-from-statistics and transfer status through the existing classification PATCH,
 // and links to a receipt when a purchase is attached.
 
-import { attachCategoryPicker, openCategoryPicker } from '../ui/category-picker.js';
-import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
-import { MoneyVariant, moneyClass } from '../ui/money.js';
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { attachCategoryPicker, openCategoryPicker } from '../components/category-picker.js';
+import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { MoneyVariant, moneyClass } from '../components/money.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -483,11 +483,11 @@ function renderSummary(items) {
 function txSkeletonRows(n = 7) {
   const row =
     `<tr class="tx-skeleton" aria-hidden="true">` +
-    `<td class="tx-date-cell"><span class="tx-sk-line tx-sk-sm"></span></td>` +
-    `<td class="tx-cp"><span class="tx-sk-avatar"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg"></span><span class="tx-sk-line tx-sk-md"></span></span></td>` +
-    `<td class="tx-cat"><span class="tx-sk-line tx-sk-md"></span></td>` +
-    `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm"></span></td>` +
-    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt"></span></td>` +
+    `<td class="tx-date-cell"><span class="tx-sk-line tx-sk-sm shimmer"></span></td>` +
+    `<td class="tx-cp"><span class="tx-sk-avatar shimmer"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg shimmer"></span><span class="tx-sk-line tx-sk-md shimmer"></span></span></td>` +
+    `<td class="tx-cat"><span class="tx-sk-line tx-sk-md shimmer"></span></td>` +
+    `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm shimmer"></span></td>` +
+    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt shimmer"></span></td>` +
     `<td class="tx-go"></td></tr>`;
   return row.repeat(n);
 }

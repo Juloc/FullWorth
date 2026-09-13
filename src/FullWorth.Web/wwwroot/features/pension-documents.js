@@ -21,7 +21,7 @@
 // It is a PAGE, not a dialog: docs/UI_AUDIT.md measured the existing dialogs as the app's main
 // usability problem, and a review form of this size in a dialog would be the worst of them. The only
 // dialog here is the one-sentence commit confirmation.
-import { sectionCard, esc } from '../ui/ux-kit.js';
+import { sectionCard, esc } from '../components/ux-kit.js';
 
 // --- injected by pension.js ---
 let ctx = null;

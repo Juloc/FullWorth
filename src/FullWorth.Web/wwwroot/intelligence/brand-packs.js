@@ -1,5 +1,5 @@
 import { api as sharedApi } from '../core/services.js';
-import { confirmMessage } from '../ui/confirm.js';
+import { confirmMessage } from '../components/confirm.js';
 const $ = id => document.getElementById(id);
 
 async function api(path = '', init = {}) {

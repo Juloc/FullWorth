@@ -13,7 +13,7 @@ public sealed class ComboboxUiBaselineTests
     [Fact]
     public void The_combobox_sets_a_native_select_rather_than_replacing_it()
     {
-        var combobox = ReadSource(Path.Combine("ui", "combobox.js"));
+        var combobox = ReadSource(Path.Combine("components", "combobox.js"));
 
         // The whole contract in one line: existing forms read the select, so the select must stay the
         // value. Replacing it with a custom control would silently empty every FormData in the app.
@@ -32,7 +32,7 @@ public sealed class ComboboxUiBaselineTests
     [Fact]
     public void The_category_picker_is_a_thin_layer_on_the_shared_combobox()
     {
-        var picker = ReadSource(Path.Combine("ui", "category-picker.js"));
+        var picker = ReadSource(Path.Combine("components", "category-picker.js"));
 
         Assert.Contains("import { attachCombobox, openCombobox } from './combobox.js';", picker, StringComparison.Ordinal);
         Assert.Contains("export function attachCategoryPicker", picker, StringComparison.Ordinal);
@@ -50,7 +50,7 @@ public sealed class ComboboxUiBaselineTests
     [Fact]
     public void A_dialog_select_only_becomes_searchable_when_the_field_asks()
     {
-        var formDialog = ReadSource(Path.Combine("ui", "form-dialog.js"));
+        var formDialog = ReadSource(Path.Combine("components", "form-dialog.js"));
 
         Assert.Contains("f.searchable && f.kind === FieldKind.Select", formDialog, StringComparison.Ordinal);
         Assert.Contains("comboboxCtx = null", formDialog, StringComparison.Ordinal);

@@ -26,7 +26,7 @@ public sealed class TypographyAppearanceTests
     [Fact]
     public void AppearanceModulePersistsAllTypographyControls()
     {
-        var script = File.ReadAllText(WebRootFile("ui", "appearance.js"));
+        var script = File.ReadAllText(WebRootFile("app", "appearance.js"));
 
         Assert.Contains("finance.typography.baseSize", script);
         Assert.Contains("finance.typography.weight", script);

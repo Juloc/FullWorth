@@ -1,9 +1,9 @@
-import { confirmMessage } from '../ui/confirm.js';
-import { createDialog } from '../ui/dialog.js';
+import { confirmMessage } from '../components/confirm.js';
+import { createDialog } from '../components/dialog.js';
 import { secureFetch } from '../security/secure-fetch.js';
 import { createInstanceSettingsPanel } from './instance-settings.js';
 import { createVaultPanel } from './vault.js';
-import { createToast } from '../ui/toast.js';
+import { createToast } from '../components/toast.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -32,7 +32,7 @@ async function request(path,options){
 }
 
 // The shared controller, so a message raised from inside a dialog reaches the top layer and is
-// actually on screen. See ui/toast.js.
+// actually on screen. See components/toast.js.
 const adminToast=createToast(document.querySelector('#admin-toast'),{defaultDuration:2500});
 const toast=text=>adminToast.show(text);
 

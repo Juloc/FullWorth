@@ -126,10 +126,7 @@
 
 .tax-loading {
   height: 82px;
-  border-radius: 12px;
-  background: linear-gradient(90deg,var(--surface-2,#eef1f4),var(--surface,#fff),var(--surface-2,#eef1f4));
-  background-size: 200% 100%;
-  animation: tax-skeleton 1.2s linear infinite
+  border-radius: 12px
 }
 
 .tax-setting-copy {
@@ -152,20 +149,6 @@
 
 .tax-status-rejected {
   opacity: .58
-}
-
-@keyframes tax-skeleton {
-  to {
-    background-position: -200% 0
-  }
-
-}
-
-@media (prefers-reduced-motion:reduce) {
-  .tax-loading {
-    animation: none
-  }
-
 }
 
 @media (max-width:760px) {

@@ -80,7 +80,7 @@ public sealed class DialogComplexityGuardTests
 
         var appeared = offenders.Keys.Where(x => !KnownFlatDialogs.ContainsKey(x)).OrderBy(x => x).ToList();
         Assert.True(appeared.Count == 0,
-            "New flat dialogs (convert them with ui/form-dialog.js, or say why here): "
+            "New flat dialogs (convert them with components/form-dialog.js, or say why here): "
             + string.Join(", ", appeared.Select(x => $"{x} ({offenders[x]} controls)")));
 
         var worse = offenders

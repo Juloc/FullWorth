@@ -56,7 +56,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var helper = await GetAsync("/features/data-completeness.js");
         var wealth = await GetAsync("/features/networth.js");
         var analytics = await GetAsync("/features/analytics.js");
-        var dashboard = await GetAsync("/ui/dashboard.js");
+        var dashboard = await GetAsync("/app/dashboard.js");
         var css = await GetAsync("/app.css");
 
         Assert.Contains("api/import/finanzguru/accounts", helper);
@@ -212,16 +212,16 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task AccessibilityReleaseFixesAreLoadedLocalizedAndCached()
     {
         var wrapper = await GetAsync("/features/wealth-real-estate.js");
-        var accessibility = await GetAsync("/ui/accessibility-release.js");
+        var accessibility = await GetAsync("/components/accessibility-release.js");
         var sw = await GetAsync("/sw.js");
 
-        Assert.Contains("../ui/accessibility-release.js", wrapper);
+        Assert.Contains("../components/accessibility-release.js", wrapper);
         Assert.Contains("Buchungen durchsuchen", accessibility);
         Assert.Contains("Search transactions", accessibility);
         Assert.Contains("setAttribute('scope', 'col')", accessibility);
         Assert.Contains("setAttribute('aria-label', t.close)", accessibility);
         Assert.Contains("MutationObserver", accessibility);
-        Assert.Contains("'/ui/accessibility-release.js'", sw);
+        Assert.Contains("'/components/accessibility-release.js'", sw);
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
                      "'/features/investment-performance-ui.js'",
                      "'/styles/features/investment-performance.css'",
                      "'/features/receipt-imports.js'",
-                     "'/ui/accessibility-release.js'"
+                     "'/components/accessibility-release.js'"
                  })
             Assert.Contains(path, sw);
     }

@@ -1,5 +1,5 @@
 import { emitAppEvent } from '../core/event-bus.js';
-import { confirmDialog } from '../ui/confirm.js';
+import { confirmDialog } from '../components/confirm.js';
 
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
 let dashboardRenderVersion = 0;

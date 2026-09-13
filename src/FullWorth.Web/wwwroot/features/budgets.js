@@ -1,7 +1,8 @@
 import { state } from '../core/state.js';
-import { ButtonRole, buttonClass } from '../ui/buttons.js';
-import { MoneyVariant, moneyClass } from '../ui/money.js';
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
+import { MoneyVariant, moneyClass } from '../components/money.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
+import { emptyRow } from '../components/empty.js';
 
 // The disclosure label is new with the form-dialog conversion and has no i18n key yet.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
@@ -196,7 +197,7 @@ export async function openBudgetDetail(context, id) {
     </div>
     ${forecastLine}
     <div class="row-group">${ctx.esc(ctx.get('budgets.contributing'))}</div>
-    <div class="budget-detail-rows">${rows || `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div></div>`}</div>
+    <div class="budget-detail-rows">${rows || emptyRow(ctx.get('common.empty'))}</div>
   </div>`);
 
   dlg.querySelectorAll('.progress > span[data-w]').forEach(element => {

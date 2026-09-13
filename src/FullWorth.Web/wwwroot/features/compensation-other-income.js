@@ -9,7 +9,7 @@
 //
 // Row markup/reading lives in features/compensation-shared.js (addOtherIncomeRow / readOtherIncomeRow),
 // same as the benefit and one-off rows — this file is only the tab, the API calls and the summary.
-import { confirmMessage } from '../ui/confirm.js';
+import { confirmMessage } from '../components/confirm.js';
 import {
   $, $$, euro, euro2, esc, fmtDate, localIsoDate, spaceId, api, json, notify,
   loadOtherIncomeTypes, fillOtherIncomeTypeList, otherIncomeTypeOptions, otherIncomeName,

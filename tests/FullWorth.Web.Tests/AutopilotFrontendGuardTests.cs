@@ -9,9 +9,16 @@ public sealed class AutopilotFrontendGuardTests
         var primary = Slice(html, "<nav id=\"nav\"", "</nav>");
         var mobile = Slice(html, "<nav id=\"bottom-nav\"", "</nav>");
 
+        // Autopilot selbst bekommt keinen Menüpunkt: eine KI-Funktion darf sich nicht in die
+        // Navigation schieben, das war und bleibt die Regel.
+        //
+        // Insights stand hier einmal mit — als bewusst zweitrangige Fläche, nur über das
+        // Dashboard-Panel erreichbar. Der Besitzer hat das umgedreht: "Für dich" ist ein normaler
+        // Eintrag in der Gruppe Übersicht, weil eine Seite, die man nirgends anklicken kann, in der
+        // Praxis eine Seite ist, die niemand findet. Es bleibt lesend, und der Rest dieser Klasse
+        // prüft das weiter.
         foreach (var nav in new[] { primary, mobile })
         {
-            Assert.DoesNotContain("data-view=\"insights\"", nav, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("data-view=\"autopilot\"", nav, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("data-view=\"intelligence\"", nav, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("data-view=\"ai\"", nav, StringComparison.OrdinalIgnoreCase);
@@ -58,7 +65,6 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("/styles/features/insights.css", html);
         Assert.DoesNotContain("Autopilot Deploy 5: read-only financial insights", appCss, StringComparison.Ordinal);
         Assert.Contains(".register('insights'", app);
-        Assert.Contains("v!=='insights'", app);
         Assert.Contains("renderDashboardInsights", app);
         Assert.Contains("mountInsights", app);
 
@@ -116,15 +122,25 @@ public sealed class AutopilotFrontendGuardTests
         Assert.DoesNotContain("fetch(", feature, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Insights ist ein gewöhnlicher Menüeintrag.
+    ///
+    /// Hier stand einmal das Gegenteil: der Eintrag durfte in keiner der beiden Leisten vorkommen,
+    /// Insights sollte nur über das Dashboard-Panel erreichbar sein. Der Besitzer hat das umgedreht,
+    /// und der Grund steht im Befund zum Menüumbau — Insights war die einzige Seite, die weder am
+    /// Desktop noch am Telefon einen Weg hatte.
+    ///
+    /// Was es nicht darf, prüft weiterhin Deploy5InsightsAreSecondaryReadOnlyFeatureSurface: genau
+    /// die dort aufgezählten Endpunkte und keine anderen.
+    /// </summary>
     [Fact]
-    public void InsightFeatureDoesNotAppearInMoreOrPersistentNavigation()
+    public void InsightsIsAnOrdinaryMenuEntry()
     {
+        var menu = File.ReadAllText(Path.Combine(WwwRoot(), "app", "menu.js"));
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
-        var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
 
-        Assert.Contains("v!=='insights'", app);
-        Assert.DoesNotContain("data-view=\"insights\"", Slice(html, "<nav id=\"bottom-nav\"", "</nav>"), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("data-view=\"insights\"", Slice(html, "<nav id=\"nav\"", "</nav>"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("{ view: 'insights'", menu);
+        Assert.Contains(".register('insights'", app);
     }
 
     private static string Slice(string text, string startMarker, string endMarker)

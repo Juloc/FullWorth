@@ -213,9 +213,12 @@ public sealed class ContractMultiMergeTests
         Assert.Contains(".contract-merge-survivor", css);
         Assert.DoesNotContain("#", css);
 
-        var js = File.ReadAllText(Path.Combine(
-            Root(), "src", "FullWorth.Web", "wwwroot", "features", "contracts.js"));
-        Assert.Contains("/styles/features/contracts-merge.css", js);
+        // Das Stylesheet hing früher an contracts.js und wurde beim ersten Besuch der Seite per
+        // JavaScript nachgeladen — die Ansicht zeichnete also einmal ungestylt und baute dann um.
+        // Jetzt steht es wie alle anderen als blockierender <link> im Dokument.
+        var html = File.ReadAllText(Path.Combine(
+            Root(), "src", "FullWorth.Web", "wwwroot", "index.html"));
+        Assert.Contains("/styles/features/contracts-merge.css", html);
     }
 
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId, object? body = null)

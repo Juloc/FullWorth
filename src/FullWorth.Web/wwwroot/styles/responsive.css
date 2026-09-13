@@ -116,7 +116,6 @@
 @media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 @media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
-@media(prefers-reduced-motion:reduce){.tx-sk-avatar,.tx-sk-line{animation:none}}
 @media(max-width:767px){
   #view-transactions .tx-summary{padding:var(--s3)}
   #view-transactions .tx-skeleton{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
@@ -131,7 +130,6 @@
 }
 @media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
 @media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}
-@media (prefers-reduced-motion:reduce){.merchant-skeleton .fw-ident,.merchants-sk-line{animation:none}}
 @media(max-width:620px){
   .ic-polish .import-metrics{grid-template-columns:1fr}
   .ic-polish .ic-map-row{grid-template-columns:1fr}

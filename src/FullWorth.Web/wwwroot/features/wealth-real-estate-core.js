@@ -1,3 +1,4 @@
+import { emptyRow } from '../components/empty.js';
 const COPY = {
   de: {
     overview: 'Übersicht', property: 'Immobilie', financing: 'Finanzierung', history: 'Historie',
@@ -242,7 +243,7 @@ function debtSummaryHtml(ctx, debts, currency) {
 }
 
 function debtCardsHtml(ctx, debts) {
-  if (!debts?.length) return `<div class="row state-empty"><div class="row-sub">${ctx.esc(tr('noDebt'))}</div></div>`;
+  if (!debts?.length) return emptyRow(tr('noDebt'));
   return debts.map(debt => `<div class="property-debt-card" data-debt-card="${debt.id}">
     <div class="property-debt-main"><strong>${ctx.esc(debt.name)}</strong><div class="property-debt-meta">${ctx.esc(tr('currentBalance'))}: ${ctx.money(debt.currentBalance, debt.currency)} · ${ctx.esc(tr('allocation'))}: ${Number(debt.allocationPercent).toFixed(2)} %${debt.interestRate != null ? ` · ${ctx.esc(tr('rate'))}: ${Number(debt.interestRate).toFixed(2)} %` : ''}${debt.regularPayment != null ? ` · ${ctx.esc(tr('payment'))}: ${ctx.money(debt.regularPayment, debt.currency)}` : ''}</div><div class="property-amortization" data-amortization hidden></div></div>
     <div class="property-actions">${debt.loanId ? `<button type="button" data-amortization-button="${debt.loanId}">${ctx.esc(tr('amortization'))}</button>` : ''}<button type="button" data-delete-debt="${debt.id}">${ctx.esc(tr('remove'))}</button></div>

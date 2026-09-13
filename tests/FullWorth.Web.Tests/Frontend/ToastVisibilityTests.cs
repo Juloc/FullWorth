@@ -36,7 +36,7 @@ public sealed class ToastVisibilityTests
     [Fact]
     public void The_toast_enters_the_top_layer()
     {
-        var source = Read("ui/toast.js");
+        var source = Read("components/toast.js");
 
         Assert.Contains("showPopover()", source, StringComparison.Ordinal);
         // manual, not auto: an auto popover light-dismisses on the next click anywhere, so a message
@@ -52,7 +52,7 @@ public sealed class ToastVisibilityTests
     [Fact]
     public void The_visible_class_is_set_before_the_top_layer()
     {
-        var source = Read("ui/toast.js");
+        var source = Read("components/toast.js");
         var show = source[source.IndexOf("function show(", StringComparison.Ordinal)..];
 
         var addClass = show.IndexOf("classList.add('show')", StringComparison.Ordinal);

@@ -1,6 +1,7 @@
-import { money, converted, maskIdentifier } from '../ui/money.js';
-import { balanceMeaningLine } from '../ui/balance-meaning.js';
+import { money, converted, maskIdentifier } from '../components/money.js';
+import { balanceMeaningLine } from '../components/balance-meaning.js';
 import { state } from '../core/state.js';
+import { emptyRow } from '../components/empty.js';
 import {
   bindAccountsPresentation,
   enhanceAccountsPresentation,
@@ -254,7 +255,7 @@ async function openSyncHistory(connection){
     const error=item.errorCode?` · ${esc(item.errorCode)}`:'';
     return `<div class="row"><div class="row-main"><div class="row-title">${esc(get(resultKey))}${error}</div><div class="row-sub">${esc(get('accounts.syncStartedAt'))}: ${esc(dateTime(item.startedAt))} · ${esc(get('accounts.syncFinishedAt'))}: ${esc(dateTime(item.completedAt))}</div></div><div class="row-side"><span class="row-sub">${esc(get('accounts.syncDuration'))}: ${esc(duration)}</span></div></div>`;
   }).join('');
-  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||`<div class="row state-empty"><div class="row-sub">${esc(get('accounts.syncHistoryEmpty'))}</div></div>`}</div></div>`);
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||emptyRow(get('accounts.syncHistoryEmpty'))}</div></div>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.showModal();
 }

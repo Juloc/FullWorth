@@ -105,7 +105,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var networth = await GetAsync("/features/networth.js");
         var accounts = await GetAsync("/features/accounts-presentation.js");
         var coach = await GetAsync("/features/coach-shell.js");
-        var dialogs = await GetAsync("/ui/dialog.js");
+        var dialogs = await GetAsync("/components/dialog.js");
 
         Assert.Contains("id=\"layout-reset\"", html);
         Assert.Contains("finance.sidebar.width.", app);

@@ -19,9 +19,10 @@
 //
 // Both mounted modules receive this module's copy (`t`, `label`, `percent`) instead of importing it,
 // so neither pair ever becomes a circular import.
-import { sectionCard, esc } from '../ui/ux-kit.js';
+import { sectionCard, esc } from '../components/ux-kit.js';
 import { renderPensionDocuments, resetPensionDocuments } from './pension-documents.js';
 import { renderPensionProjection, resetPensionProjection } from './pension-projection.js';
+import { emptyRow } from '../components/empty.js';
 
 let ctx = null;
 let contracts = [];
@@ -625,7 +626,7 @@ function detailListHtml(title, rows, newKind) {
         <h3>${esc(title)}</h3>
         <button type="button" class="btn btn-secondary" data-pension-new="${newKind}">${esc(label2)}</button>
       </div>
-      <div class="rows">${rows.length ? rows.join('') : `<div class="row state-empty"><div class="row-sub">${esc(tr().noneYet)}</div></div>`}</div>
+      <div class="rows">${rows.length ? rows.join('') : emptyRow(tr().noneYet)}</div>
     </section>`;
 }
 

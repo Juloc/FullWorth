@@ -4,7 +4,7 @@
 // (GET list with aliases, POST create, PUT rename, DELETE, POST /{id}/merge), plus per-merchant alias
 // add/remove. All writes require the space Owner role.
 
-import { identityIcon, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
 
 let ctx = null;
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
@@ -17,7 +17,7 @@ const storefrontIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 
 // instead of an empty flash. Purely decorative (aria-hidden); replaced once the data resolves.
 function skeletonRows(n = 4) {
   let out = '';
-  for (let i = 0; i < n; i++) out += '<div class="row merchant-row merchant-skeleton" aria-hidden="true"><span class="fw-ident"></span><div class="row-main"><span class="merchants-sk-line"></span><span class="merchants-sk-line short"></span></div></div>';
+  for (let i = 0; i < n; i++) out += '<div class="row merchant-row merchant-skeleton" aria-hidden="true"><span class="fw-ident shimmer"></span><div class="row-main"><span class="merchants-sk-line shimmer"></span><span class="merchants-sk-line short shimmer"></span></div></div>';
   return out;
 }
 

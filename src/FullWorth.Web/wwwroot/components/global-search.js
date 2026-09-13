@@ -1,3 +1,4 @@
+import { emptyRow } from './empty.js';
 // Global search UI. Search aggregation stays presentation-side; all data access uses ctx.api.
 
 export function openGlobalSearch(ctx) {
@@ -24,7 +25,7 @@ export function openGlobalSearch(ctx) {
 
 async function runSearch(ctx, query, results, dlg) {
   if (query.length < 2) {
-    results.innerHTML = `<div class="row state-empty"><div class="row-sub">${ctx.esc(ctx.get('search.hint'))}</div></div>`;
+    results.innerHTML = emptyRow(ctx.get('search.hint'));
     return;
   }
 

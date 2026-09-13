@@ -1,7 +1,7 @@
 import { api as sharedApi, jsonBody } from '../core/services.js';
-import { createDialog } from '../ui/dialog.js';
-import { showToast } from '../ui/toast.js';
-import { confirmMessage } from '../ui/confirm.js';
+import { createDialog } from '../components/dialog.js';
+import { showToast } from '../components/toast.js';
+import { confirmMessage } from '../components/confirm.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
 // photos into one logical receipt.

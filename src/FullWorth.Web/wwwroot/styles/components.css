@@ -145,3 +145,12 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 @media (prefers-reduced-motion: reduce) {
   .password-toggle { transition: none !important }
 }
+
+/* Ladezustand.
+   Das Flimmern gehört hierher, die Form der Zeile gehört der Seite. Vorher gab es dieselbe Animation
+   viermal — skel, tx-sk-shimmer, merchants-sk-pulse, loan-shimmer, tax-skeleton — mit vier eigenen
+   Farbverläufen und vier eigenen Ausnahmen für reduzierte Bewegung. Jetzt trägt jedes Platzhalter-
+   Element .shimmer und sagt selbst nur noch, wie groß es ist. */
+.shimmer{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+@media (prefers-reduced-motion: reduce){.shimmer{animation:none}}

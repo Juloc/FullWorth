@@ -1,4 +1,4 @@
-import '../ui/accessibility-release.js';
+import '../components/accessibility-release.js';
 import { refreshSpecializedAssets } from './wealth-specialized-assets.js';
 import { refreshExtraSpecializedAssets } from './wealth-specialized-assets-extra.js';
 import { refreshInvestmentConsolidation } from './wealth-investment-consolidation.js';

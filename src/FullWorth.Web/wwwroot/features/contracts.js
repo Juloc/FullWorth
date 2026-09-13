@@ -5,10 +5,10 @@
 // subscriptions" section surfaces recurring-payment candidates with one-click accept. All money and
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
-import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../ui/ux-kit.js';
-import { MoneyVariant, moneyClass } from '../ui/money.js';
+import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { MoneyVariant, moneyClass } from '../components/money.js';
 import { onAppEvent } from '../core/event-bus.js';
-import { openFormDialog, FieldKind } from '../ui/form-dialog.js';
+import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -1700,7 +1700,7 @@ function jsonBody(body, method) {
 }
 
 
-// Converted to ui/form-dialog.js (step 2 of docs/UI_AUDIT.md). This was the best-behaved of the four
+// Converted to components/form-dialog.js (step 2 of docs/UI_AUDIT.md). This was the best-behaved of the four
 // editors already: it had hand-written <fieldset> sections and a <details> for the dates. So the
 // conversion had to keep both, which is why the primitive gained `section` — a group says two fields
 // are one statement on one row, a section says a handful of them share a subject, and dropping the

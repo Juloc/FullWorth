@@ -1,8 +1,8 @@
-import { money, setMoneyLocale } from '../ui/money.js';
-import { isPrivate, onPrivacyChange } from '../ui/privacy.js';
+import { money, setMoneyLocale } from '../components/money.js';
+import { isPrivate, onPrivacyChange } from '../components/privacy.js';
 import { api as sharedApi } from '../core/services.js';
 import { state } from '../core/state.js';
-import { createDialog } from '../ui/dialog.js';
+import { createDialog } from '../components/dialog.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

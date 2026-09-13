@@ -93,8 +93,8 @@ public sealed class SetupUiBaselineTests
     public void The_password_eye_lives_in_one_module_and_not_in_the_markup()
     {
         var auth = ReadSource(Path.Combine("auth", "index.html"));
-        var module = ReadSource(Path.Combine("ui", "password-toggle.js"));
-        var formDialog = ReadSource(Path.Combine("ui", "form-dialog.js"));
+        var module = ReadSource(Path.Combine("components", "password-toggle.js"));
+        var formDialog = ReadSource(Path.Combine("components", "form-dialog.js"));
 
         // The markup carries plain inputs again - no wrapper, no button, no inline eye.
         Assert.DoesNotContain("password-toggle", auth, StringComparison.Ordinal);

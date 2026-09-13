@@ -63,12 +63,24 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
         Assert.Contains("targetAmount", js);
     }
 
+    /// <summary>
+    /// Das "Mehr"-Blatt beschriftet nichts selbst.
+    ///
+    /// Es tat es einmal: Buchungen hieß dort "Alle Buchungen", weil das Blatt die einzige Stelle war,
+    /// von der aus man ungefiltert dorthin kam — ein Tippen auf ein Konto führte immer in eine
+    /// gefilterte Liste. Das war eine Sonderregel im Blatt selbst, und Sonderregeln im Blatt sind
+    /// genau der Weg, auf dem Handy und Desktop auseinanderliefen.
+    ///
+    /// Heute steht Buchungen unten in der Leiste, der Bereich steht in der Kopfzeile der Seite, und
+    /// jeder Eintrag holt seine Beschriftung aus app/menu.js.
+    /// </summary>
     [Fact]
-    public async Task MobileMoreUsesExplicitAllBookingsEntry()
+    public async Task MobileMoreLabelsEveryEntryFromTheMenuDefinition()
     {
         var app = await GetAsync("/app.js");
-        Assert.Contains("view==='transactions'", app);
-        Assert.Contains("transactions.allTx", app);
+
+        Assert.Contains("get(entry.label)", app);
+        Assert.DoesNotContain("transactions.allTx", app);
     }
 
     [Fact]
@@ -88,7 +100,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task AnalyticsSeparatesPreviewActiveAndCompletedAverageWindows()
     {
-        var kit = await GetAsync("/ui/ux-kit.js");
+        var kit = await GetAsync("/components/ux-kit.js");
         var js = await GetAsync("/features/analytics.js");
         Assert.Contains("activeFrom", kit);
         Assert.Contains("averageFrom", kit);
@@ -128,7 +140,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                      "'/features/transactions.js'",
                      "'/features/analytics.js'",
                      "'/features/contracts.js'",
-                     "'/ui/ux-kit.js'"
+                     "'/components/ux-kit.js'"
                  })
             Assert.Contains(asset, sw);
 

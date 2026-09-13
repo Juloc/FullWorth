@@ -26,9 +26,9 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task An_amount_is_formatted_in_the_currency_that_came_with_it()
     {
-        var money = await GetAsync("/ui/money.js");
+        var money = await GetAsync("/components/money.js");
         var accounts = await GetAsync("/features/accounts.js");
-        var dashboard = await GetAsync("/ui/dashboard.js");
+        var dashboard = await GetAsync("/app/dashboard.js");
 
         // The shared formatter: the currency is a parameter, handed straight to Intl.
         Assert.Contains("export function money(value, currency = 'EUR')", money);
@@ -56,7 +56,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task A_converted_value_is_a_second_line_under_the_original_never_instead_of_it()
     {
         var accounts = await GetAsync("/features/accounts.js");
-        var money = await GetAsync("/ui/money.js");
+        var money = await GetAsync("/components/money.js");
         var components = await GetAsync("/styles/components.css");
 
         // Rendered only when a conversion exists, and through the dedicated secondary formatter.
@@ -86,7 +86,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task A_value_that_could_not_be_converted_is_marked_not_silently_dropped()
     {
         var accounts = await GetAsync("/features/accounts.js");
-        var dashboard = await GetAsync("/ui/dashboard.js");
+        var dashboard = await GetAsync("/app/dashboard.js");
         var components = await GetAsync("/styles/components.css");
 
         // The subtotal takes the converted figure, or the native one when it already IS the base
@@ -152,7 +152,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task A_masked_amount_still_says_which_currency_it_is()
     {
-        var money = await GetAsync("/ui/money.js");
+        var money = await GetAsync("/components/money.js");
 
         Assert.Contains("if (isPrivate()) return `•••• ${currencySymbol(currency)}`;", money);
         // Both the primary and the secondary formatter mask the same way.
