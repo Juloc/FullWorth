@@ -209,3 +209,28 @@ jobs:
           verify-privilege-separation
           SCRIPT
           docker run --rm --entrypoint /bin/sh -v "$PWD/verify-modes.sh:/verify-modes.sh:ro" fullworth-modes /verify-modes.sh
+
+  # What the browser actually reports as layout shift, per page, desktop and phone. Every other
+  # frontend guard here compares strings in source files; that catches a rule somebody wrote down and
+  # cannot catch a page that jumps, because jumping is a property of the running browser.
+  #
+  # The budget in the test is a ratchet: it starts at what main measured and may only go down.
+  layout-stability:
+    name: Layout stability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the test project
+        run: dotnet build tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release
+
+      - name: Install the browser
+        run: pwsh tests/FullWorth.Web.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Measure
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LayoutStability"
