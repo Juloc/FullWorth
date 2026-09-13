@@ -313,6 +313,24 @@ What the design does instead is make the session cookie insufficient on its own:
 | **Its own lockout** | Five wrong factors lock the vault for 15 minutes. Deliberately *not* the Identity lockout: counting these into the sign-in lockout would let somebody who already holds a session lock the real administrator out of signing in while their stolen session keeps working. Pinned by a regression test. |
 | **Audited where the thief cannot reach** | Every reveal writes an `AdminAuditEvents` row **and** a warning line to the container log. The log matters precisely because it survives whoever holds the database password. Neither records the value. |
 
+#### The finance half
+
+The credentials a person entered themselves - FinTS login and PIN, the Enable Banking private key and
+refresh token, AI API keys, the Paperless token, the Amazon session - are FieldCipher columns in the
+finance database, which the BFF does not own. They are fetched over `POST /internal/admin/secrets/*`
+behind three gates: the ingest key the `/internal` middleware already demands, a signed
+`AdminVaultTicket`, and a loopback check in the unified host.
+
+The ticket is signed with a key **derived** from `backend_internal_key` via HKDF rather than with the
+key itself. Without that derivation, learning the internal key for its ordinary purpose - the
+internal-context path - would also mean being able to mint a ticket, and the internal key would
+quietly become a read-anything key.
+
+The ticket names one finance user, and every query on the backend side filters on it. **An
+administrator sees their own credentials and never another user's**, which is why space-scoped tables
+(bank connections, Paperless) are matched on the user who set the connection up rather than on the
+space. `AdminSecretsOwnershipTests` pins that from both directions.
+
 What the vault will never show: another user's credentials, TOTP keys, account passwords, PINs and
 recovery codes (PBKDF2 — nobody can show those, and no setting changes that), and the pension policy
 number, which is a financial fact rather than a credential.

@@ -40,7 +40,7 @@ public static class AdminVaultEndpoints
 
             NoStore(context);
             return Results.Ok(await vault.InventoryAsync(
-                actor.Id, sessionId, await users.GetTwoFactorEnabledAsync(actor), ct));
+                actor.Id, actor.FinanceUserId, sessionId, await users.GetTwoFactorEnabledAsync(actor), ct));
         });
 
         group.MapPost("/elevate", async (
@@ -80,12 +80,12 @@ public static class AdminVaultEndpoints
 
             NoStore(context);
 
+            // A reference this host does not know may be one the finance backend minted, per row. The
+            // descriptor is only needed for the fresh-factor decision, and no backend-owned credential
+            // carries that flag - the four that do all live in this host's own configuration.
             var descriptor = AdminVaultCatalogue.Find(request.Reference);
-            if (descriptor is null) return Results.BadRequest(new { error = "unknown_reference" });
 
-            // The four that own the installation demand the factor for THIS reveal, not once for ten.
-            // An open window is not enough for them; a proof is.
-            if (descriptor.RequiresFreshFactor)
+            if (descriptor?.RequiresFreshFactor == true)
             {
                 var fresh = await elevations.ElevateAsync(actor, sessionId, request.Secret, ct);
                 if (!fresh.Granted)
@@ -99,12 +99,15 @@ public static class AdminVaultEndpoints
                     new { error = "elevation_required" }, statusCode: StatusCodes.Status403Forbidden);
 
             var revealed = await vault.RevealAsync(
-                actor.Id, actor.Email ?? actor.Id.ToString(), request.Reference, ct);
+                actor.Id, actor.FinanceUserId, actor.Email ?? actor.Id.ToString(), request.Reference, ct);
+
+            if (revealed.Error == "unknown_reference")
+                return Results.BadRequest(new { error = "unknown_reference" });
 
             return revealed.Found
                 ? Results.Ok(new
                 {
-                    reference = descriptor.Reference,
+                    reference = request.Reference,
                     value = revealed.Value,
                     revealsLeft = AdminElevation.RevealBudget - elevation.RevealsUsed
                 })

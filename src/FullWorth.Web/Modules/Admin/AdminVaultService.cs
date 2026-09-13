@@ -38,11 +38,21 @@ public sealed class AdminVaultService(
     IConfiguration configuration,
     ExternalAuthSettingsStore externalAuth,
     AdminElevationService elevations,
+    AdminVaultBackendClient backend,
     ILogger<AdminVaultService> logger,
     TimeProvider clock)
 {
+    /// <summary>
+    /// References the finance backend owns. They are minted there, per row, so this host neither knows
+    /// nor needs to know what exists — it recognises the prefix and forwards.
+    /// </summary>
+    private static bool IsBackendReference(string reference) =>
+        reference.StartsWith("bank.", StringComparison.Ordinal)
+        || reference.StartsWith("ai.", StringComparison.Ordinal)
+        || reference.StartsWith("import.", StringComparison.Ordinal);
+
     public async Task<VaultInventoryView> InventoryAsync(
-        Guid authUserId, Guid sessionId, bool twoFactorEnabled, CancellationToken ct)
+        Guid authUserId, Guid financeUserId, Guid sessionId, bool twoFactorEnabled, CancellationToken ct)
     {
         var settings = await externalAuth.GetAsync(ct);
 
@@ -76,6 +86,13 @@ public sealed class AdminVaultService(
                 stored ? null : "nicht gesetzt"));
         }
 
+        // The caller's own credentials in the finance database. Never anybody else's: the ticket names
+        // this one finance user and the backend filters every query on it.
+        foreach (var entry in await backend.InventoryAsync(financeUserId, ct))
+            entries.Add(new VaultEntryView(
+                entry.Reference, entry.Group, entry.Label, entry.Description,
+                Stored: true, RequiresFreshFactor: false, Hint: null));
+
         // consume: false - looking at the list is not looking at a secret.
         var elevation = await elevations.CurrentAsync(authUserId, sessionId, consume: false, ct);
 
@@ -92,9 +109,15 @@ public sealed class AdminVaultService(
     /// request that exports the installation.
     /// </summary>
     public async Task<VaultRevealResult> RevealAsync(
-        Guid authUserId, string actorEmail, string? reference, CancellationToken ct)
+        Guid authUserId, Guid financeUserId, string actorEmail, string? reference, CancellationToken ct)
     {
         var descriptor = AdminVaultCatalogue.Find(reference);
+
+        // A reference this host does not know may still be one the finance backend minted. It is not
+        // trusted for being unrecognised - the backend re-checks it against the ticket's owner.
+        if (descriptor is null && reference is not null && IsBackendReference(reference))
+            return await RevealFromBackendAsync(authUserId, financeUserId, actorEmail, reference, ct);
+
         if (descriptor is null) return new(false, null, "unknown_reference");
 
         var value = descriptor.Source switch
@@ -104,28 +127,41 @@ public sealed class AdminVaultService(
             _ => null
         };
 
-        // Audited whether or not there was anything there. "Tried to read the data encryption key" is
-        // the interesting line, and it does not become less interesting because the key was absent.
+        // Audited whether or not there was anything there, with the reference and never the value.
+        // "Tried to read the data encryption key" is the interesting line, and it does not become less
+        // interesting because the key was absent.
+        await AuditAsync(authUserId, actorEmail, descriptor.Reference, value, ct);
+
+        return string.IsNullOrEmpty(value)
+            ? new(false, null, "not_set")
+            : new(true, value, null);
+    }
+
+    private async Task<VaultRevealResult> RevealFromBackendAsync(
+        Guid authUserId, Guid financeUserId, string actorEmail, string reference, CancellationToken ct)
+    {
+        var value = await backend.RevealAsync(financeUserId, reference, ct);
+        await AuditAsync(authUserId, actorEmail, reference, value, ct);
+        return string.IsNullOrEmpty(value) ? new(false, null, "not_set") : new(true, value, null);
+    }
+
+    private async Task AuditAsync(
+        Guid authUserId, string actorEmail, string reference, string? value, CancellationToken ct)
+    {
         db.Add(new AdminAuditEvent
         {
             Id = Guid.NewGuid(),
             OccurredAt = clock.GetUtcNow(),
             ActorAuthUserId = authUserId,
             TargetAuthUserId = authUserId,
-            Action = "vault.reveal:" + descriptor.Reference,
+            Action = "vault.reveal:" + reference,
             Outcome = string.IsNullOrEmpty(value) ? "not_set" : "success"
         });
         await db.SaveChangesAsync(ct);
 
-        // The reference, never the value, and never a prefix of it.
         logger.LogWarning(
             "Vault: {Actor} revealed {Reference} ({Found}).",
-            actorEmail, descriptor.Reference,
-            string.IsNullOrEmpty(value) ? "not set" : "value returned");
-
-        return string.IsNullOrEmpty(value)
-            ? new(false, null, "not_set")
-            : new(true, value, null);
+            actorEmail, reference, string.IsNullOrEmpty(value) ? "not set" : "value returned");
     }
 
     private async Task<string?> ReadExternalAuthAsync(string reference, CancellationToken ct) =>

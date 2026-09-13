@@ -7,6 +7,7 @@ using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Analytics;
 using FullWorth.Backend.Modules.Analytics.Categories;
 using FullWorth.Backend.Modules.Analytics.Merchants;
+using FullWorth.Backend.Modules.Admin;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Bootstrap;
@@ -392,6 +393,7 @@ public static class BackendApplication
         endpoints.MapBankConnectionEndpoints();
         endpoints.MapEnableBankingProfileEndpoints();
         endpoints.MapBankingInstanceSettingsEndpoints();
+        endpoints.MapAdminSecretsEndpoints();
         endpoints.MapAccountEndpoints();
         endpoints.MapAccountGroupEndpoints();
         endpoints.MapTransactionEndpoints();

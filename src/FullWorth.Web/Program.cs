@@ -126,6 +126,7 @@ builder.Services.AddScoped<ExternalAuthSettingsStore>();
 builder.Services.AddScoped<InstanceConfigurationStore>();
 builder.Services.AddScoped<InstanceConfigurationService>();
 builder.Services.AddScoped<AdminElevationService>();
+builder.Services.AddScoped<AdminVaultBackendClient>();
 builder.Services.AddScoped<AdminVaultService>();
 builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 
