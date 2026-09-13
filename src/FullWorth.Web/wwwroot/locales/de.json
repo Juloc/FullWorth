@@ -106,6 +106,10 @@
     "insights": {
       "title": "Wichtig für dich",
       "subtitle": "Erkannte Veränderungen und offene Punkte"
+    },
+    "admin": {
+      "title": "Admin",
+      "subtitle": "Nutzer, Anmeldeanbieter, Einstellungen der Installation und Schlüssel"
     }
   },
   "dashboard": {

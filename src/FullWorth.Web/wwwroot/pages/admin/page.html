@@ -1,0 +1,74 @@
+    <section id="view-admin" class="view">
+      <section id="admin-overview" class="admin-metrics" aria-label="Übersicht">
+        <article><span>User</span><strong id="metric-users">–</strong></article>
+        <article><span>Aktiv</span><strong id="metric-active">–</strong></article>
+        <article><span>Gesperrt</span><strong id="metric-disabled">–</strong></article>
+        <article><span>Löschung</span><strong id="metric-deleting">–</strong></article>
+        <article><span>Fehler</span><strong id="metric-failed">–</strong></article>
+        <article><span>Admins</span><strong id="metric-admins">–</strong></article>
+      </section>
+  
+      <section class="panel">
+        <div class="admin-toolbar">
+          <input id="admin-search" type="search" placeholder="E-Mail oder User-ID suchen" autocomplete="off">
+          <select id="admin-status">
+            <option value="">Alle</option>
+            <option value="active">Aktiv</option>
+            <option value="disabled">Gesperrt</option>
+            <option value="deleting">Löschung</option>
+            <option value="admins">Admins</option>
+          </select>
+          <button id="admin-refresh" type="button" class="btn btn-secondary">Aktualisieren</button>
+        </div>
+        <div id="admin-users" class="admin-users"></div>
+        <div class="admin-pager">
+          <button id="admin-prev" type="button" class="btn btn-secondary">Zurück</button>
+          <span id="admin-page-info" class="row-sub"></span>
+          <button id="admin-next" type="button" class="btn btn-secondary">Weiter</button>
+        </div>
+      </section>
+  
+      <section class="panel" id="external-providers">
+        <div class="panel-head"><h2>Anmeldeanbieter</h2></div>
+        <p class="row-sub">Google- und Apple-Anmeldung für diese Installation. Wirkt sofort, ohne Neustart.
+          Werte aus der Umgebung haben Vorrang und werden hier nicht überschrieben.</p>
+        <form id="providers-form" class="admin-providers">
+          <fieldset>
+            <legend>Google</legend>
+            <label><span>Client-ID</span><input name="googleClientId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Client-Secret</span><input name="googleClientSecret" type="password" autocomplete="new-password"
+              placeholder="unverändert lassen"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Apple</legend>
+            <label><span>Service-ID</span><input name="appleServiceId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Team-ID</span><input name="appleTeamId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Key-ID</span><input name="applePrivateKeyId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Privater Schlüssel (.p8)</span><textarea name="applePrivateKey" rows="3"
+              autocomplete="off" spellcheck="false" placeholder="unverändert lassen"></textarea></label>
+          </fieldset>
+          <div class="admin-providers-actions">
+            <span id="providers-state" class="row-sub"></span>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      </section>
+  
+      <section class="panel" id="instance-settings">
+        <div class="panel-head"><h2>Einstellungen dieser Installation</h2></div>
+        <p class="row-sub">Werte, die für die ganze Installation gelten. Sie wirken sofort, ohne Neustart.
+          Ein leeres Feld bedeutet „Standardwert benutzen“. Was die Umgebung setzt, gewinnt weiterhin und
+          steht hier schreibgeschützt.</p>
+        <div id="instance-settings-body"></div>
+      </section>
+  
+      <section class="panel" id="vault">
+        <div class="panel-head"><h2>Passwörter &amp; Schlüssel</h2></div>
+        <p class="row-sub">Die Zugangsdaten und Schlüssel dieser Installation. Anzeigen verlangt eine
+          Bestätigung; die gilt fünf Minuten und für zehn Anzeigen. Die als „kritisch“ markierten Einträge
+          verlangen sie jedes Mal neu. Jede Anzeige wird protokolliert.</p>
+        <p class="row-sub">Kontopasswörter, PINs und Wiederherstellungscodes stehen hier nicht — sie sind
+          gehasht und lassen sich grundsätzlich nicht anzeigen.</p>
+        <div id="vault-body"></div>
+      </section>
+    </section>

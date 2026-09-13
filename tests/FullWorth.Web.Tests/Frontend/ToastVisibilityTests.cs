@@ -96,13 +96,15 @@ public sealed class ToastVisibilityTests
     }
 
     /// <summary>
+    /// Nur noch eine Zeile je Fall: Admin hatte einen zweiten Melder mit denselben Regeln, solange es
+    /// ein eigenes Dokument war. Als Seite der Hülle benutzt es den einen, der schon da ist.
+    ///
     /// The popover user-agent style centres the element (<c>inset: 0; margin: auto</c>) and gives it a
     /// border. Without taking that back the toast jumps into the middle of the screen the moment it
     /// works at all.
     /// </summary>
     [Theory]
     [InlineData("app.css", "#toast[popover]")]
-    [InlineData("admin/admin.css", "#admin-toast[popover]")]
     public void The_popover_default_styling_is_taken_back(string stylesheet, string selector)
     {
         var css = Read(stylesheet);
@@ -122,7 +124,6 @@ public sealed class ToastVisibilityTests
     /// </summary>
     [Theory]
     [InlineData("styles/responsive.css", "#toast,#toast[popover]")]
-    [InlineData("admin/admin.css", "#admin-toast,#admin-toast[popover]")]
     public void The_phone_layout_still_outranks_the_popover_rule(string stylesheet, string selector) =>
         Assert.Contains(selector, Read(stylesheet), StringComparison.Ordinal);
 }

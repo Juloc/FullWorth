@@ -35,6 +35,7 @@ import { createToast } from './components/toast.js';
 import { openGlobalSearch } from './components/global-search.js';
 import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
+import { renderAdmin } from './pages/admin/page.js';
 import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
@@ -406,7 +407,8 @@ const featureRegistry=createFeatureRegistry()
   .register('notifications',()=>renderNotifications(ctx))
   .register('merchants',()=>renderMerchants(ctx))
   .register('audit',()=>renderAudit(ctx))
-  .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}));
+  .register('settings',()=>renderSettings(ctx,{accessSetup,renderBankingSettings}))
+  .register('admin',()=>renderAdmin());
 async function loadDashboard(){await Promise.all([renderDashboard(ctx),renderDashboardInsights(ctx)])}
 
 initResizableSidebar();

@@ -1,9 +1,10 @@
-import { confirmMessage } from '../components/confirm.js';
-import { createDialog } from '../components/dialog.js';
-import { secureFetch } from '../security/secure-fetch.js';
+import { confirmMessage } from '../../components/confirm.js';
+import { createDialog } from '../../components/dialog.js';
+import { secureFetch } from '../../security/secure-fetch.js';
 import { createInstanceSettingsPanel } from './instance-settings.js';
 import { createVaultPanel } from './vault.js';
-import { createToast } from '../components/toast.js';
+import { showToast } from '../../components/toast.js';
+import { emptyRow } from '../../components/empty.js';
 const state={offset:0,limit:50,total:0,search:'',status:'',detail:null};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -31,10 +32,9 @@ async function request(path,options){
   return response.status===204?null:response.json();
 }
 
-// The shared controller, so a message raised from inside a dialog reaches the top layer and is
-// actually on screen. See components/toast.js.
-const adminToast=createToast(document.querySelector('#admin-toast'),{defaultDuration:2500});
-const toast=text=>adminToast.show(text);
+// Der Melder der Hülle. Er erreicht die oberste Ebene und ist damit auch über einem Dialog zu
+// sehen; ein eigener für diese Seite wäre dieselbe Sache ein zweites Mal.
+const toast=text=>showToast(text);
 
 // Secrets travel one way. The form never receives a stored value - it only learns THAT one is
 // stored - so an empty field means "leave it alone" rather than "delete it". Without that, saving a
@@ -110,7 +110,7 @@ async function loadUsers(){
   if(state.status)params.set('status',state.status);
   const page=await request('/auth/admin/users?'+params);
   state.total=page.total;
-  const list=$('#users');
+  const list=$('#admin-users');
   if(!page.items.length){
     list.innerHTML='<div class="admin-user"><div class="row-sub">Keine User gefunden.</div></div>';
   }else{
@@ -126,9 +126,9 @@ async function loadUsers(){
   }
   const from=state.total?state.offset+1:0;
   const to=Math.min(state.offset+state.limit,state.total);
-  $('#page-info').textContent=`${from}–${to} von ${state.total}`;
-  $('#prev').disabled=state.offset===0;
-  $('#next').disabled=state.offset+state.limit>=state.total;
+  $('#admin-page-info').textContent=`${from}–${to} von ${state.total}`;
+  $('#admin-prev').disabled=state.offset===0;
+  $('#admin-next').disabled=state.offset+state.limit>=state.total;
 }
 
 const instanceSettings=createInstanceSettingsPanel({request,esc,toast});
@@ -228,17 +228,30 @@ async function runAction(action){
 }
 
 let searchTimer;
-$('#search').addEventListener('input',e=>{
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>{state.search=e.target.value.trim();state.offset=0;loadUsers().catch(console.error)},220);
-});
-$('#status').addEventListener('change',e=>{state.status=e.target.value;state.offset=0;loadUsers().catch(console.error)});
-$('#refresh').addEventListener('click',()=>refresh().catch(console.error));
-$('#prev').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-state.limit);loadUsers().catch(console.error)});
-$('#next').addEventListener('click',()=>{state.offset+=state.limit;loadUsers().catch(console.error)});
+let bound=false;
 
-bindProviders();
+// Einmal verdrahten, bei jedem Besuch neu laden - dieselbe Aufteilung wie bei jeder anderen Seite.
+export function bindAdmin(){
+  if(bound)return;
+  bound=true;
+  $('#admin-search').addEventListener('input',e=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(()=>{state.search=e.target.value.trim();state.offset=0;loadUsers().catch(console.error)},220);
+  });
+  $('#admin-status').addEventListener('change',e=>{state.status=e.target.value;state.offset=0;loadUsers().catch(console.error)});
+  $('#admin-refresh').addEventListener('click',()=>refresh().catch(console.error));
+  $('#admin-prev').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-state.limit);loadUsers().catch(console.error)});
+  $('#admin-next').addEventListener('click',()=>{state.offset+=state.limit;loadUsers().catch(console.error)});
+  bindProviders();
+}
 
-refresh().catch(error=>{
-  if(error.message!=='forbidden'){document.body.innerHTML='<main class="admin-shell"><h1>Admin konnte nicht geladen werden</h1></main>'}
-});
+export async function renderAdmin(){
+  bindAdmin();
+  try{
+    await refresh();
+  }catch(error){
+    // Kein document.body mehr überschreiben: die Seitenleiste und die Leiste unten gehören nicht
+    // dieser Seite, und wer sie wegnimmt, nimmt dem Benutzer den Weg zurück.
+    if(error.message!=='forbidden')$('#admin-users').innerHTML=emptyRow('Admin konnte nicht geladen werden.');
+  }
+}

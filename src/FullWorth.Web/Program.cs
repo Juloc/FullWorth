@@ -441,24 +441,25 @@ foreach (var route in new[]
     }).AllowAnonymous();
 }
 
-var adminShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin", "index.html");
-foreach (var route in new[] { "/admin" })
+// Admin ist eine Seite der Anwendung, kein eigenes Dokument mehr: /admin liefert dieselbe Hülle wie
+// jede andere Adresse, und die Seitenleiste ist dort da, wo sie überall ist. Die Prüfung bleibt: wer
+// kein Admin ist, bekommt die Seite gar nicht erst. Dass der Menüpunkt für alle anderen verborgen
+// ist, ist Höflichkeit — die Berechtigung liegt hier und an jedem /auth/admin-Endpunkt.
+var appShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
+app.MapGet("/admin", async (
+    HttpContext context,
+    InstanceAdminService admin,
+    CancellationToken ct) =>
 {
-    app.MapGet(route, async (
-        HttpContext context,
-        InstanceAdminService admin,
-        CancellationToken ct) =>
+    if (await admin.GetCurrentAdminAsync(context.User, ct) is null)
     {
-        if (await admin.GetCurrentAdminAsync(context.User, ct) is null)
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
 
-        context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.SendFileAsync(adminShellPath, ct);
-    }).RequireAuthorization();
-}
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(appShellPath, ct);
+}).RequireAuthorization();
 
 var accountDeletionShellPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "account-deletion", "index.html");
 app.MapGet("/account/deletion", async (HttpContext context, CancellationToken ct) =>

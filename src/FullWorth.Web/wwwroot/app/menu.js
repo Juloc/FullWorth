@@ -33,8 +33,8 @@ const icon = {
   admin: '<path d="M12 3 19 6v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6Z"/><path d="M9.5 12h5M12 9.5v5"/>'
 };
 
-// view: der Name der Ansicht. href: solange sie noch ein eigenes Dokument ist — Gehalt und Admin
-// ziehen in Block 4 als Seiten in die Hülle, dann fällt das Feld weg.
+// view: der Name der Ansicht. href: solange sie noch ein eigenes Dokument ist — das gilt nur noch
+// für Gehalt. admin: der Eintrag bleibt verborgen, solange die Sitzung keine Adminrechte hat.
 // admin: true blendet den Eintrag aus, solange die Sitzung keine Adminrechte hat.
 export const MENU = [
   { id: 'overview', label: 'nav.group.overview', items: [
@@ -65,7 +65,7 @@ export const MENU = [
     { view: 'notifications', label: 'nav.notifications', icon: icon.notifications },
     { view: 'audit', label: 'nav.audit', icon: icon.audit },
     { view: 'settings', label: 'nav.settings', icon: icon.settings },
-    { view: 'admin', label: 'nav.admin', icon: icon.admin, href: '/admin', admin: true }
+    { view: 'admin', label: 'nav.admin', icon: icon.admin, admin: true }
   ] }
 ];
 

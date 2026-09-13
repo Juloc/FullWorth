@@ -145,7 +145,9 @@ export function bindSettings(ctx) {
   if (bound) return;
   bound = true;
   ctx.$('#delete-account')?.addEventListener('click', () => openDeleteAccountDialog(ctx));
-  ctx.$('#admin-settings-link')?.addEventListener('click', () => location.assign('/admin'));
+  // Admin ist eine Ansicht dieser Hülle, kein eigenes Dokument mehr - ein location.assign hätte
+  // die ganze Anwendung neu geladen, nur um eine Seite weiterzugehen.
+  ctx.$('#admin-settings-link')?.addEventListener('click', () => ctx.showView('admin'));
   ctx.$('#two-factor-settings')?.addEventListener('click', () => openTwoFactorDialog(ctx));
   ctx.$('#export-data')?.addEventListener('click', event => downloadWealthBackup(ctx, event.currentTarget));
   ctx.$('#lock-settings')?.addEventListener('click', () => openPinDialog(ctx));

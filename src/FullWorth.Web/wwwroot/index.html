@@ -49,6 +49,9 @@
   <link rel="stylesheet" href="/styles/features/wealth-real-estate-advanced.css">
   <link rel="stylesheet" href="/styles/features/wealth-real-estate-operations.css">
   <link rel="stylesheet" href="/styles/features/wealth-specialized-assets.css">
+  <!-- seiten-css:generiert -->
+  <link rel="stylesheet" href="/pages/admin/page.css">
+<!-- /seiten-css -->
   <link rel="stylesheet" href="/styles/mobile-polish.css">
   <script src="/pwa/register-sw.js"></script>
 </head>
@@ -103,7 +106,7 @@
           <a class="nav-item" href="/notifications" data-entry="notifications" data-view="notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span data-i18n="nav.notifications">Benachrichtigungen</span></a>
           <a class="nav-item" href="/audit" data-entry="audit" data-view="audit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5Z"/><path d="M8 9h8M8 13h8M8 17h4"/></svg><span data-i18n="nav.audit">Protokoll</span></a>
           <a class="nav-item" href="/settings" data-entry="settings" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m0-11.9 1.4 1.4m8.2 8.2 1.4 1.4"/></svg><span data-i18n="nav.settings">Einstellungen</span></a>
-          <a class="nav-item" href="/admin" data-entry="admin" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6Z"/><path d="M9.5 12h5M12 9.5v5"/></svg><span data-i18n="nav.admin">Admin</span></a>
+          <a class="nav-item" href="/admin" data-entry="admin" data-view="admin" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6Z"/><path d="M9.5 12h5M12 9.5v5"/></svg><span data-i18n="nav.admin">Admin</span></a>
         </div>
       </div>
       <script src="/app/nav-state.js"></script>
@@ -166,6 +169,82 @@
     <section id="view-audit" class="view"><div class="toolbar an-toolbar"><label class="field"><span data-i18n="audit.action">Aktion</span><select id="audit-action"></select></label><label class="field"><span data-i18n="audit.entityType">Typ</span><select id="audit-entity-type"></select></label><label class="field"><span data-i18n="audit.limit">Anzahl</span><select id="audit-limit"><option value="100">100</option><option value="250">250</option><option value="500">500</option></select></label></div><article class="panel"><div class="panel-head"><h2 data-i18n="audit.title">Aktivitätsprotokoll</h2></div><p class="row-sub panel-intro" data-i18n="audit.intro">Nur lesbar. Zeigt die letzten aufgezeichneten Aktionen in diesem Bereich, neueste zuerst.</p><div id="audit-list" class="rows"></div><button id="audit-more" class="ghost" data-i18n="audit.loadOlder" hidden>Ältere laden</button></article></section>
 
     <section id="view-settings" class="view"><article class="panel"><div class="panel-head"><h2 data-i18n="settings.appearance">Darstellung &amp; Sprache</h2></div><div class="settings-grid"><label><span data-i18n="settings.language">Sprache</span><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></label><label><span data-i18n="settings.theme">Design</span><select id="theme"><option value="system" data-i18n="theme.system">System</option><option value="light" data-i18n="theme.light">Hell</option><option value="dark" data-i18n="theme.dark">Dunkel</option></select></label><label class="fw-toggle-row settings-toggle"><span data-i18n="privacy.rememberOn">Beim Start im Privatmodus starten</span><span class="fw-toggle"><input id="privacy-default" type="checkbox"><span class="fw-toggle-track"></span></span></label><button id="layout-reset" type="button" class="settings-layout-reset"><span>Layout zurücksetzen</span><small>Seitenleisten, Breiten und Panel-Zustand</small></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="settings.security">Sicherheit</h2></div><div class="rows"><button id="admin-settings-link" type="button" class="row settings-link" hidden><div class="row-main"><div class="row-title">Admin</div><div class="row-sub">User verwalten</div></div><span aria-hidden="true">›</span></button><button id="two-factor-settings" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="twoFactor.title">Zwei-Faktor-Authentifizierung</div><div class="row-sub" data-i18n="twoFactor.hint">6-stelliger Code aus Google Authenticator oder einer anderen TOTP-App</div></div><span aria-hidden="true">›</span></button><a class="row settings-link" href="/settings/security/passkeys"><div class="row-main"><div class="row-title" data-i18n="passkeys.title">Passkeys</div><div class="row-sub" data-i18n="settings.passkeysHint">Passkeys und Sitzungen verwalten</div></div><span aria-hidden="true">›</span></a><button id="lock-settings" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="lock.pinSettingsTitle">App-Sperre (PIN)</div><div class="row-sub" data-i18n="settings.lockHint">PIN für die Sperre bei Inaktivität festlegen</div></div><span aria-hidden="true">›</span></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="bankingSetup.title">Enable Banking</h2></div><div class="rows"><button id="enable-banking-settings" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="bankingSetup.manage">Bankzugang einrichten</div><div id="enable-banking-status" class="row-sub" data-i18n="bankingSetup.loading">Status wird geprüft …</div></div><span aria-hidden="true">›</span></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="aiAccess.title">KI-Zugang</h2></div><div class="rows"><button id="ai-access-settings" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="aiAccess.manage">KI-Zugang verwalten</div><div id="ai-access-status" class="row-sub" data-i18n="aiAccess.loading">KI-Zugang wird geprüft…</div></div><span aria-hidden="true">›</span></button></div></article><article id="cloud-intelligence-panel" class="panel" hidden><div class="panel-head"><h2 data-i18n="cloudIntelligence.title">FullWorth Cloud Intelligence</h2></div><div class="rows"><button id="cloud-intelligence-settings" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="cloudIntelligence.manage">Cloud Intelligence verwalten</div><div id="cloud-intelligence-status" class="row-sub" data-i18n="cloudIntelligence.loading">Cloud-Status wird geprüft…</div></div><span aria-hidden="true">›</span></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="settings.account">Konto</h2></div><div class="rows"><button id="delete-account" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="settings.deleteAccount">Konto löschen</div><div class="row-sub" data-i18n="settings.deleteAccountHint">Konto sperren und nach 7 Tagen endgültig löschen</div></div><span aria-hidden="true">›</span></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="settings.data">Daten &amp; Verwaltung</h2></div><div class="rows"><a class="row settings-link" href="/compensation.html"><div class="row-main"><div class="row-title">Gehalt &amp; Benefits</div><div class="row-sub">Netto, Firmenwagen, bAV, Kaufkraft und Szenarien</div></div><span aria-hidden="true">›</span></a><a class="row settings-link" href="/settings/import"><div class="row-main"><div class="row-title" data-i18n="purchases.import">Importieren</div><div class="row-sub">CSV / XLSX · Finanzguru · Finanzfluss · Outbank · Depots</div></div><span aria-hidden="true">›</span></a><button type="button" class="row settings-link" data-view-jump="merchants"><div class="row-main"><div class="row-title" data-i18n="merchants.title">Händler</div><div class="row-sub" data-i18n="merchants.hint">Zahlungsempfänger benennen und Aliasse zusammenführen</div></div><span aria-hidden="true">›</span></button><button type="button" class="row settings-link" data-view-jump="audit"><div class="row-main"><div class="row-title" data-i18n="audit.title">Aktivitätsprotokoll</div><div class="row-sub" data-i18n="audit.hint">Aufgezeichnete Änderungen ansehen</div></div><span aria-hidden="true">›</span></button><button id="export-data" type="button" class="row settings-link"><div class="row-main"><div class="row-title" data-i18n="export.title">Daten exportieren</div><div class="row-sub" data-i18n="export.hint">Alle Daten dieses Bereichs als JSON herunterladen</div></div><span aria-hidden="true">↓</span></button></div></article><article class="panel"><div class="panel-head"><h2 data-i18n="sharing.title">Freigabe &amp; Mitglieder</h2><button id="sharing-invite" class="ghost" hidden data-i18n="sharing.invite">Person einladen</button></div><p class="row-sub panel-intro" data-i18n="sharing.hint">Lade Personen zu diesem Bereich ein und teile einzelne Konten mit ihnen.</p><div id="sharing-members" class="rows"></div><div id="sharing-invites" class="rows" hidden></div></article></section>
+    <!-- seiten:generiert -->
+    <section id="view-admin" class="view">
+      <section id="admin-overview" class="admin-metrics" aria-label="Übersicht">
+        <article><span>User</span><strong id="metric-users">–</strong></article>
+        <article><span>Aktiv</span><strong id="metric-active">–</strong></article>
+        <article><span>Gesperrt</span><strong id="metric-disabled">–</strong></article>
+        <article><span>Löschung</span><strong id="metric-deleting">–</strong></article>
+        <article><span>Fehler</span><strong id="metric-failed">–</strong></article>
+        <article><span>Admins</span><strong id="metric-admins">–</strong></article>
+      </section>
+  
+      <section class="panel">
+        <div class="admin-toolbar">
+          <input id="admin-search" type="search" placeholder="E-Mail oder User-ID suchen" autocomplete="off">
+          <select id="admin-status">
+            <option value="">Alle</option>
+            <option value="active">Aktiv</option>
+            <option value="disabled">Gesperrt</option>
+            <option value="deleting">Löschung</option>
+            <option value="admins">Admins</option>
+          </select>
+          <button id="admin-refresh" type="button" class="btn btn-secondary">Aktualisieren</button>
+        </div>
+        <div id="admin-users" class="admin-users"></div>
+        <div class="admin-pager">
+          <button id="admin-prev" type="button" class="btn btn-secondary">Zurück</button>
+          <span id="admin-page-info" class="row-sub"></span>
+          <button id="admin-next" type="button" class="btn btn-secondary">Weiter</button>
+        </div>
+      </section>
+  
+      <section class="panel" id="external-providers">
+        <div class="panel-head"><h2>Anmeldeanbieter</h2></div>
+        <p class="row-sub">Google- und Apple-Anmeldung für diese Installation. Wirkt sofort, ohne Neustart.
+          Werte aus der Umgebung haben Vorrang und werden hier nicht überschrieben.</p>
+        <form id="providers-form" class="admin-providers">
+          <fieldset>
+            <legend>Google</legend>
+            <label><span>Client-ID</span><input name="googleClientId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Client-Secret</span><input name="googleClientSecret" type="password" autocomplete="new-password"
+              placeholder="unverändert lassen"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Apple</legend>
+            <label><span>Service-ID</span><input name="appleServiceId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Team-ID</span><input name="appleTeamId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Key-ID</span><input name="applePrivateKeyId" autocomplete="off" spellcheck="false"></label>
+            <label><span>Privater Schlüssel (.p8)</span><textarea name="applePrivateKey" rows="3"
+              autocomplete="off" spellcheck="false" placeholder="unverändert lassen"></textarea></label>
+          </fieldset>
+          <div class="admin-providers-actions">
+            <span id="providers-state" class="row-sub"></span>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      </section>
+  
+      <section class="panel" id="instance-settings">
+        <div class="panel-head"><h2>Einstellungen dieser Installation</h2></div>
+        <p class="row-sub">Werte, die für die ganze Installation gelten. Sie wirken sofort, ohne Neustart.
+          Ein leeres Feld bedeutet „Standardwert benutzen“. Was die Umgebung setzt, gewinnt weiterhin und
+          steht hier schreibgeschützt.</p>
+        <div id="instance-settings-body"></div>
+      </section>
+  
+      <section class="panel" id="vault">
+        <div class="panel-head"><h2>Passwörter &amp; Schlüssel</h2></div>
+        <p class="row-sub">Die Zugangsdaten und Schlüssel dieser Installation. Anzeigen verlangt eine
+          Bestätigung; die gilt fünf Minuten und für zehn Anzeigen. Die als „kritisch“ markierten Einträge
+          verlangen sie jedes Mal neu. Jede Anzeige wird protokolliert.</p>
+        <p class="row-sub">Kontopasswörter, PINs und Wiederherstellungscodes stehen hier nicht — sie sind
+          gehasht und lassen sich grundsätzlich nicht anzeigen.</p>
+        <div id="vault-body"></div>
+      </section>
+    </section>
+<!-- /seiten -->
   </main>
 </div>
 

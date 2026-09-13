@@ -1,12 +1,10 @@
-/* Admin page. Deliberately a separate shell - no sidebar, no bottom nav, no finance data - but the
-   same design system as the app: this file used to carry ~40 hardcoded hex colours, its own
-   prefers-color-scheme dark mode (which ignored the user's chosen theme), its own button and dialog
-   styling, and a single 850px breakpoint. All of that now comes from the layer chain in index.html;
-   what is left here is the layout that only this page has. Tokens only. */
-.admin-shell{width:min(1120px,100%);margin:0 auto;padding:var(--s6) var(--s4) var(--s8)}
-.admin-header{display:flex;justify-content:space-between;gap:var(--s4);align-items:flex-start;margin-bottom:var(--s4)}
-.admin-header h1{font-size:30px;margin:4px 0}
-.admin-header p{margin:0;color:var(--muted)}
+/* Admin ist eine Seite wie jede andere geworden.
+   Sie war einmal ein eigenes Dokument mit eigener Hülle, eigenen ~40 Hex-Farben, eigenem Dunkelmodus
+   über prefers-color-scheme (der die gewählte Einstellung überging) und eigenen Knopf- und
+   Dialogstilen. Geblieben ist nur das, was diese Seite von den anderen unterscheidet: ihre
+   Kennzahlen, ihre Nutzerzeilen und ihr Anbieterformular. Überschrift, Seitenleiste, Melder und
+   Rahmen kommen wie überall von der Hülle. Nur Tokens. */
+/* Die Überzeile im Nutzerdialog. Der Rest der Kopfzeile kommt aus der Hülle. */
 .admin-eyebrow{display:block;text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--muted)}
 
 .admin-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--s2);margin-bottom:var(--s3)}
@@ -44,25 +42,15 @@
 .admin-actions{display:flex;flex-wrap:wrap;gap:var(--s2)}
 .admin-error{padding:10px;border-radius:var(--radius-input);background:var(--negative-soft);color:var(--negative)}
 
-#admin-toast{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--text);color:var(--bg);border-radius:var(--radius-input);padding:10px 14px;opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s;z-index:60}
-#admin-toast.show{opacity:1;transform:none}
-/* In the top layer, so a message raised from inside a dialog is visible - see ui/toast.js. The
-   popover default style centres the element and gives it a border; both undone here. */
-#admin-toast[popover]{position:fixed;inset:auto 20px calc(20px + env(safe-area-inset-bottom,0px)) auto;margin:0;border:0;padding:10px 14px;overflow:visible;background:var(--text);color:var(--bg)}
-
 @media(max-width:900px){
   .admin-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
   .admin-toolbar{grid-template-columns:1fr}
-  .admin-header{flex-direction:column;align-items:flex-start}
 }
 @media(max-width:620px){
-  .admin-shell{padding:var(--s4) var(--s3) var(--s6)}
   .admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .admin-user{grid-template-columns:minmax(0,1fr) auto}
   .admin-user>:nth-child(2),.admin-user>:nth-child(3),.admin-user>:nth-child(4){display:none}
   .admin-detail-grid{grid-template-columns:1fr}
-  /* Same specificity note as the app: #admin-toast[popover] would otherwise win. */
-  #admin-toast,#admin-toast[popover]{left:var(--s3);right:var(--s3);inset-block-start:auto}
 }
 
 /* The provider form. Same two-column label pattern as the settings grid in the app, so nothing new is

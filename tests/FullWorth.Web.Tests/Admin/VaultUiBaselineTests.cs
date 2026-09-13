@@ -18,7 +18,7 @@ public sealed class VaultUiBaselineTests
         using var factory = new FullWorthWebFactory();
         using var client = factory.CreateClient();
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        return File.ReadAllText(Path.Combine(environment.WebRootPath, "admin", "vault.js"));
+        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "admin", "vault.js"));
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public sealed class VaultUiBaselineTests
         using var client = factory.CreateClient();
         var root = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
 
-        var shared = File.ReadAllText(Path.Combine(root, "admin", "admin.js"));
+        var shared = File.ReadAllText(Path.Combine(root, "pages", "admin", "page.js"));
         Assert.Contains("headers.set('Content-Type','application/json')", shared, StringComparison.Ordinal);
 
         // And it really is the shared helper that every panel goes through, rather than three copies

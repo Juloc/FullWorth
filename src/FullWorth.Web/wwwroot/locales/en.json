@@ -106,6 +106,10 @@
     "insights": {
       "title": "Important for you",
       "subtitle": "Detected changes and open items"
+    },
+    "admin": {
+      "title": "Admin",
+      "subtitle": "Users, sign-in providers, installation settings and keys"
     }
   },
   "dashboard": {

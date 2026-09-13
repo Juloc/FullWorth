@@ -1,13 +1,17 @@
-// Schreibt die Seitenleiste und die untere Leiste aus app/menu.js in index.html.
+// Schreibt die Hülle: Seitenleiste und untere Leiste aus app/menu.js, und je Seite unter pages/
+// deren Markup und deren Stylesheet.
 //
 // Beide stehen fertig im Dokument, damit beim Laden nichts eingefügt wird — eingefügtes Markup ist
 // die häufigste Ursache für springende Seiten. Damit „fertig im Dokument" nicht „von Hand gepflegt"
 // heißt, erzeugt dieses Skript es, und MenuParityTests prüft, dass die Datei dem Ergebnis entspricht.
 //
-//   node ops/generate-menu.mjs          schreibt index.html
-//   node ops/generate-menu.mjs --check  meldet nur, ob es passt   (Exit 1, wenn nicht)
+// Eine Seite ist ein Ordner unter pages/ mit page.html, page.css und page.js. Das Markup landet im
+// Dokument, nicht in einem Nachlader — geladen wird nichts, alles ist beim ersten Zeichnen da.
+//
+//   node ops/generate-shell.mjs          schreibt index.html
+//   node ops/generate-shell.mjs --check  meldet nur, ob es passt   (Exit 1, wenn nicht)
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { MENU, QUICK, ENTRIES } from '../src/FullWorth.Web/wwwroot/app/menu.js';
 
 const NL = String.fromCharCode(10);
@@ -59,6 +63,22 @@ const more = '  <button id="bottom-more" class="nav-item" type="button">'
   + svg('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>')
   + `<span data-i18n="nav.more">${text('nav.more')}</span></button>`;
 
+// Die Seiten, alphabetisch. Die Reihenfolge im Dokument ist gleichgültig — sichtbar ist immer nur
+// eine —, aber sie muss stabil sein, sonst meldet --check bei jedem Lauf eine Änderung.
+const pagesDir = new URL('pages/', root);
+const pages = existsSync(pagesDir)
+  ? readdirSync(pagesDir, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
+  : [];
+
+const pageMarkup = pages
+  .map(name => readFileSync(new URL(`pages/${name}/page.html`, root), 'utf8').trimEnd())
+  .join(NL);
+
+const pageStyles = pages
+  .filter(name => existsSync(new URL(`pages/${name}/page.css`, root)))
+  .map(name => `  <link rel="stylesheet" href="/pages/${name}/page.css">`)
+  .join(NL);
+
 function replace(html, id, body) {
   const pattern = new RegExp(String.raw`(<!-- ${id}:generiert -->)[^]*?(<!-- /${id} -->)`);
   if (!pattern.test(html)) throw new Error(`index.html hat keine Marken für ${id}.`);
@@ -66,15 +86,20 @@ function replace(html, id, body) {
 }
 
 const current = readFileSync(indexPath, 'utf8');
-const next = replace(replace(current, 'nav', sidebar), 'bottom-nav', quick + NL + more);
+const next = [
+  ['nav', sidebar],
+  ['bottom-nav', quick + NL + more],
+  ['seiten-css', pageStyles],
+  ['seiten', pageMarkup]
+].reduce((html, [id, body]) => replace(html, id, body), current);
 
 if (process.argv.includes('--check')) {
   if (current !== next) {
-    console.error('index.html entspricht app/menu.js nicht. `node ops/generate-menu.mjs` ausführen.');
+    console.error('index.html ist nicht mehr das, was die Hülle ergibt. `node ops/generate-shell.mjs` ausführen.');
     process.exit(1);
   }
-  console.log('index.html entspricht app/menu.js.');
+  console.log('index.html entspricht der Hülle.');
 } else {
   writeFileSync(indexPath, next);
-  console.log(`Menü geschrieben: ${ENTRIES.length} Einträge in ${MENU.length} Gruppen.`);
+  console.log(`Geschrieben: ${ENTRIES.length} Einträge in ${MENU.length} Gruppen, ${pages.length} Seiten.`);
 }
