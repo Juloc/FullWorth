@@ -42,11 +42,11 @@ internal sealed record FinTsConnectionSecret(
 public sealed class IngFinTsService(
     FinTsClient finTs,
     FullWorthBackendClient backend,
-    IOptions<FinTsOptions> options,
+    IOptionsMonitor<FinTsOptions> options,
     IOptions<BankingSyncOptions> syncOptions,
     ILogger<IngFinTsService> logger)
 {
-    private readonly FinTsOptions _options = options.Value;
+    private readonly IOptionsMonitor<FinTsOptions> _options = options;
     private readonly BankingSyncOptions _sync = syncOptions.Value;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -318,8 +318,8 @@ public sealed class IngFinTsService(
         var allTransactions = new List<FinTsTransaction>();
         string? touchdown = null;
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var from = today.AddDays(-Math.Clamp(_options.HistoryDays, 1, 90));
-        for (var page = 0; page < Math.Max(1, _options.MaxPages); page++)
+        var from = today.AddDays(-Math.Clamp(_options.CurrentValue.HistoryDays, 1, 90));
+        for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
             var result = await finTs.GetTransactionsAsync(bank, credentials, session, account, from, today, touchdown, ct);
             session = RequireDataOrInteractive(result);
@@ -367,7 +367,7 @@ public sealed class IngFinTsService(
     {
         var holdings = new List<FinTsHolding>();
         string? touchdown = null;
-        for (var page = 0; page < Math.Max(1, _options.MaxPages); page++)
+        for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
             var result = await finTs.GetPortfolioAsync(bank, credentials, session, depot, depot.Currency, touchdown, ct);
             session = RequireDataOrInteractive(result);
@@ -446,7 +446,7 @@ public sealed class IngFinTsService(
     /// </summary>
     private async Task<string> ProductIdAsync(CancellationToken ct)
     {
-        var configured = _options.ProductId;
+        var configured = _options.CurrentValue.ProductId;
         // Only asked for when configuration has nothing, so an installation that set the id in the
         // admin menu does not pay for a backend round trip on every connect.
         var legacy = string.IsNullOrWhiteSpace(configured)
