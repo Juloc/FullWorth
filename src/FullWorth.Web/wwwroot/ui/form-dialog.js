@@ -2,6 +2,7 @@ import { ButtonRole, buttonClass } from './buttons.js';
 import { createDialog } from './dialog.js';
 import { esc } from './ux-kit.js';
 import { enhancePasswordInputs } from './password-toggle.js';
+import { attachCombobox } from './combobox.js';
 
 /**
  * The form primitive the dialogs never had.
@@ -191,6 +192,9 @@ export function createFormDialog({
   // Translated by the caller, like every other label here - this module owns layout and behaviour,
   // never wording.
   passwordLabels = { show: 'Passwort anzeigen', hide: 'Passwort verbergen' },
+  // The app context, when the caller wants searchable selects. A field opts in with
+  // `searchable: true`; without a context nothing happens and the select stays a plain select.
+  comboboxCtx = null,
   fallbackError = 'Das hat nicht funktioniert.',
   // A caller's own block that is not a field - the rule dialog's live preview, for instance. Trusted
   // markup from the caller, never user input, and it sits after the fields so it can comment on them.
@@ -227,6 +231,15 @@ export function createFormDialog({
   // wrapper and the two SVGs per call site is how fifteen of this app's password inputs ended up
   // without one.
   enhancePasswordInputs(form, passwordLabels);
+
+  // Long lists get search and icons; short ones deliberately do not. A three-option select is better
+  // native - the phone's own wheel and type-ahead beat a custom dialog.
+  if (comboboxCtx) {
+    for (const spec of fields.filter(f => f.searchable && f.kind === FieldKind.Select)) {
+      const select = form.querySelector(`select[name="${CSS.escape(spec.name)}"]`);
+      if (select) attachCombobox(comboboxCtx, select, { title: spec.searchTitle || spec.label });
+    }
+  }
 
   const values_ = () => {
     const data = {};

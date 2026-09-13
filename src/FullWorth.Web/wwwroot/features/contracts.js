@@ -1733,6 +1733,7 @@ async function openContractDialog(existing) {
   const handles = openFormDialog({
     title: ctx.get(existing ? 'contracts.edit' : 'contracts.new'),
     closeLabel: ctx.get('common.close'),
+    comboboxCtx: ctx,
     advancedLabel: t('Weitere Vertragsdaten', 'More contract details'),
     fallbackError: ctx.get('common.error'),
     className: 'contract-dialog contract-edit-v2',
@@ -1747,7 +1748,7 @@ async function openContractDialog(existing) {
       { name: 'cycle', kind: FieldKind.Select, label: ctx.get('contracts.billingCycle'), section: t('Zahlung', 'Payment'), options: choice(CYCLES, 'contracts.cycle_') },
       { name: 'category', kind: FieldKind.Select, label: t('Kategorie', 'Category'), section: t('Zahlung', 'Payment'),
         rawOptions: '<option value="">\u2014</option>' + categories },
-      { name: 'account', kind: FieldKind.Select, label: t('Zahlungskonto', 'Payment account'), section: t('Zahlung', 'Payment'),
+      { name: 'account', kind: FieldKind.Select, label: t('Zahlungskonto', 'Payment account'), section: t('Zahlung', 'Payment'), searchable: true,
         options: [{ value: '', label: '\u2014' }, ...accounts.map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
       // Visible rather than behind the disclosure, and for the same reason the asset editor keeps its
       // net-worth switch: it decides whether this contract is subtracted from what is available, and a

@@ -155,6 +155,7 @@ async function openLoanDialog(existing) {
   const form = openFormDialog({
     title: ctx.get(existing ? 'loans.edit' : 'loans.new'),
     closeLabel: ctx.get('common.close'),
+    comboboxCtx: ctx,
     advancedLabel: ctx.get('loans.moreDetails'),
     fallbackError: ctx.get('common.error'),
     create: html => ctx.dialog(html),
@@ -169,7 +170,7 @@ async function openLoanDialog(existing) {
       { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, maxLength: 3, group: 'terms' },
       { name: 'start', kind: FieldKind.Date, label: ctx.get('contracts.startDate'), required: true },
       { name: 'fees', kind: FieldKind.Money, label: ctx.get('loans.fees'), min: 0, advanced: true },
-      { name: 'account', kind: FieldKind.Select, label: ctx.get('contracts.account'), advanced: true,
+      { name: 'account', kind: FieldKind.Select, label: ctx.get('contracts.account'), advanced: true, searchable: true,
         options: [{ value: '', label: '\u2014' }, ...accounts.map(x => ({ value: x.id, label: x.displayName || x.institutionName }))] },
       { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), advanced: true,
         rawOptions: '<option value="">' + ctx.esc(ctx.get('common.all')) + '</option>' + categories }

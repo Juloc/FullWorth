@@ -1270,5 +1270,9 @@
     "configured": "Eingerichtet · {id}",
     "notConfigured": "Noch nicht hinterlegt",
     "productHint": "Banken wie die ING verlangen für FinTS eine registrierte Produkt-ID. Du bekommst sie bei der Registrierung deiner FullWorth-Installation als FinTS-Produkt."
+  },
+  "combobox": {
+    "pick": "Auswählen",
+    "search": "Suchen…"
   }
 }
