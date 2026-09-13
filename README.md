@@ -25,31 +25,29 @@ You need:
 - a domain such as `finance.example.com`
 - HTTPS through Caddy, Traefik or another reverse proxy
 
-Download `docker-compose.yml` and copy `.env.example` to `.env`.
-
-For a normal installation you only need:
-
-```env
-FULLWORTH_DOMAIN=finance.example.com
-FULLWORTH_SECRET=use-a-long-random-secret-from-your-password-manager
-```
-
-Use a random value of at least 32 characters. Keep `FULLWORTH_SECRET` safe and stable; it protects the database connection, internal application boundaries and encrypted FullWorth data.
-
-Start FullWorth:
+Download `docker-compose.yml` and start it. There is nothing to fill in:
 
 ```bash
-docker compose pull
 docker compose up -d
 ```
 
-FullWorth listens on `127.0.0.1:8098` by default.
+No `.env`, no secret to invent, no domain to declare. Every secret this installation needs is created
+by the service that reads it, the first time it starts without one — a separate value per purpose,
+none of which ever leaves your server. The address you reach FullWorth at is learned from your first
+registration, and the passkey relying party, the passkey origin, the Enable Banking redirect and the
+host pin all follow from it.
+
+FullWorth listens on `127.0.0.1:8080` by default. `.env.example` lists what you *can* change.
+
+> **Back up the `fullworth-secrets` volume.** It holds `data_encryption_key`, and without it every
+> encrypted column in the database is unreadable — a PostgreSQL backup alone cannot bring it back,
+> because what was lost never lived in PostgreSQL. Never run `docker compose down -v` in this folder.
 
 ### Caddy example
 
 ```caddy
 finance.example.com {
-    reverse_proxy 127.0.0.1:8098
+    reverse_proxy 127.0.0.1:8080
 }
 ```
 
@@ -83,7 +81,7 @@ FullWorth can:
 
 For private self-hosting, every user should use their own Enable Banking account/application for their own accounts.
 
-The callback URL is created automatically from `FULLWORTH_DOMAIN`:
+The callback URL is created automatically from the address your installation learned:
 
 ```text
 https://finance.example.com/connect/enable-banking/callback
@@ -117,14 +115,17 @@ Normal version tags automatically use the correct architecture on both **AMD64**
 
 Always back up:
 
-- `fullworth-postgres-data`
-- `fullworth-purchases-data`
-- `fullworth-web-dataprotection`
-- your `.env`
+- `fullworth-secrets` — **the one that cannot be recreated.** It holds `data_encryption_key`; without
+  it every encrypted column in the database is unreadable, and no PostgreSQL backup helps
+- `fullworth-data` — the database
+- `fullworth-purchases` — receipt files
+- `fullworth-pension` — uploaded pension statements
+- `fullworth-dataprotection` — the key ring that signs your sign-in cookies
 
-If you use the optional Codex bridge, also back up `fullworth-codex-data`.
+If you use the optional Codex bridge, also back up `fullworth-codex` — it holds your Codex sign-in.
 
-Losing `FULLWORTH_SECRET` can make encrypted data inaccessible.
+A backup of the database alone is not a backup. `fullworth-secrets` and `fullworth-data` belong
+together: either without the other is unreadable.
 
 ## License
 

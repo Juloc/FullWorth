@@ -258,7 +258,7 @@ more speculatively (`FullWorthDbContext` declares 79 indexes):
 
 There is no automated e2e, so the post-deploy pass is manual. Before merging a release candidate:
 `dotnet build FullWorth.slnx --configuration Release`, the four suites above,
-`docker compose --env-file .env.example config --quiet`, and `ops/restore-test/verify-restore.sh`.
+`docker compose config --quiet`, and `ops/restore-test/verify-restore.sh`.
 
 `verify-restore.sh` is safe to run against a live installation: it restores the latest Postgres dump
 into an **ephemeral** container and the latest purchases archive into a **throwaway** volume, then

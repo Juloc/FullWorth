@@ -18,7 +18,7 @@ Before tagging:
 dotnet restore FullWorth.slnx
 dotnet build FullWorth.slnx --configuration Release --no-restore
 dotnet test FullWorth.slnx --configuration Release --no-build
-docker compose --env-file .env.example config --quiet
+docker compose config --quiet
 ops/restore-test/verify-restore.sh
 ```
 

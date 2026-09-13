@@ -1,125 +1,125 @@
+# FullWorth — self-hosted stack.
+#
+# There is nothing to fill in. No .env, no secret to invent, no domain to declare:
+#
+#   docker compose up -d
+#
+# Every secret this installation needs is created by the service that reads it, the first time it
+# starts without one. The public address, the passkey relying party, the Enable Banking redirect and
+# the host pin are learned from your first registration. Sign-in providers, the FinTS product id and
+# the AI access live in the app's own settings.
+#
+# Put a reverse proxy with HTTPS in front of the published port. FullWorth needs a real certificate
+# for passkeys, and it will learn whichever address you reach it at.
 name: fullworth
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 services:
   fullworth-postgres:
     image: postgres:18-alpine
     restart: unless-stopped
+    logging: *default-logging
+    # The database password is created here, by the service that needs it first, on a host that does
+    # not have one yet. Create-only: a password that exists is never touched, or a restart would lock
+    # this stack out of its own database.
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        secret=/run/fullworth-secrets/fullworth_db_password
+        if [ ! -s "$$secret" ]; then
+          mkdir -p "$${secret%/*}"
+          ( umask 077; head -c 48 /dev/urandom | base64 | tr -d '\012' > "$$secret" )
+          chmod 0444 "$$secret"
+          echo "Created the database password." >&2
+        fi
+        exec docker-entrypoint.sh postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-fullworth}
-      POSTGRES_USER: ${POSTGRES_USER:-fullworth}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
+      POSTGRES_DB: fullworth
+      POSTGRES_USER: fullworth
+      POSTGRES_PASSWORD_FILE: /run/fullworth-secrets/fullworth_db_password
     volumes:
-      - fullworth-postgres-data:/var/lib/postgresql
+      - fullworth-data:/var/lib/postgresql
+      - fullworth-secrets:/run/fullworth-secrets
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fullworth} -d ${POSTGRES_DB:-fullworth}"]
+      test: ["CMD-SHELL", "pg_isready -U fullworth -d fullworth"]
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
+    security_opt: ["no-new-privileges:true"]
 
   fullworth:
     image: ghcr.io/juloc/fullworth:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       fullworth-postgres:
         condition: service_healthy
-    environment:
-      FullWorthHost__Unified: "true"
-
-      ConnectionStrings__FullWorth: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      ConnectionStrings__AuthDatabase: Host=fullworth-postgres;Port=5432;Database=${POSTGRES_DB:-fullworth};Username=${POSTGRES_USER:-fullworth};Password=${POSTGRES_PASSWORD:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-
-      Security__InternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__ApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Security__DataEncryptionKey: ${FULLWORTH_DATA_ENCRYPTION_KEY:-}
-      Security__MasterKey: ${FULLWORTH_SECRET:-}
-
-      Services__BackendUrl: http://127.0.0.1:8080
-      Services__BackendInternalKey: ${FULLWORTH_BACKEND_INTERNAL_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Services__BankingUrl: http://127.0.0.1:8080
-      Services__BankingApiKey: ${FULLWORTH_BANKING_API_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-      Backend__BaseUrl: http://127.0.0.1:8080
-      Backend__IngestKey: ${FULLWORTH_INGEST_KEY:-${FULLWORTH_SECRET:?Set FULLWORTH_SECRET in .env}}
-
-      PurchaseStorage__RootPath: /data/purchases
-      DataProtection__KeyPath: /data/dataprotection
-
-      CodexTest__Enabled: ${FULLWORTH_CODEX_TEST_ENABLED:-false}
-      CodexTest__BaseUrl: http://fullworth-codex:8080
-      CodexTest__BridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
-      AiAccess__CodexBridgeBaseUrl: http://fullworth-codex:8080
-      AiAccess__CodexBridgeKey: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
-
-      FinTs__ProductId: ${FULLWORTH_FINTS_PRODUCT_ID:-}
-      EnableBanking__ApplicationId: ${ENABLE_BANKING_APPLICATION_ID:-}
-      EnableBanking__RedirectUrl: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}/connect/enable-banking/callback
-      EnableBanking__PrivateKeyBase64: ${ENABLE_BANKING_PRIVATE_KEY_BASE64:-}
-      EnableBanking__PrivateKeyPath: ${ENABLE_BANKING_PRIVATE_KEY_PATH:-}
-      EnableBanking__MinimumRequestSpacingMilliseconds: ${ENABLE_BANKING_REQUEST_SPACING_MS:-1000}
-      EnableBanking__TransientRetryCount: ${ENABLE_BANKING_TRANSIENT_RETRIES:-2}
-      Sync__IntervalMinutes: ${SYNC_INTERVAL_MINUTES:-15}
-      Sync__MinimumBackgroundSyncIntervalMinutes: ${SYNC_MIN_BACKGROUND_INTERVAL_MINUTES:-360}
-      Sync__RateLimitCooldownMinutes: ${SYNC_RATE_LIMIT_COOLDOWN_MINUTES:-360}
-      Sync__OverlapDays: ${SYNC_OVERLAP_DAYS:-7}
-      Sync__PersistBatchSize: ${SYNC_BATCH_SIZE:-250}
-
-      FullWorthCloud__EnrollmentToken: ${FULLWORTH_CLOUD_ENROLLMENT_TOKEN:-}
-      FullWorthCloud__KnowledgePackPublicKeyBase64: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_BASE64:-}
-      FullWorthCloud__KnowledgePackPublicKeyPath: ${FULLWORTH_CLOUD_KNOWLEDGE_PUBLIC_KEY_PATH:-}
-      FullWorthCloud__KnowledgePackId: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_ID:-fullworth-official}
-      FullWorthCloud__KnowledgePackRegion: ${FULLWORTH_CLOUD_KNOWLEDGE_PACK_REGION:-GLOBAL}
-
-      ReverseProxy__KnownProxies__0: ${FULLWORTH_KNOWN_PROXY:-}
-      ReverseProxy__KnownNetworks__0: ${FULLWORTH_KNOWN_PROXY_NETWORK:-172.16.0.0/12}
-      Passkeys__RelyingPartyId: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
-      Passkeys__RelyingPartyName: FullWorth
-      Passkeys__Origins__0: https://${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env}
-      Registration__Enabled: ${FULLWORTH_REGISTRATION_ENABLED:-false}
-      ExternalAuth__Google__ClientId: ${FULLWORTH_GOOGLE_CLIENT_ID:-}
-      ExternalAuth__Google__ClientSecret: ${FULLWORTH_GOOGLE_CLIENT_SECRET:-}
-      ExternalAuth__Apple__ServiceId: ${FULLWORTH_APPLE_SERVICE_ID:-}
-      ExternalAuth__Apple__TeamId: ${FULLWORTH_APPLE_TEAM_ID:-}
-      ExternalAuth__Apple__PrivateKeyId: ${FULLWORTH_APPLE_PRIVATE_KEY_ID:-}
-      ExternalAuth__Apple__PrivateKeyBase64: ${FULLWORTH_APPLE_PRIVATE_KEY_BASE64:-}
-      AllowedHosts: ${FULLWORTH_DOMAIN:?Set FULLWORTH_DOMAIN in .env};127.0.0.1;localhost
+    # No environment at all, on purpose. Everything is an appsettings default, ENV baked into the
+    # image, or something the installation learns about itself. Any of it can still be stated as an
+    # environment variable if you prefer — none of it has to be.
     ports:
-      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8098}:8080"
+      - "${FULLWORTH_BIND_ADDRESS:-127.0.0.1}:${FULLWORTH_PORT:-8080}:8080"
     volumes:
-      - fullworth-purchases-data:/data/purchases
-      - fullworth-web-dataprotection:/data/dataprotection
+      - fullworth-purchases:/data/purchases
+      - fullworth-pension:/data/pension
+      - fullworth-dataprotection:/data/dataprotection
+      # Writable: this process creates the secrets it owns — the data encryption key, the internal
+      # key, the ingest key, the banking key and the Codex bridge key.
+      - fullworth-secrets:/run/fullworth-secrets
     shm_size: 1gb
-    security_opt:
-      - no-new-privileges:true
+    security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:mode=1777
 
+  # Optional: personal AI through a ChatGPT/Codex sign-in, in its own container.
+  #   docker compose --profile codex up -d
+  # Without it, "own API key" and "own provider" in the AI settings work normally.
   fullworth-codex:
     profiles: ["codex"]
     image: ghcr.io/juloc/fullworth-codex:${FULLWORTH_VERSION:-latest}
     restart: unless-stopped
+    logging: *default-logging
     environment:
-      BRIDGE_KEY: ${FULLWORTH_CODEX_BRIDGE_KEY:-${FULLWORTH_SECRET:-}}
+      # One file, and only this one. This sidecar parses untrusted uploads, so it must never hold a
+      # key that establishes trusted user context.
+      BRIDGE_KEY_FILE: /run/fullworth-secrets/codex_bridge_key
       CODEX_HOME: /data/codex
       CODEX_WORKDIR: /tmp/codex-work
     volumes:
-      - fullworth-codex-data:/data/codex
+      - fullworth-codex:/data/codex
+      - type: volume
+        source: fullworth-secrets
+        target: /run/fullworth-secrets/codex_bridge_key
+        read_only: true
+        volume:
+          subpath: codex_bridge_key
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 20s
-    security_opt:
-      - no-new-privileges:true
+    security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:mode=1777
 
 volumes:
-  fullworth-postgres-data:
-  fullworth-purchases-data:
-  fullworth-web-dataprotection:
-  fullworth-codex-data:
+  fullworth-data:
+  fullworth-purchases:
+  # Uploaded pension documents. Encrypted at rest with a key derived from data_encryption_key, so this
+  # volume is worthless without fullworth-secrets — and worth nothing less: losing it loses the
+  # original statements behind every pension snapshot.
+  fullworth-pension:
+  fullworth-dataprotection:
+  fullworth-codex:
+  # Holds data_encryption_key, without which every encrypted column in the database is unreadable —
+  # and no PostgreSQL backup restores it, because what was lost never lived in PostgreSQL. Back this
+  # volume up. Never "docker compose down -v" in this folder.
+  fullworth-secrets:
