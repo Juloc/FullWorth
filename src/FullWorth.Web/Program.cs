@@ -125,6 +125,8 @@ builder.Services.AddSingleton<IConfigureOptions<Indice.AspNetCore.Authentication
 builder.Services.AddScoped<ExternalAuthSettingsStore>();
 builder.Services.AddScoped<InstanceConfigurationStore>();
 builder.Services.AddScoped<InstanceConfigurationService>();
+builder.Services.AddScoped<AdminElevationService>();
+builder.Services.AddScoped<AdminVaultService>();
 builder.Services.AddSingleton<ExternalAuthSchemeSynchronizer>();
 
 builder.Services.AddAuthorization(options =>
@@ -463,6 +465,7 @@ app.MapTwoFactorEndpoints();
 app.MapInstanceAdminEndpoints();
 app.MapExternalAuthSettingsEndpoints();
 app.MapInstanceConfigurationEndpoints();
+app.MapAdminVaultEndpoints();
 app.MapSessionEndpoints();
 app.MapRecoveryEndpoints();
 app.MapPasskeyEndpoints();

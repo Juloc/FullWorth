@@ -289,6 +289,39 @@ stored, and it is reused for the automatic syncs. Bank credentials follow the sa
 only the guarded Banking module path, are never returned to the browser, and are persisted encrypted
 through the backend.
 
+### The secret vault, and what it costs
+
+*Passwörter & Schlüssel* in the admin menu shows an administrator the stored credentials and the
+infrastructure secrets of this installation in clear text. That is a deliberate decision by the
+owner, not an accident, and it has a price worth writing down:
+
+**It turns "an admin session was taken over" into "the whole installation is compromised", including
+every other user's encrypted data.** Four entries carry that on their own — `data_encryption_key`
+(decrypts every encrypted column, for every user, forever), `backend_internal_key` (acts as any user
+through the internal-context middleware), `ingest_key`, and the database password (which also reaches
+the audit table that is supposed to record the theft). No design removes that; it follows from
+showing the values at all.
+
+What the design does instead is make the session cookie insufficient on its own:
+
+| | |
+|---|---|
+| **A different credential** | `POST /auth/admin/vault/elevate` demands the TOTP code, or the account password when two-factor is off. With TOTP on, the password path does not exist — a weaker factor that stays available beside the stronger one makes the stronger one decoration. |
+| **A small window** | Five minutes absolute, never sliding. Ten reveals, then the factor again. One value per call, no batch endpoint: a batch endpoint is one request that exports the installation. |
+| **Fresh factor for the four** | `RequiresFreshFactor` on the four above — the factor must be proven for *that* reveal, not once for ten. |
+| **It dies with the session** | `AdminElevation` is checked by joining onto `UserSessions`, so signing out, a password change, a security-stamp bump, "end sessions" and disabling the account all end it, with no code written for any of them. A demotion ends it too: the check is `AuthUser.IsAdmin`, never the backend's `IntelligenceAdminGrant` (that one is bootstrapped onto the oldest finance user and never follows a demotion). |
+| **Its own lockout** | Five wrong factors lock the vault for 15 minutes. Deliberately *not* the Identity lockout: counting these into the sign-in lockout would let somebody who already holds a session lock the real administrator out of signing in while their stolen session keeps working. Pinned by a regression test. |
+| **Audited where the thief cannot reach** | Every reveal writes an `AdminAuditEvents` row **and** a warning line to the container log. The log matters precisely because it survives whoever holds the database password. Neither records the value. |
+
+What the vault will never show: another user's credentials, TOTP keys, account passwords, PINs and
+recovery codes (PBKDF2 — nobody can show those, and no setting changes that), and the pension policy
+number, which is a financial fact rather than a credential.
+
+In the browser a revealed value reaches the screen only through `textContent`, lives in a
+module-private `Map`, auto-hides after 30 seconds and when the tab loses focus, and is never written
+to `localStorage`, the console or the URL. `VaultUiBaselineTests` asserts each of those against the
+source, because every one of them is an easy habit to fall back into and silent when it happens.
+
 The unified image is built on `mcr.microsoft.com/playwright/dotnet` and adds `tesseract-ocr`,
 `tesseract-ocr-deu` and `poppler-utils`, so Amazon, receipt-OCR and PDF features keep the same
 isolation and validation behaviour that the split backend image had.

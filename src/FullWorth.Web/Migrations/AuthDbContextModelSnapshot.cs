@@ -107,6 +107,65 @@ namespace FullWorth.Web.Migrations
                     b.ToTable("ExternalAuthSettings", "auth");
                 });
 
+            modelBuilder.Entity("FullWorth.Web.Modules.Admin.AdminElevation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Factor")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("RevealsUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthUserId", "SessionId");
+
+                    b.ToTable("AdminElevations", "auth");
+                });
+
+            modelBuilder.Entity("FullWorth.Web.Modules.Admin.AdminElevationLockout", b =>
+                {
+                    b.Property<Guid>("AuthUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("AuthUserId");
+
+                    b.ToTable("AdminElevationLockouts", "auth");
+                });
+
             modelBuilder.Entity("FullWorth.Web.Modules.Admin.InstanceConfigurationValue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -540,6 +599,24 @@ namespace FullWorth.Web.Migrations
                 });
 
             modelBuilder.Entity("FullWorth.Web.Modules.Recovery.RecoveryCode", b =>
+                {
+                    b.HasOne("FullWorth.Web.Modules.Auth.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FullWorth.Web.Modules.Admin.AdminElevation", b =>
+                {
+                    b.HasOne("FullWorth.Web.Modules.Auth.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FullWorth.Web.Modules.Admin.AdminElevationLockout", b =>
                 {
                     b.HasOne("FullWorth.Web.Modules.Auth.AuthUser", null)
                         .WithMany()

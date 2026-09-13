@@ -320,10 +320,18 @@ public sealed class IntelligenceStore(
     private static AiCredentialView ToView(AiCredential x) =>
         new(x.Id, x.OwnerUserId, x.Provider, x.Name, x.SecretFingerprint, x.CreatedAt, x.UpdatedAt, x.LastTestedAt, x.LastTestSucceeded);
 
+    /// <summary>
+    /// A label for a stored key that says WHICH key it is without saying anything about the key.
+    ///
+    /// It used to end in the last four characters of the plaintext, which are rendered in the browser
+    /// for every credential on the page. Four characters is not much - and it is four an attacker no
+    /// longer has to guess, handed out to anyone who can load the settings screen. A hash prefix tells
+    /// two keys apart just as well, which is the only thing this is for.
+    /// </summary>
     private static string Fingerprint(string secret)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret))).ToLowerInvariant();
-        return $"sha256:{hash[..12]}:{secret[^4..]}";
+        return $"sha256:{hash[..16]}";
     }
 
     private void ValidateSettings(AiInstanceSettings settings)

@@ -115,3 +115,48 @@
   .setting-row { grid-template-columns: 1fr }
   .setting-source { white-space: normal }
 }
+
+/* The vault. A revealed value is long, unbreakable and must never be truncated into something that
+   looks like the whole thing — a key the administrator copies half of is worse than none at all. */
+.vault-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.vault-group { margin-top: var(--s4) }
+.vault-group h3 { margin: 0 0 var(--s2); font-size: 14px }
+
+.vault-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: start;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.vault-actions { display: flex; gap: var(--s2); flex-wrap: wrap }
+
+.vault-value {
+  display: block;
+  margin-top: var(--s2);
+  padding: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+  background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  /* Wrapped, not clipped, and line breaks preserved: an Apple .p8 key is a whole PEM block. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (max-width: 720px) {
+  .vault-row { grid-template-columns: 1fr }
+}

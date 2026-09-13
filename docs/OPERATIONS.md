@@ -49,6 +49,24 @@ Without it the old sidecar keeps running, and two writers on one `CODEX_HOME` is
 to lose the Codex sign-in. The `fullworth-codex` volume keeps its name and is mounted on the
 application service now, so the sign-in itself survives the move.
 
+## Passwords and keys
+
+The admin menu shows the stored credentials and infrastructure secrets of this installation under
+*Passwörter & Schlüssel*. Showing one requires a second confirmation — the code from your
+authenticator app, or your account password when two-factor is off. The confirmation lasts five
+minutes and ten reveals; the four that own the whole installation ask every time.
+
+Every reveal is written to the audit table **and** to the container log:
+
+```bash
+docker compose logs fullworth | grep "Vault:"
+```
+
+Neither record contains the value, only which entry was asked for and by whom.
+
+Account passwords, PINs and recovery codes are not there and cannot be: they are hashed with PBKDF2,
+so nobody can display them — not an administrator and not the application.
+
 ## Enable Banking
 
 Enable Banking is BYO per user by default. Each FullWorth user verifies and stores their own

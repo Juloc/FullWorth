@@ -19,7 +19,8 @@ public sealed class AuthMigrationTests
     private const string ExternalAuthMigration = "20260912170000_ExternalAuthSettings";
     private const string InstanceSettingsMigration = "20260912190000_InstanceSettings";
     private const string InstanceConfigurationMigration = "20260913140000_InstanceConfiguration";
-    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration, ExternalAuthMigration, InstanceSettingsMigration, InstanceConfigurationMigration];
+    private const string AdminVaultMigration = "20260913180000_AdminVault";
+    private static readonly string[] CurrentMigrations = [InitialMigration, IntegrationMigration, PasskeyMigration, AccountDeletionMigration, AdminUserManagementMigration, ExternalAuthMigration, InstanceSettingsMigration, InstanceConfigurationMigration, AdminVaultMigration];
 
     [Fact]
     public async Task ExistingAuthDatabase_UpgradesThroughAdminUserManagementAndPreservesExistingUser()
@@ -51,6 +52,7 @@ public sealed class AuthMigrationTests
         await migrator.MigrateAsync(ExternalAuthMigration);
         await migrator.MigrateAsync(InstanceSettingsMigration);
         await migrator.MigrateAsync(InstanceConfigurationMigration);
+        await migrator.MigrateAsync(AdminVaultMigration);
 
         Assert.Equal(CurrentMigrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         Assert.True(await ColumnExistsAsync(database.ConnectionString, "AspNetUsers", "DeletionScheduledFor"));
@@ -90,6 +92,10 @@ public sealed class AuthMigrationTests
         // appsettings and the environment variables, so they apply without a restart and an explicit
         // environment variable still wins.
         Assert.True(await TableExistsAsync(database.ConnectionString, "InstanceConfigurationValues"));
+        // The step-up that stands between an admin session and the stored secrets. Two tables, and the
+        // lockout one is separate from the Identity lockout on purpose - see the migration.
+        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminElevations"));
+        Assert.True(await TableExistsAsync(database.ConnectionString, "AdminElevationLockouts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Accounts"));
         Assert.False(await TableExistsAsync(database.ConnectionString, "Transactions"));
         Assert.False(db.Database.HasPendingModelChanges());

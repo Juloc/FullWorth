@@ -19,6 +19,8 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
     public DbSet<FullWorth.Web.Modules.Admin.ExternalAuthSettings> ExternalAuthSettings => Set<FullWorth.Web.Modules.Admin.ExternalAuthSettings>();
     public DbSet<FullWorth.Web.Modules.Admin.InstanceSettings> InstanceSettings => Set<FullWorth.Web.Modules.Admin.InstanceSettings>();
     public DbSet<FullWorth.Web.Modules.Admin.InstanceConfigurationValue> InstanceConfigurationValues => Set<FullWorth.Web.Modules.Admin.InstanceConfigurationValue>();
+    public DbSet<FullWorth.Web.Modules.Admin.AdminElevation> AdminElevations => Set<FullWorth.Web.Modules.Admin.AdminElevation>();
+    public DbSet<FullWorth.Web.Modules.Admin.AdminElevationLockout> AdminElevationLockouts => Set<FullWorth.Web.Modules.Admin.AdminElevationLockout>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -44,6 +46,32 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options)
             // text, not a bounded column: a Secret-kind value holds data-protection ciphertext, whose
             // length depends on the key ring rather than on what was typed.
             entity.Property(x => x.Value).IsRequired().HasColumnType("text");
+        });
+
+        builder.Entity<FullWorth.Web.Modules.Admin.AdminElevation>(entity =>
+        {
+            // The lookup every reveal makes: this account, this session, still live.
+            entity.HasIndex(x => new { x.AuthUserId, x.SessionId });
+            entity.Property(x => x.Factor).IsRequired().HasMaxLength(16);
+            // 64 hex characters of SHA-256. Only ever compared, never reversed - it exists so one TOTP
+            // code cannot buy two elevations inside its own validity window.
+            entity.Property(x => x.CodeHash).HasMaxLength(64);
+
+            entity.HasOne<AuthUser>()
+                .WithMany()
+                .HasForeignKey(x => x.AuthUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<FullWorth.Web.Modules.Admin.AdminElevationLockout>(entity =>
+        {
+            // One row per account: the counter IS the account's vault lockout state.
+            entity.HasKey(x => x.AuthUserId);
+
+            entity.HasOne<AuthUser>()
+                .WithMany()
+                .HasForeignKey(x => x.AuthUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<FullWorth.Web.Modules.Admin.ExternalAuthSettings>(entity =>
