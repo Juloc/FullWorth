@@ -1,5 +1,5 @@
 import { initializePurchaseEnhancements, tryGptReceiptScan } from './purchases-gpt-normal.js';
-import { identityIcon, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
 import { emptyRow } from '../components/empty.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as

@@ -4,7 +4,7 @@ import { apiClient } from '../core/services.js';
 // analytics and net-worth so the same identity, card, cycle and trend primitives look identical everywhere.
 // All colours/spacing come from the app.css design tokens and the `.fw-*` classes defined there.
 
-export function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
+export { esc } from '../core/html.js';
 
 // Deterministic hue (0–359) from a name, so a merchant/category keeps the same monogram tint everywhere.
 export function monogramHue(name) { let h = 0; const s = String(name || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }

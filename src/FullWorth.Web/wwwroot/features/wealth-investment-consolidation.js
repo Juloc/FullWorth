@@ -3,6 +3,8 @@ import { isPrivate, onPrivacyChange } from '../components/privacy.js';
 import { api as sharedApi } from '../core/services.js';
 import { state } from '../core/state.js';
 import { createDialog } from '../components/dialog.js';
+// Statisch: die Ladereihenfolge trägt nichts mehr, seit der Dialog seine Depotkennung selbst trägt.
+import './investment-performance-ui.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -24,18 +26,10 @@ function toast(message) {
   el.textContent = message; el.classList.add('show');
   clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 3000);
 }
-let lastPortfolioId = null;
 let portfolioCache = null;
 let overviewCache = new Map();
 let securityDialogState = null;
 
-// Register before loading the existing portfolio UI so the selected id is retained for its modal.
-document.addEventListener('click', event => {
-  const target = event.target.closest('[data-portfolio]');
-  if (target) lastPortfolioId = target.dataset.portfolio || null;
-}, true);
-
-void import('./investment-performance-ui.js');
 
 async function portfolios() {
   if (portfolioCache) return portfolioCache;
@@ -91,9 +85,10 @@ function allocationBlock(positions, currency) {
 }
 
 async function enhancePortfolioDialog(dialog) {
-  if (!lastPortfolioId || !dialog?.open) return;
+  const portfolioId = dialog?.dataset.portfolio;
+  if (!portfolioId || !dialog.open) return;
   let overview;
-  try { overview = await portfolioOverview(lastPortfolioId); } catch { return; }
+  try { overview = await portfolioOverview(portfolioId); } catch { return; }
   const content = $('[data-ip-content]', dialog);
   if (!content) return;
 
@@ -118,7 +113,7 @@ async function enhancePortfolioDialog(dialog) {
     row.setAttribute('role', 'button');
     row.tabIndex = 0;
     row.setAttribute('aria-label', `${text('Wertpapier öffnen','Open security')}: ${position.name}`);
-    const open = () => openSecurityDetail(lastPortfolioId, position.securityId);
+    const open = () => openSecurityDetail(portfolioId, position.securityId);
     row.addEventListener('click', event => { if (!event.target.closest('button')) open(); });
     row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
   });

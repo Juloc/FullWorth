@@ -1,6 +1,6 @@
 import { ButtonRole, buttonClass } from './buttons.js';
 import { createDialog } from './dialog.js';
-import { esc } from './ux-kit.js';
+import { esc } from '../core/html.js';
 import { enhancePasswordInputs } from './password-toggle.js';
 import { attachCombobox } from './combobox.js';
 

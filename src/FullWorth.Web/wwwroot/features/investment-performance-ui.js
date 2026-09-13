@@ -18,13 +18,18 @@ const dateText = (value) => value ? new Intl.DateTimeFormat(lang() === 'en' ? 'e
 const api=(path,options)=>sharedApi(path,options);
 const json=(method,body)=>jsonBody(body,method);
 const toast=message=>showToast(message);
-function modal(title){
+function modal(title,portfolioId){
   const dialog=createDialog(
     `<div class="dialog-card fp-dialog-card ip-card"><div class="panel-head fp-dialog-head ip-head"><div><h2>${esc(title)}</h2><div data-ip-subtitle class="fp-muted"></div></div></div><div data-ip-root></div></div>`,
     {className:'fp-dialog ip-dialog',closeLabel:text('Schließen','Close')});
+  // Der Dialog sagt selbst, zu welchem Depot er gehört. Vorher merkte sich das Nachbarmodul die
+  // Kennung in einem eigenen Klick-Lauscher, der vor diesem hier registriert sein musste - denn der
+  // hier ruft stopImmediatePropagation. Diese Abhängigkeit an der Ladereihenfolge war der einzige
+  // Grund, warum das Nachbarmodul zur Laufzeit nachladen musste.
+  if(portfolioId)dialog.dataset.portfolio=portfolioId;
   dialog.addEventListener('close',()=>{if(active?.dialog===dialog)active=null},{once:true});
   dialog.showModal();
-  document.dispatchEvent(new CustomEvent('fullworth:investment-dialog-opened', { detail: { dialog } }));
+  document.dispatchEvent(new CustomEvent('fullworth:investment-dialog-opened', { detail: { dialog, portfolioId } }));
   return dialog;
 }
 
@@ -43,7 +48,7 @@ async function openPortfolio(portfolioId){
     ]);
     const portfolio=portfolios.find(x=>x.id===portfolioId);
     if(!portfolio)throw new Error(text('Depot nicht verfügbar.','Portfolio is not available.'));
-    const dialog=modal(portfolio.name);
+    const dialog=modal(portfolio.name,portfolioId);
     active={dialog,portfolio,tab:'overview',period:'1y',access,render:null};
     active.render=()=>renderShell(active);
     await active.render();

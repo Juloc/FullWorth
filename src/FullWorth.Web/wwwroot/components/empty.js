@@ -8,9 +8,8 @@
 // beim Austausch nichts springt, und ein Fehler ist eine Meldung wie jede andere - beides gehört
 // der Seite. Was allen gemeinsam ist, ist das Flimmern, und das ist .shimmer in components.css.
 
-const escape = value => String(value ?? '').replace(/[&<>'"]/g,
-  character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+import { esc } from '../core/html.js';
 
 export function emptyRow(message) {
-  return `<div class="row state-empty"><div class="row-sub">${escape(message)}</div></div>`;
+  return `<div class="row state-empty"><div class="row-sub">${esc(message)}</div></div>`;
 }

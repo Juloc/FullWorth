@@ -1,5 +1,5 @@
 import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
-import { sectionCard, trendBadge, esc, identityIcon } from '../components/ux-kit.js';
+import { sectionCard, trendBadge, esc, identityIcon } from './ux-kit.js';
 import { bindChartScrubber } from '../components/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';

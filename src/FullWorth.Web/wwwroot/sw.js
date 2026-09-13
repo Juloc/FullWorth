@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v119';
+const VERSION = 'v120';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -29,7 +29,7 @@ const APP_SHELL = [
   '/app/dashboard.js',
   '/app/lock.js',
   '/components/privacy.js',
-  '/components/category-picker.js',
+  '/features/category-picker.js',
   '/components/combobox.js',
   '/components/chart-scrubber.js',
   '/components/topbar-metrics.js',
@@ -56,6 +56,7 @@ const APP_SHELL = [
   '/dialogs.css',
   '/app.js',
   '/core/api.js',
+  '/core/html.js',
   '/core/state.js',
   '/core/router.js',
   '/core/feature-registry.js',
@@ -64,13 +65,13 @@ const APP_SHELL = [
   '/core/navigation.js',
   '/core/event-bus.js',
   '/components/toast.js',
-  '/components/global-search.js',
+  '/features/global-search.js',
   '/components/buttons.js',
   '/components/confirm.js',
   '/components/dialog.js',
   '/components/form-dialog.js',
   '/components/password-toggle.js',
-  '/components/ux-kit.js',
+  '/features/ux-kit.js',
   '/features/budgets.js',
   '/features/contracts.js',
   '/styles/features/contracts-merge.css',

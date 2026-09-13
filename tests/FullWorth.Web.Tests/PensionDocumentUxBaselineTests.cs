@@ -260,7 +260,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
         Assert.Contains("ctx.date(", js);
         Assert.Contains("ctx.jsonBody(", js);
         Assert.Contains("bffUrl(", js);
-        Assert.Contains("from '../components/ux-kit.js'", js);
+        Assert.Contains("from '../features/ux-kit.js'", js);
 
         Assert.DoesNotContain("/bff/", js);
         Assert.DoesNotContain("Intl.NumberFormat", js);

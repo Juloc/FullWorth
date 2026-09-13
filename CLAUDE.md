@@ -41,13 +41,44 @@ There is **no linter, no formatter and no automated browser/e2e test** in this r
 
 ## Frontend rules
 
+Six rules carry the structure. They are few on purpose, and each one holds something that
+otherwise falls back quietly — not out of ill will, but because the shortcut is always cheaper in the
+moment. `FrontendStructureGuardTests`, `MenuParityTests` and `LayoutStabilityTests` are the version
+that argues back.
+
+1. **No layout shift.** Space is reserved, never created afterwards: `visibility:hidden` plus a
+   `min-height` rather than `hidden`, images with dimensions, nothing inserted into markup that is
+   already drawn. Whatever has to be true before the first paint belongs in `app/boot.js` — a classic
+   `<script>` in `<head>`, deliberately not a module.
+2. **No loading afterwards.** No `<link>` from JavaScript, no `import()`. Everything is there at the
+   first paint or it does not belong.
+3. **One page is one folder** under `pages/`, holding `page.html`, `page.css` and `page.js`. The folder
+   path is the address: `pages/settings/security/passkeys` answers `/settings/security/passkeys`.
+   Anything two pages share goes to `components/` or `styles/`. This replaces the old rule against
+   `features/<name>/` subfolders.
+4. **One menu source**, `wwwroot/app/menu.js`. The sidebar, the four quick targets and the whole tree
+   behind "Mehr" are three renderings of that one list, never three lists. Nothing is added to the
+   menu at runtime.
+5. **One document.** A new page is a page inside the shell, not a standalone HTML file.
+   `ops/generate-shell.mjs` writes the menu and every page into `index.html`; run it after adding a
+   page and `--check` keeps the file and the folder tree together.
+6. **Nothing unnecessary.** No CSS property that changes nothing, no rule that only overrides another,
+   no duplicated code, no check for cases that do not occur. The base inherits; a component only adds
+   the difference. A page that has moved is *shorter* than it was — otherwise it was only relocated.
+
+Beyond those:
+
 - Vanilla ES modules in `wwwroot`, **no build step**. Syntax-check with:
   `cp file.js /tmp/c.mjs && node --check /tmp/c.mjs`
-- CSS is a 5-layer scheme in `wwwroot/styles/` (`tokens` → `reset` → `shell` → `components` → `responsive`) plus `styles/features/<feature>.css`. **Tokens only** — no hardcoded colors, no frameworks, no DOM hacks. Six stylesheets still sit at the `wwwroot` root outside that scheme (`app.css` is the largest); do not add a seventh.
+- The layers are `styles/` (`tokens` → `reset` → `shell` → `components` → `responsive`, then
+  `styles/features/*`, then `styles/mobile-polish.css` last) plus each page's own `page.css`.
+  **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks. Four stylesheets still sit at
+  the `wwwroot` root outside the scheme; the list in the structure guard may get shorter, never longer.
+- `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
+  knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and classes anyway. A `<style>` block is blocked.
 - **Buttons: use the shared module roles only** — `.btn` + `.btn-primary` / `.btn-secondary` / `.btn-danger` (`styles/components.css`). Do not hand-roll button styling. (`.primary-action` in `shell.css` is the older variant still used app-wide.)
-- Don't create `features/<name>/` subfolders; keep feature files flat in `features/`.
-- **Not all markup is in `wwwroot`:** `Modules/Import/{ImportCenter,FinanzguruImport,BrokerPdfImport}Page.cs` keep their HTML in C# raw string literals. `ops/ui-harness` parses those literals so an edited inlined page is served edited.
+- **Not all markup is in `wwwroot` yet:** `Modules/Import/{ImportCenter,FinanzguruImport,BrokerPdfImport}Page.cs` still keep their HTML in C# raw string literals, and `ops/ui-harness` parses those literals so an edited inlined page is served edited. Those three are the last standalone documents; they move to `pages/settings/import/` and then this note goes away.
 
 ### Live UI verification (use this!)
 Two ways, neither needs credentials:

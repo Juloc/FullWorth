@@ -1,4 +1,4 @@
-import { emptyRow } from './empty.js';
+import { emptyRow } from '../components/empty.js';
 // Global search UI. Search aggregation stays presentation-side; all data access uses ctx.api.
 
 export function openGlobalSearch(ctx) {

@@ -100,7 +100,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task AnalyticsSeparatesPreviewActiveAndCompletedAverageWindows()
     {
-        var kit = await GetAsync("/components/ux-kit.js");
+        var kit = await GetAsync("/features/ux-kit.js");
         var js = await GetAsync("/features/analytics.js");
         Assert.Contains("activeFrom", kit);
         Assert.Contains("averageFrom", kit);
@@ -140,7 +140,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
                      "'/features/transactions.js'",
                      "'/features/analytics.js'",
                      "'/features/contracts.js'",
-                     "'/components/ux-kit.js'"
+                     "'/features/ux-kit.js'"
                  })
             Assert.Contains(asset, sw);
 

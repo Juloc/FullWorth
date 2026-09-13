@@ -270,7 +270,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
         Assert.Contains("ctx.money(", js);
         Assert.Contains("ctx.date(", js);
         Assert.Contains("ctx.jsonBody(", js);
-        Assert.Contains("from '../components/ux-kit.js'", js);
+        Assert.Contains("from '../features/ux-kit.js'", js);
         // Buttons are the shared roles, never hand-rolled.
         Assert.Contains("btn btn-primary", js);
         Assert.Contains("btn btn-secondary", js);

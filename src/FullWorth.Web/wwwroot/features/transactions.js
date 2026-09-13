@@ -3,8 +3,8 @@
 // category, exclude-from-statistics and transfer status through the existing classification PATCH,
 // and links to a receipt when a purchase is attached.
 
-import { attachCategoryPicker, openCategoryPicker } from '../components/category-picker.js';
-import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { attachCategoryPicker, openCategoryPicker } from '../features/category-picker.js';
+import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from './ux-kit.js';
 import { MoneyVariant, moneyClass } from '../components/money.js';
 import { openFormDialog, FieldKind } from '../components/form-dialog.js';
 

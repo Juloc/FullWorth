@@ -168,7 +168,11 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
 
         Assert.Contains("wealth-investment-consolidation.js", wrapper);
         Assert.Contains("investment-performance-ui.js", adapter);
-        Assert.Contains("data-portfolio", adapter);
+        // Der Dialog trägt seine Depotkennung selbst. Vorher merkte sie sich dieses Modul in einem
+        // Klick-Lauscher, der vor dem der Depot-Oberfläche registriert sein musste - die ruft
+        // stopImmediatePropagation -, und genau dafür lud es zur Laufzeit nach.
+        Assert.Contains("dialog.dataset.portfolio", portfolioUi);
+        Assert.Contains("dialog?.dataset.portfolio", adapter);
         Assert.Contains("overview-v2", adapter);
         Assert.Contains("api/investments/securities", adapter);
         Assert.Contains("api/investments/portfolios/${portfolioId}/trades", adapter);

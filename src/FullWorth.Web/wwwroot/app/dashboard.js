@@ -5,7 +5,7 @@
 import { money, converted, maskIdentifier } from '../components/money.js';
 import { balanceMeaningLine } from '../components/balance-meaning.js';
 import { isPrivate } from '../components/privacy.js';
-import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../components/ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../features/ux-kit.js';
 import { bindChartScrubber } from '../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../features/data-completeness.js';
 

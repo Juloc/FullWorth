@@ -5,7 +5,7 @@
 // subscriptions" section surfaces recurring-payment candidates with one-click accept. All money and
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
-import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../components/ux-kit.js';
+import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from './ux-kit.js';
 import { MoneyVariant, moneyClass } from '../components/money.js';
 import { onAppEvent } from '../core/event-bus.js';
 import { openFormDialog, FieldKind } from '../components/form-dialog.js';

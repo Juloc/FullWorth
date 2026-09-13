@@ -9,7 +9,7 @@
 // Still layered ON TOP of an existing <select>: picking a row sets selectEl.value and dispatches
 // 'change', so every existing form (FormData reads, plain sel.value reads) keeps working unchanged.
 
-import { attachCombobox, openCombobox } from './combobox.js';
+import { attachCombobox, openCombobox } from '../components/combobox.js';
 
 export function attachCategoryPicker(ctx, selectEl) {
   return attachCombobox(ctx, selectEl, {

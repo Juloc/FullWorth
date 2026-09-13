@@ -1,7 +1,7 @@
 import { money, setMoneyLocale } from './components/money.js';
 import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './components/privacy.js';
 import { confirmDialog } from './components/confirm.js';
-import { setPrimaryAction } from './components/ux-kit.js';
+import { setPrimaryAction } from './features/ux-kit.js';
 import { initLock } from './app/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './app/dashboard.js';
 import { renderTransactions, bindTransactions } from './features/transactions.js';
@@ -32,7 +32,7 @@ import { createFeatureRegistry } from './core/feature-registry.js';
 import { installNavigation, navigate } from './core/navigation.js';
 import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './components/toast.js';
-import { openGlobalSearch } from './components/global-search.js';
+import { openGlobalSearch } from './features/global-search.js';
 import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { renderAdmin } from './pages/admin/page.js';

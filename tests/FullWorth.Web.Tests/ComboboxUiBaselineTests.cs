@@ -32,9 +32,9 @@ public sealed class ComboboxUiBaselineTests
     [Fact]
     public void The_category_picker_is_a_thin_layer_on_the_shared_combobox()
     {
-        var picker = ReadSource(Path.Combine("components", "category-picker.js"));
+        var picker = ReadSource(Path.Combine("features", "category-picker.js"));
 
-        Assert.Contains("import { attachCombobox, openCombobox } from './combobox.js';", picker, StringComparison.Ordinal);
+        Assert.Contains("import { attachCombobox, openCombobox } from '../components/combobox.js';", picker, StringComparison.Ordinal);
         Assert.Contains("export function attachCategoryPicker", picker, StringComparison.Ordinal);
         Assert.Contains("export async function openCategoryPicker", picker, StringComparison.Ordinal);
 
