@@ -76,6 +76,14 @@ createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     let path = decodeURIComponent(url.pathname);
 
+    // Wer hier antwortet, sagt es. LayoutStabilityTests startet diese Harness auf einem festen Port
+    // und wartete vorher nur darauf, dass IRGENDJEMAND dort antwortet - lief schon ein anderer
+    // Server darauf (die Cloud-Harness stand auf demselben Port), band node nicht, und der Test maß
+    // still die falsche Anwendung. Eine Messung, die das Falsche misst, ist schlimmer als keine.
+    if (path === '/__harness') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify({ harness: 'fullworth', root: ROOT }));
+    }
     if (path === '/__fixtures.js') return serveFile(res, join(import.meta.dirname, 'fixtures.js'), false);
     if (path === '/pwa/register-sw.js') {
       const source = await readFile(join(ROOT, 'pwa', 'register-sw.js'), 'utf8');

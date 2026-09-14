@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.Playwright;
 
@@ -122,7 +121,7 @@ public sealed class UiHarness : IAsyncLifetime
             RedirectStandardError = true
         }) ?? throw new InvalidOperationException("Could not start the ui-harness.");
 
-        await WaitForPortAsync();
+        await WaitForHarnessAsync();
 
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync();
@@ -195,17 +194,38 @@ public sealed class UiHarness : IAsyncLifetime
 
     private sealed record Shift(double Value, string[] Sources);
 
-    private static async Task WaitForPortAsync()
+    /// <summary>
+    /// Warten, bis UNSERE Harness antwortet — nicht bis irgendjemand antwortet.
+    ///
+    /// Vorher stand hier eine reine TCP-Probe. Lief auf dem Port schon ein anderer Server (die
+    /// Cloud-Harness stand auf demselben), band node nicht, starb still, und die Probe war trotzdem
+    /// erfolgreich: der ganze Test maß dann die falsche Anwendung und meldete ihre Zahlen als die
+    /// dieser. Eine Messung, die das Falsche misst, ist schlimmer als gar keine.
+    /// </summary>
+    private async Task WaitForHarnessAsync()
     {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+
         for (var attempt = 0; attempt < 100; attempt++)
         {
+            if (_server is { HasExited: true })
+                throw new InvalidOperationException(
+                    $"Die ui-harness ist sofort beendet. Meistens hält schon etwas anderes Port {Port} — "
+                    + "in diesem Ordner: " + await _server.StandardError.ReadToEndAsync());
+
             try
             {
-                using var probe = new TcpClient();
-                await probe.ConnectAsync("127.0.0.1", Port);
-                return;
+                var answer = await client.GetStringAsync($"http://127.0.0.1:{Port}/__harness");
+                if (answer.Contains("\"harness\":\"fullworth\"", StringComparison.Ordinal)) return;
+
+                throw new InvalidOperationException(
+                    $"Auf Port {Port} antwortet etwas anderes als diese ui-harness: {answer}");
             }
-            catch (SocketException)
+            catch (HttpRequestException)
+            {
+                await Task.Delay(100);
+            }
+            catch (TaskCanceledException)
             {
                 await Task.Delay(100);
             }
