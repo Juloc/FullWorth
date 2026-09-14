@@ -1,6 +1,19 @@
-# Improvement plan
+# Improvement plan — closed record, 2026-09-14
 
-The one active plan for FullWorth. Everything here is a verified defect: each item was traced in the
+**This plan is finished and nothing new goes in it.** All thirty items are resolved except one, and that
+one is now [#109](https://github.com/Juloc/FullWorth/issues/109) — it waits on a row from a running
+instance, not on code. New work belongs in GitHub Issues (#102).
+
+It is kept rather than deleted because it is the only place that records *why* each of the twenty-nine
+defects was a defect and what the fix turned on. That reasoning is worth more than the checklist was:
+several items here are the reason a rule exists in `CLAUDE.md`.
+
+Read it as history. Where it disagrees with the code, the code is right — two of its claims had already
+gone stale by the time it was closed.
+
+---
+
+Everything here is a verified defect: each item was traced in the
 code and then independently re-checked by a second pass that tried to refute it, and only what survived
 is listed. Findings that did not survive verification are not here.
 

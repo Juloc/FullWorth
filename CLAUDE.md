@@ -5,7 +5,7 @@
 Self-hosted personal finance platform: .NET 10 backend + **vanilla-JS** frontend (no framework, no build step). Public repo `Juloc/FullWorth`. German UI.
 
 Cross-agent workflow, coordination and backlog rules come from `AGENTS.md`. This file keeps FullWorth-specific durable operating context.
-`docs/IMPROVEMENT_PLAN.md` is a transitional legacy backlog while issue #102 migrates remaining live items to GitHub Issues. Do not add new work there.
+`docs/IMPROVEMENT_PLAN.md` is a closed record, not a backlog: twenty-nine verified defects and why each one was one. Work belongs in GitHub Issues.
 
 ## Repo layout
 

@@ -1,7 +1,7 @@
 # Documentation
 
-Reference documents describe how FullWorth behaves today. Anything still to be done lives in exactly
-one place: [Improvement plan](IMPROVEMENT_PLAN.md).
+Reference documents describe how FullWorth behaves today. Anything still to be done lives in GitHub
+Issues — not in a document.
 
 ## Architecture and code
 
@@ -39,7 +39,7 @@ one place: [Improvement plan](IMPROVEMENT_PLAN.md).
 
 ## Work in progress
 
-- [Improvement plan](IMPROVEMENT_PLAN.md) — the single active plan, P0 to P3
+- [Improvement plan](IMPROVEMENT_PLAN.md) — closed record of thirty verified defects and why each one was one
 - [Open items](OPEN_ITEMS.md) — smaller frontend and behaviour items
 - [Mobile navigation plan](MOBILE_NAVIGATION_2_PLAN.md), [UX rework
   plan](SIMPLE_FINANCE_APP_UX_REWORK_PLAN.md), [UX gap-closure
