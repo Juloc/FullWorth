@@ -3,7 +3,7 @@ using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public sealed record InvestmentPortfolioCreateWrite(
     string Name, string Currency, Guid? AccountId, Guid? BenchmarkSecurityId,

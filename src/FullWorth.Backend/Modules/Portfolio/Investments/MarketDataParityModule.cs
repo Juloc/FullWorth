@@ -2,7 +2,7 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public sealed record SecurityMarketDescriptor(
     Guid Id, string Name, string? Isin, string? Wkn, string? Ticker,

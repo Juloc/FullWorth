@@ -1,7 +1,7 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 /// <summary>
 /// Compatibility guard for legacy investment read endpoints that predate account-scoped portfolio reads.

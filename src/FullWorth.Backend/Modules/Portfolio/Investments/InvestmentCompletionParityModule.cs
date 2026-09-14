@@ -4,7 +4,7 @@ using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public sealed record PortfolioV2Write(
     string Name, string Currency, Guid? AccountId, Guid? BenchmarkSecurityId,

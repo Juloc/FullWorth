@@ -4,7 +4,7 @@ using System.Text;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public static class InvestmentPdfOcrImportParityEndpoints
 {
