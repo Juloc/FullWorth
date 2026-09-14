@@ -1,5 +1,3 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Coach;
@@ -29,19 +27,12 @@ public static class CoachEndpoints
             UpsertSpendingReviewRequest request,
             CurrentUserContext currentUser,
             SpendingReviewService service,
-            AuditService audit,
-            FullWorthDbContext db,
             CancellationToken ct) =>
         {
             try
             {
                 var userId = currentUser.RequireUserId();
                 var result = await service.UpsertAsync(userId, fullWorthSpaceId, transactionId, request, ct);
-                if (result.Result == SpendingReviewWriteResult.Saved && result.Review is { } saved)
-                {
-                    audit.Record(fullWorthSpaceId, userId, "spending_review.upsert", "SpendingReview", saved.Id);
-                    await db.SaveChangesAsync(ct);
-                }
                 return result.Result switch
                 {
                     SpendingReviewWriteResult.Saved => Results.Ok(result.Review),
@@ -60,15 +51,10 @@ public static class CoachEndpoints
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
             SpendingReviewService service,
-            AuditService audit,
-            FullWorthDbContext db,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var existing = await service.GetAsync(userId, fullWorthSpaceId, transactionId, ct);
             if (!await service.DeleteAsync(userId, fullWorthSpaceId, transactionId, ct)) return Results.NotFound();
-            audit.Record(fullWorthSpaceId, userId, "spending_review.delete", "SpendingReview", existing?.Id);
-            await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });
 
@@ -115,16 +101,12 @@ public static class CoachEndpoints
             CreateCoachConversationRequest request,
             CurrentUserContext currentUser,
             CoachService service,
-            AuditService audit,
-            FullWorthDbContext db,
             CancellationToken ct) =>
         {
             try
             {
                 var userId = currentUser.RequireUserId();
                 var conversation = await service.CreateConversationAsync(userId, fullWorthSpaceId, request, ct);
-                audit.Record(fullWorthSpaceId, userId, "coach_conversation.create", "CoachConversation", conversation.Id);
-                await db.SaveChangesAsync(ct);
                 return Results.Created($"/api/coach/conversations/{conversation.Id}?fullWorthSpaceId={fullWorthSpaceId}", conversation);
             }
             catch (KeyNotFoundException) { return Results.NotFound(); }
@@ -158,14 +140,10 @@ public static class CoachEndpoints
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
             CoachService service,
-            AuditService audit,
-            FullWorthDbContext db,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             if (!await service.ArchiveConversationAsync(userId, fullWorthSpaceId, id, ct)) return Results.NotFound();
-            audit.Record(fullWorthSpaceId, userId, "coach_conversation.archive", "CoachConversation", id);
-            await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });
 

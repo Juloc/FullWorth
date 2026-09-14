@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Fx;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +15,7 @@ public enum SpendingReviewWriteResult
 
 public sealed class SpendingReviewValidationException(string message) : ArgumentException(message);
 
-public sealed class SpendingReviewService(FullWorthDbContext db, CurrencyConverter fx)
+public sealed class SpendingReviewService(FullWorthDbContext db, CurrencyConverter fx, AuditService audit)
 {
     private DbSet<SpendingReview> Reviews => db.Set<SpendingReview>();
 
@@ -90,6 +91,7 @@ public sealed class SpendingReviewService(FullWorthDbContext db, CurrencyConvert
         review.ReasonsJson = JsonSerializer.Serialize(reasons);
         review.Note = note;
         review.UpdatedAt = now;
+        audit.Record(fullWorthSpaceId, userId, "spending_review.upsert", "SpendingReview", review.Id);
         await db.SaveChangesAsync(ct);
         return (SpendingReviewWriteResult.Saved, ToDto(review), null);
     }
@@ -101,6 +103,7 @@ public sealed class SpendingReviewService(FullWorthDbContext db, CurrencyConvert
             x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId && x.TransactionId == transactionId, ct);
         if (review is null) return false;
         Reviews.Remove(review);
+        audit.Record(fullWorthSpaceId, userId, "spending_review.delete", "SpendingReview", review.Id);
         await db.SaveChangesAsync(ct);
         return true;
     }

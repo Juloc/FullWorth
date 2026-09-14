@@ -1,6 +1,4 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace FullWorth.Backend.Modules.Tax;
 
@@ -60,31 +58,28 @@ public static class TaxEndpoints
             return categories is null ? Results.NotFound() : Results.Ok(categories);
         });
 
-        group.MapGet("/candidates", async (Guid fullWorthSpaceId, int? year, string? status, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/candidates", async (Guid fullWorthSpaceId, int? year, string? status, CurrentUserContext currentUser, TaxCandidateViewStore views, CancellationToken ct) =>
         {
             var taxYear = year ?? DateTime.UtcNow.Year;
             if (!string.IsNullOrWhiteSpace(status) && !TaxCandidateStatuses.IsValid(status))
                 return Results.BadRequest(new { error = "Unknown tax candidate status." });
-            var candidates = await new TaxCandidateViewStore(db, store)
-                .ListAsync(currentUser.RequireUserId(), fullWorthSpaceId, taxYear, status, ct);
+            var candidates = await views.ListAsync(currentUser.RequireUserId(), fullWorthSpaceId, taxYear, status, ct);
             return candidates is null ? Results.NotFound() : Results.Ok(candidates);
         });
 
-        group.MapGet("/candidates/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/candidates/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxCandidateViewStore views, CancellationToken ct) =>
         {
-            var candidate = await new TaxCandidateViewStore(db, store)
-                .GetAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            var candidate = await views.GetAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return candidate is null ? Results.NotFound() : Results.Ok(candidate);
         });
 
-        group.MapGet("/candidates/{id:guid}/document-target", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/candidates/{id:guid}/document-target", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxDocumentTargetService targets, CancellationToken ct) =>
         {
-            var target = await new TaxDocumentTargetService(db, store)
-                .ResolveAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            var target = await targets.ResolveAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return target is null ? Results.NotFound() : Results.Ok(target);
         });
 
-        group.MapPut("/candidates/{id:guid}", async (Guid id, Guid fullWorthSpaceId, TaxCandidateUpdateRequest request, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPut("/candidates/{id:guid}", async (Guid id, Guid fullWorthSpaceId, TaxCandidateUpdateRequest request, CurrentUserContext currentUser, TaxStore store, TaxCandidateViewStore views, CancellationToken ct) =>
         {
             if (request.EligiblePercentage is < 0m or > 100m)
                 return Results.BadRequest(new { error = "EligiblePercentage must be between 0 and 100." });
@@ -93,36 +88,34 @@ public static class TaxEndpoints
             var userId = currentUser.RequireUserId();
             var result = await store.UpdateCandidateAsync(userId, fullWorthSpaceId, id, request, ct);
             if (!result.Found) return Results.NotFound();
-            return Results.Ok(await new TaxCandidateViewStore(db, store).GetAsync(userId, fullWorthSpaceId, id, ct));
+            return Results.Ok(await views.GetAsync(userId, fullWorthSpaceId, id, ct));
         });
 
-        group.MapPost("/candidates/{id:guid}/confirm", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPost("/candidates/{id:guid}/confirm", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, TaxCandidateViewStore views, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             var result = await store.UpdateCandidateAsync(
                 userId, fullWorthSpaceId, id,
                 new TaxCandidateUpdateRequest(null, null, TaxCandidateStatuses.Confirmed), ct);
             if (!result.Found) return Results.NotFound();
-            return Results.Ok(await new TaxCandidateViewStore(db, store).GetAsync(userId, fullWorthSpaceId, id, ct));
+            return Results.Ok(await views.GetAsync(userId, fullWorthSpaceId, id, ct));
         });
 
-        group.MapPost("/candidates/{id:guid}/reject", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPost("/candidates/{id:guid}/reject", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, TaxCandidateViewStore views, CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             var result = await store.UpdateCandidateAsync(
                 userId, fullWorthSpaceId, id,
                 new TaxCandidateUpdateRequest(null, null, TaxCandidateStatuses.Rejected), ct);
             if (!result.Found) return Results.NotFound();
-            return Results.Ok(await new TaxCandidateViewStore(db, store).GetAsync(userId, fullWorthSpaceId, id, ct));
+            return Results.Ok(await views.GetAsync(userId, fullWorthSpaceId, id, ct));
         });
 
-        group.MapPost("/analyze", async (Guid fullWorthSpaceId, int? year, CurrentUserContext currentUser, TaxStore store, TaxAnalysisService analysis, FullWorthDbContext db, IServiceProvider services, CancellationToken ct) =>
+        group.MapPost("/analyze", async (Guid fullWorthSpaceId, int? year, CurrentUserContext currentUser, TaxAnalysisCoordinator coordinator, CancellationToken ct) =>
         {
             var taxYear = year ?? DateTime.UtcNow.Year;
             if (taxYear is < 2000 || taxYear > 2100) return Results.BadRequest(new { error = "Invalid tax year." });
-            var ai = services.GetServices<ITaxAiResolver>().FirstOrDefault();
-            var result = await new TaxAnalysisCoordinator(db, store, analysis, ai)
-                .AnalyzeAsync(currentUser.RequireUserId(), fullWorthSpaceId, taxYear, ct);
+            var result = await coordinator.AnalyzeAsync(currentUser.RequireUserId(), fullWorthSpaceId, taxYear, ct);
             return result is null ? Results.NotFound() : Results.Ok(result);
         });
 
@@ -132,22 +125,21 @@ public static class TaxEndpoints
             return summary is null ? Results.NotFound() : Results.Ok(summary);
         });
 
-        group.MapGet("/years/{year:int}/review", async (int year, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/years/{year:int}/review", async (int year, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxYearReviewService reviews, CancellationToken ct) =>
         {
             if (year is < 2000 or > 2100) return Results.BadRequest(new { error = "Invalid tax year." });
-            var review = await new TaxYearReviewService(db, store)
-                .BuildAsync(currentUser.RequireUserId(), fullWorthSpaceId, year, ct);
+            var review = await reviews.BuildAsync(currentUser.RequireUserId(), fullWorthSpaceId, year, ct);
             return review is null ? Results.NotFound() : Results.Ok(review);
         });
 
-        group.MapGet("/years/{year:int}/export", async (int year, string? format, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxStore store, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/years/{year:int}/export", async (int year, string? format, Guid fullWorthSpaceId, CurrentUserContext currentUser, TaxExportService exports, CancellationToken ct) =>
         {
             if (year is < 2000 or > 2100) return Results.BadRequest(new { error = "Invalid tax year." });
             var normalizedFormat = string.IsNullOrWhiteSpace(format) ? "csv" : format.Trim().ToLowerInvariant();
             if (normalizedFormat is not ("csv" or "json"))
                 return Results.BadRequest(new { error = "Format must be csv or json." });
 
-            var export = await new TaxExportService(db, store).BuildAsync(currentUser.RequireUserId(), fullWorthSpaceId, year, ct);
+            var export = await exports.BuildAsync(currentUser.RequireUserId(), fullWorthSpaceId, year, ct);
             if (export is null) return Results.NotFound();
             if (normalizedFormat == "json") return Results.Ok(export);
 

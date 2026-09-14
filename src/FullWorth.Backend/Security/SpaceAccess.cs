@@ -33,4 +33,23 @@ public sealed class SpaceAccess(FullWorthDbContext db)
     /// <summary>Die Konten, die er auch ändern darf — eine echte Teilmenge der sichtbaren.</summary>
     public Task<HashSet<Guid>> WritableAccountIdsAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+
+    /// <summary>
+    /// Darf er diese eine Sache — <c>investments.manage</c>, <c>contracts.manage</c>, …?
+    ///
+    /// Die meistgestellte Frage im Backend: 65 Aufrufe in 32 Dateien, und jede dieser Dateien hielt
+    /// dafür einen DbContext, den sie sonst nirgends brauchte.
+    /// </summary>
+    public Task<bool> HasCapabilityAsync(
+        Guid userId, Guid fullWorthSpaceId, string capability, CancellationToken ct) =>
+        SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, capability, ct);
+
+    /// <summary>Die Rollenvorlage — <c>owner</c>, <c>editor</c> oder <c>viewer</c>.</summary>
+    public Task<string> TemplateAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
+        SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, userId, ct);
+
+    /// <summary>Alle Fähigkeiten auf einmal — für Oberflächen, die Schalter zeichnen.</summary>
+    public Task<Dictionary<string, bool>> EffectiveCapabilitiesAsync(
+        Guid userId, Guid fullWorthSpaceId, string template, CancellationToken ct) =>
+        SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, userId, template, ct);
 }

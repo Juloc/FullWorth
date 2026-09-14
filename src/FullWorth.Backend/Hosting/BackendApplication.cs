@@ -315,6 +315,14 @@ public static class BackendApplication
         builder.Services.AddSingleton<IBavProjectionCalculator, PensionProjectionCalculator>();
         builder.Services.AddScoped<PensionProjectionStore>();
         builder.Services.AddScoped<TaxAnalysisService>();
+        // Die Tax-Endpunkte bauten diese fünf bis 2026-09-14 im Handler aus dem DbContext. Sie werden
+        // injiziert, damit der Handler den Kontext nicht mehr braucht (#113, Regel 2).
+        builder.Services.AddScoped<TaxCandidateViewStore>();
+        builder.Services.AddScoped<TaxDocumentTargetService>();
+        builder.Services.AddScoped<TaxYearReviewService>();
+        builder.Services.AddScoped<TaxExportService>();
+        builder.Services.AddScoped<TaxAnalysisCoordinator>();
+        builder.Services.AddScoped<BankCapabilityStore>();
         builder.Services.AddHostedService<TaxAutomaticAnalysisWorker>();
         builder.Services.AddHostedService<NetWorthSnapshotWorker>();
         builder.Services.AddHostedService<FullWorth.Backend.Modules.Notifications.ContractDueNotificationWorker>();

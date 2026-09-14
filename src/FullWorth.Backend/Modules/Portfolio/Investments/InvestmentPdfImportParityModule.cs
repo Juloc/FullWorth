@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
@@ -49,11 +48,11 @@ public static class InvestmentPdfImportParityEndpoints
         Guid fullWorthSpaceId,
         HttpRequest request,
         CurrentUserContext currentUser,
-        FullWorthDbContext db,
+        SpaceAccess access,
         CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await access.HasCapabilityAsync(userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!request.HasFormContentType)
             return Results.BadRequest(new { error = "Expected multipart/form-data." });

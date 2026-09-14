@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Coach;
@@ -11,7 +12,8 @@ public sealed class CoachService(
     CoachContextBuilder contextBuilder,
     DeterministicCoachEngine deterministic,
     ICoachProviderResolver providerResolver,
-    ILogger<CoachService> logger)
+    ILogger<CoachService> logger,
+    AuditService audit)
 {
     private DbSet<CoachConversation> Conversations => db.Set<CoachConversation>();
     private DbSet<CoachMessage> Messages => db.Set<CoachMessage>();
@@ -39,6 +41,7 @@ public sealed class CoachService(
             UpdatedAt = now
         };
         Conversations.Add(entity);
+        audit.Record(fullWorthSpaceId, userId, "coach_conversation.create", "CoachConversation", entity.Id);
         await db.SaveChangesAsync(ct);
         return ToDto(entity);
     }
@@ -76,6 +79,7 @@ public sealed class CoachService(
             conversation.ArchivedAt = now;
             conversation.UpdatedAt = now;
         }
+        audit.Record(fullWorthSpaceId, userId, "coach_conversation.archive", "CoachConversation", id);
         await db.SaveChangesAsync(ct);
         return true;
     }

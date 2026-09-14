@@ -8,7 +8,6 @@ Analytics/CashflowParityModule.cs
 Analytics/Categories/CategoryAnalyticsService.cs
 Analytics/Merchants/MerchantAnalyticsService.cs
 Audit/AuditModule.cs
-BankConnections/BankCapabilityEndpoints.cs
 BankConnections/BankConnectionModule.cs
 BankConnections/EnableBankingProfileModule.cs
 Bootstrap/BootstrapEndpoints.cs
@@ -19,7 +18,6 @@ Categories/CategoryErgonomicsEndpoints.cs
 Categories/CategoryIntelligenceModule.cs
 Categories/CategoryMergeParityModule.cs
 Categories/CategoryOrderParityModule.cs
-Coach/CoachEndpoints.cs
 Contracts/ContractDetectionService.cs
 Contracts/ContractParityModule.cs
 Contracts/ContractsModule.cs
@@ -52,8 +50,6 @@ Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs
 Portfolio/Investments/InvestmentParityModule.cs
-Portfolio/Investments/InvestmentPdfImportParityModule.cs
-Portfolio/Investments/InvestmentPdfOcrImportParityModule.cs
 Portfolio/Investments/InvestmentPerformanceV2Module.cs
 Portfolio/Investments/MarketDataParityModule.cs
 Portfolio/PortfolioModule.cs
@@ -80,7 +76,6 @@ Purchases/PurchaseReviewParityModule.cs
 Purchases/PurchaseWorkspaceService.cs
 Purchases/PurchasesModule.cs
 Push/PushModule.cs
-Tax/TaxEndpoints.cs
 Transactions/AdvancedTransactionBulkParityModule.cs
 Transactions/RefundParityModule.cs
 Transactions/TransactionBulkEndpoints.cs
