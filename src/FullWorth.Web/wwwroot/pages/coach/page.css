@@ -124,7 +124,7 @@
 .coach-context-chip{display:inline-flex;align-items:center;max-width:220px;min-height:24px;padding:3px 8px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 button.coach-context-chip{cursor:pointer}
 button.coach-context-chip::after{content:"×";margin-left:5px;opacity:.65}
-.coach-new-chat{min-height:30px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer}
+.coach-new-chat{min-height:34px;padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer}
 .coach-launcher{position:fixed;right:24px;bottom:24px;z-index:58;display:grid;place-items:center;width:52px;height:52px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--cta);color:var(--cta-text);box-shadow:var(--shadow-float);cursor:pointer}
 .coach-launcher svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .coach-launcher[hidden],.coach-dock[hidden]{display:none!important}
