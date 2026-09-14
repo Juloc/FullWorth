@@ -30,7 +30,6 @@ FullWorthSpaces/AccessEndpoints.cs
 Import/FinanzguruImportModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
-Ingestion/BankingSyncStateEndpoints.cs
 Ingestion/FinTsInvestmentSnapshotEndpoints.cs
 Ingestion/IngestionModule.cs
 Intelligence/CloudBenchmarkEndpoints.cs
@@ -64,7 +63,6 @@ Purchases/PurchaseWorkspaceService.cs
 Purchases/PurchasesModule.cs
 Push/PushModule.cs
 Transactions/AdvancedTransactionBulkParityModule.cs
-Transactions/RefundParityModule.cs
 Transactions/TransactionBulkEndpoints.cs
 Transactions/TransactionsModule.cs
 Transactions/TransferDetection.cs

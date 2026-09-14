@@ -226,6 +226,8 @@ public static class BackendApplication
         builder.Services.AddScoped<CategoryOrderService>();
         builder.Services.AddScoped<IntelligenceDigestStore>();
         builder.Services.AddScoped<CapabilityGrantStore>();
+        builder.Services.AddScoped<BankingSyncStateStore>();
+        builder.Services.AddScoped<RefundCandidateStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
@@ -494,7 +496,7 @@ public static class BackendApplication
         endpoints.MapCashflowParityEndpoints();
         endpoints.MapBudgetScopeParityEndpoints();
         endpoints.MapContractParityEndpoints();
-        endpoints.MapRefundParityEndpoints();
+        endpoints.MapRefundCandidateEndpoints();
         endpoints.MapAnalyticsParityEndpoints();
         endpoints.MapImportParityEndpoints();
         endpoints.MapImportMappingParityEndpoints();
