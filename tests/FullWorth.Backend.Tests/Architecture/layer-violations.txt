@@ -10,7 +10,6 @@ Contracts/ContractParityModule.cs
 Export/ExportCompletionParityModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
-Ingestion/FinTsInvestmentSnapshotEndpoints.cs
 Intelligence/CloudBenchmarkEndpoints.cs
 Intelligence/CloudMerchantBenchmarkEndpoints.cs
 Intelligence/CloudPriceEndpoints.cs
