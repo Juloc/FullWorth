@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.DataErasure;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;

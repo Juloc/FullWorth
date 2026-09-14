@@ -1,3 +1,9 @@
+/// Das Loeschen eines Kontos muss wissen, wo ueberall persoenliche Daten liegen - Konten,
+/// Bankzugaenge, Kaeufe, Steuern, Spaces, Kurse, Intelligence. Solange diese zwei Dateien in Users
+/// lagen, war Users das Modul, das ALLES importiert: jede ausgehende Kante von Users kam aus ihnen,
+/// und drei Modulzyklen hingen daran. Loeschen ist ein eigener Belang, kein Benutzer-Belang.
+
+using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Fx;
@@ -6,7 +12,7 @@ using FullWorth.Backend.Modules.Tax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
-namespace FullWorth.Backend.Modules.Users;
+namespace FullWorth.Backend.Modules.DataErasure;
 
 public sealed record PurgeEntityDescriptor(
     IEntityType EntityType,

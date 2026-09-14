@@ -5,50 +5,48 @@ namespace FullWorth.Backend.Tests.Architecture;
 /// <summary>
 /// Welche Module einander kennen — gemessen, nicht angenommen.
 ///
-/// Neunundzwanzig Module, hundertachtundzwanzig Kanten, dreizehn Paare, die sich gegenseitig
-/// importieren. Das Frontend verbietet inzwischen, dass eine Seite in eine andere greift, und prüft
-/// es; im Backend gab es dafür nichts, und entsprechend ist der Graph gewachsen.
+/// Am Anfang des Umbaus: 29 Module, 128 Kanten, 13 Paare, die sich gegenseitig importieren. Das
+/// Frontend verbietet inzwischen, dass eine Seite in eine andere greift, und prüft es; im Backend gab
+/// es dafür nichts, und entsprechend ist der Graph gewachsen.
 ///
-/// Dieser Test verlangt keine Null. Eine Null wäre heute rot und bliebe es über den ganzen Umbau,
-/// und einen dauerhaft roten Test liest niemand — dieselbe Lehre wie beim Layout-Budget. Er hält
-/// fest, was ist, und lässt es nur noch kleiner werden.
+/// Dieser Test verlangt keine Null. Eine Null wäre am ersten Tag rot gewesen und über den ganzen
+/// Umbau rot geblieben, und einen dauerhaft roten Test liest niemand — dieselbe Lehre wie beim
+/// Layout-Budget. Er hält fest, was ist, und lässt es nur noch kleiner werden.
 /// </summary>
 public sealed class ModuleBoundaryTests
 {
     /// <summary>
-    /// Die dreizehn Paare, die sich am 2026-09-14 gegenseitig importieren. Fünf davon hängen an
-    /// <c>Parity</c>, und das ist kein Zufall: dort liegen 151 der 648 Endpunkte, fachlich verteilt
-    /// über mindestens acht andere Module. Ein Modul, das von allem ein Stück enthält, muss alles
-    /// kennen — und wird von allem gekannt.
+    /// Was am 2026-09-14 noch übrig ist: vier von ursprünglich dreizehn.
+    ///
+    /// Neun sind an diesem Tag gefallen, und keiner davon durch Verhandeln — jedes Mal lag ein Stück
+    /// Code in einem Modul, dem es nicht gehörte:
+    ///
+    /// <list type="bullet">
+    /// <item><b>Vier auf einen Schnitt</b> (Audit, Budgets, Categories, Contracts ↔ Parity):
+    ///   <c>HasCapabilityAsync</c> stand in einer Klasse namens PermissionsErgonomicsParityEndpoints,
+    ///   also in einer Endpunktdatei, obwohl es eine reine Berechtigungsprüfung ist. Sie liegt jetzt
+    ///   als <c>Security/SpaceCapabilities</c>.</item>
+    /// <item><b>Drei auf einen Umzug</b> (Accounts, FullWorthSpaces, Tax ↔ Users): JEDE ausgehende
+    ///   Kante von Users kam aus zwei Dateien — AccountPurgeService und PersonalDataPurgeManifest. Das
+    ///   Löschen eines Kontos muss wissen, wo überall persönliche Daten liegen, und machte Users damit
+    ///   zum Modul, das alles importiert. Es ist ein eigener Belang: <c>Modules/DataErasure</c>.</item>
+    /// <item><b>Categories ↔ Transactions:</b> CategoryIntelligenceModule lag in Transactions, hieß
+    ///   nach Kategorien und mappte /api/category-intelligence.</item>
+    /// <item><b>Parity ↔ Portfolio:</b> InvestmentNetWorthService lag in Parity, wurde aber schon immer
+    ///   neben NetWorthSnapshotService registriert.</item>
+    /// </list>
+    ///
+    /// Die vier übrigen sind anderer Natur — bei ihnen teilen sich zwei Module eine Modellfamilie, und
+    /// sie zu trennen hieße, sie zu verdoppeln oder zu verschieben. Siehe #111.
     ///
     /// Ein Eintrag darf verschwinden, keiner darf dazukommen.
     /// </summary>
     private static readonly string[] BekannteZyklen =
     [
         "Accounts <-> FullWorthSpaces",
-        "Accounts <-> Users",
-        // Vier Zyklen sind am 2026-09-14 mit EINEM Schnitt verschwunden - Audit, Budgets, Categories
-        // und Contracts <-> Parity. Alle vier hingen an derselben Methode: HasCapabilityAsync stand in
-        // einer Klasse namens PermissionsErgonomicsParityEndpoints, also in einer Endpunktdatei in
-        // Parity, obwohl es eine reine Berechtigungspruefung ist. Sie liegt jetzt als
-        // Security/SpaceCapabilities, und damit braucht keines der vier Module Parity noch.
-        //
-        // Categories <-> Transactions ist am selben Tag gefallen: CategoryIntelligenceModule lag in
-        // Transactions, hiess nach Kategorien und mappte /api/category-intelligence. Es war die
-        // einzige Kante Transactions -> Categories. Nach dem Umzug bleibt Categories -> Transactions -
-        // eine Richtung ist kein Kreis.
         "Coach <-> Intelligence",
         "Contracts <-> Intelligence",
-        "FullWorthSpaces <-> Users",
-        // Parity <-> Portfolio ist der fuenfte und letzte Parity-Zyklus, gefallen am 2026-09-14:
-        // InvestmentNetWorthService lag in Parity, wurde aber schon immer neben NetWorthSnapshotService
-        // registriert und von drei Portfolio-Dateien benutzt. Mit ihm sind die Endpunkte, die
-        // Performance-Mathematik und ihr V2-Modul nach Portfolio/Investments gezogen.
-        //
-        // Damit haengt KEIN Zyklus mehr an Parity. Das war die Voraussetzung fuer #110: solange die
-        // Helfer drinlagen, haette jeder Umzug einen neuen Kreis erzeugt statt einen alten zu loesen.
         "Purchases <-> Transactions",
-        "Tax <-> Users"
     ];
 
     [Fact]

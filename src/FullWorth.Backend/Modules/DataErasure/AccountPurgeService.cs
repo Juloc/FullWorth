@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Users;
 using System.Data.Common;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
@@ -11,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 
-namespace FullWorth.Backend.Modules.Users;
+namespace FullWorth.Backend.Modules.DataErasure;
 
 public sealed record AccountPurgeResult(
     bool Succeeded,
