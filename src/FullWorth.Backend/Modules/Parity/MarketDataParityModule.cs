@@ -51,18 +51,18 @@ public sealed class SecurityMarketDataService(
 {
     public async Task<SecurityMarketDescriptor?> GetSecurityAsync(Guid fullWorthSpaceId, Guid securityId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","Name","Isin","Wkn","Ticker","AssetType","Currency","Exchange","ProviderKey"
 FROM "Securities" WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "IsActive"=true
 """, ("@id", securityId), ("@space", fullWorthSpaceId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
         return new SecurityMarketDescriptor(
-            ParitySql.Guid(reader,"Id"), ParitySql.String(reader,"Name"), ParitySql.NullableString(reader,"Isin"),
-            ParitySql.NullableString(reader,"Wkn"), ParitySql.NullableString(reader,"Ticker"),
-            ParitySql.String(reader,"AssetType"), ParitySql.String(reader,"Currency"),
-            ParitySql.NullableString(reader,"Exchange"), ParitySql.NullableString(reader,"ProviderKey"));
+            RawSql.Guid(reader,"Id"), RawSql.String(reader,"Name"), RawSql.NullableString(reader,"Isin"),
+            RawSql.NullableString(reader,"Wkn"), RawSql.NullableString(reader,"Ticker"),
+            RawSql.String(reader,"AssetType"), RawSql.String(reader,"Currency"),
+            RawSql.NullableString(reader,"Exchange"), RawSql.NullableString(reader,"ProviderKey"));
     }
 
     public async Task<EffectiveSecurityPrice> ResolveEffectivePriceAsync(
@@ -70,8 +70,8 @@ FROM "Securities" WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "IsActive"=tr
     {
         if (await GetSecurityAsync(fullWorthSpaceId, securityId, ct) is null)
             return new(securityId,date,null,null,null,null,null,"missing",null);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "PriceDate","Price","Currency","Source",COALESCE("FetchedAt","CreatedAt") AS "FetchedAt"
 FROM "SecurityPrices"
 WHERE "SecurityId"=@security AND "PriceDate"<=@date
@@ -82,11 +82,11 @@ LIMIT 1
 """, ("@security", securityId), ("@date", date));
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return new(securityId,date,null,null,null,null,null,"missing",null);
-        var priceDate = ParitySql.NullableDate(reader,"PriceDate")!.Value;
+        var priceDate = RawSql.NullableDate(reader,"PriceDate")!.Value;
         var age = Math.Max(0, date.DayNumber-priceDate.DayNumber);
         var state = age <= 1 ? "current" : age <= 7 ? "recent" : "stale";
-        return new(securityId,date,priceDate,ParitySql.Decimal(reader,"Price"),ParitySql.String(reader,"Currency"),
-            ParitySql.String(reader,"Source"),ParitySql.NullableTimestamp(reader,"FetchedAt"),state,age);
+        return new(securityId,date,priceDate,RawSql.Decimal(reader,"Price"),RawSql.String(reader,"Currency"),
+            RawSql.String(reader,"Source"),RawSql.NullableTimestamp(reader,"FetchedAt"),state,age);
     }
 
     public async Task<IReadOnlyList<EffectiveSecurityPrice>> HistoryAsync(
@@ -94,8 +94,8 @@ LIMIT 1
     {
         if (from > to) (from,to)=(to,from);
         if (await GetSecurityAsync(fullWorthSpaceId,securityId,ct) is null) return [];
-        var connection = await ParitySql.OpenAsync(db,ct);
-        await using var command = ParitySql.Command(connection,"""
+        var connection = await RawSql.OpenAsync(db,ct);
+        await using var command = RawSql.Command(connection,"""
 SELECT DISTINCT ON ("PriceDate") "PriceDate","Price","Currency","Source",COALESCE("FetchedAt","CreatedAt") AS "FetchedAt"
 FROM "SecurityPrices"
 WHERE "SecurityId"=@security AND "PriceDate">=@from AND "PriceDate"<=@to
@@ -106,9 +106,9 @@ ORDER BY "PriceDate",
         await using var reader=await command.ExecuteReaderAsync(ct);var rows=new List<EffectiveSecurityPrice>();
         while(await reader.ReadAsync(ct))
         {
-            var day=ParitySql.NullableDate(reader,"PriceDate")!.Value;
-            rows.Add(new(securityId,day,day,ParitySql.Decimal(reader,"Price"),ParitySql.String(reader,"Currency"),
-                ParitySql.String(reader,"Source"),ParitySql.NullableTimestamp(reader,"FetchedAt"),"historical",0));
+            var day=RawSql.NullableDate(reader,"PriceDate")!.Value;
+            rows.Add(new(securityId,day,day,RawSql.Decimal(reader,"Price"),RawSql.String(reader,"Currency"),
+                RawSql.String(reader,"Source"),RawSql.NullableTimestamp(reader,"FetchedAt"),"historical",0));
         }
         return rows;
     }
@@ -129,10 +129,10 @@ ORDER BY "PriceDate",
                 var valid=points.Where(point=>point.Price>0&&point.Currency is{Length:3}&&point.Date>=from&&point.Date<=to)
                     .GroupBy(point=>point.Date).Select(group=>group.Last()).ToArray();
                 if(valid.Length==0)continue;
-                var connection=await ParitySql.OpenAsync(db,ct);var fetched=DateTimeOffset.UtcNow;
+                var connection=await RawSql.OpenAsync(db,ct);var fetched=DateTimeOffset.UtcNow;
                 foreach(var point in valid)
                 {
-                    await using var command=ParitySql.Command(connection,"""
+                    await using var command=RawSql.Command(connection,"""
 INSERT INTO "SecurityPrices" ("SecurityId","PriceDate","Price","Currency","Source","CreatedAt","FetchedAt")
 VALUES (@security,@date,@price,@currency,@source,@now,@now)
 ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET
@@ -184,7 +184,7 @@ public static class MarketDataParityEndpoints
         Guid securityId,Guid fullWorthSpaceId,DateOnly? date,CurrentUserContext currentUser,
         FullWorthDbContext db,SecurityMarketDataService service,CancellationToken ct)
     {
-        var userId=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
+        var userId=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
         var descriptor=await service.GetSecurityAsync(fullWorthSpaceId,securityId,ct);if(descriptor is null)return Results.NotFound();
         return Results.Ok(await service.ResolveEffectivePriceAsync(fullWorthSpaceId,securityId,date??DateOnly.FromDateTime(DateTime.UtcNow),ct));
     }
@@ -193,7 +193,7 @@ public static class MarketDataParityEndpoints
         Guid securityId,Guid fullWorthSpaceId,DateOnly? from,DateOnly? to,CurrentUserContext currentUser,
         FullWorthDbContext db,SecurityMarketDataService service,CancellationToken ct)
     {
-        var userId=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
+        var userId=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
         var end=to??DateOnly.FromDateTime(DateTime.UtcNow);var start=from??end.AddYears(-1);
         return Results.Ok(await service.HistoryAsync(fullWorthSpaceId,securityId,start,end,ct));
     }
@@ -203,7 +203,7 @@ public static class MarketDataParityEndpoints
         FullWorthDbContext db,SecurityMarketDataService service,CancellationToken ct)
     {
         var userId=currentUser.RequireUserId();
-        if(!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db,userId,fullWorthSpaceId,"investments.manage",ct))
+        if(!await SpaceCapabilities.HasCapabilityAsync(db,userId,fullWorthSpaceId,"investments.manage",ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var end=to??DateOnly.FromDateTime(DateTime.UtcNow);var start=from??end.AddDays(-14);
         var result=await service.RefreshAsync(fullWorthSpaceId,securityId,start,end,ct);
@@ -216,7 +216,7 @@ public static class MarketDataParityEndpoints
         Guid fullWorthSpaceId,string q,CurrentUserContext currentUser,FullWorthDbContext db,
         SecurityMarketDataService service,CancellationToken ct)
     {
-        var userId=currentUser.RequireUserId();if(!await ParitySql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
+        var userId=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,userId,fullWorthSpaceId,ct))return Results.NotFound();
         return Results.Ok(await service.SearchMetadataAsync(q,ct));
     }
 }

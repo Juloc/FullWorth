@@ -55,15 +55,15 @@ public static class InvestmentManagementParityEndpoints
             return Results.BadRequest(new { error = "Name and valid currency are required." });
         if (request.AccountId.HasValue)
         {
-            var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
             if (!visible.Contains(request.AccountId.Value)) return Results.BadRequest(new { error = "Linked account is inaccessible." });
         }
         if (request.BenchmarkSecurityId.HasValue && !await SecurityExists(db, fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
             return Results.BadRequest(new { error = "Benchmark security is invalid." });
 
         var id = Guid.NewGuid();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 INSERT INTO "InvestmentPortfolios"
 ("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@currency,@account,@benchmark,@provider,@manual,@include,false,@now,@now)
@@ -100,10 +100,10 @@ VALUES (@id,@space,@name,@currency,@account,@benchmark,@provider,@manual,@includ
         var isin = Clean(request.Isin)?.ToUpperInvariant();
         if (isin is { Length: > 0 } && isin.Length != 12) return Results.BadRequest(new { error = "ISIN must contain 12 characters." });
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
         await using var command = update
-            ? ParitySql.Command(connection, """
+            ? RawSql.Command(connection, """
 UPDATE "Securities" SET "Name"=@name,"Isin"=@isin,"Wkn"=@wkn,"Ticker"=@ticker,"AssetType"=@type,
  "Currency"=@currency,"Exchange"=@exchange,"ProviderKey"=@provider,"IsActive"=@active,"UpdatedAt"=@now
 WHERE "Id"=@id AND "FullWorthSpaceId"=@space
@@ -112,7 +112,7 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space
                 ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@exchange", Clean(request.Exchange)),
                 ("@provider", Clean(request.ProviderKey)), ("@active", request.IsActive), ("@now", now),
                 ("@id", id), ("@space", fullWorthSpaceId))
-            : ParitySql.Command(connection, """
+            : RawSql.Command(connection, """
 INSERT INTO "Securities"
 ("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","Exchange","ProviderKey","IsActive","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@isin,@wkn,@ticker,@type,@currency,@exchange,@provider,@active,@now,@now)
@@ -145,8 +145,8 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,@type,@currency,@exchange,@provider,
             return Results.BadRequest(new { error = "Security, positive price and valid currency are required." });
         var source = string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim().ToLowerInvariant();
         if (source.Length > 64) return Results.BadRequest(new { error = "Price source is too long." });
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 INSERT INTO "SecurityPrices" ("SecurityId","PriceDate","Price","Currency","Source","CreatedAt")
 VALUES (@security,@date,@price,@currency,@source,@now)
 ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."Price","Currency"=EXCLUDED."Currency"
@@ -169,8 +169,8 @@ ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."
         var error = await ValidateTrade(db, fullWorthSpaceId, request, type, ct);
         if (error is not null) return Results.BadRequest(new { error });
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 UPDATE "InvestmentTrades" SET "SecurityId"=@security,"TradeType"=@type,"TradeDate"=@date,
  "SettlementDate"=@settlement,"Quantity"=@quantity,"Price"=@price,"GrossAmount"=@gross,"Amount"=@amount,
  "Currency"=@currency,"Fees"=@fees,"Taxes"=@taxes,"WithholdingTax"=@withholding,"Source"=@source,
@@ -205,8 +205,8 @@ WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
     {
         var userId = currentUser.RequireUserId();
         if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id AND \"PortfolioId\"=@portfolio AND \"FullWorthSpaceId\"=@space",
             ("@id", tradeId), ("@portfolio", portfolioId), ("@space", fullWorthSpaceId));
         if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
@@ -219,9 +219,9 @@ WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","Name","CreatedAt","UpdatedAt" FROM "Watchlists"
 WHERE "FullWorthSpaceId"=@space AND "OwnerUserId"=@user ORDER BY "Name"
 """, ("@space", fullWorthSpaceId), ("@user", userId));
@@ -229,8 +229,8 @@ WHERE "FullWorthSpaceId"=@space AND "OwnerUserId"=@user ORDER BY "Name"
         var rows = new List<object>();
         while (await reader.ReadAsync(ct)) rows.Add(new
         {
-            id = ParitySql.Guid(reader, "Id"), name = ParitySql.String(reader, "Name"),
-            createdAt = ParitySql.Timestamp(reader, "CreatedAt"), updatedAt = ParitySql.Timestamp(reader, "UpdatedAt")
+            id = RawSql.Guid(reader, "Id"), name = RawSql.String(reader, "Name"),
+            createdAt = RawSql.Timestamp(reader, "CreatedAt"), updatedAt = RawSql.Timestamp(reader, "UpdatedAt")
         });
         return Results.Ok(rows);
     }
@@ -243,8 +243,8 @@ WHERE "FullWorthSpaceId"=@space AND "OwnerUserId"=@user ORDER BY "Name"
         if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
         var id = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 INSERT INTO "Watchlists" ("Id","FullWorthSpaceId","OwnerUserId","Name","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@user,@name,@now,@now)
 """, ("@id", id), ("@space", fullWorthSpaceId), ("@user", userId), ("@name", request.Name.Trim()), ("@now", now));
@@ -261,8 +261,8 @@ VALUES (@id,@space,@user,@name,@now,@now)
         var userId = currentUser.RequireUserId();
         if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 UPDATE "Watchlists" SET "Name"=@name,"UpdatedAt"=@now
 WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user
 """, ("@name", request.Name.Trim()), ("@now", DateTimeOffset.UtcNow), ("@id", watchlistId),
@@ -279,8 +279,8 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user
     {
         var userId = currentUser.RequireUserId();
         if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "DELETE FROM \"Watchlists\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"OwnerUserId\"=@user",
             ("@id", watchlistId), ("@space", fullWorthSpaceId), ("@user", userId));
         if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
@@ -295,8 +295,8 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user
     {
         var userId = currentUser.RequireUserId();
         if (!await OwnWatchlist(db, watchlistId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT i."SecurityId",s."Name",s."Ticker",i."TargetPrice",i."Notes",i."SortOrder"
 FROM "WatchlistItems" i JOIN "Securities" s ON s."Id"=i."SecurityId"
 WHERE i."WatchlistId"=@id ORDER BY i."SortOrder",s."Name"
@@ -305,9 +305,9 @@ WHERE i."WatchlistId"=@id ORDER BY i."SortOrder",s."Name"
         var rows = new List<object>();
         while (await reader.ReadAsync(ct)) rows.Add(new
         {
-            securityId = ParitySql.Guid(reader, "SecurityId"), name = ParitySql.String(reader, "Name"),
-            ticker = ParitySql.NullableString(reader, "Ticker"), targetPrice = ParitySql.NullableDecimal(reader, "TargetPrice"),
-            notes = ParitySql.NullableString(reader, "Notes"), sortOrder = ParitySql.Int(reader, "SortOrder")
+            securityId = RawSql.Guid(reader, "SecurityId"), name = RawSql.String(reader, "Name"),
+            ticker = RawSql.NullableString(reader, "Ticker"), targetPrice = RawSql.NullableDecimal(reader, "TargetPrice"),
+            notes = RawSql.NullableString(reader, "Notes"), sortOrder = RawSql.Int(reader, "SortOrder")
         });
         return Results.Ok(rows);
     }
@@ -326,13 +326,13 @@ WHERE i."WatchlistId"=@id ORDER BY i."SortOrder",s."Name"
             if (item.TargetPrice is <= 0) return Results.BadRequest(new { error = "Target price must be positive." });
             if (!await SecurityExists(db, fullWorthSpaceId, item.SecurityId, ct)) return Results.BadRequest(new { error = "Security is invalid." });
         }
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using (var delete = ParitySql.Command(connection, "DELETE FROM \"WatchlistItems\" WHERE \"WatchlistId\"=@id", ("@id", watchlistId)))
+        await using (var delete = RawSql.Command(connection, "DELETE FROM \"WatchlistItems\" WHERE \"WatchlistId\"=@id", ("@id", watchlistId)))
             await delete.ExecuteNonQueryAsync(ct);
         foreach (var item in items)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 INSERT INTO "WatchlistItems" ("WatchlistId","SecurityId","TargetPrice","Notes","SortOrder")
 VALUES (@watchlist,@security,@target,@notes,@sort)
 """, ("@watchlist", watchlistId), ("@security", item.SecurityId), ("@target", item.TargetPrice),
@@ -363,12 +363,12 @@ VALUES (@watchlist,@security,@target,@notes,@sort)
     }
 
     private static async Task<bool> CanManage(FullWorthDbContext db, Guid userId, Guid space, CancellationToken ct) =>
-        await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
+        await SpaceCapabilities.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
 
     private static async Task<bool> SecurityExists(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"Securities\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
             ("@id", id), ("@space", space));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
@@ -376,8 +376,8 @@ VALUES (@watchlist,@security,@target,@notes,@sort)
 
     private static async Task<bool> PortfolioExists(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
             ("@id", id), ("@space", space));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
@@ -385,8 +385,8 @@ VALUES (@watchlist,@security,@target,@notes,@sort)
 
     private static async Task<bool> OwnWatchlist(FullWorthDbContext db, Guid id, Guid space, Guid userId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT EXISTS(SELECT 1 FROM "Watchlists" WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user)
 """, ("@id", id), ("@space", space), ("@user", userId));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));

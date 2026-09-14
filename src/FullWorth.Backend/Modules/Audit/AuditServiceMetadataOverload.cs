@@ -1,8 +1,8 @@
-using FullWorth.Backend.Modules.Audit;
 
-namespace FullWorth.Backend.Modules.Parity;
 
-internal static class ParityAuditExtensions
+namespace FullWorth.Backend.Modules.Audit;
+
+internal static class AuditServiceMetadataOverload
 {
     /// <summary>
     /// Compatibility overload for parity workflows that calculate useful result metadata but must not

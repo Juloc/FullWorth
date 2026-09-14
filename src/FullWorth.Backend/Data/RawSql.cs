@@ -4,9 +4,18 @@ using System.Globalization;
 using FullWorth.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Data;
 
-internal static class ParitySql
+/// <summary>
+/// Roher ADO.NET-Zugriff auf dieselbe Verbindung, die der DbContext haelt: Verbindung oeffnen,
+/// Kommando mit Parametern bauen, Werte lesen. Keine Fachlichkeit.
+///
+/// Hiess ParitySql und lag in Modules/Parity. Sechs Module benutzen ihn, also gehoerte er in keines:
+/// jeder Benutzer holte sich mit dem Helfer eine Kante nach Parity, und genau daran waere die
+/// Aufloesung von Parity (#110) gescheitert - der Umzug von Analytics haette den Zyklus
+/// Analytics &lt;-&gt; Parity erzeugt. Derselbe Fall wie ImportNumber.
+/// </summary>
+internal static class RawSql
 {
     public static async Task<DbConnection> OpenAsync(FullWorthDbContext db, CancellationToken ct)
     {

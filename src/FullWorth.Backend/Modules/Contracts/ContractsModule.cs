@@ -2,7 +2,6 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.FullWorthSpaces;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -157,7 +156,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             .Select(x => new { x.Id, x.AccountId })
             .SingleOrDefaultAsync(ct);
         if (contract is null) return ContractAccessLevel.None;
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
             return ContractAccessLevel.Read;
         if (!contract.AccountId.HasValue) return ContractAccessLevel.Write;
         var canWriteAccount = await db.AccountOwners.AsNoTracking().AnyAsync(owner =>
@@ -176,7 +175,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
     {
         var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
         if (role is null) return new(ContractMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
             return new(ContractMutationResult.Forbidden);
 
         var referenceResult = await ValidateUserReferencesAsync(userId, fullWorthSpaceId, request, ct);
@@ -386,7 +385,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             .ToArray();
         var hasUnboundSource = identities.Any(item => !item.AccountId.HasValue);
 
-        var visibleAccountIds = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visibleAccountIds = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var transactionQuery = db.Transactions.AsNoTracking()
             .Where(transaction => visibleAccountIds.Contains(transaction.AccountId))
             .Where(transaction =>
@@ -451,7 +450,7 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
             .Select(x => new { x.Id, x.AccountId })
             .SingleOrDefaultAsync(ct);
         if (contract is null) return ContractAccessLevel.None;
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
             return ContractAccessLevel.Read;
         if (!contract.AccountId.HasValue) return ContractAccessLevel.Write;
         var canWriteAccount = await db.AccountOwners.AsNoTracking().AnyAsync(owner =>

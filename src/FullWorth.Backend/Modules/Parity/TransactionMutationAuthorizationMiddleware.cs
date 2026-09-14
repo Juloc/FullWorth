@@ -35,7 +35,7 @@ public sealed class TransactionMutationAuthorizationMiddleware(RequestDelegate n
         var userId = currentUser.RequireUserId();
         // Non-members must not learn that the FullWorth Space or its transactions exist: answer 404 exactly
         // like the resource endpoints, and reserve 403 for members who lack the required capability.
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -43,7 +43,7 @@ public sealed class TransactionMutationAuthorizationMiddleware(RequestDelegate n
         var capability = transactionRoute
             ? await RequiredTransactionCapabilityAsync(context, db, fullWorthSpaceId)
             : await RequiredIntelligenceCapabilityAsync(context);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(
+        if (!await SpaceCapabilities.HasCapabilityAsync(
                 db, userId, fullWorthSpaceId, capability, context.RequestAborted))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;

@@ -31,36 +31,6 @@ public sealed record TransactionBulkMutation(
     string? ReplaceNote = null,
     bool ConfirmReplaceNotes = false);
 
-public static class PermissionCapabilities
-{
-    public static readonly string[] All =
-    [
-        "transactions.read", "transactions.categorize", "transactions.write", "budgets.manage",
-        "contracts.manage", "purchases.manage", "investments.manage", "banking.manage",
-        "sharing.manage", "export.read", "audit.read"
-    ];
-
-    private static readonly HashSet<string> Editor = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "transactions.read", "transactions.categorize", "transactions.write", "budgets.manage",
-        "contracts.manage", "purchases.manage", "investments.manage", "export.read"
-    };
-
-    private static readonly HashSet<string> Viewer = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "transactions.read"
-    };
-
-    public static bool IsKnown(string capability) =>
-        All.Contains(capability, StringComparer.OrdinalIgnoreCase);
-
-    public static bool TemplateAllows(string template, string capability) => template.ToLowerInvariant() switch
-    {
-        "owner" => IsKnown(capability),
-        "editor" => Editor.Contains(capability),
-        _ => Viewer.Contains(capability)
-    };
-}
 
 public static class PermissionsErgonomicsParityEndpoints
 {
@@ -86,9 +56,9 @@ public static class PermissionsErgonomicsParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var template = await LoadTemplateAsync(db, fullWorthSpaceId, userId, ct);
-        var capabilities = await EffectiveCapabilitiesAsync(db, fullWorthSpaceId, userId, template, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var template = await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, userId, ct);
+        var capabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, userId, template, ct);
         return Results.Ok(new { template, capabilities });
     }
 
@@ -96,7 +66,7 @@ public static class PermissionsErgonomicsParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var caller = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         // Project only mapped properties. FullWorthUser.Email is a convenience alias and is intentionally
@@ -119,14 +89,14 @@ public static class PermissionsErgonomicsParityEndpoints
         {
             var template = member.Role == "owner"
                 ? "owner"
-                : await LoadTemplateAsync(db, fullWorthSpaceId, member.UserId, ct);
+                : await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, member.UserId, ct);
             result.Add(new
             {
                 member.UserId,
                 member.Email,
                 member.DisplayName,
                 template,
-                capabilities = await EffectiveCapabilitiesAsync(db, fullWorthSpaceId, member.UserId, template, ct)
+                capabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, member.UserId, template, ct)
             });
         }
         return Results.Ok(result);
@@ -137,7 +107,7 @@ public static class PermissionsErgonomicsParityEndpoints
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var caller = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         var targetRole = await db.FullWorthSpaceMembers.AsNoTracking()
@@ -150,7 +120,7 @@ public static class PermissionsErgonomicsParityEndpoints
         if (template is not ("owner" or "editor" or "viewer"))
             return Results.BadRequest(new { error = "Template must be owner, editor or viewer." });
 
-        var callerIsOwner = await ParitySql.IsOwnerAsync(db, caller, fullWorthSpaceId, ct);
+        var callerIsOwner = await RawSql.IsOwnerAsync(db, caller, fullWorthSpaceId, ct);
         var targetIsOwner = string.Equals(targetRole, "owner", StringComparison.OrdinalIgnoreCase);
 
         // Role templates refine ordinary members; they never manufacture a shadow FullWorth-Space owner.
@@ -179,8 +149,8 @@ public static class PermissionsErgonomicsParityEndpoints
         // caller does not possess. This prevents privilege escalation through a second account.
         if (!callerIsOwner && !targetIsOwner)
         {
-            var callerTemplate = await LoadTemplateAsync(db, fullWorthSpaceId, caller, ct);
-            var callerCapabilities = await EffectiveCapabilitiesAsync(db, fullWorthSpaceId, caller, callerTemplate, ct);
+            var callerTemplate = await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, caller, ct);
+            var callerCapabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, caller, callerTemplate, ct);
             foreach (var capability in PermissionCapabilities.All)
             {
                 var requested = overrides.TryGetValue(capability, out var explicitValue)
@@ -192,24 +162,24 @@ public static class PermissionsErgonomicsParityEndpoints
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
 
         if (targetIsOwner)
         {
             // Owner is structurally privileged. Remove stale template/override rows so a future
             // demotion cannot unexpectedly inherit old settings.
-            await using (var deleteTemplate = ParitySql.Command(connection,
+            await using (var deleteTemplate = RawSql.Command(connection,
                              "DELETE FROM \"FinanceMemberRoleTemplates\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
                              ("@space", fullWorthSpaceId), ("@user", memberUserId)))
                 await deleteTemplate.ExecuteNonQueryAsync(ct);
-            await using (var deleteOverrides = ParitySql.Command(connection,
+            await using (var deleteOverrides = RawSql.Command(connection,
                              "DELETE FROM \"FinanceCapabilityGrants\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
                              ("@space", fullWorthSpaceId), ("@user", memberUserId)))
                 await deleteOverrides.ExecuteNonQueryAsync(ct);
         }
         else
         {
-            await using (var templateCommand = ParitySql.Command(connection, """
+            await using (var templateCommand = RawSql.Command(connection, """
 INSERT INTO "FinanceMemberRoleTemplates" ("FullWorthSpaceId","UserId","Template","UpdatedAt")
 VALUES (@space,@user,@template,@now)
 ON CONFLICT ("FullWorthSpaceId","UserId") DO UPDATE SET "Template"=EXCLUDED."Template","UpdatedAt"=EXCLUDED."UpdatedAt"
@@ -218,7 +188,7 @@ ON CONFLICT ("FullWorthSpaceId","UserId") DO UPDATE SET "Template"=EXCLUDED."Tem
                 await templateCommand.ExecuteNonQueryAsync(ct);
             }
 
-            await using (var delete = ParitySql.Command(connection,
+            await using (var delete = RawSql.Command(connection,
                              "DELETE FROM \"FinanceCapabilityGrants\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
                              ("@space", fullWorthSpaceId), ("@user", memberUserId)))
                 await delete.ExecuteNonQueryAsync(ct);
@@ -228,7 +198,7 @@ ON CONFLICT ("FullWorthSpaceId","UserId") DO UPDATE SET "Template"=EXCLUDED."Tem
             foreach (var pair in overrides.Where(pair =>
                          pair.Value != PermissionCapabilities.TemplateAllows(template, pair.Key)))
             {
-                await using var command = ParitySql.Command(connection, """
+                await using var command = RawSql.Command(connection, """
 INSERT INTO "FinanceCapabilityGrants" ("FullWorthSpaceId","UserId","Capability","IsAllowed","UpdatedAt")
 VALUES (@space,@user,@capability,@allowed,@now)
 """, ("@space", fullWorthSpaceId), ("@user", memberUserId),
@@ -247,14 +217,14 @@ VALUES (@space,@user,@capability,@allowed,@now)
         Guid categoryId, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
         if (!await db.Categories.AsNoTracking().AnyAsync(category =>
                 category.Id == categoryId && category.FullWorthSpaceId == fullWorthSpaceId, ct))
             return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         async Task<long> Count(string sql)
         {
-            await using var command = ParitySql.Command(connection, sql, ("@id", categoryId));
+            await using var command = RawSql.Command(connection, sql, ("@id", categoryId));
             return Convert.ToInt64(await command.ExecuteScalarAsync(ct));
         }
         return Results.Ok(new
@@ -276,7 +246,7 @@ VALUES (@space,@user,@capability,@allowed,@now)
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (categoryId == request.TargetCategoryId)
             return Results.BadRequest(new { error = "Source and target must differ." });
@@ -299,7 +269,7 @@ VALUES (@space,@user,@capability,@allowed,@now)
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var updates = new[]
         {
             "UPDATE \"Transactions\" SET \"CategoryId\"=@target WHERE \"CategoryId\"=@source",
@@ -315,24 +285,24 @@ VALUES (@space,@user,@capability,@allowed,@now)
         };
         foreach (var sql in updates)
         {
-            await using var command = ParitySql.Command(connection, sql,
+            await using var command = RawSql.Command(connection, sql,
                 ("@source", categoryId), ("@target", request.TargetCategoryId));
             await command.ExecuteNonQueryAsync(ct);
         }
 
-        await using (var budgetInsert = ParitySql.Command(connection, """
+        await using (var budgetInsert = RawSql.Command(connection, """
 INSERT INTO "BudgetCategories" ("BudgetId","CategoryId","IncludeDescendants")
 SELECT "BudgetId",@target,"IncludeDescendants" FROM "BudgetCategories" WHERE "CategoryId"=@source
 ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
   "BudgetCategories"."IncludeDescendants" OR EXCLUDED."IncludeDescendants"
 """, ("@source", categoryId), ("@target", request.TargetCategoryId)))
             await budgetInsert.ExecuteNonQueryAsync(ct);
-        await using (var budgetDelete = ParitySql.Command(connection,
+        await using (var budgetDelete = RawSql.Command(connection,
                          "DELETE FROM \"BudgetCategories\" WHERE \"CategoryId\"=@source",
                          ("@source", categoryId)))
             await budgetDelete.ExecuteNonQueryAsync(ct);
 
-        await using (var children = ParitySql.Command(connection,
+        await using (var children = RawSql.Command(connection,
                          "UPDATE \"Categories\" SET \"ParentId\"=@target WHERE \"ParentId\"=@source AND \"Id\"<>@target",
                          ("@source", categoryId), ("@target", request.TargetCategoryId)))
             await children.ExecuteNonQueryAsync(ct);
@@ -354,7 +324,7 @@ ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var items = (request.Items ?? []).DistinctBy(item => item.CategoryId).ToArray();
         if (items.Length == 0 || items.Length > 1000)
@@ -397,7 +367,7 @@ ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
         FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var query = await BuildBulkQueryAsync(db, userId, fullWorthSpaceId, request, ct);
         if (query is null) return Results.NotFound();
@@ -421,7 +391,7 @@ ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (request.ReplaceNote is not null && !request.ConfirmReplaceNotes)
             return Results.BadRequest(new { error = "Replacing notes requires explicit confirmation." });
@@ -458,12 +428,12 @@ ON CONFLICT ("BudgetId","CategoryId") DO UPDATE SET "IncludeDescendants" =
         }
         await db.SaveChangesAsync(ct);
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         if (request.IsReviewed.HasValue)
         {
             foreach (var id in ids)
             {
-                await using var command = ParitySql.Command(connection, """
+                await using var command = RawSql.Command(connection, """
 INSERT INTO "TransactionReviewStates" ("TransactionId","FullWorthSpaceId","IsReviewed","UpdatedAt")
 VALUES (@id,@space,@reviewed,@now)
 ON CONFLICT ("TransactionId") DO UPDATE SET "IsReviewed"=EXCLUDED."IsReviewed","UpdatedAt"=EXCLUDED."UpdatedAt"
@@ -477,7 +447,7 @@ ON CONFLICT ("TransactionId") DO UPDATE SET "IsReviewed"=EXCLUDED."IsReviewed","
         {
             foreach (var id in ids)
             {
-                await using var command = ParitySql.Command(connection,
+                await using var command = RawSql.Command(connection,
                     "DELETE FROM \"ContractTransactionLinks\" WHERE \"FullWorthSpaceId\"=@space AND \"TransactionId\"=@id",
                     ("@space", fullWorthSpaceId), ("@id", id));
                 await command.ExecuteNonQueryAsync(ct);
@@ -487,7 +457,7 @@ ON CONFLICT ("TransactionId") DO UPDATE SET "IsReviewed"=EXCLUDED."IsReviewed","
         {
             foreach (var row in rows.Where(row => row.Amount < 0))
             {
-                await using var command = ParitySql.Command(connection, """
+                await using var command = RawSql.Command(connection, """
 INSERT INTO "ContractTransactionLinks" ("Id","FullWorthSpaceId","ContractId","TransactionId","Amount","LinkSource","Confidence","CreatedAt")
 VALUES (@id,@space,@contract,@transaction,@amount,'manual',1,@now)
 ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"=EXCLUDED."Amount","LinkSource"='manual',"Confidence"=1
@@ -506,8 +476,8 @@ ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"=EXCLUDED."Amou
     private static async Task<IQueryable<FullWorth.Backend.Modules.Transactions.FinanceTransaction>?> BuildBulkQueryAsync(
         FullWorthDbContext db, Guid userId, Guid fullWorthSpaceId, TransactionBulkFilter filter, CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var query = db.Transactions.AsNoTracking().Where(tx => writable.Contains(tx.AccountId));
         if (filter.AccountIds is { Count: > 0 })
         {
@@ -536,73 +506,4 @@ ON CONFLICT ("ContractId","TransactionId") DO UPDATE SET "Amount"=EXCLUDED."Amou
         return query;
     }
 
-    internal static async Task<bool> HasCapabilityAsync(
-        FullWorthDbContext db, Guid userId, Guid fullWorthSpaceId, string capability, CancellationToken ct)
-    {
-        if (!PermissionCapabilities.IsKnown(capability)) return false;
-        var role = await db.FullWorthSpaceMembers.AsNoTracking()
-            .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
-            .Select(member => member.Role)
-            .SingleOrDefaultAsync(ct);
-        if (role is null) return false;
-        if (role == "owner") return true;
-
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using (var overrideCommand = ParitySql.Command(connection, """
-SELECT "IsAllowed" FROM "FinanceCapabilityGrants"
-WHERE "FullWorthSpaceId"=@space AND "UserId"=@user AND "Capability"=@capability
-""", ("@space", fullWorthSpaceId), ("@user", userId), ("@capability", capability)))
-        {
-            var value = await overrideCommand.ExecuteScalarAsync(ct);
-            if (value is not null and not DBNull) return Convert.ToBoolean(value);
-        }
-
-        var template = await LoadTemplateAsync(db, fullWorthSpaceId, userId, ct);
-        return PermissionCapabilities.TemplateAllows(template, capability);
-    }
-
-    private static async Task<Dictionary<string, bool>> EffectiveCapabilitiesAsync(
-        FullWorthDbContext db, Guid fullWorthSpaceId, Guid userId, string template, CancellationToken ct)
-    {
-        if (string.Equals(template, "owner", StringComparison.OrdinalIgnoreCase))
-            return PermissionCapabilities.All.ToDictionary(capability => capability, _ => true,
-                StringComparer.OrdinalIgnoreCase);
-
-        var overrides = await LoadOverridesAsync(db, fullWorthSpaceId, userId, ct);
-        return PermissionCapabilities.All.ToDictionary(
-            capability => capability,
-            capability => overrides.TryGetValue(capability, out var value)
-                ? value
-                : PermissionCapabilities.TemplateAllows(template, capability),
-            StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static async Task<string> LoadTemplateAsync(
-        FullWorthDbContext db, Guid fullWorthSpaceId, Guid userId, CancellationToken ct)
-    {
-        var role = await db.FullWorthSpaceMembers.AsNoTracking()
-            .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
-            .Select(member => member.Role)
-            .SingleOrDefaultAsync(ct);
-        if (role == "owner") return "owner";
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
-SELECT "Template" FROM "FinanceMemberRoleTemplates" WHERE "FullWorthSpaceId"=@space AND "UserId"=@user
-""", ("@space", fullWorthSpaceId), ("@user", userId));
-        return Convert.ToString(await command.ExecuteScalarAsync(ct)) ?? "viewer";
-    }
-
-    private static async Task<Dictionary<string, bool>> LoadOverridesAsync(
-        FullWorthDbContext db, Guid fullWorthSpaceId, Guid userId, CancellationToken ct)
-    {
-        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
-SELECT "Capability","IsAllowed" FROM "FinanceCapabilityGrants" WHERE "FullWorthSpaceId"=@space AND "UserId"=@user
-""", ("@space", fullWorthSpaceId), ("@user", userId));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            result[ParitySql.String(reader, "Capability")] = ParitySql.Bool(reader, "IsAllowed");
-        return result;
-    }
 }

@@ -377,7 +377,7 @@ internal static class CategoryIntelligenceStore
         db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x => x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId, ct);
 
     private static Task<bool> CanCategorizeAsync(FullWorthDbContext db, Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
-        FullWorth.Backend.Modules.Parity.PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(
+        SpaceCapabilities.HasCapabilityAsync(
             db, userId, fullWorthSpaceId, "transactions.categorize", ct);
 
     private static List<Guid> CleanIds(IEnumerable<Guid>? ids) => ids?.Where(x => x != Guid.Empty).Distinct().ToList() ?? [];

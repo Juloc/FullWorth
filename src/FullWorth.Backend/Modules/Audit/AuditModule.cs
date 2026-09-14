@@ -1,6 +1,5 @@
 using System.Text.Json;
 using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -197,7 +196,7 @@ public sealed class AuditStore(FullWorthDbContext db)
         int limit,
         CancellationToken ct)
     {
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(
+        if (!await SpaceCapabilities.HasCapabilityAsync(
                 db, userId, fullWorthSpaceId, "audit.read", ct)) return null;
 
         var take = limit is <= 0 or > 500 ? 100 : limit;

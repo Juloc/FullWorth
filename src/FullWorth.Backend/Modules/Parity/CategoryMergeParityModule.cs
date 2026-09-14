@@ -166,8 +166,8 @@ DELETE FROM "BudgetCategories" WHERE "CategoryId"={sourceCategoryId};
     }
 
     private static async Task<bool> CanManage(FullWorthDbContext db, Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
-        await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) &&
-        await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct);
+        await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) &&
+        await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct);
 
     private static async Task<MergeCounts> Counts(FullWorthDbContext db, Guid fullWorthSpaceId, Guid source, CancellationToken ct)
     {
@@ -181,8 +181,8 @@ DELETE FROM "BudgetCategories" WHERE "CategoryId"={sourceCategoryId};
         var activeChildren = await db.Categories.AsNoTracking().CountAsync(category =>
             category.FullWorthSpaceId == fullWorthSpaceId && category.ParentId == source && !category.IsArchived, ct);
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var extra = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var extra = RawSql.Command(connection, """
 SELECT
   (SELECT count(DISTINCT bc."BudgetId") FROM "BudgetCategories" bc
    JOIN "Budgets" b ON b."Id"=bc."BudgetId"

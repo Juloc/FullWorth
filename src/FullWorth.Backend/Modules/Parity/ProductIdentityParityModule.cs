@@ -42,7 +42,7 @@ public static class ProductIdentityParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
         var rows = await db.Products.AsNoTracking()
             .Where(p => p.FullWorthSpaceId == fullWorthSpaceId && !p.IsArchived)
             .OrderBy(p => p.CanonicalName)
@@ -75,7 +75,7 @@ public static class ProductIdentityParityEndpoints
         FullWorthDbContext db, AuditService audit, bool update, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.CanonicalName)) return Results.BadRequest(new { error = "Product name is required." });
         var unit = NormalizeUnit(request.UnitKind);
@@ -139,7 +139,7 @@ public static class ProductIdentityParityEndpoints
         Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var product = await db.Products.SingleOrDefaultAsync(p => p.Id == id && p.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (product is null) return Results.NotFound();
@@ -155,7 +155,7 @@ public static class ProductIdentityParityEndpoints
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!await ProductExists(db, fullWorthSpaceId, id, ct)) return Results.NotFound();
         var alias = Clean(request.Text);
@@ -186,7 +186,7 @@ public static class ProductIdentityParityEndpoints
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var alias = await db.ProductAliases.Include(a => a.Product)
             .SingleOrDefaultAsync(a => a.Id == aliasId && a.ProductId == id && a.Product.FullWorthSpaceId == fullWorthSpaceId, ct);
@@ -201,7 +201,7 @@ public static class ProductIdentityParityEndpoints
         Guid fullWorthSpaceId, string text, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
         var normalized = Normalize(text);
         if (normalized.Length < 2) return Results.Ok(null);
 
@@ -228,7 +228,7 @@ public static class ProductIdentityParityEndpoints
         Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) || !await ProductExists(db, fullWorthSpaceId, id, ct))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) || !await ProductExists(db, fullWorthSpaceId, id, ct))
             return Results.NotFound();
         var rows = await db.PurchaseItems.AsNoTracking()
             .Where(i => i.ProductId == id && i.Purchase.FullWorthSpaceId == fullWorthSpaceId &&
@@ -256,7 +256,7 @@ public static class ProductIdentityParityEndpoints
         FullWorthDbContext db, PurchaseAuthorizationStore purchases, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!await ProductExists(db, fullWorthSpaceId, request.ProductIdentityId, ct)) return Results.BadRequest(new { error = "Product is invalid." });
         var item = await db.PurchaseItems.SingleOrDefaultAsync(i => i.Id == purchaseItemId, ct);
@@ -275,7 +275,7 @@ public static class ProductIdentityParityEndpoints
         FullWorthDbContext db, PurchaseAuthorizationStore purchases, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var item = await db.PurchaseItems.SingleOrDefaultAsync(i => i.Id == purchaseItemId, ct);
         if (item is null || await purchases.GetAccessAsync(userId, fullWorthSpaceId, item.PurchaseId, ct) != PurchaseAccessLevel.Write)

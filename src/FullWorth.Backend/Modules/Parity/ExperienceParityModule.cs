@@ -47,7 +47,7 @@ public static class ExperienceParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         if (visible.Count == 0) return Results.Ok(Array.Empty<object>());
 
         var accounts = await db.Accounts.AsNoTracking()
@@ -55,7 +55,7 @@ public static class ExperienceParityEndpoints
             .OrderBy(account => account.SortOrder)
             .ThenBy(account => account.DisplayName)
             .ToListAsync(ct);
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var rows = new List<object>();
 
         foreach (var account in accounts)
@@ -65,20 +65,20 @@ public static class ExperienceParityEndpoints
             string? backgroundColor = null;
             DateTimeOffset? lastSeenAt = null;
 
-            await using (var cmd = ParitySql.Command(connection,
+            await using (var cmd = RawSql.Command(connection,
                 "SELECT \"Icon\",\"IconColor\",\"BackgroundColor\" FROM \"AccountAppearances\" WHERE \"AccountId\"=@id",
                 ("@id", account.Id)))
             await using (var reader = await cmd.ExecuteReaderAsync(ct))
             {
                 if (await reader.ReadAsync(ct))
                 {
-                    icon = ParitySql.NullableString(reader, "Icon");
-                    iconColor = ParitySql.NullableString(reader, "IconColor");
-                    backgroundColor = ParitySql.NullableString(reader, "BackgroundColor");
+                    icon = RawSql.NullableString(reader, "Icon");
+                    iconColor = RawSql.NullableString(reader, "IconColor");
+                    backgroundColor = RawSql.NullableString(reader, "BackgroundColor");
                 }
             }
 
-            await using (var cmd = ParitySql.Command(connection,
+            await using (var cmd = RawSql.Command(connection,
                 "SELECT \"LastSeenAt\" FROM \"AccountTransactionSeenStates\" WHERE \"UserId\"=@user AND \"AccountId\"=@account",
                 ("@user", userId), ("@account", account.Id)))
             {
@@ -115,13 +115,13 @@ public static class ExperienceParityEndpoints
         CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         if (!writable.Contains(accountId)) return Results.NotFound();
         if (!ValidColor(request.IconColor) || !ValidColor(request.BackgroundColor))
             return Results.BadRequest(new { error = "Colors must be #RRGGBB or #RRGGBBAA." });
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 INSERT INTO "AccountAppearances" ("AccountId","Icon","IconColor","BackgroundColor","UpdatedAt")
 VALUES (@id,@icon,@iconColor,@background,@now)
 ON CONFLICT ("AccountId") DO UPDATE SET
@@ -145,11 +145,11 @@ ON CONFLICT ("AccountId") DO UPDATE SET
         Guid accountId, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         if (!visible.Contains(accountId)) return Results.NotFound();
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 INSERT INTO "AccountTransactionSeenStates" ("UserId","AccountId","LastSeenAt")
 VALUES (@user,@account,@now)
 ON CONFLICT ("UserId","AccountId") DO UPDATE SET "LastSeenAt"=EXCLUDED."LastSeenAt"
@@ -162,8 +162,8 @@ ON CONFLICT ("UserId","AccountId") DO UPDATE SET "LastSeenAt"=EXCLUDED."LastSeen
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var visibleAccounts = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
 
         var purchases = await db.Purchases.AsNoTracking()
             .Where(purchase => purchase.FullWorthSpaceId == fullWorthSpaceId &&
@@ -215,8 +215,8 @@ ON CONFLICT ("UserId","AccountId") DO UPDATE SET "LastSeenAt"=EXCLUDED."LastSeen
         Guid fullWorthSpaceId, string name, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var visibleAccounts = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var normalized = NormalizeProduct(name);
 
         var purchases = await db.Purchases.AsNoTracking()
@@ -248,7 +248,7 @@ ON CONFLICT ("UserId","AccountId") DO UPDATE SET "LastSeenAt"=EXCLUDED."LastSeen
         CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (!await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
         var normalized = NormalizeProduct(normalizedName);
         if (string.IsNullOrWhiteSpace(request.DisplayName) || normalized.Length < 2) return Results.BadRequest();
         if (request.CategoryId.HasValue && !await db.Categories.AsNoTracking().AnyAsync(category =>
@@ -299,9 +299,9 @@ ON CONFLICT ("UserId","AccountId") DO UPDATE SET "LastSeenAt"=EXCLUDED."LastSeen
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        if (!await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 SELECT "UserId","Capability","IsAllowed","UpdatedAt"
 FROM "FinanceCapabilityGrants"
 WHERE "FullWorthSpaceId"=@space
@@ -311,10 +311,10 @@ ORDER BY "UserId","Capability"
         var rows = new List<object>();
         while (await reader.ReadAsync(ct)) rows.Add(new
         {
-            userId = ParitySql.Guid(reader, "UserId"),
-            capability = ParitySql.String(reader, "Capability"),
-            isAllowed = ParitySql.Bool(reader, "IsAllowed"),
-            updatedAt = ParitySql.Timestamp(reader, "UpdatedAt")
+            userId = RawSql.Guid(reader, "UserId"),
+            capability = RawSql.String(reader, "Capability"),
+            isAllowed = RawSql.Bool(reader, "IsAllowed"),
+            updatedAt = RawSql.Timestamp(reader, "UpdatedAt")
         });
         return Results.Ok(rows);
     }
@@ -324,14 +324,14 @@ ORDER BY "UserId","Capability"
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (!await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
         var capability = request.Capability.Trim().ToLowerInvariant();
         if (!Capabilities.Contains(capability) || !await db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(member =>
                 member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == request.UserId, ct))
             return Results.BadRequest();
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 INSERT INTO "FinanceCapabilityGrants" ("FullWorthSpaceId","UserId","Capability","IsAllowed","UpdatedAt")
 VALUES (@space,@user,@capability,@allowed,@now)
 ON CONFLICT ("FullWorthSpaceId","UserId","Capability") DO UPDATE SET
@@ -350,8 +350,8 @@ ON CONFLICT ("FullWorthSpaceId","UserId","Capability") DO UPDATE SET
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var visibleAccounts = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
 
         var transactions = await db.Transactions.AsNoTracking()
             .Where(transaction => visibleAccounts.Contains(transaction.AccountId))
@@ -428,15 +428,15 @@ ON CONFLICT ("FullWorthSpaceId","UserId","Capability") DO UPDATE SET
         FullWorthDbContext db, Guid fullWorthSpaceId, CancellationToken ct)
     {
         var result = new Dictionary<string, AliasRow>(StringComparer.OrdinalIgnoreCase);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection,
             "SELECT a.\"NormalizedAlias\" AS \"NormalizedName\", p.\"CanonicalName\" AS \"DisplayName\", p.\"DefaultCategoryId\" AS \"CategoryId\" " +
             "FROM \"ProductAliases\" a JOIN \"Products\" p ON p.\"Id\"=a.\"ProductId\" WHERE p.\"FullWorthSpaceId\"=@space",
             ("@space", fullWorthSpaceId));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            result[ParitySql.String(reader, "NormalizedName")] = new(
-                ParitySql.NullableString(reader, "DisplayName"), ParitySql.NullableGuid(reader, "CategoryId"));
+            result[RawSql.String(reader, "NormalizedName")] = new(
+                RawSql.NullableString(reader, "DisplayName"), RawSql.NullableGuid(reader, "CategoryId"));
         return result;
     }
 

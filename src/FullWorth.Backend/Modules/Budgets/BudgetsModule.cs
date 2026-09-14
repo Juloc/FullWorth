@@ -3,7 +3,6 @@ using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Budgets.CarryOver;
 using FullWorth.Backend.Modules.Budgets.Cycles;
 using FullWorth.Backend.Modules.FullWorthSpaces;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using FullWorth.Backend.Validation;
@@ -205,7 +204,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         var budget = await VisibleBudgets(userId, fullWorthSpaceId).SingleOrDefaultAsync(x => x.Id == budgetId, ct);
         if (budget is null) return null;
 
-        var visibleAccountIds = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visibleAccountIds = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var allAccountIds = await db.Accounts.AsNoTracking()
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.IsActive)
             .Select(account => account.Id)
@@ -335,7 +334,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
     {
         var visible = await VisibleBudgets(userId, fullWorthSpaceId).AnyAsync(budget => budget.Id == budgetId, ct);
         if (!visible) return BudgetAccessLevel.None;
-        return await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "budgets.manage", ct)
+        return await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "budgets.manage", ct)
             ? BudgetAccessLevel.Write
             : BudgetAccessLevel.Read;
     }
@@ -344,7 +343,7 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
     {
         var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
         if (role is null) return new(BudgetMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "budgets.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "budgets.manage", ct))
             return new(BudgetMutationResult.Forbidden);
 
         if (!await CategoryIsValidAsync(fullWorthSpaceId, request.CategoryId, ct))

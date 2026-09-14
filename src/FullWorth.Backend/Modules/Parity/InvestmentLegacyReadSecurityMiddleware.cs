@@ -38,15 +38,15 @@ public sealed class InvestmentLegacyReadSecurityMiddleware(RequestDelegate next)
 
         var userId = currentUser.RequireUserId();
         var ct = context.RequestAborted;
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
-        var visibleAccounts = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","Name","Currency","AccountId","BenchmarkSecurityId","IsArchived","CreatedAt","UpdatedAt"
 FROM "InvestmentPortfolios"
 WHERE "FullWorthSpaceId"=@space
@@ -57,20 +57,20 @@ ORDER BY "IsArchived","Name"
         var rows = new List<object>();
         while (await reader.ReadAsync(ct))
         {
-            var accountId = ParitySql.NullableGuid(reader, "AccountId");
+            var accountId = RawSql.NullableGuid(reader, "AccountId");
             if (accountId.HasValue && !visibleAccounts.Contains(accountId.Value))
                 continue;
 
             rows.Add(new
             {
-                id = ParitySql.Guid(reader, "Id"),
-                name = ParitySql.String(reader, "Name"),
-                currency = ParitySql.String(reader, "Currency"),
+                id = RawSql.Guid(reader, "Id"),
+                name = RawSql.String(reader, "Name"),
+                currency = RawSql.String(reader, "Currency"),
                 accountId,
-                benchmarkSecurityId = ParitySql.NullableGuid(reader, "BenchmarkSecurityId"),
-                isArchived = ParitySql.Bool(reader, "IsArchived"),
-                createdAt = ParitySql.Timestamp(reader, "CreatedAt"),
-                updatedAt = ParitySql.Timestamp(reader, "UpdatedAt")
+                benchmarkSecurityId = RawSql.NullableGuid(reader, "BenchmarkSecurityId"),
+                isArchived = RawSql.Bool(reader, "IsArchived"),
+                createdAt = RawSql.Timestamp(reader, "CreatedAt"),
+                updatedAt = RawSql.Timestamp(reader, "UpdatedAt")
             });
         }
 

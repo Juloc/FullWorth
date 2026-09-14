@@ -35,7 +35,7 @@ public static class CsvZipExportParityEndpoints
         var includePurchasesFlag = includePurchases ?? false;
         var includeInvestmentsFlag = includeInvestments ?? false;
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "export.read", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "export.read", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (from.HasValue && to.HasValue && from > to)
             return Results.BadRequest(new { error = "Invalid date range." });
@@ -92,7 +92,7 @@ public static class CsvZipExportParityEndpoints
             ["net_worth_history.csv"] = NetWorth(snapshot.NetWorthHistory)
         };
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         files["tags.csv"] = await Tags(connection, fullWorthSpaceId, ct);
         files["transaction_tags.csv"] = await TransactionTags(connection, transactionIds, ct);
 
@@ -242,9 +242,9 @@ public static class CsvZipExportParityEndpoints
     private static async Task<List<string[]>> Tags(System.Data.Common.DbConnection connection, Guid space, CancellationToken ct)
     {
         var result = Table(new[] { "Id", "Name", "Color" });
-        await using var command = ParitySql.Command(connection, "SELECT \"Id\",\"Name\",\"Color\" FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space));
+        await using var command = RawSql.Command(connection, "SELECT \"Id\",\"Name\",\"Color\" FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space));
         await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) result.Add(new[] { ParitySql.Guid(reader, "Id").ToString(), ParitySql.String(reader, "Name"), ParitySql.NullableString(reader, "Color") ?? "" });
+        while (await reader.ReadAsync(ct)) result.Add(new[] { RawSql.Guid(reader, "Id").ToString(), RawSql.String(reader, "Name"), RawSql.NullableString(reader, "Color") ?? "" });
         return result;
     }
 
@@ -253,9 +253,9 @@ public static class CsvZipExportParityEndpoints
         var result = Table(new[] { "TransactionId", "TagId" });
         foreach (var transactionId in transactionIds)
         {
-            await using var command = ParitySql.Command(connection, "SELECT \"TagId\" FROM \"TransactionTags\" WHERE \"TransactionId\"=@id", ("@id", transactionId));
+            await using var command = RawSql.Command(connection, "SELECT \"TagId\" FROM \"TransactionTags\" WHERE \"TransactionId\"=@id", ("@id", transactionId));
             await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct)) result.Add(new[] { transactionId.ToString(), ParitySql.Guid(reader, "TagId").ToString() });
+            while (await reader.ReadAsync(ct)) result.Add(new[] { transactionId.ToString(), RawSql.Guid(reader, "TagId").ToString() });
         }
         return result;
     }
@@ -271,18 +271,18 @@ public static class CsvZipExportParityEndpoints
     {
         var portfolios = Table(new[] { "Id", "Name", "ProviderName", "Currency", "LinkedAccountId", "BenchmarkSecurityId", "IsManual", "IncludeInNetWorth", "IsArchived" });
         var allowedPortfolioIds = new HashSet<Guid>();
-        await using (var command = ParitySql.Command(connection, "SELECT \"Id\",\"Name\",\"ProviderName\",\"Currency\",\"AccountId\",\"BenchmarkSecurityId\",\"IsManual\",\"IncludeInNetWorth\",\"IsArchived\" FROM \"InvestmentPortfolios\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space)))
+        await using (var command = RawSql.Command(connection, "SELECT \"Id\",\"Name\",\"ProviderName\",\"Currency\",\"AccountId\",\"BenchmarkSecurityId\",\"IsManual\",\"IncludeInNetWorth\",\"IsArchived\" FROM \"InvestmentPortfolios\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
         {
             while (await reader.ReadAsync(ct))
             {
-                var accountId = ParitySql.NullableGuid(reader, "AccountId");
-                var archived = ParitySql.Bool(reader, "IsArchived");
+                var accountId = RawSql.NullableGuid(reader, "AccountId");
+                var archived = RawSql.Bool(reader, "IsArchived");
                 if (accountId.HasValue && !visibleAccountIds.Contains(accountId.Value)) continue;
                 if (!includeArchived && archived) continue;
-                var id = ParitySql.Guid(reader, "Id");
+                var id = RawSql.Guid(reader, "Id");
                 allowedPortfolioIds.Add(id);
-                portfolios.Add(new[] { id.ToString(), ParitySql.String(reader, "Name"), ParitySql.NullableString(reader, "ProviderName") ?? "", ParitySql.String(reader, "Currency"), accountId?.ToString() ?? "", ParitySql.NullableGuid(reader, "BenchmarkSecurityId")?.ToString() ?? "", Bool(ParitySql.Bool(reader, "IsManual")), Bool(ParitySql.Bool(reader, "IncludeInNetWorth")), Bool(archived) });
+                portfolios.Add(new[] { id.ToString(), RawSql.String(reader, "Name"), RawSql.NullableString(reader, "ProviderName") ?? "", RawSql.String(reader, "Currency"), accountId?.ToString() ?? "", RawSql.NullableGuid(reader, "BenchmarkSecurityId")?.ToString() ?? "", Bool(RawSql.Bool(reader, "IsManual")), Bool(RawSql.Bool(reader, "IncludeInNetWorth")), Bool(archived) });
             }
         }
 
@@ -294,17 +294,17 @@ public static class CsvZipExportParityEndpoints
             var parameters = new List<(string, object?)> { ("@portfolio", portfolioId) };
             if (from.HasValue) parameters.Add(("@from", from.Value));
             if (to.HasValue) parameters.Add(("@to", to.Value));
-            await using var command = ParitySql.Command(connection, sql, parameters.ToArray());
+            await using var command = RawSql.Command(connection, sql, parameters.ToArray());
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
-                trades.Add(new[] { ParitySql.Guid(reader, "Id").ToString(), portfolioId.ToString(), ParitySql.NullableGuid(reader, "SecurityId")?.ToString() ?? "", ParitySql.String(reader, "TradeType"), Date(ParitySql.NullableDate(reader, "TradeDate")), Date(ParitySql.NullableDate(reader, "SettlementDate")), ParitySql.NullableDecimal(reader, "Quantity")?.ToString(CultureInfo.InvariantCulture) ?? "", ParitySql.NullableDecimal(reader, "Price")?.ToString(CultureInfo.InvariantCulture) ?? "", ParitySql.NullableDecimal(reader, "GrossAmount")?.ToString(CultureInfo.InvariantCulture) ?? "", Num(ParitySql.Decimal(reader, "Amount")), ParitySql.String(reader, "Currency"), Num(ParitySql.Decimal(reader, "Fees")), Num(ParitySql.Decimal(reader, "Taxes")), Num(ParitySql.Decimal(reader, "WithholdingTax")), ParitySql.String(reader, "Source"), ParitySql.NullableString(reader, "ExternalKey") ?? "", ParitySql.NullableString(reader, "Notes") ?? "" });
+                trades.Add(new[] { RawSql.Guid(reader, "Id").ToString(), portfolioId.ToString(), RawSql.NullableGuid(reader, "SecurityId")?.ToString() ?? "", RawSql.String(reader, "TradeType"), Date(RawSql.NullableDate(reader, "TradeDate")), Date(RawSql.NullableDate(reader, "SettlementDate")), RawSql.NullableDecimal(reader, "Quantity")?.ToString(CultureInfo.InvariantCulture) ?? "", RawSql.NullableDecimal(reader, "Price")?.ToString(CultureInfo.InvariantCulture) ?? "", RawSql.NullableDecimal(reader, "GrossAmount")?.ToString(CultureInfo.InvariantCulture) ?? "", Num(RawSql.Decimal(reader, "Amount")), RawSql.String(reader, "Currency"), Num(RawSql.Decimal(reader, "Fees")), Num(RawSql.Decimal(reader, "Taxes")), Num(RawSql.Decimal(reader, "WithholdingTax")), RawSql.String(reader, "Source"), RawSql.NullableString(reader, "ExternalKey") ?? "", RawSql.NullableString(reader, "Notes") ?? "" });
         }
 
         var securities = Table(new[] { "Id", "Name", "ISIN", "WKN", "Ticker", "AssetType", "Currency", "Exchange", "ProviderKey", "IsActive" });
-        await using (var command = ParitySql.Command(connection, "SELECT \"Id\",\"Name\",\"Isin\",\"Wkn\",\"Ticker\",\"AssetType\",\"Currency\",\"Exchange\",\"ProviderKey\",\"IsActive\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space)))
+        await using (var command = RawSql.Command(connection, "SELECT \"Id\",\"Name\",\"Isin\",\"Wkn\",\"Ticker\",\"AssetType\",\"Currency\",\"Exchange\",\"ProviderKey\",\"IsActive\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
             while (await reader.ReadAsync(ct))
-                securities.Add(new[] { ParitySql.Guid(reader, "Id").ToString(), ParitySql.String(reader, "Name"), ParitySql.NullableString(reader, "Isin") ?? "", ParitySql.NullableString(reader, "Wkn") ?? "", ParitySql.NullableString(reader, "Ticker") ?? "", ParitySql.String(reader, "AssetType"), ParitySql.String(reader, "Currency"), ParitySql.NullableString(reader, "Exchange") ?? "", ParitySql.NullableString(reader, "ProviderKey") ?? "", Bool(ParitySql.Bool(reader, "IsActive")) });
+                securities.Add(new[] { RawSql.Guid(reader, "Id").ToString(), RawSql.String(reader, "Name"), RawSql.NullableString(reader, "Isin") ?? "", RawSql.NullableString(reader, "Wkn") ?? "", RawSql.NullableString(reader, "Ticker") ?? "", RawSql.String(reader, "AssetType"), RawSql.String(reader, "Currency"), RawSql.NullableString(reader, "Exchange") ?? "", RawSql.NullableString(reader, "ProviderKey") ?? "", Bool(RawSql.Bool(reader, "IsActive")) });
 
         return new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase)
         {

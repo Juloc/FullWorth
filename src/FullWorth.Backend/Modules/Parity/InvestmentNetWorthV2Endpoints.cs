@@ -21,7 +21,7 @@ public static class InvestmentNetWorthV2Endpoints
         CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var result = await service.CalculateAsync(fullWorthSpaceId, userId, day, ct);

@@ -53,7 +53,7 @@ public static class InvestmentPdfImportParityEndpoints
         CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!request.HasFormContentType)
             return Results.BadRequest(new { error = "Expected multipart/form-data." });

@@ -47,12 +47,12 @@ public sealed class BudgetReconciliationService(
         DateOnly? asOf,
         CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
         var budget = await db.Budgets.AsNoTracking().SingleOrDefaultAsync(row =>
             row.Id == budgetId && row.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (budget is null) return null;
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var allActiveAccounts = await db.Accounts.AsNoTracking()
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.IsActive)
             .Select(account => account.Id).ToListAsync(ct);
@@ -149,7 +149,7 @@ public sealed class BudgetReconciliationService(
         string? currency,
         CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
         var space = await db.FullWorthSpaces.AsNoTracking().SingleOrDefaultAsync(row => row.Id == fullWorthSpaceId, ct);
         if (space is null) return null;
 
@@ -210,36 +210,36 @@ public sealed class BudgetReconciliationService(
         var accounts = new List<Guid>();
         var tags = new List<Guid>();
         var merchants = new List<string>();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"CategoryId\",\"IncludeDescendants\" FROM \"BudgetCategories\" WHERE \"BudgetId\"=@id",
             ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
             while (await reader.ReadAsync(ct))
                 categories.Add(new CategoryScope(
-                    ParitySql.Guid(reader, "CategoryId"),
-                    ParitySql.Bool(reader, "IncludeDescendants")));
+                    RawSql.Guid(reader, "CategoryId"),
+                    RawSql.Bool(reader, "IncludeDescendants")));
 
         // Legacy budgets stored one exact category directly on Budgets.CategoryId. Only use this when
         // no explicit advanced category scope exists, and preserve the old exact-match semantics.
         if (categories.Count == 0 && budget.CategoryId.HasValue)
             categories.Add(new CategoryScope(budget.CategoryId.Value, IncludeDescendants: false));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"AccountId\" FROM \"BudgetAccounts\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) accounts.Add(ParitySql.Guid(reader, "AccountId"));
+            while (await reader.ReadAsync(ct)) accounts.Add(RawSql.Guid(reader, "AccountId"));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"TagId\" FROM \"BudgetTags\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) tags.Add(ParitySql.Guid(reader, "TagId"));
+            while (await reader.ReadAsync(ct)) tags.Add(RawSql.Guid(reader, "TagId"));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"NormalizedMerchant\" FROM \"BudgetMerchants\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) merchants.Add(ParitySql.String(reader, "NormalizedMerchant"));
+            while (await reader.ReadAsync(ct)) merchants.Add(RawSql.String(reader, "NormalizedMerchant"));
 
         return new BudgetScope(categories, accounts, tags, merchants);
     }

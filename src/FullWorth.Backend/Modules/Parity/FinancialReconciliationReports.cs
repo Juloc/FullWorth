@@ -15,7 +15,7 @@ public sealed class FinancialReconciliationReportService(
 {
     public async Task<object?> AnalyticsAsync(Guid userId, Guid fullWorthSpaceId, AnalysisQueryWrite request, bool sankey, CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
         var validation = ValidateAnalysis(request);
         if (validation is not null) throw new ArgumentException(validation);
 
@@ -24,7 +24,7 @@ public sealed class FinancialReconciliationReportService(
         var space = await db.FullWorthSpaces.AsNoTracking().SingleOrDefaultAsync(x => x.Id == fullWorthSpaceId, ct);
         if (space is null) return null;
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var requested = request.AccountIds is { Count: > 0 } ? request.AccountIds.ToHashSet() : visible.ToHashSet();
         if (requested.Any(id => !visible.Contains(id))) throw new ArgumentException("Analysis contains an inaccessible account.");
         if (request.AccountGroupIds is { Count: > 0 })
@@ -103,11 +103,11 @@ public sealed class FinancialReconciliationReportService(
 
     public async Task<object?> BudgetStatusAsync(Guid userId, Guid fullWorthSpaceId, Guid budgetId, DateOnly? asOf, CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
         var budget = await db.Budgets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == budgetId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (budget is null) return null;
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var allSpaceAccounts = await db.Accounts.AsNoTracking().Where(a => a.FullWorthSpaceId == fullWorthSpaceId && a.IsActive).Select(a => a.Id).ToListAsync(ct);
         var scope = await LoadBudgetScope(budgetId, ct);
         var effectiveAccounts = scope.AccountIds.Count == 0
@@ -176,8 +176,8 @@ public sealed class FinancialReconciliationReportService(
 
     public async Task<object?> CashflowAvailableAsync(Guid userId, Guid fullWorthSpaceId, DateOnly? asOf, CancellationToken ct)
     {
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var space = await db.FullWorthSpaces.AsNoTracking().SingleOrDefaultAsync(x => x.Id == fullWorthSpaceId, ct);
         if (space is null) return null;
@@ -423,10 +423,10 @@ public sealed class FinancialReconciliationReportService(
     private async Task<Dictionary<Guid, string>> LoadNames(string table, Guid fullWorthSpaceId, CancellationToken ct)
     {
         var result = new Dictionary<Guid, string>();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, $"SELECT \"Id\",\"Name\" FROM \"{table}\" WHERE \"FullWorthSpaceId\"=@space", ("@space", fullWorthSpaceId));
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, $"SELECT \"Id\",\"Name\" FROM \"{table}\" WHERE \"FullWorthSpaceId\"=@space", ("@space", fullWorthSpaceId));
         await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) result[ParitySql.Guid(reader, "Id")] = ParitySql.String(reader, "Name");
+        while (await reader.ReadAsync(ct)) result[RawSql.Guid(reader, "Id")] = RawSql.String(reader, "Name");
         return result;
     }
 
@@ -436,48 +436,48 @@ public sealed class FinancialReconciliationReportService(
         var accounts = new List<Guid>();
         var tags = new List<Guid>();
         var merchants = new List<string>();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using (var command = ParitySql.Command(connection, "SELECT \"CategoryId\",\"IncludeDescendants\" FROM \"BudgetCategories\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using (var command = RawSql.Command(connection, "SELECT \"CategoryId\",\"IncludeDescendants\" FROM \"BudgetCategories\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) categories.Add(new CategoryScopeWrite(ParitySql.Guid(reader, "CategoryId"), ParitySql.Bool(reader, "IncludeDescendants")));
-        await using (var command = ParitySql.Command(connection, "SELECT \"AccountId\" FROM \"BudgetAccounts\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
+            while (await reader.ReadAsync(ct)) categories.Add(new CategoryScopeWrite(RawSql.Guid(reader, "CategoryId"), RawSql.Bool(reader, "IncludeDescendants")));
+        await using (var command = RawSql.Command(connection, "SELECT \"AccountId\" FROM \"BudgetAccounts\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) accounts.Add(ParitySql.Guid(reader, "AccountId"));
-        await using (var command = ParitySql.Command(connection, "SELECT \"TagId\" FROM \"BudgetTags\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
+            while (await reader.ReadAsync(ct)) accounts.Add(RawSql.Guid(reader, "AccountId"));
+        await using (var command = RawSql.Command(connection, "SELECT \"TagId\" FROM \"BudgetTags\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) tags.Add(ParitySql.Guid(reader, "TagId"));
-        await using (var command = ParitySql.Command(connection, "SELECT \"NormalizedMerchant\" FROM \"BudgetMerchants\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
+            while (await reader.ReadAsync(ct)) tags.Add(RawSql.Guid(reader, "TagId"));
+        await using (var command = RawSql.Command(connection, "SELECT \"NormalizedMerchant\" FROM \"BudgetMerchants\" WHERE \"BudgetId\"=@id", ("@id", budgetId)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) merchants.Add(ParitySql.String(reader, "NormalizedMerchant"));
+            while (await reader.ReadAsync(ct)) merchants.Add(RawSql.String(reader, "NormalizedMerchant"));
         return new BudgetScope(categories, accounts, tags, merchants);
     }
 
     private async Task<CashflowSettings> LoadCashflowSettings(Guid fullWorthSpaceId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, "SELECT \"HorizonMode\",\"SafetyReserveAmount\",\"SafetyReserveCurrency\",\"IncludePendingIncome\",\"IncludePendingExpenses\" FROM \"CashflowPlanSettings\" WHERE \"FullWorthSpaceId\"=@space", ("@space", fullWorthSpaceId));
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, "SELECT \"HorizonMode\",\"SafetyReserveAmount\",\"SafetyReserveCurrency\",\"IncludePendingIncome\",\"IncludePendingExpenses\" FROM \"CashflowPlanSettings\" WHERE \"FullWorthSpaceId\"=@space", ("@space", fullWorthSpaceId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct)
-            ? new CashflowSettings(ParitySql.String(reader, "HorizonMode"), ParitySql.Decimal(reader, "SafetyReserveAmount"), ParitySql.String(reader, "SafetyReserveCurrency"), ParitySql.Bool(reader, "IncludePendingIncome"), ParitySql.Bool(reader, "IncludePendingExpenses"))
+            ? new CashflowSettings(RawSql.String(reader, "HorizonMode"), RawSql.Decimal(reader, "SafetyReserveAmount"), RawSql.String(reader, "SafetyReserveCurrency"), RawSql.Bool(reader, "IncludePendingIncome"), RawSql.Bool(reader, "IncludePendingExpenses"))
             : new CashflowSettings("next_income", 0m, "EUR", false, false);
     }
 
     private async Task<List<IncomeScheduleRow>> LoadIncomeSchedules(Guid fullWorthSpaceId, HashSet<Guid> visible, CancellationToken ct)
     {
         var result = new List<IncomeScheduleRow>();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, "SELECT \"Name\",\"AccountId\",\"NormalizedCounterparty\",\"ExpectedAmount\",\"Currency\",\"NextExpectedDate\" FROM \"IncomeSchedules\" WHERE \"FullWorthSpaceId\"=@space AND \"IsActive\"=true", ("@space", fullWorthSpaceId));
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, "SELECT \"Name\",\"AccountId\",\"NormalizedCounterparty\",\"ExpectedAmount\",\"Currency\",\"NextExpectedDate\" FROM \"IncomeSchedules\" WHERE \"FullWorthSpaceId\"=@space AND \"IsActive\"=true", ("@space", fullWorthSpaceId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var accountId = ParitySql.NullableGuid(reader, "AccountId");
+            var accountId = RawSql.NullableGuid(reader, "AccountId");
             if (accountId.HasValue && !visible.Contains(accountId.Value)) continue;
             result.Add(new IncomeScheduleRow(
-                ParitySql.String(reader, "Name"),
-                MerchantNormalization.Normalize(ParitySql.NullableString(reader, "NormalizedCounterparty")),
-                ParitySql.NullableDecimal(reader, "ExpectedAmount"),
-                ParitySql.String(reader, "Currency"),
-                ParitySql.NullableDate(reader, "NextExpectedDate")));
+                RawSql.String(reader, "Name"),
+                MerchantNormalization.Normalize(RawSql.NullableString(reader, "NormalizedCounterparty")),
+                RawSql.NullableDecimal(reader, "ExpectedAmount"),
+                RawSql.String(reader, "Currency"),
+                RawSql.NullableDate(reader, "NextExpectedDate")));
         }
         return result;
     }

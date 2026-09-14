@@ -1,7 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.FullWorthSpaces;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -106,7 +105,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
     public async Task<CategoryMutationOutcome<FinanceCategory>> CreateForUserAsync(Guid userId, Guid fullWorthSpaceId, CategoryWrite request, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return new(CategoryMutationResult.Forbidden);
         if (request.ParentId.HasValue && !await CategoryExistsAsync(fullWorthSpaceId, request.ParentId.Value, ct))
             return new(CategoryMutationResult.NotFound);
@@ -129,7 +128,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
     public async Task<CategoryMutationOutcome<FinanceCategory>> UpdateForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid categoryId, CategoryUpdate request, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return new(CategoryMutationResult.Forbidden);
 
         var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == categoryId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
@@ -161,7 +160,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
     public async Task<CategoryMutationOutcome<FinanceCategory>> ArchiveForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid categoryId, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return new(CategoryMutationResult.Forbidden);
 
         var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == categoryId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
@@ -182,7 +181,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
     public async Task<CategoryMutationOutcome<FinanceCategory>> UnarchiveForUserAsync(Guid userId, Guid fullWorthSpaceId, Guid categoryId, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return new(CategoryMutationResult.NotFound);
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return new(CategoryMutationResult.Forbidden);
 
         var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == categoryId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
@@ -296,7 +295,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
             .ToListAsync(ct);
         var activeCategoryIdsByKey = activeCategoryRows
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
 
         var query = db.Transactions.Where(t =>
             writable.Contains(t.AccountId) && t.CategorizationSource != "manual");
@@ -343,7 +342,7 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
         ApplyRuleWrite(draft, request with { Name = string.IsNullOrWhiteSpace(request.Name) ? "draft" : request.Name });
 
         const int scanCap = 5000;
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var candidates = await db.Transactions.AsNoTracking()
             .Where(t => writable.Contains(t.AccountId))
             .OrderByDescending(t => t.BookingDate ?? t.ValueDate)
@@ -380,13 +379,13 @@ public sealed class CategoryStore(FullWorthDbContext db, AuditService? auditServ
 
     private async Task<bool> CanManageGlobalRulesAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
     {
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return false;
         var activeAccountIds = await db.Accounts.AsNoTracking()
             .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.IsActive)
             .Select(account => account.Id)
             .ToListAsync(ct);
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         return activeAccountIds.All(writable.Contains);
     }
 

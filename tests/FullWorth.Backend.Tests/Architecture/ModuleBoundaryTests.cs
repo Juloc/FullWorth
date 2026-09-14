@@ -27,16 +27,18 @@ public sealed class ModuleBoundaryTests
     [
         "Accounts <-> FullWorthSpaces",
         "Accounts <-> Users",
-        "Audit <-> Parity",
-        "Budgets <-> Parity",
-        "Categories <-> Parity",
-        // Categories <-> Transactions ist am 2026-09-14 aufgeloest worden, siehe #111:
-        // CategoryIntelligenceModule lag in Transactions, hiess nach Kategorien und mappte
-        // /api/category-intelligence. Es war die einzige Kante Transactions -> Categories. Nach dem
-        // Umzug bleibt Categories -> Transactions - eine Richtung ist kein Kreis.
+        // Vier Zyklen sind am 2026-09-14 mit EINEM Schnitt verschwunden - Audit, Budgets, Categories
+        // und Contracts <-> Parity. Alle vier hingen an derselben Methode: HasCapabilityAsync stand in
+        // einer Klasse namens PermissionsErgonomicsParityEndpoints, also in einer Endpunktdatei in
+        // Parity, obwohl es eine reine Berechtigungspruefung ist. Sie liegt jetzt als
+        // Security/SpaceCapabilities, und damit braucht keines der vier Module Parity noch.
+        //
+        // Categories <-> Transactions ist am selben Tag gefallen: CategoryIntelligenceModule lag in
+        // Transactions, hiess nach Kategorien und mappte /api/category-intelligence. Es war die
+        // einzige Kante Transactions -> Categories. Nach dem Umzug bleibt Categories -> Transactions -
+        // eine Richtung ist kein Kreis.
         "Coach <-> Intelligence",
         "Contracts <-> Intelligence",
-        "Contracts <-> Parity",
         "FullWorthSpaces <-> Users",
         "Parity <-> Portfolio",
         "Purchases <-> Transactions",

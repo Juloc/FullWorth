@@ -108,9 +108,9 @@ public static class AdvancedTransactionBulkParityEndpoints
                                (request.AddTagIds?.Count ?? 0) > 0 || (request.RemoveTagIds?.Count ?? 0) > 0;
         var writeAction = request.IsIgnored.HasValue || request.ReplaceNotes || request.PairAsTransfer ||
                           !string.IsNullOrWhiteSpace(request.ContractAction);
-        if (categorizeAction && !await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
+        if (categorizeAction && !await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.categorize", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (writeAction && !await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (writeAction && !await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         if (request.UpdateCategory && request.CategoryId.HasValue &&
@@ -138,7 +138,7 @@ public static class AdvancedTransactionBulkParityEndpoints
         {
             if (!request.ContractId.HasValue)
                 return Results.BadRequest(new { error = "A contract is required for the bulk contract action." });
-            if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+            if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var contract = await db.Contracts.AsNoTracking().SingleOrDefaultAsync(row =>
                 row.Id == request.ContractId.Value &&
@@ -148,7 +148,7 @@ public static class AdvancedTransactionBulkParityEndpoints
             if (contract is null) return Results.BadRequest(new { error = "Contract is unavailable." });
             if (contract.AccountId.HasValue)
             {
-                var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+                var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
                 if (!writable.Contains(contract.AccountId.Value))
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
@@ -266,7 +266,7 @@ WHERE "FullWorthSpaceId"={fullWorthSpaceId} AND "ContractId"={request.ContractId
         IReadOnlyList<Guid>? explicitIds,
         CancellationToken ct)
     {
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var query = db.Transactions.Where(transaction => writable.Contains(transaction.AccountId));
 
         if (explicitIds is { Count: > 0 })
@@ -344,8 +344,8 @@ WHERE "FullWorthSpaceId"={fullWorthSpaceId} AND "ContractId"={request.ContractId
     private static async Task<bool> TagsValid(FullWorthDbContext db, Guid fullWorthSpaceId, Guid[] tagIds, CancellationToken ct)
     {
         if (tagIds.Length == 0) return true;
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT count(*) FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space AND \"Id\"=ANY(@ids)",
             ("@space", fullWorthSpaceId), ("@ids", tagIds));
         return Convert.ToInt32(await command.ExecuteScalarAsync(ct)) == tagIds.Length;
@@ -353,8 +353,8 @@ WHERE "FullWorthSpaceId"={fullWorthSpaceId} AND "ContractId"={request.ContractId
 
     private static async Task<HashSet<Guid>> LoadTagTransactionIds(FullWorthDbContext db, Guid fullWorthSpaceId, Guid tagId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT tt."TransactionId" FROM "TransactionTags" tt JOIN "FinanceTags" ft ON ft."Id"=tt."TagId"
 WHERE ft."FullWorthSpaceId"=@space AND ft."Id"=@tag
 """, ("@space", fullWorthSpaceId), ("@tag", tagId));
@@ -365,8 +365,8 @@ WHERE ft."FullWorthSpaceId"=@space AND ft."Id"=@tag
 
     private static async Task<Dictionary<Guid, bool>> LoadReviewStates(FullWorthDbContext db, Guid fullWorthSpaceId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT \"TransactionId\",\"IsReviewed\" FROM \"TransactionReviewStates\" WHERE \"FullWorthSpaceId\"=@space", ("@space", fullWorthSpaceId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         var states = new Dictionary<Guid, bool>(); while (await reader.ReadAsync(ct)) states[reader.GetGuid(0)] = reader.GetBoolean(1);
@@ -375,8 +375,8 @@ WHERE ft."FullWorthSpaceId"=@space AND ft."Id"=@tag
 
     private static async Task<bool> AnyContractLinkExists(FullWorthDbContext db, Guid[] ids, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"ContractTransactionLinks\" WHERE \"TransactionId\"=ANY(@ids))", ("@ids", ids));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
     }

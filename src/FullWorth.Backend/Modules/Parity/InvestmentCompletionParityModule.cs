@@ -43,20 +43,20 @@ public static class InvestmentCompletionParityEndpoints
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name) || !ValidCurrency(request.Currency))
             return Results.BadRequest(new { error = "Name and valid currency are required." });
         if (request.AccountId.HasValue)
         {
-            var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
             if (!visible.Contains(request.AccountId.Value)) return Results.BadRequest(new { error = "Linked account is inaccessible." });
         }
         if (request.BenchmarkSecurityId.HasValue && !await SecurityExistsAsync(db, fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
             return Results.BadRequest(new { error = "Benchmark security is invalid." });
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 UPDATE "InvestmentPortfolios" SET
  "Name"=@name,"Currency"=@currency,"AccountId"=@account,"BenchmarkSecurityId"=@benchmark,
  "ProviderName"=@provider,"IsManual"=@manual,"IncludeInNetWorth"=@include,"IsArchived"=@archived,"UpdatedAt"=@now
@@ -77,7 +77,7 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!await PortfolioExistsAsync(db, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
 
@@ -106,8 +106,8 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space
 
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,@source,@external,@notes,@now,@now)
@@ -136,12 +136,12 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
         FullWorthDbContext db, CurrencyConverter fx, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
         var portfolio = await LoadPortfolioAsync(db, fullWorthSpaceId, portfolioId, ct);
         if (portfolio is null) return Results.NotFound();
         if (portfolio.AccountId.HasValue)
         {
-            var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
             if (!visible.Contains(portfolio.AccountId.Value)) return Results.NotFound();
         }
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -173,10 +173,10 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
         FullWorthDbContext db, CurrencyConverter fx, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var portfolios = await LoadPortfoliosAsync(db, fullWorthSpaceId, includeArchived: false, ct);
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var rows = new List<object>();
         decimal total = 0;
         var incomplete = false;
@@ -205,9 +205,9 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","FullWorthSpaceId","Name","SecurityId","ProviderSeriesKey","IsBuiltIn","CreatedAt","UpdatedAt"
 FROM "BenchmarkDefinitions" WHERE "FullWorthSpaceId" IS NULL OR "FullWorthSpaceId"=@space
 ORDER BY "IsBuiltIn" DESC,"Name"
@@ -216,12 +216,12 @@ ORDER BY "IsBuiltIn" DESC,"Name"
         var rows = new List<object>();
         while (await reader.ReadAsync(ct)) rows.Add(new
         {
-            id = ParitySql.Guid(reader, "Id"),
-            fullWorthSpaceId = ParitySql.NullableGuid(reader, "FullWorthSpaceId"),
-            name = ParitySql.String(reader, "Name"),
-            securityId = ParitySql.NullableGuid(reader, "SecurityId"),
-            providerSeriesKey = ParitySql.NullableString(reader, "ProviderSeriesKey"),
-            isBuiltIn = ParitySql.Bool(reader, "IsBuiltIn")
+            id = RawSql.Guid(reader, "Id"),
+            fullWorthSpaceId = RawSql.NullableGuid(reader, "FullWorthSpaceId"),
+            name = RawSql.String(reader, "Name"),
+            securityId = RawSql.NullableGuid(reader, "SecurityId"),
+            providerSeriesKey = RawSql.NullableString(reader, "ProviderSeriesKey"),
+            isBuiltIn = RawSql.Bool(reader, "IsBuiltIn")
         });
         return Results.Ok(rows);
     }
@@ -241,22 +241,22 @@ ORDER BY "IsBuiltIn" DESC,"Name"
         FullWorthDbContext db, AuditService audit, bool update, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
         if (request.SecurityId.HasValue && !await SecurityExistsAsync(db, fullWorthSpaceId, request.SecurityId.Value, ct))
             return Results.BadRequest(new { error = "Security is invalid." });
         if (!request.SecurityId.HasValue && string.IsNullOrWhiteSpace(request.ProviderSeriesKey))
             return Results.BadRequest(new { error = "Choose a security or provider series." });
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
         await using var command = update
-            ? ParitySql.Command(connection, """
+            ? RawSql.Command(connection, """
 UPDATE "BenchmarkDefinitions" SET "Name"=@name,"SecurityId"=@security,"ProviderSeriesKey"=@series,"UpdatedAt"=@now
 WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "IsBuiltIn"=false
 """, ("@name", request.Name.Trim()), ("@security", request.SecurityId), ("@series", request.ProviderSeriesKey?.Trim()),
                 ("@now", now), ("@id", id), ("@space", fullWorthSpaceId))
-            : ParitySql.Command(connection, """
+            : RawSql.Command(connection, """
 INSERT INTO "BenchmarkDefinitions" ("Id","FullWorthSpaceId","Name","SecurityId","ProviderSeriesKey","IsBuiltIn","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@security,@series,false,@now,@now)
 """, ("@id", id), ("@space", fullWorthSpaceId), ("@name", request.Name.Trim()),
@@ -272,10 +272,10 @@ VALUES (@id,@space,@name,@security,@series,false,@now,@now)
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "investments.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "DELETE FROM \"BenchmarkDefinitions\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"IsBuiltIn\"=false",
             ("@id", benchmarkId), ("@space", fullWorthSpaceId));
         if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
@@ -414,12 +414,12 @@ VALUES (@id,@space,@name,@security,@series,false,@now,@now)
 
     private static async Task<List<PortfolioRow>> LoadPortfoliosAsync(FullWorthDbContext db, Guid space, bool includeArchived, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var sql = """
 SELECT "Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived"
 FROM "InvestmentPortfolios" WHERE "FullWorthSpaceId"=@space
 """ + (includeArchived ? "" : " AND \"IsArchived\"=false");
-        await using var command = ParitySql.Command(connection, sql, ("@space", space));
+        await using var command = RawSql.Command(connection, sql, ("@space", space));
         await using var reader = await command.ExecuteReaderAsync(ct);
         var rows = new List<PortfolioRow>();
         while (await reader.ReadAsync(ct)) rows.Add(ReadPortfolio(reader));
@@ -432,23 +432,23 @@ FROM "InvestmentPortfolios" WHERE "FullWorthSpaceId"=@space
     private static async Task<List<TradeRowV2>> LoadTradesAsync(
         FullWorthDbContext db, Guid portfolioId, DateOnly to, CancellationToken ct, Guid? securityId = null)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var sql = """
 SELECT "Id","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","CreatedAt"
 FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@to
 """ + (securityId.HasValue ? " AND \"SecurityId\"=@security" : "") + " ORDER BY \"TradeDate\",\"CreatedAt\",\"Id\"";
         await using var command = securityId.HasValue
-            ? ParitySql.Command(connection, sql, ("@portfolio", portfolioId), ("@to", to), ("@security", securityId.Value))
-            : ParitySql.Command(connection, sql, ("@portfolio", portfolioId), ("@to", to));
+            ? RawSql.Command(connection, sql, ("@portfolio", portfolioId), ("@to", to), ("@security", securityId.Value))
+            : RawSql.Command(connection, sql, ("@portfolio", portfolioId), ("@to", to));
         await using var reader = await command.ExecuteReaderAsync(ct);
         var rows = new List<TradeRowV2>();
         while (await reader.ReadAsync(ct)) rows.Add(new(
-            ParitySql.Guid(reader, "Id"), ParitySql.NullableGuid(reader, "SecurityId"), ParitySql.String(reader, "TradeType"),
-            ParitySql.NullableDate(reader, "TradeDate")!.Value, ParitySql.NullableDate(reader, "SettlementDate"),
-            ParitySql.NullableDecimal(reader, "Quantity"), ParitySql.NullableDecimal(reader, "Price"),
-            ParitySql.NullableDecimal(reader, "GrossAmount"), ParitySql.Decimal(reader, "Amount"),
-            ParitySql.String(reader, "Currency"), ParitySql.Decimal(reader, "Fees"), ParitySql.Decimal(reader, "Taxes"),
-            ParitySql.Decimal(reader, "WithholdingTax"), ParitySql.String(reader, "Source"), ParitySql.Timestamp(reader, "CreatedAt")));
+            RawSql.Guid(reader, "Id"), RawSql.NullableGuid(reader, "SecurityId"), RawSql.String(reader, "TradeType"),
+            RawSql.NullableDate(reader, "TradeDate")!.Value, RawSql.NullableDate(reader, "SettlementDate"),
+            RawSql.NullableDecimal(reader, "Quantity"), RawSql.NullableDecimal(reader, "Price"),
+            RawSql.NullableDecimal(reader, "GrossAmount"), RawSql.Decimal(reader, "Amount"),
+            RawSql.String(reader, "Currency"), RawSql.Decimal(reader, "Fees"), RawSql.Decimal(reader, "Taxes"),
+            RawSql.Decimal(reader, "WithholdingTax"), RawSql.String(reader, "Source"), RawSql.Timestamp(reader, "CreatedAt")));
         return rows;
     }
 
@@ -456,15 +456,15 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@to
         FullWorthDbContext db, Guid space, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
         if (ids.Count == 0) return [];
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var rows = new Dictionary<Guid, SecurityRowV2>();
         foreach (var id in ids)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 SELECT "Id","Name","AssetType","Currency" FROM "Securities" WHERE "Id"=@id AND "FullWorthSpaceId"=@space
 """, ("@id", id), ("@space", space));
             await using var reader = await command.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct)) rows[id] = new(id, ParitySql.String(reader, "Name"), ParitySql.String(reader, "AssetType"), ParitySql.String(reader, "Currency"));
+            if (await reader.ReadAsync(ct)) rows[id] = new(id, RawSql.String(reader, "Name"), RawSql.String(reader, "AssetType"), RawSql.String(reader, "Currency"));
         }
         return rows;
     }
@@ -473,25 +473,25 @@ SELECT "Id","Name","AssetType","Currency" FROM "Securities" WHERE "Id"=@id AND "
         FullWorthDbContext db, IReadOnlyCollection<Guid> securityIds, DateOnly to, CancellationToken ct)
     {
         var result = new Dictionary<Guid, PriceRow>();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         foreach (var id in securityIds)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 SELECT "PriceDate","Price","Currency" FROM "SecurityPrices"
 WHERE "SecurityId"=@id AND "PriceDate"<=@to ORDER BY "PriceDate" DESC,
  CASE WHEN "Source"='manual' THEN 0 ELSE 1 END,"CreatedAt" DESC LIMIT 1
 """, ("@id", id), ("@to", to));
             await using var reader = await command.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct)) result[id] = new(ParitySql.NullableDate(reader, "PriceDate")!.Value,
-                ParitySql.Decimal(reader, "Price"), ParitySql.String(reader, "Currency"));
+            if (await reader.ReadAsync(ct)) result[id] = new(RawSql.NullableDate(reader, "PriceDate")!.Value,
+                RawSql.Decimal(reader, "Price"), RawSql.String(reader, "Currency"));
         }
         return result;
     }
 
     private static async Task<bool> SecurityExistsAsync(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"Securities\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
             ("@id", id), ("@space", space));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
@@ -499,18 +499,18 @@ WHERE "SecurityId"=@id AND "PriceDate"<=@to ORDER BY "PriceDate" DESC,
 
     private static async Task<bool> PortfolioExistsAsync(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
             ("@id", id), ("@space", space));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
     }
 
     private static PortfolioRow ReadPortfolio(System.Data.Common.DbDataReader reader) => new(
-        ParitySql.Guid(reader, "Id"), ParitySql.Guid(reader, "FullWorthSpaceId"), ParitySql.String(reader, "Name"),
-        ParitySql.String(reader, "Currency"), ParitySql.NullableGuid(reader, "AccountId"),
-        ParitySql.NullableGuid(reader, "BenchmarkSecurityId"), ParitySql.NullableString(reader, "ProviderName"),
-        ParitySql.Bool(reader, "IsManual"), ParitySql.Bool(reader, "IncludeInNetWorth"), ParitySql.Bool(reader, "IsArchived"));
+        RawSql.Guid(reader, "Id"), RawSql.Guid(reader, "FullWorthSpaceId"), RawSql.String(reader, "Name"),
+        RawSql.String(reader, "Currency"), RawSql.NullableGuid(reader, "AccountId"),
+        RawSql.NullableGuid(reader, "BenchmarkSecurityId"), RawSql.NullableString(reader, "ProviderName"),
+        RawSql.Bool(reader, "IsManual"), RawSql.Bool(reader, "IncludeInNetWorth"), RawSql.Bool(reader, "IsArchived"));
 
     private static string NormalizeSource(string? source) => string.IsNullOrWhiteSpace(source) ? "manual" : source.Trim().ToLowerInvariant() switch
     {

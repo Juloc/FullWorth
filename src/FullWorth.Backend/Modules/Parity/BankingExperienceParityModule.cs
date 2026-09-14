@@ -34,9 +34,9 @@ public static class BankingExperienceParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 SELECT "InstitutionKey","Provider","DisplayName","Country","IconAssetKey","BalancesTested","TransactionsTested","PendingTested","MultiCurrencyTested","HistoryDepthDays","LastValidatedAt","LastValidatedVersion","KnownLimitations"
 FROM "BankValidationRecords" ORDER BY "DisplayName"
 """);
@@ -46,20 +46,20 @@ FROM "BankValidationRecords" ORDER BY "DisplayName"
         {
             rows.Add(new
             {
-                institutionKey = ParitySql.String(reader, "InstitutionKey"),
-                provider = ParitySql.String(reader, "Provider"),
-                displayName = ParitySql.String(reader, "DisplayName"),
-                country = ParitySql.String(reader, "Country"),
-                iconAssetKey = ParitySql.NullableString(reader, "IconAssetKey"),
-                balancesTested = ParitySql.Bool(reader, "BalancesTested"),
-                transactionsTested = ParitySql.Bool(reader, "TransactionsTested"),
-                pendingTested = ParitySql.Bool(reader, "PendingTested"),
-                multiCurrencyTested = ParitySql.Bool(reader, "MultiCurrencyTested"),
-                historyDepthDays = reader.IsDBNull(reader.GetOrdinal("HistoryDepthDays")) ? (int?)null : ParitySql.Int(reader, "HistoryDepthDays"),
-                lastValidatedAt = ParitySql.NullableTimestamp(reader, "LastValidatedAt"),
-                lastValidatedVersion = ParitySql.NullableString(reader, "LastValidatedVersion"),
-                knownLimitations = ParitySql.NullableString(reader, "KnownLimitations"),
-                validated = ParitySql.Bool(reader, "BalancesTested") && ParitySql.Bool(reader, "TransactionsTested")
+                institutionKey = RawSql.String(reader, "InstitutionKey"),
+                provider = RawSql.String(reader, "Provider"),
+                displayName = RawSql.String(reader, "DisplayName"),
+                country = RawSql.String(reader, "Country"),
+                iconAssetKey = RawSql.NullableString(reader, "IconAssetKey"),
+                balancesTested = RawSql.Bool(reader, "BalancesTested"),
+                transactionsTested = RawSql.Bool(reader, "TransactionsTested"),
+                pendingTested = RawSql.Bool(reader, "PendingTested"),
+                multiCurrencyTested = RawSql.Bool(reader, "MultiCurrencyTested"),
+                historyDepthDays = reader.IsDBNull(reader.GetOrdinal("HistoryDepthDays")) ? (int?)null : RawSql.Int(reader, "HistoryDepthDays"),
+                lastValidatedAt = RawSql.NullableTimestamp(reader, "LastValidatedAt"),
+                lastValidatedVersion = RawSql.NullableString(reader, "LastValidatedVersion"),
+                knownLimitations = RawSql.NullableString(reader, "KnownLimitations"),
+                validated = RawSql.Bool(reader, "BalancesTested") && RawSql.Bool(reader, "TransactionsTested")
             });
         }
         return Results.Ok(rows.Count == 0 ? PlannedInstitutions : rows);
@@ -70,8 +70,8 @@ FROM "BankValidationRecords" ORDER BY "DisplayName"
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "banking.manage", ct))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "banking.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var groups = (request.Groups ?? []).DistinctBy(item => item.GroupId).ToArray();
         var accounts = (request.Accounts ?? []).DistinctBy(item => item.AccountId).ToArray();
@@ -84,7 +84,7 @@ FROM "BankValidationRecords" ORDER BY "DisplayName"
             accounts.Any(item => item.GroupId.HasValue && !validGroupIds.Contains(item.GroupId.Value)))
             return Results.BadRequest(new { error = "Account group does not belong to this FullWorth Space." });
 
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         if (accounts.Any(item => !writable.Contains(item.AccountId))) return Results.StatusCode(403);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -110,9 +110,9 @@ FROM "BankValidationRecords" ORDER BY "DisplayName"
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 SELECT a."GroupId",a."Icon",a."Color" FROM "AccountGroupAppearances" a
 JOIN "AccountGroups" g ON g."Id"=a."GroupId" WHERE g."FullWorthSpaceId"=@space
 """, ("@space", fullWorthSpaceId));
@@ -120,9 +120,9 @@ JOIN "AccountGroups" g ON g."Id"=a."GroupId" WHERE g."FullWorthSpaceId"=@space
         var rows = new List<object>();
         while (await reader.ReadAsync(ct)) rows.Add(new
         {
-            groupId = ParitySql.Guid(reader, "GroupId"),
-            icon = ParitySql.NullableString(reader, "Icon"),
-            color = ParitySql.NullableString(reader, "Color")
+            groupId = RawSql.Guid(reader, "GroupId"),
+            icon = RawSql.NullableString(reader, "Icon"),
+            color = RawSql.NullableString(reader, "Color")
         });
         return Results.Ok(rows);
     }
@@ -132,15 +132,15 @@ JOIN "AccountGroups" g ON g."Id"=a."GroupId" WHERE g."FullWorthSpaceId"=@space
         CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "banking.manage", ct))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "banking.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!await db.AccountGroups.AsNoTracking().AnyAsync(group => group.Id == groupId && group.FullWorthSpaceId == fullWorthSpaceId, ct))
             return Results.NotFound();
         if (!ValidColor(request.Color)) return Results.BadRequest(new { error = "Color must be #RRGGBB or #RRGGBBAA." });
 
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var cmd = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var cmd = RawSql.Command(connection, """
 INSERT INTO "AccountGroupAppearances" ("GroupId","Icon","Color","UpdatedAt") VALUES (@id,@icon,@color,@now)
 ON CONFLICT ("GroupId") DO UPDATE SET "Icon"=EXCLUDED."Icon","Color"=EXCLUDED."Color","UpdatedAt"=EXCLUDED."UpdatedAt"
 """, ("@id", groupId), ("@icon", string.IsNullOrWhiteSpace(request.Icon) ? null : request.Icon.Trim()),

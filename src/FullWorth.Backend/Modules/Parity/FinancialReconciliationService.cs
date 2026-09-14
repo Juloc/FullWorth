@@ -50,9 +50,9 @@ public sealed class FinancialReconciliationService(FullWorthDbContext db, Curren
         CancellationToken ct)
     {
         if (from > to) throw new ArgumentException("Invalid date range.");
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         if (requestedAccountIds is not null && requestedAccountIds.Any(id => !visible.Contains(id)))
             throw new UnauthorizedAccessException("Report contains an inaccessible account.");
 
@@ -250,16 +250,16 @@ public sealed class FinancialReconciliationService(FullWorthDbContext db, Curren
     {
         var map = new Dictionary<Guid, HashSet<Guid>>();
         if (transactionIds.Length == 0) return map;
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT \"TransactionId\",\"TagId\" FROM \"TransactionTags\" WHERE \"TransactionId\"=ANY(@ids)",
             ("@ids", transactionIds));
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var tx = ParitySql.Guid(reader, "TransactionId");
+            var tx = RawSql.Guid(reader, "TransactionId");
             if (!map.TryGetValue(tx, out var tags)) map[tx] = tags = [];
-            tags.Add(ParitySql.Guid(reader, "TagId"));
+            tags.Add(RawSql.Guid(reader, "TagId"));
         }
         return map;
     }
@@ -270,8 +270,8 @@ public sealed class FinancialReconciliationService(FullWorthDbContext db, Curren
         if (transactionIds.Length == 0) return map;
         var ids = new Dictionary<Guid, HashSet<Guid>>();
         var amounts = new Dictionary<Guid, decimal>();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT l."TransactionId",
        COALESCE(source_contract."MergedIntoContractId",l."ContractId") AS "ContractId",
        l."Amount"
@@ -282,10 +282,10 @@ WHERE l."TransactionId"=ANY(@ids)
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var tx = ParitySql.Guid(reader, "TransactionId");
+            var tx = RawSql.Guid(reader, "TransactionId");
             if (!ids.TryGetValue(tx, out var contracts)) ids[tx] = contracts = [];
-            contracts.Add(ParitySql.Guid(reader, "ContractId"));
-            amounts[tx] = amounts.GetValueOrDefault(tx) + Math.Abs(ParitySql.Decimal(reader, "Amount"));
+            contracts.Add(RawSql.Guid(reader, "ContractId"));
+            amounts[tx] = amounts.GetValueOrDefault(tx) + Math.Abs(RawSql.Decimal(reader, "Amount"));
         }
         foreach (var pair in ids)
             map[pair.Key] = new ContractInfo(pair.Value, amounts.GetValueOrDefault(pair.Key));

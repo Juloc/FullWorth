@@ -87,7 +87,7 @@ public static class WealthPreviewBasisModule
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
             var basis = await BuildAsync(db, converter, userId, fullWorthSpaceId, months, ct);
             return basis is null ? Results.NotFound() : Results.Ok(basis);
@@ -116,7 +116,7 @@ public static class WealthPreviewBasisModule
         var windowEnd = new DateOnly(today.Year, today.Month, 1);
         var windowStart = windowEnd.AddMonths(-months);
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var fx = await converter.PrepareAsync(baseCurrency, windowStart, today.AddMonths(1), ct);
 
         var missing = new SortedSet<string>(StringComparer.Ordinal);
@@ -238,7 +238,7 @@ public static class WealthPreviewBasisModule
         FullWorthDbContext db, Guid space, HashSet<Guid> visible, CancellationToken ct)
     {
         var rows = new List<IncomeScheduleRow>();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         await using var command = connection.CreateCommand();
         command.CommandText = """
 SELECT "Id","Name","ExpectedAmount","Currency","Cycle","Interval","AccountId"
@@ -275,7 +275,7 @@ WHERE "FullWorthSpaceId" = @space AND "IsActive"
         FullWorthDbContext db, Guid space, CancellationToken ct)
     {
         var ids = new HashSet<Guid>();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         await using var command = connection.CreateCommand();
         command.CommandText = """
 SELECT DISTINCT "TransactionId" FROM "ContractTransactionLinks" WHERE "FullWorthSpaceId" = @space

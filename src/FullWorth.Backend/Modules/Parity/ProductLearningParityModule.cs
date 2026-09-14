@@ -25,7 +25,7 @@ public static class ProductLearningParityEndpoints
         Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
         var rows = await db.PurchaseItems.AsNoTracking()
             .Where(i => i.CategoryId.HasValue && i.CategorizationSource == "manual" &&
@@ -95,7 +95,7 @@ public static class ProductLearningParityEndpoints
         FullWorthDbContext db, AuditService audit, IntelligenceFeedbackRecorder intelligenceFeedback, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Text)) return Results.BadRequest(new { error = "Product text is required." });
         var targetCategory = await db.Categories.AsNoTracking()
@@ -189,7 +189,7 @@ public static class ProductLearningParityEndpoints
         Guid productId, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) ||
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) ||
             !await db.Products.AsNoTracking().AnyAsync(p => p.Id == productId && p.FullWorthSpaceId == fullWorthSpaceId && !p.IsArchived, ct))
             return Results.NotFound();
         var rows = await db.ProductAliases.AsNoTracking().Where(a => a.ProductId == productId)

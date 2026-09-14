@@ -22,12 +22,12 @@ public sealed class ExportAuthorizationMiddleware(RequestDelegate next)
             var userId = currentUser.RequireUserId();
             // Non-members must not learn that the FullWorth Space exists: answer with the same 404 the
             // resource endpoints use, and reserve 403 for members who are missing the export capability.
-            if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
+            if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
-            if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(
+            if (!await SpaceCapabilities.HasCapabilityAsync(
                     db, userId, fullWorthSpaceId, "export.read", context.RequestAborted))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;

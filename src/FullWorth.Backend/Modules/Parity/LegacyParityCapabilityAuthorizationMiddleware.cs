@@ -26,12 +26,12 @@ public sealed class LegacyParityCapabilityAuthorizationMiddleware(RequestDelegat
         }
 
         var userId = currentUser.RequireUserId();
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, context.RequestAborted))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(
+        if (!await SpaceCapabilities.HasCapabilityAsync(
                 db, userId, fullWorthSpaceId, capability, context.RequestAborted))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;

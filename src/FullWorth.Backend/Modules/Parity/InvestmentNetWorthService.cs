@@ -22,7 +22,7 @@ public sealed class InvestmentNetWorthService(FullWorthDbContext db, CurrencyCon
             .SingleOrDefaultAsync(ct);
         if (space is null) return new("EUR", 0m, true, new HashSet<Guid>());
 
-        var visibleAccounts = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var portfolios = await LoadPortfoliosAsync(fullWorthSpaceId, ct);
         var excluded = new HashSet<Guid>();
         var baseSnapshot = await currencyConverter.PrepareLatestAsync(space.BaseCurrency, asOf, ct);
@@ -117,22 +117,22 @@ public sealed class InvestmentNetWorthService(FullWorthDbContext db, CurrencyCon
 
     private async Task<List<PortfolioRow>> LoadPortfoliosAsync(Guid space, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","Currency","AccountId" FROM "InvestmentPortfolios"
 WHERE "FullWorthSpaceId"=@space AND "IsArchived"=false AND "IncludeInNetWorth"=true
 """, ("@space", space));
         await using var reader = await command.ExecuteReaderAsync(ct);
         var result = new List<PortfolioRow>();
         while (await reader.ReadAsync(ct)) result.Add(new(
-            ParitySql.Guid(reader, "Id"), ParitySql.String(reader, "Currency"), ParitySql.NullableGuid(reader, "AccountId")));
+            RawSql.Guid(reader, "Id"), RawSql.String(reader, "Currency"), RawSql.NullableGuid(reader, "AccountId")));
         return result;
     }
 
     private async Task<List<TradeRow>> LoadTradesAsync(Guid portfolioId, DateOnly to, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","SecurityId","TradeType","TradeDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","CreatedAt"
 FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@to
 ORDER BY "TradeDate","CreatedAt","Id"
@@ -140,25 +140,25 @@ ORDER BY "TradeDate","CreatedAt","Id"
         await using var reader = await command.ExecuteReaderAsync(ct);
         var result = new List<TradeRow>();
         while (await reader.ReadAsync(ct)) result.Add(new(
-            ParitySql.Guid(reader, "Id"), ParitySql.NullableGuid(reader, "SecurityId"), ParitySql.String(reader, "TradeType"),
-            ParitySql.NullableDate(reader, "TradeDate")!.Value, ParitySql.NullableDecimal(reader, "Quantity"),
-            ParitySql.NullableDecimal(reader, "Price"), ParitySql.NullableDecimal(reader, "GrossAmount"),
-            ParitySql.Decimal(reader, "Amount"), ParitySql.String(reader, "Currency"), ParitySql.Decimal(reader, "Fees"),
-            ParitySql.Decimal(reader, "Taxes"), ParitySql.Decimal(reader, "WithholdingTax"), ParitySql.Timestamp(reader, "CreatedAt")));
+            RawSql.Guid(reader, "Id"), RawSql.NullableGuid(reader, "SecurityId"), RawSql.String(reader, "TradeType"),
+            RawSql.NullableDate(reader, "TradeDate")!.Value, RawSql.NullableDecimal(reader, "Quantity"),
+            RawSql.NullableDecimal(reader, "Price"), RawSql.NullableDecimal(reader, "GrossAmount"),
+            RawSql.Decimal(reader, "Amount"), RawSql.String(reader, "Currency"), RawSql.Decimal(reader, "Fees"),
+            RawSql.Decimal(reader, "Taxes"), RawSql.Decimal(reader, "WithholdingTax"), RawSql.Timestamp(reader, "CreatedAt")));
         return result;
     }
 
     private async Task<PriceRow?> LatestPriceAsync(Guid securityId, DateOnly to, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "PriceDate","Price","Currency" FROM "SecurityPrices"
 WHERE "SecurityId"=@security AND "PriceDate"<=@to
 ORDER BY "PriceDate" DESC, CASE WHEN "Source"='manual' THEN 0 ELSE 1 END, "CreatedAt" DESC LIMIT 1
 """, ("@security", securityId), ("@to", to));
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct)
-            ? new(ParitySql.NullableDate(reader, "PriceDate")!.Value, ParitySql.Decimal(reader, "Price"), ParitySql.String(reader, "Currency"))
+            ? new(RawSql.NullableDate(reader, "PriceDate")!.Value, RawSql.Decimal(reader, "Price"), RawSql.String(reader, "Currency"))
             : null;
     }
 

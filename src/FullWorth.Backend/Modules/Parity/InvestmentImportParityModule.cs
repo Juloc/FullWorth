@@ -187,9 +187,9 @@ public static class InvestmentImportParityEndpoints
 
         var jobId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using (var command = ParitySql.Command(connection, """
+        await using (var command = RawSql.Command(connection, """
 INSERT INTO "InvestmentImportJobs"
 ("Id","FullWorthSpaceId","UserId","FileName","FileSha256","Status","SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@user,@file,@sha,@status,@source,@ready,0,0,@errors,@now,@now)
@@ -202,7 +202,7 @@ VALUES (@id,@space,@user,@file,@sha,@status,@source,@ready,0,0,@errors,@now,@now
 
         foreach (var candidate in candidates)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 INSERT INTO "InvestmentImportCandidates"
 ("Id","ImportJobId","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker","AssetType",
  "Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","ExternalKey","RowFingerprint",
@@ -235,8 +235,8 @@ VALUES (@id,@job,@row,@tradeDate,@settlement,@type,@name,@isin,@wkn,@ticker,@ass
     {
         var userId = currentUser.RequireUserId();
         if (!await OwnJobAsync(db, jobId, fullWorthSpaceId, userId, includeCompleted: true, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "FileName","Status","SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount","CreatedAt","CompletedAt"
 FROM "InvestmentImportJobs" WHERE "Id"=@id
 """, ("@id", jobId));
@@ -245,15 +245,15 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
         return Results.Ok(new
         {
             jobId,
-            fileName = ParitySql.String(reader, "FileName"),
-            status = ParitySql.String(reader, "Status"),
-            sourceRows = ParitySql.Int(reader, "SourceRowCount"),
-            ready = ParitySql.Int(reader, "ReadyCount"),
-            duplicates = ParitySql.Int(reader, "DuplicateCount"),
-            imported = ParitySql.Int(reader, "ImportedCount"),
-            errors = ParitySql.Int(reader, "ErrorCount"),
-            createdAt = ParitySql.Timestamp(reader, "CreatedAt"),
-            completedAt = ParitySql.NullableTimestamp(reader, "CompletedAt")
+            fileName = RawSql.String(reader, "FileName"),
+            status = RawSql.String(reader, "Status"),
+            sourceRows = RawSql.Int(reader, "SourceRowCount"),
+            ready = RawSql.Int(reader, "ReadyCount"),
+            duplicates = RawSql.Int(reader, "DuplicateCount"),
+            imported = RawSql.Int(reader, "ImportedCount"),
+            errors = RawSql.Int(reader, "ErrorCount"),
+            createdAt = RawSql.Timestamp(reader, "CreatedAt"),
+            completedAt = RawSql.NullableTimestamp(reader, "CompletedAt")
         });
     }
 
@@ -433,12 +433,12 @@ FROM "InvestmentImportJobs" WHERE "Id"=@id
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         try
         {
-            var connection = await ParitySql.OpenAsync(db, ct);
+            var connection = await RawSql.OpenAsync(db, ct);
             var portfolioCreated = false;
             if (!targetPortfolioId.HasValue)
             {
                 targetPortfolioId = Guid.NewGuid();
-                await using var createPortfolio = ParitySql.Command(connection, """
+                await using var createPortfolio = RawSql.Command(connection, """
 INSERT INTO "InvestmentPortfolios"
 ("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,true,true,false,@now,@now)
@@ -466,7 +466,7 @@ VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,true,true,false,@now,@now
                         first.Wkn,
                         first.Ticker,
                         first.Currency);
-                    await using var createSecurity = ParitySql.Command(connection, """
+                    await using var createSecurity = RawSql.Command(connection, """
 INSERT INTO "Securities"
 ("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","ProviderKey","IsActive","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@isin,@wkn,@ticker,@assetType,@currency,'investment-import',true,@now,@now)
@@ -474,7 +474,7 @@ VALUES (@id,@space,@name,@isin,@wkn,@ticker,@assetType,@currency,'investment-imp
                         ("@isin", created.Isin), ("@wkn", created.Wkn), ("@ticker", created.Ticker),
                         ("@assetType", first.AssetType ?? "other"), ("@currency", created.Currency), ("@now", DateTimeOffset.UtcNow));
                     await createSecurity.ExecuteNonQueryAsync(ct);
-                    await using (var linkSecurity = ParitySql.Command(connection, """
+                    await using (var linkSecurity = RawSql.Command(connection, """
 INSERT INTO "InvestmentImportSecurityLinks" ("ImportJobId","SecurityId","CreatedAt")
 VALUES (@job,@security,@now)
 ON CONFLICT DO NOTHING
@@ -503,7 +503,7 @@ ON CONFLICT DO NOTHING
 
                 var now = DateTimeOffset.UtcNow;
                 var tradeId = Guid.NewGuid();
-                await using var insert = ParitySql.Command(connection, """
+                await using var insert = RawSql.Command(connection, """
 INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@price,@gross,@amount,@currency,@fees,@taxes,@withholding,'import',@external,@notes,@now,@now)
@@ -515,7 +515,7 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
                     ("@withholding", candidate.WithholdingTax), ("@external", stableKey),
                     ("@notes", $"Imported row {candidate.RowNumber}"), ("@now", now));
                 await insert.ExecuteNonQueryAsync(ct);
-                await using (var linkTrade = ParitySql.Command(connection, """
+                await using (var linkTrade = RawSql.Command(connection, """
 INSERT INTO "InvestmentImportTradeLinks" ("ImportJobId","TradeId","CreatedAt")
 VALUES (@job,@trade,@now)
 """, ("@job", jobId), ("@trade", tradeId), ("@now", now)))
@@ -524,7 +524,7 @@ VALUES (@job,@trade,@now)
                 await MarkCandidateAsync(db, candidate.Id, "imported", ct);
             }
 
-            await using (var updateJob = ParitySql.Command(connection, """
+            await using (var updateJob = RawSql.Command(connection, """
 UPDATE "InvestmentImportJobs"
 SET "Status"='completed',"ImportedCount"=@imported,"DuplicateCount"=@duplicates,
     "PortfolioId"=@portfolio,"PortfolioCreated"=@portfolioCreated,
@@ -567,8 +567,8 @@ WHERE "Id"=@id
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         var take = Math.Clamp(limit ?? 25, 1, 100);
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT j."Id",j."FileName",j."Status",j."SourceRowCount",j."ReadyCount",j."ImportedCount",j."DuplicateCount",j."ErrorCount",
        j."PortfolioId",j."PortfolioCreated",j."CreatedAt",j."CompletedAt",j."RolledBackAt",p."Name" AS "PortfolioName",
        (SELECT count(*) FROM "InvestmentImportTradeLinks" l WHERE l."ImportJobId"=j."Id") AS "LinkedTrades",
@@ -583,27 +583,27 @@ LIMIT @limit
         var rows = new List<object>();
         while (await reader.ReadAsync(ct))
         {
-            var status = ParitySql.String(reader, "Status");
-            var rolledBackAt = ParitySql.NullableTimestamp(reader, "RolledBackAt");
+            var status = RawSql.String(reader, "Status");
+            var rolledBackAt = RawSql.NullableTimestamp(reader, "RolledBackAt");
             var linkedTrades = Convert.ToInt32(reader["LinkedTrades"], CultureInfo.InvariantCulture);
             rows.Add(new
             {
-                id = ParitySql.Guid(reader, "Id"),
-                fileName = ParitySql.String(reader, "FileName"),
+                id = RawSql.Guid(reader, "Id"),
+                fileName = RawSql.String(reader, "FileName"),
                 status,
-                sourceRows = ParitySql.Int(reader, "SourceRowCount"),
-                ready = ParitySql.Int(reader, "ReadyCount"),
-                imported = ParitySql.Int(reader, "ImportedCount"),
-                duplicates = ParitySql.Int(reader, "DuplicateCount"),
-                errors = ParitySql.Int(reader, "ErrorCount"),
-                portfolioId = ParitySql.NullableGuid(reader, "PortfolioId"),
-                portfolioName = ParitySql.NullableString(reader, "PortfolioName"),
+                sourceRows = RawSql.Int(reader, "SourceRowCount"),
+                ready = RawSql.Int(reader, "ReadyCount"),
+                imported = RawSql.Int(reader, "ImportedCount"),
+                duplicates = RawSql.Int(reader, "DuplicateCount"),
+                errors = RawSql.Int(reader, "ErrorCount"),
+                portfolioId = RawSql.NullableGuid(reader, "PortfolioId"),
+                portfolioName = RawSql.NullableString(reader, "PortfolioName"),
                 portfolioCreated = reader.GetBoolean(reader.GetOrdinal("PortfolioCreated")),
                 linkedTrades,
                 createdSecurities = Convert.ToInt32(reader["CreatedSecurities"], CultureInfo.InvariantCulture),
                 rollbackAvailable = status == "completed" && rolledBackAt is null && linkedTrades > 0,
-                createdAt = ParitySql.Timestamp(reader, "CreatedAt"),
-                completedAt = ParitySql.NullableTimestamp(reader, "CompletedAt"),
+                createdAt = RawSql.Timestamp(reader, "CreatedAt"),
+                completedAt = RawSql.NullableTimestamp(reader, "CompletedAt"),
                 rolledBackAt
             });
         }
@@ -637,12 +637,12 @@ LIMIT @limit
         if (!await CanManageInvestments(db, userId, fullWorthSpaceId, ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         string status;
         Guid? portfolioId;
         bool portfolioCreated;
         DateTimeOffset? rolledBackAt;
-        await using (var read = ParitySql.Command(connection, """
+        await using (var read = RawSql.Command(connection, """
 SELECT "Status","PortfolioId","PortfolioCreated","RolledBackAt"
 FROM "InvestmentImportJobs"
 WHERE "Id"=@job AND "FullWorthSpaceId"=@space AND "UserId"=@user
@@ -650,10 +650,10 @@ WHERE "Id"=@job AND "FullWorthSpaceId"=@space AND "UserId"=@user
         await using (var reader = await read.ExecuteReaderAsync(ct))
         {
             if (!await reader.ReadAsync(ct)) return Results.NotFound();
-            status = ParitySql.String(reader, "Status");
-            portfolioId = ParitySql.NullableGuid(reader, "PortfolioId");
+            status = RawSql.String(reader, "Status");
+            portfolioId = RawSql.NullableGuid(reader, "PortfolioId");
             portfolioCreated = reader.GetBoolean(reader.GetOrdinal("PortfolioCreated"));
-            rolledBackAt = ParitySql.NullableTimestamp(reader, "RolledBackAt");
+            rolledBackAt = RawSql.NullableTimestamp(reader, "RolledBackAt");
         }
 
         if (rolledBackAt is not null || status == "rolled_back")
@@ -662,7 +662,7 @@ WHERE "Id"=@job AND "FullWorthSpaceId"=@space AND "UserId"=@user
             return Results.BadRequest(new { error = "Only completed investment imports can be rolled back." });
 
         int linkedTrades;
-        await using (var count = ParitySql.Command(connection,
+        await using (var count = RawSql.Command(connection,
             "SELECT count(*) FROM \"InvestmentImportTradeLinks\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
             linkedTrades = Convert.ToInt32(await count.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
         if (linkedTrades == 0)
@@ -671,17 +671,17 @@ WHERE "Id"=@job AND "FullWorthSpaceId"=@space AND "UserId"=@user
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         try
         {
-            await using (var defer = ParitySql.Command(connection, "SET CONSTRAINTS ALL DEFERRED"))
+            await using (var defer = RawSql.Command(connection, "SET CONSTRAINTS ALL DEFERRED"))
                 await defer.ExecuteNonQueryAsync(ct);
 
             var createdSecurityIds = new List<Guid>();
-            await using (var securities = ParitySql.Command(connection,
+            await using (var securities = RawSql.Command(connection,
                 "SELECT \"SecurityId\" FROM \"InvestmentImportSecurityLinks\" WHERE \"ImportJobId\"=@job", ("@job", jobId)))
             await using (var securityReader = await securities.ExecuteReaderAsync(ct))
-                while (await securityReader.ReadAsync(ct)) createdSecurityIds.Add(ParitySql.Guid(securityReader, "SecurityId"));
+                while (await securityReader.ReadAsync(ct)) createdSecurityIds.Add(RawSql.Guid(securityReader, "SecurityId"));
 
             int removedTrades;
-            await using (var removeTrades = ParitySql.Command(connection, """
+            await using (var removeTrades = RawSql.Command(connection, """
 DELETE FROM "InvestmentTrades" t
 USING "InvestmentImportTradeLinks" l
 WHERE l."ImportJobId"=@job AND l."TradeId"=t."Id" AND t."FullWorthSpaceId"=@space
@@ -691,7 +691,7 @@ WHERE l."ImportJobId"=@job AND l."TradeId"=t."Id" AND t."FullWorthSpaceId"=@spac
             var removedSecurities = 0;
             foreach (var securityId in createdSecurityIds)
             {
-                await using var removeSecurity = ParitySql.Command(connection, """
+                await using var removeSecurity = RawSql.Command(connection, """
 DELETE FROM "Securities" s
 WHERE s."Id"=@security AND s."FullWorthSpaceId"=@space
   AND NOT EXISTS (SELECT 1 FROM "InvestmentTrades" t WHERE t."SecurityId"=s."Id")
@@ -705,7 +705,7 @@ WHERE s."Id"=@security AND s."FullWorthSpaceId"=@space
             var portfolioRemoved = false;
             if (portfolioCreated && portfolioId.HasValue)
             {
-                await using var removePortfolio = ParitySql.Command(connection, """
+                await using var removePortfolio = RawSql.Command(connection, """
 DELETE FROM "InvestmentPortfolios" p
 WHERE p."Id"=@portfolio AND p."FullWorthSpaceId"=@space
   AND NOT EXISTS (SELECT 1 FROM "InvestmentTrades" t WHERE t."PortfolioId"=p."Id")
@@ -714,14 +714,14 @@ WHERE p."Id"=@portfolio AND p."FullWorthSpaceId"=@space
             }
 
             var now = DateTimeOffset.UtcNow;
-            await using (var candidates = ParitySql.Command(connection, """
+            await using (var candidates = RawSql.Command(connection, """
 UPDATE "InvestmentImportCandidates"
 SET "DuplicateStatus"='rolled_back'
 WHERE "ImportJobId"=@job AND "DuplicateStatus"='imported'
 """, ("@job", jobId)))
                 await candidates.ExecuteNonQueryAsync(ct);
 
-            await using (var update = ParitySql.Command(connection, """
+            await using (var update = RawSql.Command(connection, """
 UPDATE "InvestmentImportJobs"
 SET "Status"='rolled_back',"RolledBackAt"=@now,"UpdatedAt"=@now
 WHERE "Id"=@job
@@ -767,10 +767,10 @@ WHERE "Id"=@job
         Guid portfolioId,
         CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         string portfolioName;
         string portfolioCurrency;
-        await using (var portfolio = ParitySql.Command(connection, """
+        await using (var portfolio = RawSql.Command(connection, """
 SELECT "Name","Currency" FROM "InvestmentPortfolios"
 WHERE "Id"=@portfolio AND "FullWorthSpaceId"=@space
 """, ("@portfolio", portfolioId), ("@space", fullWorthSpaceId)))
@@ -778,8 +778,8 @@ WHERE "Id"=@portfolio AND "FullWorthSpaceId"=@space
         {
             if (!await reader.ReadAsync(ct))
                 return new { portfolioId, exists = false, healthy = false, warnings = new[] { new ReconciliationWarning("portfolio_missing", "error", "Portfolio does not exist.") } };
-            portfolioName = ParitySql.String(reader, "Name");
-            portfolioCurrency = ParitySql.String(reader, "Currency");
+            portfolioName = RawSql.String(reader, "Name");
+            portfolioCurrency = RawSql.String(reader, "Currency");
         }
 
         var positions = new Dictionary<Guid, PositionAccumulator>();
@@ -788,7 +788,7 @@ WHERE "Id"=@portfolio AND "FullWorthSpaceId"=@space
         var otherEvents = 0;
         var tradeCount = 0;
 
-        await using var command = ParitySql.Command(connection, """
+        await using var command = RawSql.Command(connection, """
 SELECT t."Id",t."SecurityId",t."TradeType",t."TradeDate",t."Quantity",t."Amount",t."Currency",
        t."Fees",t."Taxes",t."WithholdingTax",s."Name" AS "SecurityName",s."Isin"
 FROM "InvestmentTrades" t
@@ -800,14 +800,14 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
         while (await tradeReader.ReadAsync(ct))
         {
             tradeCount++;
-            var type = ParitySql.String(tradeReader, "TradeType");
-            var securityId = ParitySql.NullableGuid(tradeReader, "SecurityId");
-            var quantity = ParitySql.NullableDecimal(tradeReader, "Quantity") ?? 0m;
-            var amount = ParitySql.Decimal(tradeReader, "Amount");
-            var currency = ParitySql.String(tradeReader, "Currency");
-            var fees = ParitySql.Decimal(tradeReader, "Fees");
-            var taxes = ParitySql.Decimal(tradeReader, "Taxes");
-            var withholding = ParitySql.Decimal(tradeReader, "WithholdingTax");
+            var type = RawSql.String(tradeReader, "TradeType");
+            var securityId = RawSql.NullableGuid(tradeReader, "SecurityId");
+            var quantity = RawSql.NullableDecimal(tradeReader, "Quantity") ?? 0m;
+            var amount = RawSql.Decimal(tradeReader, "Amount");
+            var currency = RawSql.String(tradeReader, "Currency");
+            var fees = RawSql.Decimal(tradeReader, "Fees");
+            var taxes = RawSql.Decimal(tradeReader, "Taxes");
+            var withholding = RawSql.Decimal(tradeReader, "WithholdingTax");
 
             if (type == "other") otherEvents++;
 
@@ -819,8 +819,8 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
             {
                 position = new PositionAccumulator(
                     securityId.Value,
-                    ParitySql.NullableString(tradeReader, "SecurityName") ?? securityId.Value.ToString("D"),
-                    ParitySql.NullableString(tradeReader, "Isin"));
+                    RawSql.NullableString(tradeReader, "SecurityName") ?? securityId.Value.ToString("D"),
+                    RawSql.NullableString(tradeReader, "Isin"));
                 positions[securityId.Value] = position;
             }
 
@@ -923,8 +923,8 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
         Guid portfolioId,
         CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"InvestmentPortfolios\" WHERE \"Id\"=@portfolio AND \"FullWorthSpaceId\"=@space)",
             ("@portfolio", portfolioId), ("@space", space));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
@@ -1020,8 +1020,8 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
 
     private static async Task<List<ExistingSecurity>> ReadSecuritiesAsync(FullWorthDbContext db, Guid space, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","Name","Isin","Wkn","Ticker","Currency"
 FROM "Securities" WHERE "FullWorthSpaceId"=@space AND "IsActive"=true
 """, ("@space", space));
@@ -1029,16 +1029,16 @@ FROM "Securities" WHERE "FullWorthSpaceId"=@space AND "IsActive"=true
         var rows = new List<ExistingSecurity>();
         while (await reader.ReadAsync(ct))
             rows.Add(new ExistingSecurity(
-                ParitySql.Guid(reader, "Id"), ParitySql.String(reader, "Name"),
-                ParitySql.NullableString(reader, "Isin"), ParitySql.NullableString(reader, "Wkn"),
-                ParitySql.NullableString(reader, "Ticker"), ParitySql.String(reader, "Currency")));
+                RawSql.Guid(reader, "Id"), RawSql.String(reader, "Name"),
+                RawSql.NullableString(reader, "Isin"), RawSql.NullableString(reader, "Wkn"),
+                RawSql.NullableString(reader, "Ticker"), RawSql.String(reader, "Currency")));
         return rows;
     }
 
     private static async Task<List<Candidate>> ReadCandidatesAsync(FullWorthDbContext db, Guid jobId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection, """
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
 SELECT "Id","RowNumber","TradeDate","SettlementDate","TradeType","SecurityName","Isin","Wkn","Ticker","AssetType","Quantity","Price",
  "GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","ExternalKey","RowFingerprint","ValidationStatus","DuplicateStatus","ValidationError"
 FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
@@ -1048,17 +1048,17 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         while (await reader.ReadAsync(ct))
         {
             rows.Add(new Candidate(
-                ParitySql.Guid(reader, "Id"), ParitySql.Int(reader, "RowNumber"),
-                ParitySql.NullableDate(reader, "TradeDate"), ParitySql.NullableDate(reader, "SettlementDate"),
-                ParitySql.NullableString(reader, "TradeType"), ParitySql.NullableString(reader, "SecurityName"),
-                ParitySql.NullableString(reader, "Isin"), ParitySql.NullableString(reader, "Wkn"),
-                ParitySql.NullableString(reader, "Ticker"), ParitySql.NullableString(reader, "AssetType"), ParitySql.NullableDecimal(reader, "Quantity"),
-                ParitySql.NullableDecimal(reader, "Price"), ParitySql.NullableDecimal(reader, "GrossAmount"),
-                ParitySql.Decimal(reader, "Amount"), ParitySql.String(reader, "Currency"),
-                ParitySql.Decimal(reader, "Fees"), ParitySql.Decimal(reader, "Taxes"),
-                ParitySql.Decimal(reader, "WithholdingTax"), ParitySql.NullableString(reader, "ExternalKey"),
-                ParitySql.String(reader, "RowFingerprint"), ParitySql.String(reader, "ValidationStatus"),
-                ParitySql.NullableString(reader, "ValidationError"), ParitySql.String(reader, "DuplicateStatus")));
+                RawSql.Guid(reader, "Id"), RawSql.Int(reader, "RowNumber"),
+                RawSql.NullableDate(reader, "TradeDate"), RawSql.NullableDate(reader, "SettlementDate"),
+                RawSql.NullableString(reader, "TradeType"), RawSql.NullableString(reader, "SecurityName"),
+                RawSql.NullableString(reader, "Isin"), RawSql.NullableString(reader, "Wkn"),
+                RawSql.NullableString(reader, "Ticker"), RawSql.NullableString(reader, "AssetType"), RawSql.NullableDecimal(reader, "Quantity"),
+                RawSql.NullableDecimal(reader, "Price"), RawSql.NullableDecimal(reader, "GrossAmount"),
+                RawSql.Decimal(reader, "Amount"), RawSql.String(reader, "Currency"),
+                RawSql.Decimal(reader, "Fees"), RawSql.Decimal(reader, "Taxes"),
+                RawSql.Decimal(reader, "WithholdingTax"), RawSql.NullableString(reader, "ExternalKey"),
+                RawSql.String(reader, "RowFingerprint"), RawSql.String(reader, "ValidationStatus"),
+                RawSql.NullableString(reader, "ValidationError"), RawSql.String(reader, "DuplicateStatus")));
         }
         return rows;
     }
@@ -1071,10 +1071,10 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         bool includeCompleted,
         CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var sql = "SELECT EXISTS(SELECT 1 FROM \"InvestmentImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@user" +
                   (includeCompleted ? ")" : " AND \"Status\" NOT IN ('completed','cancelled'))");
-        await using var command = ParitySql.Command(connection, sql, ("@id", jobId), ("@space", space), ("@user", userId));
+        await using var command = RawSql.Command(connection, sql, ("@id", jobId), ("@space", space), ("@user", userId));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
     }
 
@@ -1085,26 +1085,26 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
         Guid portfolioId,
         CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT \"AccountId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"IsArchived\"=false",
             ("@id", portfolioId), ("@space", space));
         var account = await command.ExecuteScalarAsync(ct);
         if (account is null) return false;
         if (account is DBNull) return true;
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, space, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, space, ct);
         return writable.Contains((Guid)account);
     }
 
     private static Task<bool> CanManageInvestments(
         FullWorthDbContext db, Guid userId, Guid space, CancellationToken ct) =>
-        PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
+        SpaceCapabilities.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
 
     private static async Task<bool> InvestmentTradeExistsAsync(
         FullWorthDbContext db, Guid portfolioId, string externalKey, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT EXISTS(SELECT 1 FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio AND \"ExternalKey\"=@key)",
             ("@portfolio", portfolioId), ("@key", externalKey));
         return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
@@ -1112,8 +1112,8 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
 
     private static async Task MarkCandidateAsync(FullWorthDbContext db, Guid id, string state, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "UPDATE \"InvestmentImportCandidates\" SET \"DuplicateStatus\"=@state WHERE \"Id\"=@id",
             ("@state", state), ("@id", id));
         await command.ExecuteNonQueryAsync(ct);

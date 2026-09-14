@@ -50,7 +50,7 @@ public static class ImportMappingParityEndpoints
         Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var fileResult = await ReadFile(request, ct);
         if (fileResult.Error is not null) return Results.BadRequest(new { error = fileResult.Error });
@@ -79,7 +79,7 @@ public static class ImportMappingParityEndpoints
         FullWorthDbContext db, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart/form-data." });
         var form = await request.ReadFormAsync(ct);
@@ -137,9 +137,9 @@ public static class ImportMappingParityEndpoints
             }
         }
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using (var command = ParitySql.Command(connection, """
+        await using (var command = RawSql.Command(connection, """
 INSERT INTO "ImportJobs" ("Id","FullWorthSpaceId","UserId","FileName","FileSha256","AdapterKey","Status","SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@user,@file,@sha,@adapter,@status,@source,@ready,0,0,@errors,@now,@now)
 """, ("@id", jobId), ("@space", fullWorthSpaceId), ("@user", userId), ("@file", Path.GetFileName(file.FileName)),
@@ -148,7 +148,7 @@ VALUES (@id,@space,@user,@file,@sha,@adapter,@status,@source,@ready,0,0,@errors,
             ("@ready", candidates.Count-errorCount), ("@errors", errorCount), ("@now", now))) await command.ExecuteNonQueryAsync(ct);
         foreach (var candidate in candidates)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency","Counterparty","Description","CategoryText","ExternalKey","RowFingerprint","DuplicateStatus","ValidationStatus","ValidationError")
 VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@external,@fingerprint,'new',@status,@error)
 """, ("@id", candidate.Id), ("@job", jobId), ("@account", candidate.SourceAccount), ("@date", candidate.Date),
@@ -167,15 +167,15 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
     {
         var userId = currentUser.RequireUserId();
         if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var accounts = new List<object>();
-        await using (var command = ParitySql.Command(connection, """
+        await using (var command = RawSql.Command(connection, """
 SELECT COALESCE("SourceAccount",''),count(*) FROM "ImportCandidates"
 WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("SourceAccount",'') ORDER BY count(*) DESC
 """, ("@job", jobId)))
         { await using var reader = await command.ExecuteReaderAsync(ct); while(await reader.ReadAsync(ct)) accounts.Add(new { source = reader.GetString(0), count = reader.GetInt64(1) }); }
         var categories = new List<object>();
-        await using (var command = ParitySql.Command(connection, """
+        await using (var command = RawSql.Command(connection, """
 SELECT COALESCE("CategoryText",''),count(*) FROM "ImportCandidates"
 WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("CategoryText",'') ORDER BY count(*) DESC
 """, ("@job", jobId)))
@@ -189,9 +189,9 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
     {
         var userId = currentUser.RequireUserId();
         if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var accountMap = request.SourceAccountMappings ?? new Dictionary<string, Guid?>();
         var allMappedIds = accountMap.Values.Where(value => value.HasValue).Select(value => value!.Value)
             .Concat(request.DefaultAccountId.HasValue ? [request.DefaultAccountId.Value] : []).Distinct().ToArray();
@@ -205,7 +205,7 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
         var candidates = await ReadCandidates(db, jobId, ct);
         if (selected is not null) candidates = candidates.Where(candidate => selected.Contains(candidate.Id)).ToList();
         candidates = candidates.Where(candidate => candidate.Status == "ready" && candidate.Date.HasValue).ToList();
-        var roleOwner = await ParitySql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct);
+        var roleOwner = await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct);
         if (request.CreateMissingCategories && !roleOwner) return Results.StatusCode(StatusCodes.Status403Forbidden);
         var existingCategories = await db.Categories.Where(c => c.FullWorthSpaceId == fullWorthSpaceId).ToListAsync(ct);
         var ruleList = request.RunFullWorthCategorization
@@ -255,7 +255,7 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
         }
         await db.SaveChangesAsync(ct);
         await ImportTransactionProvenance.LinkAsync(db,jobId,createdTransactions.Select(entity=>entity.Id).ToArray(),ct);
-        var connection=await ParitySql.OpenAsync(db,ct);await using(var command=ParitySql.Command(connection,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",jobId)))await command.ExecuteNonQueryAsync(ct);
+        var connection=await RawSql.OpenAsync(db,ct);await using(var command=RawSql.Command(connection,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",jobId)))await command.ExecuteNonQueryAsync(ct);
         audit.Record(fullWorthSpaceId,userId,"import.mapped.completed","ImportJob",jobId);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);
         return Results.Ok(new{imported,duplicates,skipped,total=candidates.Count});
     }
@@ -266,9 +266,9 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
     {
         var userId = currentUser.RequireUserId();
         if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var writable = await ParitySql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var accountMap = request.SourceAccountMappings ?? new Dictionary<string, Guid?>();
         var allMappedIds = accountMap.Values.Where(value => value.HasValue).Select(value => value!.Value)
             .Concat(request.DefaultAccountId.HasValue ? [request.DefaultAccountId.Value] : []).Distinct().ToArray();
@@ -361,7 +361,7 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
 
     private sealed record MappedCandidate(Guid Id,string? SourceAccount,DateOnly? Date,decimal Amount,string Currency,string? Counterparty,string? Description,string? Category,string? ExternalKey,string Fingerprint,string Status,string? Error);
     private sealed record CandidateClassification(Guid CandidateId,Guid? AccountId,string ExternalKey,string? NormalizedCounterparty,string Status,string? Reason);
-    private static async Task<bool> OwnJob(FullWorthDbContext db,Guid jobId,Guid space,Guid user,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT EXISTS(SELECT 1 FROM \"ImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@user AND \"Status\" NOT IN ('completed','cancelled'))",("@id",jobId),("@space",space),("@user",user));return Convert.ToBoolean(await cmd.ExecuteScalarAsync(ct));}
-    private static async Task<List<MappedCandidate>> ReadCandidates(FullWorthDbContext db,Guid jobId,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"RowFingerprint\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",("@job",jobId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<MappedCandidate>();while(await r.ReadAsync(ct))rows.Add(new(ParitySql.Guid(r,"Id"),ParitySql.NullableString(r,"SourceAccount"),ParitySql.NullableDate(r,"BookingDate"),ParitySql.Decimal(r,"Amount"),ParitySql.String(r,"Currency"),ParitySql.NullableString(r,"Counterparty"),ParitySql.NullableString(r,"Description"),ParitySql.NullableString(r,"CategoryText"),ParitySql.NullableString(r,"ExternalKey"),ParitySql.String(r,"RowFingerprint"),ParitySql.String(r,"ValidationStatus"),ParitySql.NullableString(r,"ValidationError")));return rows;}
-    private static async Task MarkCandidate(FullWorthDbContext db,Guid id,string state,CancellationToken ct){var c=await ParitySql.OpenAsync(db,ct);await using var cmd=ParitySql.Command(c,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@state WHERE \"Id\"=@id",("@state",state),("@id",id));await cmd.ExecuteNonQueryAsync(ct);}
+    private static async Task<bool> OwnJob(FullWorthDbContext db,Guid jobId,Guid space,Guid user,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT EXISTS(SELECT 1 FROM \"ImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@user AND \"Status\" NOT IN ('completed','cancelled'))",("@id",jobId),("@space",space),("@user",user));return Convert.ToBoolean(await cmd.ExecuteScalarAsync(ct));}
+    private static async Task<List<MappedCandidate>> ReadCandidates(FullWorthDbContext db,Guid jobId,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"RowFingerprint\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",("@job",jobId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<MappedCandidate>();while(await r.ReadAsync(ct))rows.Add(new(RawSql.Guid(r,"Id"),RawSql.NullableString(r,"SourceAccount"),RawSql.NullableDate(r,"BookingDate"),RawSql.Decimal(r,"Amount"),RawSql.String(r,"Currency"),RawSql.NullableString(r,"Counterparty"),RawSql.NullableString(r,"Description"),RawSql.NullableString(r,"CategoryText"),RawSql.NullableString(r,"ExternalKey"),RawSql.String(r,"RowFingerprint"),RawSql.String(r,"ValidationStatus"),RawSql.NullableString(r,"ValidationError")));return rows;}
+    private static async Task MarkCandidate(FullWorthDbContext db,Guid id,string state,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@state WHERE \"Id\"=@id",("@state",state),("@id",id));await cmd.ExecuteNonQueryAsync(ct);}
 }

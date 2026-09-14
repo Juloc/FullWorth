@@ -51,20 +51,20 @@ public static class FinTsInvestmentSnapshotEndpoints
         var spaceId = connectionInfo.FullWorthSpaceId;
         var providerName = $"fints:{request.ConnectionId:N}:{request.DepotKey.Trim()}";
         var now = DateTimeOffset.UtcNow;
-        var sql = await ParitySql.OpenAsync(db, ct);
+        var sql = await RawSql.OpenAsync(db, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         Guid portfolioId;
 
-        await using (var findPortfolio = ParitySql.Command(sql,
+        await using (var findPortfolio = RawSql.Command(sql,
             "SELECT \"Id\" FROM \"InvestmentPortfolios\" WHERE \"FullWorthSpaceId\"=@space AND \"ProviderName\"=@provider LIMIT 1",
             ("@space", spaceId), ("@provider", providerName)))
         await using (var reader = await findPortfolio.ExecuteReaderAsync(ct))
-            portfolioId = await reader.ReadAsync(ct) ? ParitySql.Guid(reader, "Id") : Guid.Empty;
+            portfolioId = await reader.ReadAsync(ct) ? RawSql.Guid(reader, "Id") : Guid.Empty;
 
         if (portfolioId == Guid.Empty)
         {
             portfolioId = Guid.NewGuid();
-            await using var createPortfolio = ParitySql.Command(sql, """
+            await using var createPortfolio = RawSql.Command(sql, """
 INSERT INTO "InvestmentPortfolios"
 ("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,false,true,false,@now,@now)
@@ -74,7 +74,7 @@ VALUES (@id,@space,@name,@currency,NULL,NULL,@provider,false,true,false,@now,@no
         }
         else
         {
-            await using var updatePortfolio = ParitySql.Command(sql, """
+            await using var updatePortfolio = RawSql.Command(sql, """
 UPDATE "InvestmentPortfolios" SET "Name"=@name,"Currency"=@currency,"IsArchived"=false,"IsManual"=false,
  "IncludeInNetWorth"=true,"UpdatedAt"=@now WHERE "Id"=@id
 """, ("@name", request.Name.Trim()), ("@currency", request.Currency.Trim().ToUpperInvariant()),
@@ -89,19 +89,19 @@ UPDATE "InvestmentPortfolios" SET "Name"=@name,"Currency"=@currency,"IsArchived"
             if (providerKey.Length == 0 || holding.Name.Trim().Length == 0) continue;
             var securityId = Guid.Empty;
 
-            await using (var findSecurity = ParitySql.Command(sql, """
+            await using (var findSecurity = RawSql.Command(sql, """
 SELECT "Id" FROM "Securities" WHERE "FullWorthSpaceId"=@space AND
  -- Casts are required: an untyped NULL parameter leaves Postgres unable to infer a type for the
  -- IS NOT NULL test, so a holding WITHOUT an ISIN failed the whole depot snapshot with a 500.
  ((@isin::text IS NOT NULL AND "Isin"=@isin::text) OR "ProviderKey"=@providerKey) LIMIT 1
 """, ("@space", spaceId), ("@isin", CleanUpper(holding.Isin)), ("@providerKey", providerKey)))
             await using (var reader = await findSecurity.ExecuteReaderAsync(ct))
-                securityId = await reader.ReadAsync(ct) ? ParitySql.Guid(reader, "Id") : Guid.Empty;
+                securityId = await reader.ReadAsync(ct) ? RawSql.Guid(reader, "Id") : Guid.Empty;
 
             if (securityId == Guid.Empty)
             {
                 securityId = Guid.NewGuid();
-                await using var createSecurity = ParitySql.Command(sql, """
+                await using var createSecurity = RawSql.Command(sql, """
 INSERT INTO "Securities"
 ("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","Exchange","ProviderKey","IsActive","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@name,@isin,@wkn,NULL,'other',@currency,@exchange,@providerKey,true,@now,@now)
@@ -113,7 +113,7 @@ VALUES (@id,@space,@name,@isin,@wkn,NULL,'other',@currency,@exchange,@providerKe
             }
             else
             {
-                await using var updateSecurity = ParitySql.Command(sql, """
+                await using var updateSecurity = RawSql.Command(sql, """
 UPDATE "Securities" SET "Name"=@name,"Wkn"=COALESCE(@wkn,"Wkn"),"Currency"=@currency,
  "Exchange"=COALESCE(@exchange,"Exchange"),"ProviderKey"=@providerKey,"IsActive"=true,"UpdatedAt"=@now WHERE "Id"=@id
 """, ("@name", holding.Name.Trim()), ("@wkn", CleanUpper(holding.Wkn)),
@@ -135,7 +135,7 @@ UPDATE "Securities" SET "Name"=@name,"Wkn"=COALESCE(@wkn,"Wkn"),"Currency"=@curr
             if (unitPrice is > 0)
             {
                 var priceDate = holding.PriceDate ?? request.AsOf;
-                await using var price = ParitySql.Command(sql, """
+                await using var price = RawSql.Command(sql, """
 INSERT INTO "SecurityPrices" ("SecurityId","PriceDate","Price","Currency","Source","CreatedAt")
 VALUES (@security,@date,@price,@currency,'fints',@now)
 ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."Price","Currency"=EXCLUDED."Currency"
@@ -147,15 +147,15 @@ ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."
             var externalKey = $"fints-position:{providerKey}";
             activeExternalKeys.Add(externalKey);
             var existingTradeId = Guid.Empty;
-            await using (var findPosition = ParitySql.Command(sql,
+            await using (var findPosition = RawSql.Command(sql,
                 "SELECT \"Id\" FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio AND \"Source\"='fints_snapshot' AND \"ExternalKey\"=@external LIMIT 1",
                 ("@portfolio", portfolioId), ("@external", externalKey)))
             await using (var reader = await findPosition.ExecuteReaderAsync(ct))
-                existingTradeId = await reader.ReadAsync(ct) ? ParitySql.Guid(reader, "Id") : Guid.Empty;
+                existingTradeId = await reader.ReadAsync(ct) ? RawSql.Guid(reader, "Id") : Guid.Empty;
 
             if (existingTradeId == Guid.Empty)
             {
-                await using var position = ParitySql.Command(sql, """
+                await using var position = RawSql.Command(sql, """
 INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quantity,@price,@gross,0,@currency,0,0,0,'fints_snapshot',@external,NULL,@now,@now)
@@ -167,7 +167,7 @@ VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quant
             }
             else
             {
-                await using var updatePosition = ParitySql.Command(sql, """
+                await using var updatePosition = RawSql.Command(sql, """
 UPDATE "InvestmentTrades" SET "SecurityId"=@security,"TradeDate"=@date,"Quantity"=@quantity,"Price"=@price,
  "GrossAmount"=@gross,"Currency"=@currency,"UpdatedAt"=@now
 WHERE "Id"=@id
@@ -179,15 +179,15 @@ WHERE "Id"=@id
         }
 
         var existing = new List<(Guid Id, string Key)>();
-        await using (var listPositions = ParitySql.Command(sql,
+        await using (var listPositions = RawSql.Command(sql,
             "SELECT \"Id\",\"ExternalKey\" FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@portfolio AND \"Source\"='fints_snapshot'",
             ("@portfolio", portfolioId)))
         await using (var reader = await listPositions.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) existing.Add((ParitySql.Guid(reader, "Id"), ParitySql.NullableString(reader, "ExternalKey") ?? string.Empty));
+            while (await reader.ReadAsync(ct)) existing.Add((RawSql.Guid(reader, "Id"), RawSql.NullableString(reader, "ExternalKey") ?? string.Empty));
 
         foreach (var stale in existing.Where(x => !activeExternalKeys.Contains(x.Key)))
         {
-            await using var delete = ParitySql.Command(sql, "DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id", ("@id", stale.Id));
+            await using var delete = RawSql.Command(sql, "DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id", ("@id", stale.Id));
             await delete.ExecuteNonQueryAsync(ct);
         }
 

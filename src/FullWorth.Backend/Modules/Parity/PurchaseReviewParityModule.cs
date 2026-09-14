@@ -66,16 +66,16 @@ public static class PurchaseReviewParityEndpoints
         FullWorthDbContext db, PurchaseAuthorizationStore authorization, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (await authorization.GetAccessAsync(userId, fullWorthSpaceId, purchaseId, ct) != PurchaseAccessLevel.Write)
             return Results.NotFound();
         var state = await PurchaseFinancialReconciliation.CalculateAsync(db, fullWorthSpaceId, purchaseId, ct);
         if (state is null) return Results.NotFound();
 
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
-        await using var command = ParitySql.Command(connection, """
+        await using var command = RawSql.Command(connection, """
 INSERT INTO "PurchaseReconciliationConfirmations"
 ("PurchaseId","FullWorthSpaceId","UserId","ItemDifference","TransactionDifference","StateFingerprint","ConfirmedAt")
 VALUES (@purchase,@space,@user,@item,@transaction,@fingerprint,@now)
@@ -97,7 +97,7 @@ ON CONFLICT ("PurchaseId") DO UPDATE SET
         FullWorthDbContext db, PurchaseAuthorizationStore authorization, AuditService audit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await PermissionsErgonomicsParityEndpoints.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (await authorization.GetAccessAsync(userId, fullWorthSpaceId, purchaseId, ct) != PurchaseAccessLevel.Write)
             return Results.NotFound();
@@ -129,17 +129,17 @@ ON CONFLICT ("PurchaseId") DO UPDATE SET
 
     private static async Task<Confirmation?> LoadConfirmationAsync(FullWorthDbContext db, Guid purchaseId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT \"ItemDifference\",\"TransactionDifference\",\"StateFingerprint\",\"ConfirmedAt\" FROM \"PurchaseReconciliationConfirmations\" WHERE \"PurchaseId\"=@id",
             ("@id", purchaseId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct)
             ? new Confirmation(
-                ParitySql.Decimal(reader, "ItemDifference"),
-                ParitySql.NullableDecimal(reader, "TransactionDifference"),
-                ParitySql.String(reader, "StateFingerprint") ?? string.Empty,
-                ParitySql.Timestamp(reader, "ConfirmedAt"))
+                RawSql.Decimal(reader, "ItemDifference"),
+                RawSql.NullableDecimal(reader, "TransactionDifference"),
+                RawSql.String(reader, "StateFingerprint") ?? string.Empty,
+                RawSql.Timestamp(reader, "ConfirmedAt"))
             : null;
     }
 

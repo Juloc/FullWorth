@@ -34,9 +34,9 @@ public sealed class BudgetNotificationReconciliationService(FullWorthDbContext d
         var budget = await db.Budgets.AsNoTracking().SingleOrDefaultAsync(b =>
             b.Id == budgetId && b.FullWorthSpaceId == fullWorthSpaceId && b.IsActive, ct);
         if (budget is null) return null;
-        if (!await ParitySql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
 
-        var visible = await ParitySql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
         var allActiveAccounts = await db.Accounts.AsNoTracking()
             .Where(a => a.FullWorthSpaceId == fullWorthSpaceId && a.IsActive)
             .Select(a => a.Id).ToListAsync(ct);
@@ -79,30 +79,30 @@ public sealed class BudgetNotificationReconciliationService(FullWorthDbContext d
         var accounts = new List<Guid>();
         var tags = new List<Guid>();
         var merchants = new List<string>();
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"CategoryId\",\"IncludeDescendants\" FROM \"BudgetCategories\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
             while (await reader.ReadAsync(ct))
-                categories.Add((ParitySql.Guid(reader, "CategoryId"), ParitySql.Bool(reader, "IncludeDescendants")));
+                categories.Add((RawSql.Guid(reader, "CategoryId"), RawSql.Bool(reader, "IncludeDescendants")));
         if (categories.Count == 0 && budget.CategoryId.HasValue)
             categories.Add((budget.CategoryId.Value, false));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"AccountId\" FROM \"BudgetAccounts\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) accounts.Add(ParitySql.Guid(reader, "AccountId"));
+            while (await reader.ReadAsync(ct)) accounts.Add(RawSql.Guid(reader, "AccountId"));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"TagId\" FROM \"BudgetTags\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) tags.Add(ParitySql.Guid(reader, "TagId"));
+            while (await reader.ReadAsync(ct)) tags.Add(RawSql.Guid(reader, "TagId"));
 
-        await using (var command = ParitySql.Command(connection,
+        await using (var command = RawSql.Command(connection,
             "SELECT \"NormalizedMerchant\" FROM \"BudgetMerchants\" WHERE \"BudgetId\"=@id", ("@id", budget.Id)))
         await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) merchants.Add(ParitySql.String(reader, "NormalizedMerchant"));
+            while (await reader.ReadAsync(ct)) merchants.Add(RawSql.String(reader, "NormalizedMerchant"));
 
         return new BudgetScope(categories, accounts, tags, merchants);
     }
@@ -135,13 +135,13 @@ public sealed class BudgetNotificationReconciliationService(FullWorthDbContext d
 
     private async Task<(decimal Near, decimal Critical)> LoadThresholds(Guid budgetId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT \"AlertNearPercent\",\"AlertCriticalPercent\" FROM \"BudgetAdvancedSettings\" WHERE \"BudgetId\"=@id", ("@id", budgetId));
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return (80m, 100m);
-        var near = Math.Max(0m, ParitySql.Decimal(reader, "AlertNearPercent"));
-        var critical = Math.Max(near, ParitySql.Decimal(reader, "AlertCriticalPercent"));
+        var near = Math.Max(0m, RawSql.Decimal(reader, "AlertNearPercent"));
+        var critical = Math.Max(near, RawSql.Decimal(reader, "AlertCriticalPercent"));
         return (near, critical);
     }
 

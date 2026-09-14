@@ -41,11 +41,11 @@ WHERE l."ImportJobId"=@job AND l."TransactionId"=t."Id"
         FullWorthDbContext db, Guid jobId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct)
     {
         if (transactionIds.Count == 0) return;
-        var connection = await ParitySql.OpenAsync(db, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
         foreach (var transactionId in transactionIds)
         {
-            await using var command = ParitySql.Command(connection, """
+            await using var command = RawSql.Command(connection, """
 INSERT INTO "ImportTransactionLinks" ("ImportJobId","TransactionId","CreatedAt")
 VALUES (@job,@transaction,@now)
 ON CONFLICT ("TransactionId") DO NOTHING
@@ -56,8 +56,8 @@ ON CONFLICT ("TransactionId") DO NOTHING
 
     internal static async Task<int> LinkCountAsync(FullWorthDbContext db, Guid jobId, CancellationToken ct)
     {
-        var connection = await ParitySql.OpenAsync(db, ct);
-        await using var command = ParitySql.Command(connection,
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
             "SELECT count(*) FROM \"ImportTransactionLinks\" WHERE \"ImportJobId\"=@job", ("@job", jobId));
         return Convert.ToInt32(await command.ExecuteScalarAsync(ct), System.Globalization.CultureInfo.InvariantCulture);
     }
