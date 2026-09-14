@@ -41,6 +41,6 @@ public sealed class PurchaseArticleSplitUiBaselineTests : IClassFixture<FullWort
     private string ReadTransactions()
     {
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        return File.ReadAllText(Path.Combine(environment.WebRootPath, "features", "transactions.js"));
+        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "transactions", "page.js"));
     }
 }

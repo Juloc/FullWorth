@@ -65,7 +65,7 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task TransactionIdentity_UsesInstalledBrandPackThenCategoryFallbacks()
     {
         var kit = await GetAsync("/features/ux-kit.js");
-        var transactions = await GetAsync("/features/transactions.js");
+        var transactions = await GetAsync("/pages/transactions/page.js");
 
         Assert.Contains("api/intelligence/brand-catalog", kit);
         Assert.Contains("OFFICIAL_BRAND_LOGOS", kit);

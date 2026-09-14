@@ -4,7 +4,11 @@ import { apiClient } from '../core/services.js';
 // analytics and net-worth so the same identity, card, cycle and trend primitives look identical everywhere.
 // All colours/spacing come from the app.css design tokens and the `.fw-*` classes defined there.
 
-export { esc } from '../core/html.js';
+// Importiert UND weitergereicht: ein bloßes 'export … from' holt den Namen nicht in dieses
+// Modul, und sectionCard hier benutzt ihn. Das hat kein Test gemeldet - nur die Browserkonsole,
+// mit "esc is not defined" auf jeder Seite, die eine Abschnittskarte zeichnet.
+import { esc } from '../core/html.js';
+export { esc };
 
 // Deterministic hue (0–359) from a name, so a merchant/category keeps the same monogram tint everywhere.
 export function monogramHue(name) { let h = 0; const s = String(name || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }

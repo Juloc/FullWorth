@@ -21,7 +21,7 @@ public sealed class ContractsIncomePanelTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public void Contracts_screen_reads_income_schedules_and_their_detection()
     {
-        var contracts = Read("features/contracts.js");
+        var contracts = Read("pages/contracts/page.js");
 
         Assert.Contains("api/income-schedules'", contracts);
         Assert.Contains("api/income-schedules/detection'", contracts);
@@ -43,7 +43,7 @@ public sealed class ContractsIncomePanelTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public void Income_is_a_separate_panel_and_never_becomes_a_contract()
     {
-        var contracts = Read("features/contracts.js");
+        var contracts = Read("pages/contracts/page.js");
 
         var incomePanel = contracts.IndexOf("id=\"contracts-income\"", StringComparison.Ordinal);
         Assert.True(incomePanel > 0, "the income panel must exist as its own element");
@@ -61,7 +61,7 @@ public sealed class ContractsIncomePanelTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public void A_variable_income_states_that_instead_of_showing_zero()
     {
-        var contracts = Read("features/contracts.js");
+        var contracts = Read("pages/contracts/page.js");
 
         Assert.Contains("schedule.expectedAmount == null", contracts);
         Assert.Contains("Betrag schwankt", contracts);
@@ -76,7 +76,7 @@ public sealed class ContractsIncomePanelTests : IClassFixture<FullWorthWebFactor
     public void Dismissing_one_cadence_does_not_hide_the_others()
     {
         var dismiss = Slice(
-            Read("features/contracts.js"),
+            Read("pages/contracts/page.js"),
             "async function dismissIncome(",
             "async function acceptCandidate(");
 

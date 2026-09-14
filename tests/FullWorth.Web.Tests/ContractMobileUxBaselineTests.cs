@@ -12,7 +12,7 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
     [Fact]
     public async Task ContractsSuggestions_AreBatchedAndDoNotShowConfidencePercentages()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("DETECTED_BATCH_SIZE = 3", js);
         Assert.Contains("data-detected-more", js);
@@ -23,7 +23,7 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
     [Fact]
     public async Task ContractRows_DoNotDuplicateGlobalCoachAction()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.DoesNotContain("contract-coach", js);
         Assert.Contains("askCoachAboutContract(contract, activity)", js);
@@ -46,7 +46,7 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
     [Fact]
     public async Task ContractsActions_UseOnlySharedButtonVariants()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("btn btn-primary", js);
         Assert.Contains("btn btn-secondary", js);
@@ -58,7 +58,7 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
     [Fact]
     public async Task ContractsMerge_IsAvailableFromDetailAndSupportsUndo()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("data-merge", js);
         Assert.Contains("merged-sources", js);

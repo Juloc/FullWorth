@@ -9,7 +9,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task TransactionsExposeCompleteScopedFilterFlow()
     {
-        var js = await GetAsync("/features/transactions.js");
+        var js = await GetAsync("/pages/transactions/page.js");
         foreach (var token in new[]
                  {
                      "accountGroupId", "includeDescendants", "merchant", "minAmount", "maxAmount",
@@ -29,7 +29,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task AnalyticsUsesCycleBucketsAndScopedDrilldowns()
     {
-        var js = await GetAsync("/features/analytics.js");
+        var js = await GetAsync("/pages/analytics/page.js");
         Assert.Contains("byPeriod", js);
         Assert.Contains("granularity=${gran}", js);
         Assert.Contains("analyticsTxScope", js);
@@ -42,7 +42,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task ContractsExposeAccountCategoryCycleFiltersAndIdentityFallback()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
         Assert.Contains("openContractFilterSheet", js);
         Assert.Contains("view.account", js);
         Assert.Contains("view.category", js);
@@ -86,7 +86,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task AnalyticsPeriodAndIncomeExpenseSegmentsAreKeyboardDrillable()
     {
-        var js = await GetAsync("/features/analytics.js");
+        var js = await GetAsync("/pages/analytics/page.js");
         Assert.Contains("bindPeriodDrills", js);
         Assert.Contains("data-period-index", js);
         Assert.Contains("data-direction=\"income\"", js);
@@ -101,7 +101,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     public async Task AnalyticsSeparatesPreviewActiveAndCompletedAverageWindows()
     {
         var kit = await GetAsync("/features/ux-kit.js");
-        var js = await GetAsync("/features/analytics.js");
+        var js = await GetAsync("/pages/analytics/page.js");
         Assert.Contains("activeFrom", kit);
         Assert.Contains("averageFrom", kit);
         Assert.Contains("averageTo", kit);
@@ -113,8 +113,8 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task CategoryOverviewUsesRootLevelAndMerchantDrillUsesStableIdentity()
     {
-        var analytics = await GetAsync("/features/analytics.js");
-        var transactions = await GetAsync("/features/transactions.js");
+        var analytics = await GetAsync("/pages/analytics/page.js");
+        var transactions = await GetAsync("/pages/transactions/page.js");
         Assert.Contains("cats.filter(category => !category.parentId)", analytics);
         Assert.Contains("openCategoryDetail", analytics);
         Assert.Contains("data-merchant-id", analytics);
@@ -137,9 +137,9 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
         var sw = await GetAsync("/sw.js");
         foreach (var asset in new[]
                  {
-                     "'/features/transactions.js'",
-                     "'/features/analytics.js'",
-                     "'/features/contracts.js'",
+                     "'/pages/transactions/page.js'",
+                     "'/pages/analytics/page.js'",
+                     "'/pages/contracts/page.js'",
                      "'/features/ux-kit.js'"
                  })
             Assert.Contains(asset, sw);

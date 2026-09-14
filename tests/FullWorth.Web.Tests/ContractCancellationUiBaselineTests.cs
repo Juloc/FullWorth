@@ -12,7 +12,7 @@ public sealed class ContractCancellationUiBaselineTests : IClassFixture<FullWort
     [Fact]
     public async Task ContractsUi_DistinguishesCancellationFromArchiving()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("api/contract-parity/cancellations", js);
         Assert.Contains("data-cancellation", js);

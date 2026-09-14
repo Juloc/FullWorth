@@ -55,7 +55,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var helper = await GetAsync("/features/data-completeness.js");
         var wealth = await GetAsync("/features/networth.js");
-        var analytics = await GetAsync("/features/analytics.js");
+        var analytics = await GetAsync("/pages/analytics/page.js");
         var dashboard = await GetAsync("/app/dashboard.js");
         var css = await GetAsync("/app.css");
 

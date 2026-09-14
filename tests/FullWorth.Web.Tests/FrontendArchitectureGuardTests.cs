@@ -165,7 +165,7 @@ public sealed class FrontendArchitectureGuardTests
     public void SettingsWorkflowsStayOutOfAppBootstrap()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
-        var settings = File.ReadAllText(Path.Combine(WwwRoot(), "features", "settings.js"));
+        var settings = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "settings", "page.js"));
 
         Assert.DoesNotContain("openDeleteAccountDialog", app);
         Assert.DoesNotContain("openTwoFactorDialog", app);

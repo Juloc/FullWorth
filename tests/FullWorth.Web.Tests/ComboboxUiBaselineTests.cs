@@ -61,9 +61,11 @@ public sealed class ComboboxUiBaselineTests
     [Fact]
     public void The_account_pickers_are_searchable()
     {
-        foreach (var file in new[] { "contracts.js", "loans.js" })
+        // Verträge sind eine Seite geworden, Kredite gehören noch zu Vermögen und liegen weiter in
+        // features/ — beide benutzen dieselbe durchsuchbare Kontenauswahl.
+        foreach (var file in new[] { Path.Combine("pages", "contracts", "page.js"), Path.Combine("features", "loans.js") })
         {
-            var source = ReadSource(Path.Combine("features", file));
+            var source = ReadSource(file);
             Assert.Contains("comboboxCtx: ctx", source, StringComparison.Ordinal);
             Assert.Contains("searchable: true", source, StringComparison.Ordinal);
         }

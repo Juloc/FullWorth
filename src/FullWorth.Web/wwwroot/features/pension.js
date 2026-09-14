@@ -5,7 +5,7 @@
 // /pension/dokumente all land on the 'pension' view and this module reads the full pathname itself to
 // pick the active tab. Back and Forward therefore work between the tabs without a second router.
 //
-// Copy lives in this module (like features/networth.js and features/contracts.js) rather than in the
+// Copy lives in this module (like features/networth.js and pages/contracts/page.js — contracts.js) rather than in the
 // shared locale files, so the area ships without touching them.
 //
 // Two things this screen must never do, because the model is built to prevent exactly them:

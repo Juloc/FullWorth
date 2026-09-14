@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v123';
+const VERSION = 'v124';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -47,7 +47,7 @@ const APP_SHELL = [
   '/styles/tokens.css',
   '/styles/reset.css',
   '/styles/shell.css',
-  '/styles/features/insights.css',
+  '/pages/insights/page.css',
   '/styles/components.css',
   '/app.css',
   '/styles/responsive.css',
@@ -73,9 +73,9 @@ const APP_SHELL = [
   '/components/password-toggle.js',
   '/features/ux-kit.js',
   '/pages/budgets/page.js',
-  '/features/contracts.js',
+  '/pages/contracts/page.js',
   '/styles/features/contracts-merge.css',
-  '/features/insights.js',
+  '/pages/insights/page.js',
   '/features/tax.js',
   '/features/tax-review-extra.js',
   '/styles/features/tax.css',
@@ -85,9 +85,9 @@ const APP_SHELL = [
   '/features/pension-projection.js',
   '/features/wealth-preview.js',
   '/styles/features/pension.css',
-  '/features/analytics.js',
+  '/pages/analytics/page.js',
   '/features/data-completeness.js',
-  '/features/transactions.js',
+  '/pages/transactions/page.js',
   '/features/networth.js',
   '/styles/features/wealth-assets.css',
   '/features/wealth-real-estate.js',
@@ -106,7 +106,7 @@ const APP_SHELL = [
   '/features/investment-performance-ui.js',
   '/styles/features/investment-performance.css',
   '/features/accounts.js',
-  '/features/settings.js',
+  '/pages/settings/page.js',
   '/features/accounts-presentation.js',
   '/styles/features/accounts.css',
   '/features/purchases.js',

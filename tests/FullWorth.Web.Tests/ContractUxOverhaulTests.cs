@@ -12,7 +12,7 @@ public sealed class ContractUxOverhaulTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ContractsOverview_UsesFocusedSortGroupingAndAnalysisEntry()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("data-contract-analysis", js);
         Assert.Contains("key: 'cycle'", js);
@@ -26,7 +26,7 @@ public sealed class ContractUxOverhaulTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ContractDetail_SupportsQuickEditsAndCompactPaymentHistory()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("data-quick-edit", js);
         Assert.Contains("openQuickEdit", js);
@@ -39,7 +39,7 @@ public sealed class ContractUxOverhaulTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ContractAnalysis_ContainsBudgetContextCategoriesAndHistory()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
         var css = await GetAsync("/styles/components.css") + await GetAsync("/app.css");
 
         Assert.Contains("api/analytics/overview", js);
@@ -53,7 +53,7 @@ public sealed class ContractUxOverhaulTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ContractEdit_HidesTechnicalIntervalFromNormalForm()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
 
         Assert.Contains("contract-edit-v2", js);
         Assert.DoesNotContain("name=\"interval\"", js);

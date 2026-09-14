@@ -277,11 +277,11 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public async Task The_contract_editor_keeps_its_sections()
     {
-        var js = await GetAsync("/features/contracts.js");
+        var js = await GetAsync("/pages/contracts/page.js");
         var module = await GetAsync("/components/form-dialog.js");
         var css = await GetAsync("/dialogs.css");
 
-        Assert.Contains("import { openFormDialog, FieldKind } from '../components/form-dialog.js'", js);
+        Assert.Contains("import { openFormDialog, FieldKind } from '../../components/form-dialog.js'", js);
         Assert.Contains("section: t('Basisdaten', 'Basics')", js);
         Assert.Contains("section: t('Zahlung', 'Payment')", js);
         Assert.Contains("function sectionsHtml", module);
@@ -301,7 +301,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [InlineData("/features/networth.js")]
     [InlineData("/features/loans.js")]
     [InlineData("/pages/rules/page.js")]
-    [InlineData("/features/contracts.js")]
+    [InlineData("/pages/contracts/page.js")]
     public async Task Every_converted_editor_keeps_its_required_fields_visible(string path)
     {
         var js = await GetAsync(path);

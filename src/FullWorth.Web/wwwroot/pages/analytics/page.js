@@ -5,10 +5,10 @@
 // a collapsed "Erweitert / Eigene Analyse" section. All money is privacy-masked via ctx.money(); SVG
 // bar widths are set from JS (no source inline style) to keep the CSP audit at one.
 
-import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc, ensureOfficialBrandCatalog } from './ux-kit.js';
-import { bindChartScrubber } from '../components/chart-scrubber.js';
-import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
-import { emptyRow } from '../components/empty.js';
+import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIconInner, esc, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { bindChartScrubber } from '../../components/chart-scrubber.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
+import { emptyRow } from '../../components/empty.js';
 
 let ctx = null;
 // Kept for backwards compatibility with the builder period presets (and the required export).

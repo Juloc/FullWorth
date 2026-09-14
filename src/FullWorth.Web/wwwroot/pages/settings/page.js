@@ -1,10 +1,10 @@
-import { state } from '../core/state.js';
-import { secureFetch } from '../security/secure-fetch.js';
-import { createDialog } from '../components/dialog.js';
-import { openPinDialog } from '../app/lock.js';
-import { privacyDefault, setPrivacyDefault } from '../components/privacy.js';
-import { renderSharing, bindSharing } from './sharing.js';
-import { downloadWealthBackup } from './wealth-portability.js';
+import { state } from '../../core/state.js';
+import { secureFetch } from '../../security/secure-fetch.js';
+import { createDialog } from '../../components/dialog.js';
+import { openPinDialog } from '../../app/lock.js';
+import { privacyDefault, setPrivacyDefault } from '../../components/privacy.js';
+import { renderSharing, bindSharing } from '../../features/sharing.js';
+import { downloadWealthBackup } from '../../features/wealth-portability.js';
 
 let bound = false;
 

@@ -5,10 +5,10 @@
 // subscriptions" section surfaces recurring-payment candidates with one-click accept. All money and
 // cadence come from the backend (annualization/next-due are computed server-side, §30).
 
-import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from './ux-kit.js';
-import { MoneyVariant, moneyClass } from '../components/money.js';
-import { onAppEvent } from '../core/event-bus.js';
-import { openFormDialog, FieldKind } from '../components/form-dialog.js';
+import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { MoneyVariant, moneyClass } from '../../components/money.js';
+import { onAppEvent } from '../../core/event-bus.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -287,15 +287,22 @@ export async function renderContracts(context) {
   ]));
   accountNames = new Map((accountRows || []).map(account => [account.id, account.displayName || account.institutionName]));
 
-  host.innerHTML = viewHtml();
+  // Die Seite entsteht außerhalb des Dokuments und wird fertig eingesetzt.
+  //
+  // Die drei Hinweisfelder - erkannte Abos, Preisänderungen, Einnahmen - stehen ÜBER der Liste und
+  // waren verborgen, bis ihre Abfrage zurückkam. Sie danach einzublenden schob die ganze Liste um
+  // 355 Pixel nach unten; /contracts sprang um 0,117 am Desktop und 0,310 am Telefon. Jetzt warten
+  // sie mit, und sichtbar wird alles zusammen.
+  //
+  // loadCloudBenchmarks bleibt draußen: sein Feld steht UNTER der Liste, da schiebt nichts.
+  const staged = document.createElement('div');
+  staged.innerHTML = viewHtml();
+  renderList(staged);
+  await Promise.all([loadDetected(false, staged), loadIncome(false, staged), loadPriceChanges(false, staged)]);
+
+  host.replaceChildren(...staged.childNodes);
   wireControls(host);
-  renderList(host);
   loadCloudBenchmarks();
-  // Contextual alerts: detected subscriptions + price-change suggestions load quietly and surface only
-  // when the backend actually has candidates, so they never dominate the header (UX rework §7).
-  loadDetected(false);
-  loadIncome(false);
-  loadPriceChanges(false);
 }
 
 // Whole-view markup: top summary card (sum of monthlyEquivalent / annualizedAmount over active
@@ -650,8 +657,8 @@ function sortContracts(list) {
 // for the owner to accept (apply the new price to the contract) or dismiss. `detect` runs a fresh scan
 // first; the passive path only lists existing pending suggestions. Not-owner access returns 404 → the
 // panel stays hidden quietly. Joined to contractsById for the contract name and currency.
-async function loadPriceChanges(detect) {
-  const box = ctx.$('#contracts-price-changes');
+async function loadPriceChanges(detect, root = null) {
+  const box = (root || document).querySelector('#contracts-price-changes');
   if (!box) return;
   try {
     if (detect) await ctx.api('api/contracts/price-changes/detect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ detectedOn: new Date().toISOString().slice(0, 10) }) });
@@ -786,8 +793,8 @@ function rowFor(c) {
   return row;
 }
 
-async function loadDetected(interactive) {
-  const box = ctx.$('#contracts-detected');
+async function loadDetected(interactive, root = null) {
+  const box = (root || document).querySelector('#contracts-detected');
   if (!box) return;
   let candidates;
   try { candidates = await ctx.api('api/contracts/detection'); }
@@ -846,8 +853,8 @@ async function loadDetected(interactive) {
 // Deliberately a separate panel rather than rows in the contract list: a contract is money that
 // leaves, and every consumer of that list subtracts it. Putting a salary in there as a negative-of-a
 // -negative is how a wage ends up counted as a fixed cost.
-async function loadIncome(interactive) {
-  const box = ctx.$('#contracts-income');
+async function loadIncome(interactive, root = null) {
+  const box = (root || document).querySelector('#contracts-income');
   if (!box) return;
 
   let schedules = [];

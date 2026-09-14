@@ -26,7 +26,7 @@ public sealed class DialogComplexityGuardTests
     /// </summary>
     private static readonly Dictionary<string, int> KnownFlatDialogs = new()
     {
-        ["features/transactions.js"] = 7
+        ["pages/transactions/page.js"] = 7
     };
 
     /// <summary>

@@ -145,6 +145,40 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
+    /// Ein Modul reicht nichts weiter, was es selbst benutzt.
+    ///
+    /// features/ux-kit.js hatte "export { esc } from '../core/html.js';" und rief esc zwei Zeilen
+    /// später selbst auf. Ein reines Weiterreichen holt den Namen aber NICHT in den Gültigkeitsbereich
+    /// des Moduls — jede Seite, die eine Abschnittskarte zeichnet, brach mit "esc is not defined".
+    ///
+    /// Kein Test hat das gemeldet: sie lesen Quelltext, und der Quelltext sah richtig aus. Gefunden
+    /// hat es die Browserkonsole. Dieser hier findet es beim nächsten Mal vorher.
+    /// </summary>
+    [Fact]
+    public void A_module_does_not_pass_on_what_it_uses_itself()
+    {
+        var offenders = new List<string>();
+
+        foreach (var path in Scripts("app", "components", "core", "features", "pages"))
+        {
+            var code = Code(path);
+            foreach (Match match in Regex.Matches(code, @"(?m)^export \{ ([^}]+) \} from '[^']+';"))
+            {
+                foreach (var name in match.Groups[1].Value.Split(',').Select(part => part.Trim().Split(' ')[0]))
+                {
+                    var used = Regex.Matches(code, @"(?<![\w.$])" + Regex.Escape(name) + @"\s*\(").Count;
+                    if (used > 0) offenders.Add($"{Relative(path)}: {name}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Diese Module reichen einen Namen weiter, den sie selbst aufrufen — dabei kommt er nie in "
+            + "ihren Gültigkeitsbereich. Importieren UND exportieren:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
     /// Eine Seite bringt keinen eigenen Kopf mit.
     ///
     /// Hier stand einmal ein eigener Wächter dafür — ImportPageStylesheetGuardTests —, weil drei
