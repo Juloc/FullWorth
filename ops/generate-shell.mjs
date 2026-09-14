@@ -12,6 +12,7 @@
 //   node ops/generate-shell.mjs --check  meldet nur, ob es passt   (Exit 1, wenn nicht)
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { dirname, join, normalize } from 'node:path/posix';
 import { MENU, QUICK, ENTRIES } from '../src/FullWorth.Web/wwwroot/app/menu.js';
 
 const NL = String.fromCharCode(10);
@@ -91,6 +92,34 @@ const pageStyles = pages
   .map(path => `  <link rel="stylesheet" href="/pages/${path}/page.css">`)
   .join(NL);
 
+// Der ganze Modulgraph, damit der Browser ihn nicht Ebene für Ebene entdecken muss.
+//
+// app.js importiert alles statisch - das ist die Regel "nichts wird nachgeladen". Der Browser sieht
+// davon aber zunächst nur app.js, parst sie, holt deren 44 Importe, parst die, holt deren 31, und so
+// weiter: der Graph ist fünf Ebenen tief, also fünf Runden nacheinander, bevor die Seite vollständig
+// ist. Mit modulepreload stehen alle 97 Adressen schon im Kopf und werden zusammen geholt.
+//
+// Kein Bündler und kein Schritt im Bau: dieselbe Datei erzeugt es, die auch das Menü und die Seiten
+// schreibt, und --check merkt, wenn ein Modul dazukommt und hier fehlt.
+function moduleGraph(entry) {
+  const found = new Set();
+  const visit = relative => {
+    if (found.has(relative)) return;
+    found.add(relative);
+    let source;
+    try { source = readFileSync(new URL(relative, root), 'utf8'); } catch { return; }
+    for (const match of source.matchAll(/(?:from|import)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g))
+      visit(normalize(join(dirname(relative), match[1])));
+  };
+  visit(entry);
+  found.delete(entry);
+  return [...found].sort();
+}
+
+const preloads = moduleGraph('app.js')
+  .map(path => `  <link rel="modulepreload" href="/${path}">`)
+  .join(NL);
+
 function replace(html, id, body) {
   const pattern = new RegExp(String.raw`(<!-- ${id}:generiert -->)[^]*?(<!-- /${id} -->)`);
   if (!pattern.test(html)) throw new Error(`index.html hat keine Marken für ${id}.`);
@@ -102,6 +131,7 @@ const next = [
   ['nav', sidebar],
   ['bottom-nav', quick + NL + more],
   ['seiten-css', pageStyles],
+  ['module', preloads],
   ['seiten', pageMarkup]
 ].reduce((html, [id, body]) => replace(html, id, body), current);
 
@@ -113,5 +143,6 @@ if (process.argv.includes('--check')) {
   console.log('index.html entspricht der Hülle.');
 } else {
   writeFileSync(indexPath, next);
-  console.log(`Geschrieben: ${ENTRIES.length} Einträge in ${MENU.length} Gruppen, ${pages.length} Seiten.`);
+  console.log(`Geschrieben: ${ENTRIES.length} Einträge in ${MENU.length} Gruppen, ${pages.length} Seiten, `
+    + `${preloads.split(NL).length} vorgeladene Module.`);
 }
