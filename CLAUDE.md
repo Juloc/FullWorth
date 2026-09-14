@@ -127,6 +127,43 @@ Check the browser console for module errors after any frontend refactor. Measure
 ### Compensation ("Gehalt") feature
 `features/compensation-shared.js` is the **single source of truth** for the profile↔form mapping (`readProfile` / `fillProfile`), car-factor derivation, benefit rows, formatters and api/notify. The calculator, history and extended views all import from it — **never re-implement these per view** (they used to be triplicated and silently diverged).
 
+## Backend rules
+
+The frontend has six rules and three guards. The backend now has six and three too, and they are the
+same idea applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerSeparationTests` and
+`RouteSurfaceTests` hold them.
+
+1. **One layer per file.** `*Endpoints.cs` maps routes and translates HTTP — nothing else. `*Store.cs`
+   owns the data. `*Service.cs` is a flow that needs several stores or an outside system. `Pension` is
+   the worked example: `PensionEndpoints` maps, `PensionStore` owns, and the ordering
+   not-found → forbidden → conflict lives in one place instead of in every handler.
+2. **The store is the only way to the database.** No `db.Anything` outside a store. Everything else
+   follows from this one: as long as a handler queries for itself, the query gets copied to the next
+   handler instead of named — and a copied query is eventually fixed in only one of the copies.
+   `LayerSeparationTests` is a ratchet: 97 files mix the two today, a 98th turns it red, and a file
+   that gets split is struck from `tests/…/Architecture/layer-violations.txt`.
+3. **A store method does one thing and is named after it.** `AddSnapshotAsync` adds a snapshot. Not
+   "save and compute and notify". What happens next is the caller's decision.
+4. **No module knows another sideways.** What two need belongs to the module it belongs to, or to a
+   layer without domain knowledge (`Validation/`, `Security/`, `Data/`). This is not theory — it was
+   measured: 13 module cycles at the start of 2026-09-14, 4 at the end, and every one that fell fell
+   because a piece of code sat in a module it did not belong to. `ModuleBoundaryTests` counts them.
+5. **Nothing unnecessary.** No code for a case that does not occur, no check that repeats another, no
+   helper with one caller. A thing that has moved is *shorter* afterwards — otherwise it was only
+   relocated. Word for word the frontend's rule 6.
+6. **The name says the layer.** `Endpoints`, `Store`, `Service`. No "Module" that can mean anything,
+   and no "Parity" — that described a finished migration, not a subject. `Modules/Parity` is gone;
+   its 43 files and 151 endpoints live in the eleven modules they belong to.
+
+Two places exist because something belonged to no module at all, and that is a legitimate answer:
+`Modules/Reconciliation` (Budgets, Analytics and Notifications all need it) and `Modules/DataErasure`
+(erasing an account has to know where every kind of personal data lives). Before you add a third, be
+sure the thing really has no owner — that is rarer than it looks.
+
+**Moving code between modules is only safe if you measure it.** `RouteSurfaceTests` reads all 640
+routes out of the running application and compares them to a recorded list. Splitting a file is where
+this matters: when you *move* a file a lost route is obvious, when you *split* one it is not.
+
 ## Money rules that must not be broken
 
 - **Parse imported numbers with `Modules/Parity/ImportNumber.cs`, never with a culture.** Every importer used to bring its own parser, and two of them read `"1234.56"` as `123456` because a German culture with `AllowThousands` accepted the dot as a group separator and .NET does not validate group sizes.
