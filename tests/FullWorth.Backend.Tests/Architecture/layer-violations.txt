@@ -51,7 +51,6 @@ Portfolio/Assets/Valuations/AssetValuationModule.cs
 Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs
-Portfolio/Investments/InvestmentNetWorthV2Endpoints.cs
 Portfolio/Investments/InvestmentParityModule.cs
 Portfolio/Investments/InvestmentPdfImportParityModule.cs
 Portfolio/Investments/InvestmentPdfOcrImportParityModule.cs

@@ -16,12 +16,12 @@ public static class InvestmentNetWorthV2Endpoints
         Guid fullWorthSpaceId,
         DateOnly? asOf,
         CurrentUserContext currentUser,
-        FullWorthDbContext db,
+        SpaceAccess access,
         InvestmentNetWorthService service,
         CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await access.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
         var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var result = await service.CalculateAsync(fullWorthSpaceId, userId, day, ct);

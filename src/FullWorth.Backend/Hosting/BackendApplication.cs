@@ -210,6 +210,7 @@ public static class BackendApplication
         builder.Services.AddScoped<CompensationHistoryStore>();
         builder.Services.AddScoped<CompensationOtherIncomeStore>();
         builder.Services.AddScoped<PayslipStore>();
+        builder.Services.AddScoped<SpaceAccess>();
         builder.Services.AddScoped<InvestmentNetWorthService>();
         builder.Services.AddScoped<PropertyValuationProviderRegistry>();
         builder.Services.AddScoped<PropertyValuationService>();
