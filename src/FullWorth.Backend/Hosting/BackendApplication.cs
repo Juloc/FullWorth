@@ -230,7 +230,7 @@ public static class BackendApplication
         builder.Services.AddScoped<RefundCandidateStore>();
         builder.Services.AddScoped<AccountAppearanceStore>();
         builder.Services.AddScoped<XlsxExportService>();
-        builder.Services.AddScoped<CsvExportStore>();
+        builder.Services.AddScoped<ExportDataStore>();
         builder.Services.AddScoped<MemberAccessStore>();
         builder.Services.AddScoped<PurchaseDiscountAnalyticsService>();
         builder.Services.AddScoped<FinTsInvestmentSnapshotStore>();
@@ -524,7 +524,7 @@ public static class BackendApplication
         endpoints.MapCategoryMergeParityEndpoints();
         endpoints.MapCategoryOrderEndpoints();
         endpoints.MapAdvancedTransactionBulkParityEndpoints();
-        endpoints.MapExportCompletionParityEndpoints();
+        endpoints.MapXlsxExportV2Endpoints();
         endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints()
             .MapProductIntelligenceEndpoints()

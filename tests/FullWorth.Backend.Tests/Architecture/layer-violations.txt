@@ -5,7 +5,6 @@ Budgets/BudgetScopeParityModule.cs
 Categories/CategoryIntelligenceModule.cs
 Categories/CategoryMergeParityModule.cs
 Contracts/ContractParityModule.cs
-Export/ExportCompletionParityModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
 Intelligence/CloudBenchmarkEndpoints.cs

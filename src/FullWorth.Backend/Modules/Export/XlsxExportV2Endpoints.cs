@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security;
 using System.Text;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Purchases;
@@ -10,9 +11,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Export;
 
-public static class ExportCompletionParityEndpoints
+public static class XlsxExportV2Endpoints
 {
-    public static IEndpointRouteBuilder MapExportCompletionParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapXlsxExportV2Endpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/export/xlsx-v2", Export).WithTags("Export");
         return app;
@@ -21,33 +22,28 @@ public static class ExportCompletionParityEndpoints
     private static async Task<IResult> Export(
         Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? accountIds,
         bool? includeArchived, bool? includePurchases, bool? includeInvestments,
-        CurrentUserContext currentUser, FullWorthDbContext db, PurchaseAuthorizationStore purchases,
+        CurrentUserContext currentUser, SpaceAccess space, ExportDataStore exportData, PurchaseAuthorizationStore purchases,
         ContractStore contracts, PortfolioStore portfolioStore, CancellationToken ct)
     {
         var includeArchivedFlag = includeArchived ?? false;
         var includePurchasesFlag = includePurchases ?? false;
         var includeInvestmentsFlag = includeInvestments ?? false;
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "export.read", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "export.read", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (from.HasValue && to.HasValue && from > to) return Results.BadRequest(new { error = "Invalid date range." });
 
-        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
         var selected = ParseIds(accountIds);
         if (selected.Count > 0 && selected.Any(id => !visible.Contains(id))) return Results.BadRequest(new { error = "Selected account is unavailable." });
         var accountsToExport = selected.Count > 0 ? selected : visible;
 
-        var accounts = await db.Accounts.AsNoTracking()
-            .Where(a => accountsToExport.Contains(a.Id) && (includeArchivedFlag || a.IsActive))
-            .OrderBy(a => a.SortOrder).ThenBy(a => a.DisplayName).ToListAsync(ct);
+        var accounts = await exportData.AccountsAsync(accountsToExport, includeArchivedFlag, ct);
 
-        var txQuery = db.Transactions.AsNoTracking().Where(t => accountsToExport.Contains(t.AccountId));
-        if (from.HasValue) txQuery = txQuery.Where(t => (t.BookingDate ?? t.ValueDate) >= from.Value);
-        if (to.HasValue) txQuery = txQuery.Where(t => (t.BookingDate ?? t.ValueDate) <= to.Value);
-        var transactions = await txQuery.OrderBy(t => t.BookingDate ?? t.ValueDate).ThenBy(t => t.Id).ToListAsync(ct);
+        var transactions = await exportData.TransactionsAsync(accountsToExport, from, to, ct);
         var transactionIds = transactions.Select(t => t.Id).ToHashSet();
-        var allocations = await db.TransactionAllocations.AsNoTracking().Where(a => transactionIds.Contains(a.TransactionId)).ToListAsync(ct);
-        var categories = await db.Categories.AsNoTracking().Where(c => c.FullWorthSpaceId == fullWorthSpaceId && (includeArchivedFlag || !c.IsArchived)).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync(ct);
+        var allocations = await exportData.AllocationsAsync(transactionIds, ct);
+        var categories = await exportData.CategoriesAsync(fullWorthSpaceId, includeArchivedFlag, ct);
         var categoryNames = categories.ToDictionary(c => c.Id, c => c.Name);
 
         var sheets = new Dictionary<string, List<IReadOnlyList<string>>>(StringComparer.Ordinal)
@@ -59,10 +55,9 @@ public static class ExportCompletionParityEndpoints
             ["Categories"] = BuildCategories(categories)
         };
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        sheets["Tags"] = await BuildTags(connection, fullWorthSpaceId, ct);
-        sheets["TransactionTags"] = await BuildTransactionTags(connection, transactionIds, ct);
-        sheets["Budgets"] = await BuildBudgets(db, fullWorthSpaceId, includeArchivedFlag, ct);
+        sheets["Tags"] = [.. await exportData.Tags(fullWorthSpaceId, ct)];
+        sheets["TransactionTags"] = [.. await exportData.TransactionTags(transactionIds, ct)];
+        sheets["Budgets"] = BuildBudgets(await exportData.BudgetsAsync(fullWorthSpaceId, includeArchivedFlag, ct));
 
         var contractRows = await contracts.ListForUserAsync(userId, fullWorthSpaceId, ct);
         sheets["Contracts"] = BuildContracts(contractRows.Where(c =>
@@ -74,11 +69,11 @@ public static class ExportCompletionParityEndpoints
 
         if (includeInvestmentsFlag)
         {
-            var investment = await BuildInvestments(connection, fullWorthSpaceId, accountsToExport, includeArchivedFlag, from, to, ct);
-            sheets["InvestmentPortfolios"] = investment.Portfolios;
-            sheets["InvestmentTransactions"] = investment.Trades;
-            sheets["Securities"] = investment.Securities;
-            sheets["SecurityPrices"] = investment.Prices;
+            var investment = await exportData.Investments(fullWorthSpaceId, accountsToExport, includeArchivedFlag, from, to, ct);
+            sheets["InvestmentPortfolios"] = [.. investment["investment_portfolios.csv"]];
+            sheets["InvestmentTransactions"] = [.. investment["investment_transactions.csv"]];
+            sheets["Securities"] = [.. investment["securities.csv"]];
+            sheets["SecurityPrices"] = [.. await exportData.SecurityPrices(fullWorthSpaceId, from, to, ct)];
         }
 
         if (includePurchasesFlag)
@@ -122,28 +117,13 @@ public static class ExportCompletionParityEndpoints
     private static List<IReadOnlyList<string>> BuildCategories(IEnumerable<FinanceCategory> rows)
     {var result=Rows(new[]{"Id","Key","Name","ParentId","Icon","IsSystem","IsArchived","SortOrder"});foreach(var c in rows)result.Add(new[]{c.Id.ToString(),c.Key,c.Name,c.ParentId?.ToString()??"",c.Icon??"",Bool(c.IsSystem),Bool(c.IsArchived),c.SortOrder.ToString()});return result;}
 
-    private static async Task<List<IReadOnlyList<string>>> BuildTags(System.Data.Common.DbConnection connection,Guid space,CancellationToken ct)
-    {var result=Rows(new[]{"Id","Name","Color"});await using var cmd=RawSql.Command(connection,"SELECT \"Id\",\"Name\",\"Color\" FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"",("@space",space));await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))result.Add(new[]{RawSql.Guid(r,"Id").ToString(),RawSql.String(r,"Name"),RawSql.NullableString(r,"Color")??""});return result;}
-    private static async Task<List<IReadOnlyList<string>>> BuildTransactionTags(System.Data.Common.DbConnection connection,IReadOnlySet<Guid> transactionIds,CancellationToken ct)
-    {var result=Rows(new[]{"TransactionId","TagId"});foreach(var id in transactionIds){await using var cmd=RawSql.Command(connection,"SELECT \"TagId\" FROM \"TransactionTags\" WHERE \"TransactionId\"=@id",("@id",id));await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))result.Add(new[]{id.ToString(),RawSql.Guid(r,"TagId").ToString()});}return result;}
-    private static async Task<List<IReadOnlyList<string>>> BuildBudgets(FullWorthDbContext db,Guid space,bool includeArchived,CancellationToken ct)
-    {var query=db.Budgets.AsNoTracking().Where(b=>b.FullWorthSpaceId==space&&(includeArchived||b.IsActive));var rows=await query.OrderBy(b=>b.Name).ToListAsync(ct);var result=Rows(new[]{"Id","Name","CategoryIdLegacy","Amount","Currency","Period","CarryOver","IsActive","StartDate","EndDate"});foreach(var b in rows)result.Add(new[]{b.Id.ToString(),b.Name,b.CategoryId?.ToString()??"",Num(b.Amount),b.Currency,b.Period,Bool(b.CarryOver),Bool(b.IsActive),b.StartDate?.ToString("yyyy-MM-dd")??"",b.EndDate?.ToString("yyyy-MM-dd")??""});return result;}
+    private static List<IReadOnlyList<string>> BuildBudgets(IReadOnlyList<Budget> rows)
+    {var result=Rows(new[]{"Id","Name","CategoryIdLegacy","Amount","Currency","Period","CarryOver","IsActive","StartDate","EndDate"});foreach(var b in rows)result.Add(new[]{b.Id.ToString(),b.Name,b.CategoryId?.ToString()??"",Num(b.Amount),b.Currency,b.Period,Bool(b.CarryOver),Bool(b.IsActive),b.StartDate?.ToString("yyyy-MM-dd")??"",b.EndDate?.ToString("yyyy-MM-dd")??""});return result;}
     private static List<IReadOnlyList<string>> BuildContracts(IEnumerable<ContractView> rows)
     {var result=Rows(new[]{"Id","Name","ProviderName","Kind","CategoryId","AccountId","Amount","Currency","BillingCycle","Interval","StartDate","EndDate","NextDueDate","AutoDetected","IsActive","Notes"});foreach(var c in rows)result.Add(new[]{c.Id.ToString(),c.Name,c.ProviderName??"",c.Kind,c.CategoryId?.ToString()??"",c.AccountId?.ToString()??"",Num(c.Amount),c.Currency,c.BillingCycle,c.Interval.ToString(),c.StartDate?.ToString("yyyy-MM-dd")??"",c.EndDate?.ToString("yyyy-MM-dd")??"",c.NextDueDate?.ToString("yyyy-MM-dd")??"",Bool(c.AutoDetected),Bool(c.IsActive),c.Notes??""});return result;}
     private static List<IReadOnlyList<string>> BuildAssetsLiabilities(IEnumerable<AssetView> assets,IEnumerable<LiabilityView> liabilities)
     {var result=Rows(new[]{"Type","Id","Name","Kind","Value","Currency","DateOrDue","Rate","Payment","IncludeInNetWorth","Notes"});foreach(var a in assets)result.Add(new[]{"asset",a.Id.ToString(),a.Name,a.Kind,Num(a.CurrentValue),a.Currency,a.ValuedAt?.ToString("yyyy-MM-dd")??"",a.AnnualGrowthRate?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"","",Bool(a.IncludeInNetWorth),a.Notes??""});foreach(var l in liabilities)result.Add(new[]{"liability",l.Id.ToString(),l.Name,l.Kind,Num(l.CurrentBalance),l.Currency,l.NextDueDate?.ToString("yyyy-MM-dd")??"",l.InterestRate?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",l.RegularPayment?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",Bool(l.IncludeInNetWorth),l.Notes??""});return result;}
 
-    private sealed record InvestmentSheets(List<IReadOnlyList<string>> Portfolios,List<IReadOnlyList<string>> Trades,List<IReadOnlyList<string>> Securities,List<IReadOnlyList<string>> Prices);
-    private static async Task<InvestmentSheets> BuildInvestments(System.Data.Common.DbConnection connection,Guid space,IReadOnlySet<Guid> visible,bool includeArchived,DateOnly? from,DateOnly? to,CancellationToken ct)
-    {
-        var portfolios=Rows(new[]{"Id","Name","ProviderName","Currency","LinkedAccountId","BenchmarkSecurityId","IsManual","IncludeInNetWorth","IsArchived"});var allowed=new HashSet<Guid>();
-        await using(var cmd=RawSql.Command(connection,"SELECT \"Id\",\"Name\",\"ProviderName\",\"Currency\",\"AccountId\",\"BenchmarkSecurityId\",\"IsManual\",\"IncludeInNetWorth\",\"IsArchived\" FROM \"InvestmentPortfolios\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"",("@space",space))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct)){var account=RawSql.NullableGuid(r,"AccountId");var archived=RawSql.Bool(r,"IsArchived");if(account.HasValue&&!visible.Contains(account.Value)||(!includeArchived&&archived))continue;var id=RawSql.Guid(r,"Id");allowed.Add(id);portfolios.Add(new[]{id.ToString(),RawSql.String(r,"Name"),RawSql.NullableString(r,"ProviderName")??"",RawSql.String(r,"Currency"),account?.ToString()??"",RawSql.NullableGuid(r,"BenchmarkSecurityId")?.ToString()??"",Bool(RawSql.Bool(r,"IsManual")),Bool(RawSql.Bool(r,"IncludeInNetWorth")),Bool(archived)});}}
-        var trades=Rows(new[]{"Id","PortfolioId","SecurityId","Type","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes"});foreach(var p in allowed){var sql="SELECT \"Id\",\"SecurityId\",\"TradeType\",\"TradeDate\",\"SettlementDate\",\"Quantity\",\"Price\",\"GrossAmount\",\"Amount\",\"Currency\",\"Fees\",\"Taxes\",\"WithholdingTax\",\"Source\",\"ExternalKey\",\"Notes\" FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@p"+(from.HasValue?" AND \"TradeDate\">=@from":"")+(to.HasValue?" AND \"TradeDate\"<=@to":"")+" ORDER BY \"TradeDate\"";var pars=new List<(string,object?)>{("@p",p)};if(from.HasValue)pars.Add(("@from",from.Value));if(to.HasValue)pars.Add(("@to",to.Value));await using var cmd=RawSql.Command(connection,sql,pars.ToArray());await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))trades.Add(new[]{RawSql.Guid(r,"Id").ToString(),p.ToString(),RawSql.NullableGuid(r,"SecurityId")?.ToString()??"",RawSql.String(r,"TradeType"),RawSql.NullableDate(r,"TradeDate")?.ToString("yyyy-MM-dd")??"",RawSql.NullableDate(r,"SettlementDate")?.ToString("yyyy-MM-dd")??"",RawSql.NullableDecimal(r,"Quantity")?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",RawSql.NullableDecimal(r,"Price")?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",RawSql.NullableDecimal(r,"GrossAmount")?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",Num(RawSql.Decimal(r,"Amount")),RawSql.String(r,"Currency"),Num(RawSql.Decimal(r,"Fees")),Num(RawSql.Decimal(r,"Taxes")),Num(RawSql.Decimal(r,"WithholdingTax")),RawSql.String(r,"Source"),RawSql.NullableString(r,"ExternalKey")??"",RawSql.NullableString(r,"Notes")??""});}
-        var securities=Rows(new[]{"Id","Name","ISIN","WKN","Ticker","AssetType","Currency","Exchange","ProviderKey","IsActive"});await using(var cmd=RawSql.Command(connection,"SELECT \"Id\",\"Name\",\"Isin\",\"Wkn\",\"Ticker\",\"AssetType\",\"Currency\",\"Exchange\",\"ProviderKey\",\"IsActive\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=@space",("@space",space))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))securities.Add(new[]{RawSql.Guid(r,"Id").ToString(),RawSql.String(r,"Name"),RawSql.NullableString(r,"Isin")??"",RawSql.NullableString(r,"Wkn")??"",RawSql.NullableString(r,"Ticker")??"",RawSql.String(r,"AssetType"),RawSql.String(r,"Currency"),RawSql.NullableString(r,"Exchange")??"",RawSql.NullableString(r,"ProviderKey")??"",Bool(RawSql.Bool(r,"IsActive"))});}
-        var prices=Rows(new[]{"SecurityId","Date","Price","Currency","Source"});await using(var cmd=RawSql.Command(connection,"SELECT p.\"SecurityId\",p.\"PriceDate\",p.\"Price\",p.\"Currency\",p.\"Source\" FROM \"SecurityPrices\" p JOIN \"Securities\" s ON s.\"Id\"=p.\"SecurityId\" WHERE s.\"FullWorthSpaceId\"=@space"+(from.HasValue?" AND p.\"PriceDate\">=@from":"")+(to.HasValue?" AND p.\"PriceDate\"<=@to":""),BuildDateParams(space,from,to))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))prices.Add(new[]{RawSql.Guid(r,"SecurityId").ToString(),RawSql.NullableDate(r,"PriceDate")?.ToString("yyyy-MM-dd")??"",Num(RawSql.Decimal(r,"Price")),RawSql.String(r,"Currency"),RawSql.String(r,"Source")});}
-        return new(portfolios,trades,securities,prices);
-    }
-    private static (string,object?)[] BuildDateParams(Guid space,DateOnly? from,DateOnly? to){var p=new List<(string,object?)>{("@space",space)};if(from.HasValue)p.Add(("@from",from.Value));if(to.HasValue)p.Add(("@to",to.Value));return p.ToArray();}
 
     private static List<IReadOnlyList<string>> BuildPurchases(IEnumerable<PurchaseView> rows){var result=Rows(new[]{"Id","TransactionId","Source","Merchant","ExternalOrderId","PurchaseDate","TotalAmount","Currency","Status","MatchConfidence","Notes","HasReceipt"});foreach(var p in rows)result.Add(new[]{p.Id.ToString(),p.TransactionId?.ToString()??"",p.Source,p.Merchant,p.ExternalOrderId??"",p.PurchaseDate?.ToString("yyyy-MM-dd")??"",Num(p.TotalAmount),p.Currency,p.Status,p.MatchConfidence?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",p.Notes??"",Bool(p.HasReceipt)});return result;}
     private static List<IReadOnlyList<string>> BuildPurchaseItems(IEnumerable<PurchaseView> rows){var result=Rows(new[]{"PurchaseId","ItemId","CategoryId","Name","Brand","Sku","Asin","Quantity","UnitPrice","TotalPrice","Currency","CategorizationSource","Notes"});foreach(var p in rows)foreach(var i in p.Items)result.Add(new[]{p.Id.ToString(),i.Id.ToString(),i.CategoryId?.ToString()??"",i.Name,i.Brand??"",i.Sku??"",i.Asin??"",Num(i.Quantity),i.UnitPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture)??"",Num(i.TotalPrice),i.Currency,i.CategorizationSource,i.Notes??""});return result;}

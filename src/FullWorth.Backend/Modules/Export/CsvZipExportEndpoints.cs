@@ -29,7 +29,7 @@ public static class CsvZipExportEndpoints
         CurrentUserContext currentUser,
         SpaceAccess space,
         ExportService exportService,
-        CsvExportStore csvStore,
+        ExportDataStore exportData,
         PurchaseAuthorizationStore purchaseStore,
         CancellationToken ct)
     {
@@ -61,10 +61,10 @@ public static class CsvZipExportEndpoints
             .OrderBy(transaction => transaction.BookingDate ?? transaction.ValueDate).ThenBy(transaction => transaction.Id).ToArray();
         var transactionIds = transactions.Select(transaction => transaction.Id).ToHashSet();
 
-        var categories = await exportService.ListCategoriesAsync(fullWorthSpaceId, includeArchivedFlag, ct);
+        var categories = await exportData.CategoriesAsync(fullWorthSpaceId, includeArchivedFlag, ct);
         var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
 
-        var allocations = await exportService.ListAllocationsAsync(transactionIds, ct);
+        var allocations = await exportData.AllocationsAsync(transactionIds, ct);
 
         var files = new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -88,8 +88,8 @@ public static class CsvZipExportEndpoints
             ["net_worth_history.csv"] = NetWorth(snapshot.NetWorthHistory)
         };
 
-        files["tags.csv"] = await csvStore.Tags(fullWorthSpaceId, ct);
-        files["transaction_tags.csv"] = await csvStore.TransactionTags(transactionIds, ct);
+        files["tags.csv"] = await exportData.Tags(fullWorthSpaceId, ct);
+        files["transaction_tags.csv"] = await exportData.TransactionTags(transactionIds, ct);
 
         if (includePurchasesFlag)
         {
@@ -102,7 +102,7 @@ public static class CsvZipExportEndpoints
 
         if (includeInvestmentsFlag)
         {
-            var investmentFiles = await csvStore.Investments(fullWorthSpaceId, exportedAccountIds, includeArchivedFlag, from, to, ct);
+            var investmentFiles = await exportData.Investments(fullWorthSpaceId, exportedAccountIds, includeArchivedFlag, from, to, ct);
             foreach (var pair in investmentFiles) files[pair.Key] = pair.Value;
         }
 
