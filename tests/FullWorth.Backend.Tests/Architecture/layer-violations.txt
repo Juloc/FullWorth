@@ -1,4 +1,3 @@
-Admin/AdminSecretsModule.cs
 Analytics/AnalyticsParityModule.cs
 Analytics/CashflowParityModule.cs
 Budgets/BudgetScopeParityModule.cs
