@@ -82,7 +82,11 @@ public sealed class CategoryOrderService(FullWorthDbContext db, AuditService aud
         }
     }
 
-    private static bool HasCycle(Dictionary<Guid, Guid?> parentById)
+    /// <summary>
+    /// Wuerde diese Elternzuordnung einen Kreis ergeben? Auch CategoryErgonomicsEndpoints stellt
+    /// dieselbe Frage fuer seine eigene Reihenfolge-Route - dieselbe Antwort, also dieselbe Stelle.
+    /// </summary>
+    internal static bool HasCycle(IReadOnlyDictionary<Guid, Guid?> parentById)
     {
         foreach (var categoryId in parentById.Keys)
         {

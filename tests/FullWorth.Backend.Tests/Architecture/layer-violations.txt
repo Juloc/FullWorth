@@ -1,9 +1,7 @@
-Accounts/AccountExperienceEndpoints.cs
 Admin/AdminSecretsModule.cs
 Analytics/AnalyticsParityModule.cs
 Analytics/CashflowParityModule.cs
 Budgets/BudgetScopeParityModule.cs
-Categories/CategoryErgonomicsEndpoints.cs
 Categories/CategoryIntelligenceModule.cs
 Categories/CategoryMergeParityModule.cs
 Contracts/ContractParityModule.cs
@@ -23,4 +21,3 @@ Purchases/ProductIntelligenceEndpoints.cs
 Purchases/ProductLearningParityModule.cs
 Purchases/PurchaseAdvancedInsights.cs
 Transactions/AdvancedTransactionBulkParityModule.cs
-Transactions/TransactionBulkEndpoints.cs
