@@ -53,6 +53,53 @@ public sealed class SecurityHeadersSourceAuditTests : IClassFixture<FullWorthWeb
         Assert.Equal(0, occurrences);
     }
 
+    /// <summary>
+    /// Markup entsteht nicht nur in .html-Dateien. Es entsteht in Zeichenketten in JavaScript und in
+    /// Rohstrings in C# — und dort hat der Wächter oben nie hingesehen.
+    ///
+    /// Zwei Stellen haben das ausgenutzt, beide über Monate. <c>features/ux-kit.js</c> hängte
+    /// <c>onerror="this.remove()"</c> an das Markenlogo: <c>script-src 'self'</c> deckt auch
+    /// <c>script-src-attr</c> ab, der Browser hat den Handler verworfen, das fehlgeschlagene Bild blieb
+    /// stehen — und da ein Markenlogo einen eigenen Untergrund mitbringt, deckte der leere Rahmen das
+    /// Monogramm darunter zu. <c>ShareReceiptEndpoints.Page()</c> schrieb einen <c>&lt;style&gt;</c>-Block
+    /// in das Dokument, den <c>style-src 'self'</c> verwirft: die Seite, auf der ein geteilter Beleg
+    /// landet, kam unformatiert.
+    ///
+    /// Beides bricht leise. Kein Bau schlägt fehl, keine Anfrage schlägt fehl, nur der Browser tut
+    /// nichts — die Meldung steht in seiner Konsole, die niemand liest.
+    /// </summary>
+    [Fact]
+    public void Nothing_generates_markup_the_policy_refuses_to_run()
+    {
+        var sources = PublicFiles("*.js")
+            .Concat(PublicFiles("*.html"))
+            .Concat(Directory.EnumerateFiles(
+                Path.Combine(RepositoryRoot(), "src", "FullWorth.Web"), "*.cs", SearchOption.AllDirectories));
+
+        var offenders = new List<string>();
+        foreach (var file in sources)
+        {
+            // Ohne Kommentare, sonst meldet der Wächter den Satz, mit dem jemand erklärt hat, warum es
+            // diese Regel gibt. Genau das ist in diesem Projekt schon einmal passiert.
+            var code = Regex.Replace(
+                Regex.Replace(File.ReadAllText(file), @"/\*.*?\*/", string.Empty, RegexOptions.Singleline),
+                @"(?m)^\s*//.*$", string.Empty);
+            var name = Path.GetRelativePath(RepositoryRoot(), file).Replace('\\', '/');
+
+            if (Regex.IsMatch(code, @"<style\b", RegexOptions.IgnoreCase))
+                offenders.Add($"{name}: ein <style>-Block — style-src 'self' verwirft ihn");
+            // Das Leerzeichen davor gehört dazu: eine Wortgrenze allein macht aus data-oneoff="label"
+            // einen Treffer, weil der Bindestrich eine ist. Ein Attribut beginnt nach Zwischenraum
+            // oder Anführungszeichen, nie mitten im Namen.
+            if (Regex.IsMatch(code, @"[\s""'](?:on[a-z]+)\s*=\s*\\?""", RegexOptions.IgnoreCase))
+                offenders.Add($"{name}: ein Ereignis-Attribut — script-src 'self' führt es nicht aus");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Das schickt der Server aus, und der Browser weigert sich:"
+            + Environment.NewLine + "  " + string.Join(Environment.NewLine + "  ", offenders));
+    }
+
     [Theory]
     [InlineData("/app/boot.js", "javascript")]
     [InlineData("/app.js", "javascript")]

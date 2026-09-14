@@ -123,6 +123,21 @@ export function setPrimaryAction(button, label, kind = 'add') {
   if (label) button.setAttribute('aria-label', label);
 }
 
+/**
+ * Ein Logo, das nicht lädt, nimmt sich selbst heraus — darunter steht das Monogramm schon bereit.
+ *
+ * Das war ein onerror-Attribut am Bild, und die Auslieferung schickt `script-src 'self'` ohne
+ * 'unsafe-inline': der Browser führt es nicht aus. Gemessen gegen die echte Richtlinie — der Handler
+ * wird blockiert, das Bild bleibt stehen, und da ein Markenlogo seinen eigenen Untergrund mitbringt,
+ * deckt der leere Rahmen den Buchstaben zu. Ein Fehler an einem Bild steigt nicht auf, abfangen lässt
+ * er sich trotzdem: ein Zuhörer für die ganze Anwendung statt eines Attributs an jedem Bild.
+ */
+export function bindIdentityIcons() {
+  addEventListener('error', event => {
+    if (event.target.classList?.contains('fw-ident-logo')) event.target.remove();
+  }, true);
+}
+
 export function identityIcon(name, opts = {}) {
   if (opts.isTransfer) return `<span class="fw-ident fw-ident-transfer" aria-hidden="true">${opts.isSavings ? '↑' : '⇄'}</span>`;
   const inferredBrandLogo = !opts.logoAssetPath ? brandLogoPath(name) : null;
@@ -136,11 +151,12 @@ export function identityIcon(name, opts = {}) {
   //
   // Stacking both in the same grid cell means the fallback is already in place when the image fails.
   // Removing the image is then the whole error handler, and nothing has to watch the DOM.
+  // Wer das Bild herausnimmt, steht in bindIdentityIcons - nicht mehr als Attribut hier.
   if (logoAssetPath) {
     const fallback = (String(name || '?').trim()[0] || '?').toUpperCase();
     return `<span class="fw-ident fw-ident-stack fw-monogram" style="--ident-h:${monogramHue(name)}" aria-hidden="true">` +
       `<span class="fw-ident-initial">${esc(fallback)}</span>` +
-      `<img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy" onerror="this.remove()">` +
+      `<img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy">` +
       `</span>`;
   }
   const iconKey = opts.categoryIconKey;

@@ -142,7 +142,7 @@ public static class ShareReceiptEndpoints
         var backLink = string.IsNullOrWhiteSpace(back) ? "" : $"<p><a href=\"{HtmlEncoder.Default.Encode(back)}\">Back</a></p>";
         return $$"""
             <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>{{encodedTitle}} · FullWorth</title><style>body{font:16px system-ui,sans-serif;max-width:560px;margin:48px auto;padding:0 20px;color:#202124;background:#f5f6f7}main{background:#fff;border:1px solid #dfe1e5;border-radius:16px;padding:24px}label{display:grid;gap:8px;margin:18px 0}select,button{font:inherit;padding:11px 12px;border-radius:10px;border:1px solid #c7c9cc}button{cursor:pointer;background:#202124;color:#fff}</style></head>
+            <title>{{encodedTitle}} · FullWorth</title><link rel="stylesheet" href="/styles/tokens.css"><link rel="stylesheet" href="/share-receipt/share-receipt.css"></head>
             <body><main>{{content}}{{backLink}}</main></body></html>
             """;
     }

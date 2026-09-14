@@ -1,0 +1,12 @@
+/* Die Seite, auf der ein geteilter Beleg landet. Sie hat weder Sitzung noch Menü und ist deshalb ein
+   eigenständiges Dokument, wie auth/ und account-deletion/ - aber ihr Aussehen stand als <style>-Block
+   in einem C#-Rohstring. Die Auslieferung schickt style-src 'self' ohne 'unsafe-inline', also hat der
+   Browser den Block verworfen und die Seite unformatiert gezeichnet.
+
+   Die Farben sind jetzt Token statt fester Werte, wie überall sonst; das bringt nebenbei den
+   Dunkelmodus mit, den die feste Fassung nicht hatte. */
+body{font:16px var(--font,system-ui,sans-serif);max-width:560px;margin:48px auto;padding:0 20px;color:var(--text);background:var(--bg)}
+main{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:24px}
+label{display:grid;gap:8px;margin:18px 0}
+select,button{font:inherit;padding:11px 12px;border-radius:var(--radius-input);border:1px solid var(--line)}
+button{cursor:pointer;background:var(--cta);color:var(--cta-text)}

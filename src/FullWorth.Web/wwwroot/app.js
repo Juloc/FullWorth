@@ -1,7 +1,7 @@
 import { money, setMoneyLocale } from './components/money.js';
 import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './components/privacy.js';
 import { confirmDialog } from './components/confirm.js';
-import { setPrimaryAction } from './features/ux-kit.js';
+import { setPrimaryAction, bindIdentityIcons } from './features/ux-kit.js';
 import { initLock } from './app/lock.js';
 import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
 import { renderCoach, bindCoach } from './pages/coach/page.js';
@@ -144,6 +144,7 @@ function renderUserBlock(){
   $('#user-avatar').textContent=(sp?.name||'F').trim().charAt(0).toUpperCase()||'F';
 }
 function bind(){
+  bindIdentityIcons();
   $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
   $('#theme').addEventListener('change',e=>{state.theme=e.target.value;localStorage.setItem('finance.theme',state.theme);applyTheme()});
   // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
