@@ -202,9 +202,13 @@ public static partial class BrokerPdfTradeParser
         var wkn = FindToken(normalized, @"\bWKN\b\s*[:\-]?\s*(?<value>[A-Z0-9]{6})\b");
         var securityName = FindSecurityName(normalized, isin);
         var quantity = FindNumber(normalized, "Stückzahl", "Stueckzahl", "Stück", "Stueck", "Anzahl", "Nominale");
-        var price = FindMoneyValue(normalized, out var priceCurrency, "Ausführungskurs", "Ausfuehrungskurs", "Kurs", "Preis");
-        var gross = FindMoneyValue(normalized, out var grossCurrency, "Kurswert", "Bruttobetrag", "Brutto");
-        var amount = FindMoneyValue(normalized, out var amountCurrency,
+        // Ein Kurs ist ein Stückpreis und trägt drei oder vier Nachkommastellen; ein Kurswert ist ein
+        // Betrag mit zweien. Genau daran hing der Unterschied, den der frühere eigene Leser nicht kannte.
+        var price = FindMoneyValue(normalized, ImportNumber.ThreeDigitTail.Decimal, out var priceCurrency,
+            "Ausführungskurs", "Ausfuehrungskurs", "Kurs", "Preis");
+        var gross = FindMoneyValue(normalized, ImportNumber.ThreeDigitTail.Grouping, out var grossCurrency,
+            "Kurswert", "Bruttobetrag", "Brutto");
+        var amount = FindMoneyValue(normalized, ImportNumber.ThreeDigitTail.Grouping, out var amountCurrency,
             "Ausmachender Betrag", "Endbetrag", "Abrechnungsbetrag", "Gesamtbetrag", "Gesamtsumme",
             "Zu Ihren Lasten", "Zu Ihren Gunsten", "Gutschrift", "Belastung");
 
@@ -309,17 +313,24 @@ public static partial class BrokerPdfTradeParser
         foreach (var label in labels)
         {
             var match = Regex.Match(text, $@"{Regex.Escape(label)}[^\r\n]{{0,40}}?(?<value>{MoneyNumber})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (match.Success && TryDecimal(match.Groups["value"].Value, out var value)) return Math.Abs(value);
+            // Stückzahl und Nominale: "1.234" ist hier eins Komma zwei drei vier, kein Tausender.
+            if (match.Success && TryDecimal(match.Groups["value"].Value, ImportNumber.ThreeDigitTail.Decimal, out var value))
+                return Math.Abs(value);
         }
         return null;
     }
 
-    private static decimal? FindMoneyValue(string text, out string? currency, params string[] labels)
+    /// <summary>
+    /// Der Anrufer sagt, ob er einen Betrag liest oder einen Stückpreis. Beides steht in derselben
+    /// Abrechnung, und bei "1.234" gehen die Antworten um den Faktor tausend auseinander.
+    /// </summary>
+    private static decimal? FindMoneyValue(
+        string text, ImportNumber.ThreeDigitTail tail, out string? currency, params string[] labels)
     {
         foreach (var label in labels)
         {
             var match = Regex.Match(text, $@"{Regex.Escape(label)}[^\r\n]{{0,80}}?(?<value>{MoneyNumber})\s*(?<currency>EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CZK|HUF|JPY|CAD|AUD)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (match.Success && TryDecimal(match.Groups["value"].Value, out var value))
+            if (match.Success && TryDecimal(match.Groups["value"].Value, tail, out var value))
             {
                 currency = match.Groups["currency"].Success ? match.Groups["currency"].Value.ToUpperInvariant() : null;
                 return Math.Abs(value);
@@ -335,7 +346,9 @@ public static partial class BrokerPdfTradeParser
         foreach (var label in labels)
         {
             foreach (Match match in Regex.Matches(text, $@"{Regex.Escape(label)}[^\r\n]{{0,80}}?(?<value>{MoneyNumber})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-                if (TryDecimal(match.Groups["value"].Value, out var value)) total += Math.Abs(value);
+                // Gebühren und Steuern sind Beträge mit zwei Nachkommastellen: "1.234" ist 1234.
+                if (TryDecimal(match.Groups["value"].Value, ImportNumber.ThreeDigitTail.Grouping, out var value))
+                    total += Math.Abs(value);
         }
         return Math.Round(total, 8, MidpointRounding.AwayFromZero);
     }
@@ -377,11 +390,29 @@ public static partial class BrokerPdfTradeParser
         return result.Length is >= 3 and <= 120 ? result : null;
     }
 
-    private static bool TryDecimal(string value, out decimal result)
+    /// <summary>
+    /// Hier stand ein eigener Zahlenleser. Er kannte den Unterschied nicht, um den es in einer
+    /// Depotabrechnung geht: "1.234" ist als Kurswert vierzehnhundertvierunddreißig und als Stückzahl
+    /// eins Komma zwei drei vier. Ohne Komma im Text ließ er den Punkt stehen, las also beides als
+    /// 1,234 - und derselbe Helfer bediente Kurs UND Kurswert, konnte für beide also gar nicht
+    /// richtig sein.
+    ///
+    /// <see cref="ImportNumber"/> beantwortet genau diese Frage, und zwar je Feld
+    /// (<see cref="ImportNumber.ThreeDigitTail"/>). Deshalb sagt jede Fundstelle jetzt, was sie liest.
+    /// </summary>
+    private static bool TryDecimal(string value, ImportNumber.ThreeDigitTail tail, out decimal result)
     {
-        var clean = value.Trim().Replace(" ", "");
-        if (clean.Contains(',')) clean = clean.Replace(".", "").Replace(',', '.');
-        return decimal.TryParse(clean, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out result);
+        try
+        {
+            var parsed = ImportNumber.TryParse(value, tail);
+            result = parsed ?? 0m;
+            return parsed.HasValue;
+        }
+        catch (FormatException)
+        {
+            result = 0m;
+            return false;
+        }
     }
 
     private static string? FindCurrency(string text)

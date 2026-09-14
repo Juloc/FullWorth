@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Parity;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -41,7 +42,8 @@ public static partial class AmazonPageParser
         if (string.IsNullOrWhiteSpace(text)) return 1m;
         var match = QuantityRegex().Match(text);
         if (!match.Success) return 1m;
-        return decimal.TryParse(match.Groups["q"].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value) && value > 0
+        // Eine Stückzahl, kein Betrag: "1.234" ist hier eins Komma zwei drei vier.
+        return Read(match.Groups["q"].Value, ImportNumber.ThreeDigitTail.Decimal) is { } value && value > 0
             ? value
             : 1m;
     }
@@ -267,10 +269,21 @@ public static partial class AmazonPageParser
 
     private static string NormalizeLabel(string value) => Regex.Replace(value.Trim().ToLowerInvariant(), @"\s+", " ");
 
+    /// <summary>
+    /// Auch hier stand ein eigener Zahlenleser. Ohne Komma im Text ließ er den Punkt stehen, las
+    /// "1.234" also als eins Komma zwei drei vier — ein Bestellbetrag über tausend wurde zu 1,23 €.
+    /// </summary>
     private static bool TryParseAmount(string raw, out decimal amount)
     {
-        if (raw.Contains(',')) raw = raw.Replace(".", string.Empty).Replace(',', '.');
-        return decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
+        var parsed = Read(raw, ImportNumber.ThreeDigitTail.Grouping);
+        amount = parsed ?? 0m;
+        return parsed.HasValue;
+    }
+
+    private static decimal? Read(string? value, ImportNumber.ThreeDigitTail tail)
+    {
+        try { return ImportNumber.TryParse(value, tail); }
+        catch (FormatException) { return null; }
     }
 
     private static string Currency(string iso, string symbol)

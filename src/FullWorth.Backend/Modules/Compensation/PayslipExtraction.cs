@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using FullWorth.Backend.Modules.Parity;
 
 namespace FullWorth.Backend.Modules.Compensation;
 
@@ -208,13 +209,30 @@ public static partial class PayslipTextParser
         return null;
     }
 
+    /// <summary>
+    /// Hier stand ein eigener Zahlenleser, der <see cref="ImportNumber"/> fast nachbaute und an einer
+    /// Stelle davon abwich: bei genau einem Punkt und keinem Komma ließ er ihn stehen, las "3.500"
+    /// also als dreieinhalb statt als dreitausendfünfhundert. Auf einer Abrechnung ist jede Zahl ein
+    /// Betrag mit zwei Nachkommastellen, also ist eine dreistellige Endgruppe immer eine Tausendergruppe.
+    ///
+    /// Genau davor warnt CLAUDE.md: jeder Importer hat einmal seinen eigenen Parser mitgebracht, und
+    /// zwei davon lasen "1234.56" als 123456.
+    /// </summary>
     private static bool TryParseAmount(string token, out decimal amount)
     {
-        var raw = token.Replace("€", "", StringComparison.Ordinal).Replace("EUR", "", StringComparison.OrdinalIgnoreCase)
-            .Replace(" ", "", StringComparison.Ordinal).Trim();
-        if (raw.Contains(',')) raw = raw.Replace(".", "", StringComparison.Ordinal).Replace(',', '.');
-        else if (raw.Count(c => c == '.') > 1) raw = raw.Replace(".", "", StringComparison.Ordinal);
-        return decimal.TryParse(raw, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out amount);
+        var raw = token.Replace("€", "", StringComparison.Ordinal)
+            .Replace("EUR", "", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            var parsed = ImportNumber.TryParse(raw, ImportNumber.ThreeDigitTail.Grouping);
+            amount = parsed ?? 0m;
+            return parsed.HasValue;
+        }
+        catch (FormatException)
+        {
+            amount = 0m;
+            return false;
+        }
     }
 
     private static string Normalize(string text)

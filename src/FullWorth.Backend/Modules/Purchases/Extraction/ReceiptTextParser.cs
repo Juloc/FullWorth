@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Parity;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using FullWorth.Backend.Validation;
@@ -237,20 +238,29 @@ public static partial class ReceiptTextParser
         return matches.Count == 0 ? null : ParseAmount(matches[^1]);
     }
 
+    /// <summary>Ein Bonbetrag: zwei Nachkommastellen, eine dreistellige Endgruppe ist eine Tausendergruppe.</summary>
     private static decimal ParseAmount(Match match)
     {
-        var value = match.Groups["whole"].Value + "." + match.Groups["fraction"].Value;
-        if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)) return 0m;
-        if (match.Groups["sign"].Value is "-" or "−" || match.Groups["trail"].Value is "-" or "−") amount = -amount;
-        return amount;
+        var amount = Read(match.Groups["amount"].Value, ImportNumber.ThreeDigitTail.Grouping);
+        if (amount is null) return 0m;
+        return match.Groups["sign"].Value is "-" or "−" || match.Groups["trail"].Value is "-" or "−"
+            ? -amount.Value
+            : amount.Value;
     }
 
-    private static decimal? ParseFlexibleDecimal(string value)
+    /// <summary>Stückzahl und Einzelpreis: "1.234" ist hier eins Komma zwei drei vier.</summary>
+    private static decimal? ParseFlexibleDecimal(string value) =>
+        Read(value, ImportNumber.ThreeDigitTail.Decimal) is { } parsed && parsed > 0m ? parsed : null;
+
+    /// <summary>
+    /// Der geteilte Zahlenleser statt eines eigenen. Ein Kassenbon kommt aus einer Texterkennung, also
+    /// ist jede Zahl darin importiert — und für importierte Zahlen gibt es genau einen Leser, der die
+    /// Frage "Tausendergruppe oder Nachkommastellen" je Feld beantwortet statt zu raten.
+    /// </summary>
+    private static decimal? Read(string? value, ImportNumber.ThreeDigitTail tail)
     {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        return decimal.TryParse(value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) && parsed > 0m
-            ? parsed
-            : null;
+        try { return ImportNumber.TryParse(value, tail); }
+        catch (FormatException) { return null; }
     }
 
     // True when the (already lower-cased) line contains the keyword delimited by non-letters on both
@@ -268,7 +278,13 @@ public static partial class ReceiptTextParser
         _ => "piece"
     };
 
-    [GeneratedRegex(@"(?<!\d)(?<sign>[-−]?)(?<whole>\d{1,6})[.,](?<fraction>\d{2})(?<trail>[-−]?)(?!\d)")]
+    // Der ganze Betrag in EINER Gruppe, Tausendergruppen eingeschlossen.
+    //
+    // Vorher stand hier (?<whole>\d{1,6}) ohne Trennzeichen. Bei "1.234,56" verhinderte (?<!\d) den
+    // Treffer nicht, weil links vom "234" ein Punkt steht und kein Ziffernzeichen: die Regex griff ab
+    // "234,56", und aus 1.234,56 € wurden 234,56 €. Auf einem Kassenbon über tausend Euro fehlten so
+    // die Tausender, ohne dass irgendetwas fehlschlug.
+    [GeneratedRegex(@"(?<!\d)(?<sign>[-−]?)(?<amount>(?:\d{1,3}(?:[.,]\d{3})+|\d{1,6})[.,]\d{2})(?<trail>[-−]?)(?![\d.,])")]
     private static partial Regex MoneyAmountRegex();
 
     [GeneratedRegex(@"^(?<name>.+?)\s+(?<quantity>\d+(?:[.,]\d{1,3})?)\s*(?<unit>kg|g|l|ml|st|stk|stück)?\s*[xX*]\s*(?<unitPrice>\d+(?:[.,]\d{2}))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
