@@ -25,12 +25,12 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
         // static nav entry + view section in index.html, and app.js imports and registers the module.
         var html = ReadWebAsset("index.html");
         var appJs = await GetAsync("/app.js");
-        var tax = await GetAsync("/features/tax.js");
-        var review = await GetAsync("/features/tax-review-extra.js");
+        var tax = await GetAsync("/pages/tax/page.js");
+        var review = await GetAsync("/pages/tax/review-extra.js");
 
         Assert.Contains("data-view=\"tax\"", html);
         Assert.Contains("id=\"view-tax\"", html);
-        Assert.Contains("./features/tax.js", appJs);
+        Assert.Contains("./pages/tax/page.js", appJs);
         Assert.Contains("'tax'", appJs);
         Assert.Contains("/tax/review", tax);
         Assert.Contains("api/tax/candidates", tax);
@@ -40,8 +40,8 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task TaxReview_ContainsDecisionEvidenceAndExportFlows()
     {
-        var tax = await GetAsync("/features/tax.js");
-        var review = await GetAsync("/features/tax-review-extra.js");
+        var tax = await GetAsync("/pages/tax/page.js");
+        var review = await GetAsync("/pages/tax/review-extra.js");
 
         Assert.Contains("api/tax/candidates/${id}/${action}", tax);
         Assert.Contains("'confirm'", tax);
@@ -56,8 +56,8 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task TaxSettings_ExposePersonalAndAnalysisOptOuts()
     {
-        var tax = await GetAsync("/features/tax.js");
-        var review = await GetAsync("/features/tax-review-extra.js");
+        var tax = await GetAsync("/pages/tax/page.js");
+        var review = await GetAsync("/pages/tax/review-extra.js");
 
         Assert.Contains("api/tax/profile/settings", tax);
         Assert.Contains("assistantEnabled", tax);
@@ -72,8 +72,8 @@ public sealed class TaxAssistantUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task TaxUi_HasResponsiveReviewAndSettingsStyles()
     {
-        var taxCss = await GetAsync("/styles/features/tax.css");
-        var reviewCss = await GetAsync("/styles/features/tax-review-extra.css");
+        var taxCss = await GetAsync("/pages/tax/page.css");
+        var reviewCss = await GetAsync("/pages/tax/page.css");
 
         Assert.Contains("tax-view", taxCss);
         Assert.Contains("tax-case", taxCss);

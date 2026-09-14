@@ -27,7 +27,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task An_amount_is_formatted_in_the_currency_that_came_with_it()
     {
         var money = await GetAsync("/components/money.js");
-        var accounts = await GetAsync("/features/accounts.js");
+        var accounts = await GetAsync("/pages/accounts/page.js");
         var dashboard = await GetAsync("/app/dashboard.js");
 
         // The shared formatter: the currency is a parameter, handed straight to Intl.
@@ -55,7 +55,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task A_converted_value_is_a_second_line_under_the_original_never_instead_of_it()
     {
-        var accounts = await GetAsync("/features/accounts.js");
+        var accounts = await GetAsync("/pages/accounts/page.js");
         var money = await GetAsync("/components/money.js");
         var components = await GetAsync("/styles/components.css");
 
@@ -85,7 +85,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task A_value_that_could_not_be_converted_is_marked_not_silently_dropped()
     {
-        var accounts = await GetAsync("/features/accounts.js");
+        var accounts = await GetAsync("/pages/accounts/page.js");
         var dashboard = await GetAsync("/app/dashboard.js");
         var components = await GetAsync("/styles/components.css");
 
@@ -135,7 +135,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task The_balance_dialog_asks_in_the_accounts_own_currency()
     {
-        var accounts = await GetAsync("/features/accounts.js");
+        var accounts = await GetAsync("/pages/accounts/page.js");
 
         // The field label is the account's currency …
         Assert.Contains("esc(get('accounts.newBalance'))} (${esc(account.currency)})", accounts);

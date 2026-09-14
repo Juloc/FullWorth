@@ -13,14 +13,14 @@ import { renderNotifications } from './pages/notifications/page.js';
 import { renderLoans, bindLoans } from './features/loans.js';
 import { renderAnalytics, bindAnalytics } from './pages/analytics/page.js';
 import { renderPurchases, bindPurchases } from './features/purchases.js';
-import { renderTax, bindTax } from './features/tax.js';
-import { renderPension, bindPension } from './features/pension.js';
+import { renderTax, bindTax } from './pages/tax/page.js';
+import { renderPension, bindPension } from './pages/pension/page.js';
 import { renderMerchants, bindMerchants, newMerchant } from './pages/merchants/page.js';
 import { renderAudit, bindAudit } from './pages/audit/page.js';
 import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './features/access-setup.js';
-import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderBankingSettings } from './features/accounts.js';
+import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderBankingSettings } from './pages/accounts/page.js';
 import { bindSettings, renderSettings } from './pages/settings/page.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './pages/budgets/page.js';
 

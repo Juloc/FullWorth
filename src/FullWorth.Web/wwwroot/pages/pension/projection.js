@@ -26,7 +26,7 @@
 // It is a PAGE, not a dialog: a return scenario is something the user changes repeatedly, and
 // re-opening a dialog for each change is exactly the friction docs/UI_AUDIT.md spent six steps
 // removing. The form is inline on the tab, and there is no dialog in this flow at all.
-import { sectionCard, esc } from './ux-kit.js';
+import { sectionCard, esc } from '../../features/ux-kit.js';
 
 // --- injected by pension.js ---
 let ctx = null;

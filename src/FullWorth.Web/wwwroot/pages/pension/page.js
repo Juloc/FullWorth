@@ -19,10 +19,10 @@
 //
 // Both mounted modules receive this module's copy (`t`, `label`, `percent`) instead of importing it,
 // so neither pair ever becomes a circular import.
-import { sectionCard, esc } from './ux-kit.js';
-import { renderPensionDocuments, resetPensionDocuments } from './pension-documents.js';
-import { renderPensionProjection, resetPensionProjection } from './pension-projection.js';
-import { emptyRow } from '../components/empty.js';
+import { sectionCard, esc } from '../../features/ux-kit.js';
+import { renderPensionDocuments, resetPensionDocuments } from './documents.js';
+import { renderPensionProjection, resetPensionProjection } from './projection.js';
+import { emptyRow } from '../../components/empty.js';
 
 let ctx = null;
 let contracts = [];

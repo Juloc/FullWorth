@@ -182,7 +182,7 @@ public sealed class FrontendArchitectureGuardTests
     public void BootstrapLivesInApp_NotInFeatureOwners()
     {
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
-        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts.js"));
+        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "accounts", "page.js"));
 
         Assert.Contains("initResizableSidebar();", app);
         Assert.Contains("syncResponsiveSidebar();", app);
@@ -196,7 +196,7 @@ public sealed class FrontendArchitectureGuardTests
     [Fact]
     public void AccountsPresentationUsesSharedCoreWithoutPatchObserverOrSyntheticNavigation()
     {
-        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "features", "accounts-presentation.js"));
+        var accounts = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "accounts", "presentation.js"));
         Assert.DoesNotContain("/bff/", accounts);
         Assert.DoesNotContain("new MutationObserver", accounts);
         Assert.DoesNotContain(".click()", accounts);

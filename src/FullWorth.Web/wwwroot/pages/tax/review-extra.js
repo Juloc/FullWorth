@@ -6,7 +6,7 @@
 // ctx.api (the shared client from core/services.js), and the CSV/JSON download needs the raw Response
 // (for its blob body), so it uses apiClient.backendResponse — the same shared client wealth-portability.js
 // uses for its backup download — never a hand-rolled fetch/BFF URL.
-import { apiClient } from '../core/services.js';
+import { apiClient } from '../../core/services.js';
 
 function lang() { return (document.documentElement.lang || '').startsWith('en') ? 'en' : 'de'; }
 const copy = {

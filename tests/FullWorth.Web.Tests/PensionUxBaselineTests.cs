@@ -24,15 +24,15 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
 
         Assert.Contains("id=\"view-pension\"", html);
         Assert.Contains("data-view=\"pension\"", html);
-        Assert.Contains("/styles/features/pension.css", html);
+        Assert.Contains("/pages/pension/page.css", html);
 
-        Assert.Contains("from './features/pension.js'", app);
+        Assert.Contains("from './pages/pension/page.js'", app);
         Assert.Contains("register('pension'", app);
         Assert.Contains("'pension'", app);
         Assert.Contains("bindPension(ctx)", app);
 
-        Assert.Contains("/features/pension.js", sw);
-        Assert.Contains("/styles/features/pension.css", sw);
+        Assert.Contains("/pages/pension/page.js", sw);
+        Assert.Contains("/pages/pension/page.css", sw);
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void PensionModuleKeepsProjectionsAndBeitragsfreiHonest()
     {
-        var js = ReadAsset("features", "pension.js");
+        var js = ReadAsset("pages", "pension", "page.js");
 
         Assert.Contains("projectionIsSimulation", js);
         Assert.Contains("projectionHint", js);
@@ -69,7 +69,7 @@ public sealed class PensionUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void PensionStylesUseTokensAndCollapseOnNarrowViewports()
     {
-        var css = ReadAsset("styles", "features", "pension.css");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains("@media (max-width: 760px)", css);
         Assert.Contains("var(--surface", css);

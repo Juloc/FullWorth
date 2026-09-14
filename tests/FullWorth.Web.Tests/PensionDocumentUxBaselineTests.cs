@@ -33,20 +33,20 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void DocumentsTabIsServedRegisteredAndPrecached()
     {
-        var pension = ReadAsset("features", "pension.js");
+        var pension = ReadAsset("pages", "pension", "page.js");
         var sw = ReadAsset("sw.js");
 
-        Assert.Contains("from './pension-documents.js'", pension);
+        Assert.Contains("from './documents.js'", pension);
         Assert.Contains("renderPensionDocuments", pension);
         Assert.Contains("tabDocuments: 'Dokumente'", pension);
         Assert.Contains("path: '/pension/dokumente'", pension);
         Assert.Contains("data-pension-documents", pension);
 
-        Assert.Contains("/features/pension-documents.js", sw);
+        Assert.Contains("/pages/pension/documents.js", sw);
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
-        Assert.True(File.Exists(Path.Combine(environment.WebRootPath, "features", "pension-documents.js")));
+        Assert.True(File.Exists(Path.Combine(environment.WebRootPath, "pages", "pension", "documents.js")));
         Assert.False(Directory.Exists(Path.Combine(environment.WebRootPath, "features", "pension-documents")));
     }
 
@@ -58,7 +58,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void ReviewScreenSaysNothingIsStoredUntilTheCommit()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("Noch ist nichts gespeichert.", js);
         Assert.Contains("pension-doc-unsaved", js);
@@ -77,8 +77,8 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void EveryFieldCarriesItsPageConfidenceAndWhetherItWasOnlyRecognised()
     {
-        var js = ReadAsset("features", "pension-documents.js");
-        var css = ReadAsset("styles", "features", "pension.css");
+        var js = ReadAsset("pages", "pension", "documents.js");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains("provenance", js);
         Assert.Contains("matchedLabel", js);
@@ -113,8 +113,8 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void GuaranteeAndProjectionAreSeparateBlocksAndTheProjectionNamesItsAssumption()
     {
-        var js = ReadAsset("features", "pension-documents.js");
-        var css = ReadAsset("styles", "features", "pension.css");
+        var js = ReadAsset("pages", "pension", "documents.js");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains("pension-doc-now", js);
         Assert.Contains("pension-doc-guarantee", js);
@@ -147,7 +147,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void TheThreeContributionSharesStaySeparateAndAPrintedTotalIsNeverCorrected()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         var spec = Between(js, "const CONTRIBUTION_SPEC = [", "];");
         Assert.Contains("contribution.employeeAmount", spec);
@@ -171,7 +171,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void AMatchNamesItsRuleAndOnlyAnUnmatchedDocumentOffersANewContract()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("matchedOn", js);
         Assert.Contains("policy_number", js);
@@ -191,7 +191,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void TheCommitResultShowsAppliedAndSkippedHonestly()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("applied", js);
         Assert.Contains("skipped", js);
@@ -209,7 +209,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void UploadHasACapAndTheOriginalIsLinkedNeverFetched()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("12 * 1024 * 1024", js);
         Assert.Contains("existingDocumentId", js);
@@ -235,7 +235,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void TheReviewScreenIsAPageAndNotADialog()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("pension-doc-screen", js);
         Assert.Contains("data-doc-back", js);
@@ -254,13 +254,13 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void TheModuleReusesTheSharedInfrastructureAndLeavesNoDebugCode()
     {
-        var js = ReadAsset("features", "pension-documents.js");
+        var js = ReadAsset("pages", "pension", "documents.js");
 
         Assert.Contains("ctx.money(", js);
         Assert.Contains("ctx.date(", js);
         Assert.Contains("ctx.jsonBody(", js);
         Assert.Contains("bffUrl(", js);
-        Assert.Contains("from './ux-kit.js'", js);
+        Assert.Contains("from '../../features/ux-kit.js'", js);
 
         Assert.DoesNotContain("/bff/", js);
         Assert.DoesNotContain("Intl.NumberFormat", js);
@@ -278,7 +278,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     [Fact]
     public void DocumentStylesUseTokensAndCanShrinkOnAPhone()
     {
-        var css = ReadAsset("styles", "features", "pension.css");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains(".pension-doc-drop", css);
         Assert.Contains(".pension-doc-block", css);
@@ -299,7 +299,7 @@ public sealed class PensionDocumentUxBaselineTests : IClassFixture<FullWorthWebF
     private static string Between(string source, string start, string end)
     {
         var from = source.IndexOf(start, StringComparison.Ordinal);
-        Assert.True(from >= 0, $"'{start}' is gone from features/pension-documents.js");
+        Assert.True(from >= 0, $"'{start}' is gone from pages/pension/documents.js");
         from += start.Length;
         var to = source.IndexOf(end, from, StringComparison.Ordinal);
         Assert.True(to > from, $"'{start}' is no longer terminated by '{end}'");

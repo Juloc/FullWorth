@@ -23,14 +23,14 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         var html = ReadAsset("index.html");
         var sw = ReadAsset("sw.js");
 
-        var accounts = ReadAsset("features", "accounts.js");
+        var accounts = ReadAsset("pages", "accounts", "page.js");
         Assert.DoesNotContain("/features/accounts-ux.js", html);
-        Assert.Contains("/styles/features/accounts.css", html);
-        Assert.Contains("from './accounts-presentation.js'", accounts);
+        Assert.Contains("/pages/accounts/page.css", html);
+        Assert.Contains("from './presentation.js'", accounts);
 
-        Assert.Contains("/features/accounts.js", sw);
-        Assert.Contains("/features/accounts-presentation.js", sw);
-        Assert.Contains("/styles/features/accounts.css", sw);
+        Assert.Contains("/pages/accounts/page.js", sw);
+        Assert.Contains("/pages/accounts/presentation.js", sw);
+        Assert.Contains("/pages/accounts/page.css", sw);
     }
 
     private string ReadAsset(params string[] path)
@@ -42,7 +42,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccountsPresentation_UsesSharedApiAndPersistentAccountGroupApis()
     {
-        var js = await GetAsync("/features/accounts-presentation.js");
+        var js = await GetAsync("/pages/accounts/presentation.js");
 
         Assert.DoesNotContain("/bff/", js);
         Assert.Contains("apiClient.backend", js);
@@ -68,7 +68,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ConnectedAccounts_DefaultToBankLogo_AndVisualOverrideCanBeReset()
     {
-        var js = await GetAsync("/features/accounts-presentation.js");
+        var js = await GetAsync("/pages/accounts/presentation.js");
 
         Assert.Contains("bankForAccount", js);
         Assert.Contains("hasVisualOverride", js);
@@ -81,8 +81,8 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void BankPicker_UsesOnlyNativeAppLogoRenderer()
     {
-        var accounts = ReadAsset("features", "accounts.js");
-        var ux = ReadAsset("features", "accounts-presentation.js");
+        var accounts = ReadAsset("pages", "accounts", "page.js");
+        var ux = ReadAsset("pages", "accounts", "presentation.js");
 
         Assert.Contains("logo.className='bank-option-logo'", accounts);
         Assert.DoesNotContain("decorateBankPicker", ux);
@@ -92,7 +92,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccountsStyles_HoverDoesNotMoveLargeInteractiveSurfaces_AndMobileEditorExists()
     {
-        var css = await GetAsync("/styles/features/accounts.css");
+        var css = await GetAsync("/pages/accounts/page.css");
 
         Assert.Contains("transform: none !important", css);
         Assert.Contains(".panel:hover", css);
@@ -106,8 +106,8 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task MobileAccountsUseCompactOverflowActions()
     {
-        var accounts = await GetAsync("/features/accounts.js");
-        var css = await GetAsync("/styles/features/accounts.css");
+        var accounts = await GetAsync("/pages/accounts/page.js");
+        var css = await GetAsync("/pages/accounts/page.css");
 
         Assert.Contains("data-account-more", accounts);
         Assert.Contains("openAccountActionsDialog", accounts);
@@ -136,7 +136,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void Ing_DefaultsToOwnedFinTs_WithoutRequiringEnableBanking()
     {
-        var accounts = ReadAsset("features", "accounts.js");
+        var accounts = ReadAsset("pages", "accounts", "page.js");
         var de = ReadAsset("locales", "de.json");
 
         Assert.Contains("fullworthProvider:'fints'", accounts);
@@ -158,7 +158,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccountsList_OffersAManualBalanceToAnImportedAccount()
     {
-        var js = await GetAsync("/features/accounts.js");
+        var js = await GetAsync("/pages/accounts/page.js");
 
         Assert.Contains("const canSetBalance", js);
         Assert.Contains("'finanzguru-import'", js);
@@ -180,7 +180,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task BankPicker_ExplainsThatOnlyEnabledInstitutionsAppear()
     {
-        var js = await GetAsync("/features/accounts.js");
+        var js = await GetAsync("/pages/accounts/page.js");
 
         Assert.Contains("bankingSetup.bankMissingHint", js);
         Assert.Contains("https://enablebanking.com/cp/applications", js);

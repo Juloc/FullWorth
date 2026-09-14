@@ -11,7 +11,7 @@ namespace FullWorth.Web.Tests.Frontend;
 /// never happens.
 ///
 /// This is not hypothetical: a refactor turned three <c>$$(</c> into <c>$(</c> in
-/// <c>features/accounts-presentation.js</c>, which killed the whole accounts-page decoration (identity
+/// <c>pages/accounts/presentation.js</c>, which killed the whole accounts-page decoration (identity
 /// icons, unread dots, performance badges, group icons, bank logos) for two days. There are no browser
 /// tests in this repo, so nothing noticed. One character, invisible in review, and a text search for
 /// <c>$$</c> does not find its absence — hence a guard.

@@ -11,9 +11,9 @@
 // Year-review checklist, CSV/JSON export, per-candidate document upload and the advanced analysis
 // toggles live in tax-review-extra.js and are composed in directly below — no MutationObserver
 // polling, no cross-view DOM patching (FrontendArchitectureGuardTests forbids both).
-import { sectionCard, esc } from './ux-kit.js';
-import { renderTaxYearPanel, renderAdvancedSettings, wireDocumentUploads } from './tax-review-extra.js';
-import { emptyRow } from '../components/empty.js';
+import { sectionCard, esc } from '../../features/ux-kit.js';
+import { renderTaxYearPanel, renderAdvancedSettings, wireDocumentUploads } from './review-extra.js';
+import { emptyRow } from '../../components/empty.js';
 
 let ctx = null;
 let year = null; // sticky across re-renders (tab switch, decide, analyze) until the user picks another

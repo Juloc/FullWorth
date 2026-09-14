@@ -34,10 +34,10 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void SimulationTabIsServedRegisteredAndPrecached()
     {
-        var pension = ReadAsset("features", "pension.js");
+        var pension = ReadAsset("pages", "pension", "page.js");
         var sw = ReadAsset("sw.js");
 
-        Assert.Contains("from './pension-projection.js'", pension);
+        Assert.Contains("from './projection.js'", pension);
         Assert.Contains("renderPensionProjection", pension);
         Assert.Contains("tabSimulation: 'Simulation'", pension);
         Assert.Contains("path: '/pension/simulation'", pension);
@@ -49,11 +49,11 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
         // different ways.
         Assert.Contains("percent, reload: () => renderPension(ctx)", pension);
 
-        Assert.Contains("/features/pension-projection.js", sw);
+        Assert.Contains("/pages/pension/projection.js", sw);
 
         // Flat in features/, never a features/<name>/ subfolder (CLAUDE.md).
         var environment = _factory.Services.GetRequiredService<IWebHostEnvironment>();
-        Assert.True(File.Exists(Path.Combine(environment.WebRootPath, "features", "pension-projection.js")));
+        Assert.True(File.Exists(Path.Combine(environment.WebRootPath, "pages", "pension", "projection.js")));
         Assert.False(Directory.Exists(Path.Combine(environment.WebRootPath, "features", "pension-projection")));
     }
 
@@ -66,8 +66,8 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void GuaranteeAndProjectionAreSeparateBlocks()
     {
-        var js = ReadAsset("features", "pension-projection.js");
-        var css = ReadAsset("styles", "features", "pension.css");
+        var js = ReadAsset("pages", "pension", "projection.js");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains("pension-sim-guarantee", js);
         Assert.Contains("pension-sim-projection", js);
@@ -103,7 +103,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void EveryProjectedFigureNamesItsReturn()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         Assert.Contains("withReturn: '{percent} % p. a. angenommen'", js);
         Assert.Contains("returnPercent", js);
@@ -126,7 +126,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void AMissingAnnuityFactorIsExplainedRatherThanBlankedOrInvented()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         Assert.Contains("item.projectedMonthlyAnnuity == null", js);
         Assert.Contains("noAnnuity:", js);
@@ -147,8 +147,8 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void AZeroDeltaIsStatedInWordsAndNotAsAnAmount()
     {
-        var js = ReadAsset("features", "pension-projection.js");
-        var css = ReadAsset("styles", "features", "pension.css");
+        var js = ReadAsset("pages", "pension", "projection.js");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains("sameMoneySameAssumptions", js);
         Assert.Contains("erzeugt keinen zusätzlichen Zinseszins", js);
@@ -174,7 +174,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void ANonZeroDeltaIsAttributedAndDifferentAssumptionsAreNotComparable()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         Assert.Contains("comparison.cause", js);
         Assert.Contains("data-sim-cause", js);
@@ -202,7 +202,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void EveryExcludedContractIsNamedWithItsBlockerAndItsRemedy()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         Assert.Contains("result.excluded", js);
         Assert.Contains("data-sim-blocker", js);
@@ -235,7 +235,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void TheScenarioFormIsInlineAndTheTabNeverWritesAnything()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         // 3 / 5 / 7 % plus a free field, per the brief.
         Assert.Contains("const RETURN_PRESETS = [3, 5, 7];", js);
@@ -265,12 +265,12 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void TheModuleReusesTheSharedInfrastructureAndLeavesNoDebugCode()
     {
-        var js = ReadAsset("features", "pension-projection.js");
+        var js = ReadAsset("pages", "pension", "projection.js");
 
         Assert.Contains("ctx.money(", js);
         Assert.Contains("ctx.date(", js);
         Assert.Contains("ctx.jsonBody(", js);
-        Assert.Contains("from './ux-kit.js'", js);
+        Assert.Contains("from '../../features/ux-kit.js'", js);
         // Buttons are the shared roles, never hand-rolled.
         Assert.Contains("btn btn-primary", js);
         Assert.Contains("btn btn-secondary", js);
@@ -291,7 +291,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public void SimulationStylesUseTokensAndCanShrinkOnAPhone()
     {
-        var css = ReadAsset("styles", "features", "pension.css");
+        var css = ReadAsset("pages", "pension", "page.css");
 
         Assert.Contains(".pension-simulation", css);
         Assert.Contains(".pension-sim-scenario", css);
@@ -320,7 +320,7 @@ public sealed class PensionProjectionUxBaselineTests : IClassFixture<FullWorthWe
     private static string Between(string source, string start, string end)
     {
         var from = source.IndexOf(start, StringComparison.Ordinal);
-        Assert.True(from >= 0, $"'{start}' is gone from features/pension-projection.js");
+        Assert.True(from >= 0, $"'{start}' is gone from pages/pension/projection.js");
         from += start.Length;
         var to = source.IndexOf(end, from, StringComparison.Ordinal);
         Assert.True(to > from, $"'{start}' is no longer terminated by '{end}'");

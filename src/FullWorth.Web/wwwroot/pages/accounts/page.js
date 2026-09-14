@@ -1,7 +1,7 @@
-import { money, converted, maskIdentifier } from '../components/money.js';
-import { balanceMeaningLine } from '../components/balance-meaning.js';
-import { state } from '../core/state.js';
-import { emptyRow } from '../components/empty.js';
+import { money, converted, maskIdentifier } from '../../components/money.js';
+import { balanceMeaningLine } from '../../components/balance-meaning.js';
+import { state } from '../../core/state.js';
+import { emptyRow } from '../../components/empty.js';
 import {
   bindAccountsPresentation,
   enhanceAccountsPresentation,
@@ -9,7 +9,7 @@ import {
   decorateManualAccountDialog,
   applyManualAccountVisual,
   editAccountVisualById
-} from './accounts-presentation.js';
+} from './presentation.js';
 
 let ctx = null;
 let bound = false;
