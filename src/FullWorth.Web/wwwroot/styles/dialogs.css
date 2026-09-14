@@ -1,0 +1,174 @@
+dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min(92vw,560px);width:100%}dialog::backdrop{background:rgba(11,15,20,.42)}.dialog-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-menu);display:grid;gap:12px}.dialog-card h2{margin:0;font-size:18px}.bank-options{display:grid;gap:5px;max-height:420px;overflow:auto;padding-right:3px}.bank-options button{text-align:left;background:var(--surface);padding:10px 12px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.dialog-actions button{border:1px solid transparent;border-radius:var(--radius-pill);height:38px;padding:0 16px;font-weight:600;background:var(--surface-2);color:var(--text)}.dialog-actions button:hover{background:var(--surface-3)}.dialog-actions button[type=submit],.dialog-actions button[data-save],.dialog-actions button[data-confirm],.dialog-actions button[data-apply]{background:var(--cta);color:var(--cta-text)}.dialog-actions button[type=submit]:hover,.dialog-actions button[data-save]:hover,.dialog-actions button[data-confirm]:hover,.dialog-actions button[data-apply]:hover{background:var(--cta);opacity:.9}.dialog-actions .ghost{background:transparent;border-color:transparent;color:var(--muted)}.dialog-actions .ghost:hover{background:var(--surface-2);color:var(--text)}.dialog-actions .ghost.danger,.dialog-actions .danger{color:var(--negative)}.dialog-actions .ghost.danger:hover,.dialog-actions .danger:hover{background:var(--negative-soft);color:var(--negative)}
+.dialog-actions .btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+.dialog-actions .btn-primary:hover{background:var(--cta);color:var(--cta-text);opacity:.9}
+.dialog-actions .btn-secondary{background:var(--surface);color:var(--text);border-color:var(--line)}
+.dialog-actions .btn-secondary:hover{background:var(--surface-2);color:var(--text)}
+.dialog-actions .btn-danger{background:transparent;color:var(--negative);border-color:transparent}
+.dialog-actions .btn-danger:hover{background:var(--negative-soft);color:var(--negative)}
+
+.setup-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.setup-choice{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.setup-choice:hover{background:var(--surface-2)}
+.setup-choice span{font-size:12px;color:var(--muted);line-height:1.45}
+.setup-meta{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2)}
+.setup-meta>div{display:grid;gap:2px;min-width:0}.setup-meta span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.setup-meta a{font-size:12px;overflow-wrap:anywhere}
+.setup-code{display:inline-block;margin-top:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:18px;font-weight:700;letter-spacing:.08em;user-select:all}
+.two-factor-key{user-select:all;word-break:break-all}
+.codex-login-action{display:grid;gap:8px}
+.setup-progress{font-size:12px;color:var(--muted);font-weight:700}
+.onboarding-dialog{max-width:620px}
+.onboarding-dialog h3{margin:0;font-size:20px}
+.ai-access-setup label{display:grid;gap:6px}
+@media(max-width:560px){.setup-choice-grid{grid-template-columns:1fr}.dialog-actions{flex-wrap:wrap}.dialog-actions button{flex:1 1 auto}}
+
+/* Shared dialog shell: every app dialog is normalized by ui/dialog.js. */
+dialog.fw-dialog{overscroll-behavior:contain}
+dialog.fw-dialog .fw-dialog-card{min-width:0}
+dialog.fw-dialog .fw-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+dialog.fw-dialog .fw-dialog-head>h2,
+dialog.fw-dialog .fw-dialog-head>h3,
+dialog.fw-dialog .fw-dialog-head>div{min-width:0;overflow-wrap:anywhere}
+dialog.fw-dialog .fw-dialog-head-minimal{justify-content:flex-end}
+dialog.fw-dialog .fw-dialog-close{
+  display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;padding:0;
+  border:0;border-radius:50%;background:transparent;color:var(--text);cursor:pointer
+}
+dialog.fw-dialog .fw-dialog-close:hover{background:var(--surface-2)}
+dialog.fw-dialog .fw-dialog-close svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+dialog.fw-dialog .dialog-actions{min-width:0}
+
+/* Phone dialogs are one consistent full-screen surface, matching transaction details. */
+@media(max-width:767px){
+  dialog.fw-dialog:not(.fw-dialog--sheet){
+    inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:0;
+    overflow:hidden;background:var(--surface)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet)::backdrop{background:var(--surface)}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-card{
+    width:100%;max-width:none;height:100%;max-height:none;min-height:100%;
+    margin:0;padding:0 var(--s4) calc(var(--s5) + env(safe-area-inset-bottom,0px));
+    border:0;border-radius:0;box-shadow:none;overflow-y:auto;overflow-x:hidden;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;align-content:start
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-head{
+    position:sticky;top:0;z-index:6;
+    margin:0 calc(var(--s4) * -1);
+    padding:calc(var(--s3) + env(safe-area-inset-top,0px)) var(--s4) var(--s3);
+    background:var(--surface);border-bottom:1px solid var(--line)
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close{
+    width:48px;height:48px;margin:-6px -8px -6px 0
+  }
+  dialog.fw-dialog:not(.fw-dialog--sheet) .fw-dialog-close svg{width:25px;height:25px;stroke-width:2.1}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .bank-options{max-height:none;overflow:visible}
+
+  /* Two cards set their own padding in app.css, which beats the card padding above and took the
+     safe-area inset with it - measured 18px flat, so on a notched phone the last row of a contract
+     detail sat under the home indicator. They keep their own horizontal padding; only the bottom
+     inset comes back. */
+  dialog.fw-dialog .contract-detail-v2,
+  dialog.fw-dialog .contract-analysis-dialog{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+  dialog.fw-dialog:not(.fw-dialog--sheet) .dialog-actions{
+    width:100%;padding-top:var(--s2)
+  }
+}
+
+/* Desktop/tablet: anchor non-drawer, non-sheet dialogs near the top instead of letting the
+   native dialog auto-center. Async content that grows after open then only extends downward,
+   never re-centering (jumping) the whole card. */
+/* This is THE dialog height, and the only one. Six features used to set their own — 92vh, 90vh,
+   86vh, 80vh, min(88vh,920px), min(900px,100dvh-24px) — so every dialog stopped at a different
+   place and none of them agreed with this rule. They are deleted; a feature that needs its own
+   inner scroll region says `overflow:auto` on that region, not a second height for the card.
+
+   dvh, never vh: vh is the LARGEST viewport, so 92vh on a phone reaches under the browser chrome. */
+@media(min-width:768px){
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet){
+    /* The anchor and the ceiling have to be the same number, or the card hangs off the bottom. They
+       were not: the top was max(--s8,10vh) while the height allowed 100dvh - 2*--s8, which only adds
+       up when 10vh happens to be below --s8. Measured at 1024x768 before this: top 77 px, bottom
+       781 px, 13 px past the viewport - on every centred dialog in the app. */
+    --fw-dialog-top:max(var(--s8),10vh);
+    margin-top:var(--fw-dialog-top);
+    margin-bottom:auto;
+    max-height:calc(100dvh - var(--fw-dialog-top) - var(--s8));
+  }
+  dialog.fw-dialog:not(.drawer):not(.fw-dialog--sheet) .fw-dialog-card{
+    max-height:inherit;
+    overflow-y:auto;
+  }
+}
+/* Codex model picker in the AI-access dialog. */
+.ai-codex-model{display:grid;grid-template-columns:1fr 1fr auto;gap:var(--s2);align-items:end;margin:var(--s3) 0}
+.ai-codex-model label{display:grid;gap:4px}
+.ai-codex-model [data-codex-model-status]{grid-column:1/-1}
+@media(max-width:640px){.ai-codex-model{grid-template-columns:1fr}}
+
+/* Every dialog overflowed the viewport as soon as its content contained one long string.
+
+   .dialog-card is display:grid with no grid-template-columns, so its single implicit column is
+   `auto`, which resolves to MAX-CONTENT - and a <select>'s max-content width is its longest <option>.
+   One long category or merchant name therefore sized the whole card: measured on the booking filter at
+   375 px, the column came out 435 px wide and every field sat 76 px past the right edge of the screen.
+   It looks random because it depends on the data, which is why it was never pinned down.
+
+   The grid rule is the same as everywhere else in this codebase: a column that must be allowed to
+   shrink is minmax(0,1fr), and its items need min-width:0, because a grid item's default
+   min-width:auto refuses to go below min-content. */
+.dialog-card{grid-template-columns:minmax(0,1fr)}
+.dialog-card>*{min-width:0}
+.dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}
+.dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}
+
+/* The declarative form dialog (ui/form-dialog.js). These rules exist once so the 76 call sites stop
+   each re-deciding label spacing, error position and the actions row. See docs/UI_AUDIT.md. */
+.fw-form-dialog .fw-field{display:grid;gap:4px;min-width:0}
+/* A grouped row is its own grid. .rule-grid looked like the shared two-column primitive but its only
+   base rule is scoped under .rule-dialog, so a bare .rule-grid is display:block - measured: grouped
+   fields stacked instead of sitting side by side. auto-fit keeps two and three-field groups even. */
+.fw-form-dialog .fw-field-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);align-items:start;min-width:0}
+@media(max-width:560px){.fw-form-dialog .fw-field-row{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr)}}
+.fw-form-dialog .fw-field--check{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--s2)}
+.fw-form-dialog .fw-field-label{min-width:0}
+.fw-form-dialog .fw-field-required{color:var(--muted);font-weight:400}
+.fw-form-dialog .fw-field-hint{font-size:11px;color:var(--muted);line-height:1.4}
+
+/* The error sits under its own field and is always in the DOM, so a failed validation does not
+   reflow the card and push the message it just produced off screen. */
+.fw-form-dialog .fw-field-error{font-size:11px;color:var(--negative);line-height:1.4}
+.fw-form-dialog .fw-field-error:empty{display:none}
+
+/* A failure that belongs to no field sits next to the button that caused it, not in a toast that
+   outlives the dialog. */
+.fw-form-dialog .fw-form-error{margin:0;font-size:12px;line-height:1.45;color:var(--negative)}
+.fw-form-dialog .fw-form-error:empty{display:none}
+.fw-form-dialog .fw-field.is-invalid input,
+.fw-form-dialog .fw-field.is-invalid select,
+.fw-form-dialog .fw-field.is-invalid textarea{border-color:var(--negative)}
+
+/* A section groups a handful of fields under a subject. Borderless on purpose: a box around every
+   group is what makes a form look like a tax return. The legend carries the weight. */
+.fw-form-dialog .fw-dialog-section{display:grid;gap:var(--s2);border:0;margin:0;padding:0;min-width:0}
+.fw-form-dialog .fw-dialog-section>legend{padding:0;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fw-form-dialog .fw-dialog-section+.fw-dialog-section{margin-top:var(--s2)}
+
+/* Progressive disclosure. A flat list of 14 equally weighted controls was the measured complaint;
+   the fields a caller marks `advanced` live in here. */
+.fw-dialog-advanced{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s2) var(--s3);min-width:0}
+.fw-dialog-advanced>summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);list-style:none}
+.fw-dialog-advanced>summary::-webkit-details-marker{display:none}
+.fw-dialog-advanced>summary::after{content:"▾";margin-left:6px;font-size:10px}
+.fw-dialog-advanced[open]>summary::after{content:"▴"}
+.fw-dialog-advanced[open]>summary{margin-bottom:var(--s2)}
+.fw-dialog-advanced>*+*{margin-top:var(--s2)}
+.fw-advanced-count:not(:empty){margin-left:6px;color:var(--text)}
+
+/* The destructive action is pushed away from the primary one, not merely coloured differently:
+   colour alone still leaves "Löschen" a thumb-slip from "Speichern" on a 375 px screen.
+
+   Scoped to .dialog-actions, not to the generated .fw-dialog-actions, so a hand-written actions row
+   can separate its delete the same way - the transaction drawer does. */
+.dialog-actions .fw-actions-spacer{flex:1 1 auto;min-width:var(--s3)}
+@media(max-width:560px){
+  .dialog-actions .fw-actions-spacer{flex-basis:100%;min-width:0;height:0}
+}

@@ -1,0 +1,45 @@
+/* Appearance layer: the two brand colours the user picks.
+   This file replaced the "cute" visual theme. That theme was a second look bolted over the whole app
+   - it re-skinned the topbar, the sidebar, panels, progress bars and budget cards - which meant every
+   new feature had to be checked twice and the design drifted apart in two directions at once. One
+   design plus two chosen colours gives the same room for taste with none of that cost.
+
+   IMPORTANT: this layer loads THIRD in the chain (tokens -> reset -> appearance -> shell ->
+   components -> app.css -> responsive), so it can never win a rule against app.css. It therefore only
+   defines custom properties, and the properties it defines are the ones the rest of the app already
+   reads. The picker in ui/appearance.js writes the same properties inline on <html>, which beats the
+   [data-theme] blocks in tokens.css in both light and dark mode.
+
+   The split follows how the tokens are actually used:
+     primary   -> --cta        buttons and primary actions      (~60 uses)
+     secondary -> --accent     links, focus rings, chart strokes (~40 uses)
+   Untouched, both fall back to the monochrome values from tokens.css, so an install where nobody
+   picked anything looks exactly as it did before. */
+
+:root {
+  --brand-primary: var(--cta);
+  --brand-secondary: var(--accent);
+
+  /* Derived chrome. design-depth.css used to carry ~30 fixed greys for its gradients, borders, hover
+     surfaces and dark chips, which is why a picked brand colour reached the buttons and left
+     everything around them grey. These are mixes of the primary into the surface/line/text tokens, so
+     the whole chrome follows the choice - and, because the base is a per-theme token, dark mode gets
+     its own values for free instead of inheriting light-mode greys.
+
+     With the shipped near-black primary the results land within a hair of the greys they replace, so
+     an untouched install barely moves. The percentages are a scale, not tuned per site: 1 is the
+     faintest wash, 3 the most present. */
+  --tint-surface-1: color-mix(in srgb, var(--brand-primary) 3%, var(--surface));
+  --tint-surface-2: color-mix(in srgb, var(--brand-primary) 6%, var(--surface));
+  --tint-surface-3: color-mix(in srgb, var(--brand-primary) 9%, var(--surface));
+  --tint-line-1: color-mix(in srgb, var(--brand-primary) 10%, var(--line));
+  --tint-line-2: color-mix(in srgb, var(--brand-primary) 22%, var(--line));
+  --tint-line-3: color-mix(in srgb, var(--brand-primary) 45%, var(--line));
+  --tint-text-strong: color-mix(in srgb, var(--brand-primary) 20%, var(--text));
+  --tint-text-soft: color-mix(in srgb, var(--brand-primary) 12%, var(--muted));
+}
+
+/* The brand mark is tinted by swapping the image source for a recoloured data URL (see tintBrandMark
+   in ui/appearance.js), not with a CSS mask: a mask would flatten the three bars into one solid shape
+   and lose the ramp the mark is built on. html[data-brand-tint] therefore carries no styling here - it
+   exists so the state is visible in the DOM. */

@@ -1,4 +1,5 @@
 using FullWorth.Web.Modules.Bootstrap;
+using Npgsql;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
@@ -22,6 +23,9 @@ public class FullWorthWebFactory : WebApplicationFactory<FullWorth.Web.WebAssemb
 
     private readonly ConcurrentQueue<RecordedProxyRequest> recordedRequests = new();
 
+    // Einmal je Testprozess, nicht je Testklasse.
+    private static readonly Lazy<bool> Purged = new(PurgeAbandonedDatabases, LazyThreadSafetyMode.ExecutionAndPublication);
+
     public IReadOnlyList<RecordedProxyRequest> BackendRequests => recordedRequests
         .Where(x => x.ClientName == "backend")
         .ToArray();
@@ -40,6 +44,7 @@ public class FullWorthWebFactory : WebApplicationFactory<FullWorth.Web.WebAssemb
         var authDatabase = Environment.GetEnvironmentVariable("FULLWORTH_TEST_POSTGRES");
         if (string.IsNullOrWhiteSpace(authDatabase))
             throw new InvalidOperationException("FULLWORTH_TEST_POSTGRES must point to the PostgreSQL 18 test server.");
+        _ = Purged.Value;
         // Give every test host its own isolated auth database (the app migrates it on startup), so tests
         // never collide on shared unique keys such as passkey credential ids. Bound the pool so parallel
         // hosts stay under the CI max_connections ceiling.
@@ -97,6 +102,55 @@ public class FullWorthWebFactory : WebApplicationFactory<FullWorth.Web.WebAssemb
         if (environment.IsProduction() && client.BaseAddress?.Scheme != Uri.UriSchemeHttps)
             client.BaseAddress = new Uri("https://localhost");
         return client;
+    }
+
+    /// <summary>
+    /// Wirft die Auth-Datenbanken früherer Läufe weg.
+    ///
+    /// Jede Testklasse bekommt ihre eigene <c>fullworth_web_&lt;guid&gt;</c>, und keine hat sie je wieder
+    /// gelöscht. Die Backend-Factory räumt seit Langem auf, diese hier nicht — also wuchs der Testserver
+    /// nur dann nicht, wenn zufällig auch Backend-Tests liefen. Am 2026-09-14 standen 5 846 Klone mit
+    /// 48 GB darin, und das Ende war nicht die Platte: PostgreSQL lief mit Dockers voreingestellten
+    /// 64 MB <c>/dev/shm</c> in "could not resize shared memory segment … No space left on device",
+    /// während C: 50 GB frei hatte. Diagnose kostet dann Stunden, weil die Meldung auf das Falsche zeigt.
+    ///
+    /// Sechs Stunden, nicht sofort: ein zweiter Testprozess daneben darf seine Datenbanken behalten.
+    /// Ein Fehler hier ist kein Testfehler — der Lauf geht weiter, es bleibt nur liegen.
+    /// </summary>
+    private static bool PurgeAbandonedDatabases()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("FULLWORTH_TEST_POSTGRES");
+        if (string.IsNullOrWhiteSpace(connectionString)) return false;
+
+        try
+        {
+            using var maintenance = new NpgsqlConnection($"{connectionString.TrimEnd(';')};Database=postgres;Pooling=false");
+            maintenance.Open();
+
+            var abandoned = new List<string>();
+            using (var query = new NpgsqlCommand("""
+                SELECT d.datname
+                FROM pg_database d
+                WHERE starts_with(d.datname, 'fullworth_web_')
+                  AND NOT d.datistemplate
+                  AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)
+                  AND (pg_stat_file('base/' || d.oid || '/PG_VERSION')).modification < now() - interval '6 hours'
+                """, maintenance))
+            using (var reader = query.ExecuteReader())
+                while (reader.Read()) abandoned.Add(reader.GetString(0));
+
+            foreach (var database in abandoned)
+            {
+                using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)", maintenance);
+                try { drop.ExecuteNonQuery(); } catch { /* eine, die gerade jemand benutzt */ }
+            }
+        }
+        catch
+        {
+            // Aufräumen ist Hygiene, kein Test.
+        }
+
+        return true;
     }
 
     public sealed record RecordedProxyRequest(
