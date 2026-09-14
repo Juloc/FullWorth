@@ -2,13 +2,13 @@ using System.Data;
 using System.Data.Common;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
-using FullWorth.Backend.Modules.Categories;
+using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Transactions;
+namespace FullWorth.Backend.Modules.Categories;
 
 public sealed record CategoryExplanation(decimal Confidence, string ReasonCode, string? Detail);
 public sealed record ReviewWrite(IReadOnlyList<Guid>? TransactionIds, bool IsReviewed);

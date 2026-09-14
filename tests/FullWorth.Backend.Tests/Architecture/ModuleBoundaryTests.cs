@@ -30,7 +30,10 @@ public sealed class ModuleBoundaryTests
         "Audit <-> Parity",
         "Budgets <-> Parity",
         "Categories <-> Parity",
-        "Categories <-> Transactions",
+        // Categories <-> Transactions ist am 2026-09-14 aufgeloest worden, siehe #111:
+        // CategoryIntelligenceModule lag in Transactions, hiess nach Kategorien und mappte
+        // /api/category-intelligence. Es war die einzige Kante Transactions -> Categories. Nach dem
+        // Umzug bleibt Categories -> Transactions - eine Richtung ist kein Kreis.
         "Coach <-> Intelligence",
         "Contracts <-> Intelligence",
         "Contracts <-> Parity",
