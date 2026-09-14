@@ -71,7 +71,11 @@ main:focus{outline:none}
    Die Drei in repeat(3,auto) sind die drei Symbolknöpfe im Markup; ein vierter braucht hier eine Zahl. */
 .topbar-actions{display:grid;grid-template-columns:repeat(3,auto) minmax(0,1fr);align-items:center;gap:var(--s2);width:300px;min-width:0}
 .topbar-actions #primary-action{justify-self:end;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
+/* padding:0 ist der Punkt, nicht Kosmetik: components.css gibt JEDEM button 9px 11px, und mit
+   border-box bleiben von 36px dann 12px Inhaltsbreite für ein 18px-Symbol. Ein Rasterelement, das
+   über seine Fläche hinausragt, richtet der Browser sicherheitshalber am Anfang aus - place-items:center
+   hin oder her. Gemessen war der Abstand links 12 und rechts 6; jetzt ist er ringsum 9. */
+.icon-button{display:grid;place-items:center;padding:0;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text);cursor:pointer}
 .icon-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .icon-button:hover{border-color:var(--cta)}
 .icon-button.active{background:var(--surface-2);color:var(--text);border-color:var(--line)}

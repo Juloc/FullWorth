@@ -419,6 +419,8 @@ automated browser test either. What exists:
   `Frontend/FrontendStructureGuardTests` (the six structure rules),
   `Frontend/MenuParityTests` (phone and desktop against the one definition),
   `Frontend/LayoutStabilityTests` (Playwright, a real shift measurement per page and size),
+  `Frontend/IconAlignmentTests` (Playwright, every icon-only container measured against its icon —
+  the string guards cannot see that a 18px icon sits 12px from the left and 6px from the right),
   `Frontend/AdminPageDesignSystemGuardTests`, `Frontend/SingleElementQueryGuardTests`,
   `Frontend/ToastVisibilityTests`, `Frontend/TouchRevealGuardTests`,
   `Accessibility/AccessibilityGuardTests`, `Responsive/ResponsiveLayoutTests`, `Theme/ThemeParityTests`,

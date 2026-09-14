@@ -160,7 +160,37 @@ public sealed class UiHarness : IAsyncLifetime
     /// </summary>
     public async Task<(double Score, string[] Culprits)> MeasureAsync(string path, bool mobile)
     {
-        await using var context = await _browser!.NewContextAsync(new()
+        var page = await OpenAsync(path, mobile, ShiftProbe);
+        await using var context = page.Context;
+
+        var raw = await page.EvaluateAsync<JsonElement>("JSON.stringify(window.__shifts)");
+        var shifts = JsonSerializer.Deserialize<Shift[]>(raw.GetString()!, JsonSerializerOptions.Web)!;
+
+        return (
+            shifts.Sum(shift => shift.Value),
+            shifts.SelectMany(shift => shift.Sources).Distinct().Take(8).ToArray());
+    }
+
+    /// <summary>
+    /// Dieselbe Seite unter denselben Bedingungen, aber mit einer eigenen Frage. Der Ausdruck läuft
+    /// im Browser, wenn alles steht, und liefert eine Zeichenkette zurück.
+    /// </summary>
+    public async Task<string> AskAsync(string path, bool mobile, string script)
+    {
+        var page = await OpenAsync(path, mobile, null);
+        await using var context = page.Context;
+
+        return await page.EvaluateAsync<string>(script);
+    }
+
+    /// <summary>
+    /// Eine fertig geladene Seite. Feste Sprache, feste Größe, und derselbe Moment für jede Messung:
+    /// die Harness beantwortet die Abrufe sofort, die aufgeschobenen Module brauchen trotzdem einen
+    /// Augenblick.
+    /// </summary>
+    private async Task<IPage> OpenAsync(string path, bool mobile, string? initScript)
+    {
+        var context = await _browser!.NewContextAsync(new()
         {
             ViewportSize = mobile ? new() { Width = 375, Height = 812 } : new() { Width = 1280, Height = 900 },
             // Feste Sprache, und zwar die, in der das Dokument NICHT erzeugt wird.
@@ -173,10 +203,22 @@ public sealed class UiHarness : IAsyncLifetime
             Locale = "en-US"
         });
         var page = await context.NewPageAsync();
+        if (initScript is not null) await page.AddInitScriptAsync(initScript);
 
-        // Vor allem anderen eingebaut: ein später hinzugefügter Beobachter verpasst die Sprünge, die
-        // passieren, während die Seite sich noch zusammensetzt — also alle interessanten.
-        await page.AddInitScriptAsync("""
+        await page.GotoAsync($"http://127.0.0.1:{Port}{path}", new() { WaitUntil = WaitUntilState.NetworkIdle });
+        // Hier legt sich die späte Arbeit: verzögerte Module und die Abrufe, die die Harness sofort
+        // beantwortet.
+        await page.WaitForTimeoutAsync(1500);
+
+        return page;
+    }
+
+    /// <summary>
+    /// Vor allem anderen eingebaut: ein später hinzugefügter Beobachter verpasst die Sprünge, die
+    /// passieren, während die Seite sich noch zusammensetzt — also alle interessanten.
+    /// </summary>
+    private const string ShiftProbe =
+        """
             window.__shifts = [];
             // className ist an einem SVG ein SVGAnimatedString, kein Text - der Bericht sagte dann
             // "[object SVGAnimatedString]" und half niemandem. Das Attribut lesen, nicht die
@@ -200,20 +242,7 @@ public sealed class UiHarness : IAsyncLifetime
                 });
               }
             }).observe({ type: 'layout-shift', buffered: true });
-            """);
-
-        await page.GotoAsync($"http://127.0.0.1:{Port}{path}", new() { WaitUntil = WaitUntilState.NetworkIdle });
-        // Hier legt sich die späte Arbeit: verzögerte Module und die Abrufe, die die Harness sofort
-        // beantwortet.
-        await page.WaitForTimeoutAsync(1500);
-
-        var raw = await page.EvaluateAsync<JsonElement>("JSON.stringify(window.__shifts)");
-        var shifts = JsonSerializer.Deserialize<Shift[]>(raw.GetString()!, JsonSerializerOptions.Web)!;
-
-        return (
-            shifts.Sum(shift => shift.Value),
-            shifts.SelectMany(shift => shift.Sources).Distinct().Take(8).ToArray());
-    }
+            """;
 
     private sealed record Shift(double Value, string[] Sources);
 
