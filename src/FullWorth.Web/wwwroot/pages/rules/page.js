@@ -5,7 +5,7 @@
 // enabled/disabled and re-applied to history. Backend: /api/categorization-rules (GET/POST/PUT),
 // /preview (dry-run of a draft), /reapply (apply the whole set to existing transactions).
 
-import { openFormDialog, FieldKind } from '../components/form-dialog.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 
 let ctx = null;
 

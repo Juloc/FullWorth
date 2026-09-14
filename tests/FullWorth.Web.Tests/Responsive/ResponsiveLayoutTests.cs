@@ -102,7 +102,7 @@ public sealed class ResponsiveLayoutTests
         var html = File.ReadAllText(Path.Combine(wwwroot, "index.html"));
         var appJs = File.ReadAllText(Path.Combine(wwwroot, "app.js"));
         // The frontend is a set of ES modules: app.js orchestrates, feature/ui modules own their screens.
-        // A data-action may be wired in app.js OR in the module that owns that screen (e.g. features/rules.js).
+        // A data-action may be wired in app.js OR in the module that owns that screen (e.g. pages/rules/page.js).
         var allJs = appJs + string.Concat(Directory
             .EnumerateFiles(wwwroot, "*.js", SearchOption.AllDirectories)
             .Where(path => !path.EndsWith("app.js", StringComparison.Ordinal))

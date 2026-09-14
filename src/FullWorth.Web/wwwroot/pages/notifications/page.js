@@ -4,7 +4,7 @@
 // disabled controls: when push is unsupported/denied/not configured, the status says so plainly
 // instead of showing an always-on checkbox that implies the feature works.
 
-import { enablePush, disablePush } from '../push/push.js';
+import { enablePush, disablePush } from '../../push/push.js';
 
 let ctx = null;
 const TYPES = [

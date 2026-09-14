@@ -238,9 +238,9 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public async Task The_rule_builder_shows_the_rule_and_hides_the_refinements()
     {
-        var js = await GetAsync("/features/rules.js");
+        var js = await GetAsync("/pages/rules/page.js");
 
-        Assert.Contains("import { openFormDialog, FieldKind } from '../components/form-dialog.js'", js);
+        Assert.Contains("import { openFormDialog, FieldKind } from '../../components/form-dialog.js'", js);
         Assert.Contains("label: ctx.get('rules.enabled') }", js);          // visible
         Assert.Contains("label: ctx.get('rules.markTransfer'), advanced: true", js);
         Assert.Contains("label: ctx.get('rules.stop'), advanced: true", js);
@@ -262,7 +262,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task A_neutral_select_value_does_not_count_as_a_set_filter()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var rules = await GetAsync("/features/rules.js");
+        var rules = await GetAsync("/pages/rules/page.js");
 
         Assert.Contains("field.emptyValue !== undefined && value === String(field.emptyValue)", js);
         Assert.Contains("emptyValue: 'any'", rules);
@@ -300,7 +300,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [Theory]
     [InlineData("/features/networth.js")]
     [InlineData("/features/loans.js")]
-    [InlineData("/features/rules.js")]
+    [InlineData("/pages/rules/page.js")]
     [InlineData("/features/contracts.js")]
     public async Task Every_converted_editor_keeps_its_required_fields_visible(string path)
     {

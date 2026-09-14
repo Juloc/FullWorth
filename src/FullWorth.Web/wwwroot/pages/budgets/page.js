@@ -1,8 +1,8 @@
-import { state } from '../core/state.js';
-import { ButtonRole, buttonClass } from '../components/buttons.js';
-import { MoneyVariant, moneyClass } from '../components/money.js';
-import { openFormDialog, FieldKind } from '../components/form-dialog.js';
-import { emptyRow } from '../components/empty.js';
+import { state } from '../../core/state.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { MoneyVariant, moneyClass } from '../../components/money.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { emptyRow } from '../../components/empty.js';
 
 // The disclosure label is new with the form-dialog conversion and has no i18n key yet.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }

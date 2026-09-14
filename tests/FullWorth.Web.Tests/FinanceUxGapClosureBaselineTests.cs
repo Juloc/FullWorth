@@ -125,7 +125,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task MixedBudgetWindowsAreNotBlindlySummed()
     {
-        var budgets = await GetAsync("/features/budgets.js");
+        var budgets = await GetAsync("/pages/budgets/page.js");
         Assert.Contains("const windows = new Set", budgets);
         Assert.Contains("comparableWindow", budgets);
         Assert.Contains("unterschiedliche aktive Zeiträume", budgets);

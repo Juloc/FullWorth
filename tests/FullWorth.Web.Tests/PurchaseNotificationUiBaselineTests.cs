@@ -13,7 +13,7 @@ public sealed class PurchaseNotificationUiBaselineTests : IClassFixture<FullWort
     public void Purchase_notification_types_are_user_configurable()
     {
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        var js = File.ReadAllText(Path.Combine(environment.WebRootPath, "features", "notifications.js"));
+        var js = File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "notifications", "page.js"));
 
         Assert.Contains("'purchase_review'", js);
         Assert.Contains("'purchase_scan_failed'", js);

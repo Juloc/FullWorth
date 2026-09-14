@@ -4,7 +4,7 @@
 // (GET list with aliases, POST create, PUT rename, DELETE, POST /{id}/merge), plus per-merchant alias
 // add/remove. All writes require the space Owner role.
 
-import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
+import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 
 let ctx = null;
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';

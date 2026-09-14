@@ -9,7 +9,7 @@ public sealed class BudgetWizardUiBaselineTests : IClassFixture<FullWorthWebFact
     [Fact]
     public async Task WizardExposesFlexiblePeriodsRolloverModesAndWeeklyGroceriesPreset()
     {
-        var budgets = await GetAsync("/features/budgets.js");
+        var budgets = await GetAsync("/pages/budgets/page.js");
         var de = await GetAsync("/locales/de.json");
 
         Assert.Contains("'daily','weekly','biweekly','monthly','quarterly','yearly','paycycle','custom'", budgets);
