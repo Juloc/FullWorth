@@ -1,4 +1,3 @@
-Accounts/AccountAppearanceEndpoints.cs
 Accounts/AccountExperienceEndpoints.cs
 Accounts/AccountsModule.cs
 Admin/AdminSecretsModule.cs
@@ -25,7 +24,6 @@ Export/CsvZipExportParityModule.cs
 Export/ExportCompletionParityModule.cs
 Export/ExportModule.cs
 Export/WealthPortableExportModule.cs
-Export/XlsxExportEndpoints.cs
 FullWorthSpaces/AccessEndpoints.cs
 Import/FinanzguruImportModule.cs
 Import/ImportMappingParityModule.cs

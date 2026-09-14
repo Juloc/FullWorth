@@ -228,6 +228,8 @@ public static class BackendApplication
         builder.Services.AddScoped<CapabilityGrantStore>();
         builder.Services.AddScoped<BankingSyncStateStore>();
         builder.Services.AddScoped<RefundCandidateStore>();
+        builder.Services.AddScoped<AccountAppearanceStore>();
+        builder.Services.AddScoped<XlsxExportService>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
