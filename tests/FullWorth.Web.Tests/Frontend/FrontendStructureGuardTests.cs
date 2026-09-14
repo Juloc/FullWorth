@@ -209,6 +209,34 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
+    /// Ein nachgebauter Klick trifft etwas.
+    ///
+    /// Zehn Stellen unter pages/networth/ riefen nach dem Speichern
+    /// document.querySelector('#refresh')?.click() auf. Einen Knopf mit dieser Kennung gibt es in
+    /// diesem Dokument nicht — er stand einmal in der eigenen Admin-Seite, die es nicht mehr gibt.
+    /// Das Fragezeichen hat den Fehler verschluckt, also passierte schlicht nichts: kein Neuladen,
+    /// keine Meldung, nur ein Wert, der auf dem Bildschirm alt blieb.
+    ///
+    /// Kein Test hat das gemeldet, weil der Quelltext richtig aussah. Dieser vergleicht die Kennung
+    /// mit dem, was wirklich im Dokument steht.
+    /// </summary>
+    [Fact]
+    public void A_synthetic_click_has_a_target()
+    {
+        var markup = File.ReadAllText(Path.Combine(WebRoot, "index.html"));
+        var offenders = new List<string>();
+
+        foreach (var path in Scripts("app", "components", "core", "features", "pages"))
+            foreach (Match match in Regex.Matches(Code(path), @"querySelector\('#([\w-]+)'\)\??\.click\(\)"))
+                if (!markup.Contains($"id=\"{match.Groups[1].Value}\"", StringComparison.Ordinal))
+                    offenders.Add($"{Relative(path)}: #{match.Groups[1].Value}");
+
+        Assert.True(offenders.Count == 0,
+            "Diese Module klicken auf etwas, das es im Dokument nicht gibt:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
     /// Eine Seite ist ein Ordner mit page.html, und index.html ist erzeugt, nicht gepflegt.
     /// </summary>
     [Fact]

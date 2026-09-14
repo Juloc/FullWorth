@@ -1,8 +1,14 @@
 import { api as sharedApi, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
+import { emitAppEvent } from '../../core/event-bus.js';
 import { showToast } from '../../components/toast.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
+
+// Nach dem Speichern soll die Seite neu laden. Hier stand dafür
+// document.querySelector('#refresh')?.click() - ein Knopf, den es in diesem Dokument nie gab. Das
+// Fragezeichen hat den Fehler verschluckt, also passierte schlicht nichts, und zwar zehnmal.
+const reloadSurface = () => emitAppEvent('surface:reload');
 
 const COPY = {
   de: {
@@ -190,34 +196,34 @@ function bindDetails(dlg, asset, base) {
     else if (asset.kind === 'receivable') body = { counterpartyDisplayLabel: fd.get('counterpartyDisplayLabel'), originalPrincipal: Number(fd.get('originalPrincipal')), outstandingPrincipal: Number(fd.get('outstandingPrincipal')), currency: String(fd.get('currency')).toUpperCase(), interestRate: num(fd.get('interestRate')), startDate: fd.get('startDate') || null, dueDate: fd.get('dueDate') || null, paymentCycle: fd.get('paymentCycle') || null, expectedPayment: num(fd.get('expectedPayment')), status: fd.get('status'), notes: fd.get('notes') || null };
     else if (asset.kind === 'business_interest') body = { companyDisplayName: fd.get('companyDisplayName'), legalForm: fd.get('legalForm') || null, ownershipPercent: num(fd.get('ownershipPercent')), acquisitionDate: fd.get('acquisitionDate') || null, investedCapital: num(fd.get('investedCapital')), investedCurrency: fd.get('investedCurrency') || null, valuationMethod: fd.get('valuationMethod') || null, lastDistributionDate: fd.get('lastDistributionDate') || null, notes: fd.get('notes') || null };
     else body = { providerName: fd.get('providerName') || null, productName: fd.get('productName') || null, productType: fd.get('productType'), policyReference: fd.get('policyReference') || null, startDate: fd.get('startDate') || null, maturityDate: fd.get('maturityDate') || null, regularContribution: num(fd.get('regularContribution')), contributionCycle: fd.get('contributionCycle') || null, guaranteedValue: num(fd.get('guaranteedValue')), guaranteedValueDate: fd.get('guaranteedValueDate') || null, notes: fd.get('notes') || null };
-    try { await api(base, json('PUT', body)); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(base, json('PUT', body)); toast(t('saved')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
 }
 
 function bindValuation(dlg, asset, d) {
   dlg.querySelector('[data-manual-valuation]')?.addEventListener('submit', async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
-    try { await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(fd.get('amount')), currency: String(fd.get('currency')).toUpperCase(), valuedAt: fd.get('valuedAt'), method: 'manual', isAccepted: true })); toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(fd.get('amount')), currency: String(fd.get('currency')).toUpperCase(), valuedAt: fd.get('valuedAt'), method: 'manual', isAccepted: true })); toast(t('accepted')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
   dlg.querySelector('[data-accept-appraisal]')?.addEventListener('click', async () => {
-    try { await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(d.appraisedValue), currency: d.purchaseCurrency || asset.currency || 'EUR', valuedAt: d.appraisedAt || today(), method: 'appraisal', isAccepted: true })); toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(d.appraisedValue), currency: d.purchaseCurrency || asset.currency || 'EUR', valuedAt: d.appraisedAt || today(), method: 'appraisal', isAccepted: true })); toast(t('accepted')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
 }
 
 function bindReceivableActivity(dlg, asset, base) {
   dlg.querySelector('[data-payment-form]')?.addEventListener('submit', async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
-    try { await api(`${base}/payments`, json('POST', { transactionId: fd.get('transactionId') || null, date: fd.get('date'), principalAmount: Number(fd.get('principalAmount')), interestAmount: Number(fd.get('interestAmount')), currency: String(fd.get('currency')).toUpperCase(), notes: fd.get('notes') || null })); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(`${base}/payments`, json('POST', { transactionId: fd.get('transactionId') || null, date: fd.get('date'), principalAmount: Number(fd.get('principalAmount')), interestAmount: Number(fd.get('interestAmount')), currency: String(fd.get('currency')).toUpperCase(), notes: fd.get('notes') || null })); toast(t('saved')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
   dlg.querySelector('[data-write-down]')?.addEventListener('submit', async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
-    try { await api(`${base}/write-down`, json('POST', { recoverableAmount: Number(fd.get('recoverableAmount')), confirmed: fd.get('confirmed') === 'on' })); toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(`${base}/write-down`, json('POST', { recoverableAmount: Number(fd.get('recoverableAmount')), confirmed: fd.get('confirmed') === 'on' })); toast(t('accepted')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
 }
 
 function bindDistributionActivity(dlg, asset) {
   dlg.querySelector('[data-distribution-form]')?.addEventListener('submit', async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
-    try { await api(`api/assets/${asset.id}/cashflows`, json('POST', { transactionId: null, date: fd.get('date'), type: 'distribution', amount: Number(fd.get('amount')), direction: 'income', currency: String(fd.get('currency')).toUpperCase(), isPlanned: false, notes: fd.get('notes') || null })); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); } catch (error) { toast(error.message || t('invalid')); }
+    try { await api(`api/assets/${asset.id}/cashflows`, json('POST', { transactionId: null, date: fd.get('date'), type: 'distribution', amount: Number(fd.get('amount')), direction: 'income', currency: String(fd.get('currency')).toUpperCase(), isPlanned: false, notes: fd.get('notes') || null })); toast(t('saved')); dlg.close(); reloadSurface(); } catch (error) { toast(error.message || t('invalid')); }
   });
 }

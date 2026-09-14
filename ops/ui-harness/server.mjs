@@ -37,8 +37,8 @@ const INJECT = '<script src="/__fixtures.js"></script>\n  <script type="module" 
 // .catch() cannot silence it, and a permanent error in the console makes the one rule this harness
 // exists for - check the console after a frontend change - useless.
 //
-// Only the registration call is removed. Everything else in register-sw.js stays, because that file
-// also loads the Coach shell, which IS real UI worth looking at here.
+// Nur der Registrierungsaufruf wird ersetzt, der Rest der Datei bleibt. Sie lud einmal auch den
+// Coach nach; seit der eine gewöhnliche Seite ist, registriert sie nur noch den Service Worker.
 const SW_REGISTRATION = "navigator.serviceWorker.register('/sw.js')";
 const SW_REGISTRATION_STUB =
   "Promise.reject(new Error('ui-harness: service workers are not available in this browser'))";

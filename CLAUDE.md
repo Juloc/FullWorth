@@ -79,7 +79,7 @@ Beyond those:
   knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and classes anyway. A `<style>` block is blocked.
 - **Buttons: use the shared module roles only** — `.btn` + `.btn-primary` / `.btn-secondary` / `.btn-danger` (`styles/components.css`). Do not hand-roll button styling. (`.primary-action` in `shell.css` is the older variant still used app-wide.)
-- **Not all markup is in `wwwroot` yet:** `Modules/Import/{ImportCenter,FinanzguruImport,BrokerPdfImport}Page.cs` still keep their HTML in C# raw string literals, and `ops/ui-harness` parses those literals so an edited inlined page is served edited. Those three are the last standalone documents; they move to `pages/settings/import/` and then this note goes away.
+- **Alles Markup liegt in `wwwroot`.** Die drei Import-Seiten hielten ihr HTML einmal in C#-Rohstringen, und `ops/ui-harness` las sie von dort; seit sie unter `pages/settings/import/` liegen, ist beides weg. Eigenständige Dokumente gibt es noch zwei, beide mit Grund: `auth/` (dort gibt es noch keine Sitzung) und `account-deletion/` (dort ist das Konto abgeschaltet, ein Menü führte ins Leere).
 
 ### Live UI verification (use this!)
 Two ways, neither needs credentials:

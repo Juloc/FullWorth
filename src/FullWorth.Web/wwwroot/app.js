@@ -405,6 +405,7 @@ installTopbarMetrics();
 installNavigation((view,options={})=>showView(view,options));
 onAppEvent('budget:open',detail=>{if(detail?.id)openBudgetDetail(ctx,detail.id)});
 onAppEvent('rules:new',()=>newRule(ctx));
+onAppEvent('surface:reload',()=>loadCurrent());
 
 // Global search (§19): groups results from existing scoped endpoints; never touches provider payloads.
 // Shared context handed to UI modules (dashboard widgets, transactions detail, …) so they reuse the

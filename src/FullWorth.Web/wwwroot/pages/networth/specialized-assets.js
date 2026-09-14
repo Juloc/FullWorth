@@ -1,8 +1,14 @@
 import { api as sharedApi, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
+import { emitAppEvent } from '../../core/event-bus.js';
 import { showToast } from '../../components/toast.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
+
+// Nach dem Speichern soll die Seite neu laden. Hier stand dafür
+// document.querySelector('#refresh')?.click() - ein Knopf, den es in diesem Dokument nie gab. Das
+// Fragezeichen hat den Fehler verschluckt, also passierte schlicht nichts, und zwar zehnmal.
+const reloadSurface = () => emitAppEvent('surface:reload');
 
 const TEXT = {
   de: {
@@ -252,7 +258,7 @@ function bindDetailForm(dlg, asset, endpoint) {
         purchasePrice: num(fd.get('purchasePrice')), purchaseCurrency: fd.get('purchaseCurrency') || null, notes: fd.get('notes') || null
       };
     }
-    try { await api(endpoint, json('PUT', body)); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); }
+    try { await api(endpoint, json('PUT', body)); toast(t('saved')); dlg.close(); reloadSurface(); }
     catch (error) { toast(error.message || t('invalid')); }
   });
 }
@@ -262,7 +268,7 @@ function bindValuation(dlg, asset, endpoint) {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
     try {
       await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: Number(fd.get('amount')), currency: String(fd.get('currency')).toUpperCase(), valuedAt: fd.get('valuedAt') || null, method: 'manual', isAccepted: true }));
-      toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click();
+      toast(t('accepted')); dlg.close(); reloadSurface();
     } catch (error) { toast(error.message || t('invalid')); }
   });
 
@@ -278,7 +284,7 @@ function bindValuation(dlg, asset, endpoint) {
       result.querySelector('[data-accept-estimate]').addEventListener('click', async () => {
         try {
           await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: estimate.amount, currency: estimate.currency, valuedAt: estimate.valuedAt, method: 'internal_estimate', lowEstimate: estimate.lowEstimate, highEstimate: estimate.highEstimate, isAccepted: true }));
-          toast(t('accepted')); dlg.close(); document.querySelector('#refresh')?.click();
+          toast(t('accepted')); dlg.close(); reloadSurface();
         } catch (error) { toast(error.message || t('invalid')); }
       });
     } catch (error) { toast(error.message || t('invalid')); }
@@ -295,7 +301,7 @@ function bindFinancing(dlg, asset) {
     event.preventDefault(); const fd = new FormData(event.currentTarget); const source = String(fd.get('source') || '');
     const [type, id] = source.split(':'); if (!id) return;
     const body = { loanId: type === 'loan' ? id : null, liabilityId: type === 'liability' ? id : null, relationType: fd.get('relationType'), allocationPercent: Number(fd.get('allocationPercent')) };
-    try { await api(`api/assets/${asset.id}/debts`, json('POST', body)); toast(t('saved')); dlg.close(); document.querySelector('#refresh')?.click(); }
+    try { await api(`api/assets/${asset.id}/debts`, json('POST', body)); toast(t('saved')); dlg.close(); reloadSurface(); }
     catch (error) { toast(error.message || t('invalid')); }
   });
 }
