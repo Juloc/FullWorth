@@ -33,19 +33,16 @@ public static class AiUserAccessEndpoints
 
         group.MapGet("/", async (
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
             IntelligenceStore store,
             IConfiguration configuration,
             IHttpClientFactory clients,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var settings = await db.AiUserSettings.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.UserId == userId, ct);
+            var settings = await store.FindUserSettingsAsync(userId, ct);
             AiCredential? credential = null;
             if (settings?.CredentialId is { } credentialId)
-                credential = await db.AiCredentials.AsNoTracking()
-                    .SingleOrDefaultAsync(x => x.Id == credentialId && x.OwnerUserId == userId, ct);
+                credential = await store.FindOwnedCredentialAsync(credentialId, userId, ct);
 
             object? custom = null;
             if (credential?.Provider == IntelligenceProviders.OpenAiCompatible)
@@ -194,7 +191,6 @@ public static class AiUserAccessEndpoints
         group.MapGet("/codex/login/{sessionId:guid}", async (
             Guid sessionId,
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
             IntelligenceStore store,
             IConfiguration configuration,
             IHttpClientFactory clients,
@@ -218,10 +214,8 @@ public static class AiUserAccessEndpoints
                 : null;
             if (string.Equals(status, "connected", StringComparison.OrdinalIgnoreCase))
             {
-                var existing = await db.AiCredentials
-                    .SingleOrDefaultAsync(x =>
-                        x.OwnerUserId == userId &&
-                        x.Provider == IntelligenceProviders.Codex, ct);
+                var existing = await store.FindOwnedCredentialByProviderAsync(
+                    userId, IntelligenceProviders.Codex, ct);
                 var scope = CodexBridgeIntelligenceProvider.ScopeForUser(userId);
                 AiCredentialView view;
                 if (existing is null)
@@ -259,7 +253,7 @@ public static class AiUserAccessEndpoints
         group.MapPut("/codex/model", async (
             CodexModelRequest request,
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
+            IntelligenceStore store,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
@@ -269,16 +263,7 @@ public static class AiUserAccessEndpoints
                  !model.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or ':')))
                 return Results.BadRequest(new { error = "invalid_model" });
 
-            var settings = await db.AiUserSettings.SingleOrDefaultAsync(x => x.UserId == userId, ct);
-            if (settings is null)
-            {
-                settings = new AiUserSettings { UserId = userId };
-                db.AiUserSettings.Add(settings);
-            }
-            settings.TextModel = string.IsNullOrEmpty(model) ? null : model;
-            settings.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(new { model = settings.TextModel });
+            return Results.Ok(new { model = await store.SetTextModelAsync(userId, model, ct) });
         });
 
         // Lists the models this user's Codex login can actually use, so the UI can offer a real choice
@@ -299,14 +284,13 @@ public static class AiUserAccessEndpoints
 
         group.MapPost("/codex/logout", async (
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
             IntelligenceStore store,
             IConfiguration configuration,
             IHttpClientFactory clients,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var selectedProvider = await SelectedProviderAsync(userId, db, ct);
+            var selectedProvider = await store.SelectedProviderAsync(userId, ct);
             var result = await ForwardCodexJsonAsync(
                 HttpMethod.Post,
                 "/logout",
@@ -322,19 +306,16 @@ public static class AiUserAccessEndpoints
 
         group.MapPost("/test", async (
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
             IntelligenceStore store,
             IntelligenceProviderRegistry providers,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var settings = await db.AiUserSettings.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.UserId == userId, ct);
+            var settings = await store.FindUserSettingsAsync(userId, ct);
             if (settings?.CredentialId is not { } credentialId)
                 return Results.NotFound(new { error = "ai_access_not_configured" });
 
-            var credential = await db.AiCredentials.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.Id == credentialId && x.OwnerUserId == userId, ct);
+            var credential = await store.FindOwnedCredentialAsync(credentialId, userId, ct);
             if (credential is null)
                 return Results.NotFound(new { error = "ai_access_not_configured" });
 
@@ -345,14 +326,13 @@ public static class AiUserAccessEndpoints
 
         group.MapDelete("/", async (
             CurrentUserContext currentUser,
-            IntelligenceDbContext db,
             IntelligenceStore store,
             IConfiguration configuration,
             IHttpClientFactory clients,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            if (await SelectedProviderAsync(userId, db, ct) == IntelligenceProviders.Codex)
+            if (await store.SelectedProviderAsync(userId, ct) == IntelligenceProviders.Codex)
             {
                 try
                 {
@@ -375,22 +355,6 @@ public static class AiUserAccessEndpoints
         });
 
         return app;
-    }
-
-    private static async Task<string?> SelectedProviderAsync(
-        Guid userId,
-        IntelligenceDbContext db,
-        CancellationToken ct)
-    {
-        var credentialId = await db.AiUserSettings.AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .Select(x => x.CredentialId)
-            .SingleOrDefaultAsync(ct);
-        if (!credentialId.HasValue) return null;
-        return await db.AiCredentials.AsNoTracking()
-            .Where(x => x.Id == credentialId.Value && x.OwnerUserId == userId)
-            .Select(x => x.Provider)
-            .SingleOrDefaultAsync(ct);
     }
 
     private static async Task<bool> TryGetCodexConnectedAsync(

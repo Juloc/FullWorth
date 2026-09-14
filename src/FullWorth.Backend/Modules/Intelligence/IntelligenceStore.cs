@@ -145,6 +145,45 @@ public sealed class IntelligenceStore(
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Die Einstellungen dieses Benutzers - oder nichts, wenn er noch keine hat.</summary>
+    public Task<AiUserSettings?> FindUserSettingsAsync(Guid userId, CancellationToken ct) =>
+        db.AiUserSettings.AsNoTracking().SingleOrDefaultAsync(settings => settings.UserId == userId, ct);
+
+    /// <summary>Ein Zugang, aber nur wenn er diesem Benutzer gehoert.</summary>
+    public Task<AiCredential?> FindOwnedCredentialAsync(Guid credentialId, Guid userId, CancellationToken ct) =>
+        db.AiCredentials.AsNoTracking()
+            .SingleOrDefaultAsync(credential => credential.Id == credentialId && credential.OwnerUserId == userId, ct);
+
+    /// <summary>Sein Zugang fuer genau diesen Anbieter - hoechstens einer.</summary>
+    public Task<AiCredential?> FindOwnedCredentialByProviderAsync(Guid userId, string provider, CancellationToken ct) =>
+        db.AiCredentials
+            .SingleOrDefaultAsync(credential => credential.OwnerUserId == userId && credential.Provider == provider, ct);
+
+    /// <summary>Welcher Anbieter ist bei ihm ausgewaehlt? Null heisst: keiner.</summary>
+    public async Task<string?> SelectedProviderAsync(Guid userId, CancellationToken ct)
+    {
+        var credentialId = await db.AiUserSettings.AsNoTracking()
+            .Where(settings => settings.UserId == userId)
+            .Select(settings => settings.CredentialId)
+            .SingleOrDefaultAsync(ct);
+        if (!credentialId.HasValue) return null;
+
+        return await db.AiCredentials.AsNoTracking()
+            .Where(credential => credential.Id == credentialId.Value && credential.OwnerUserId == userId)
+            .Select(credential => credential.Provider)
+            .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>Das Modell, das der Benutzer gewaehlt hat. Leer heisst "automatisch".</summary>
+    public async Task<string?> SetTextModelAsync(Guid userId, string? model, CancellationToken ct)
+    {
+        var settings = await GetOrCreateUserSettingsAsync(userId, ct);
+        settings.TextModel = string.IsNullOrEmpty(model) ? null : model;
+        settings.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return settings.TextModel;
+    }
+
     public async Task<AiUserSettings> GetOrCreateUserSettingsAsync(Guid userId, CancellationToken ct)
     {
         var settings = await db.AiUserSettings.SingleOrDefaultAsync(x => x.UserId == userId, ct);

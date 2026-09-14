@@ -223,6 +223,10 @@ public static class BackendApplication
         builder.Services.AddSingleton<ISecurityPriceProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
         builder.Services.AddScoped<SecurityMarketDataService>();
         builder.Services.AddScoped<InvestmentPerformanceStore>();
+        builder.Services.AddScoped<CategoryOrderService>();
+        builder.Services.AddScoped<IntelligenceDigestStore>();
+        builder.Services.AddScoped<CapabilityGrantStore>();
+        builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
         // facades over these services and no longer own a second product or reconciliation model.
@@ -507,7 +511,7 @@ public static class BackendApplication
         endpoints.MapProductLearningParityEndpoints();
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeParityEndpoints();
-        endpoints.MapCategoryOrderParityEndpoints();
+        endpoints.MapCategoryOrderEndpoints();
         endpoints.MapAdvancedTransactionBulkParityEndpoints();
         endpoints.MapExportCompletionParityEndpoints();
         endpoints.MapCsvZipExportParityEndpoints();

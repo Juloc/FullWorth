@@ -1,6 +1,4 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Users;
 
@@ -15,51 +13,25 @@ public static class UserOnboardingEndpoints
     {
         var group = app.MapGroup("/api/onboarding").WithTags("Onboarding");
 
-        group.MapGet("/status", async (
-            CurrentUserContext currentUser,
-            FullWorthDbContext db,
-            CancellationToken ct) =>
+        group.MapGet("/status", async (CurrentUserContext currentUser, UserOnboardingStore store, CancellationToken ct) =>
         {
-            var userId = currentUser.RequireUserId();
-            var user = await db.Users.AsNoTracking()
-                .Where(x => x.Id == userId)
-                .Select(x => new
-                {
-                    x.OnboardingVersion,
-                    x.OnboardingCompletedAt
-                })
-                .SingleOrDefaultAsync(ct);
-
-            if (user is null) return Results.NotFound();
+            var state = await store.ReadAsync(currentUser.RequireUserId(), ct);
+            if (state is null) return Results.NotFound();
             return Results.Ok(new
             {
                 currentVersion = UserOnboarding.CurrentVersion,
-                completed = user.OnboardingVersion >= UserOnboarding.CurrentVersion &&
-                            user.OnboardingCompletedAt.HasValue,
-                completedVersion = user.OnboardingVersion,
-                user.OnboardingCompletedAt
+                completed = state.Version >= UserOnboarding.CurrentVersion && state.CompletedAt.HasValue,
+                completedVersion = state.Version,
+                OnboardingCompletedAt = state.CompletedAt
             });
         });
 
-        group.MapPost("/complete", async (
-            CurrentUserContext currentUser,
-            FullWorthDbContext db,
-            CancellationToken ct) =>
+        group.MapPost("/complete", async (CurrentUserContext currentUser, UserOnboardingStore store, CancellationToken ct) =>
         {
-            var userId = currentUser.RequireUserId();
-            var user = await db.Users.SingleOrDefaultAsync(x => x.Id == userId, ct);
-            if (user is null) return Results.NotFound();
-
-            user.OnboardingVersion = UserOnboarding.CurrentVersion;
-            user.OnboardingCompletedAt = DateTimeOffset.UtcNow;
-            user.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(new
-            {
-                completed = true,
-                completedVersion = user.OnboardingVersion,
-                user.OnboardingCompletedAt
-            });
+            var state = await store.CompleteAsync(currentUser.RequireUserId(), UserOnboarding.CurrentVersion, ct);
+            return state is null
+                ? Results.NotFound()
+                : Results.Ok(new { completed = true, completedVersion = state.Version, OnboardingCompletedAt = state.CompletedAt });
         });
 
         return app;

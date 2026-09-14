@@ -16,7 +16,6 @@ Categories/CategoriesModule.cs
 Categories/CategoryErgonomicsEndpoints.cs
 Categories/CategoryIntelligenceModule.cs
 Categories/CategoryMergeParityModule.cs
-Categories/CategoryOrderParityModule.cs
 Contracts/ContractDetectionService.cs
 Contracts/ContractParityModule.cs
 Contracts/ContractsModule.cs
@@ -28,18 +27,15 @@ Export/ExportModule.cs
 Export/WealthPortableExportModule.cs
 Export/XlsxExportEndpoints.cs
 FullWorthSpaces/AccessEndpoints.cs
-FullWorthSpaces/CapabilityGrantEndpoints.cs
 Import/FinanzguruImportModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
 Ingestion/BankingSyncStateEndpoints.cs
 Ingestion/FinTsInvestmentSnapshotEndpoints.cs
 Ingestion/IngestionModule.cs
-Intelligence/AiUserAccessEndpoints.cs
 Intelligence/CloudBenchmarkEndpoints.cs
 Intelligence/CloudMerchantBenchmarkEndpoints.cs
 Intelligence/CloudPriceEndpoints.cs
-Intelligence/IntelligenceDigests.cs
 Loans/LoansModule.cs
 Merchants/MerchantModule.cs
 Portfolio/Assets/Valuations/AssetValuationModule.cs
@@ -64,7 +60,6 @@ Purchases/PurchaseLifecycleService.cs
 Purchases/PurchaseMerchantService.cs
 Purchases/PurchaseMetadataService.cs
 Purchases/PurchaseReceiptSourceService.cs
-Purchases/PurchaseReconciliationEndpoints.cs
 Purchases/PurchaseWorkspaceService.cs
 Purchases/PurchasesModule.cs
 Push/PushModule.cs
@@ -73,4 +68,3 @@ Transactions/RefundParityModule.cs
 Transactions/TransactionBulkEndpoints.cs
 Transactions/TransactionsModule.cs
 Transactions/TransferDetection.cs
-Users/UserOnboardingEndpoints.cs
