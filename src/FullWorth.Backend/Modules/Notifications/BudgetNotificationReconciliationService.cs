@@ -3,7 +3,6 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.Budgets.Cycles;
 using FullWorth.Backend.Modules.Fx;
-using FullWorth.Backend.Modules.Parity;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Notifications;

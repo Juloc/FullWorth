@@ -28,7 +28,6 @@ using FullWorth.Backend.Modules.Intelligence.Context;
 using FullWorth.Backend.Modules.Intelligence.Signals;
 using FullWorth.Backend.Modules.Loans;
 using FullWorth.Backend.Modules.Merchants;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Modules.Pension;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Preferences;
@@ -485,10 +484,15 @@ public static class BackendApplication
         endpoints.MapAdvancedTransactionBulkParityEndpoints();
         endpoints.MapExportCompletionParityEndpoints();
         endpoints.MapCsvZipExportParityEndpoints();
-        endpoints.MapExperienceParityEndpoints();
+        endpoints.MapAccountAppearanceEndpoints()
+            .MapProductIntelligenceEndpoints()
+            .MapCapabilityGrantEndpoints()
+            .MapXlsxExportEndpoints();
         endpoints.MapAccountExperienceEndpoints()
             .MapBankCapabilityEndpoints();
-        endpoints.MapPermissionsErgonomicsParityEndpoints();
+        endpoints.MapAccessEndpoints()
+            .MapCategoryErgonomicsEndpoints()
+            .MapTransactionBulkEndpoints();
     }
 
     private static void ConfigureBackendMiddleware(IApplicationBuilder app, IConfiguration configuration)

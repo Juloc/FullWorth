@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FullWorth.Backend.Modules.Intelligence;
-using FullWorth.Backend.Modules.Parity;
 
 namespace FullWorth.Backend.Modules.Pension;
 

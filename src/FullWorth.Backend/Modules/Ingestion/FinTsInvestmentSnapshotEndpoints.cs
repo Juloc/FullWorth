@@ -1,5 +1,4 @@
 using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Parity;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Ingestion;
