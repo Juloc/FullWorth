@@ -1,5 +1,4 @@
 using FullWorth.Backend.Modules.DataErasure;
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Modules.Users;
@@ -23,7 +22,6 @@ public static class BootstrapEndpoints
     {
         app.MapPost($"{BasePath}/first-admin", async (
             BootstrapAdminRequest request,
-            FullWorthDbContext db,
             UserStore users,
             FullWorthSpaceService spaces,
             IntelligenceAdminBootstrapper intelligenceAdminBootstrapper,
@@ -34,7 +32,7 @@ public static class BootstrapEndpoints
 
             // Bootstrap only runs on an empty system. Once any user exists it is a no-op, so this
             // endpoint can never be used to mint additional admins later.
-            if (await db.Set<FullWorthUser>().AnyAsync(ct))
+            if (await users.AnyExistsAsync(ct))
                 return Results.Conflict(new { error = "The system is already bootstrapped." });
 
             FullWorthUser user;
@@ -56,7 +54,6 @@ public static class BootstrapEndpoints
 
         app.MapPost($"{BasePath}/register", async (
             BootstrapRegistrationRequest request,
-            FullWorthDbContext db,
             UserStore users,
             FullWorthSpaceService spaces,
             CancellationToken ct) =>

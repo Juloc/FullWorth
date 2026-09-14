@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Purchases;
@@ -67,13 +66,12 @@ public static class PurchaseAuthorizationEndpoints
             List<PurchaseItemWrite> items,
             CurrentUserContext currentUser,
             PurchaseAuthorizationStore store,
-            FullWorthDbContext db,
+            PurchaseDiscountDetailsStore financialStore,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             var previousPurchase = await store.GetForUserAsync(userId, fullWorthSpaceId, id, ct);
             if (previousPurchase is null) return Results.NotFound();
-            var financialStore = new PurchaseDiscountDetailsStore(db, store);
             var previousFinancial = await financialStore.GetAsync(userId, fullWorthSpaceId, id, ct);
 
             var outcome = await store.ReplaceItemsForUserAsync(userId, fullWorthSpaceId, id, items, ct);
@@ -195,13 +193,13 @@ public static class PurchaseAuthorizationEndpoints
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
             PurchaseAuthorizationStore store,
-            FullWorthDbContext db,
+            PurchaseReconciliationStore reconciliation,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
             if (await store.GetAccessAsync(userId, fullWorthSpaceId, id, ct) == PurchaseAccessLevel.None)
                 return Results.NotFound();
-            var state = await PurchaseFinancialReconciliation.CalculateAsync(db, fullWorthSpaceId, id, ct);
+            var state = await reconciliation.CalculateAsync(fullWorthSpaceId, id, ct);
             return state is null ? Results.NotFound() : Results.Ok(state);
         });
 

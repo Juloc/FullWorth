@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Purchases;
@@ -75,12 +76,19 @@ public sealed record PurchaseFinancialReconciliationState(
     bool FullyReconciled,
     string StateFingerprint);
 
-public static class PurchaseFinancialReconciliation
+/// <summary>
+/// Stimmen Kaufsumme, Positionen, Rabatte, Pfand und Steuer zusammen - und passt das Ganze zur
+/// verknuepften Buchung?
+///
+/// Das war bis 2026-09-14 eine statische Klasse, der jeder Aufrufer den DbContext reichte. Genau so
+/// entsteht ein Endpunkt, der einen Kontext haelt, den er sonst nicht braucht: vier Aufrufer in zwei
+/// Dateien, viermal derselbe Parameter. Als Store gehoert der Kontext hierher (#113, Regel 2).
+/// </summary>
+public sealed class PurchaseReconciliationStore(FullWorthDbContext db, AuditService audit)
 {
     public const decimal Tolerance = .01m;
 
-    public static async Task<PurchaseFinancialReconciliationState?> CalculateAsync(
-        FullWorthDbContext db,
+    public async Task<PurchaseFinancialReconciliationState?> CalculateAsync(
         Guid fullWorthSpaceId,
         Guid purchaseId,
         CancellationToken ct)
@@ -123,7 +131,7 @@ public static class PurchaseFinancialReconciliation
             : (decimal?)null;
         var itemsReconciled = Math.Abs(itemDifference) <= Tolerance;
         var transactionReconciled = !transactionDifference.HasValue || Math.Abs(transactionDifference.Value) <= Tolerance;
-        var fingerprint = await FingerprintAsync(db, row, transactionAmount, ct);
+        var fingerprint = await FingerprintAsync(row, transactionAmount, ct);
 
         return new PurchaseFinancialReconciliationState(
             row.PurchaseId,
@@ -148,8 +156,7 @@ public static class PurchaseFinancialReconciliation
             fingerprint);
     }
 
-    private static async Task<string> FingerprintAsync(
-        FullWorthDbContext db,
+    private async Task<string> FingerprintAsync(
         PurchaseFinancialReconciliationRow purchase,
         decimal? transactionAmount,
         CancellationToken ct)
@@ -196,4 +203,75 @@ public static class PurchaseFinancialReconciliation
 
     private static string S(string? value) => string.IsNullOrWhiteSpace(value) ? "~" : value.Trim();
     private static string D(decimal? value) => value?.ToString("0.############################", CultureInfo.InvariantCulture) ?? "~";
+/// <summary>
+    /// Die zuletzt bestaetigte Differenz - gebunden an den Fingerabdruck des Zustands, den der
+    /// Benutzer gesehen hat.
+    /// </summary>
+    public async Task<PurchaseReconciliationConfirmation?> ReadConfirmationAsync(Guid purchaseId, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection,
+            "SELECT \"ItemDifference\",\"TransactionDifference\",\"StateFingerprint\",\"ConfirmedAt\" FROM \"PurchaseReconciliationConfirmations\" WHERE \"PurchaseId\"=@id",
+            ("@id", purchaseId));
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct)
+            ? new PurchaseReconciliationConfirmation(
+                RawSql.Decimal(reader, "ItemDifference"),
+                RawSql.NullableDecimal(reader, "TransactionDifference"),
+                RawSql.String(reader, "StateFingerprint") ?? string.Empty,
+                RawSql.Timestamp(reader, "ConfirmedAt"))
+            : null;
+    }
+
+    /// <summary>Haelt fest, dass der Benutzer genau diese Differenz gesehen und akzeptiert hat.</summary>
+    public async Task<DateTimeOffset> ConfirmDifferenceAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid purchaseId,
+        PurchaseFinancialReconciliationState state, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        var now = DateTimeOffset.UtcNow;
+        await using var command = RawSql.Command(connection, """
+INSERT INTO "PurchaseReconciliationConfirmations"
+("PurchaseId","FullWorthSpaceId","UserId","ItemDifference","TransactionDifference","StateFingerprint","ConfirmedAt")
+VALUES (@purchase,@space,@user,@item,@transaction,@fingerprint,@now)
+ON CONFLICT ("PurchaseId") DO UPDATE SET
+ "FullWorthSpaceId"=EXCLUDED."FullWorthSpaceId","UserId"=EXCLUDED."UserId",
+ "ItemDifference"=EXCLUDED."ItemDifference","TransactionDifference"=EXCLUDED."TransactionDifference",
+ "StateFingerprint"=EXCLUDED."StateFingerprint","ConfirmedAt"=EXCLUDED."ConfirmedAt"
+""",
+            ("@purchase", purchaseId), ("@space", fullWorthSpaceId), ("@user", userId), ("@item", state.ItemDifference),
+            ("@transaction", state.TransactionDifference), ("@fingerprint", state.StateFingerprint), ("@now", now));
+        await command.ExecuteNonQueryAsync(ct);
+        audit.Record(fullWorthSpaceId, userId, "purchase.difference.confirmed", "Purchase", purchaseId);
+        await db.SaveChangesAsync(ct);
+        return now;
+    }
+
+    /// <summary>Setzt den Kauf auf bestaetigt. Ob er das darf, hat der Aufrufer entschieden.</summary>
+    public async Task<bool> MarkConfirmedAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
+    {
+        var purchase = await db.Purchases.SingleOrDefaultAsync(
+            row => row.Id == purchaseId && row.FullWorthSpaceId == fullWorthSpaceId, ct);
+        if (purchase is null) return false;
+        purchase.Status = "confirmed";
+        purchase.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Record(fullWorthSpaceId, userId, "purchase.confirmed", "Purchase", purchaseId);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+}
+
+/// <summary>
+/// Eine Bestaetigung gilt nur fuer den Zustand, zu dem sie gegeben wurde: aendert sich am Korb etwas
+/// Inhaltliches, aendert sich der Fingerabdruck und die Bestaetigung verfaellt von selbst. Ein reines
+/// Neuschreiben derselben Positionen mit neuen Ids laesst sie gelten.
+/// </summary>
+public sealed record PurchaseReconciliationConfirmation(
+    decimal ItemDifference, decimal? TransactionDifference, string StateFingerprint, DateTimeOffset ConfirmedAt)
+{
+    public bool Matches(PurchaseFinancialReconciliationState state) =>
+        ItemDifference == state.ItemDifference
+        && TransactionDifference == state.TransactionDifference
+        && !string.IsNullOrWhiteSpace(StateFingerprint)
+        && string.Equals(StateFingerprint, state.StateFingerprint, StringComparison.Ordinal);
 }

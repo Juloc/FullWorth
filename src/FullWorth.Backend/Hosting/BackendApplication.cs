@@ -202,6 +202,9 @@ public static class BackendApplication
         // (new RealEstateStore(db, audit, fx)), wofuer der Endpunkt den DbContext halten musste. Sie
         // haengen nur an Diensten, die ohnehin registriert sind - siehe #113, Regel 2.
         builder.Services.AddScoped<RealEstateStore>();
+        builder.Services.AddScoped<PropertyRentalStore>();
+        builder.Services.AddScoped<AssetCashflowStore>();
+        builder.Services.AddScoped<PropertyOperationsStore>();
         builder.Services.AddScoped<RealEstateUpdateStore>();
         builder.Services.AddScoped<RealEstateAdvancedStore>();
         builder.Services.AddScoped<RemainingAssetStore>();
@@ -219,11 +222,13 @@ public static class BackendApplication
         builder.Services.AddSingleton<ISecurityMetadataProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
         builder.Services.AddSingleton<ISecurityPriceProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
         builder.Services.AddScoped<SecurityMarketDataService>();
+        builder.Services.AddScoped<InvestmentPerformanceStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
         // facades over these services and no longer own a second product or reconciliation model.
         builder.Services.AddScoped<PurchaseStore>();
         builder.Services.AddScoped<PurchaseAuthorizationStore>();
+        builder.Services.AddScoped<PurchaseReconciliationStore>();
         builder.Services.AddScoped<PurchaseCaptureService>();
         builder.Services.AddSingleton<ReceiptScanQueueSignal>();
         builder.Services.AddScoped<ReceiptScanJobStore>();
@@ -497,10 +502,10 @@ public static class BackendApplication
         endpoints.MapInvestmentImportParityEndpoints();
         endpoints.MapInvestmentPdfImportParityEndpoints();
         endpoints.MapInvestmentPdfOcrImportParityEndpoints();
-        endpoints.MapMarketDataParityEndpoints();
+        endpoints.MapMarketDataEndpoints();
         endpoints.MapProductIdentityParityEndpoints();
         endpoints.MapProductLearningParityEndpoints();
-        endpoints.MapPurchaseReviewParityEndpoints();
+        endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeParityEndpoints();
         endpoints.MapCategoryOrderParityEndpoints();
         endpoints.MapAdvancedTransactionBulkParityEndpoints();

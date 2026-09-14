@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +17,7 @@ public static class FinancialSignalEndpoints
             string? view,
             int? limit,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
@@ -27,7 +26,7 @@ public static class FinancialSignalEndpoints
                 return Results.NotFound();
 
             var userId = currentUser.RequireUserId();
-            if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
 
             try
@@ -51,7 +50,7 @@ public static class FinancialSignalEndpoints
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
@@ -60,7 +59,7 @@ public static class FinancialSignalEndpoints
                 return Results.NotFound();
 
             var userId = currentUser.RequireUserId();
-            if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
 
             var result = await store.GetAsync(userId, fullWorthSpaceId, id, DateTimeOffset.UtcNow, ct);
@@ -71,14 +70,14 @@ public static class FinancialSignalEndpoints
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
             await StateMutationAsync(
                 currentUser.RequireUserId(),
                 fullWorthSpaceId,
-                financeDb,
+                space,
                 rollout,
                 ct,
                 () => store.MarkReadAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
@@ -87,14 +86,14 @@ public static class FinancialSignalEndpoints
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
             await StateMutationAsync(
                 currentUser.RequireUserId(),
                 fullWorthSpaceId,
-                financeDb,
+                space,
                 rollout,
                 ct,
                 () => store.DismissAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
@@ -104,7 +103,7 @@ public static class FinancialSignalEndpoints
             Guid fullWorthSpaceId,
             SnoozeFinancialSignalRequest request,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
@@ -113,7 +112,7 @@ public static class FinancialSignalEndpoints
                 return Results.NotFound();
 
             var userId = currentUser.RequireUserId();
-            if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
 
             try
@@ -133,7 +132,7 @@ public static class FinancialSignalEndpoints
             Guid fullWorthSpaceId,
             FinancialSignalFeedbackRequest request,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
             FinancialSignalStore store,
             AutopilotRolloutSettings rollout,
             CancellationToken ct) =>
@@ -142,7 +141,7 @@ public static class FinancialSignalEndpoints
                 return Results.NotFound();
 
             var userId = currentUser.RequireUserId();
-            if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct))
                 return Results.NotFound();
 
             try
@@ -163,23 +162,16 @@ public static class FinancialSignalEndpoints
     private static async Task<IResult> StateMutationAsync(
         Guid userId,
         Guid fullWorthSpaceId,
-        FullWorthDbContext financeDb,
+        SpaceAccess space,
         AutopilotRolloutSettings rollout,
         CancellationToken ct,
         Func<Task<bool>> mutate)
     {
         if (!rollout.IsOn(AutopilotFeatures.Insights))
             return Results.NotFound();
-        if (!await IsMemberAsync(financeDb, userId, fullWorthSpaceId, ct))
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct))
             return Results.NotFound();
         return await mutate() ? Results.NoContent() : Results.NotFound();
     }
 
-    private static Task<bool> IsMemberAsync(
-        FullWorthDbContext db,
-        Guid userId,
-        Guid fullWorthSpaceId,
-        CancellationToken ct) =>
-        db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-            x.UserId == userId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
 }

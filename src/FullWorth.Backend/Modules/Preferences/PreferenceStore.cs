@@ -40,12 +40,9 @@ public sealed class PreferenceStore(FullWorthDbContext db)
     };
     public const int MaxValueBytes = 64 * 1024;
 
-    private Task<bool> IsMemberAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
-        db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(m => m.FullWorthSpaceId == fullWorthSpaceId && m.UserId == userId, ct);
-
     public async Task<PreferenceView?> GetAsync(Guid userId, Guid fullWorthSpaceId, string key, CancellationToken ct)
     {
-        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return null;
         var row = await db.Set<UserPreference>().AsNoTracking()
             .SingleOrDefaultAsync(p => p.FinanceUserId == userId && p.FullWorthSpaceId == fullWorthSpaceId && p.Key == key, ct);
         // Nothing stored yet: return an empty OBJECT (not a default/Undefined JsonElement, which would
@@ -57,7 +54,7 @@ public sealed class PreferenceStore(FullWorthDbContext db)
 
     public async Task<bool> SetAsync(Guid userId, Guid fullWorthSpaceId, string key, string valueJson, CancellationToken ct)
     {
-        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return false;
+        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return false;
         var row = await db.Set<UserPreference>()
             .SingleOrDefaultAsync(p => p.FinanceUserId == userId && p.FullWorthSpaceId == fullWorthSpaceId && p.Key == key, ct);
         if (row is null)
@@ -69,32 +66,5 @@ public sealed class PreferenceStore(FullWorthDbContext db)
         row.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
-    }
-}
-
-public static class PreferenceEndpoints
-{
-    public static IEndpointRouteBuilder MapPreferenceEndpoints(this IEndpointRouteBuilder app)
-    {
-        var group = app.MapGroup("/api/preferences").WithTags("Preferences");
-
-        group.MapGet("/{key}", async (string key, Guid fullWorthSpaceId, CurrentUserContext currentUser, PreferenceStore store, CancellationToken ct) =>
-        {
-            if (!PreferenceStore.AllowedKeys.Contains(key)) return Results.NotFound();
-            var view = await store.GetAsync(currentUser.RequireUserId(), fullWorthSpaceId, key, ct);
-            return view is null ? Results.NotFound() : Results.Ok(view);
-        });
-
-        group.MapPut("/{key}", async (string key, Guid fullWorthSpaceId, System.Text.Json.JsonElement value, CurrentUserContext currentUser, PreferenceStore store, HttpContext http, CancellationToken ct) =>
-        {
-            if (!PreferenceStore.AllowedKeys.Contains(key)) return Results.NotFound();
-            var json = value.GetRawText();
-            if (json.Length > PreferenceStore.MaxValueBytes) return Results.BadRequest(new { error = "Preference value too large." });
-            return await store.SetAsync(currentUser.RequireUserId(), fullWorthSpaceId, key, json, ct)
-                ? Results.NoContent()
-                : Results.NotFound();
-        });
-
-        return app;
     }
 }

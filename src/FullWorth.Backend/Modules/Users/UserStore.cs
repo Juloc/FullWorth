@@ -4,6 +4,9 @@ namespace FullWorth.Backend.Modules.Users;
 
 public sealed class UserStore(DbContext db)
 {
+    /// <summary>Gibt es ueberhaupt schon einen Benutzer? Die Frage, an der die Erstinstallation haengt.</summary>
+    public Task<bool> AnyExistsAsync(CancellationToken ct) => db.Set<FullWorthUser>().AnyAsync(ct);
+
     public Task<FullWorthUser?> GetAsync(Guid userId, CancellationToken ct) => db.Set<FullWorthUser>()
         .AsNoTracking()
         .SingleOrDefaultAsync(x => x.Id == userId, ct);

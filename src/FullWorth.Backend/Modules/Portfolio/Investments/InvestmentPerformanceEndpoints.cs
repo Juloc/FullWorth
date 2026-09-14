@@ -1,5 +1,4 @@
 using System.Data.Common;
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Security;
 
@@ -20,7 +19,8 @@ public static class InvestmentPerformanceV2Endpoints
         DateOnly? from,
         DateOnly? to,
         CurrentUserContext currentUser,
-        FullWorthDbContext db,
+        SpaceAccess space,
+        InvestmentPerformanceStore store,
         CurrencyConverter converter,
         CancellationToken ct)
     {
@@ -29,14 +29,14 @@ public static class InvestmentPerformanceV2Endpoints
         var requestedStart = from ?? end.AddYears(-1);
         if (requestedStart > end) return Results.BadRequest(new { error = "From must not be after to." });
 
-        var portfolio = await LoadPortfolioAsync(db, fullWorthSpaceId, portfolioId, ct);
+        var portfolio = await store.ReadPortfolioAsync(fullWorthSpaceId, portfolioId, ct);
         if (portfolio is null) return Results.NotFound();
-        if (!await CanReadPortfolioAsync(db, userId, fullWorthSpaceId, portfolio.AccountId, ct)) return Results.NotFound();
+        if (!await CanReadAsync(space, userId, fullWorthSpaceId, portfolio.AccountId, ct)) return Results.NotFound();
 
-        var trades = await LoadTradesAsync(db, portfolioId, end, ct);
+        var trades = await store.ListTradesAsync(portfolioId, end, ct);
         var securityIds = trades.Where(x => x.SecurityId.HasValue).Select(x => x.SecurityId!.Value).ToHashSet();
         if (portfolio.BenchmarkSecurityId.HasValue) securityIds.Add(portfolio.BenchmarkSecurityId.Value);
-        var prices = await LoadPricesAsync(db, securityIds, requestedStart.AddDays(-14), end, ct);
+        var prices = await store.ListPricesAsync(securityIds, requestedStart.AddDays(-14), end, ct);
         var earliestTrade = trades.Count == 0 ? requestedStart : trades.Min(x => x.TradeDate);
         var fx = await converter.PrepareAsync(portfolio.Currency, earliestTrade, end, ct);
         var data = new PerformanceData(portfolio, trades, prices, fx);
@@ -302,96 +302,15 @@ public static class InvestmentPerformanceV2Endpoints
         return result;
     }
 
-    private static async Task<bool> CanReadPortfolioAsync(
-        FullWorthDbContext db, Guid userId, Guid fullWorthSpaceId, Guid? accountId, CancellationToken ct)
+    /// <summary>Mitglied reicht - ausser das Depot haengt an einem Konto, das er nicht sehen darf.</summary>
+    private static async Task<bool> CanReadAsync(
+        SpaceAccess space, Guid userId, Guid fullWorthSpaceId, Guid? accountId, CancellationToken ct)
     {
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return false;
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return false;
         if (!accountId.HasValue) return true;
-        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-        return visible.Contains(accountId.Value);
+        return (await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct)).Contains(accountId.Value);
     }
 
-    private static async Task<PortfolioRow?> LoadPortfolioAsync(
-        FullWorthDbContext db, Guid fullWorthSpaceId, Guid portfolioId, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT "Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId"
-FROM "InvestmentPortfolios" WHERE "Id"=@id AND "FullWorthSpaceId"=@space
-""", ("@id", portfolioId), ("@space", fullWorthSpaceId));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-        return new PortfolioRow(
-            RawSql.Guid(reader, "Id"),
-            RawSql.Guid(reader, "FullWorthSpaceId"),
-            RawSql.String(reader, "Name"),
-            RawSql.String(reader, "Currency"),
-            RawSql.NullableGuid(reader, "AccountId"),
-            RawSql.NullableGuid(reader, "BenchmarkSecurityId"));
-    }
-
-    private static async Task<List<TradeRow>> LoadTradesAsync(
-        FullWorthDbContext db, Guid portfolioId, DateOnly end, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT "Id","SecurityId","TradeType","TradeDate","Quantity","Price","GrossAmount","Amount","Currency",
-       "Fees","Taxes","WithholdingTax","CreatedAt"
-FROM "InvestmentTrades"
-WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@end
-ORDER BY "TradeDate","CreatedAt","Id"
-""", ("@portfolio", portfolioId), ("@end", end));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<TradeRow>();
-        while (await reader.ReadAsync(ct))
-            rows.Add(new TradeRow(
-                RawSql.Guid(reader, "Id"),
-                RawSql.NullableGuid(reader, "SecurityId"),
-                RawSql.String(reader, "TradeType"),
-                RawSql.NullableDate(reader, "TradeDate")!.Value,
-                RawSql.NullableDecimal(reader, "Quantity"),
-                RawSql.NullableDecimal(reader, "Price"),
-                RawSql.NullableDecimal(reader, "GrossAmount"),
-                RawSql.Decimal(reader, "Amount"),
-                RawSql.String(reader, "Currency"),
-                RawSql.Decimal(reader, "Fees"),
-                RawSql.Decimal(reader, "Taxes"),
-                RawSql.Decimal(reader, "WithholdingTax"),
-                RawSql.Timestamp(reader, "CreatedAt")));
-        return rows;
-    }
-
-    private static async Task<List<PriceRow>> LoadPricesAsync(
-        FullWorthDbContext db, IReadOnlySet<Guid> securityIds, DateOnly from, DateOnly to, CancellationToken ct)
-    {
-        if (securityIds.Count == 0) return [];
-        var ids = securityIds.ToArray();
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT "SecurityId","PriceDate","Price","Currency","Source",COALESCE("FetchedAt","CreatedAt") AS "FetchedAt"
-FROM "SecurityPrices"
-WHERE "SecurityId"=ANY(@ids) AND "PriceDate">=@from AND "PriceDate"<=@to
-ORDER BY "PriceDate","SecurityId"
-""", ("@ids", ids), ("@from", from), ("@to", to));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<PriceRow>();
-        while (await reader.ReadAsync(ct))
-            rows.Add(new PriceRow(
-                RawSql.Guid(reader, "SecurityId"),
-                RawSql.NullableDate(reader, "PriceDate")!.Value,
-                RawSql.Decimal(reader, "Price"),
-                RawSql.String(reader, "Currency"),
-                RawSql.String(reader, "Source"),
-                RawSql.NullableTimestamp(reader, "FetchedAt") ?? DateTimeOffset.MinValue));
-        return rows;
-    }
-
-    private sealed record PortfolioRow(Guid Id, Guid FullWorthSpaceId, string Name, string Currency, Guid? AccountId, Guid? BenchmarkSecurityId);
-    private sealed record TradeRow(
-        Guid Id, Guid? SecurityId, string TradeType, DateOnly TradeDate, decimal? Quantity, decimal? Price,
-        decimal? GrossAmount, decimal Amount, string Currency, decimal Fees, decimal Taxes, decimal WithholdingTax,
-        DateTimeOffset CreatedAt);
-    private sealed record PriceRow(Guid SecurityId, DateOnly Date, decimal Price, string Currency, string Source, DateTimeOffset FetchedAt);
     private sealed record PerformanceData(PortfolioRow Portfolio, List<TradeRow> Trades, List<PriceRow> Prices, FxSnapshot Fx);
     private sealed record ValuationResult(decimal Value, bool Incomplete, IReadOnlySet<string> Reasons);
     private sealed record FlowResult(decimal Amount, bool Incomplete, IReadOnlySet<string> Reasons);
