@@ -70,8 +70,9 @@ Beyond those:
 
 - Vanilla ES modules in `wwwroot`, **no build step**. Syntax-check with:
   `cp file.js /tmp/c.mjs && node --check /tmp/c.mjs`
-- The layers are `styles/` (`tokens` → `reset` → `shell` → `components` → `responsive`, then
-  `styles/features/*`, then `styles/mobile-polish.css` last) plus each page's own `page.css`.
+- The layers are `styles/` (`tokens` → `reset` → `shell` → `components` → `responsive`), then every
+  page's own `page.css`, then `styles/mobile-polish.css` last. `styles/features/` is gone: a
+  stylesheet belongs to its page, and the last one that did not — Coach — became a page.
   **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks. Four stylesheets still sit at
   the `wwwroot` root outside the scheme; the list in the structure guard may get shorter, never longer.
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and

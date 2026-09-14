@@ -1,14 +1,12 @@
-import { api as sharedApi } from '../core/services.js';
-import { state } from '../core/state.js';
-import { navigate } from '../core/navigation.js';
-import { emitAppEvent, onAppEvent } from '../core/event-bus.js';
+import { api as sharedApi } from '../../core/services.js';
+import { state } from '../../core/state.js';
+import { navigate } from '../../core/navigation.js';
+import { emitAppEvent, onAppEvent } from '../../core/event-bus.js';
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const lang = () => (localStorage.getItem('finance.language') || (navigator.language || 'de')).startsWith('de') ? 'de' : 'en';
 const spaceId = () => state.space?.id || localStorage.getItem('finance.space');
-const isCoachPath = () => location.pathname.replace(/\/+$/, '') === '/coach';
-let active = false;
 let currentConversationId = null;
 let reviews = new Map();
 let loading = false;
@@ -63,87 +61,68 @@ async function api(path, options = {}) {
   return sharedApi(path, options);
 }
 
-function installShell() {
-  if ($('#view-coach')) return;
-
-  const section = document.createElement('section');
-  section.id = 'view-coach';
-  section.className = 'view coach-view';
-  section.innerHTML = `
-    <div class="coach-layout">
-      <div class="coach-main">
-        <article class="panel coach-hero">
-          <div class="coach-identity"><div class="coach-avatar" aria-hidden="true"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""></div><div><span class="coach-eyebrow">FullWorth Coach</span><strong id="coach-mascot-label"></strong></div></div>
-          <div class="coach-head-actions"><span id="coach-page-context" class="coach-context"></span><button id="coach-new-chat" type="button" class="ghost coach-new-chat">${esc(tr('Neu starten', 'New chat'))}</button><span id="coach-mode" class="coach-mode">${esc(tr('Lokale Auswertung', 'Local analysis'))}</span></div>
-        </article>
-        <article class="panel coach-chat-panel">
-          <div id="coach-starters" class="coach-starters"></div>
-          <div id="coach-messages" class="coach-messages" aria-live="polite"></div>
-          <form id="coach-form" class="coach-composer">
-            <label class="sr-only" for="coach-input">${esc(tr('Frage an FullWorth', 'Question for FullWorth'))}</label>
-            <textarea id="coach-input" rows="2" maxlength="2000" placeholder="${esc(tr('Wo ist mein Geld diesen Monat hin?', 'Where did my money go this month?'))}"></textarea>
-            <div class="coach-composer-footer">
-              <label class="coach-model-picker" for="coach-model">
-                <span class="sr-only">${esc(tr('KI-Modell', 'AI model'))}</span>
-                <select id="coach-model" aria-label="${esc(tr('KI-Modell', 'AI model'))}"><option value="">${esc(tr('Automatisch', 'Automatic'))}</option></select>
-                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
-              </label>
-              <button id="coach-send" type="submit" class="primary-action coach-send" aria-label="${esc(tr('Senden', 'Send'))}" title="${esc(tr('Senden', 'Send'))}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
-              </button>
-            </div>
-          </form>
-        </article>
-      </div>
-      <aside class="coach-side">
-        <article class="panel"><div class="panel-head"><h2>${esc(tr('Ausgaben-Review', 'Spending review'))}</h2><button id="coach-review-refresh" type="button" class="ghost">↻</button></div><div id="coach-summary"></div></article>
-        <article class="panel"><div class="panel-head"><h2>${esc(tr('Letzte Ausgaben bewerten', 'Review recent spending'))}</h2></div><div id="coach-review-list" class="coach-review-list"></div></article>
-      </aside>
-    </div>`;
-  $('#main')?.appendChild(section);
-
-  installQuickAccess();
-  installSettingsToggle();
+// Coach ist eine gewöhnliche Seite der Hülle: das Markup steht in page.html, das Dock und die
+// Sprechblase stehen als Möbel in index.html. Hier wird nur noch verdrahtet.
+//
+// Was hier stand und weg ist: ein zweiter Router. Coach fing seinen eigenen Menüeintrag ab, hörte
+// auf popstate und load, schob selbst in die Verlaufsliste, setzte Titel und Untertitel von Hand
+// und schaltete .view.active selbst um - alles parallel zu dem, was die Hülle ohnehin tut.
+export function bindCoach() {
   $('#coach-form')?.addEventListener('submit', event => handleComposerSubmit(event, $('#coach-input')));
   installComposerKeyboard($('#coach-input'));
   $('#coach-new-chat')?.addEventListener('click', restartConversation);
   $('#coach-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
   $('#coach-review-refresh')?.addEventListener('click', () => loadReviews());
-  $('#refresh')?.addEventListener('click', event => {
-    if (!active) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    loadAll();
-  }, true);
 
-  // Coach ist noch keine Seite dieser Hülle, deshalb fängt es seinen eigenen Menüeintrag ab -
-  // in der Seitenleiste, in der unteren Leiste und im "Mehr"-Blatt, das denselben Eintrag rendert.
-  document.addEventListener('click', event => {
-    const entry = event.target.closest('[data-view="coach"], [data-go="coach"]');
-    if (entry) { event.preventDefault(); entry.closest('dialog')?.close(); activate(true); return; }
-    if (active && event.target.closest('[data-view], [data-go]')) deactivate();
-  }, true);
-  window.addEventListener('popstate', () => { if (isCoachPath()) activate(false); else if (active) deactivate(); });
-  window.addEventListener('load', () => { if (isCoachPath()) activate(false); });
+  $('#coach-launcher')?.addEventListener('click', openDock);
+  $('#coach-dock-close')?.addEventListener('click', closeDock);
+  $('#coach-dock-pin')?.addEventListener('click', () => {
+    localStorage.setItem(pinnedKey, isPinned() ? '0' : '1');
+    syncPinButton();
+  });
+  $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); navigate('coach'); });
+  $('#coach-dock-new')?.addEventListener('click', restartConversation);
+  $('#coach-dock-form')?.addEventListener('submit', event => handleComposerSubmit(event, $('#coach-dock-input')));
+  installComposerKeyboard($('#coach-dock-input'));
+  $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
+  initDockResize();
+  initDockSwipe();
+  syncPinButton();
+
+  renderStarters();
+  onAppEvent('coach:bubble', syncQuickAccess);
   window.addEventListener('storage', event => {
     if (event.key === quickAccessKey) syncQuickAccess();
     if (event.key === pinnedKey) syncPinButton();
   });
   window.addEventListener('fullworth:view-change', () => {
-    currentObjectContext=null;excludedContext.clear();
-    if(!dockOpen)return;
-    if(isPinned()){renderPageContext();renderStarters();}
+    currentObjectContext = null; excludedContext.clear();
+    syncQuickAccess();
+    if (!dockOpen) return;
+    if (isPinned()) { renderPageContext(); renderStarters(); }
     else closeDock();
   });
   window.addEventListener('fullworth:coach-open', event => {
-    setObjectContext(event.detail||null);
-    if(!dockOpen)openDock();else {renderPageContext();renderStarters();$('#coach-dock-input')?.focus();}
+    setObjectContext(event.detail || null);
+    if (!dockOpen) openDock(); else { renderPageContext(); renderStarters(); $('#coach-dock-input')?.focus(); }
   });
-  window.addEventListener('fullworth:layout-reset',()=>{localStorage.removeItem(pinnedKey);currentObjectContext=null;excludedContext.clear();if(dockOpen)closeDock();syncPinButton()});
-  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&dockOpen&&!document.querySelector('dialog[open]')){event.preventDefault();closeDock()}});
-  document.addEventListener('change', event => { if (dockOpen && event.target.closest('.view.active')) renderPageContext(); });
-  document.addEventListener('input', event => { if (dockOpen && event.target.closest('.view.active') && event.target.id === 'tx-query') renderPageContext(); });
-  if (document.readyState === 'complete' && isCoachPath()) activate(false);
+  window.addEventListener('fullworth:layout-reset', () => {
+    localStorage.removeItem(pinnedKey); currentObjectContext = null; excludedContext.clear();
+    if (dockOpen) closeDock();
+    syncPinButton();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && dockOpen && !document.querySelector('dialog[open]')) { event.preventDefault(); closeDock(); }
+  });
+  // Der Seitenkontext wird auf der Seite festgehalten, die man verlässt - auf der Coach-Seite ist
+  // die einzige Ansicht ja Coach selbst. Deshalb hier, nicht erst beim Wechsel.
+  const track = event => {
+    if (state.view === 'coach' || !event.target.closest('.view.active')) return;
+    if (dockOpen) renderPageContext(); else capturePageContext();
+  };
+  document.addEventListener('change', track);
+  document.addEventListener('input', event => { if (event.target.id === 'tx-query') track(event); });
+  onAppEvent('surface:rendered', detail => { if (detail.view !== 'coach') capturePageContext(); });
   syncQuickAccess();
 }
 
@@ -221,84 +200,6 @@ function installComposerKeyboard(input) {
     input.setRangeText(`\n${continuation}`, start, end, 'end');
     setComposerValue(input.value, input);
   });
-}
-
-function installSettingsToggle() {
-  const grid = $('#view-settings .settings-grid');
-  if (!grid || $('#coach-quick-access-setting')) return;
-  const label = document.createElement('label');
-  label.className = 'fw-toggle-row settings-toggle';
-  label.innerHTML = `<span>${esc(tr('Coach-Sprechblase', 'Coach chat bubble'))}</span><span class="fw-toggle"><input id="coach-quick-access-setting" type="checkbox"><span class="fw-toggle-track"></span></span>`;
-  const input = label.querySelector('input');
-  input.checked = quickAccessEnabled();
-  input.addEventListener('change', () => {
-    localStorage.setItem(quickAccessKey, input.checked ? '1' : '0');
-    syncQuickAccess();
-  });
-  grid.appendChild(label);
-}
-
-function installQuickAccess() {
-  if ($('#coach-launcher')) return;
-  const launcher = document.createElement('button');
-  launcher.id = 'coach-launcher';
-  launcher.className = 'coach-launcher';
-  launcher.type = 'button';
-  launcher.setAttribute('aria-label', tr('Coach öffnen', 'Open Coach'));
-  launcher.setAttribute('title', tr('Coach öffnen', 'Open Coach'));
-  launcher.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M9 9h6m-6 3h4"/></svg>';
-  launcher.addEventListener('click', openDock);
-
-  const dock = document.createElement('aside');
-  dock.id = 'coach-dock';
-  dock.className = 'coach-dock';
-  dock.hidden = true;
-  dock.setAttribute('aria-label', 'FullWorth Coach');
-  dock.innerHTML = `
-    <div id="coach-dock-resizer" class="coach-dock-resizer" role="separator" aria-orientation="vertical" aria-label="${esc(tr('Coach-Breite ändern', 'Resize Coach'))}" tabindex="0"></div>
-    <header class="coach-dock-header">
-      <div class="coach-dock-title"><img class="brand-logo" src="/branding/fullworth-logo.svg" alt=""><div><strong>Coach</strong><span id="coach-dock-subtitle"></span></div></div>
-      <div class="coach-dock-actions">
-        <button id="coach-dock-pin" type="button" class="icon-button coach-dock-pin" aria-label="${esc(tr('Coach anheften', 'Pin Coach'))}" title="${esc(tr('Coach anheften', 'Pin Coach'))}" aria-pressed="false">⌖</button>
-        <button id="coach-dock-new" type="button" class="icon-button" aria-label="${esc(tr('Neu starten', 'New chat'))}" title="${esc(tr('Neu starten', 'New chat'))}">↻</button>
-        <button id="coach-dock-page" type="button" class="icon-button" aria-label="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}" title="${esc(tr('Coach-Seite öffnen', 'Open Coach page'))}">↗</button>
-        <button id="coach-dock-close" type="button" class="icon-button coach-dock-close" aria-label="${esc(tr('Schließen', 'Close'))}" title="${esc(tr('Schließen', 'Close'))}">×</button>
-      </div>
-    </header>
-    <div class="coach-dock-chat">
-      <div id="coach-dock-context" class="coach-context"></div>
-      <div id="coach-dock-starters" class="coach-starters"></div>
-      <div id="coach-dock-messages" class="coach-messages" aria-live="polite"></div>
-      <form id="coach-dock-form" class="coach-composer">
-        <label class="sr-only" for="coach-dock-input">${esc(tr('Frage an FullWorth', 'Question for FullWorth'))}</label>
-        <textarea id="coach-dock-input" rows="2" maxlength="2000" placeholder="${esc(tr('Frag FullWorth …', 'Ask FullWorth …'))}"></textarea>
-        <div class="coach-composer-footer">
-          <label class="coach-model-picker" for="coach-dock-model">
-            <span class="sr-only">${esc(tr('KI-Modell', 'AI model'))}</span>
-            <select id="coach-dock-model" aria-label="${esc(tr('KI-Modell', 'AI model'))}"><option value="">${esc(tr('Automatisch', 'Automatic'))}</option></select>
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"/></svg>
-          </label>
-          <button id="coach-dock-send" type="submit" class="primary-action coach-send" aria-label="${esc(tr('Senden', 'Send'))}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
-          </button>
-        </div>
-      </form>
-    </div>`;
-
-  document.body.append(launcher, dock);
-  $('#coach-dock-close')?.addEventListener('click', closeDock);
-  $('#coach-dock-pin')?.addEventListener('click', () => {
-    localStorage.setItem(pinnedKey, isPinned() ? '0' : '1');
-    syncPinButton();
-  });
-  $('#coach-dock-page')?.addEventListener('click', () => { closeDock(); activate(true); });
-  $('#coach-dock-new')?.addEventListener('click', restartConversation);
-  $('#coach-dock-form')?.addEventListener('submit', event => handleComposerSubmit(event, $('#coach-dock-input')));
-  installComposerKeyboard($('#coach-dock-input'));
-  $('#coach-dock-model')?.addEventListener('change', event => setSelectedModel(event.target.value || ''));
-  initDockResize();
-  initDockSwipe();
-  syncPinButton();
 }
 
 function dockWidthMode(){return window.innerWidth>=1024?'desktop':'tablet'}
@@ -484,12 +385,10 @@ function setSelectedModel(value) {
 }
 
 function syncQuickAccess() {
-  installSettingsToggle();
-  const setting = $('#coach-quick-access-setting');
-  if (setting) setting.checked = quickAccessEnabled();
   if (!quickAccessEnabled() && dockOpen) closeDock();
   const launcher = $('#coach-launcher');
-  if (launcher) launcher.hidden = !quickAccessEnabled() || active || dockOpen;
+  // Auf der Coach-Seite selbst wäre die Sprechblase eine Verknüpfung auf das, was man schon sieht.
+  if (launcher) launcher.hidden = !quickAccessEnabled() || state.view === 'coach' || dockOpen;
 }
 
 async function openDock() {
@@ -525,33 +424,8 @@ function closeDock() {
 }
 
 
-function activate(push) {
-  if (!isCoachPath()) capturePageContext();
-  if (dockOpen) closeDock();
-  active = true;
-  document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-  $('#view-coach')?.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  $('[data-entry="coach"]')?.classList.add('active');
-  $('[data-entry="coach"]')?.setAttribute('aria-current', 'page');
-  $('#bottom-more')?.classList.add('active');
-  $('#page-title').textContent = 'Coach';
-  $('#page-subtitle').textContent = tr('Deine Daten erklären, Ausgaben bewerten und Ziele berechnen.', 'Explain your data, review spending and calculate goals.');
-  const primary = $('#primary-action'); if (primary) primary.hidden = true;
-  if (push && !isCoachPath()) history.pushState({ view: 'coach' }, '', '/coach');
-  syncQuickAccess();
-  loadAll();
-}
 
-function deactivate() {
-  active = false;
-  $('#view-coach')?.classList.remove('active');
-  $('[data-entry="coach"]')?.classList.remove('active');
-  $('[data-entry="coach"]')?.setAttribute('aria-current', 'false');
-  syncQuickAccess();
-}
-
-async function loadAll() {
+export async function renderCoach() {
   if (loading) return;
   loading = true;
   setMascotLabel();
@@ -1020,14 +894,13 @@ async function loadReviews(renderCandidates = true) {
 }
 
 function renderSummary(summary) {
-  const root = $('#coach-summary');
-  const score = summary.worthItScore == null ? '—' : Number(summary.worthItScore).toFixed(2);
-  root.innerHTML = `<div class="coach-summary-grid">
-    <div class="coach-metric"><span>${esc(tr('Abdeckung', 'Coverage'))}</span><strong>${esc(formatPercent(summary.reviewCoverage))}</strong></div>
-    <div class="coach-metric"><span>${esc(tr('Worth-it', 'Worth it'))}</span><strong>${esc(score)}</strong></div>
-    <div class="coach-metric coach-metric--good"><span>${esc(tr('Gut', 'Good'))}</span><strong>${esc(formatMoney(summary.positiveAmount, summary.currency))}</strong></div>
-    <div class="coach-metric coach-metric--bad"><span>${esc(tr('Schlecht', 'Bad'))}</span><strong>${esc(formatMoney(summary.negativeAmount, summary.currency))}</strong></div>
-  </div>${renderInsightGroups(summary)}`;
+  // Das Raster steht im Markup, hier kommen nur die Werte hinein. Vorher entstand der ganze Kasten
+  // erst nach dem Abruf und schob die Karte darunter um 182 Pixel nach unten.
+  $('#coach-coverage').textContent = formatPercent(summary.reviewCoverage);
+  $('#coach-worth-it').textContent = summary.worthItScore == null ? '—' : Number(summary.worthItScore).toFixed(2);
+  $('#coach-good').textContent = formatMoney(summary.positiveAmount, summary.currency);
+  $('#coach-bad').textContent = formatMoney(summary.negativeAmount, summary.currency);
+  $('#coach-signals').innerHTML = renderInsightGroups(summary);
 }
 
 function renderInsightGroups(summary) {
@@ -1116,4 +989,3 @@ async function refreshSummaryOnly() { renderSummary(await api('api/spending-revi
 function showInlineError(row, message) { let error = row.querySelector('.coach-inline-error'); if (!error) { error = document.createElement('div'); error.className = 'coach-inline-error'; row.appendChild(error); } error.textContent = message; }
 function renderError(error) { messageRoots().forEach(root => { root.innerHTML = `<div class="coach-empty">${esc(tr('Coach konnte nicht geladen werden: ', 'Coach could not be loaded: ') + error.message)}</div>`; }); }
 
-installShell();

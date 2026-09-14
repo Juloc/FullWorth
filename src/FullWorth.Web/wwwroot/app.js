@@ -3,7 +3,8 @@ import { isPrivate, togglePrivacy, onPrivacyChange, privacyDefault } from './com
 import { confirmDialog } from './components/confirm.js';
 import { setPrimaryAction } from './features/ux-kit.js';
 import { initLock } from './app/lock.js';
-import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './app/dashboard.js';
+import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout } from './pages/dashboard/page.js';
+import { renderCoach, bindCoach } from './pages/coach/page.js';
 import { renderTransactions, bindTransactions } from './pages/transactions/page.js';
 import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
 import { renderRules, bindRules, newRule } from './pages/rules/page.js';
@@ -48,9 +49,6 @@ import { emptyRow } from './components/empty.js';
 
 // GET de-duplication and mutation invalidation are owned by core/api.js.
 const get=path=>i18n.get(path);
-// Seitenleiste, untere Leiste und "Mehr" kommen alle aus app/menu.js. Coach ist dort ein Eintrag,
-// aber noch keine Seite dieser Hülle - features/coach-shell.js baut sie selbst und meldet sich auf
-// seinen Eintrag. Block 4 macht daraus eine gewöhnliche Seite und diese Ausnahme verschwindet.
 // Seiten, die unter einer anderen liegen. Sie stehen nicht im Menü — sonst wäre es wieder überfüllt —,
 // haben aber eine Adresse, die zeigt, wo sie hingehören, und markieren im Menü ihre Elternseite.
 const SUBPAGES={
@@ -60,7 +58,7 @@ const SUBPAGES={
   'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'},
   intelligence:{path:'/settings/intelligence',parent:'settings'}
 };
-const ALL_VIEWS=[...VIEWS.filter(view=>view!=='coach'),...Object.keys(SUBPAGES)];
+const ALL_VIEWS=[...VIEWS,...Object.keys(SUBPAGES)];
 const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
 const MORE=ENTRIES.filter(entry=>!QUICK.includes(entry.view));
 // §3: every screen has a real URL so reload/back/forward/deep-links work (the view is no longer
@@ -188,6 +186,7 @@ function bind(){
   bindMerchants(ctx);
   bindAudit(ctx);
   bindDashboard(ctx);
+  bindCoach();
   $('#layout-reset')?.addEventListener('click',resetLayout);
   // Re-render on privacy change so every value on the current screen re-masks via the shared path.
   onPrivacyChange(()=>{syncPrivacyToggle();loadCurrent()});
@@ -417,6 +416,7 @@ const accessSetup=createAccessSetup(ctx,(status,options)=>openBankingSetup(ctx,s
 const featureRegistry=createFeatureRegistry()
   .register('dashboard',()=>loadDashboard())
   .register('insights',()=>mountInsights(ctx))
+  .register('coach',()=>renderCoach())
   .register('transactions',()=>renderTransactions(ctx))
   .register('accounts',()=>renderAccounts(ctx))
   .register('budgets',()=>renderBudgets(ctx))

@@ -9,9 +9,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task CoachExtensionsUseOnlyAuthenticatedBffForFinanceData()
     {
-        // transaction-review-controls.js was merged into coach-shell.js by the architecture cleanup;
-        // its spending-review sentiment controls now live inline in the shell module below.
-        var shell = await GetAsync("/features/coach-shell.js");
+        // transaction-review-controls.js was merged into the Coach module by the architecture
+        // cleanup; its spending-review sentiment controls now live inline in the page below.
+        var shell = await GetAsync("/pages/coach/page.js");
         var apiClient = await GetAsync("/core/api.js");
         var register = await GetAsync("/pwa/register-sw.js");
 
@@ -19,7 +19,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // shared authenticated BFF client (core/services.js -> core/api.js), which is the only place
         // allowed to construct /bff/backend and /bff/banking URLs (also enforced by
         // FrontendArchitectureGuardTests.NoNewFeatureMayCallBffDirectly).
-        Assert.Contains("import { api as sharedApi } from '../core/services.js'", shell);
+        Assert.Contains("import { api as sharedApi } from '../../core/services.js'", shell);
         Assert.Contains("api/fullworth-spaces", shell);
         Assert.DoesNotContain("/bff/backend", shell);
         Assert.DoesNotContain("/bff/banking", shell);
@@ -34,18 +34,27 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("sentimentButton('Negative'", shell);
         Assert.Contains("data-sentiment=\"${sentiment}\"", shell);
 
-        Assert.Contains("import('/features/coach-shell.js')", register);
+        // Coach wurde einmal nachgeladen: register-sw.js holte es per import() nach dem Zeichnen.
+        // Jetzt ist es eine Seite wie jede andere, also lädt der Einstieg es fest mit - und der
+        // Registrierer lädt gar nichts mehr.
+        Assert.DoesNotContain("import(", register);
+        Assert.Contains("from './pages/coach/page.js'", await GetAsync("/app.js"));
     }
 
     [Fact]
     public async Task CoachShellExposesEvidenceAndDeterministicModeWithoutMandatoryAi()
     {
-        var shell = await GetAsync("/features/coach-shell.js");
-        var coachCss = await GetAsync("/styles/features/coach.css");
-        Assert.Contains("Lokale Auswertung", shell);
+        var shell = await GetAsync("/pages/coach/page.js");
+        var coachCss = await GetAsync("/pages/coach/page.css");
+        var markup = ReadSource("index.html");
+        // Die Beschriftungen stehen jetzt im Markup und in den Sprachdateien, nicht mehr zweisprachig
+        // im Modul.
+        Assert.Contains("coach.mode", markup);
+        Assert.Contains("Lokale Auswertung", ReadSource(Path.Combine("locales", "de.json")));
+        Assert.Contains("Local analysis", ReadSource(Path.Combine("locales", "en.json")));
         Assert.Contains("Verwendete Fakten", shell);
         Assert.Contains("FullWorth-Daten im sicheren Kontext", shell);
-        Assert.Contains("id=\"coach-model\"", shell);
+        Assert.Contains("id=\"coach-model\"", markup);
         Assert.Contains("finance.coach.model", shell);
         Assert.Contains("api/coach/models", shell);
         Assert.Contains("model: selectedModel || null", shell);
@@ -56,8 +65,10 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("Wobei soll ich helfen?", shell);
         Assert.Contains("coach-suggestion-list", shell);
         Assert.Contains("coach-followups", shell);
-        Assert.Contains("launcher.id = 'coach-launcher'", shell);
-        Assert.Contains("dock.id = 'coach-dock'", shell);
+        // Sprechblase und Dock stehen im Dokument, nicht im Modul: sie begleiten jede Seite, und
+        // was vor dem ersten Zeichnen da ist, kann nichts mehr verschieben.
+        Assert.Contains("id=\"coach-launcher\"", markup);
+        Assert.Contains("id=\"coach-dock\"", markup);
         Assert.Contains("finance.coach.quickAccess", shell);
         Assert.Contains("restartConversation", shell);
         Assert.Contains("api/coach/conversations?limit=1", shell);
@@ -104,7 +115,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var contracts = await GetAsync("/pages/contracts/page.js");
         var networth = await GetAsync("/pages/networth/page.js");
         var accounts = await GetAsync("/pages/accounts/presentation.js");
-        var coach = await GetAsync("/features/coach-shell.js");
+        var coach = await GetAsync("/pages/coach/page.js");
         var dialogs = await GetAsync("/components/dialog.js");
 
         Assert.Contains("id=\"layout-reset\"", html);

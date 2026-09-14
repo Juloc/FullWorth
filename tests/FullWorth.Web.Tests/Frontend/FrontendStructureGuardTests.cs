@@ -57,14 +57,14 @@ public sealed class FrontendStructureGuardTests
     /// Ein import() heißt: beim ersten Besuch ist die Seite noch nicht da, sondern kommt gleich. Genau
     /// das soll es nicht geben — alles ist beim ersten Zeichnen da oder es gehört nicht dazu.
     ///
-    /// Zwei Ausnahmen, beide begründet: app/boot.js lädt das Aussehen erst, wenn das Dokument steht
-    /// (es ist ein klassisches Skript im Kopf und kann gar nicht anders), und pwa/register-sw.js holt
-    /// die Coach-Erweiterung, die in Block 4 eine gewöhnliche Seite wird.
+    /// Eine Ausnahme, und sie ist begründet: app/boot.js lädt das Aussehen erst, wenn das Dokument
+    /// steht — es ist ein klassisches Skript im Kopf und kann gar nicht anders. Die zweite hieß
+    /// pwa/register-sw.js und holte den Coach nach; der ist jetzt eine Seite wie jede andere.
     /// </summary>
     [Fact]
     public void No_module_is_loaded_at_runtime()
     {
-        var allowed = new[] { "app/boot.js", "pwa/register-sw.js" };
+        var allowed = new[] { "app/boot.js" };
 
         var offenders = Scripts("app", "components", "core", "features", "pages")
             .Where(path => !allowed.Contains(Relative(path), StringComparer.Ordinal))

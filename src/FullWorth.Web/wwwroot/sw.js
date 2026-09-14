@@ -23,7 +23,8 @@ const APP_SHELL = [
   // one of them needs the server to do anything, so caching them would only fake availability.
   '/security/browser-fetch.js',
   '/styles/mobile-polish.css',
-  '/app/dashboard.js',
+  '/pages/dashboard/page.js',
+  '/pages/dashboard/page.css',
   '/app/lock.js',
   '/components/privacy.js',
   '/features/category-picker.js',
@@ -112,8 +113,9 @@ const APP_SHELL = [
   '/pages/purchases/price-insights.js',
   '/pages/purchases/advanced-insights.js',
   '/pages/purchases/receipt-source-review.js',
-  '/features/coach-shell.js',
-  '/styles/features/coach.css',
+  '/pages/coach/page.js',
+  '/pages/coach/page.css',
+  
   '/components/accessibility-release.js',
   '/app/motion.js',
   '/app/appearance.js',

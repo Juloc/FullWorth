@@ -2,12 +2,12 @@
 // user + FullWorth Space via /api/preferences (§22); the desktop uses a responsive grid, mobile a
 // single ordered full-width list (§6.3). Edit mode adds/removes/reorders with an accessible
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
-import { money, converted, maskIdentifier } from '../components/money.js';
-import { balanceMeaningLine } from '../components/balance-meaning.js';
-import { isPrivate } from '../components/privacy.js';
-import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../features/ux-kit.js';
-import { bindChartScrubber } from '../components/chart-scrubber.js';
-import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../features/data-completeness.js';
+import { money, converted, maskIdentifier } from '../../components/money.js';
+import { balanceMeaningLine } from '../../components/balance-meaning.js';
+import { isPrivate } from '../../components/privacy.js';
+import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../../features/ux-kit.js';
+import { bindChartScrubber } from '../../components/chart-scrubber.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
 // endpoints that already exist. Per-widget title + width are user-configurable (§7); scope/period/

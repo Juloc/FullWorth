@@ -1,0 +1,94 @@
+/* Übersicht: das Widget-Raster, die Kennzahl-Kacheln und die Kontengruppen.
+
+   Diese Regeln lagen in vier Dateien - app.css, styles/responsive.css, design-depth.css und
+   styles/mobile-polish.css. Keine davon gehörte einer anderen Seite, und die beiden
+   Raster-Rücksetzungen in responsive.css standen zweimal wortgleich da: einmal für Tablet, einmal
+   für Telefon. Hier ist es eine Medienabfrage. */
+
+/* Zwölf Spalten am Schreibtisch, eine Liste darunter. */
+.dashboard-editbar{display:flex;gap:var(--s2);justify-content:flex-end;margin-bottom:var(--s3)}
+.dashboard-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s4);align-items:start}
+.widget{grid-column:span 12;min-width:0}
+.widget.span-4{grid-column:span 4}.widget.span-6{grid-column:span 6}.widget.span-8{grid-column:span 8}.widget.span-12{grid-column:span 12}
+.widget .widget-body{display:grid;min-width:0}
+.widget-metric strong{font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
+.widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:13px;margin-top:6px;flex-wrap:wrap}
+.widget-split.big{gap:var(--s6)}.widget-split.big strong{font-size:20px}
+/* Inline monthly bar chart inside a configurable income/expense widget. */
+.widget-chart{width:100%;height:96px;display:block}
+.widget-controls{display:flex;gap:4px}
+.widget-controls button{width:30px;height:30px;padding:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.widget-catalog button{text-align:left}
+#dashboard-data-completeness{grid-column:1/-1}
+/* Eine Zeile, die nichts aufklappt (anstehende Verträge), behält den normalen Zeiger. */
+.fw-row-plain{cursor:default}
+
+/* Unter dem Schreibtisch bricht das Raster auf eine Spalte, und die Spannweiten gelten nicht mehr. */
+@media(max-width:1023px){
+  .dashboard-grid{grid-template-columns:1fr}
+  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
+}
+
+/* Kennzahl-Kacheln der Übersicht. */
+.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
+.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em;overflow-wrap:anywhere}
+.widget-split.dash-metric-split{margin-top:var(--s2)}
+/* Overview net-worth preview: value + change inline, a compact history sparkline, taps through to Wealth. */
+.dash-nw{display:grid;gap:8px;cursor:pointer;border-radius:var(--radius-card);margin:calc(var(--s1) * -1);padding:var(--s1);transition:background .12s}
+.dash-nw:hover{background:var(--surface-2)}
+.dash-nw .widget-metric.dash-metric{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:var(--s2)}
+.dash-nw .widget-split.dash-metric-split{margin-top:0}
+.dash-nw-change{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.dash-nw-change.positive{color:var(--positive)}
+.dash-nw-change.negative{color:var(--negative)}
+.dash-nw-change.muted{color:var(--muted)}
+.dash-nw-spark{width:100%;height:40px;display:block}
+.dash-nw-spark-line{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.dash-nw-spark-fill{fill:var(--accent);opacity:.08;stroke:none}
+.dash-accounts{display:grid;gap:var(--s5)}
+.dash-group{display:grid}
+.dash-group-rows{display:grid}
+.dash-group-head{padding-top:2px;padding-bottom:var(--s3)}
+.dash-group-head .fw-row-title{font-size:15px}
+.dash-group-head .fw-row-sub{font-size:11px}
+.dash-group-head .fw-row-amt{font-size:15px}
+.dash-drill-chevron{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
+.dash-drill-chevron svg{width:16px;height:16px;display:block}
+.dash-group-head:hover .dash-drill-chevron,.dash-group-head:focus-visible .dash-drill-chevron{color:var(--text)}
+.dash-group .fw-row.is-drillable:focus-visible{outline:2px solid var(--text);outline-offset:-2px;border-radius:var(--radius-input)}
+
+/* Die Karten bekommen im hellen Thema einen sehr leisen Lichtschein, nie einen Farbverlauf. */
+html[data-theme="light"] #dashboard-grid .widget::before{
+  content:"";
+  position:absolute;
+  width:230px;
+  height:180px;
+  right:-92px;
+  top:-96px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(91,71,224,.045),rgba(91,71,224,0) 70%);
+  pointer-events:none;
+}
+
+html[data-theme="light"] #dashboard-grid .widget:nth-child(2n)::before{
+  background:radial-gradient(circle,rgba(23,180,92,.045),rgba(23,180,92,0) 70%);
+}
+
+.widget-metric strong{
+  letter-spacing:-.025em;
+  line-height:1;
+}
+
+@media(max-width:767px){
+  /* Zeilen in einer Karte bekommen drei feste Spalten, damit ein langer Name den Betrag nie aus dem
+     Bild schiebt. */
+  .widget .fw-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:10px;width:100%;box-sizing:border-box}
+  .widget .tx-ident-slot{margin-right:0}
+  .widget .fw-row-main{overflow:hidden}
+  .widget .fw-row-title,
+  .widget .fw-row-sub{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .widget .fw-row-amt{justify-self:end;max-width:min(38vw,150px);overflow:hidden;text-overflow:ellipsis}
+  /* Bearbeiten am Telefon: langes Drücken wählt eine Karte aus - dieselbe Hervorhebung wie in Listen,
+     ohne zusätzliche Kästchen. */
+  #view-dashboard .widget.mobile-edit-selected{background:var(--surface-2);box-shadow:inset 0 0 0 2px var(--cta),var(--shadow)}
+}

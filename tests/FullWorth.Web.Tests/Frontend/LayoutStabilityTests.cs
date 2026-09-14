@@ -30,6 +30,7 @@ public sealed class LayoutStabilityTests(UiHarness harness)
     ///   /transactions   0,056 / 0,096   ->   0,001 / 0,003
     ///   /contracts      0,127 / 0,368   ->   0,000 / 0,000
     ///   /settings       0,020 / 0,036   ->   0,000 / 0,003
+    ///   /coach              —           ->   0,000 / 0,003
     ///
     /// Vier Ursachen, in der Reihenfolge, in der sie gefunden wurden:
     ///
@@ -46,7 +47,17 @@ public sealed class LayoutStabilityTests(UiHarness harness)
     /// lag bei 0,368.
     ///
     /// Die 0,005 sind Luft für den CI-Rechner, nicht für neue Sprünge: die schlechteste gemessene
-    /// Zahl ist 0,003, und die kommt vom Umbruch einer Beschriftung am Telefon.
+    /// Zahl ist 0,003.
+    ///
+    /// Woher die 0,003 kommen: die Aktionsleiste oben. Der Aktionsknopf steht im Dokument und wird
+    /// erst von JavaScript versteckt, wenn die Seite gar keine Aktion hat — dann wird die Leiste am
+    /// Telefon einmal schmaler. Das ist die letzte gemeinsame Quelle und trifft jede Seite ohne
+    /// eigene Aktion gleich; sie zu beseitigen heißt, den Kopf umzubauen, nicht eine Seite.
+    ///
+    /// Coach kam zuerst mit 0,033 herein, und das waren zwei echte Fehler: die drei Vorschläge
+    /// entstanden erst beim Öffnen (224px) und der Kennzahlenkasten erst nach dem Abruf (182px).
+    /// Die Vorschläge werden jetzt beim Start gezeichnet, das Raster steht im Markup und bekommt
+    /// nur noch seine Werte.
     /// </summary>
     private static readonly (string Path, double Desktop, double Mobile)[] Budget =
     [
@@ -55,7 +66,8 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         ("/accounts",        0.005,  0.005), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
         ("/transactions",    0.005,  0.005), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
         ("/contracts",       0.005,  0.005), // 0.000 / 0.000   nichts
-        ("/settings",        0.005,  0.005)  // 0.000 / 0.003   Überschrift bricht am Telefon um
+        ("/settings",        0.005,  0.005), // 0.000 / 0.003   Überschrift bricht am Telefon um
+        ("/coach",           0.005,  0.005)  // 0.000 / 0.003   derselbe Kopf wie oben
     ];
 
     public static TheoryData<string, bool> Pages()

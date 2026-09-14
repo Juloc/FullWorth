@@ -5,17 +5,3 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => { /* PWA is progressive enhancement */ });
   });
 }
-
-// Small shell extensions are loaded here because this file is present on every authenticated app
-// page and is already allowed by the CSP. The Coach modules own their own DOM and degrade safely if
-// they cannot be loaded; they never bypass the existing BFF for finance data.
-function loadCoachExtension() {
-  // The auth page registers the service worker too, but must not load authenticated shell modules.
-  if (document.body?.classList.contains('auth-body')) return;
-  import('/features/coach-shell.js').catch(() => { /* optional shell extension */ });
-}
-
-if (document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', loadCoachExtension, { once: true });
-else
-  loadCoachExtension();

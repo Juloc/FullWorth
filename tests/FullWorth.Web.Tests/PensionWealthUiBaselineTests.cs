@@ -47,7 +47,7 @@ public sealed class PensionWealthUiBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void DashboardPensionWidgetKeepsTheBalanceApartFromTheProjection()
     {
-        var js = ReadAsset("app", "dashboard.js");
+        var js = ReadAsset("pages", "dashboard", "page.js");
 
         Assert.Contains("api/pension/overview", js);
         Assert.Contains("o.totalBalance", js);

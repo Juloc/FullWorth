@@ -1,4 +1,5 @@
 import { state } from '../../core/state.js';
+import { emitAppEvent } from '../../core/event-bus.js';
 import { secureFetch } from '../../security/secure-fetch.js';
 import { createDialog } from '../../components/dialog.js';
 import { openPinDialog } from '../../app/lock.js';
@@ -6,6 +7,7 @@ import { privacyDefault, setPrivacyDefault } from '../../components/privacy.js';
 import { renderSharing, bindSharing } from '../../features/sharing.js';
 import { downloadWealthBackup } from '../../features/wealth-portability.js';
 
+const COACH_BUBBLE = 'finance.coach.quickAccess';
 let bound = false;
 
 function dialog(ctx, html) {
@@ -152,6 +154,12 @@ export function bindSettings(ctx) {
   ctx.$('#export-data')?.addEventListener('click', event => downloadWealthBackup(ctx, event.currentTarget));
   ctx.$('#lock-settings')?.addEventListener('click', () => openPinDialog(ctx));
   ctx.$('#privacy-default')?.addEventListener('change', event => setPrivacyDefault(event.target.checked));
+  // Der Schalter gehört den Einstellungen, die Sprechblase dem Coach. Deshalb schreibt hier nur der
+  // Schalter, und der Coach hört zu - keine Seite fasst in die Markierung der anderen.
+  ctx.$('#coach-quick-access')?.addEventListener('change', event => {
+    localStorage.setItem(COACH_BUBBLE, event.target.checked ? '1' : '0');
+    emitAppEvent('coach:bubble', event.target.checked);
+  });
   bindSharing(ctx);
 }
 
@@ -159,6 +167,7 @@ export async function renderSettings(ctx, { accessSetup, renderBankingSettings }
   ctx.$('#language').value = state.lang;
   ctx.$('#theme').value = state.theme;
   ctx.$('#privacy-default').checked = privacyDefault();
+  ctx.$('#coach-quick-access').checked = localStorage.getItem(COACH_BUBBLE) !== '0';
 
   await Promise.all([
     renderSharing(ctx),

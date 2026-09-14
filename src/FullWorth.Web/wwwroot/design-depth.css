@@ -177,33 +177,10 @@ html[data-theme="light"] .metric::after{
   z-index:1;
 }
 
-/* Dashboard cards get a very subtle highlight wash, never a decorative neon gradient. */
-html[data-theme="light"] #dashboard-grid .widget::before{
-  content:"";
-  position:absolute;
-  width:230px;
-  height:180px;
-  right:-92px;
-  top:-96px;
-  border-radius:50%;
-  background:radial-gradient(circle,rgba(91,71,224,.045),rgba(91,71,224,0) 70%);
-  pointer-events:none;
-}
-
-html[data-theme="light"] #dashboard-grid .widget:nth-child(2n)::before{
-  background:radial-gradient(circle,rgba(23,180,92,.045),rgba(23,180,92,0) 70%);
-}
-
 /* Stronger hierarchy without increasing density. */
 .panel h2,.panel-head h2,.panel-head h3{
   letter-spacing:-.005em;
 }
-
-.widget-metric strong{
-  letter-spacing:-.025em;
-  line-height:1;
-}
-
 .metric strong,
 .amount,
 .widget-metric strong,

@@ -134,6 +134,10 @@
     "intelligence": {
       "title": "AI & Intelligence",
       "subtitle": "Lokale KI-Einstellungen, Cloud-Anbindung und Marken-Pakete"
+    },
+    "coach": {
+      "title": "Coach",
+      "subtitle": "Deine Daten erklären, Ausgaben bewerten und Ziele berechnen."
     }
   },
   "dashboard": {
@@ -1310,5 +1314,26 @@
   "combobox": {
     "pick": "Auswählen",
     "search": "Suchen…"
+  },
+  "coach": {
+    "newChat": "Neu starten",
+    "mode": "Lokale Auswertung",
+    "question": "Frage an FullWorth",
+    "placeholder": "Wo ist mein Geld diesen Monat hin?",
+    "dockPlaceholder": "Frag FullWorth …",
+    "model": "KI-Modell",
+    "automatic": "Automatisch",
+    "send": "Senden",
+    "review": "Ausgaben-Review",
+    "reviewRecent": "Letzte Ausgaben bewerten",
+    "bubble": "Coach-Sprechblase",
+    "open": "Coach öffnen",
+    "pin": "Coach anheften",
+    "openPage": "Coach-Seite öffnen",
+    "resize": "Coach-Breite ändern",
+    "coverage": "Abdeckung",
+    "worthIt": "Worth-it",
+    "good": "Gut",
+    "bad": "Schlecht"
   }
 }

@@ -44,8 +44,6 @@
   .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .content-grid{grid-template-columns:1fr}
   .span-2{grid-column:auto}
-  .dashboard-grid{grid-template-columns:1fr}
-  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
 }
 @media(max-width:767px){
   .shell{display:block;width:100%;min-width:0}
@@ -73,8 +71,6 @@
      Schriftgröße, anderer Abstand. Gewonnen hat immer die spätere Datei, also war dieser Block
      wirkungslos. */
   .content-grid{grid-template-columns:1fr}
-  .dashboard-grid{grid-template-columns:1fr}
-  .widget,.widget.span-4,.widget.span-6,.widget.span-8,.widget.span-12{grid-column:auto}
   .span-2{grid-column:auto}
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}

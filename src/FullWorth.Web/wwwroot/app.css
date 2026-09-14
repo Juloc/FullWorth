@@ -1,18 +1,4 @@
 /* FullWorth feature and responsive styles. Shared tokens/reset/shell/components live under /styles/. */
-/* Dashboard widget grid (§6.2): 12-col on desktop, single column list on mobile (§6.3). */
-.dashboard-editbar{display:flex;gap:var(--s2);justify-content:flex-end;margin-bottom:var(--s3)}
-.dashboard-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s4);align-items:start}
-.widget{grid-column:span 12;min-width:0}
-.widget.span-4{grid-column:span 4}.widget.span-6{grid-column:span 6}.widget.span-8{grid-column:span 8}.widget.span-12{grid-column:span 12}
-.widget .widget-body{display:grid;min-width:0}
-.widget-metric strong{font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
-.widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:13px;margin-top:6px;flex-wrap:wrap}
-.widget-split.big{gap:var(--s6)}.widget-split.big strong{font-size:20px}
-/* Inline monthly bar chart inside a configurable income/expense widget. */
-.widget-chart{width:100%;height:96px;display:block}
-.widget-controls{display:flex;gap:4px}
-.widget-controls button{width:30px;height:30px;padding:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
-.widget-catalog button{text-align:left}
 /* Budget cards (§12) */
 .budget-wizard{min-width:min(520px,92vw)}
 .budget-wizard-presets{display:grid;gap:7px;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
@@ -337,7 +323,6 @@ svg.fw-chart-scrubbable{touch-action:pan-y;cursor:crosshair;user-select:none;-we
 .data-completeness-copy strong{font-size:13px}
 .data-completeness-copy span{font-size:12px;color:var(--muted);line-height:1.4}
 .data-completeness-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;text-decoration:none;white-space:nowrap}
-#dashboard-data-completeness{grid-column:1/-1}
 .nw-alloc-block{margin:var(--s2) 0 var(--s3)}
 .nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
 .nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
@@ -631,34 +616,6 @@ button.danger:hover{background:var(--surface-2)}
    namespaced under its page prefix (dash-/contracts-/an-/nw-/purchase-/tx-) so
    the rules cannot collide. FullWorth stays monochrome + --cat accents only.
    ============================================================================ */
-
-/* --- Übersicht (Overview): calmer summary tiles + grouped account cards --- */
-.widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
-.widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em;overflow-wrap:anywhere}
-.widget-split.dash-metric-split{margin-top:var(--s2)}
-/* Overview net-worth preview: value + change inline, a compact history sparkline, taps through to Wealth. */
-.dash-nw{display:grid;gap:8px;cursor:pointer;border-radius:var(--radius-card);margin:calc(var(--s1) * -1);padding:var(--s1);transition:background .12s}
-.dash-nw:hover{background:var(--surface-2)}
-.dash-nw .widget-metric.dash-metric{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:var(--s2)}
-.dash-nw .widget-split.dash-metric-split{margin-top:0}
-.dash-nw-change{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
-.dash-nw-change.positive{color:var(--positive)}
-.dash-nw-change.negative{color:var(--negative)}
-.dash-nw-change.muted{color:var(--muted)}
-.dash-nw-spark{width:100%;height:40px;display:block}
-.dash-nw-spark-line{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
-.dash-nw-spark-fill{fill:var(--accent);opacity:.08;stroke:none}
-.dash-accounts{display:grid;gap:var(--s5)}
-.dash-group{display:grid}
-.dash-group-rows{display:grid}
-.dash-group-head{padding-top:2px;padding-bottom:var(--s3)}
-.dash-group-head .fw-row-title{font-size:15px}
-.dash-group-head .fw-row-sub{font-size:11px}
-.dash-group-head .fw-row-amt{font-size:15px}
-.dash-drill-chevron{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
-.dash-drill-chevron svg{width:16px;height:16px;display:block}
-.dash-group-head:hover .dash-drill-chevron,.dash-group-head:focus-visible .dash-drill-chevron{color:var(--text)}
-.dash-group .fw-row.is-drillable:focus-visible{outline:2px solid var(--text);outline-offset:-2px;border-radius:var(--radius-input)}
 
 /* --- Verträge (contracts): hero summary + grouped sections + sort sheet --- */
 .contracts-summary .fw-card-head{margin-bottom:var(--s2)}
@@ -1075,9 +1032,6 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .ic-polish .import-status.is-done::before{content:"\2713";font-weight:700}
 .ic-polish .import-status.is-error{color:var(--negative)}
 @keyframes ic-spin{to{transform:rotate(360deg)}}
-
-/* A non-interactive dashboard widget row (e.g. upcoming contracts) keeps the default cursor. */
-.fw-row-plain{cursor:default}
 
 
 

@@ -85,9 +85,9 @@ public sealed class MenuParityTests
     /// Jeder Eintrag führt zu etwas: zu einer Ansicht, die im Dokument steht, oder zu einer eigenen
     /// Adresse. Ein Menüpunkt, der ins Leere zeigt, ist schlimmer als keiner.
     ///
-    /// Coach ist die eine Ausnahme und steht deshalb hier namentlich: es baut seine Ansicht noch
-    /// selbst, statt im Dokument zu stehen. Sobald es eine gewöhnliche Seite ist, fällt dieser Zweig
-    /// weg — und bis dahin merkt der Test, wenn auch das noch verschwindet.
+    /// Coach stand hier einmal namentlich als Ausnahme: es baute seine Ansicht selbst und war
+    /// deshalb nicht im Dokument zu finden. Seit es eine gewöhnliche Seite ist, gibt es keine
+    /// Ausnahme mehr — und dass es keine gibt, ist genau das, was dieser Test jetzt festhält.
     /// </summary>
     [Fact]
     public void Every_entry_leads_somewhere()
@@ -97,12 +97,6 @@ public sealed class MenuParityTests
 
         foreach (var entry in DefinedEntries())
         {
-            if (entry == "coach")
-            {
-                Assert.Contains("section.id = 'view-coach'", Read("features/coach-shell.js"));
-                continue;
-            }
-
             var inDocument = html.Contains($"id=\"view-{entry}\"");
             var ownPage = sidebar.Contains($"data-entry=\"{entry}\"") && !sidebar.Contains($"data-view=\"{entry}\"");
 

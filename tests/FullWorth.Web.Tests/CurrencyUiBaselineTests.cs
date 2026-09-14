@@ -28,7 +28,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var money = await GetAsync("/components/money.js");
         var accounts = await GetAsync("/pages/accounts/page.js");
-        var dashboard = await GetAsync("/app/dashboard.js");
+        var dashboard = await GetAsync("/pages/dashboard/page.js");
 
         // The shared formatter: the currency is a parameter, handed straight to Intl.
         Assert.Contains("export function money(value, currency = 'EUR')", money);
@@ -86,7 +86,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task A_value_that_could_not_be_converted_is_marked_not_silently_dropped()
     {
         var accounts = await GetAsync("/pages/accounts/page.js");
-        var dashboard = await GetAsync("/app/dashboard.js");
+        var dashboard = await GetAsync("/pages/dashboard/page.js");
         var components = await GetAsync("/styles/components.css");
 
         // The subtotal takes the converted figure, or the native one when it already IS the base

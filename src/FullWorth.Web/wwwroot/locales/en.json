@@ -134,6 +134,10 @@
     "intelligence": {
       "title": "AI & intelligence",
       "subtitle": "Local AI settings, cloud connection and brand packs"
+    },
+    "coach": {
+      "title": "Coach",
+      "subtitle": "Explain your data, review spending and calculate goals."
     }
   },
   "dashboard": {
@@ -1310,5 +1314,26 @@
   "combobox": {
     "pick": "Choose",
     "search": "Search…"
+  },
+  "coach": {
+    "newChat": "New chat",
+    "mode": "Local analysis",
+    "question": "Question for FullWorth",
+    "placeholder": "Where did my money go this month?",
+    "dockPlaceholder": "Ask FullWorth …",
+    "model": "AI model",
+    "automatic": "Automatic",
+    "send": "Send",
+    "review": "Spending review",
+    "reviewRecent": "Review recent spending",
+    "bubble": "Coach chat bubble",
+    "open": "Open Coach",
+    "pin": "Pin Coach",
+    "openPage": "Open Coach page",
+    "resize": "Resize Coach",
+    "coverage": "Coverage",
+    "worthIt": "Worth it",
+    "good": "Good",
+    "bad": "Bad"
   }
 }

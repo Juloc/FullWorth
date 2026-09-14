@@ -56,7 +56,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var helper = await GetAsync("/features/data-completeness.js");
         var wealth = await GetAsync("/pages/networth/page.js");
         var analytics = await GetAsync("/pages/analytics/page.js");
-        var dashboard = await GetAsync("/app/dashboard.js");
+        var dashboard = await GetAsync("/pages/dashboard/page.js");
         var css = await GetAsync("/app.css");
 
         Assert.Contains("api/import/finanzguru/accounts", helper);
