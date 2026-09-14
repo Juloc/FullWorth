@@ -19,9 +19,7 @@ Contracts/ContractDetectionService.cs
 Contracts/ContractParityModule.cs
 Contracts/ContractsModule.cs
 Contracts/PriceChanges/PriceChangesModule.cs
-Contracts/Review/ContractCandidateReview.cs
 Export/ExportCompletionParityModule.cs
-FullWorthSpaces/AccessEndpoints.cs
 Import/FinanzguruImportModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs

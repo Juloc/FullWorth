@@ -1,7 +1,4 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.FullWorthSpaces;
 
@@ -11,7 +8,11 @@ public sealed record MemberAccessWrite(string Template, IReadOnlyDictionary<stri
 ///
 /// Letzte Datei aus Parity: drei Fachbereiche in einer - Zugriff, Kategorie-Ergonomie und
 /// Massenaenderungen an Buchungen. Die Berechtigungspruefung selbst ist schon vorher nach
-/// Security/SpaceCapabilities gezogen; sie hielt allein vier Modulzyklen.</summary>
+/// Security/SpaceCapabilities gezogen; sie hielt allein vier Modulzyklen.
+///
+/// Die Entscheidungen stehen absichtlich hier und nicht im Store: wer wen wie hochstufen darf, ist
+/// die Sicherheitsaussage dieser Datei, und sie gehoert an eine Stelle, an der man sie am Stueck
+/// liest. Der Store weiss nur, wie das Ergebnis in die Datenbank kommt.</summary>
 public static class AccessEndpoints
 {
     public static IEndpointRouteBuilder MapAccessEndpoints(this IEndpointRouteBuilder app)
@@ -24,50 +25,38 @@ public static class AccessEndpoints
     }
 
     private static async Task<IResult> GetEffectiveAccess(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var template = await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, userId, ct);
-        var capabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, userId, template, ct);
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var template = await space.TemplateAsync(userId, fullWorthSpaceId, ct);
+        var capabilities = await space.EffectiveCapabilitiesAsync(userId, fullWorthSpaceId, template, ct);
         return Results.Ok(new { template, capabilities });
     }
 
     private static async Task<IResult> ListMembers(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        MemberAccessStore store, CancellationToken ct)
     {
         var caller = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
+        if (!await space.HasCapabilityAsync(caller, fullWorthSpaceId, "sharing.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        // Project only mapped properties. FullWorthUser.Email is a convenience alias and is intentionally
-        // NotMapped, so using it inside an EF query would fail translation at runtime.
-        var members = await db.FullWorthSpaceMembers.AsNoTracking()
-            .Where(member => member.FullWorthSpaceId == fullWorthSpaceId)
-            .Join(db.Users.AsNoTracking(), member => member.UserId, user => user.Id,
-                (member, user) => new
-                {
-                    member.UserId,
-                    member.Role,
-                    Email = user.EmailNormalized,
-                    user.DisplayName
-                })
-            .OrderBy(row => row.DisplayName).ThenBy(row => row.Email)
-            .ToListAsync(ct);
-
+        var members = await store.ListMembersAsync(fullWorthSpaceId, ct);
         var result = new List<object>();
         foreach (var member in members)
         {
             var template = member.Role == "owner"
                 ? "owner"
-                : await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, member.UserId, ct);
+                : await space.TemplateAsync(member.UserId, fullWorthSpaceId, ct);
             result.Add(new
             {
                 member.UserId,
                 member.Email,
                 member.DisplayName,
                 template,
-                capabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, member.UserId, template, ct)
+                capabilities = await space.EffectiveCapabilitiesAsync(member.UserId, fullWorthSpaceId, template, ct)
             });
         }
         return Results.Ok(result);
@@ -75,23 +64,20 @@ public static class AccessEndpoints
 
     private static async Task<IResult> PutMemberAccess(
         Guid memberUserId, Guid fullWorthSpaceId, MemberAccessWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        SpaceAccess space, MemberAccessStore store, CancellationToken ct)
     {
         var caller = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, caller, fullWorthSpaceId, "sharing.manage", ct))
+        if (!await space.HasCapabilityAsync(caller, fullWorthSpaceId, "sharing.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var targetRole = await db.FullWorthSpaceMembers.AsNoTracking()
-            .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == memberUserId)
-            .Select(member => member.Role)
-            .SingleOrDefaultAsync(ct);
+        var targetRole = await store.RoleOfAsync(fullWorthSpaceId, memberUserId, ct);
         if (targetRole is null) return Results.NotFound();
 
         var template = request.Template.Trim().ToLowerInvariant();
         if (template is not ("owner" or "editor" or "viewer"))
             return Results.BadRequest(new { error = "Template must be owner, editor or viewer." });
 
-        var callerIsOwner = await RawSql.IsOwnerAsync(db, caller, fullWorthSpaceId, ct);
+        var callerIsOwner = await space.IsOwnerAsync(caller, fullWorthSpaceId, ct);
         var targetIsOwner = string.Equals(targetRole, "owner", StringComparison.OrdinalIgnoreCase);
 
         // Role templates refine ordinary members; they never manufacture a shadow FullWorth-Space owner.
@@ -120,8 +106,8 @@ public static class AccessEndpoints
         // caller does not possess. This prevents privilege escalation through a second account.
         if (!callerIsOwner && !targetIsOwner)
         {
-            var callerTemplate = await SpaceCapabilities.LoadTemplateAsync(db, fullWorthSpaceId, caller, ct);
-            var callerCapabilities = await SpaceCapabilities.EffectiveCapabilitiesAsync(db, fullWorthSpaceId, caller, callerTemplate, ct);
+            var callerTemplate = await space.TemplateAsync(caller, fullWorthSpaceId, ct);
+            var callerCapabilities = await space.EffectiveCapabilitiesAsync(caller, fullWorthSpaceId, callerTemplate, ct);
             foreach (var capability in PermissionCapabilities.All)
             {
                 var requested = overrides.TryGetValue(capability, out var explicitValue)
@@ -132,56 +118,7 @@ public static class AccessEndpoints
             }
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var connection = await RawSql.OpenAsync(db, ct);
-
-        if (targetIsOwner)
-        {
-            // Owner is structurally privileged. Remove stale template/override rows so a future
-            // demotion cannot unexpectedly inherit old settings.
-            await using (var deleteTemplate = RawSql.Command(connection,
-                             "DELETE FROM \"FinanceMemberRoleTemplates\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
-                             ("@space", fullWorthSpaceId), ("@user", memberUserId)))
-                await deleteTemplate.ExecuteNonQueryAsync(ct);
-            await using (var deleteOverrides = RawSql.Command(connection,
-                             "DELETE FROM \"FinanceCapabilityGrants\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
-                             ("@space", fullWorthSpaceId), ("@user", memberUserId)))
-                await deleteOverrides.ExecuteNonQueryAsync(ct);
-        }
-        else
-        {
-            await using (var templateCommand = RawSql.Command(connection, """
-INSERT INTO "FinanceMemberRoleTemplates" ("FullWorthSpaceId","UserId","Template","UpdatedAt")
-VALUES (@space,@user,@template,@now)
-ON CONFLICT ("FullWorthSpaceId","UserId") DO UPDATE SET "Template"=EXCLUDED."Template","UpdatedAt"=EXCLUDED."UpdatedAt"
-""", ("@space", fullWorthSpaceId), ("@user", memberUserId), ("@template", template), ("@now", DateTimeOffset.UtcNow)))
-            {
-                await templateCommand.ExecuteNonQueryAsync(ct);
-            }
-
-            await using (var delete = RawSql.Command(connection,
-                             "DELETE FROM \"FinanceCapabilityGrants\" WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@user",
-                             ("@space", fullWorthSpaceId), ("@user", memberUserId)))
-                await delete.ExecuteNonQueryAsync(ct);
-
-            // Persist only differences from the selected template. This keeps template changes
-            // predictable instead of freezing a full copied capability matrix as overrides.
-            foreach (var pair in overrides.Where(pair =>
-                         pair.Value != PermissionCapabilities.TemplateAllows(template, pair.Key)))
-            {
-                await using var command = RawSql.Command(connection, """
-INSERT INTO "FinanceCapabilityGrants" ("FullWorthSpaceId","UserId","Capability","IsAllowed","UpdatedAt")
-VALUES (@space,@user,@capability,@allowed,@now)
-""", ("@space", fullWorthSpaceId), ("@user", memberUserId),
-                    ("@capability", pair.Key), ("@allowed", pair.Value), ("@now", DateTimeOffset.UtcNow));
-                await command.ExecuteNonQueryAsync(ct);
-            }
-        }
-
-        audit.Record(fullWorthSpaceId, caller, "sharing.access.updated", "FullWorthUser", memberUserId);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        await store.SaveAccessAsync(caller, fullWorthSpaceId, memberUserId, template, overrides, targetIsOwner, ct);
         return Results.NoContent();
     }
-
 }

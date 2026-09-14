@@ -231,6 +231,7 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountAppearanceStore>();
         builder.Services.AddScoped<XlsxExportService>();
         builder.Services.AddScoped<CsvExportStore>();
+        builder.Services.AddScoped<MemberAccessStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
