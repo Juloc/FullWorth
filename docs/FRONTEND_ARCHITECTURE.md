@@ -147,9 +147,10 @@ document, so the optional chaining swallowed it and the reload never happened. T
 
 One page is one folder under `pages/`. A page may bring more modules than the three files — Käufe and
 Vermögen bring a dozen each — but they live in that folder and no other page imports them.
-`features/` is what is left over: seven modules that genuinely belong to no single page
-(`ux-kit`, `category-picker`, `global-search`, `access-setup`, `data-completeness`, `sharing`,
-`wealth-portability`).
+`features/` is what is left over: three modules that genuinely belong to no single page
+(`ux-kit`, `data-completeness`, `wealth-portability`). It held seven; `category-picker` went to
+Buchungen, `access-setup` and `sharing` to Einstellungen, and `global-search` to `app/` — each of
+them had exactly one owner and only looked shared.
 
 The shipped convention is a `renderX(ctx)` / `bindX(ctx)` pair: `bindX` is called once from `app.js`
 `bind()` and wires static listeners; `renderX` is registered with the feature registry and runs on every
@@ -377,11 +378,21 @@ Applied by `UseFinanceSecurityHeaders()` to every response. `Program.cs` calls
 - Cross-origin images are limited to the Enable Banking hosts, which is why
   `pages/accounts/presentation.js::logo()` validates bank logo URLs against them.
 
-Two violations are in the tree today. `features/ux-kit.js` puts
-`onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"` on the brand-logo
-`<img>`, so the `.fw-ident-failed` fallback in `styles/app.css` never fires. `ShareReceiptEndpoints.Page()`
-emits an inline `<style>` block, so `/share/receipt/*` renders unstyled. Neither is caught by
-`SecurityHeadersSourceAuditTests`, which only scans files under `wwwroot`.
+Two violations sat in the tree for months, and both broke silently — no build failed, no request
+failed, only the browser refused and said so in a console nobody reads.
+
+`features/ux-kit.js` put `onerror="this.remove()"` on the brand-logo `<img>`. `script-src 'self'`
+covers `script-src-attr`, so the handler never ran and a failed logo stayed put — and because a brand
+logo carries its own plate (`.fw-ident-brand-logo` has a background), that empty frame covered the
+monogram stacked underneath it. It is one `bindIdentityIcons()` listener now: an image error does not
+bubble, but it can be caught in the capture phase, so one listener replaces an attribute per image.
+`ShareReceiptEndpoints.Page()` emitted an inline `<style>` block, which `style-src 'self'` discards, so
+`/share/receipt/*` rendered unstyled; that sheet is a file under `share-receipt/` now and uses tokens,
+which also gave the page the dark mode it never had.
+
+Neither was caught, because `SecurityHeadersSourceAuditTests` only read `*.html` — and markup is also
+born in JavaScript template strings and C# raw strings. Its
+`Nothing_generates_markup_the_policy_refuses_to_run` reads those too.
 
 ## Service worker
 

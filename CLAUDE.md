@@ -108,7 +108,11 @@ Beyond those:
   `font-display: optional` the font then falls back, which shows up as text-width noise everywhere.
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
   knows nothing visual.
-- The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and classes anyway. A `<style>` block is blocked.
+- The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and
+  classes anyway. A `<style>` block is blocked, and so is an `onclick="…"`: `script-src 'self'` covers
+  `script-src-attr`. That holds for markup written in a JavaScript template string or a C# raw string
+  just as much as in a `.html` file — two such places lived in the tree for months because the guard
+  only read `.html`. `SecurityHeadersSourceAuditTests` reads all three now.
 - **Buttons: use the shared module roles only** — `.btn` + `.btn-primary` / `.btn-secondary` / `.btn-danger` (`styles/components.css`). Do not hand-roll button styling. (`.primary-action` in `shell.css` is the older variant still used app-wide.)
 - **Alles Markup liegt in `wwwroot`.** Die drei Import-Seiten hielten ihr HTML einmal in C#-Rohstringen, und `ops/ui-harness` las sie von dort; seit sie unter `pages/settings/import/` liegen, ist beides weg. Eigenständige Dokumente gibt es noch zwei, beide mit Grund: `auth/` (dort gibt es noch keine Sitzung) und `account-deletion/` (dort ist das Konto abgeschaltet, ein Menü führte ins Leere).
 
