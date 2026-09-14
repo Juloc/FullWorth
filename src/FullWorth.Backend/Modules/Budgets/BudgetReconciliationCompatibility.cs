@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Reconciliation;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.Budgets.Cycles;
@@ -5,7 +6,7 @@ using FullWorth.Backend.Modules.Budgets.Forecast;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Budgets;
 
 public sealed record ReconciledBudgetContribution(
     Guid TransactionId,

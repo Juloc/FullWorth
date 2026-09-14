@@ -6,7 +6,11 @@ using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Reconciliation;
+
+/// <summary>Ein Kategoriebereich, ueber den abgestimmt wird. Lag im Budget-Modul, wird aber von der
+/// Abstimmung genauso gebraucht - und die gehoert keinem der beiden.</summary>
+public sealed record CategoryScopeWrite(Guid CategoryId, bool IncludeDescendants);
 
 public sealed class FinancialReconciliationReportService(
     FullWorthDbContext db,
@@ -572,3 +576,30 @@ public sealed class FinancialReconciliationMiddleware(RequestDelegate next)
         await context.Response.WriteAsJsonAsync(result, cancellationToken: ct);
     }
 }
+
+/// <summary>Die Abfrageform einer gespeicherten Analyse. Sie wird von der Analyse UND von der
+/// Abstimmung gebraucht, gehoert also keiner von beiden allein.</summary>
+public sealed record AnalysisCategoryScope(Guid CategoryId,bool IncludeDescendants);
+public sealed record AnalysisQueryWrite(
+    string Measure,
+    string Dimension,
+    DateOnly? From,
+    DateOnly? To,
+    string? Granularity,
+    IReadOnlyList<Guid>? AccountIds,
+    IReadOnlyList<Guid>? AccountGroupIds,
+    IReadOnlyList<AnalysisCategoryScope>? CategoryScopes,
+    IReadOnlyList<Guid>? TagIds,
+    IReadOnlyList<string>? NormalizedMerchants,
+    IReadOnlyList<Guid>? ContractIds,
+    IReadOnlyList<string>? Currencies,
+    IReadOnlyList<string>? Directions,
+    bool IncludeTransfers=false,
+    bool IncludePending=false,
+    bool IncludeIgnored=false,
+    string RefundMode="reverse",
+    string? Comparison=null,
+    string? ForecastMode=null);
+
+/// <summary>Eine Zeile im Geldfluss. Analyse und Abstimmung lesen dieselbe.</summary>
+public sealed record CashflowLine(string Kind, string Name, DateOnly? Date, decimal Amount, string Currency, decimal? BaseAmount);

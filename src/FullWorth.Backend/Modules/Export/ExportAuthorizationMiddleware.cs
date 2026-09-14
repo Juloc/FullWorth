@@ -1,7 +1,7 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Export;
 
 /// <summary>
 /// Keeps the legacy JSON snapshot endpoint compatible while enforcing the same explicit export.read

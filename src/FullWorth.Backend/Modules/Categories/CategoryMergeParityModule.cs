@@ -3,7 +3,7 @@ using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Categories;
 
 public sealed record CategoryMergeApplyWrite(Guid TargetCategoryId, bool DeleteSource = false);
 

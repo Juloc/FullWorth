@@ -5,7 +5,7 @@ using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Contracts;
 
 public sealed record ContractLinkWrite(Guid TransactionId, decimal Amount, string LinkSource = "manual", decimal? Confidence = null);
 public sealed record ContractSplitComponent(string Name, decimal Amount, Guid? CategoryId, string? Kind);

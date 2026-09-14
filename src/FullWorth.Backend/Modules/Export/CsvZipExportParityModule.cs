@@ -7,7 +7,7 @@ using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Export;
 
 public static class CsvZipExportParityEndpoints
 {

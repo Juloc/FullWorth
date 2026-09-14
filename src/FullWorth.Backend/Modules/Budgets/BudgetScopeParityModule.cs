@@ -1,12 +1,12 @@
+using FullWorth.Backend.Modules.Reconciliation;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Budgets;
 
-public sealed record CategoryScopeWrite(Guid CategoryId, bool IncludeDescendants);
 public sealed record BudgetScopeWrite(
     IReadOnlyList<CategoryScopeWrite>? Categories,
     IReadOnlyList<Guid>? AccountIds,

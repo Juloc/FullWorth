@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Reconciliation;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Fx;
@@ -5,7 +6,7 @@ using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Analytics;
 
 public sealed record IncomeScheduleWrite(
     string Name,
@@ -30,7 +31,6 @@ public sealed record CashflowSettingsWrite(
 
 public sealed record IncomeCandidate(Guid AccountId, string Counterparty, decimal TypicalAmount, string Currency, string Cycle, DateOnly NextExpectedDate, decimal Confidence, int Occurrences);
 public sealed record IncomeCandidateDismissWrite(Guid AccountId, string Counterparty, string Currency, string Cycle);
-public sealed record CashflowLine(string Kind, string Name, DateOnly? Date, decimal Amount, string Currency, decimal? BaseAmount);
 
 public static class CashflowParityEndpoints
 {

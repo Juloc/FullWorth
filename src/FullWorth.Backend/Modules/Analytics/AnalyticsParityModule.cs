@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Reconciliation;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
@@ -6,29 +7,8 @@ using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Analytics;
 
-public sealed record AnalysisCategoryScope(Guid CategoryId,bool IncludeDescendants);
-public sealed record AnalysisQueryWrite(
-    string Measure,
-    string Dimension,
-    DateOnly? From,
-    DateOnly? To,
-    string? Granularity,
-    IReadOnlyList<Guid>? AccountIds,
-    IReadOnlyList<Guid>? AccountGroupIds,
-    IReadOnlyList<AnalysisCategoryScope>? CategoryScopes,
-    IReadOnlyList<Guid>? TagIds,
-    IReadOnlyList<string>? NormalizedMerchants,
-    IReadOnlyList<Guid>? ContractIds,
-    IReadOnlyList<string>? Currencies,
-    IReadOnlyList<string>? Directions,
-    bool IncludeTransfers=false,
-    bool IncludePending=false,
-    bool IncludeIgnored=false,
-    string RefundMode="reverse",
-    string? Comparison=null,
-    string? ForecastMode=null);
 public sealed record SavedAnalysisWrite(string Name,AnalysisQueryWrite Query,string ChartType="bar",int SchemaVersion=1);
 internal sealed record StatisticalContribution(Guid TransactionId,Guid AccountId,Guid? CategoryId,DateOnly Date,string Merchant,string Currency,decimal NativeAmount,decimal BaseAmount,IReadOnlyList<Guid> TagIds,IReadOnlyList<Guid> ContractIds);
 
