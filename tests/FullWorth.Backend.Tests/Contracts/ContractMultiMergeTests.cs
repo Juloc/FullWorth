@@ -184,7 +184,7 @@ public sealed class ContractMultiMergeTests
     public void ContractsList_OffersMultiSelectMergeAndDoesNotFilterCandidatesByAnExactCurrency()
     {
         var js = File.ReadAllText(Path.Combine(
-            Root(), "src", "FullWorth.Web", "wwwroot", "features", "contracts.js"));
+            Root(), "src", "FullWorth.Web", "wwwroot", "pages", "contracts", "page.js"));
 
         // The old candidate filter compared the raw currency strings, which excluded every contract
         // without one.
