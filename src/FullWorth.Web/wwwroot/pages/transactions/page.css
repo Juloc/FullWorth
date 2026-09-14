@@ -1,3 +1,220 @@
+/* transactions: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+.tx-row:hover{background:var(--surface-2)}
+
+.tx-ignored{opacity:.6}
+
+/* Income stands out as a soft-green pill (Finanzguru-style; green = income, on-brand §4.3). Expenses
+   stay plain text so colour is reserved for the money statement that matters. */
+.tx-row td.amount .tx-amt{font-variant-numeric:tabular-nums;font-weight:600}
+
+/* Desktop table: income is clean green text; the soft-green pill is a mobile-card touch (added below). */
+.tx-row td.amount.positive .tx-amt{color:var(--positive)}
+
+/* A transfer moves money between your own accounts — neither income nor expense — so keep both legs
+   neutral (no green income pill, no red) and let the ⟳ badge tell the story. */
+.tx-row.tx-is-transfer td.amount .tx-amt{background:transparent;color:var(--muted);padding:0;font-weight:600}
+
+.tx-marker{display:inline-block;font-size:12px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:6px;background:var(--surface-2);color:var(--muted);vertical-align:middle}
+
+.tx-marker.pending{background:var(--surface-2);color:var(--text)}
+
+/* Transfer badge: a compact circular-arrow chip (Finanzguru-style), not a wordy text chip. */
+.tx-marker.tx-marker-icon{padding:0;width:18px;height:18px;display:inline-grid;place-items:center;font-size:12px;line-height:1;background:var(--surface-3);color:var(--text)}
+
+.tx-marker.tx-marker-icon.transfer{color:var(--k1)}
+
+/* Merchant/category identity + booking-date grouping (UX rework §4) */
+.tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
+
+.tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0}
+
+.tx-cp-main strong{font-weight:600}
+
+.tx-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+
+.tx-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
+
+.tx-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
+
+.tx-logo{width:100%;height:100%;object-fit:cover}
+
+.tx-ident.tx-logo-failed{background:var(--surface-2)}
+
+/* Sticky against the SCROLL CONTAINER, which above 1023px is .table-panel itself (overflow:auto),
+   not the page. top:var(--topbar-h) pinned the group header ~96px down INSIDE the panel, so it sat on
+   top of the first transaction of every group and hid it - even unscrolled. Under 1023px the panel is
+   overflow:visible and the page scrolls, so responsive.css puts the topbar offset back. */
+.tx-date-head td{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+
+.tx-date-head td>span{opacity:.85}
+
+/* Scope banner: account/group name + back path (UX rework §3) */
+.tx-scopebar{display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)}
+
+.tx-scope-back{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer;font-size:17px;line-height:1;padding:0}
+
+.tx-scope-back:hover{background:var(--surface-2)}
+
+.tx-scope-label{font-weight:600;font-size:15px}
+
+.tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+
+.tx-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:700;line-height:1}
+
+.tx-close{flex:0 0 auto}
+
+.tx-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+
+/* Transaction detail drawer — Finanzguru-style identity header + card sections that read top-to-bottom. */
+.tx-detail-head{align-items:center;gap:var(--s3)}
+
+.tx-detail-id{display:flex;align-items:center;gap:var(--s3);min-width:0}
+
+.tx-detail-id .fw-ident{width:44px;height:44px;font-size:17px}
+
+.tx-detail-idmain{min-width:0;display:flex;flex-direction:column}
+
+.tx-detail-idmain h2{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.tx-detail-sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+.tx-detail .tx-amount{font-size:28px;font-weight:600;margin:0}
+
+.tx-detail .tx-detail-desc{margin-top:calc(-1 * var(--s3))}
+
+.tx-detail .tx-refund,.tx-detail .tx-transfer{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
+
+.tx-detail .tx-note{margin-top:0}
+
+/* Transfer block (revealed by the Umbuchung toggle): purpose + choose/Von→An counter-booking. */
+.tx-transfer{display:grid;gap:var(--s3)}
+
+.tx-transfer .tx-purpose{text-transform:none;letter-spacing:normal;color:var(--muted);font-size:12px;gap:5px;margin:0}
+
+.tx-choose-counter{width:100%;border:1px solid var(--cta);background:var(--cta);color:var(--cta-text);border-radius:var(--radius-pill);padding:10px 14px;font-weight:600;cursor:pointer}
+
+.tx-choose-counter:hover{opacity:.92}
+
+.tx-vonan{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:10px 12px;cursor:pointer}
+
+.tx-vonan:hover{background:var(--surface-2)}
+
+.tx-vonan-leg{display:flex;flex-direction:column;min-width:0;flex:1}
+
+.tx-vonan-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+
+.tx-vonan-acct{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.tx-vonan-arrow{color:var(--muted);flex:0 0 auto}
+
+.tx-vonan-go{color:var(--muted);flex:0 0 auto;font-size:18px;line-height:1}
+
+.tx-transfer-unpair{justify-self:start}
+
+/* Injected advanced sections (category-review/tags, coach worth-rating) share the calm grey-card look. */
+.tx-detail .coach-inline-review,.tx-detail .ci-detail-panel{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin:0}
+
+.tx-detail .coach-inline-review>*:first-child,.tx-detail .ci-detail-panel>*:first-child{margin-top:0}
+
+/* The detail close control is a real 36px icon button; reset the inherited button padding and make the
+   SVG block-level so the ✕ sits dead-centre. */
+.tx-close{padding:0}
+
+.tx-close svg{display:block}
+
+.tx-summary .tx-summary-figs{gap:var(--s6)}
+
+.tx-summary .tx-summary-fig{display:flex;flex-direction:column}
+
+.tx-summary .fw-summary-value{font-size:20px}
+
+.tx-summary .tx-summary-income{color:var(--positive)}
+
+.tx-summary .tx-summary-expense{color:var(--text)}
+
+.tx-summary .tx-summary-meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.tx-skeleton td{vertical-align:middle}
+
+.tx-sk-avatar{display:inline-block;vertical-align:middle;width:38px;height:38px;border-radius:50%;margin-right:11px}
+
+.tx-skeleton .tx-cp-main{gap:6px}
+
+.tx-sk-line{display:block;height:10px;border-radius:var(--radius-pill)}
+
+.tx-sk-sm{width:52px}
+
+.tx-sk-md{width:96px}
+
+.tx-sk-lg{width:150px;height:12px}
+
+.tx-sk-amt{display:inline-block}
+
+.tx-empty{text-align:center}
+
+.tx-empty-box{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s8) var(--s4);color:var(--muted)}
+
+.tx-empty-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--surface-2);color:var(--muted)}
+
+.tx-empty-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.tx-empty-title{color:var(--text);font-weight:600;font-size:14px}
+
+.tx-empty-hint{font-size:12px;max-width:34ch;line-height:1.4}
+
+.tx-cat-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-width:0;border:0;background:transparent;padding:4px 9px 4px 4px;border-radius:var(--radius-pill);cursor:pointer;font:inherit;color:var(--text)}
+
+.tx-cat-chip:hover{background:var(--surface-2)}
+
+.tx-cat-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.tx-cat-ic{display:inline-grid;place-items:center;width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--surface-2);color:var(--muted)}
+
+.tx-cat-ic svg{width:16px;height:16px;fill:none;stroke:currentColor}
+
+.tx-cat-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+.tx-cat-caret{color:var(--muted);font-size:11px;line-height:1;flex:0 0 auto}
+
+.tx-cat-ic[data-cat="1"]{color:var(--cat-1);background:color-mix(in srgb,var(--cat-1) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="2"]{color:var(--cat-2);background:color-mix(in srgb,var(--cat-2) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="3"]{color:var(--cat-3);background:color-mix(in srgb,var(--cat-3) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="4"]{color:var(--cat-4);background:color-mix(in srgb,var(--cat-4) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="5"]{color:var(--cat-5);background:color-mix(in srgb,var(--cat-5) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="6"]{color:var(--cat-6);background:color-mix(in srgb,var(--cat-6) 16%,var(--surface))}
+
+.tx-cat-ic[data-cat="7"]{color:var(--cat-7);background:color-mix(in srgb,var(--cat-7) 14%,var(--surface))}
+
+.tx-cat-ic[data-cat="8"]{color:var(--cat-8);background:color-mix(in srgb,var(--cat-8) 16%,var(--surface))}
+
+.tx-acct-ic{display:inline-grid;place-items:center;width:22px;height:22px;flex:0 0 auto;vertical-align:middle;margin-right:8px;color:var(--muted)}
+
+.tx-acct-ic svg{width:18px;height:18px}
+
+.tx-acct-name{vertical-align:middle}
+
+.tx-go-caret{color:var(--muted);font-size:18px;line-height:1;opacity:.5}
+
+.tx-row:hover .tx-go-caret{opacity:1;color:var(--text)}
+
+.tx-select-wrap input{width:16px;height:16px;min-height:0;margin:0;accent-color:currentColor}
+
+.tx-row.tx-selected{background:var(--surface-2)}
+
 /* Feste Spaltenbreiten.
 
    Mit dem voreingestellten table-layout:auto bemessen sich die Köpfe am eigenen Text, solange der

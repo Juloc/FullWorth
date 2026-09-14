@@ -1,0 +1,43 @@
+/* audit: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+/* Audit log: keep the timestamp on one line, aligned to the row's end column. */
+.audit-time{white-space:nowrap;text-align:right}
+
+/* --- Prüfprotokoll (audit.js): monochrome timeline --- */
+#audit-list .audit-row{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;column-gap:var(--s3);padding:var(--s3) 0;border-bottom:0}
+
+#audit-list .audit-row .row-title{font-weight:500}
+
+#audit-list .audit-row .audit-meta{margin-top:2px}
+
+#audit-list .audit-time{align-self:start;padding-top:1px;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+#audit-list .audit-mark{position:relative;width:10px;align-self:stretch}
+
+#audit-list .audit-mark::before{content:"";position:absolute;left:4px;top:0;bottom:0;width:1px;background:var(--line)}
+
+#audit-list .audit-mark::after{content:"";position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:var(--radius-pill);background:var(--surface);border:1.5px solid var(--k4)}
+
+#audit-list .audit-row:last-child .audit-mark::before{bottom:auto;height:9px}
+
+#audit-list .audit-day{display:flex;align-items:center;gap:var(--s3);padding:var(--s5) 0 var(--s2)}
+
+#audit-list .audit-day:first-child{padding-top:var(--s1)}
+
+#audit-list .audit-day-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+
+#audit-list .audit-day-line{flex:1 1 auto;height:1px;background:var(--line)}
+
+#audit-list .audit-empty{display:flex;flex-direction:column;align-items:center;gap:var(--s2);text-align:center;padding:var(--s8) var(--s4)}
+
+#audit-list .audit-empty-icon{width:32px;height:32px;color:var(--k4)}
+
+#audit-list .audit-empty .row-sub{margin-top:0}

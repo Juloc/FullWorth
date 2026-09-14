@@ -84,7 +84,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     public async Task ColourPickerDrivesTheTokensTheAppAlreadyReads()
     {
         var appearance = await GetAsync("/app/appearance.js");
-        var css = await GetAsync("/styles/app.css");
+        var css = await GetAsync("/pages/settings/page.css");
 
         // primary -> --cta (buttons), secondary -> --accent (links, focus rings, chart strokes).
         // Writing anything else would give a picker that visibly does nothing.

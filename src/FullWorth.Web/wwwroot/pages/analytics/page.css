@@ -1,0 +1,141 @@
+/* analytics: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+/* ---- Per-feature UX-rework styles (moved out of runtime <style> blocks: the app CSP blocks injected
+   inline stylesheets, so these must live in a linked file). Analyses (an-*), contracts, net worth. ---- */
+.an-card-body{min-height:60px}
+
+.an-chart{display:block;width:100%;height:auto}
+
+.an-line-expense{stroke:var(--accent);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
+
+.an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
+
+.an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
+
+.an-kpi .k{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+
+.an-kpi .k .positive{color:var(--positive)}
+
+.an-kpi .k .negative{color:var(--negative)}
+
+.an-kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+.an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
+
+.an-catrow{padding:8px 0;border-bottom:1px solid var(--line)}
+
+.an-catrow:last-child{border-bottom:0}
+
+/* Finanzguru-style colour accent: the category marker reads as a tall left bar, not a small dot,
+   reusing the existing per-category palette (data-cat). Scoped to the category list rows so donut
+   legends and other dots keep their compact form. */
+.an-catrow .cat-dot,.an-cat-head .cat-dot{width:4px;height:22px;border-radius:999px;margin-right:11px}
+
+.an-catrow-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:6px}
+
+.an-catrow-head .row-title{flex:1 1 auto;min-width:0}
+
+.an-catrow-head .amount{margin-left:auto}
+
+.an-mrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+
+.an-mrow:last-child{border-bottom:0}
+
+.an-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+
+.an-mrow-side{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+
+/* Analytics category/merchant rows drill into scoped bookings (UX rework §6) */
+.an-catrow.is-drillable,.an-mrow.is-drillable{cursor:pointer;border-radius:8px;margin:0 -6px;padding-left:6px;padding-right:6px}
+
+.an-catrow.is-drillable:hover,.an-mrow.is-drillable:hover{background:var(--surface-2)}
+
+.an-catrow.is-drillable:focus-visible,.an-mrow.is-drillable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* Privacy mode: charts must not reveal figures through their geometry */
+.an-chart-private{height:80px;display:grid;place-items:center;color:var(--muted);letter-spacing:.35em;font-weight:600}
+
+.an-advanced{margin-top:var(--s5)}
+
+.an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
+
+.an-advanced>summary::-webkit-details-marker{display:none}
+
+.an-advanced>summary::before{content:"▸";color:var(--muted);margin-right:8px}
+
+.an-advanced[open]>summary::before{content:"▾"}
+
+.an-builder-controls{display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s3) 0}
+
+.an-builder-actions{display:flex;gap:var(--s3);justify-content:flex-end;margin-bottom:var(--s3)}
+
+.an-toolbar{margin-bottom:var(--s3)}
+
+.an-legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:6px}
+
+.an-legend .lg{display:flex;align-items:center;gap:6px}
+
+.an-legend .lg::before{content:"";width:10px;height:10px;border-radius:2px;display:inline-block}
+
+.an-legend .lg-income::before{background:var(--positive)}
+
+.an-legend .lg-expense::before{background:var(--accent)}
+
+.an-axis{fill:var(--muted);font-size:12px}
+
+.an-zero{stroke:currentColor;opacity:.25}
+
+.an-cat:last-child{border-bottom:0}
+
+.an-cat-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3)}
+
+.an-estimate{margin-bottom:var(--s2)}
+
+/* --- Analyse (an-*): softened charts + category donut --- */
+.an-area{stroke:none}
+
+.an-chart .an-line-expense{stroke-linecap:round;stroke-linejoin:round}
+
+.an-chart .an-line-networth{stroke:var(--k2);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+
+.an-chart .an-line-builder{stroke:var(--cta);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+
+.an-g-neg-0{stop-color:var(--accent);stop-opacity:.18}
+
+.an-g-neg-1{stop-color:var(--accent);stop-opacity:0}
+
+.an-g-nw-0{stop-color:var(--k2);stop-opacity:.16}
+
+.an-g-nw-1{stop-color:var(--k2);stop-opacity:0}
+
+.an-g-line-0{stop-color:var(--cta);stop-opacity:.12}
+
+.an-g-line-1{stop-color:var(--cta);stop-opacity:0}
+
+.an-donut{position:relative;width:180px;max-width:60vw;margin:0 auto var(--s5);aspect-ratio:1/1}
+
+.an-donut-svg{display:block;width:100%;height:100%;overflow:visible}
+
+.an-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;pointer-events:none}
+
+.an-donut-center .k{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1.1}
+
+.an-donut-center .l{font-size:11px;color:var(--muted)}
+
+/* Finance UX gap-closure accessibility: chart drill targets are keyboard visible and mobile controls
+   keep a 44px touch target without changing the visual hierarchy. */
+.an-period-hit,.an-period-bar{cursor:pointer}
+
+.an-period-hit:focus-visible,.an-period-bar:focus-visible{
+  outline:none;
+  stroke:var(--cta);
+  stroke-width:4;
+}

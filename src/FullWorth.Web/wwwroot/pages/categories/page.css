@@ -1,0 +1,38 @@
+/* categories: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+.cat-node{border-bottom:1px solid var(--line)}
+
+.cat-node:last-child{border-bottom:0}
+
+.cat-row{display:flex;align-items:center;gap:var(--s2);padding:9px 0;padding-left:calc(var(--depth,0) * 20px)}
+
+.cat-twist:disabled{cursor:default;opacity:.4}
+
+.cat-name{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.cat-archived{opacity:.6}
+
+/* --- Kategorien (categories.js): summary strip + per-category accent + calm rows --- */
+.cat-summary{display:flex;flex-wrap:wrap;gap:var(--s6);padding-bottom:var(--s4);margin-bottom:var(--s2);border-bottom:1px solid var(--line)}
+
+.cat-sum-item{display:flex;flex-direction:column;gap:3px}
+
+.cat-sum-item strong{font-size:19px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+
+.cat-sum-item span{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+
+.cat-tree .cat-row .cat-dot{width:3px;height:17px;margin:0;border-radius:var(--radius-pill);flex:0 0 auto}
+
+.cat-tree .cat-row{transition:background .12s}
+
+.cat-tree .cat-row:hover,.cat-tree .cat-row:focus-within{background:var(--surface-2)}
+
+.cat-tree .cat-twist{border-radius:var(--radius-pill)}

@@ -32,7 +32,8 @@ public sealed class ContractMobileUxBaselineTests : IClassFixture<FullWorthWebFa
     [Fact]
     public async Task ContractsMobileCss_UsesCompactScrollableControls()
     {
-        var css = await GetAsync("/styles/components.css") + await GetAsync("/styles/app.css");
+        var css = await GetAsync("/styles/components.css") + await GetAsync("/pages/contracts/page.css")
+            + await GetAsync("/styles/app.css");
 
         Assert.Contains("contracts-toolbar", css);
         Assert.Contains("flex-wrap:nowrap;overflow-x:auto", css);

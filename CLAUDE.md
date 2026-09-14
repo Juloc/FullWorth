@@ -96,10 +96,16 @@ Beyond those:
 - Every stylesheet is under `styles/` or belongs to a page. The order `index.html` loads them in:
   `tokens` → `reset` → `appearance` → `shell` → `components` → `app` → `responsive` → `design-depth`
   → `dialogs`, then every page's own `page.css`, then `styles/mobile-polish.css` last.
-  `styles/features/` is gone (a stylesheet belongs to its page, and the last one that did not — Coach —
-  became a page), and so is the `wwwroot` root: four files sat there outside the scheme and now sit in
-  `styles/`. The guard insists the root stays empty.
-  **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks.
+  `styles/features/` is gone and so is the `wwwroot` root. `styles/app.css` was the collecting bucket —
+  1 056 rules, 791 of them for exactly one page; those live with their page now. What stayed is what is
+  genuinely shared, plus the rules a later sheet overrides: moved to a `page.css` they would win where
+  they used to lose. **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks.
+- **Moving CSS between files is only safe if you measure it.** A rule that moves to a `page.css` moves
+  later in the cascade, past `responsive`, `design-depth` and `dialogs`. Two checks, both cheap:
+  compare the rules the browser parses (`document.styleSheets` walked recursively) before and after —
+  the multiset must be identical — and compare `getComputedStyle` for every element of every view.
+  Use a full reload for the second one: swapping `<link>` elements re-declares `@font-face`, and with
+  `font-display: optional` the font then falls back, which shows up as text-width noise everywhere.
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
   knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and classes anyway. A `<style>` block is blocked.

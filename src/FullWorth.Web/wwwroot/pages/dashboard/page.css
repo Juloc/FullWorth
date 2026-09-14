@@ -1,3 +1,22 @@
+/* dashboard: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+/* Overview grouped account cards (UX rework §3) */
+.dash-group-head .fw-row-title{font-weight:700}
+
+.dash-group-head+.fw-row:not(.dash-group-head){padding-left:12px}
+
+.dash-group-icon{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
+
+.dash-group-icon svg{width:20px;height:20px}
+
 /* Übersicht: das Widget-Raster, die Kennzahl-Kacheln und die Kontengruppen.
 
    Diese Regeln lagen in vier Dateien - app.css, styles/responsive.css, design-depth.css und

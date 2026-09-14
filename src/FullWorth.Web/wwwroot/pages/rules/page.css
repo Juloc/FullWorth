@@ -1,0 +1,50 @@
+/* rules: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+.rule-actions{display:flex;align-items:center;gap:var(--s2)}
+
+.rule-prio{color:var(--muted);font-size:12px;white-space:nowrap}
+
+.rule-off{opacity:.6}
+
+.rule-grid>*{min-width:0}
+
+.rule-preview.is-loading{opacity:.6}
+
+.rule-preview .preview-head{font-weight:600;margin-bottom:var(--s2)}
+
+/* --- Regeln (rules.js): "when → do" summary, priority badge, empty state --- */
+#rules-list .rule-row{padding-top:13px;padding-bottom:13px}
+
+#rules-list .rule-row .row-title{font-weight:600}
+
+#rules-list .rule-summary{margin-top:5px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+
+#rules-list .rule-summary .rule-when{color:var(--muted)}
+
+#rules-list .rule-summary .rule-term{color:var(--text);font-weight:500}
+
+#rules-list .rule-summary .rule-sep{margin:0 6px;color:var(--muted)}
+
+#rules-list .rule-summary .rule-arrow{margin:0 7px;color:var(--muted);font-weight:600}
+
+#rules-list .rule-summary .rule-then-tag{display:inline-block;margin:1px 0;padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);font-size:11.5px;font-weight:500;line-height:1.6;vertical-align:baseline}
+
+#rules-list .rule-summary .rule-then-tag + .rule-then-tag{margin-left:4px}
+
+#rules-list .rule-row .rule-prio{padding:2px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:500;line-height:1.6}
+
+#rules-list .rules-empty{display:block;padding:var(--s6) var(--s4);text-align:center}
+
+#rules-list .rules-empty .rules-empty-inner{display:flex;flex-direction:column;align-items:center;gap:var(--s2)}
+
+#rules-list .rules-empty .rules-empty-icon{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+
+#rules-list .rules-empty .row-sub{margin-top:0}

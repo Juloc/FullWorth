@@ -1,0 +1,36 @@
+/* notifications: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+.notif-intro{margin:0 0 var(--s2)}
+
+.notif-foot{margin-top:var(--s3)}
+
+.notif-h{font-size:14px;margin:var(--s3) 0 var(--s2)}
+
+/* --- Benachrichtigungen (notifications.js): master card + status dot + switch rows --- */
+.notif-intro{margin-bottom:var(--s4)}
+
+.notif-push .row-title{margin-bottom:2px}
+
+.notif-push-status{display:flex;align-items:center;gap:var(--s2)}
+
+.notif-dot{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-pill);background:var(--k4)}
+
+.notif-push[data-push-state="on"] .notif-dot{background:var(--positive)}
+
+.notif-push[data-push-state="blocked"] .notif-dot{background:var(--warning)}
+
+.notif-types{margin-top:var(--s1)}
+
+.notif-type-row{cursor:pointer;gap:var(--s4)}
+
+.notif-type-title{white-space:normal;overflow:visible;font-weight:400;line-height:1.35}
+
+.notif-foot{border-top:1px solid var(--line);margin-top:var(--s4);padding-top:var(--s3)}

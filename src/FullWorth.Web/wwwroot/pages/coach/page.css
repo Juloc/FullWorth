@@ -1,3 +1,48 @@
+/* coach: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+/* --- Coach (coach-shell.js): status-tinted metrics + calm insight/review cards --- */
+#coach-summary .coach-metric strong{letter-spacing:-.01em}
+
+#coach-summary .coach-metric--good strong{color:var(--positive)}
+
+#coach-summary .coach-metric--bad strong{color:var(--negative)}
+
+.coach-insight-label{margin:var(--s4) 0 var(--s2);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.coach-insight-list{display:grid;gap:var(--s2)}
+
+.coach-insight{display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+
+.coach-insight-dot{flex:0 0 auto;width:8px;height:8px;margin-top:6px;border-radius:var(--radius-pill);background:var(--k3)}
+
+.coach-insight-body{display:grid;gap:2px;min-width:0}
+
+.coach-insight-body strong{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+
+.coach-insight-body span{font-size:12px;color:var(--muted)}
+
+.coach-insight--good .coach-insight-dot{background:var(--positive)}
+
+.coach-insight--good .coach-insight-body span{color:var(--positive)}
+
+.coach-insight--warn .coach-insight-dot{background:var(--warning)}
+
+.coach-insight--warn .coach-insight-body span{color:var(--warning)}
+
+#coach-review-list{gap:var(--s3)}
+
+#coach-review-list .coach-review-row{padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+
+#coach-review-list .coach-review-row:last-child{border-bottom:1px solid var(--line)}
+
 .coach-view{min-width:0}
 .coach-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,.8fr);gap:var(--s4);align-items:start}
 .coach-main,.coach-side{display:grid;gap:var(--s4);min-width:0;align-content:start}

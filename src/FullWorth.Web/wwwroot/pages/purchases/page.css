@@ -1,3 +1,66 @@
+/* purchases: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+.purchase-row:last-child{border-bottom:0}
+
+.purchase-row:hover{background:var(--surface-2)}
+
+.purchase-detail{width:min(760px,94vw)}
+
+.purchase-items{display:grid;gap:var(--s2)}
+
+.purchase-item input,.purchase-item select{min-width:0}
+
+.purchase-merchants{margin-top:var(--s3)}
+
+/* --- Käufe (purchase-*): summary strip + identity rows + share bars --- */
+.purchase-summary{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:var(--s3);margin:0 0 var(--s4);padding:var(--s4);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-card)}
+
+.purchase-stat{display:flex;flex-direction:column;gap:6px;min-width:0}
+
+.purchase-stat-k{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+
+.purchase-stat--review .purchase-stat-v{color:var(--warning)}
+
+.purchase-ident{display:inline-flex;align-items:center;flex:0 0 auto}
+
+.purchase-title{display:flex;align-items:center;gap:var(--s2);min-width:0}
+
+.purchase-name{font-size:15px;font-weight:500;min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.purchase-row .amount{align-self:center;text-align:right}
+
+.purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:11px;font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+
+.purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
+
+.purchase-tag--unlinked{background:var(--surface-3);color:var(--text)}
+
+.purchase-mrow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--s3);align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+
+.purchase-mrow:last-child{border-bottom:0}
+
+.purchase-mrow .fw-ident{width:32px;height:32px;font-size:13px}
+
+.purchase-mrow-main{min-width:0;display:flex;flex-direction:column;gap:6px}
+
+.purchase-mrow-top{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+
+.purchase-mrow-top .purchase-name{font-weight:500}
+
+.purchase-mrow-top .amount{flex:0 0 auto}
+
+.purchase-bar{display:block;height:4px;border-radius:var(--radius-pill);background:var(--surface-3);overflow:hidden}
+
+.purchase-bar>span{display:block;height:100%;border-radius:inherit;background:var(--k4)}
+
 /* Aus styles/features/purchase-advanced-insights.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */
 .pa-advanced-insight .pa-insight-kpi{font-size:1.35rem;font-weight:700}

@@ -1,3 +1,68 @@
+/* tax: aus styles/app.css hierher gezogen.
+
+   app.css war das Sammelbecken - 1056 Regeln, davon 796 für genau eine Seite. Was nur diese Seite
+   betrifft, gehört zu ihr: dann verschwindet es mit ihr, und niemand sucht es an drei Stellen.
+
+   Die Reihenfolge ist die aus app.css, und diese Regeln stehen VOR dem, was hier schon stand -
+   app.css wurde vor page.css geladen, also muss das so bleiben. Regeln, die ein später geladenes
+   Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
+   sie gewinnen, wo sie vorher verloren haben. */
+
+/* Mobile card view: the soft-green income pill (desktop uses plain green text). */
+
+/* ============================================================================
+   Round 4b — remaining pages (tax / compensation / coach / categories / rules /
+   notifications). Namespaced per page; monochrome shell, colour only where it
+   carries meaning (green income/confirmed, red/amber status, --cat identity).
+   ============================================================================ */
+
+/* --- Steuern (tax.js): hero + softened category breakdown --- */
+.tax-hero{padding:var(--s5) var(--s6)}
+
+.tax-hero-lead{min-width:0}
+
+.tax-hero-side>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+
+.tax-hero-side dt{color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+
+.tax-hero-side dd{margin:0;font-size:18px}
+
+.tax-hero .tax-pos{color:var(--positive)}
+
+.tax-hero .tax-warn{color:var(--warning)}
+
+.tax-alloc{display:flex;gap:3px;height:10px;margin-top:var(--s5)}
+
+.tax-alloc .tax-seg{height:100%;min-width:8px;border-radius:var(--radius-pill)}
+
+.tax-alloc .tax-seg[data-cat="1"]{background:var(--cat-1)}
+
+.tax-alloc .tax-seg[data-cat="2"]{background:var(--cat-2)}
+
+.tax-alloc .tax-seg[data-cat="3"]{background:var(--cat-3)}
+
+.tax-alloc .tax-seg[data-cat="4"]{background:var(--cat-4)}
+
+.tax-alloc .tax-seg[data-cat="5"]{background:var(--cat-5)}
+
+.tax-alloc .tax-seg[data-cat="6"]{background:var(--cat-6)}
+
+.tax-alloc .tax-seg[data-cat="7"]{background:var(--cat-7)}
+
+.tax-alloc .tax-seg[data-cat="8"]{background:var(--cat-8)}
+
+.tax-breakdown-list .tax-brow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);padding:10px 4px;border-bottom:1px solid var(--line)}
+
+.tax-breakdown-list .tax-brow:last-child{border-bottom:0}
+
+.tax-brow .cat-dot{width:4px;height:20px;border-radius:var(--radius-pill);margin-right:0}
+
+.tax-brow-main{min-width:0}
+
+.tax-brow-main .row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.tax-brow .amount{white-space:nowrap;text-align:right}
+
 .tax-view {
   display: none
 }

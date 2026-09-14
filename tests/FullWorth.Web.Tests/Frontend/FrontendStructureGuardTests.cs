@@ -208,6 +208,44 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
+    /// Jedes Stylesheet schließt, was es öffnet.
+    ///
+    /// Beim Verteilen von app.css auf die Seiten hat ein selbstgebauter Schnitt mehrzeilige
+    /// Kommentare zerteilt: das /* blieb liegen, das */ zog mit um. Der Browser überliest dann alles
+    /// bis zum nächsten */ — die Regeln stehen im Text und wirken nicht. Die ganze Suite blieb grün;
+    /// gefunden hat es erst ein Vergleich der berechneten Stile im Browser.
+    ///
+    /// Das ist der billige Teil davon, und er hätte gereicht: ein offener Kommentar und eine
+    /// unbalancierte Klammer sind im Text zu sehen, ohne Browser und in Millisekunden.
+    /// </summary>
+    [Fact]
+    public void Every_stylesheet_closes_what_it_opens()
+    {
+        var offenders = new List<string>();
+
+        foreach (var path in Directory.EnumerateFiles(WebRoot, "*.css", SearchOption.AllDirectories))
+        {
+            var css = File.ReadAllText(path);
+            var opened = Regex.Matches(css, @"/\*").Count;
+            var closed = Regex.Matches(css, @"\*/").Count;
+            if (opened != closed)
+            {
+                offenders.Add($"{Relative(path)}: {opened}× /* aber {closed}× */");
+                continue;
+            }
+
+            var code = Regex.Replace(css, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+            var open = code.Count(character => character == '{');
+            var close = code.Count(character => character == '}');
+            if (open != close) offenders.Add($"{Relative(path)}: {open}× {{ aber {close}× }}");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Diese Stylesheets sind nicht geschlossen. Alles danach fällt beim Parsen unter den Tisch:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
     /// Ein nachgebauter Klick trifft etwas.
     ///
     /// Zehn Stellen unter pages/networth/ riefen nach dem Speichern
