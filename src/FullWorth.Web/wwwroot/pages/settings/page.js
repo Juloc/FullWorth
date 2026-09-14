@@ -4,7 +4,7 @@ import { secureFetch } from '../../security/secure-fetch.js';
 import { createDialog } from '../../components/dialog.js';
 import { openPinDialog } from '../../app/lock.js';
 import { privacyDefault, setPrivacyDefault } from '../../components/privacy.js';
-import { renderSharing, bindSharing } from '../../features/sharing.js';
+import { renderSharing, bindSharing } from './sharing.js';
 import { downloadWealthBackup } from '../../features/wealth-portability.js';
 
 const COACH_BUBBLE = 'finance.coach.quickAccess';

@@ -20,7 +20,7 @@ import { renderMerchants, bindMerchants, newMerchant } from './pages/merchants/p
 import { renderAudit, bindAudit } from './pages/audit/page.js';
 import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
 
-import { createAccessSetup } from './features/access-setup.js';
+import { createAccessSetup } from './pages/settings/access-setup.js';
 import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderBankingSettings } from './pages/accounts/page.js';
 import { bindSettings, renderSettings } from './pages/settings/page.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './pages/budgets/page.js';
@@ -33,7 +33,7 @@ import { createFeatureRegistry } from './core/feature-registry.js';
 import { installNavigation, navigate } from './core/navigation.js';
 import { emitAppEvent, onAppEvent } from './core/event-bus.js';
 import { createToast } from './components/toast.js';
-import { openGlobalSearch } from './features/global-search.js';
+import { openGlobalSearch } from './app/global-search.js';
 import { installTopbarMetrics } from './components/topbar-metrics.js';
 import { MENU, QUICK, ENTRIES, VIEWS } from './app/menu.js';
 import { renderAdmin } from './pages/admin/page.js';
