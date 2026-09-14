@@ -486,7 +486,8 @@ public static class BackendApplication
         endpoints.MapExportCompletionParityEndpoints();
         endpoints.MapCsvZipExportParityEndpoints();
         endpoints.MapExperienceParityEndpoints();
-        endpoints.MapBankingExperienceParityEndpoints();
+        endpoints.MapAccountExperienceEndpoints()
+            .MapBankCapabilityEndpoints();
         endpoints.MapPermissionsErgonomicsParityEndpoints();
     }
 
@@ -505,7 +506,7 @@ public static class BackendApplication
         
         app.UseMiddleware<InternalUserContextMiddleware>();
         app.UseMiddleware<TransactionClassificationFeedbackMiddleware>();
-        app.UseMiddleware<LegacyParityCapabilityAuthorizationMiddleware>();
+        app.UseMiddleware<LegacyCapabilityAuthorizationMiddleware>();
         app.UseMiddleware<BudgetReconciliationCompatibilityMiddleware>();
         app.UseMiddleware<FinancialReconciliationMiddleware>();
         app.UseMiddleware<ExportAuthorizationMiddleware>();

@@ -231,7 +231,7 @@ public sealed class FolderReceiptImportIntegrationTests
             });
             await db.SaveChangesAsync();
 
-            // LegacyParityCapabilityAuthorizationMiddleware gates every non-GET /api/purchases write with
+            // LegacyCapabilityAuthorizationMiddleware gates every non-GET /api/purchases write with
             // purchases.manage; a plain member resolves to the read-only viewer template, so grant the
             // editor template (which carries purchases.manage).
             await CapabilityTestSeeding.GrantEditorAsync(db, spaceId, userId);

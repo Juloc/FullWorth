@@ -1,14 +1,14 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Security;
 
 /// <summary>
 /// Capability bridge for core/early endpoints that predate the owner/editor/viewer capability model.
 /// It does not replace endpoint validation; it prevents legacy and newly integrated mutation routes
 /// from bypassing the newer role policy before their existing handlers run.
 /// </summary>
-public sealed class LegacyParityCapabilityAuthorizationMiddleware(RequestDelegate next)
+public sealed class LegacyCapabilityAuthorizationMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, CurrentUserContext currentUser, FullWorthDbContext db)
     {
