@@ -1,4 +1,4 @@
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Modules.Portfolio;
 
 namespace FullWorth.Backend.Tests.Portfolio;
 

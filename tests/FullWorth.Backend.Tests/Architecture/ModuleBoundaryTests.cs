@@ -40,7 +40,13 @@ public sealed class ModuleBoundaryTests
         "Coach <-> Intelligence",
         "Contracts <-> Intelligence",
         "FullWorthSpaces <-> Users",
-        "Parity <-> Portfolio",
+        // Parity <-> Portfolio ist der fuenfte und letzte Parity-Zyklus, gefallen am 2026-09-14:
+        // InvestmentNetWorthService lag in Parity, wurde aber schon immer neben NetWorthSnapshotService
+        // registriert und von drei Portfolio-Dateien benutzt. Mit ihm sind die Endpunkte, die
+        // Performance-Mathematik und ihr V2-Modul nach Portfolio/Investments gezogen.
+        //
+        // Damit haengt KEIN Zyklus mehr an Parity. Das war die Voraussetzung fuer #110: solange die
+        // Helfer drinlagen, haette jeder Umzug einen neuen Kreis erzeugt statt einen alten zu loesen.
         "Purchases <-> Transactions",
         "Tax <-> Users"
     ];

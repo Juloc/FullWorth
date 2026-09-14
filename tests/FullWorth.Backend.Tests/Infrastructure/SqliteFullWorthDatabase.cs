@@ -1,3 +1,4 @@
+using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

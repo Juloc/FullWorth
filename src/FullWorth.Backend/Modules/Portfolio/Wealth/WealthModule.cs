@@ -3,7 +3,6 @@ using System.Data.Common;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Fx;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 

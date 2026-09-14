@@ -1,7 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Fx;
-using FullWorth.Backend.Modules.Parity;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 

@@ -3,7 +3,7 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Security;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public static class InvestmentPerformanceV2Endpoints
 {

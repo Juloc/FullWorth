@@ -34,7 +34,7 @@ public sealed record ChartResult(string Currency, string Measure, string Dimensi
 public sealed class AnalyticsService(
     FullWorthDbContext db,
     FullWorth.Backend.Modules.Fx.CurrencyConverter fx,
-    FullWorth.Backend.Modules.Parity.InvestmentNetWorthService investments)
+    FullWorth.Backend.Modules.Portfolio.InvestmentNetWorthService investments)
 {
     public Task<object?> OverviewForUserAsync(
         Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? currency, CancellationToken ct) =>

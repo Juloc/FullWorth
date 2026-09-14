@@ -5,7 +5,7 @@ using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Fx;
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Users;
 using FullWorth.Backend.Tests.Infrastructure;

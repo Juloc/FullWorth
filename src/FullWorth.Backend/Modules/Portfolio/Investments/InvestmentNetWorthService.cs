@@ -2,7 +2,7 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Fx;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Portfolio;
 
 public sealed record InvestmentNetWorthContribution(
     string BaseCurrency,
