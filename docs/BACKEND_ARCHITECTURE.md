@@ -241,7 +241,8 @@ Backend startup currently has several ways to change schema:
 
 1. regular EF Core migrations for the core model;
 2. EF migrations for the separate Intelligence context;
-3. `ParitySql.InitializeAsync` and its SQL-heavy parallel schema;
+3. the SQL-heavy parallel schema that used to sit behind `ParitySql` (that type is `Data/RawSql` now
+   and carries no `InitializeAsync`; the tables are still created by idempotent migration SQL);
 4. Compensation/benchmark database bootstrappers that perform runtime DDL;
 5. pre-migration compatibility mutation such as `PurchaseSchemaCompatibility.PrepareBeforeMigrationsAsync`.
 
@@ -353,9 +354,12 @@ The FinTS runtime fallback was already removed. Remaining pre-cutover schema/cod
 
 For the hard cutoff this must be deleted rather than expanded. An unsupported pre-alpha.40 database is rejected by the upgrade/schema epoch check; startup must not guess and mutate it into shape.
 
-### Parity schema/module
+### Parity schema/module — aufgelöst
 
-`Modules/Parity` and `ParitySql` represent a parallel/compatibility-era schema and route layer. Do not blindly delete active functionality just because its filename contains `Parity`.
+`Modules/Parity` existiert seit 2026-09-14 nicht mehr (#110). Der Rat unten galt für genau diese
+Auflösung und ist eingelöst: nichts wurde gelöscht, jedes Stück ging in das Modul, dem es fachlich
+gehört. `ParitySql` heißt jetzt `Data/RawSql` und liegt außerhalb von `Modules`, weil sechs Module ihn
+benutzen. Der Abschnitt bleibt als Bericht stehen — er erklärt, warum es den Ordner überhaupt gab.
 
 For every Parity table/route/model:
 

@@ -120,13 +120,17 @@ src/Shared/SecretBootstrap.cs     Docker-secret file loading, shared by Web and 
 
 Backend domain modules under `src/FullWorth.Backend/Modules`: Accounts, Analytics, Audit,
 BankConnections, Bootstrap, Budgets, Categories, Coach, Compensation, Contracts, Export,
-FullWorthSpaces, Fx, Import, Ingestion, Intelligence, Loans, Merchants, Parity, Portfolio,
-Preferences, Purchases, Push, Tax, Transactions, Users. `BackendApplication.UseFullWorthBackend`
+DataErasure, FullWorthSpaces, Fx, Import, Ingestion, Intelligence, Loans, Merchants, Notifications,
+Pension, Portfolio, Preferences, Purchases, Push, Reconciliation, Tax, Transactions, Users. `BackendApplication.UseFullWorthBackend`
 maps all of their endpoint groups in one list — that method is the index of the HTTP surface.
 
-`Modules/Parity` is the compatibility layer for imported Finanzguru/Finanzfluss-shaped features. Its
-endpoints are facades over the canonical stack, not parallel storage, and they are the heaviest
-users of raw SQL (`Modules/Parity/ParitySql.cs`).
+`Modules/Parity` is **gone** (issue #110, 2026-09-14). It was the compatibility layer for imported
+Finanzguru/Finanzfluss-shaped features and had grown to 43 files, 11 337 lines and 151 of the 648
+endpoints — a quarter of the API in a folder whose name said nothing about its contents. Every piece
+sits in the module it belongs to now. Its raw-SQL helper is `Data/RawSql`, outside `Modules`, because
+six modules use it; the two things that belonged to no module at all became `Modules/Reconciliation`
+(Budgets, Analytics and Notifications all need it) and `Modules/DataErasure` (erasing an account has
+to know where every kind of personal data lives).
 
 Web modules under `src/FullWorth.Web/Modules`: Admin, Auth, Bootstrap, Import, Passkeys, Pin,
 Purchases, Recovery, Sessions.
@@ -185,8 +189,8 @@ Many later migrations are a single `migrationBuilder.Sql("""…""")` with idempo
 migration chain, but the tables are not in the EF model at all — no `DbSet`, no snapshot entry — so
 the only way to read or write them is raw SQL. `AssetValuations`, `ImportTransactionLinks` and the
 whole real-estate, receipt-import and operational-registry surface work this way. 20 files under
-`src/` use `FromSqlRaw`/`ExecuteSqlRaw`/`…Interpolated`, mostly `Modules/Parity` and
-`Modules/Portfolio/Assets`.
+`src/` use `FromSqlRaw`/`ExecuteSqlRaw`/`…Interpolated`, mostly what used to be `Modules/Parity` (now
+spread across the owning modules, its helper being `Data/RawSql`) and `Modules/Portfolio/Assets`.
 
 Two follow-on rules exist because of this regime:
 
