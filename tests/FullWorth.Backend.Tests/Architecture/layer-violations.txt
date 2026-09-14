@@ -14,7 +14,6 @@ Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs
 Portfolio/Investments/InvestmentParityModule.cs
-Portfolio/Wealth/WealthPreviewBasisModule.cs
 Purchases/ProductIdentityParityModule.cs
 Purchases/ProductIntelligenceEndpoints.cs
 Purchases/ProductLearningParityModule.cs

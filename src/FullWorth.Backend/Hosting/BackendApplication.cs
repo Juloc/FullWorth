@@ -237,6 +237,8 @@ public static class BackendApplication
         builder.Services.AddScoped<AccountGroupStore>();
         builder.Services.AddScoped<CategoryErgonomicsStore>();
         builder.Services.AddScoped<TransactionBulkStore>();
+        builder.Services.AddScoped<WealthPreviewBasisService>();
+        builder.Services.AddScoped<CloudRequestContextStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility

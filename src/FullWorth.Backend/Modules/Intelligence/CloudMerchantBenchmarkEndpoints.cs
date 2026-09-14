@@ -14,6 +14,7 @@ public static class CloudMerchantBenchmarkEndpoints
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
+            CloudRequestContextStore cloudContext,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
@@ -41,7 +42,7 @@ public static class CloudMerchantBenchmarkEndpoints
             if (aliasSet.Count == 0)
                 return Results.Ok(new { available = false });
 
-            var country = await SpaceCountryAsync(financeDb, fullWorthSpaceId, ct);
+            var country = await cloudContext.SpaceCountryAsync(fullWorthSpaceId, ct);
             var identities = new List<CloudMerchantIdentity>();
             foreach (var alias in aliasSet)
             {
@@ -116,7 +117,7 @@ public static class CloudMerchantBenchmarkEndpoints
             var spendByCurrency = expenses
                 .Select(x => new { x.Currency, Value = -x.Amount })
                 .Concat(refunds.Select(x => new { x.Currency, Value = -x.Amount }))
-                .GroupBy(x => NormalizeCurrency(x.Currency))
+                .GroupBy(x => CloudRequestContextStore.NormalizeCurrency(x.Currency))
                 .Where(g => g.Key is not null)
                 .Select(g => new
                 {
@@ -204,43 +205,6 @@ public static class CloudMerchantBenchmarkEndpoints
         return app;
     }
 
-    private static async Task<string?> SpaceCountryAsync(
-        FullWorthDbContext db,
-        Guid fullWorthSpaceId,
-        CancellationToken ct)
-    {
-        var countries = (await db.BankConnections.AsNoTracking()
-                .Where(x =>
-                    x.FullWorthSpaceId == fullWorthSpaceId &&
-                    x.Country != null &&
-                    x.Country != "")
-                .Select(x => x.Country)
-                .Distinct()
-                .Take(3)
-                .ToListAsync(ct))
-            .Select(NormalizeCountry)
-            .Where(x => x is not null)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
 
-        return countries.Count == 1 ? countries[0] : null;
-    }
 
-    private static string? NormalizeCurrency(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToUpperInvariant();
-        return normalized.Length == 3 && normalized.All(char.IsAsciiLetter)
-            ? normalized
-            : null;
-    }
-
-    private static string? NormalizeCountry(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToUpperInvariant();
-        return normalized.Length == 2 && normalized.All(char.IsAsciiLetter)
-            ? normalized
-            : null;
-    }
 }

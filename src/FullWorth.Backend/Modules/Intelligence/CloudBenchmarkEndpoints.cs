@@ -138,7 +138,7 @@ public static class CloudBenchmarkEndpoints
             var local = rows.Select(x =>
                 {
                     var metricKey = CloudContractBenchmarkContributionService.MetricForCategory(x.CategoryKey);
-                    var currency = NormalizeCurrency(x.Currency);
+                    var currency = CloudRequestContextStore.NormalizeCurrency(x.Currency);
                     if (metricKey is null || currency is null) return null;
                     var monthly = Math.Abs(x.Amount) *
                                   ContractCycle.PeriodsPerYear(x.BillingCycle, x.Interval) / 12m;
@@ -208,6 +208,7 @@ public static class CloudBenchmarkEndpoints
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
+            CloudRequestContextStore cloudContext,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
@@ -241,7 +242,7 @@ public static class CloudBenchmarkEndpoints
             if (contract is null) return Results.NotFound();
 
             var metricKey = CloudContractBenchmarkContributionService.MetricForCategory(contract.CategoryKey);
-            var currency = NormalizeCurrency(contract.Currency);
+            var currency = CloudRequestContextStore.NormalizeCurrency(contract.Currency);
             if (metricKey is null || currency is null)
                 return Results.Ok(new { available = false });
 
@@ -265,7 +266,7 @@ public static class CloudBenchmarkEndpoints
                 return Results.Ok(new { available = false, localMonthly = Math.Round(localMonthly, 2) });
             }
 
-            var country = await SpaceCountryAsync(financeDb, fullWorthSpaceId, ct);
+            var country = await cloudContext.SpaceCountryAsync(fullWorthSpaceId, ct);
             var provider = await registryResolver.ResolveProviderAsync(
                 contract.ProviderName,
                 country,
@@ -492,36 +493,7 @@ public static class CloudBenchmarkEndpoints
         return "all";
     }
 
-    private static async Task<string?> SpaceCountryAsync(
-        FullWorthDbContext db,
-        Guid fullWorthSpaceId,
-        CancellationToken ct)
-    {
-        var countries = (await db.BankConnections.AsNoTracking()
-                .Where(x =>
-                    x.FullWorthSpaceId == fullWorthSpaceId &&
-                    x.Country != null &&
-                    x.Country != "")
-                .Select(x => x.Country)
-                .Distinct()
-                .Take(3)
-                .ToListAsync(ct))
-            .Select(x => x?.Trim().ToUpperInvariant())
-            .Where(x => x is { Length: 2 } && x.All(char.IsAsciiLetter))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
 
-        return countries.Count == 1 ? countries[0] : null;
-    }
-
-    private static string? NormalizeCurrency(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToUpperInvariant();
-        return normalized.Length == 3 && normalized.All(char.IsAsciiLetter)
-            ? normalized
-            : null;
-    }
 
     private static decimal Median(IEnumerable<decimal> values)
     {

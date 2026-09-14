@@ -1,103 +1,23 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Fx;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
 /// <summary>
-/// One line of the forward preview's basis: a figure that recurs every month, named, so the screen can
-/// show what the preview is built from and let the owner give each line its own expected increase.
+/// Woraus die Vorausschau rechnet: wiederkehrende Einnahmen, Vertraege, beobachtete Ausgaben und
+/// Budgets - je Monat, in der Waehrung des Space.
+///
+/// Das lag bis 2026-09-15 in derselben Datei wie die Route, samt sechs Abfragen und zwei privaten
+/// Ladefunktionen, die den DbContext gereicht bekamen.
 /// </summary>
-/// <param name="Kind">See <see cref="WealthPreviewLineKinds"/>.</param>
-/// <param name="Id">The contract or income schedule this line is; null for the variable aggregate.</param>
-/// <param name="MonthlyAmount">
-/// Always positive and always in the space's base currency: the sign is carried by
-/// <paramref name="Kind"/>, so a caller cannot accidentally add an expense to income.
-/// </param>
-/// <param name="IsEstimate">
-/// True when the figure is observed rather than configured — the variable spend is an average of what
-/// actually happened, not a number anybody entered, and the screen has to be able to say so.
-/// </param>
-public sealed record WealthPreviewLine(
-    string Kind,
-    Guid? Id,
-    string Name,
-    decimal MonthlyAmount,
-    bool IsEstimate);
-
-public static class WealthPreviewLineKinds
-{
-    public const string Income = "income";
-    public const string FixedCost = "fixed";
-    public const string VariableSpend = "variable";
-}
-
-/// <summary>
-/// What the forward preview on the wealth page is built from, per month and in the base currency.
-///
-/// The preview used to take its savings rate from the measured net-worth curve — last value minus first
-/// value, divided by the months. That is backwards in two senses: it extrapolates from the past, and it
-/// bundles market movement in with actual saving, so a good year on the markets read as a high savings
-/// rate and then compounded on top of itself.
-///
-/// This composes the figure forward instead, from things that exist: configured income, the contracts
-/// the owner marked as fixed costs, and what is actually spent besides those.
-///
-/// <b>The double-count this had to avoid.</b> A contract is a fixed cost <i>and</i> its payment shows up
-/// as a booked expense. The cashflow endpoint gets away with adding both because it compares future dues
-/// against past spending — different periods. A monthly steady-state figure cannot: the same rent would
-/// be subtracted twice. So the variable average excludes every transaction linked to a contract.
-///
-/// <b>Budgets are reported, not used.</b> <see cref="MonthlyBudgetLimit"/> is the sum of the limits and
-/// exists only so the screen can put it next to the actual average. A budget is an intention; the
-/// preview is about what is likely to happen, and those are different questions.
-/// </summary>
-public sealed record WealthPreviewBasisView(
-    string Currency,
-    IReadOnlyList<WealthPreviewLine> Lines,
-    decimal MonthlyIncome,
-    decimal MonthlyFixedCosts,
-    decimal MonthlyVariableSpend,
-    /// <summary>The sum of the budget limits, for comparison on screen. Never part of the arithmetic.</summary>
-    decimal MonthlyBudgetLimit,
-    /// <summary>Income minus fixed costs minus variable spend. What the preview grows.</summary>
-    decimal MonthlySurplus,
-    /// <summary>How many whole months the variable average rests on. One month is not an average.</summary>
-    int ObservedMonths,
-    /// <summary>False when a rate was missing: the surplus is then unknown, not merely smaller.</summary>
-    bool IsComplete,
-    IReadOnlyList<string> MissingCurrencies);
-
-public static class WealthPreviewBasisModule
+public sealed class WealthPreviewBasisService(FullWorthDbContext db, CurrencyConverter converter)
 {
     /// <summary>Six months smooths a quarterly insurance bill without reaching back into a different life.</summary>
     private const int DefaultObservedMonths = 6;
 
-    public static IEndpointRouteBuilder MapWealthPreviewBasisEndpoints(this IEndpointRouteBuilder app)
-    {
-        app.MapGet("/api/wealth/preview-basis", async (
-            Guid fullWorthSpaceId,
-            int? months,
-            CurrentUserContext currentUser,
-            FullWorthDbContext db,
-            CurrencyConverter converter,
-            CancellationToken ct) =>
-        {
-            var userId = currentUser.RequireUserId();
-            if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-
-            var basis = await BuildAsync(db, converter, userId, fullWorthSpaceId, months, ct);
-            return basis is null ? Results.NotFound() : Results.Ok(basis);
-        });
-
-        return app;
-    }
-
-    internal static async Task<WealthPreviewBasisView?> BuildAsync(
-        FullWorthDbContext db,
-        CurrencyConverter converter,
+    public async Task<WealthPreviewBasisView?> BuildAsync(
         Guid userId,
         Guid fullWorthSpaceId,
         int? requestedMonths,
@@ -123,7 +43,7 @@ public static class WealthPreviewBasisModule
 
         // ---- income: what is configured, not what happened to arrive ----
         var income = 0m;
-        foreach (var schedule in await LoadIncomeSchedulesAsync(db, fullWorthSpaceId, visible, ct))
+        foreach (var schedule in await LoadIncomeSchedulesAsync(fullWorthSpaceId, visible, ct))
         {
             if (schedule.Amount is not { } amount) continue;
             var monthly = PerMonth(amount, schedule.Cycle, schedule.Interval);
@@ -161,7 +81,7 @@ public static class WealthPreviewBasisModule
         }
 
         // ---- variable spend: what is actually spent BESIDES the contracts ----
-        var linked = await LoadContractLinkedTransactionIdsAsync(db, fullWorthSpaceId, ct);
+        var linked = await LoadContractLinkedTransactionIdsAsync(fullWorthSpaceId, ct);
         var expenses = await db.Transactions.AsNoTracking()
             .Where(transaction =>
                 visible.Contains(transaction.AccountId) &&
@@ -233,8 +153,8 @@ public static class WealthPreviewBasisModule
 
     private sealed record IncomeScheduleRow(Guid Id, string Name, decimal? Amount, string Currency, string Cycle, int Interval);
 
-    private static async Task<List<IncomeScheduleRow>> LoadIncomeSchedulesAsync(
-        FullWorthDbContext db, Guid space, HashSet<Guid> visible, CancellationToken ct)
+    private async Task<List<IncomeScheduleRow>> LoadIncomeSchedulesAsync(
+        Guid space, HashSet<Guid> visible, CancellationToken ct)
     {
         var rows = new List<IncomeScheduleRow>();
         var connection = await RawSql.OpenAsync(db, ct);
@@ -270,8 +190,8 @@ WHERE "FullWorthSpaceId" = @space AND "IsActive"
     /// The transactions a contract already accounts for. Raw SQL because <c>ContractTransactionLinks</c>
     /// has no CLR entity — it is written and read with SQL everywhere else too.
     /// </summary>
-    private static async Task<HashSet<Guid>> LoadContractLinkedTransactionIdsAsync(
-        FullWorthDbContext db, Guid space, CancellationToken ct)
+    private async Task<HashSet<Guid>> LoadContractLinkedTransactionIdsAsync(
+        Guid space, CancellationToken ct)
     {
         var ids = new HashSet<Guid>();
         var connection = await RawSql.OpenAsync(db, ct);

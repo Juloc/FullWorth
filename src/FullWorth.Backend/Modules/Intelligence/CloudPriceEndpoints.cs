@@ -15,6 +15,7 @@ public static class CloudPriceEndpoints
             Guid purchaseItemId,
             CurrentUserContext currentUser,
             FullWorthDbContext financeDb,
+            CloudRequestContextStore cloudContext,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
@@ -53,7 +54,7 @@ public static class CloudPriceEndpoints
                 financeDb,
                 ct);
 
-            var currency = NormalizeCurrency(item.Currency);
+            var currency = CloudRequestContextStore.NormalizeCurrency(item.Currency);
             if (productKey is null || currency is null)
             {
                 return Results.Ok(new
@@ -125,7 +126,7 @@ public static class CloudPriceEndpoints
                 });
             }
 
-            var country = await SpaceCountryAsync(item.FullWorthSpaceId, financeDb, ct);
+            var country = await cloudContext.SpaceCountryAsync(item.FullWorthSpaceId, ct);
             try
             {
                 var aggregate = await cloud.GetPriceAsync(
@@ -298,45 +299,8 @@ public static class CloudPriceEndpoints
         return null;
     }
 
-    private static async Task<string?> SpaceCountryAsync(
-        Guid fullWorthSpaceId,
-        FullWorthDbContext db,
-        CancellationToken ct)
-    {
-        var countries = (await db.BankConnections.AsNoTracking()
-                .Where(x => x.FullWorthSpaceId == fullWorthSpaceId &&
-                            x.Country != null &&
-                            x.Country != "")
-                .Select(x => x.Country)
-                .Distinct()
-                .Take(3)
-                .ToListAsync(ct))
-            .Select(NormalizeCountry)
-            .Where(x => x is not null)
-            .Cast<string>()
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
 
-        return countries.Count == 1 ? countries[0] : null;
-    }
 
-    private static string? NormalizeCurrency(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToUpperInvariant();
-        return normalized.Length == 3 && normalized.All(char.IsAsciiLetter)
-            ? normalized
-            : null;
-    }
-
-    private static string? NormalizeCountry(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Trim().ToUpperInvariant();
-        return normalized.Length == 2 && normalized.All(char.IsAsciiLetter)
-            ? normalized
-            : null;
-    }
 
     private static decimal Median(IReadOnlyList<decimal> sorted)
     {
