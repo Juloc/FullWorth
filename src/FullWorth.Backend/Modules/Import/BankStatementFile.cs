@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>One booking read off a bank statement file.</summary>
 internal sealed record StatementEntry(

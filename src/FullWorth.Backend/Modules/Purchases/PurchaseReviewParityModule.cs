@@ -4,7 +4,7 @@ using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Purchases;
 
 /// <summary>
 /// Compatibility endpoints for the parity review UI. Reconciliation is delegated to the canonical

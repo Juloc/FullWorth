@@ -12,7 +12,7 @@ using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Import;
 
 public sealed record ImportCommitWrite(Guid AccountId,IReadOnlyList<Guid>? CandidateIds=null);
 

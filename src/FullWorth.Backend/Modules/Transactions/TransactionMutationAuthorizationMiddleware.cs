@@ -5,7 +5,7 @@ using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Transactions;
 
 /// <summary>
 /// Capability gate for transaction and category-intelligence mutation routes. Account ownership remains

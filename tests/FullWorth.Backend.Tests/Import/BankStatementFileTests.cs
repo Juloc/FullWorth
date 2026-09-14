@@ -1,5 +1,5 @@
 using System.Text;
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Modules.Import;
 
 namespace FullWorth.Backend.Tests.Import;
 

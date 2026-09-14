@@ -1,4 +1,4 @@
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>What to do with the closing balance a statement states.</summary>
 internal enum StatementBalanceOutcome

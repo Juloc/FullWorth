@@ -35,8 +35,17 @@ WHERE c.contype='f'
         });
 
         Assert.NotEmpty(referencing);
-        var sql = File.ReadAllText(Path.Combine(Root(),
-            "src", "FullWorth.Backend", "Modules", "Parity", "ImportTransactionProvenance.cs"));
+        // Gesucht, nicht verdrahtet. Der Pfad stand hier als
+        // "Modules/Parity/ImportTransactionProvenance.cs", und als die Datei im Zuge von #110 nach
+        // Modules/Import zog, schlug dieser Test mit FileNotFoundException fehl - er prueft die
+        // Ruecknahme eines Imports, nicht den Ordner, in dem sie steht.
+        var quelle = Directory.EnumerateFiles(
+                Path.Combine(Root(), "src", "FullWorth.Backend"),
+                "ImportTransactionProvenance.cs", SearchOption.AllDirectories)
+            .SingleOrDefault()
+            ?? throw new FileNotFoundException(
+                "ImportTransactionProvenance.cs ist unter src/FullWorth.Backend nicht (oder mehrfach) zu finden.");
+        var sql = File.ReadAllText(quelle);
 
         foreach (var table in referencing)
         {

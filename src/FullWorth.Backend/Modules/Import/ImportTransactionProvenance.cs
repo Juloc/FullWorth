@@ -1,6 +1,6 @@
 using FullWorth.Backend.Data;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Import;
 
 /// <summary>
 /// Records which transactions an import job created, so the job can be undone. Both transaction

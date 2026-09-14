@@ -4,7 +4,7 @@ using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Modules.Transactions;
 
 public sealed record RefundDismissWrite(Guid OriginalTransactionId);
 
