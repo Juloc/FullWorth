@@ -6,6 +6,13 @@ namespace FullWorth.Backend.Tests.Intelligence;
 
 public sealed class AiBudgetGuardTests
 {
+    // Mitternacht UTC heute und der Monatserste: genau die Grenzen, die AiBudgetGuard zieht. Ein
+    // Zeitpunkt relativ zu "jetzt" fällt an der Grenze auf die falsche Seite.
+    private static DateTimeOffset Today => new(DateTimeOffset.UtcNow.UtcDateTime.Date, TimeSpan.Zero);
+
+    private static DateTimeOffset ThisMonth =>
+        new(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc));
+
     [Fact]
     public async Task Disabled_ai_blocks_provider_calls_even_without_budget_limits()
     {
@@ -15,6 +22,14 @@ public sealed class AiBudgetGuardTests
         Assert.Equal("ai_disabled", decision.Reason);
     }
 
+    /// <summary>
+    /// Der Lauf liegt auf Mitternacht UTC, nicht "vor zehn Minuten".
+    ///
+    /// Der Wächter zählt, was seit Tagesbeginn UTC ausgegeben wurde. Zehn Minuten vor jetzt liegt
+    /// zwischen 00:00 und 00:10 UTC im VORTAG — dann zählte der Lauf nicht mit, heute war nichts
+    /// ausgegeben, und der Test scheiterte. Zehn Minuten am Tag, sonst grün: CI hat ihn um 00:08
+    /// erwischt, lokal war er jedes Mal in Ordnung.
+    /// </summary>
     [Fact]
     public async Task Estimated_call_must_fit_daily_budget()
     {
@@ -26,8 +41,8 @@ public sealed class AiBudgetGuardTests
             Capability = "text-classification",
             JobType = "daily",
             Status = AiRunStatuses.Succeeded,
-            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10),
-            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-9),
+            StartedAt = Today,
+            CompletedAt = Today,
             ActualCostEur = 0.80m
         });
         await fixture.Db.SaveChangesAsync();
@@ -42,6 +57,10 @@ public sealed class AiBudgetGuardTests
         Assert.Equal(0.20m, allowed.DailyRemainingEur);
     }
 
+    /// <summary>
+    /// Dasselbe eine Ebene höher: "gestern" liegt am Monatsersten im Vormonat, und dann zählt der
+    /// Lauf nicht mit. Der Monatsbeginn ist der sichere Zeitpunkt.
+    /// </summary>
     [Fact]
     public async Task Estimated_call_must_fit_monthly_budget()
     {
@@ -53,8 +72,8 @@ public sealed class AiBudgetGuardTests
             Capability = "text-classification",
             JobType = "weekly",
             Status = AiRunStatuses.Succeeded,
-            StartedAt = DateTimeOffset.UtcNow.AddDays(-1),
-            CompletedAt = DateTimeOffset.UtcNow.AddDays(-1),
+            StartedAt = ThisMonth,
+            CompletedAt = ThisMonth,
             EstimatedCostEur = 1.80m
         });
         await fixture.Db.SaveChangesAsync();
