@@ -18,8 +18,12 @@ public static class KnowledgePackProtocol
     /// / <c>…Path</c> / <c>…Base64</c> setting takes precedence, which is how private or self-signed Cloud
     /// deployments (and existing same-host installs reading the shared secrets volume) keep working unchanged.
     ///
-    /// Set this to the official Cloud's public key PEM at release time. While it is empty, an instance without an
-    /// explicit override fails closed with <c>knowledge_pack_public_key_missing</c> rather than trusting anything.
+    /// Set this to the official Cloud's public key PEM at release time. That it is empty is NOT the hole it looks
+    /// like, and this comment exists because it has been read as one: <see cref="KnowledgePackTrustStore"/> fetches
+    /// the key from the Cloud the instance is already enrolled with (<c>GET /v1/knowledge-packs/public-key</c>,
+    /// instance-authenticated) and pins it, so a self-hoster needs neither this constant nor a shared secret volume.
+    /// This is the last fallback of three; if all three come up empty the sync fails closed with
+    /// <c>knowledge_pack_public_key_missing</c> rather than trusting anything.
     /// </summary>
     public const string OfficialPublicKeyPem = "";
 
