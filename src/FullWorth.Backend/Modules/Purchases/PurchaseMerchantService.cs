@@ -67,22 +67,3 @@ public sealed class PurchaseMerchantService(FullWorthDbContext db)
     private IQueryable<Purchase> Visible(Guid userId, Guid fullWorthSpaceId) => db.Purchases.Where(p => p.FullWorthSpaceId == fullWorthSpaceId && db.FullWorthSpaceMembers.Any(m => m.FullWorthSpaceId == fullWorthSpaceId && m.UserId == userId) && (p.Visibility != "private" || p.CreatedByUserId == userId) && (!p.PaymentLinks.Any() || p.PaymentLinks.Any(l => db.Transactions.Any(t => t.Id == l.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId))))) && (p.TransactionId == null || db.Transactions.Any(t => t.Id == p.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId)))));
     private IQueryable<Purchase> Writable(Guid userId, Guid fullWorthSpaceId) => db.Purchases.Where(p => p.FullWorthSpaceId == fullWorthSpaceId && db.FullWorthSpaceMembers.Any(m => m.FullWorthSpaceId == fullWorthSpaceId && m.UserId == userId) && (p.Visibility != "private" || p.CreatedByUserId == userId) && (!p.PaymentLinks.Any() || p.PaymentLinks.All(l => db.Transactions.Any(t => t.Id == l.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId && o.OwnershipType == AccountOwnershipTypes.Owner))))) && (p.TransactionId == null || db.Transactions.Any(t => t.Id == p.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId && o.OwnershipType == AccountOwnershipTypes.Owner)))));
 }
-
-public static class PurchaseMerchantEndpoints
-{
-    public static IEndpointRouteBuilder MapPurchaseMerchantEndpoints(this IEndpointRouteBuilder app)
-    {
-        var group = app.MapGroup("/api/purchases/{id:guid}/merchant").WithTags("Purchases");
-        group.MapPost("/resolve", async (Guid id, Guid fullWorthSpaceId, FullWorth.Backend.Security.CurrentUserContext user, PurchaseMerchantService service, CancellationToken ct) =>
-        {
-            var outcome = await service.ResolveAsync(user.RequireUserId(), fullWorthSpaceId, id, ct);
-            return outcome.Result switch { PurchaseMutationResult.Success => Results.Ok(outcome.Value), PurchaseMutationResult.Forbidden => Results.StatusCode(403), PurchaseMutationResult.Invalid => Results.BadRequest(), _ => Results.NotFound() };
-        });
-        group.MapPut("/", async (Guid id, Guid fullWorthSpaceId, PurchaseMerchantAssignRequest request, FullWorth.Backend.Security.CurrentUserContext user, PurchaseMerchantService service, CancellationToken ct) =>
-        {
-            var result = await service.AssignAsync(user.RequireUserId(), fullWorthSpaceId, id, request.MerchantId, ct);
-            return result switch { PurchaseMutationResult.Success => Results.NoContent(), PurchaseMutationResult.Forbidden => Results.StatusCode(403), PurchaseMutationResult.Invalid => Results.BadRequest(), _ => Results.NotFound() };
-        });
-        return app;
-    }
-}

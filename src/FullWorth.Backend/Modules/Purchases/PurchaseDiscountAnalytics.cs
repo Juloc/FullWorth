@@ -164,32 +164,3 @@ public sealed class PurchaseDiscountAnalyticsService(
 
     private sealed record PurchaseCurrencyContext(string Currency, DateOnly Date);
 }
-
-public static class PurchaseDiscountAnalyticsEndpoints
-{
-    public static void Map(RouteGroupBuilder group)
-    {
-        group.MapGet("/discount-analytics", GetAsync);
-    }
-
-    private static async Task<IResult> GetAsync(
-        Guid fullWorthSpaceId,
-        DateOnly? from,
-        DateOnly? to,
-        CurrentUserContext currentUser,
-        FullWorthDbContext db,
-        PurchaseAuthorizationStore authorization,
-        CancellationToken ct)
-    {
-        try
-        {
-            var service = new PurchaseDiscountAnalyticsService(db, authorization);
-            var result = await service.GetAsync(currentUser.RequireUserId(), fullWorthSpaceId, from, to, ct);
-            return result is null ? Results.NotFound() : Results.Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return Results.BadRequest(new { error = ex.Message });
-        }
-    }
-}

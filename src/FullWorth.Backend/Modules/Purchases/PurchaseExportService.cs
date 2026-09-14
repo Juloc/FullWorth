@@ -268,16 +268,3 @@ public sealed class PurchaseExportService(FullWorthDbContext db, IOptions<Purcha
     private static string SafeFileName(string name) { var safe = Path.GetFileName(name); return string.IsNullOrWhiteSpace(safe) ? "document" : safe; }
     private IQueryable<Purchase> Visible(Guid userId, Guid fullWorthSpaceId) => db.Purchases.AsNoTracking().Where(p => p.FullWorthSpaceId == fullWorthSpaceId && (p.Visibility != "private" || p.CreatedByUserId == userId) && (!p.PaymentLinks.Any() || p.PaymentLinks.Any(l => db.Transactions.Any(t => t.Id == l.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId))))) && (p.TransactionId == null || db.Transactions.Any(t => t.Id == p.TransactionId && db.Accounts.Any(a => a.Id == t.AccountId && a.Owners.Any(o => o.UserId == userId)))));
 }
-
-public static class PurchaseExportEndpoints
-{
-    public static IEndpointRouteBuilder MapPurchaseExportEndpoints(this IEndpointRouteBuilder app)
-    {
-        app.MapGet("/api/purchases/export", async (Guid fullWorthSpaceId, string? format, bool? includeDocuments, FullWorth.Backend.Security.CurrentUserContext user, PurchaseExportService service, CancellationToken ct) =>
-        {
-            var file = await service.ExportAsync(user.RequireUserId(), fullWorthSpaceId, format ?? "json", includeDocuments == true, ct);
-            return file is null ? Results.NotFound() : Results.File(file.Bytes, file.ContentType, file.FileName);
-        }).WithTags("Purchases");
-        return app;
-    }
-}
