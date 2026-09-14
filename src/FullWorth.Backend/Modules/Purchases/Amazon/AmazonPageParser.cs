@@ -1,4 +1,4 @@
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Validation;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;

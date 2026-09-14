@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Compensation;
 

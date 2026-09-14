@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Validation;
 
 /// <summary>
 /// The one number parser for imported files.

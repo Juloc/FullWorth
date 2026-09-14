@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FullWorth.Backend.Modules.Parity;
+namespace FullWorth.Backend.Validation;
 
 /// <summary>
 /// The one date parser for imported and provider-supplied values — the counterpart to

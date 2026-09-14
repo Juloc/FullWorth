@@ -1,7 +1,6 @@
-using FullWorth.Backend.Modules.Parity;
+using FullWorth.Backend.Validation;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Purchases.Extraction;
 

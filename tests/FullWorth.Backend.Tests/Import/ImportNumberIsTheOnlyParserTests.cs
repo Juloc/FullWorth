@@ -1,3 +1,4 @@
+using FullWorth.Backend.Validation;
 using System.Text.RegularExpressions;
 
 namespace FullWorth.Backend.Tests.Import;
@@ -33,8 +34,10 @@ public sealed class ImportNumberIsTheOnlyParserTests
     /// </summary>
     private static readonly Dictionary<string, string> Erlaubt = new(StringComparer.Ordinal)
     {
-        ["Parity/ImportNumber.cs"] =
-            "Der Leser selbst.",
+        // Der Leser selbst steht nicht hier: er liegt seit dem Umzug in Validation/ und damit
+        // ausserhalb von Modules. Das war kein Aufraeumen, sondern der einzige Ausweg - er wird von
+        // fuenf Modulen benutzt, gehoert also in keines, und solange er in Parity lag, holte sich
+        // jeder Benutzer eine Kante nach Parity. Bei Purchases war das prompt ein Zyklus.
         ["Coach/DeterministicCoachEngine.cs"] =
             "Zahlen aus dem Text des Coaches, also aus unserem eigenen Haus - kein Bankauszug, keine Texterkennung.",
         ["Intelligence/AiCostEstimator.cs"] =
