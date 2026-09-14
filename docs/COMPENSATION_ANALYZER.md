@@ -313,7 +313,8 @@ Bundled German CPI values carry source and `asOf` metadata. Completed years use 
 
 ## UI
 
-Standalone responsive surface: `/compensation.html`.
+Responsive surface: `/compensation`, a page of the shell. It was a standalone `/compensation.html`
+with a hand-copied nav bar that had already fallen behind the real menu.
 
 Tabs:
 - Rechner

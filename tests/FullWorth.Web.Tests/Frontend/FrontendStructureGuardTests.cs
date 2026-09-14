@@ -126,22 +126,21 @@ public sealed class FrontendStructureGuardTests
     }
 
     /// <summary>
-    /// Keine Stylesheets in der Wurzel.
+    /// Keine Stylesheets in der Wurzel. Keine einzige.
     ///
-    /// Sie sind der Ort, an dem etwas landet, wenn niemand entscheidet, wohin es gehört. Die vier,
-    /// die noch dort liegen, stehen hier namentlich — die Liste darf kürzer werden, nie länger.
+    /// Sie ist der Ort, an dem etwas landet, wenn niemand entscheidet, wohin es gehört. Vier lagen
+    /// noch dort und standen hier namentlich als Ausnahme; sie liegen jetzt unter styles/, wo die
+    /// Schichten hingehören, und die Ausnahmeliste ist leer. Sie bleibt leer.
     /// </summary>
     [Fact]
-    public void The_root_collects_no_new_stylesheets()
+    public void The_root_collects_no_stylesheets()
     {
-        string[] known = ["app.css", "appearance.css", "design-depth.css", "dialogs.css"];
+        var found = Directory.EnumerateFiles(WebRoot, "*.css").Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal).ToArray();
 
-        var found = Directory.EnumerateFiles(WebRoot, "*.css").Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
-        var extra = found.Except(known, StringComparer.Ordinal).ToArray();
-
-        Assert.True(extra.Length == 0,
-            "Neue Stylesheets in der Wurzel. Sie gehören nach styles/, zu ihrer Seite oder zu ihrer Komponente:"
-            + Environment.NewLine + string.Join(Environment.NewLine, extra!));
+        Assert.True(found.Length == 0,
+            "Stylesheets in der Wurzel. Sie gehören nach styles/, zu ihrer Seite oder zu ihrer Komponente:"
+            + Environment.NewLine + string.Join(Environment.NewLine, found!));
     }
 
     /// <summary>

@@ -62,12 +62,12 @@ public sealed class LayoutStabilityTests(UiHarness harness)
     private static readonly (string Path, double Desktop, double Mobile)[] Budget =
     [
         //                 desktop  mobile      gemessen        was sich noch bewegt
-        ("/",                0.005,  0.005), // 0.000 / 0.000   nichts
-        ("/accounts",        0.005,  0.005), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
-        ("/transactions",    0.005,  0.005), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
-        ("/contracts",       0.005,  0.005), // 0.000 / 0.000   nichts
-        ("/settings",        0.005,  0.005), // 0.000 / 0.003   Überschrift bricht am Telefon um
-        ("/coach",           0.005,  0.005)  // 0.000 / 0.003   derselbe Kopf wie oben
+        ("/",                0.0,    0.0), // 0.000 / 0.000   nichts
+        ("/accounts",        0.0,    0.0), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
+        ("/transactions",    0.0,    0.0), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
+        ("/contracts",       0.0,    0.0), // 0.000 / 0.000   nichts
+        ("/settings",        0.0,    0.0), // 0.000 / 0.003   Überschrift bricht am Telefon um
+        ("/coach",           0.0,    0.0)  // 0.000 / 0.003   derselbe Kopf wie oben
     ];
 
     public static TheoryData<string, bool> Pages()
@@ -156,7 +156,16 @@ public sealed class UiHarness : IAsyncLifetime
         // passieren, während die Seite sich noch zusammensetzt — also alle interessanten.
         await page.AddInitScriptAsync("""
             window.__shifts = [];
-            const name = node => node ? (node.id || node.className || node.tagName) : '?';
+            // className ist an einem SVG ein SVGAnimatedString, kein Text - der Bericht sagte dann
+            // "[object SVGAnimatedString]" und half niemandem. Das Attribut lesen, nicht die
+            // Eigenschaft, und den Elternnamen dazu, damit die Stelle auffindbar ist.
+            const name = node => {
+              if (!node) return '?';
+              const own = node.id || node.getAttribute?.('class') || node.tagName;
+              const parent = node.parentElement;
+              const around = parent && (parent.id || parent.getAttribute?.('class'));
+              return around ? around + ' > ' + own : own;
+            };
             const box = rect => Math.round(rect.x) + ',' + Math.round(rect.y)
               + ' ' + Math.round(rect.width) + 'x' + Math.round(rect.height);
             new PerformanceObserver(list => {

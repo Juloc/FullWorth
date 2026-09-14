@@ -91,12 +91,17 @@
     display: none;
   }
 
-  /* Die letzte Spur ist fest 40px breit - genau der Kreis, zu dem der Aktionsknopf hier wird. Damit
-     ist die Leiste immer gleich breit, egal ob die Seite eine Aktion hat oder nicht, und die drei
-     Symbole daneben bleiben stehen. Vorher schrumpfte sie mit und schob alles um 44px. */
+  /* Eine Spur je sichtbarem Knopf, alle 40px breit - kein festes Raster mehr.
+     Vorher stand hier "repeat(3, auto) 40px", damit die Leiste gleich breit bleibt, egal ob die Seite
+     eine Aktion hat. Das ging nicht auf: der Privatmodus-Schalter ist normalerweise display:none, also
+     füllten nur drei Kinder die vier Spuren, und die feste 40px-Spur stand leer am Ende. Nahm
+     JavaScript den Aktionsknopf heraus, rutschte alles eine Spur nach links - 40px, und das war der
+     letzte gemessene Sprung der Anwendung (0,003 auf jeder Seite ohne eigene Aktion). */
   .topbar-actions {
     width: auto;
-    grid-template-columns: repeat(3, auto) 40px;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 40px;
     gap: 4px;
   }
 
@@ -107,8 +112,10 @@
     min-height: 40px;
   }
 
-  /* Contextual actions stay reachable, but no longer consume a text-button-wide part of the header. */
-  #primary-action:not([hidden]) {
+  /* Contextual actions stay reachable, but no longer consume a text-button-wide part of the header.
+     Er bleibt auch dann eine Spur breit, wenn die Seite keine Aktion hat - unsichtbar, nicht entfernt.
+     Genau das meint die Regel "Platz wird reserviert, nicht nachträglich geschaffen". */
+  #primary-action {
     display: grid !important;
     place-items: center;
     width: 40px;
@@ -124,7 +131,9 @@
     color: transparent;
   }
 
-  #primary-action:not([hidden])::before {
+  #primary-action[hidden] { visibility: hidden }
+
+  #primary-action::before {
     display: grid;
     place-items: center;
     width: 100%;

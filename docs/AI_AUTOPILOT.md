@@ -67,7 +67,7 @@ Users configure their own access in Settings through `features/access-setup.js` 
 
 ### Coach UI
 
-`src/FullWorth.Web/wwwroot/features/coach-shell.js` is loaded lazily from `pwa/register-sw.js` and
+`src/FullWorth.Web/wwwroot/pages/coach/page.js` is imported statically by `app.js` and
 installs itself: a `Coach` button in the sidebar, a `Coach` entry in the mobile "More" sheet, the
 `/coach` full page, and a resizable, pinnable dock with its own launcher button. Coach is not a bottom-nav
 slot.

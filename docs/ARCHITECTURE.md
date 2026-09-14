@@ -134,18 +134,17 @@ Purchases, Recovery, Sessions.
 ## Frontend
 
 Vanilla ES modules in `src/FullWorth.Web/wwwroot`, no build step, no bundler, no linter or
-formatter. Composition is `app.js` → `core/*` → `ui/*` → `features/*`; the rules live in
+formatter. One page is one folder under `pages/` with `page.html`, `page.css` and `page.js`;
+composition is `app.js` → `core/*` → `components/*` → `pages/*`, and `ops/generate-shell.mjs` writes
+the menu and every page into the single `index.html`. The rules live in
 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) and are enforced by
-`tests/FullWorth.Web.Tests/FrontendArchitectureGuardTests.cs`.
+`FrontendArchitectureGuardTests`, `Frontend/FrontendStructureGuardTests`, `Frontend/MenuParityTests`
+and `Frontend/LayoutStabilityTests`.
 
-The one exception to "HTML lives in wwwroot" is the import area:
-`src/FullWorth.Web/Modules/Import/{ImportCenterPage,FinanzguruImportPage,BrokerPdfImportPage}.cs`
-each hold a full HTML document in a C# raw string literal and serve it via `Results.Content`.
-`ImportCenterPage` serves both `/settings/import` and `/settings/import/finanzguru`;
-`FinanzguruImportPage` serves `/settings/import/finanzguru/xlsx`; `BrokerPdfImportPage` serves
-`/settings/import/broker-pdf`. Editing those pages means editing C#, and each literal has to repeat
-the whole stylesheet chain from `index.html` by hand — loading only `app.css` there left every
-design token undefined.
+"HTML lives in wwwroot" has no exception left. The import area used to be one:
+`Modules/Import/{ImportCenter,FinanzguruImport,BrokerPdfImport}Page.cs` each held a full HTML document
+in a C# raw string literal, had to repeat the whole stylesheet chain by hand, and were the reason
+`ops/ui-harness` parsed C# source. They are ordinary pages under `pages/settings/import/` now.
 
 Other shell pages (`/settings/security/passkeys`, account deletion) are real files served with
 `SendFileAsync`; everything else falls through `MapFallbackToFile("index.html")` behind

@@ -46,7 +46,9 @@ Three places do not honour the rule yet; the fixes belong in the improvement pla
 
 Page HTML for the three import pages lives in C# raw string literals under
 `src/FullWorth.Web/Modules/Import/`; their behaviour is in
-`src/FullWorth.Web/wwwroot/features/{import-center-page,finanzguru-import-page,broker-pdf-import-page}.js`.
+`src/FullWorth.Web/wwwroot/pages/settings/import/` — `page.js`, `finanzguru/xlsx/page.js` and
+`broker-pdf/page.js`. Their markup used to live in C# raw string literals; it is ordinary
+`page.html` now.
 
 ## Transaction import (CSV / XLSX)
 

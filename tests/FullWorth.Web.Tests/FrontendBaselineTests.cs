@@ -95,7 +95,7 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PublicResponses_DoNotExposeConfiguredSecretsOrInternalUrls()
     {
-        foreach (var path in new[] { "/", "/app.js", "/app.css", "/dialogs.css", "/locales/de.json", "/locales/en.json", "/health" })
+        foreach (var path in new[] { "/", "/app.js", "/styles/app.css", "/styles/dialogs.css", "/locales/de.json", "/locales/en.json", "/health" })
         {
             var content = await GetAsync(path);
             AssertDoesNotContain(content, FullWorthWebFactory.BackendSecret, path);

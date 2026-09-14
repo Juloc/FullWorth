@@ -1,5 +1,11 @@
 # FullWorth AI Autopilot — Implementation Plan
 
+> **Pfade in diesem Dokument sind der Stand seiner Entstehung.** Das Frontend wurde im September 2026
+> umgebaut: eine Seite ist ein Ordner unter `wwwroot/pages/` mit `page.html`, `page.css` und
+> `page.js`; `wwwroot/ui/` und `styles/features/` gibt es nicht mehr, und die eigenständigen
+> Dokumente sind Seiten der Hülle geworden. Die gültige Struktur steht in
+> [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md).
+
 Status: implementation plan  
 
 Current behaviour and the deployment levers: [AI_AUTOPILOT.md](AI_AUTOPILOT.md)

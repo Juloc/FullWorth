@@ -751,7 +751,7 @@
     "balanceUpdated": "Kontostand aktualisiert.",
     "created": "Konto angelegt.",
     "manual": "Manuell",
-    "groups": "Gruppe",
+    "groups": "Gruppen",
     "addGroup": "Gruppe",
     "newGroup": "Gruppe anlegen",
     "groupName": "Gruppenname",
@@ -1334,6 +1334,7 @@
     "coverage": "Abdeckung",
     "worthIt": "Worth-it",
     "good": "Gut",
-    "bad": "Schlecht"
+    "bad": "Schlecht",
+    "reviewMore": "Mehr Ausgaben bewerten, damit die Auswertung persönlicher wird."
   }
 }

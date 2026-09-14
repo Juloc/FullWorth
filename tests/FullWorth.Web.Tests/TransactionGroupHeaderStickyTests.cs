@@ -33,7 +33,7 @@ public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthW
     [Fact]
     public async Task The_group_header_sticks_to_the_top_of_the_panel_that_scrolls_it()
     {
-        var rule = await RuleForAsync("/app.css", ".tx-date-head td");
+        var rule = await RuleForAsync("/styles/app.css", ".tx-date-head td");
 
         Assert.Contains("position:sticky", rule);
 

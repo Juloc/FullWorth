@@ -54,7 +54,7 @@ public sealed class AutopilotFrontendGuardTests
         var app = File.ReadAllText(Path.Combine(WwwRoot(), "app.js"));
         var feature = File.ReadAllText(Path.Combine(WwwRoot(), "pages", "insights", "page.js"));
         var serviceWorker = File.ReadAllText(Path.Combine(WwwRoot(), "sw.js"));
-        var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "app.css"));
+        var appCss = File.ReadAllText(Path.Combine(WwwRoot(), "styles", "app.css"));
         var insightCssPath = Path.Combine(WwwRoot(), "pages", "insights", "page.css");
 
         Assert.Contains("id=\"dashboard-insights\"", html);

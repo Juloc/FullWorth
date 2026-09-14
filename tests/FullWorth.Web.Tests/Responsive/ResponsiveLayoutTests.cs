@@ -69,7 +69,7 @@ public sealed class ResponsiveLayoutTests
     [Fact]
     public void DialogContentIsAllowedToShrinkBelowItsLongestOption()
     {
-        var css = ReadAsset("dialogs.css");
+        var css = ReadAsset("styles/dialogs.css");
 
         // minmax(0,1fr), not 1fr: a grid item's default min-width:auto refuses to go below min-content,
         // so 1fr alone would not have fixed it.
@@ -152,7 +152,7 @@ public sealed class ResponsiveLayoutTests
             Path.Combine(root, "styles", "reset.css"),
             Path.Combine(root, "styles", "shell.css"),
             Path.Combine(root, "styles", "components.css"),
-            Path.Combine(root, "app.css"),
+            Path.Combine(root, "styles", "app.css"),
             Path.Combine(root, "styles", "responsive.css")
         };
         foreach (var path in paths) Assert.True(File.Exists(path), $"css layer not found: {path}");

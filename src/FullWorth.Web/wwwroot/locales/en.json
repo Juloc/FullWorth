@@ -751,7 +751,7 @@
     "balanceUpdated": "Balance updated.",
     "created": "Account created.",
     "manual": "Manual",
-    "groups": "Group",
+    "groups": "Groups",
     "addGroup": "Group",
     "newGroup": "Add group",
     "groupName": "Group name",
@@ -1334,6 +1334,7 @@
     "coverage": "Coverage",
     "worthIt": "Worth it",
     "good": "Good",
-    "bad": "Bad"
+    "bad": "Bad",
+    "reviewMore": "Review more spending to make the analysis personal."
   }
 }

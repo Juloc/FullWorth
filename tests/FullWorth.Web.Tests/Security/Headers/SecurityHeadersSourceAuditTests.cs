@@ -57,7 +57,7 @@ public sealed class SecurityHeadersSourceAuditTests : IClassFixture<FullWorthWeb
     [InlineData("/app/boot.js", "javascript")]
     [InlineData("/app.js", "javascript")]
     [InlineData("/auth/auth.js", "javascript")]
-    [InlineData("/app.css", "text/css")]
+    [InlineData("/styles/app.css", "text/css")]
     [InlineData("/auth/auth.css", "text/css")]
     [InlineData("/locales/de.json", "application/json")]
     public async Task CriticalStaticAssets_HaveNosniffCompatibleContentTypes(string path, string expectedMediaType)

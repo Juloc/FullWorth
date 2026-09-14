@@ -28,7 +28,7 @@ What exists after step 1:
   `GET|PUT|DELETE contracts/{id}`, `GET|POST contracts/{id}/snapshots`,
   `POST contracts/{id}/{contributions,costs,allocations}`. Reads need space membership, writes the
   owner role; the ordering is not-found → forbidden → conflict.
-- `wwwroot/features/pension.js` + `wwwroot/styles/features/pension.css`, view `pension`, routes
+- `wwwroot/pages/pension/page.js` + `page.css`, view `pension`, routes
   `/pension`, `/pension/vertraege`, `/pension/verlauf`. Übersicht / Verträge / Verlauf with the full
   manual entry flow. (Step 2 added `/pension/dokumente`, step 3 `/pension/simulation`.)
 - Tests: `tests/FullWorth.Backend.Tests/Pension/` (18) and
@@ -191,7 +191,7 @@ Built as sketched. The pipeline and its four seams are declared in
 partial failure leaves a reviewable document rather than a half-written contract; a snapshot date the
 contract already holds is **skipped and named**, not an error that loses the rest of the document.
 
-`wwwroot/features/pension-documents.js` is the Dokumente tab and the review screen. It is a **page, not
+`wwwroot/pages/pension/documents.js` is the Dokumente tab and the review screen. It is a **page, not
 a dialog** — 56 fields in a dialog would have been the worst offender in the app (docs/UI_AUDIT.md) — and
 the only dialog in the feature is the commit confirmation: one sentence, two buttons, no inputs.
 

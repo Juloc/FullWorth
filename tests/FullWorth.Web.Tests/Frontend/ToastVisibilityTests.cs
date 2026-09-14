@@ -104,7 +104,7 @@ public sealed class ToastVisibilityTests
     /// works at all.
     /// </summary>
     [Theory]
-    [InlineData("app.css", "#toast[popover]")]
+    [InlineData("styles/app.css", "#toast[popover]")]
     public void The_popover_default_styling_is_taken_back(string stylesheet, string selector)
     {
         var css = Read(stylesheet);

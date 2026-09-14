@@ -43,11 +43,10 @@ minimized under the old one; the workers regenerate whatever is still eligible.
 untransmitted outbox rows. Re-enabling starts from a fresh registration and a fresh queue.
 
 The consent UI is the "FullWorth Cloud Intelligence" panel in Einstellungen
-(`wwwroot/features/access-setup.js`, `openCloudWizard`). The standalone admin page
-`wwwroot/intelligence/index.html` has a fuller version of the same panel plus the brand-pack import,
-but nothing in the app links to it — it is only reachable by typing
-`/intelligence/index.html` (there is no `UseDefaultFiles`, so `/intelligence` hits the SPA
-fallback).
+(`wwwroot/features/access-setup.js`, `openCloudWizard`). The fuller version of the same panel plus the
+brand-pack import is `pages/settings/intelligence/`, reachable at `/settings/intelligence`. It used to
+be a standalone `wwwroot/intelligence/index.html` that nothing linked to and that only opened if you
+typed the full file name.
 
 ## The endpoint
 
@@ -307,7 +306,7 @@ catalog, and transaction or counterparty text is never sent to a logo provider �
 
 ### Resolution order
 
-`identityIcon` in `wwwroot/ui/ux-kit.js`:
+`identityIcon` in `wwwroot/features/ux-kit.js`:
 
 1. transfer glyph (`⇄`, or `↑` for savings) when the row is a transfer — this overrides everything;
 2. the resolved logo asset path;

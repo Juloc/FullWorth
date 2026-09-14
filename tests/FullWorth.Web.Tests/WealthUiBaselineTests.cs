@@ -40,7 +40,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task WealthTrendShowsImportedBookingCoverageWithoutTreatingItAsNetWorth()
     {
         var js = await GetAsync("/pages/networth/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
         Assert.Contains("api/wealth/booking-activity", js);
         Assert.Contains("bookingActivityMarkup", js);
         Assert.Contains("parseChartDate(point.date)", js);
@@ -57,7 +57,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var wealth = await GetAsync("/pages/networth/page.js");
         var analytics = await GetAsync("/pages/analytics/page.js");
         var dashboard = await GetAsync("/pages/dashboard/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         Assert.Contains("api/import/finanzguru/accounts", helper);
         Assert.Contains("needsBalance", helper);
@@ -272,7 +272,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         var js = await GetAsync("/pages/networth/page.js");
         var preview = await GetAsync("/pages/networth/preview.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         // Monthly compounding, because the money arrives monthly — but from the ANNUAL rate it is the
         // twelfth root and not a twelfth. This assertion used to pin `/ 100 / 12`, which is the bug:
@@ -317,7 +317,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task WealthProjectionIsDrawnIntoTheTrendChartAndNotAsASecondRepresentation()
     {
         var js = await GetAsync("/pages/networth/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         // The preview is the trend curve continued past today: ONE chart, one value scale, a dashed
         // forward segment and a "today" divider. The old tile drew a second chart of the same numbers.
@@ -350,7 +350,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task WealthProjectionNeverReadsAsAMeasuredValue()
     {
         var js = await GetAsync("/pages/networth/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         // Scrubbing a projected point must leave the headline net worth alone: it reads out in the
         // preview line, with its own marker, and says that it was calculated rather than measured.
@@ -374,7 +374,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task AllocationDonutNeverClaimsTheHeroAssetsWording()
     {
         var js = await GetAsync("/pages/networth/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         // A donut cannot draw a negative slice, so its own total only ever covers the categories it can
         // show. Labelling that total "Vermögenswerte"/"Assets" - the same wording the hero card uses for
@@ -403,7 +403,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task ConvertedSumsNameTheRateAndItsFixingDate()
     {
         var js = await GetAsync("/pages/networth/page.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         Assert.Contains("ratesUsed", js);
         Assert.Contains("fxRatesText", js);

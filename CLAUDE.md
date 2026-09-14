@@ -35,7 +35,30 @@ export FULLWORTH_TEST_POSTGRES='Host=localhost;Port=5432;Username=fullworth_test
 
 Always filter to the relevant tests; the full suite is 1 840 tests and local Docker struggles under it. Counts: Backend 1147, Web 548, Banking 140, FinTs 5. Banking and FinTs need no database.
 
-**That test server grows.** Each test class clones the migration template into its own database and a per-class DROP was measured as a real slowdown, so clones are left behind — 4 241 of them and 61 GB by 2026-09-11, which filled the disk and took the Docker engine down with it. `BackendWebApplicationFactory.PurgeAbandonedDatabases` now drops leftovers older than six hours once per test process. If the data directory is ever huge again, count `pg_database` before suspecting Docker.
+**That test server grows, and it has run out twice for different reasons.** Each test class clones the
+migration template into its own database and a per-class DROP was measured as a real slowdown, so
+clones are left behind. Both factories now drop leftovers older than six hours once per test process
+(`PurgeAbandonedDatabases`); `TestDatabaseHygieneTests` insists that every factory which creates a
+database also has one.
+
+- **2026-09-11, 4 241 databases / 61 GB:** filled C:, which took the Docker engine down with it.
+- **2026-09-14, 5 846 databases / 48 GB:** the Web factory had no purge at all, so a day of Web-only
+  runs grew unchecked. The failure was **not** the disk — C: had 50 GB free — but
+  `could not resize shared memory segment … No space left on device`: the container ran with Docker's
+  default **64 MB `/dev/shm`**. Once shm is exhausted even `psql` cannot connect. It runs with
+  `--shm-size=1g` now.
+
+If it is ever huge again, count `pg_database` and check `df -h /dev/shm` **before** suspecting Docker
+or the disk — the error message points at the wrong thing. Recreating the container must keep its five
+tuning flags, or every run afterwards is slower for no visible reason:
+
+```bash
+docker run -d --name fullworth-ci-pg --shm-size=1g -p 5432:5432 \
+  -v fullworth-ci-pg-data:/var/lib/postgresql \
+  -e POSTGRES_USER=fullworth_test -e POSTGRES_PASSWORD=fullworth_test_password -e POSTGRES_DB=fullworth_test \
+  postgres:18 \
+  -c max_connections=500 -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c shared_buffers=256MB
+```
 
 There is **no linter, no formatter and no automated browser/e2e test** in this repo. `ci.yml` is `workflow_dispatch` only — it is **not** a tag gate and does not run on push, so `main` can be red unnoticed. Run it before requesting a release.
 
@@ -70,11 +93,13 @@ Beyond those:
 
 - Vanilla ES modules in `wwwroot`, **no build step**. Syntax-check with:
   `cp file.js /tmp/c.mjs && node --check /tmp/c.mjs`
-- The layers are `styles/` (`tokens` → `reset` → `shell` → `components` → `responsive`), then every
-  page's own `page.css`, then `styles/mobile-polish.css` last. `styles/features/` is gone: a
-  stylesheet belongs to its page, and the last one that did not — Coach — became a page.
-  **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks. Four stylesheets still sit at
-  the `wwwroot` root outside the scheme; the list in the structure guard may get shorter, never longer.
+- Every stylesheet is under `styles/` or belongs to a page. The order `index.html` loads them in:
+  `tokens` → `reset` → `appearance` → `shell` → `components` → `app` → `responsive` → `design-depth`
+  → `dialogs`, then every page's own `page.css`, then `styles/mobile-polish.css` last.
+  `styles/features/` is gone (a stylesheet belongs to its page, and the last one that did not — Coach —
+  became a page), and so is the `wwwroot` root: four files sat there outside the scheme and now sit in
+  `styles/`. The guard insists the root stays empty.
+  **Tokens only** — no hardcoded colours, no frameworks, no DOM hacks.
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
   knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and classes anyway. A `<style>` block is blocked.

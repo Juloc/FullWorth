@@ -148,10 +148,10 @@ public sealed class FrontendArchitectureGuardTests
         var html = File.ReadAllText(Path.Combine(WwwRoot(), "index.html"));
         var tokens = html.IndexOf("/styles/tokens.css", StringComparison.Ordinal);
         var reset = html.IndexOf("/styles/reset.css", StringComparison.Ordinal);
-        var appearance = html.IndexOf("/appearance.css", StringComparison.Ordinal);
+        var appearance = html.IndexOf("/styles/appearance.css", StringComparison.Ordinal);
         var shell = html.IndexOf("/styles/shell.css", StringComparison.Ordinal);
         var components = html.IndexOf("/styles/components.css", StringComparison.Ordinal);
-        var featureBase = html.IndexOf("/app.css", StringComparison.Ordinal);
+        var featureBase = html.IndexOf("/styles/app.css", StringComparison.Ordinal);
 
         Assert.True(tokens >= 0 && reset > tokens && appearance > reset && shell > appearance && components > shell && featureBase > components);
         Assert.True(File.Exists(Path.Combine(WwwRoot(), "styles", "tokens.css")));

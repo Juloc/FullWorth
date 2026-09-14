@@ -1,5 +1,11 @@
 # FullWorth simple finance-app UX rework plan
 
+> **Pfade in diesem Dokument sind der Stand seiner Entstehung.** Das Frontend wurde im September 2026
+> umgebaut: eine Seite ist ein Ordner unter `wwwroot/pages/` mit `page.html`, `page.css` und
+> `page.js`; `wwwroot/ui/` und `styles/features/` gibt es nicht mehr, und die eigenständigen
+> Dokumente sind Seiten der Hülle geworden. Die gültige Struktur steht in
+> [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md).
+
 Status: **largely shipped** — Phases A, C and D are delivered; Phase B is delivered via a client-side brand catalog (see §4); Phase E polish is largely done and ongoing. Remaining gaps are called out inline and in §12.  
 Reference: the Finanzguru screenshots and interaction notes supplied on 2026-09-05.  
 Goal: make FullWorth feel like a simple consumer finance application first, while keeping FullWorth's own branding, data model and advanced features.

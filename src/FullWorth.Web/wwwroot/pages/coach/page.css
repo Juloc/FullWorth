@@ -38,7 +38,9 @@
 .coach-composer:focus-within{border-color:var(--k3);box-shadow:0 0 0 2px color-mix(in srgb,var(--k3) 12%,transparent)}
 .coach-composer textarea{width:100%;min-height:52px;max-height:160px;resize:none;overflow-y:hidden;border:0;outline:0;background:transparent;padding:8px 9px 4px;font-size:16px}
 .coach-composer-footer{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
-.coach-model-picker{position:relative;display:inline-flex;align-items:center;min-width:0;max-width:min(76%,360px)}
+/* Feste Breite, nicht inhaltsabhängig: die Liste der Modelle kommt erst nach einem Abruf, und ein
+   <select> wächst mit seiner längsten Option. Dabei rutschte das Pfeilchen rechts um 26 Pixel. */
+.coach-model-picker{position:relative;display:inline-flex;align-items:center;min-width:0;width:min(76%,220px)}
 .coach-model-picker select{appearance:none;-webkit-appearance:none;max-width:100%;height:36px;border:0;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);padding:0 32px 0 12px;font:inherit;font-size:12px;cursor:pointer;text-overflow:ellipsis}
 .coach-model-picker select:disabled{cursor:default;color:var(--muted);opacity:.8}
 .coach-model-picker svg{position:absolute;right:9px;width:16px;height:16px;pointer-events:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}

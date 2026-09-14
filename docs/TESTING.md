@@ -107,17 +107,16 @@ The frontend is vanilla ES modules in `src/FullWorth.Web/wwwroot` with **no buil
 compiles it and a syntax error only surfaces in the browser. Check a changed module explicitly:
 
 ```bash
-cp src/FullWorth.Web/wwwroot/features/analytics.js /tmp/c.mjs && node --check /tmp/c.mjs
+cp src/FullWorth.Web/wwwroot/pages/analytics/page.js /tmp/c.mjs && node --check /tmp/c.mjs
 ```
 
-Three pages are the exception: `src/FullWorth.Web/Modules/Import/ImportCenterPage.cs`,
-`FinanzguruImportPage.cs` and `BrokerPdfImportPage.cs` keep their HTML in a C# raw string literal and
-map it onto `/settings/import*` routes. Editing those means rebuilding the host — and it is why the UI
-harness parses the literal out of the source instead of using a copy.
+After adding or moving a page, run `node ops/generate-shell.mjs`; `--check` fails when `index.html`
+and the folder tree have drifted apart. (The three import pages used to keep their HTML in C# raw
+string literals and were the reason the UI harness parsed C# source — both are gone.)
 
-After any frontend change, load the page and check the browser console for module errors. The
-`fullworth-test` container on <http://localhost:8099> bind-mounts `wwwroot`, so edits are live without
-a rebuild.
+After any frontend change, load the page and check the browser console for module errors. The dev
+stack next to this repo bind-mounts `wwwroot`, so edits are live without a rebuild, and
+`node ops/ui-harness/server.mjs` needs no login at all.
 
 ## UI verification without credentials
 

@@ -1,0 +1,16 @@
+/* Feste Spaltenbreiten.
+
+   Mit dem voreingestellten table-layout:auto bemessen sich die Köpfe am eigenen Text, solange der
+   Körper leer ist - und legen sich neu, sobald die erste Zeile ankommt. Gemessen am Schreibtisch:
+   der Empfänger-Kopf sprang von 340 auf 427 Pixel, Kategorie von 187 auf 237, Konto von 138 auf 82.
+   Das war der letzte Sprung dieser Seite.
+
+   Die Prozentwerte sind die Breiten, die sich vorher von selbst eingestellt haben - 98/427/237/82/108/34
+   von 987 bei 1280 Pixeln -, also sieht die Tabelle danach genauso aus, nur schon vor der ersten Zeile. */
+.tx-table{table-layout:fixed}
+.tx-table th:nth-child(1){width:10%}
+.tx-table th:nth-child(2){width:43%}
+.tx-table th:nth-child(3){width:24%}
+.tx-table th:nth-child(4){width:8.5%}
+.tx-table th:nth-child(5){width:11%}
+.tx-table th:nth-child(6){width:3.5%}

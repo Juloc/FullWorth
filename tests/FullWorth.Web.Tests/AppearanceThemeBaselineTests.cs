@@ -32,13 +32,13 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         // A light primary must not get white text on it, so contrast is derived here too.
         Assert.Contains("0.2126", init);
         Assert.Contains("/app/appearance.js", init);
-        Assert.Contains("/appearance.css", head);
+        Assert.Contains("/styles/appearance.css", head);
     }
 
     [Fact]
     public async Task CuteThemeIsGoneEverywhere()
     {
-        var css = await GetAsync("/appearance.css");
+        var css = await GetAsync("/styles/appearance.css");
         var appearance = await GetAsync("/app/appearance.js");
         var init = await GetAsync("/app/boot.js");
 
@@ -59,7 +59,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public async Task AppearanceLayerOnlyDefinesProperties()
     {
-        var css = await GetAsync("/appearance.css");
+        var css = await GetAsync("/styles/appearance.css");
 
         // appearance.css loads third in the chain (tokens -> reset -> appearance -> shell ->
         // components -> app.css -> responsive), so it can never win a rule against app.css. If it ever
@@ -84,7 +84,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     public async Task ColourPickerDrivesTheTokensTheAppAlreadyReads()
     {
         var appearance = await GetAsync("/app/appearance.js");
-        var css = await GetAsync("/app.css");
+        var css = await GetAsync("/styles/app.css");
 
         // primary -> --cta (buttons), secondary -> --accent (links, focus rings, chart strokes).
         // Writing anything else would give a picker that visibly does nothing.
@@ -120,7 +120,7 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
     {
         var sw = await GetAsync("/sw.js");
 
-        Assert.Contains("'/appearance.css'", sw);
+        Assert.Contains("'/styles/appearance.css'", sw);
         Assert.Contains("'/styles/tokens.css'", sw);
         Assert.Contains("'/styles/reset.css'", sw);
         Assert.Contains("'/styles/shell.css'", sw);

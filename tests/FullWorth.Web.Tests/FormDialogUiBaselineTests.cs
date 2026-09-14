@@ -26,7 +26,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task The_form_dialog_supports_grouped_rows_and_progressive_disclosure()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("export function createFormDialog", js);
         Assert.Contains("export function openFormDialog", js);
@@ -48,7 +48,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task A_grouped_row_does_not_rely_on_the_rule_dialog_scoped_grid()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.DoesNotContain("class=\"rule-grid fw-field-row\"", js);
         Assert.Contains(".fw-form-dialog .fw-field-row{display:grid", css);
@@ -66,7 +66,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task A_validation_error_appears_at_its_own_field_and_reveals_a_hidden_one()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("data-error-for=", js);
         Assert.Contains("closest('details')?.setAttribute('open'", js);
@@ -83,7 +83,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task The_destructive_action_is_separated_from_the_primary_one()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("fw-actions-spacer", js);
         Assert.Contains(".dialog-actions .fw-actions-spacer", css);
@@ -113,7 +113,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task The_closed_disclosure_says_how_many_hidden_fields_are_set()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("data-advanced-count", js);
         Assert.Contains("advanced.filter(isSet).length", js);
@@ -141,7 +141,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task A_rejected_save_is_reported_in_the_dialog_and_never_silently()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
         var wealth = await GetAsync("/pages/networth/page.js");
 
         Assert.Contains("setFormError", js);
@@ -183,7 +183,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     public async Task The_required_marker_sits_next_to_its_label()
     {
         var js = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("class=\"fw-field-label\"", js);
         Assert.Contains(".fw-form-dialog .fw-field-label", css);
@@ -279,7 +279,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     {
         var js = await GetAsync("/pages/contracts/page.js");
         var module = await GetAsync("/components/form-dialog.js");
-        var css = await GetAsync("/dialogs.css");
+        var css = await GetAsync("/styles/dialogs.css");
 
         Assert.Contains("import { openFormDialog, FieldKind } from '../../components/form-dialog.js'", js);
         Assert.Contains("section: t('Basisdaten', 'Basics')", js);

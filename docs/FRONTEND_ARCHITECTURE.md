@@ -329,20 +329,20 @@ a `.css` file. The chain `index.html` loads, in order:
 | --- | --- | --- |
 | 1 | `styles/tokens.css` | colours, spacing, radii, shadows, typography vars; light plus `[data-theme=dark]` |
 | 2 | `styles/reset.css` | element normalization, base font/number features, PWA touch rules |
-| 3 | `appearance.css` | the two user-chosen brand colours. Loads third *on purpose* so it can never win against `app.css`; it only sets what the user picked |
+| 3 | `styles/appearance.css` | the two user-chosen brand colours. Loads third *on purpose* so it can never win against `app.css`; it only sets what the user picked |
 | 4 | `styles/shell.css` | shell grid, sidebar, topbar, bottom nav, `.primary-action`, `.view:not(.active)` |
 | 5 | `styles/components.css` | metrics, panels, rows, `.btn` roles, money variants, `.amount` defaults, the one shimmer and the one `.sr-only` |
-| 6 | `app.css` | what is still shared across pages and has not found its layer yet |
+| 6 | `styles/app.css` | what is still shared across pages and has not found its layer yet |
 | 7 | `styles/responsive.css` | the central breakpoints |
-| 8 | `design-depth.css` | shadows, depth, easing, motion — visual only |
-| 9 | `dialogs.css` | `dialog`, `::backdrop`, `.dialog-card`, `.dialog-actions` |
+| 8 | `styles/design-depth.css` | shadows, depth, easing, motion — visual only |
+| 9 | `styles/dialogs.css` | `dialog`, `::backdrop`, `.dialog-card`, `.dialog-actions` |
 | 10 | `pages/*/page.css` | one per page, written into the document by `ops/generate-shell.mjs` |
 | 11 | `styles/mobile-polish.css` | the phone layer, last on purpose |
 
 `SharedCssLayersAreExplicitAndOrdered` pins positions 1–6 and the existence of the `styles/` files.
-`FrontendStructureGuardTests.The_root_collects_no_new_stylesheets` names the four that still sit at the
-`wwwroot` root — `app.css`, `appearance.css`, `design-depth.css`, `dialogs.css`. That list may get
-shorter, never longer.
+`FrontendStructureGuardTests.The_root_collects_no_stylesheets` insists the `wwwroot` root holds no
+`.css` at all. Four used to sit there — `app.css`, `appearance.css`, `design-depth.css`,
+`dialogs.css` — and the guard used to name them as a shrinking exception list. The list is empty now.
 
 `styles/features/` is gone. It held 23 sheets, 19 of which were appended to the `<head>` by their owning
 module at first render, so every screen drew once unstyled and then rebuilt itself — the second-largest
@@ -379,7 +379,7 @@ Applied by `UseFinanceSecurityHeaders()` to every response. `Program.cs` calls
 
 Two violations are in the tree today. `features/ux-kit.js` puts
 `onerror="this.closest('.fw-ident').classList.add('fw-ident-failed');this.remove()"` on the brand-logo
-`<img>`, so the `.fw-ident-failed` fallback in `app.css:133` never fires. `ShareReceiptEndpoints.Page()`
+`<img>`, so the `.fw-ident-failed` fallback in `styles/app.css` never fires. `ShareReceiptEndpoints.Page()`
 emits an inline `<style>` block, so `/share/receipt/*` renders unstyled. Neither is caught by
 `SecurityHeadersSourceAuditTests`, which only scans files under `wwwroot`.
 
