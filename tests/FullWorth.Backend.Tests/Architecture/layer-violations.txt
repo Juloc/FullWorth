@@ -20,10 +20,7 @@ Contracts/ContractParityModule.cs
 Contracts/ContractsModule.cs
 Contracts/PriceChanges/PriceChangesModule.cs
 Contracts/Review/ContractCandidateReview.cs
-Export/CsvZipExportParityModule.cs
 Export/ExportCompletionParityModule.cs
-Export/ExportModule.cs
-Export/WealthPortableExportModule.cs
 FullWorthSpaces/AccessEndpoints.cs
 Import/FinanzguruImportModule.cs
 Import/ImportMappingParityModule.cs

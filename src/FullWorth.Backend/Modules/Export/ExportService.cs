@@ -1,4 +1,5 @@
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
@@ -271,24 +272,23 @@ public sealed class ExportService(FullWorthDbContext db)
             purchases,
             netWorthHistory);
     }
-}
+/// <summary>
+    /// Die Kategorien des Space, zum Auffuellen der Namen im CSV-Export. Archivierte nur, wenn der
+    /// Aufrufer sie ausdruecklich will.
+    /// </summary>
+    public Task<List<FinanceCategory>> ListCategoriesAsync(
+        Guid fullWorthSpaceId, bool includeArchived, CancellationToken ct) =>
+        db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId
+                            && (includeArchived || !category.IsArchived))
+            .OrderBy(category => category.SortOrder).ThenBy(category => category.Name)
+            .ToListAsync(ct);
 
-public static class ExportEndpoints
-{
-    public static IEndpointRouteBuilder MapExportEndpoints(this IEndpointRouteBuilder app)
-    {
-        app.MapGet("/api/export/snapshot", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, ExportService service, CancellationToken ct) =>
-        {
-            var snapshot = await service.SnapshotForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
-            return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
-        }).WithTags("Export");
-
-        app.MapGet("/api/capabilities", () => Results.Ok(new
-        {
-            version = "0.3.0",
-            resources = new[] { "accounts", "transactions", "purchases", "purchase-items", "categories", "categorization-rules", "contracts", "budgets", "assets", "liabilities", "analytics", "net-worth", "export" },
-            fullSnapshot = "/api/export/snapshot"
-        })).WithTags("Meta");
-        return app;
-    }
+    /// <summary>Die Aufteilungen zu genau diesen Buchungen - eine Buchung kann auf mehrere Kategorien gehen.</summary>
+    public Task<List<TransactionAllocation>> ListAllocationsAsync(
+        IReadOnlySet<Guid> transactionIds, CancellationToken ct) =>
+        db.TransactionAllocations.AsNoTracking()
+            .Where(allocation => transactionIds.Contains(allocation.TransactionId))
+            .OrderBy(allocation => allocation.TransactionId).ThenBy(allocation => allocation.Id)
+            .ToListAsync(ct);
 }

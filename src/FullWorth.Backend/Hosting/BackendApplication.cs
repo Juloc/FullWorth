@@ -230,6 +230,7 @@ public static class BackendApplication
         builder.Services.AddScoped<RefundCandidateStore>();
         builder.Services.AddScoped<AccountAppearanceStore>();
         builder.Services.AddScoped<XlsxExportService>();
+        builder.Services.AddScoped<CsvExportStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
@@ -518,7 +519,7 @@ public static class BackendApplication
         endpoints.MapCategoryOrderEndpoints();
         endpoints.MapAdvancedTransactionBulkParityEndpoints();
         endpoints.MapExportCompletionParityEndpoints();
-        endpoints.MapCsvZipExportParityEndpoints();
+        endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints()
             .MapProductIntelligenceEndpoints()
             .MapCapabilityGrantEndpoints()
