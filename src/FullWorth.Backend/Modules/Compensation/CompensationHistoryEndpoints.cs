@@ -12,10 +12,9 @@ public static class CompensationHistoryEndpoints
         group.MapGet("/history", async (
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationHistoryStore store,
             CancellationToken ct) =>
         {
-            var store = new CompensationHistoryStore(db);
             var entries = await store.ListAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
             return entries is null ? Results.NotFound() : Results.Ok(entries);
         });
@@ -24,12 +23,11 @@ public static class CompensationHistoryEndpoints
             Guid fullWorthSpaceId,
             CompensationHistoryWrite request,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationHistoryStore store,
             CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationHistoryStore(db);
                 var entry = await store.CreateAsync(
                     currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
                 return entry is null
@@ -47,12 +45,11 @@ public static class CompensationHistoryEndpoints
             Guid fullWorthSpaceId,
             CompensationHistoryWrite request,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationHistoryStore store,
             CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationHistoryStore(db);
                 var entry = await store.UpdateAsync(
                     currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct);
                 return entry is null ? Results.NotFound() : Results.Ok(entry);
@@ -67,10 +64,9 @@ public static class CompensationHistoryEndpoints
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationHistoryStore store,
             CancellationToken ct) =>
         {
-            var store = new CompensationHistoryStore(db);
             var deleted = await store.DeleteAsync(
                 currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return deleted switch
@@ -87,7 +83,7 @@ public static class CompensationHistoryEndpoints
             DateOnly? to,
             string? scope,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationHistoryStore store,
             CancellationToken ct) =>
         {
             try
@@ -95,7 +91,6 @@ public static class CompensationHistoryEndpoints
                 // scope=joint sums every space member's timeline (household view for partners/spouses);
                 // anything else stays the caller's own timeline.
                 var joint = string.Equals(scope?.Trim(), "joint", StringComparison.OrdinalIgnoreCase);
-                var store = new CompensationHistoryStore(db);
                 var timeline = await store.TimelineAsync(
                     currentUser.RequireUserId(), fullWorthSpaceId, from, to, joint, ct);
                 return timeline is null ? Results.NotFound() : Results.Ok(timeline);

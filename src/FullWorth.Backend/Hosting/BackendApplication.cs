@@ -198,6 +198,18 @@ public static class BackendApplication
         builder.Services.AddScoped<AssetValuationStore>();
         builder.Services.AddScoped<WealthOverviewService>();
         builder.Services.AddScoped<NetWorthSnapshotService>();
+        // Die Immobilien- und Restwert-Stores wurden bis 2026-09-14 in jedem Handler neu gebaut
+        // (new RealEstateStore(db, audit, fx)), wofuer der Endpunkt den DbContext halten musste. Sie
+        // haengen nur an Diensten, die ohnehin registriert sind - siehe #113, Regel 2.
+        builder.Services.AddScoped<RealEstateStore>();
+        builder.Services.AddScoped<RealEstateUpdateStore>();
+        builder.Services.AddScoped<RealEstateAdvancedStore>();
+        builder.Services.AddScoped<RemainingAssetStore>();
+        builder.Services.AddScoped<ReceivablePaymentStore>();
+        builder.Services.AddScoped<CompensationStore>();
+        builder.Services.AddScoped<CompensationHistoryStore>();
+        builder.Services.AddScoped<CompensationOtherIncomeStore>();
+        builder.Services.AddScoped<PayslipStore>();
         builder.Services.AddScoped<InvestmentNetWorthService>();
         builder.Services.AddScoped<PropertyValuationProviderRegistry>();
         builder.Services.AddScoped<PropertyValuationService>();

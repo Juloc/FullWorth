@@ -39,18 +39,16 @@ public static class CompensationEndpoints
             return Results.Ok(InflationIndex.Metadata());
         });
 
-        group.MapGet("/profile", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/profile", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
-            var store = new CompensationStore(db);
             var profile = await store.GetProfileAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
             return profile is null ? Results.NotFound() : Results.Ok(profile);
         });
 
-        group.MapPut("/profile", async (Guid fullWorthSpaceId, CompensationProfileInput request, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPut("/profile", async (Guid fullWorthSpaceId, CompensationProfileInput request, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationStore(db);
                 var profile = await store.SaveProfileAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
                 return profile is null ? Results.NotFound() : Results.Ok(profile);
             }
@@ -60,18 +58,16 @@ public static class CompensationEndpoints
             }
         });
 
-        group.MapGet("/scenarios", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapGet("/scenarios", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
-            var store = new CompensationStore(db);
             var scenarios = await store.ListScenariosAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
             return scenarios is null ? Results.NotFound() : Results.Ok(scenarios);
         });
 
-        group.MapPost("/scenarios", async (Guid fullWorthSpaceId, CompensationScenarioWrite request, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPost("/scenarios", async (Guid fullWorthSpaceId, CompensationScenarioWrite request, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationStore(db);
                 var scenario = await store.CreateScenarioAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
                 return scenario is null ? Results.NotFound() : Results.Created($"/api/compensation/scenarios/{scenario.Id}?fullWorthSpaceId={fullWorthSpaceId}", scenario);
             }
@@ -81,11 +77,10 @@ public static class CompensationEndpoints
             }
         });
 
-        group.MapPut("/scenarios/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CompensationScenarioWrite request, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapPut("/scenarios/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CompensationScenarioWrite request, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationStore(db);
                 var scenario = await store.UpdateScenarioAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct);
                 return scenario is null ? Results.NotFound() : Results.Ok(scenario);
             }
@@ -95,9 +90,8 @@ public static class CompensationEndpoints
             }
         });
 
-        group.MapDelete("/scenarios/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct) =>
+        group.MapDelete("/scenarios/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, CompensationStore store, CancellationToken ct) =>
         {
-            var store = new CompensationStore(db);
             var deleted = await store.DeleteScenarioAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return deleted switch
             {

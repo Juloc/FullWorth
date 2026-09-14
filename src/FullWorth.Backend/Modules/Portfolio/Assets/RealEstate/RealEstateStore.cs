@@ -139,6 +139,26 @@ DELETE FROM "AssetDebtLinks" WHERE "Id"={linkId} AND "AssetId"={assetId} AND "Fu
         Guid userId, Guid fullWorthSpaceId, Guid assetId, CancellationToken ct) =>
         RealEstateMetrics.CalculateAsync(db, fx, userId, fullWorthSpaceId, assetId, ReadDetailAsync, ReadCostsAsync, ReadDebtLinksAsync, ct);
 
+    /// <summary>
+    /// Die Kennzahlen plus das, was die Mieten daraus machen.
+    ///
+    /// Der Endpunkt hat dafür bis 2026-09-14 selbst <c>RealEstateRentalMetrics.EnrichAsync(db, fx, …)</c>
+    /// gerufen und musste deshalb den DbContext halten — als einzige Stelle in dieser Datei. Die zwei
+    /// Schritte gehören ohnehin zusammen: eine Anreicherung ohne ihre Grundlage gibt es nicht.
+    /// </summary>
+    public async Task<RealEstateMutationOutcome<RealEstateMetricsView>> GetRentalMetricsAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid assetId, DateOnly? from, DateOnly? to, CancellationToken ct)
+    {
+        var basis = await GetMetricsAsync(userId, fullWorthSpaceId, assetId, ct);
+        if (basis.Result != RealEstateMutationResult.Success || basis.Value is null) return basis;
+
+        return basis with
+        {
+            Value = await RealEstateRentalMetrics.EnrichAsync(
+                db, fx, fullWorthSpaceId, assetId, basis.Value, from, to, ct)
+        };
+    }
+
     internal async Task<RealEstateDetailView?> ReadDetailAsync(Guid assetId, CancellationToken ct)
     {
         var connection = db.Database.GetDbConnection();

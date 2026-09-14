@@ -12,74 +12,70 @@ public static class RealEstateEndpoints
         var property = app.MapGroup("/api/assets/{assetId:guid}/real-estate").WithTags("Real estate");
 
         property.MapGet("/", async (
-            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).GetPropertyAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
+            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.GetPropertyAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
 
         property.MapPut("/", async (
-            Guid assetId, Guid fullWorthSpaceId, RealEstateDetailWrite request, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).UpsertDetailAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
+            Guid assetId, Guid fullWorthSpaceId, RealEstateDetailWrite request, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.UpsertDetailAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
 
         property.MapGet("/metrics", async (
-            Guid assetId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
+            Guid assetId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
         {
-            var basis = await Store(db, audit, fx).GetMetricsAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct);
-            if (basis.Result != RealEstateMutationResult.Success || basis.Value is null) return ToResult(basis);
-            var enriched = await RealEstateRentalMetrics.EnrichAsync(db, fx, fullWorthSpaceId, assetId, basis.Value, from, to, ct);
-            return Results.Ok(enriched);
+            var metrics = await store.GetRentalMetricsAsync(
+                user.RequireUserId(), fullWorthSpaceId, assetId, from, to, ct);
+            return ToResult(metrics);
         });
 
         property.MapGet("/acquisition-costs", async (
-            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).ListCostsAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
+            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.ListCostsAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
 
         property.MapPost("/acquisition-costs", async (
-            Guid assetId, Guid fullWorthSpaceId, RealEstateAcquisitionCostWrite request, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).CreateCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
+            Guid assetId, Guid fullWorthSpaceId, RealEstateAcquisitionCostWrite request, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.CreateCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
 
         property.MapPut("/acquisition-costs/{costId:guid}", async (
             Guid assetId, Guid costId, Guid fullWorthSpaceId, RealEstateAcquisitionCostWrite request, CurrentUserContext user,
-            FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-            ToResult(await UpdateStore(db, audit).UpdateCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, costId, request, ct)));
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await updateStore.UpdateCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, costId, request, ct)));
 
         property.MapDelete("/acquisition-costs/{costId:guid}", async (
-            Guid assetId, Guid costId, Guid fullWorthSpaceId, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).DeleteCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, costId, ct)));
+            Guid assetId, Guid costId, Guid fullWorthSpaceId, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.DeleteCostAsync(user.RequireUserId(), fullWorthSpaceId, assetId, costId, ct)));
 
         var debt = app.MapGroup("/api/assets/{assetId:guid}/debts").WithTags("Asset debt");
 
         debt.MapGet("/", async (
-            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).ListDebtLinksAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
+            Guid assetId, Guid fullWorthSpaceId, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.ListDebtLinksAsync(user.RequireUserId(), fullWorthSpaceId, assetId, ct)));
 
         debt.MapPost("/", async (
-            Guid assetId, Guid fullWorthSpaceId, AssetDebtLinkWrite request, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).CreateDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
+            Guid assetId, Guid fullWorthSpaceId, AssetDebtLinkWrite request, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.CreateDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, request, ct)));
 
         debt.MapPut("/{linkId:guid}", async (
             Guid assetId, Guid linkId, Guid fullWorthSpaceId, AssetDebtLinkWrite request, CurrentUserContext user,
-            FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-            ToResult(await UpdateStore(db, audit).UpdateDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, linkId, request, ct)));
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await updateStore.UpdateDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, linkId, request, ct)));
 
         debt.MapDelete("/{linkId:guid}", async (
-            Guid assetId, Guid linkId, Guid fullWorthSpaceId, CurrentUserContext user, FullWorthDbContext db,
-            AuditService audit, CurrencyConverter fx, CancellationToken ct) =>
-            ToResult(await Store(db, audit, fx).DeleteDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, linkId, ct)));
+            Guid assetId, Guid linkId, Guid fullWorthSpaceId, CurrentUserContext user, RealEstateStore store,
+            RealEstateUpdateStore updateStore, CancellationToken ct) =>
+            ToResult(await store.DeleteDebtLinkAsync(user.RequireUserId(), fullWorthSpaceId, assetId, linkId, ct)));
 
         app.MapRealEstateOperationsEndpoints();
         app.MapRealEstateAdvancedEndpoints();
         return app;
     }
-
-    private static RealEstateStore Store(FullWorthDbContext db, AuditService audit, CurrencyConverter fx) => new(db, audit, fx);
-    private static RealEstateUpdateStore UpdateStore(FullWorthDbContext db, AuditService audit) => new(db, audit);
 
     private static IResult ToResult<T>(RealEstateMutationOutcome<T> outcome) => outcome.Result switch
     {

@@ -16,10 +16,9 @@ public static class CompensationOtherIncomeEndpoints
         group.MapGet("/other-income", async (
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationOtherIncomeStore store,
             CancellationToken ct) =>
         {
-            var store = new CompensationOtherIncomeStore(db);
             var entries = await store.ListAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
             return entries is null ? Results.NotFound() : Results.Ok(entries);
         });
@@ -28,12 +27,11 @@ public static class CompensationOtherIncomeEndpoints
             Guid fullWorthSpaceId,
             CompensationOtherIncomeWrite request,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationOtherIncomeStore store,
             CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationOtherIncomeStore(db);
                 var entry = await store.CreateAsync(
                     currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
                 return entry is null
@@ -52,12 +50,11 @@ public static class CompensationOtherIncomeEndpoints
             Guid fullWorthSpaceId,
             CompensationOtherIncomeWrite request,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationOtherIncomeStore store,
             CancellationToken ct) =>
         {
             try
             {
-                var store = new CompensationOtherIncomeStore(db);
                 var entry = await store.UpdateAsync(
                     currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct);
                 return entry is null ? Results.NotFound() : Results.Ok(entry);
@@ -72,10 +69,9 @@ public static class CompensationOtherIncomeEndpoints
             Guid id,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext db,
+            CompensationOtherIncomeStore store,
             CancellationToken ct) =>
         {
-            var store = new CompensationOtherIncomeStore(db);
             var deleted = await store.DeleteAsync(
                 currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
             return deleted switch

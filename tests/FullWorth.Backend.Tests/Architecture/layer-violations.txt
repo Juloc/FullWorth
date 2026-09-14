@@ -20,10 +20,6 @@ Categories/CategoryIntelligenceModule.cs
 Categories/CategoryMergeParityModule.cs
 Categories/CategoryOrderParityModule.cs
 Coach/CoachEndpoints.cs
-Compensation/CompensationEndpoints.cs
-Compensation/CompensationHistoryEndpoints.cs
-Compensation/CompensationOtherIncomeEndpoints.cs
-Compensation/PayslipEndpoints.cs
 Contracts/ContractDetectionService.cs
 Contracts/ContractParityModule.cs
 Contracts/ContractsModule.cs
@@ -50,10 +46,7 @@ Intelligence/IntelligenceDigests.cs
 Intelligence/Signals/FinancialSignalEndpoints.cs
 Loans/LoansModule.cs
 Merchants/MerchantModule.cs
-Portfolio/Assets/RealEstate/RealEstateAdvancedEndpoints.cs
-Portfolio/Assets/RealEstate/RealEstateEndpoints.cs
 Portfolio/Assets/RealEstate/RealEstateOperationsEndpoints.cs
-Portfolio/Assets/Specialized/RemainingAssetEndpoints.cs
 Portfolio/Assets/Valuations/AssetValuationModule.cs
 Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
