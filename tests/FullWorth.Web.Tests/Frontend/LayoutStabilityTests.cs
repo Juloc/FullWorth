@@ -18,6 +18,7 @@ namespace FullWorth.Web.Tests.Frontend;
 ///
 /// Jetzt steht es fast auf null, und das ist kein Ziel, sondern ein Messwert.
 /// </summary>
+[Trait("Needs", "Browser")]
 [Collection(nameof(UiHarnessCollection))]
 public sealed class LayoutStabilityTests(UiHarness harness)
 {

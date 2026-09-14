@@ -294,4 +294,37 @@ public sealed class FrontendStructureGuardTests
             Assert.Contains($"id=\"{id.Groups[1].Value}\"", html);
         }
     }
+
+    /// <summary>
+    /// Wer den Browser braucht, sagt es — und zwar so, wie CI danach fragt.
+    ///
+    /// Die Messungen laufen in einem eigenen Job, weil nur der den Browser installiert. Ausgewählt
+    /// wurden sie einmal über den Klassennamen ("!~LayoutStability"), und die zweite Messklasse fiel
+    /// deshalb in den falschen Job: zwölf Tests, alle rot, alle mit "Executable doesn't exist" — ein
+    /// Fehler, der nichts über die Anwendung sagt und trotzdem den ganzen Lauf rot macht.
+    ///
+    /// Jetzt filtert CI nach <c>Needs=Browser</c>, und dieser Test hält die Markierung an den Klassen,
+    /// die sie brauchen: alles, was sich die ui-harness teilt, teilt sich auch den Browser.
+    /// </summary>
+    [Fact]
+    public void A_test_that_needs_the_browser_says_so()
+    {
+        var offenders = typeof(UiHarness).Assembly.GetTypes()
+            .Where(type => type.GetCustomAttributesData().Any(attribute =>
+                attribute.AttributeType.Name == "CollectionAttribute"
+                && attribute.ConstructorArguments.Any(argument =>
+                    (argument.Value as string) == nameof(UiHarnessCollection))))
+            .Where(type => !type.GetCustomAttributesData().Any(attribute =>
+                attribute.AttributeType.Name == "TraitAttribute"
+                && attribute.ConstructorArguments.Select(argument => argument.Value as string)
+                    .SequenceEqual(["Needs", "Browser"])))
+            .Select(type => type.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0,
+            "Diese Klassen teilen sich die ui-harness, tragen aber kein [Trait(\"Needs\", \"Browser\")] — "
+            + "CI schickt sie damit in den Job ohne Browser:" + Environment.NewLine + "  "
+            + string.Join(Environment.NewLine + "  ", offenders));
+    }
 }

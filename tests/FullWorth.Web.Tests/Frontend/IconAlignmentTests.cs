@@ -20,6 +20,7 @@ namespace FullWorth.Web.Tests.Frontend;
 /// dieses Symbol mittig. Alles mit Text daneben — Menüeinträge, beschriftete Knöpfe — fällt heraus,
 /// denn dort gehört das Symbol nach links.
 /// </summary>
+[Trait("Needs", "Browser")]
 [Collection(nameof(UiHarnessCollection))]
 public sealed class IconAlignmentTests(UiHarness harness)
 {

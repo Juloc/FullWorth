@@ -111,10 +111,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # Ohne LayoutStability: die Messung braucht einen Browser, den dieser Shard bewusst nicht
-      # installiert. Sie laeuft im eigenen Job "Layout stability".
+      # Ohne die Klassen, die einen Browser brauchen: den installiert dieser Shard bewusst nicht, sie
+      # laufen im eigenen Job "Layout stability".
+      #
+      # Gefiltert wird nach der Markierung, nicht nach dem Klassennamen. Vorher stand hier
+      # "!~LayoutStability", und die zweite Messklasse fiel damit in diesen Shard: zwoelf Tests, alle
+      # rot, alle mit "Executable doesn't exist". Wer eine dritte schreibt, setzt [Trait] und ist fertig.
       - name: Test Web
-        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --filter "FullyQualifiedName!~LayoutStability"
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --filter "Needs!=Browser"
 
       - name: Test Banking
         run: dotnet test tests/FullWorth.Banking.Tests/FullWorth.Banking.Tests.csproj --configuration Release
@@ -235,4 +239,4 @@ jobs:
         run: pwsh tests/FullWorth.Web.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Measure
-        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~LayoutStability"
+        run: dotnet test tests/FullWorth.Web.Tests/FullWorth.Web.Tests.csproj --configuration Release --no-build --filter "Needs=Browser"
