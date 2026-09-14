@@ -102,7 +102,7 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         var html = ReadSource("index.html");
         var transactions = await GetAsync("/pages/transactions/page.js");
         var contracts = await GetAsync("/pages/contracts/page.js");
-        var networth = await GetAsync("/features/networth.js");
+        var networth = await GetAsync("/pages/networth/page.js");
         var accounts = await GetAsync("/pages/accounts/presentation.js");
         var coach = await GetAsync("/features/coach-shell.js");
         var dialogs = await GetAsync("/components/dialog.js");

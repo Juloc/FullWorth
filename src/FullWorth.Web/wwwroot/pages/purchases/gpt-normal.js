@@ -1,7 +1,7 @@
-import { ensurePurchaseArticlesWorkspace } from './purchase-articles-workspace.js';
-import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced.js';
-import { refreshPurchasePriceInsights } from './purchase-price-insights.js';
-import { refreshPurchaseAdvancedInsights } from './purchase-advanced-insights.js';
+import { ensurePurchaseArticlesWorkspace } from './articles-workspace.js';
+import { refreshPurchaseAdvancedInstaller } from './articles-advanced.js';
+import { refreshPurchasePriceInsights } from './price-insights.js';
+import { refreshPurchaseAdvancedInsights } from './advanced-insights.js';
 import { ensureReceiptImportsLauncher } from './receipt-imports.js';
 import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js';
 import { addReceiptScanFiles } from './receipt-scan-set.js';

@@ -73,6 +73,6 @@ public sealed class AmazonPurchasesUiBaselineTests : IClassFixture<FullWorthWebF
     private string ReadPurchasesJs()
     {
         var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
-        return File.ReadAllText(Path.Combine(environment.WebRootPath, "features", "purchases.js"));
+        return File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "purchases", "page.js"));
     }
 }

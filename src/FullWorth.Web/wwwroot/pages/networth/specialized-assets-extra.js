@@ -1,6 +1,6 @@
-import { api as sharedApi, jsonBody } from '../core/services.js';
-import { createDialog } from '../components/dialog.js';
-import { showToast } from '../components/toast.js';
+import { api as sharedApi, jsonBody } from '../../core/services.js';
+import { createDialog } from '../../components/dialog.js';
+import { showToast } from '../../components/toast.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
 

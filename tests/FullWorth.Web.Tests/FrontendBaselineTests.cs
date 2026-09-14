@@ -51,13 +51,13 @@ public sealed class FrontendBaselineTests : IClassFixture<FullWorthWebFactory>
         // The receipt upload lives in the purchases feature module and routes through ctx.api(), which
         // app.js wires to the shared BFF client in core/api.js (via core/services.js). Assert the call
         // site, the shared fetch call the client makes, and that neither leaks an internal service URL.
-        var purchasesJs = await GetAsync("/features/purchases.js");
+        var purchasesJs = await GetAsync("/pages/purchases/page.js");
         var apiJs = await GetAsync("/core/api.js");
 
         Assert.Contains("ctx.api('api/purchases/receipt-scan'", purchasesJs);
         Assert.Contains("fetchImpl(target,", apiJs);
         Assert.Contains("`/bff/${service}/", apiJs);
-        AssertNoInternalServiceUrl(purchasesJs, "features/purchases.js");
+        AssertNoInternalServiceUrl(purchasesJs, "pages/purchases/page.js");
         AssertNoInternalServiceUrl(apiJs, "core/api.js");
     }
 

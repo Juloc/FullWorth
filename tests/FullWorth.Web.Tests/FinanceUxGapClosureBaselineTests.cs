@@ -55,7 +55,7 @@ public sealed class FinanceUxGapClosureBaselineTests : IClassFixture<FullWorthWe
     [Fact]
     public async Task WealthHasExplicitConfigurableEmergencyFund()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         Assert.Contains("wealth.emergencyFund", js);
         Assert.Contains("buildEmergencyCard", js);
         Assert.Contains("openEmergencyFundDialog", js);

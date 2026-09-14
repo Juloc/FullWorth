@@ -1,3 +1,5 @@
+// Der Datenexport. Vermögen und Einstellungen benutzen ihn beide, also gehört er keiner der
+// zwei Seiten - eine Seite greift nie in eine andere.
 import { apiClient } from '../core/services.js';
 import { state } from '../core/state.js';
 

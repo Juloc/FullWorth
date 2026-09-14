@@ -63,7 +63,7 @@ public sealed class ComboboxUiBaselineTests
     {
         // Verträge sind eine Seite geworden, Kredite gehören noch zu Vermögen und liegen weiter in
         // features/ — beide benutzen dieselbe durchsuchbare Kontenauswahl.
-        foreach (var file in new[] { Path.Combine("pages", "contracts", "page.js"), Path.Combine("features", "loans.js") })
+        foreach (var file in new[] { Path.Combine("pages", "contracts", "page.js"), Path.Combine("pages", "networth", "loans.js") })
         {
             var source = ReadSource(file);
             Assert.Contains("comboboxCtx: ctx", source, StringComparison.Ordinal);

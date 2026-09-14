@@ -17,14 +17,14 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         // purchase-articles-advanced.js and is now wired through the fullworth:purchases-ui-changed
         // event (see Advanced_installer_reuses_existing_workspace_instead_of_replacing_it) rather than a
         // bare side-effect import.
-        var js = Read("features", "purchases-gpt-normal.js");
-        Assert.Contains("import { refreshPurchaseAdvancedInstaller } from './purchase-articles-advanced.js';", js);
+        var js = Read("pages", "purchases", "gpt-normal.js");
+        Assert.Contains("import { refreshPurchaseAdvancedInstaller } from './articles-advanced.js';", js);
     }
 
     [Fact]
     public void Purchase_workspace_exposes_tags_returns_documents_ocr_and_exports()
     {
-        var js = Read("features", "purchase-articles-advanced-actions.js");
+        var js = Read("pages", "purchases", "articles-advanced-actions.js");
 
         Assert.Contains("api/purchases/${purchase.id}/tags", js);
         Assert.Contains("/items/${item.id}/returns", js);
@@ -38,7 +38,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Product_workspace_exposes_alias_barcode_archive_merge_and_camera_scan()
     {
-        var js = Read("features", "purchase-articles-advanced-actions.js");
+        var js = Read("pages", "purchases", "articles-advanced-actions.js");
 
         Assert.Contains("/aliases", js);
         Assert.Contains("/barcodes", js);
@@ -51,7 +51,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Advanced_installer_reuses_existing_workspace_instead_of_replacing_it()
     {
-        var js = Read("features", "purchase-articles-advanced.js");
+        var js = Read("pages", "purchases", "articles-advanced.js");
 
         Assert.Contains(".pa-workspace", js);
         Assert.Contains(".pa-product-detail", js);
@@ -69,8 +69,8 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Payment_picker_never_relabels_foreign_currency_transactions()
     {
-        var js = Read("features", "purchase-articles-advanced.js");
-        var css = Read("styles", "features", "purchase-articles-workspace.css");
+        var js = Read("pages", "purchases", "articles-advanced.js");
+        var css = Read("pages", "purchases", "page.css");
 
         Assert.Contains("mountCurrencySafePaymentPicker", js);
         Assert.Contains("FX-Konvertierung erforderlich", js);
@@ -82,7 +82,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     [Fact]
     public void Payment_picker_does_not_offer_another_amount_when_purchase_is_fully_linked()
     {
-        var js = Read("features", "purchase-articles-advanced.js");
+        var js = Read("pages", "purchases", "articles-advanced.js");
 
         Assert.Contains("const fullyLinked = remaining <= 0.005", js);
         Assert.Contains("Der Kauf ist bereits vollständig mit Zahlungen verknüpft.", js);
@@ -98,7 +98,7 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
         // untouched - and a baseline that fails on reformatting is how people learn to weaken
         // baselines. Both sides drop their whitespace instead, which asks exactly the same question in
         // a way the file's layout cannot answer wrongly.
-        var css = WithoutWhitespace(Read("styles", "features", "purchase-articles-workspace.css"));
+        var css = WithoutWhitespace(Read("pages", "purchases", "page.css"));
         foreach (var selector in new[] { ".pa-export-actions .button", ".pa-chip-remove", ".pa-fx-blocked" })
             Assert.Contains(WithoutWhitespace($"{selector}:hover{{transform:none!important"), css);
     }
@@ -108,20 +108,20 @@ public sealed class PurchaseAdvancedActionsUiBaselineTests : IClassFixture<FullW
     {
         var sw = Read("sw.js");
 
-        Assert.Contains("/features/purchase-articles-workspace.js", sw);
-        Assert.Contains("/styles/features/purchase-articles-workspace.css", sw);
-        Assert.Contains("/features/purchase-articles-advanced.js", sw);
-        Assert.Contains("/features/purchase-articles-advanced-actions.js", sw);
+        Assert.Contains("/pages/purchases/articles-workspace.js", sw);
+        Assert.Contains("/pages/purchases/page.css", sw);
+        Assert.Contains("/pages/purchases/articles-advanced.js", sw);
+        Assert.Contains("/pages/purchases/articles-advanced-actions.js", sw);
         // REGRESSION (reported, not weakened): receipt-scan-ai.js was deleted, and the branch's later
         // removal of the also-unreachable features/receipt-scan-local-builder.js ("Remove unreachable
         // frontend patch layer") left sw.js's APP_SHELL precache list pointing at that now-nonexistent
-        // file (and its .css) while never listing the real, reachable features/receipt-scan-set.js/.css.
+        // file (and its .css) while never listing the real, reachable pages/purchases/receipt-scan-set.js/.css.
         // Because install() precaches via cache.addAll (atomic: one 404 fails the whole precache), this
         // currently breaks service-worker install entirely. Needs a source fix in
         // src/FullWorth.Web/wwwroot/sw.js: replace '/features/receipt-scan-local-builder.js' and
-        // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/features/receipt-scan-set.js'
-        // and '/styles/features/receipt-scan-set.css'.
-        Assert.Contains("/features/receipt-scan-set.js", sw);
+        // '/features/receipt-scan-local-builder.css' in APP_SHELL with '/pages/purchases/receipt-scan-set.js'
+        // and '/pages/purchases/page.css'.
+        Assert.Contains("/pages/purchases/receipt-scan-set.js", sw);
         Assert.DoesNotContain("url.pathname.includes('/receipt')", sw);
     }
 

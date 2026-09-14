@@ -1,6 +1,6 @@
-import { api as sharedApi, apiClient } from '../core/services.js';
-import { createDialog } from '../components/dialog.js';
-import { showToast } from '../components/toast.js';
+import { api as sharedApi, apiClient } from '../../core/services.js';
+import { createDialog } from '../../components/dialog.js';
+import { showToast } from '../../components/toast.js';
 // Detail explorer for bulk receipt import batches. The core importer owns polling and batch actions;
 // this module only enriches rendered cards and loads details after an explicit user action.
 

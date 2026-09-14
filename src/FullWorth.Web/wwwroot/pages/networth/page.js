@@ -1,13 +1,13 @@
-import { openRealEstateDetail, refreshWealthExtensions } from './wealth-real-estate.js';
-import { sectionCard, trendBadge, esc, identityIcon } from './ux-kit.js';
-import { bindChartScrubber } from '../components/chart-scrubber.js';
+import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
+import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
+import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { renderLoans, bindLoans } from './loans.js';
-import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from './data-completeness.js';
-import { MoneyVariant, moneyClass, maskIdentifier } from '../components/money.js';
-import { balanceMeaningLine } from '../components/balance-meaning.js';
-import { openFormDialog, FieldKind } from '../components/form-dialog.js';
-import { basisSummary, lineKey, projectSeries as projectPreviewSeries, realValue, surplusAt } from './wealth-preview.js';
-import { emptyRow } from '../components/empty.js';
+import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
+import { MoneyVariant, moneyClass, maskIdentifier } from '../../components/money.js';
+import { balanceMeaningLine } from '../../components/balance-meaning.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { basisSummary, lineKey, projectSeries as projectPreviewSeries, realValue, surplusAt } from './preview.js';
+import { emptyRow } from '../../components/empty.js';
 
 // Unified wealth view (UX rework §8 / delivery Phase D). The first screen explains wealth before it
 // offers management tools: a trend card ("Wie entwickelt sich dein Vermögen?") whose chart carries the
@@ -717,7 +717,7 @@ function projectionSettings() {
 
 // value(m+1) = value(m) * (1 + r/12) + savings. Monthly compounding, because the savings arrive
 // monthly; a yearly formula would silently overstate the growth on the current year's payments.
-// Delegates to features/wealth-preview.js, which owns two decisions this used to get wrong.
+// Delegates to preview.js, which owns two decisions this used to get wrong.
 //
 // It compounded with `1 + r/12`, and `(1 + r/12)^12` is more than `1 + r`: at 7 % it came out as
 // 7.229 % a year. On a 50 000 balance over thirty years that is 405 825 on screen against 380 613 in

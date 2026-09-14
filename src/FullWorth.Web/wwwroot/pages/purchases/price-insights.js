@@ -1,4 +1,4 @@
-import { api as sharedApi } from '../core/services.js';
+import { api as sharedApi } from '../../core/services.js';
 // Lightweight product/savings enhancer. It deliberately augments the existing purchases workspace
 // instead of owning navigation or financial state. All data is fetched from the canonical backend APIs;
 // unconfirmed OCR/import drafts are already excluded there from product price observations.

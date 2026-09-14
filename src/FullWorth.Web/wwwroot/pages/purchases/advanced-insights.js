@@ -1,4 +1,4 @@
-import { api as sharedApi } from '../core/services.js';
+import { api as sharedApi } from '../../core/services.js';
 // Advanced confirmed-purchase insights. This augments the existing analytics grid and never owns
 // navigation or financial state. All calculations live in the backend so mobile/desktop show the same data.
 

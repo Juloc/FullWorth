@@ -116,7 +116,7 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task The_wealth_screen_names_which_figure_a_missing_rate_made_incomplete()
     {
-        var networth = await GetAsync("/features/networth.js");
+        var networth = await GetAsync("/pages/networth/page.js");
 
         Assert.Contains("function fxIncompleteText(overview)", networth);
         Assert.Contains("overview[key]?.missingCurrencies", networth);

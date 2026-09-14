@@ -148,3 +148,118 @@
 .history-years-card{padding:18px;margin-bottom:14px;overflow:auto}.history-years-card h2{margin:0 0 12px;font-size:1rem}
 .history-years{width:100%;border-collapse:collapse;font-size:.76rem}.history-years th,.history-years td{padding:9px 10px;border-bottom:1px solid var(--border,#e3e5e8);text-align:right;white-space:nowrap}.history-years th:first-child,.history-years td:first-child{text-align:left}.history-years th{color:var(--muted,#6d737c);font-weight:700}
 .history-delta{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}.history-delta span{font-size:.68rem}.history-delta .positive{color:var(--positive,#13834b)}.history-delta .negative{color:var(--negative,#b52e36)}
+
+/* Aus styles/features/compensation-benchmarks.css. */
+/* Marktvergleich (salary benchmarks) inside the Gehaltsgespräch tab.
+   Every figure of the dataset is an estimate, so the "Schätzwert" marker is part of the layout, not an
+   afterthought: it sits in the heading, on the result and above the numbers. Tokens only. */
+
+.bench-card{margin-top:14px}
+.bench-result{display:grid;gap:14px;margin-top:14px}
+.bench-detail{display:grid;gap:12px}
+.bench-filters{margin-top:16px}
+.bench-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.bench-actions .btn{min-height:44px}
+
+.bench-disclaimer{margin:6px 0 0;color:var(--muted);font-size:.74rem;line-height:1.45}
+.bench-badges{display:flex;flex-wrap:wrap;gap:6px}
+.bench-badge{display:inline-block;padding:3px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:.66rem;font-weight:700;white-space:nowrap}
+.bench-badge-estimate{background:var(--warning-soft);color:var(--warning)}
+
+.bench-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bench-metrics .metric{min-height:88px}
+.bench-metrics small{display:block;margin-top:5px;color:var(--muted);font-size:.68rem;line-height:1.3}
+.bench-metric-median strong{letter-spacing:-.02em}
+
+.bench-compare{display:grid;gap:6px;padding:12px 14px;border-radius:var(--radius-input);background:var(--surface-2)}
+.bench-compare-row{display:flex;justify-content:space-between;gap:16px;font-size:.8rem}
+.bench-compare-row span{color:var(--muted)}
+.bench-compare-row strong{font-variant-numeric:tabular-nums}
+
+.bench-explain{margin:0;color:var(--muted);font-size:.74rem;line-height:1.5}
+.bench-notes h3,.bench-details h3{margin:12px 0 6px;font-size:.8rem}
+.bench-notes ul,.bench-notes-list{margin:0;padding-left:18px;color:var(--muted);font-size:.74rem;line-height:1.55}
+.bench-sources{margin:0;color:var(--muted);font-size:.72rem;line-height:1.45}
+.bench-source-links{margin:0;padding-left:18px;font-size:.72rem;line-height:1.6;color:var(--muted)}
+
+.bench-details summary{cursor:pointer;font-size:.78rem;font-weight:700;color:var(--muted);min-height:44px;display:flex;align-items:center}
+.bench-years{width:100%;border-collapse:collapse;font-size:.74rem}
+.bench-years th,.bench-years td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.bench-years th:first-child,.bench-years td:first-child,.bench-years th:last-child,.bench-years td:last-child{text-align:left}
+.bench-years th{color:var(--muted);font-weight:700}
+/* The table is the only wide element here; it scrolls inside the card instead of widening the page. */
+.bench-details{overflow-x:auto}
+
+@media(max-width:980px){.bench-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.bench-metrics{grid-template-columns:1fr}.bench-actions .btn{flex:1 1 auto}}
+/* Phone: the source links are the only remaining tap targets, so give them a full 44 px row. */
+@media(max-width:767px){
+  .bench-source-links{padding-left:0;list-style:none}
+  .bench-source-links a{display:inline-flex;align-items:center;min-height:44px}
+}
+
+/* The verification note is a caveat, not help text: it gets the same warning accent as the
+   "Schätzwert" badge so it does not read as ordinary small print. */
+.bench-verification>p{border-left:2px solid var(--warning);padding-left:10px}
+
+/* Aus styles/features/compensation-extended.css. */
+.extended-intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,260px) auto;gap:14px;align-items:end}.extended-intro h2,.extended-intro p{margin:0}.extended-intro p,.extended-note{color:var(--muted,#6d737c);font-size:.82rem;line-height:1.5}.extended-intro label{display:grid;gap:6px;font-size:.75rem;color:var(--muted,#6d737c)}
+.optimizer-section{margin-top:20px}.optimizer-section>h2{margin:0 0 10px;font-size:1rem}.optimizer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.optimizer-card{position:relative;padding:17px}.optimizer-card.best{outline:2px solid var(--accent,#4a75ff);outline-offset:-2px}.optimizer-card h3{margin:0 0 6px}.optimizer-card p{min-height:44px;margin:0;color:var(--muted,#6d737c);font-size:.79rem;line-height:1.45}.optimizer-value{margin-top:18px;font-size:1.6rem;font-weight:800;letter-spacing:-.03em}.optimizer-card>small{color:var(--muted,#6d737c)}.optimizer-details{display:grid;gap:6px;margin:14px 0;font-size:.78rem}.optimizer-details span{display:flex;justify-content:space-between;gap:10px}.optimizer-badge{display:inline-block;margin-bottom:10px;padding:4px 7px;border-radius:999px;background:var(--accent-soft,#edf5ff);font-size:.68rem;font-weight:700}
+.payslip-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:16px;align-items:start}.payslip-stack{display:grid;gap:14px}.upload-row{display:flex;gap:9px;align-items:center;margin:16px 0 9px}.upload-row input{flex:1}.payslip-fields{margin-bottom:16px}.payslip-list{display:grid;gap:8px;margin-top:14px}.payslip-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border,#e3e5e8)}.payslip-row:last-child{border-bottom:0}.payslip-row>div{display:grid;gap:3px}.payslip-row>div:last-child{display:flex;align-items:center;gap:8px;text-align:right}.payslip-row small{color:var(--muted,#6d737c)}.payslip-row button{width:30px;height:30px;padding:0}.delta-list{display:grid;gap:8px;margin-top:12px}.delta-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:4px}
+@media(max-width:980px){.optimizer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payslip-layout{grid-template-columns:1fr}.extended-intro{grid-template-columns:1fr 1fr}.extended-intro>div{grid-column:1/-1}}
+@media(max-width:640px){.optimizer-grid,.extended-intro{grid-template-columns:1fr}.extended-intro>div{grid-column:auto}.upload-row{align-items:stretch;flex-direction:column}.delta-head{align-items:flex-start;flex-direction:column}}
+.payslip-batch{margin-top:12px}
+.payslip-batch .panel-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.payslip-batch-list{display:grid;gap:8px;margin-top:12px}
+.payslip-batch-row{display:grid;grid-template-columns:minmax(120px,1.4fr) repeat(4,minmax(80px,1fr)) auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--border,#e3e5e8);border-radius:12px}
+.payslip-batch-row label{display:grid;gap:3px;font-size:.68rem;color:var(--muted,#6d737c)}
+.payslip-batch-row input{width:100%}
+.payslip-batch-row .pb-file{display:grid;gap:2px;overflow:hidden}
+.payslip-batch-row .pb-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:.78rem}
+.payslip-batch-row .pb-file small{color:var(--muted,#6d737c)}
+.payslip-batch-row button{height:34px}
+.payslip-batch-row.saved{opacity:.6;border-color:var(--positive,#13834b)}
+.payslip-batch-row.error{grid-template-columns:1fr auto;color:var(--negative,#b52e36);align-items:center}
+.payslip-batch-row.error .pb-msg{font-size:.76rem}
+@media(max-width:980px){.payslip-batch-row{grid-template-columns:1fr 1fr 1fr;gap:8px}.payslip-batch-row .pb-file{grid-column:1/-1}.payslip-batch-row button{grid-column:1/-1}}
+@media(max-width:560px){.payslip-batch-row{grid-template-columns:1fr}.payslip-batch-row label{min-width:0}.payslip-batch-row button{width:100%}}
+@media(max-width:560px){.payslip-batch-row.error{grid-template-columns:1fr}}
+
+/* Aus styles/features/compensation-other-income.css. */
+/* Sonstige regelmäßige Einkünfte (Gehalt page, own tab).
+   Same record-row look as .benefit-row / .oneoff-row in compensation.css — tokens only, no own button
+   styling: the rows use the shared .btn roles. */
+
+.income-intro{margin-bottom:14px}
+.income-separate{margin:14px 0 0;padding:11px 13px;border-radius:var(--radius-input);background:var(--surface-2);color:var(--muted);font-size:.78rem;line-height:1.45}
+.income-separate strong{color:var(--text)}
+.income-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
+.income-summary .metric{min-height:86px}
+.income-summary small{display:block;margin-top:5px;color:var(--muted);font-size:.7rem;line-height:1.3}
+
+.income-list{display:grid;gap:10px;margin-top:16px}
+.income-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line);border-radius:13px}
+.income-row>label{display:grid;gap:5px;font-size:.72rem;color:var(--muted)}
+.income-row input{width:100%;box-sizing:border-box}
+/* A row that was added but not saved yet, and a record whose von/bis window does not contain today. */
+.income-draft{border-style:dashed}
+.income-inactive{background:var(--surface-2)}
+/* The per-record "counts toward the personally available income" flag: always visible, always editable. */
+/* Selector must outrank `.income-row>label` above (that one would make the flag a grid and push the
+   checkbox onto its own line). */
+.income-row>label.income-counts{grid-column:1/-1;display:flex;align-items:center;gap:var(--s2);min-height:44px;color:var(--text);font-size:.8rem}
+.income-counts input[type=checkbox]{width:20px;height:20px;flex:0 0 auto}
+.income-row-actions{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.income-row-actions .btn{min-width:44px;min-height:44px}
+.income-annual{margin-right:auto;font-size:.74rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.income-empty{padding:26px;text-align:center;color:var(--muted);font-size:.82rem}
+
+@media(max-width:980px){
+  .income-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .income-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .income-summary{grid-template-columns:1fr}
+  .income-row{grid-template-columns:1fr}
+  .income-row-actions .btn{flex:1 1 auto}
+}

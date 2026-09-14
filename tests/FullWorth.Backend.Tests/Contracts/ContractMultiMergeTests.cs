@@ -207,7 +207,7 @@ public sealed class ContractMultiMergeTests
     public void ContractsMergeCss_IsAFeatureStylesheetWithoutHardcodedColours()
     {
         var css = File.ReadAllText(Path.Combine(
-            Root(), "src", "FullWorth.Web", "wwwroot", "styles", "features", "contracts-merge.css"));
+            Root(), "src", "FullWorth.Web", "wwwroot", "pages", "contracts", "page.css"));
 
         Assert.Contains(".contracts-selection", css);
         Assert.Contains(".contract-merge-survivor", css);
@@ -218,7 +218,7 @@ public sealed class ContractMultiMergeTests
         // Jetzt steht es wie alle anderen als blockierender <link> im Dokument.
         var html = File.ReadAllText(Path.Combine(
             Root(), "src", "FullWorth.Web", "wwwroot", "index.html"));
-        Assert.Contains("/styles/features/contracts-merge.css", html);
+        Assert.Contains("/pages/contracts/page.css", html);
     }
 
     private static HttpRequestMessage Request(HttpMethod method, string path, Guid userId, object? body = null)

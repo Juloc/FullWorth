@@ -1,4 +1,4 @@
-import { emptyRow } from '../components/empty.js';
+import { emptyRow } from '../../components/empty.js';
 const COPY = {
   de: {
     overview: 'Übersicht', property: 'Immobilie', financing: 'Finanzierung', history: 'Historie',

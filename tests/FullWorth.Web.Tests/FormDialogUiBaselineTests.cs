@@ -142,7 +142,7 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     {
         var js = await GetAsync("/components/form-dialog.js");
         var css = await GetAsync("/dialogs.css");
-        var wealth = await GetAsync("/features/networth.js");
+        var wealth = await GetAsync("/pages/networth/page.js");
 
         Assert.Contains("setFormError", js);
         Assert.Contains("banner.textContent = message || fallbackError", js);
@@ -161,9 +161,9 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public async Task The_asset_editor_is_built_from_a_field_spec()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
 
-        Assert.Contains("import { openFormDialog, FieldKind } from '../components/form-dialog.js'", js);
+        Assert.Contains("import { openFormDialog, FieldKind } from '../../components/form-dialog.js'", js);
         Assert.Contains("openFormDialog({", js);
         // Growth and notes are secondary; the as-of date and the net-worth switch are not.
         Assert.Contains("label: ctx.get('networth.growth'), step: '0.01', advanced: true", js);
@@ -198,9 +198,9 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     [Fact]
     public async Task The_loan_editor_keeps_every_required_field_out_of_the_disclosure()
     {
-        var js = await GetAsync("/features/loans.js");
+        var js = await GetAsync("/pages/networth/loans.js");
 
-        Assert.Contains("import { openFormDialog, FieldKind } from '../components/form-dialog.js'", js);
+        Assert.Contains("import { openFormDialog, FieldKind } from '../../components/form-dialog.js'", js);
         // Only the three optional fields moved.
         Assert.Contains("label: ctx.get('loans.fees'), min: 0, advanced: true", js);
         Assert.Contains("label: ctx.get('contracts.account'), advanced: true", js);
@@ -298,8 +298,8 @@ public sealed class FormDialogUiBaselineTests : IClassFixture<FullWorthWebFactor
     /// All four editors of step 2 are converted, and none of them hides a field the server requires.
     /// </summary>
     [Theory]
-    [InlineData("/features/networth.js")]
-    [InlineData("/features/loans.js")]
+    [InlineData("/pages/networth/page.js")]
+    [InlineData("/pages/networth/loans.js")]
     [InlineData("/pages/rules/page.js")]
     [InlineData("/pages/contracts/page.js")]
     public async Task Every_converted_editor_keeps_its_required_fields_visible(string path)

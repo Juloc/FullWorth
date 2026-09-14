@@ -8,11 +8,11 @@ import { renderTransactions, bindTransactions } from './pages/transactions/page.
 import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
 import { renderRules, bindRules, newRule } from './pages/rules/page.js';
 import { renderContracts, bindContracts, newContract } from './pages/contracts/page.js';
-import { renderNetWorth, bindNetWorth, newAsset } from './features/networth.js';
+import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
 import { renderNotifications } from './pages/notifications/page.js';
-import { renderLoans, bindLoans } from './features/loans.js';
+import { renderLoans, bindLoans } from './pages/networth/loans.js';
 import { renderAnalytics, bindAnalytics } from './pages/analytics/page.js';
-import { renderPurchases, bindPurchases } from './features/purchases.js';
+import { renderPurchases, bindPurchases } from './pages/purchases/page.js';
 import { renderTax, bindTax } from './pages/tax/page.js';
 import { renderPension, bindPension } from './pages/pension/page.js';
 import { renderMerchants, bindMerchants, newMerchant } from './pages/merchants/page.js';

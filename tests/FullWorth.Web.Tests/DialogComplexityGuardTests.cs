@@ -51,7 +51,7 @@ public sealed class DialogComplexityGuardTests
     private static readonly Dictionary<string, int> KnownRawColours = new()
     {
         ["app.css"] = 1,
-        ["styles/features/purchase-articles-workspace.css"] = 1,
+        ["pages/purchases/page.css"] = 1,
         ["auth/auth.css"] = 5,
         ["passkeys/passkeys.css"] = 4
     };

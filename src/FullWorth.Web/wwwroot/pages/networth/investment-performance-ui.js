@@ -1,11 +1,11 @@
-import { money, percent, setMoneyLocale } from '../components/money.js';
-import { onPrivacyChange } from '../components/privacy.js';
-import { bindChartScrubber } from '../components/chart-scrubber.js';
-import { api as sharedApi, jsonBody } from '../core/services.js';
-import { createDialog } from '../components/dialog.js';
-import { showToast } from '../components/toast.js';
-import { confirmMessage } from '../components/confirm.js';
-import { ButtonRole, buttonClass } from '../components/buttons.js';
+import { money, percent, setMoneyLocale } from '../../components/money.js';
+import { onPrivacyChange } from '../../components/privacy.js';
+import { bindChartScrubber } from '../../components/chart-scrubber.js';
+import { api as sharedApi, jsonBody } from '../../core/services.js';
+import { createDialog } from '../../components/dialog.js';
+import { showToast } from '../../components/toast.js';
+import { confirmMessage } from '../../components/confirm.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];

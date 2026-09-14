@@ -1,11 +1,11 @@
-import '../components/accessibility-release.js';
-import { refreshSpecializedAssets } from './wealth-specialized-assets.js';
-import { refreshExtraSpecializedAssets } from './wealth-specialized-assets-extra.js';
-import { refreshInvestmentConsolidation } from './wealth-investment-consolidation.js';
-import './wealth-portability.js';
-import { openRealEstateDetail as openCoreRealEstateDetail } from './wealth-real-estate-core.js';
-import { attachRealEstateOperations } from './wealth-real-estate-operations.js';
-import { attachRealEstateAdvanced } from './wealth-real-estate-advanced.js';
+import '../../components/accessibility-release.js';
+import { refreshSpecializedAssets } from './specialized-assets.js';
+import { refreshExtraSpecializedAssets } from './specialized-assets-extra.js';
+import { refreshInvestmentConsolidation } from './investment-consolidation.js';
+import '../../features/wealth-portability.js';
+import { openRealEstateDetail as openCoreRealEstateDetail } from './real-estate-core.js';
+import { attachRealEstateOperations } from './real-estate-operations.js';
+import { attachRealEstateAdvanced } from './real-estate-advanced.js';
 
 export async function refreshWealthExtensions() {
   await Promise.all([

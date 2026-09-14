@@ -4,7 +4,7 @@
 // (GET /api/loans/{id}/amortization). When the loan cannot be projected reliably the drawer says so
 // instead of a misleading number. Loans render as a panel inside the net-worth screen.
 
-import { openFormDialog, FieldKind } from '../components/form-dialog.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 
 let ctx = null;
 const FREQ = ['monthly', 'quarterly', 'yearly', 'weekly'];

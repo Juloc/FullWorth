@@ -1,7 +1,7 @@
-import { api as sharedApi, apiClient, jsonBody } from '../core/services.js';
-import { createDialog } from '../components/dialog.js';
-import { confirmMessage } from '../components/confirm.js';
-// Advanced purchases/articles UI. It is loaded as a side effect by purchases-gpt-normal.js so the
+import { api as sharedApi, apiClient, jsonBody } from '../../core/services.js';
+import { createDialog } from '../../components/dialog.js';
+import { confirmMessage } from '../../components/confirm.js';
+// Advanced purchases/articles UI. It is loaded as a side effect by gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
 // Receipts remains the default, while Articles, Products and Analytics use the new API families.
 

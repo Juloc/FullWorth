@@ -2,13 +2,13 @@ import {
   mountExportAndWarrantyActions,
   mountPurchaseAdvancedActions,
   mountProductAdvancedActions
-} from './purchase-articles-advanced-actions.js';
-import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';
-import { mountReceiptSourceReview } from './purchase-receipt-source-review.js';
-import { api as sharedApi, apiClient } from '../core/services.js';
-import { createDialog } from '../components/dialog.js';
-import { confirmMessage } from '../components/confirm.js';
-import { openPurchaseWorkspace, openProduct } from './purchase-articles-workspace.js';
+} from './articles-advanced-actions.js';
+import { mountPurchaseDiscountActions } from './discount-actions.js';
+import { mountReceiptSourceReview } from './receipt-source-review.js';
+import { api as sharedApi, apiClient } from '../../core/services.js';
+import { createDialog } from '../../components/dialog.js';
+import { confirmMessage } from '../../components/confirm.js';
+import { openPurchaseWorkspace, openProduct } from './articles-workspace.js';
 
 // Adapter between the existing purchase workspace and the secondary advanced-actions module. It avoids
 // coupling the large renderer to these workflows: IDs are captured from the existing list interactions

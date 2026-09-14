@@ -75,7 +75,7 @@ public sealed class AccessibilityGuardTests
     public void ChartModulesProvideTextAlternative()
     {
         // Every SVG chart must carry role="img" + an aria-label (§25: chart meaning not by color alone).
-        foreach (var module in new[] { "pages/analytics/page.js", "features/networth.js", "features/loans.js", "pages/contracts/page.js" })
+        foreach (var module in new[] { "pages/analytics/page.js", "pages/networth/page.js", "pages/networth/loans.js", "pages/contracts/page.js" })
         {
             var js = Www(module.Split('/'));
             Assert.Contains("role=\"img\"", js);

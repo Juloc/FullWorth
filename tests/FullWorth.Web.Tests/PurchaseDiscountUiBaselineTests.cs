@@ -12,9 +12,9 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     [Fact]
     public void Advanced_installer_mounts_canonical_discount_editor()
     {
-        var js = Read("features", "purchase-articles-advanced.js");
+        var js = Read("pages", "purchases", "articles-advanced.js");
 
-        Assert.Contains("import { mountPurchaseDiscountActions } from './purchase-discount-actions.js';", js);
+        Assert.Contains("import { mountPurchaseDiscountActions } from './discount-actions.js';", js);
         Assert.Contains("await mountPurchaseDiscountActions", js);
         Assert.Contains("writable", js);
         Assert.Contains("refresh", js);
@@ -23,7 +23,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     [Fact]
     public void Discount_editor_uses_discount_rows_instead_of_summary_mutations()
     {
-        var js = Read("features", "purchase-discount-actions.js");
+        var js = Read("pages", "purchases", "discount-actions.js");
 
         Assert.Contains("api/purchases/${purchase.id}/discounts", js);
         Assert.Contains("method: row ? 'PATCH' : 'POST'", js);
@@ -35,7 +35,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     [Fact]
     public void Discount_editor_preserves_basket_and_item_assignment()
     {
-        var js = Read("features", "purchase-discount-actions.js");
+        var js = Read("pages", "purchases", "discount-actions.js");
 
         Assert.Contains("purchaseItemId", js);
         Assert.Contains("Warenkorb / gesamter Kauf", js);
@@ -48,7 +48,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     [Fact]
     public void Discount_editor_exposes_source_and_confidence_without_treating_them_as_user_truth()
     {
-        var js = Read("features", "purchase-discount-actions.js");
+        var js = Read("pages", "purchases", "discount-actions.js");
 
         Assert.Contains("row.confidence", js);
         Assert.Contains("sourceLabel(row.source)", js);
@@ -62,7 +62,7 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
         var sw = Read("sw.js");
 
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("/features/purchase-discount-actions.js", sw);
+        Assert.Contains("/pages/purchases/discount-actions.js", sw);
         Assert.DoesNotContain("/api/purchases", sw);
     }
 

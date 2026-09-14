@@ -9,7 +9,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthScreenUsesUnifiedBackendTotalsAndHistory()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         Assert.Contains("api/wealth/overview", js);
         Assert.Contains("api/wealth/history", js);
         Assert.DoesNotContain("api/analytics/dashboard", js);
@@ -26,7 +26,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthTrendSupportsTenYearsMaxAndCustomDateRange()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         Assert.Contains("{ m: 120", js);
         Assert.Contains("{ m: 0", js);
         Assert.Contains("data-range-from", js);
@@ -39,7 +39,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthTrendShowsImportedBookingCoverageWithoutTreatingItAsNetWorth()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         var css = await GetAsync("/app.css");
         Assert.Contains("api/wealth/booking-activity", js);
         Assert.Contains("bookingActivityMarkup", js);
@@ -54,7 +54,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     public async Task ImportedDataCompletenessWarningsReachWealthAnalyticsAndDashboard()
     {
         var helper = await GetAsync("/features/data-completeness.js");
-        var wealth = await GetAsync("/features/networth.js");
+        var wealth = await GetAsync("/pages/networth/page.js");
         var analytics = await GetAsync("/pages/analytics/page.js");
         var dashboard = await GetAsync("/app/dashboard.js");
         var css = await GetAsync("/app.css");
@@ -77,7 +77,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AssetWizardUsesCanonicalTaxonomyAndValuationHistory()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         foreach (var kind in new[] { "real_estate", "vehicle", "precious_metal", "collectible", "receivable", "business_interest", "insurance_pension", "other" })
             Assert.Contains($"'{kind}'", js);
         Assert.Contains("wealth-type-grid", js);
@@ -90,13 +90,13 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task RealEstateDetailsUseCoreOperationsAndAdvancedModules()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
-        var core = await GetAsync("/features/wealth-real-estate-core.js");
-        var operations = await GetAsync("/features/wealth-real-estate-operations.js");
-        var advanced = await GetAsync("/features/wealth-real-estate-advanced.js");
-        Assert.Contains("wealth-real-estate-core.js", wrapper);
-        Assert.Contains("wealth-real-estate-operations.js", wrapper);
-        Assert.Contains("wealth-real-estate-advanced.js", wrapper);
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
+        var core = await GetAsync("/pages/networth/real-estate-core.js");
+        var operations = await GetAsync("/pages/networth/real-estate-operations.js");
+        var advanced = await GetAsync("/pages/networth/real-estate-advanced.js");
+        Assert.Contains("real-estate-core.js", wrapper);
+        Assert.Contains("real-estate-operations.js", wrapper);
+        Assert.Contains("real-estate-advanced.js", wrapper);
         Assert.Contains("attachRealEstateOperations", wrapper);
         Assert.Contains("attachRealEstateAdvanced", wrapper);
         Assert.Contains("api/assets/${id}/real-estate", core);
@@ -118,11 +118,11 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task VehicleAndPreciousMetalDetailsUseCanonicalValuationAndDebtApis()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
-        var js = await GetAsync("/features/wealth-specialized-assets.js");
-        var css = await GetAsync("/styles/features/wealth-specialized-assets.css");
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
+        var js = await GetAsync("/pages/networth/specialized-assets.js");
+        var css = await GetAsync("/pages/networth/page.css");
 
-        Assert.Contains("wealth-specialized-assets.js", wrapper);
+        Assert.Contains("specialized-assets.js", wrapper);
         Assert.Contains("api/assets/${asset.id}/vehicle", js);
         Assert.Contains("api/assets/${asset.id}/precious-metal", js);
         Assert.Contains("api/assets/${asset.id}/valuations", js);
@@ -140,10 +140,10 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task RemainingSpecializedAssetsHaveFunctionalDetailAndActivityFlows()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
-        var js = await GetAsync("/features/wealth-specialized-assets-extra.js");
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
+        var js = await GetAsync("/pages/networth/specialized-assets-extra.js");
 
-        Assert.Contains("wealth-specialized-assets-extra.js", wrapper);
+        Assert.Contains("specialized-assets-extra.js", wrapper);
         foreach (var kind in new[] { "'collectible'", "'receivable'", "'business_interest'", "'insurance_pension'" })
             Assert.Contains(kind, js);
         Assert.Contains("business-interest", js);
@@ -161,12 +161,12 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task InvestmentWealthDrilldownReusesCanonicalPortfolioSecurityAndMarketDataApis()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
-        var adapter = await GetAsync("/features/wealth-investment-consolidation.js");
-        var portfolioUi = await GetAsync("/features/investment-performance-ui.js");
-        var css = await GetAsync("/styles/features/wealth-investment-consolidation.css");
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
+        var adapter = await GetAsync("/pages/networth/investment-consolidation.js");
+        var portfolioUi = await GetAsync("/pages/networth/investment-performance-ui.js");
+        var css = await GetAsync("/pages/networth/page.css");
 
-        Assert.Contains("wealth-investment-consolidation.js", wrapper);
+        Assert.Contains("investment-consolidation.js", wrapper);
         Assert.Contains("investment-performance-ui.js", adapter);
         // Der Dialog trägt seine Depotkennung selbst. Vorher merkte sie sich dieses Modul in einem
         // Klick-Lauscher, der vor dem der Depot-Oberfläche registriert sein musste - die ruft
@@ -193,11 +193,11 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task PortabilityUsesCompleteZipBackupWithoutCachingFinancialData()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
         var portability = await GetAsync("/features/wealth-portability.js");
         var sw = await GetAsync("/sw.js");
 
-        Assert.Contains("wealth-portability.js", wrapper);
+        Assert.Contains("portability.js", wrapper);
         Assert.Contains("api/export/wealth-backup", portability);
         Assert.Contains("Accept: 'application/zip'", portability);
         Assert.Contains("cache: 'no-store'", portability);
@@ -215,7 +215,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AccessibilityReleaseFixesAreLoadedLocalizedAndCached()
     {
-        var wrapper = await GetAsync("/features/wealth-real-estate.js");
+        var wrapper = await GetAsync("/pages/networth/real-estate.js");
         var accessibility = await GetAsync("/components/accessibility-release.js");
         var sw = await GetAsync("/sw.js");
 
@@ -233,12 +233,12 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     {
         foreach (var path in new[]
                  {
-                     "/styles/features/wealth-assets.css",
-                     "/styles/features/wealth-real-estate.css",
-                     "/styles/features/wealth-real-estate-operations.css",
-                     "/styles/features/wealth-real-estate-advanced.css",
-                     "/styles/features/wealth-specialized-assets.css",
-                     "/styles/features/wealth-investment-consolidation.css"
+                     "/pages/networth/page.css",
+                     "/pages/networth/page.css",
+                     "/pages/networth/page.css",
+                     "/pages/networth/page.css",
+                     "/pages/networth/page.css",
+                     "/pages/networth/page.css"
                  })
         {
             var css = await GetAsync(path);
@@ -250,18 +250,18 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
         foreach (var path in new[]
                  {
-                     "'/features/networth.js'", "'/styles/features/wealth-assets.css'",
-                     "'/features/wealth-real-estate.js'", "'/features/wealth-real-estate-core.js'",
-                     "'/features/wealth-real-estate-operations.js'", "'/features/wealth-real-estate-advanced.js'",
-                     "'/styles/features/wealth-real-estate.css'", "'/styles/features/wealth-real-estate-operations.css'",
-                     "'/features/wealth-specialized-assets.js'", "'/features/wealth-specialized-assets-extra.js'",
-                     "'/styles/features/wealth-specialized-assets.css'",
-                     "'/features/wealth-investment-consolidation.js'",
-                     "'/styles/features/wealth-investment-consolidation.css'",
+                     "'/pages/networth/page.js'", "'/pages/networth/page.css'",
+                     "'/pages/networth/real-estate.js'", "'/pages/networth/real-estate-core.js'",
+                     "'/pages/networth/real-estate-operations.js'", "'/pages/networth/real-estate-advanced.js'",
+                     "'/pages/networth/page.css'", "'/pages/networth/page.css'",
+                     "'/pages/networth/specialized-assets.js'", "'/pages/networth/specialized-assets-extra.js'",
+                     "'/pages/networth/page.css'",
+                     "'/pages/networth/investment-consolidation.js'",
+                     "'/pages/networth/page.css'",
                      "'/features/wealth-portability.js'",
-                     "'/features/investment-performance-ui.js'",
-                     "'/styles/features/investment-performance.css'",
-                     "'/features/receipt-imports.js'",
+                     "'/pages/networth/investment-performance-ui.js'",
+                     "'/pages/networth/page.css'",
+                     "'/pages/purchases/receipt-imports.js'",
                      "'/components/accessibility-release.js'"
                  })
             Assert.Contains(path, sw);
@@ -270,8 +270,8 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthProjectionIsACalculationNotAForecastAndIsTranslatedBothWays()
     {
-        var js = await GetAsync("/features/networth.js");
-        var preview = await GetAsync("/features/wealth-preview.js");
+        var js = await GetAsync("/pages/networth/page.js");
+        var preview = await GetAsync("/pages/networth/preview.js");
         var css = await GetAsync("/app.css");
 
         // Monthly compounding, because the money arrives monthly — but from the ANNUAL rate it is the
@@ -316,7 +316,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthProjectionIsDrawnIntoTheTrendChartAndNotAsASecondRepresentation()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         var css = await GetAsync("/app.css");
 
         // The preview is the trend curve continued past today: ONE chart, one value scale, a dashed
@@ -349,7 +349,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task WealthProjectionNeverReadsAsAMeasuredValue()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         var css = await GetAsync("/app.css");
 
         // Scrubbing a projected point must leave the headline net worth alone: it reads out in the
@@ -373,7 +373,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task AllocationDonutNeverClaimsTheHeroAssetsWording()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         var css = await GetAsync("/app.css");
 
         // A donut cannot draw a negative slice, so its own total only ever covers the categories it can
@@ -402,7 +402,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task ConvertedSumsNameTheRateAndItsFixingDate()
     {
-        var js = await GetAsync("/features/networth.js");
+        var js = await GetAsync("/pages/networth/page.js");
         var css = await GetAsync("/app.css");
 
         Assert.Contains("ratesUsed", js);

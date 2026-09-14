@@ -128,8 +128,8 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         Assert.DoesNotContain("/parity-completion.css", sw);
         Assert.Contains("'/app/appearance.js'", sw);
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("'/features/wealth-real-estate.js'", sw);
-        Assert.Contains("'/styles/features/wealth-real-estate.css'", sw);
+        Assert.Contains("'/pages/networth/real-estate.js'", sw);
+        Assert.Contains("'/pages/networth/page.css'", sw);
         Assert.False(sw.Contains("/mascots/", StringComparison.OrdinalIgnoreCase));
         Assert.False(sw.Contains("mascot-scenes", StringComparison.OrdinalIgnoreCase));
 

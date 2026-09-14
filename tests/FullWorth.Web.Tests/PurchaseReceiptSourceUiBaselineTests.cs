@@ -12,8 +12,8 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     [Fact]
     public void Purchase_dialog_mounts_multi_page_source_review()
     {
-        var installer = Read("features", "purchase-articles-advanced.js");
-        var review = Read("features", "purchase-receipt-source-review.js");
+        var installer = Read("pages", "purchases", "articles-advanced.js");
+        var review = Read("pages", "purchases", "receipt-source-review.js");
 
         Assert.Contains("mountReceiptSourceReview", installer);
         Assert.Contains("api/purchases/${purchase.id}/receipt-sources", review);
@@ -27,7 +27,7 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
     [Fact]
     public void Source_review_uses_authenticated_bff_for_document_content()
     {
-        var review = Read("features", "purchase-receipt-source-review.js");
+        var review = Read("pages", "purchases", "receipt-source-review.js");
 
         // Receipt documents must only ever be loaded through the authenticated BFF, never from an
         // absolute URL. The module no longer spells out "/bff/backend/" itself - it receives the
@@ -56,10 +56,10 @@ public sealed class PurchaseReceiptSourceUiBaselineTests : IClassFixture<FullWor
         var sw = Read("sw.js");
 
         Assert.Matches(@"const\s+VERSION\s*=\s*'v\d+'", sw);
-        Assert.Contains("/features/purchase-receipt-source-review.js", sw);
-        Assert.Contains("/features/receipt-imports.js", sw);
-        Assert.Contains("/features/receipt-import-batch-details.js", sw);
-        Assert.Contains("/styles/features/receipt-imports.css", sw);
+        Assert.Contains("/pages/purchases/receipt-source-review.js", sw);
+        Assert.Contains("/pages/purchases/receipt-imports.js", sw);
+        Assert.Contains("/pages/purchases/receipt-import-batch-details.js", sw);
+        Assert.Contains("/pages/purchases/page.css", sw);
         Assert.Contains("url.pathname.startsWith('/share')", sw);
         Assert.Contains("url.pathname.startsWith('/bff')", sw);
     }

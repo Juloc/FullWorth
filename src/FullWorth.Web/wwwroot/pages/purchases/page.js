@@ -1,6 +1,6 @@
-import { initializePurchaseEnhancements, tryGptReceiptScan } from './purchases-gpt-normal.js';
-import { identityIcon, ensureOfficialBrandCatalog } from './ux-kit.js';
-import { emptyRow } from '../components/empty.js';
+import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.js';
+import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { emptyRow } from '../../components/empty.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank

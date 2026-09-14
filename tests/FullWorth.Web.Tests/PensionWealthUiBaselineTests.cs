@@ -24,7 +24,7 @@ public sealed class PensionWealthUiBaselineTests : IClassFixture<FullWorthWebFac
     [Fact]
     public void WealthPageReadsThePensionComponentAndNamesTheTiedPart()
     {
-        var js = ReadAsset("features", "networth.js");
+        var js = ReadAsset("pages", "networth", "page.js");
 
         Assert.Contains("overview.pensionAssets?.amount", js);
         Assert.Contains("pensionAssets: 'Altersvorsorge'", js);

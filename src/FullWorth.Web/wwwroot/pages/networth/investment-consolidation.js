@@ -1,8 +1,8 @@
-import { money, setMoneyLocale } from '../components/money.js';
-import { isPrivate, onPrivacyChange } from '../components/privacy.js';
-import { api as sharedApi } from '../core/services.js';
-import { state } from '../core/state.js';
-import { createDialog } from '../components/dialog.js';
+import { money, setMoneyLocale } from '../../components/money.js';
+import { isPrivate, onPrivacyChange } from '../../components/privacy.js';
+import { api as sharedApi } from '../../core/services.js';
+import { state } from '../../core/state.js';
+import { createDialog } from '../../components/dialog.js';
 // Statisch: die Ladereihenfolge trägt nichts mehr, seit der Dialog seine Depotkennung selbst trägt.
 import './investment-performance-ui.js';
 

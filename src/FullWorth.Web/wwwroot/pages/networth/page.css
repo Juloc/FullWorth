@@ -1,0 +1,1152 @@
+/* Vermögen. Die sieben Stylesheets seiner Module standen als sieben eigene <link> im Dokument;
+   sie gehören zu dieser einen Seite und stehen jetzt hier. */
+/* Aus styles/features/wealth-assets.css. */
+.wealth-composition {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.wealth-composition-item {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.wealth-composition-item span,
+.wealth-composition-item strong {
+  display: block;
+}
+
+.wealth-composition-item span {
+  color: var(--muted);
+  font-size: .86rem;
+}
+
+.wealth-composition-item strong {
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wealth-chart svg {
+  width: 100%;
+  min-height: 180px;
+  max-height: 230px;
+  color: var(--text);
+}
+
+.wealth-group-title {
+  margin-top: 7px;
+}
+
+.wealth-group-title:first-child {
+  margin-top: 0;
+}
+
+.wealth-investment-total {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  border-radius: 10px;
+}
+
+.wealth-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.wealth-type {
+  min-height: 72px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.wealth-type:hover,
+.wealth-type:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--muted);
+  box-shadow: 0 5px 16px rgb(0 0 0 / 7%);
+}
+
+.wealth-type strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.wealth-investment-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  font-size: .9rem;
+}
+
+.wealth-valuations {
+  max-height: min(42dvh, 420px);
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.wealth-valuation.is-current {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.wealth-value-form {
+  margin-top: 14px;
+}
+
+.wealth-value-form h3 {
+  margin: 0 0 10px;
+}
+
+.fx-incomplete {
+  margin-top: 5px;
+  color: var(--warning, #f9891f);
+  font-size: .8rem;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .wealth-composition {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wealth-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wealth-type {
+    min-height: 58px;
+  }
+
+  .nw-item .row-side {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+/* Aus styles/features/wealth-investment-consolidation.css. */
+.wealth-portfolio-drilldown {
+  cursor: pointer;
+  transition: transform .12s ease,box-shadow .12s ease
+}
+
+.wealth-portfolio-drilldown:hover {
+  transform: translateY(-1px)
+}
+
+.wealth-portfolio-drilldown:focus-visible,
+.ip-security-row:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px
+}
+
+.wealth-investment-chevron {
+  margin-left: auto;
+  font-size: 1.25rem;
+  opacity: .58
+}
+
+.ip-security-row {
+  cursor: pointer;
+  border-radius: 8px
+}
+
+.ip-security-row:hover {
+  background: var(--surface-2,var(--surf2,#f7f7f7))
+}
+
+.wealth-investment-allocation {
+  display: grid;
+  gap: 10px
+}
+
+.wealth-investment-allocation-row {
+  display: grid;
+  grid-template-columns: minmax(120px,1fr) minmax(90px,2fr) auto;
+  gap: 12px;
+  align-items: center
+}
+
+.wealth-investment-allocation-row>div:first-child {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between
+}
+
+.wealth-investment-allocation-row>div:first-child span {
+  opacity: .7
+}
+
+.wealth-investment-allocation-track {
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb,currentColor 10%,transparent);
+  overflow: hidden
+}
+
+.wealth-investment-allocation-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor
+}
+
+.wealth-security-dialog .wealth-security-freshness {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border,var(--line,#e5e5e5));
+  border-radius: 12px
+}
+
+.wealth-security-dialog .wealth-security-freshness.is-warning {
+  border-color: var(--warning,#f9891f)
+}
+
+.wealth-security-dialog .wealth-security-freshness span {
+  opacity: .7
+}
+
+.privacy-on .wealth-investment-allocation-track {
+  visibility: hidden
+}
+
+.privacy-on .wealth-investment-allocation-row>div:first-child span {
+  font-size: 0
+}
+
+.privacy-on .wealth-investment-allocation-row>div:first-child span::after {
+  content: '••••';
+  font-size: .82rem;
+  letter-spacing: .1em
+}
+
+@media(max-width:720px) {
+  .wealth-investment-allocation-row {
+    grid-template-columns: 1fr auto
+  }
+  .wealth-investment-allocation-track {
+    grid-column: 1/-1;
+    grid-row: 2
+  }
+  .wealth-security-dialog .wealth-security-freshness {
+    align-items: flex-start;
+    flex-direction: column
+  }
+
+}
+
+/* Aus styles/features/wealth-real-estate.css. */
+.property-dialog {
+  width: min(960px, calc(100vw - 28px));
+  max-height: min(90dvh, 920px);
+  overflow: auto;
+}
+
+.property-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.property-tabs button {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 11px;
+}
+
+.property-tabs button[aria-selected="true"] {
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.property-pane[hidden] { display: none; }
+
+.property-pane {
+  padding-top: 14px;
+}
+
+.property-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-metric {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+}
+
+.property-metric span,
+.property-metric strong { display: block; }
+.property-metric span { color: var(--muted); font-size: .82rem; }
+.property-metric strong { margin-top: 4px; font-size: 1.08rem; }
+
+.property-address {
+  margin: 12px 0;
+  color: var(--muted);
+}
+
+.property-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.property-grid .wide { grid-column: 1 / -1; }
+
+.property-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.property-section h3 { margin: 0 0 10px; }
+
+.property-debt-card,
+.property-cost-row,
+.property-valuation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.property-debt-card:last-child,
+.property-cost-row:last-child,
+.property-valuation-row:last-child { border-bottom: 0; }
+
+.property-debt-main { min-width: 0; }
+.property-debt-main strong { display: block; }
+.property-debt-meta { color: var(--muted); font-size: .86rem; margin-top: 3px; }
+
+.property-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.property-amortization {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surf2, #f7f7f7));
+  color: var(--muted);
+  font-size: .88rem;
+}
+
+.property-fx-warning {
+  margin-top: 10px;
+  color: var(--warning, #f9891f);
+  font-size: .86rem;
+}
+
+@media (max-width: 760px) {
+  .property-dialog {
+    width: calc(100vw - 16px);
+    max-height: 94dvh;
+  }
+
+  .property-metrics,
+  .property-grid,
+  .property-grid.two {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .property-grid .mobile-wide { grid-column: 1 / -1; }
+
+  .property-debt-card,
+  .property-cost-row,
+  .property-valuation-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .property-metrics,
+  .property-grid,
+  .property-grid.two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Aus styles/features/wealth-real-estate-advanced.css. */
+.property-valuation-launch {
+  margin-left: auto;
+  margin-right: 8px
+}
+
+.property-valuation-methods {
+  display: grid;
+  gap: 14px
+}
+
+/* Two of the three valuation methods sit in a <details>, so it has to carry the same frame its
+   <section> sibling does - otherwise collapsing them reads as "these two are less real". */
+.property-valuation-methods>section,
+.property-valuation-method,
+.property-estimate-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2,#f7f7f7);
+  padding: 12px
+}
+
+.property-valuation-methods h3 {
+  margin: 0 0 8px
+}
+
+.property-estimate-card {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap
+}
+
+.property-estimate-card strong {
+  font-size: 1.2rem
+}
+
+.property-estimate-card button {
+  margin-left: auto
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface-1,#fff)
+}
+
+.button-link:hover {
+  background: var(--surface-2,#f7f7f7)
+}
+
+@media(max-width:760px) {
+  .property-valuation-launch {
+    margin-left: 0
+  }
+  .property-estimate-card {
+    align-items: flex-start;
+    flex-direction: column
+  }
+  .property-estimate-card button {
+    margin-left: 0;
+    width: 100%
+  }
+
+}
+
+.property-valuation-method>summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 15px;
+  list-style: none;
+}
+
+.property-valuation-method>summary::-webkit-details-marker {
+  display: none;
+}
+
+.property-valuation-method>summary::after {
+  content: '›';
+  float: right;
+  transition: transform .15s ease;
+}
+
+.property-valuation-method[open]>summary::after {
+  transform: rotate(90deg);
+}
+
+.property-valuation-method[open]>summary {
+  margin-bottom: 10px;
+}
+
+/* Aus styles/features/wealth-real-estate-operations.css. */
+.property-operation-metrics {
+  margin-bottom: 14px;
+}
+
+.property-operation-note {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, #f7f7f7);
+  color: var(--muted);
+  font-size: .92rem;
+  line-height: 1.35;
+  margin: 10px 0 14px;
+}
+
+.property-operation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-operation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.property-operation-row,
+.property-operation-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, #f7f7f7);
+}
+
+.property-operation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+}
+
+.property-operation-card {
+  padding: 12px;
+}
+
+.property-operation-card > .property-operation-row {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.property-operation-actions,
+.property-operation-inline,
+.property-operation-facts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.property-operation-actions {
+  justify-content: flex-end;
+}
+
+.property-operation-facts {
+  margin: 9px 0 6px;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.property-operation-facts strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.property-operation-inline {
+  margin-top: 10px;
+}
+
+.property-operation-inline select {
+  min-width: min(420px, 100%);
+  flex: 1 1 240px;
+}
+
+.property-operation-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.property-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.property-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.property-form-grid label {
+  min-width: 0;
+}
+
+.property-form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.property-form-grid textarea {
+  resize: vertical;
+}
+
+.property-operation-row button,
+.property-operation-card button {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .property-form-grid,
+  .property-form-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .property-form-grid .wide {
+    grid-column: auto;
+  }
+
+  .property-operation-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .property-operation-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .property-operation-inline {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Aus styles/features/wealth-specialized-assets.css. */
+.specialized-asset-dialog {
+  width: min(920px,calc(100vw - 24px));
+  overflow: auto
+}
+
+.specialized-asset-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 14px
+}
+
+.specialized-asset-tabs button[aria-selected="true"] {
+  background: var(--surface-2,#f7f7f7);
+  border-color: var(--text)
+}
+
+.specialized-asset-panel[hidden] {
+  display: none
+}
+
+.specialized-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px
+}
+
+.specialized-asset-grid .span-2 {
+  grid-column: 1/-1
+}
+
+.specialized-asset-grid label {
+  display: grid;
+  gap: 5px
+}
+
+.specialized-asset-section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2,#f7f7f7);
+  padding: 12px;
+  margin: 0 0 12px
+}
+
+.specialized-asset-section h3 {
+  margin: 0 0 10px
+}
+
+.specialized-estimate {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+  margin-top: 10px
+}
+
+.specialized-estimate>div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--surface-1,#fff)
+}
+
+.specialized-estimate span {
+  display: block;
+  color: var(--muted);
+  font-size: .86rem
+}
+
+.specialized-estimate strong {
+  display: block;
+  margin-top: 2px
+}
+
+.specialized-detail-button {
+  flex: 0 0 auto
+}
+
+.specialized-debt-row,
+.specialized-history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line)
+}
+
+.specialized-debt-row:last-child,
+.specialized-history-row:last-child {
+  border-bottom: 0
+}
+
+.specialized-debt-main,
+.specialized-history-main {
+  min-width: 0;
+  flex: 1
+}
+
+.specialized-debt-title,
+.specialized-history-title {
+  font-weight: 600
+}
+
+.specialized-debt-sub,
+.specialized-history-sub {
+  color: var(--muted);
+  font-size: .9rem
+}
+
+.specialized-empty {
+  color: var(--muted);
+  padding: 10px 0
+}
+
+.specialized-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px
+}
+
+.specialized-privacy-note {
+  color: var(--muted);
+  font-size: .85rem;
+  margin: 0 0 10px
+}
+
+@media(max-width:720px) {
+  .specialized-asset-grid,
+  .specialized-estimate {
+    grid-template-columns: 1fr
+  }
+  .specialized-asset-grid .span-2 {
+    grid-column: auto
+  }
+  .specialized-debt-row,
+  .specialized-history-row {
+    align-items: flex-start;
+    flex-wrap: wrap
+  }
+  .specialized-form-actions {
+    justify-content: stretch
+  }
+  .specialized-form-actions button {
+    flex: 1
+  }
+
+}
+
+/* Aus styles/features/investment-performance.css. */
+.ip-dialog {
+  width: min(1040px,calc(100vw - 32px));
+  max-width: none
+}
+
+.ip-card {
+  width: 100%;
+  overflow: auto
+}
+
+.ip-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--surface,Canvas);
+  padding-bottom: 12px
+}
+
+.ip-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  position: sticky;
+  top: 64px;
+  z-index: 3;
+  background: var(--surface,Canvas);
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border,#d8d8d8)
+}
+
+.ip-tabs button,
+.ip-periods button {
+  white-space: nowrap
+}
+
+.ip-tabs button.active,
+.ip-periods button.active {
+  font-weight: 700;
+  border-color: currentColor
+}
+
+.ip-content {
+  padding-top: 16px
+}
+
+.ip-loading,
+.ip-error,
+.ip-warning {
+  padding: 14px;
+  border-radius: 12px
+}
+
+.ip-warning {
+  border: 1px solid var(--warning-border);
+  background: var(--warning-soft)
+}
+
+.ip-error {
+  border: 1px solid var(--danger,#b42318)
+}
+
+.ip-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(150px,1fr));
+  gap: 10px
+}
+
+.ip-metric {
+  padding: 14px;
+  border: 1px solid var(--border,#d8d8d8);
+  border-radius: 14px;
+  background: var(--surface-2)
+}
+
+.ip-metric span {
+  display: block;
+  font-size: .84rem;
+  opacity: .72;
+  margin-bottom: 6px
+}
+
+.ip-metric strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem
+}
+
+.ip-section {
+  margin-top: 16px;
+  border: 1px solid var(--border,#d8d8d8);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface-2)
+}
+
+.ip-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px
+}
+
+.ip-section-head h3 {
+  margin: 0
+}
+
+.ip-list {
+  display: grid;
+  gap: 2px
+}
+
+.ip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 4px;
+  border-bottom: 1px solid color-mix(in srgb,currentColor 10%,transparent)
+}
+
+.ip-row:last-child {
+  border-bottom: 0
+}
+
+.ip-row-value {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-row-value span {
+  font-size: .82rem;
+  opacity: .72
+}
+
+.ip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px
+}
+
+.ip-icon {
+  min-width: 34px;
+  padding-inline: 8px
+}
+
+.ip-periods {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 12px
+}
+
+.ip-chart-wrap {
+  min-height: 230px
+}
+
+.ip-chart-readout {
+  margin: 0 0 8px;
+  font-size: .86rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-chart {
+  width: 100%;
+  height: auto;
+  display: block
+}
+
+.ip-line {
+  fill: none;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke
+}
+
+.ip-line-main {
+  stroke: var(--accent,#4f46e5)
+}
+
+.ip-line-benchmark {
+  stroke: var(--muted-fg,#777);
+  stroke-dasharray: 8 5
+}
+
+.ip-zero {
+  stroke: color-mix(in srgb,currentColor 24%,transparent);
+  stroke-width: 1
+}
+
+.ip-chart-legend {
+  display: flex;
+  gap: 18px;
+  font-size: .84rem;
+  margin-top: 8px
+}
+
+.ip-chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px
+}
+
+.ip-chart-legend i {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px
+}
+
+.ip-chart-legend i.main {
+  background: var(--accent,#4f46e5)
+}
+
+.ip-chart-legend i.benchmark {
+  background: var(--muted-fg,#777)
+}
+
+.ip-bars {
+  display: grid;
+  gap: 8px
+}
+
+.ip-bar-row {
+  display: grid;
+  grid-template-columns: 44px 1fr minmax(90px,auto);
+  align-items: center;
+  gap: 10px;
+  font-size: .84rem
+}
+
+.ip-bar-row>div {
+  height: 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb,currentColor 10%,transparent);
+  overflow: hidden
+}
+
+.ip-bar-row i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent,#4f46e5)
+}
+
+.ip-bar-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums
+}
+
+.ip-small-dialog {
+  width: min(720px,calc(100vw - 32px));
+  max-width: none
+}
+
+.ip-form {
+  display: grid;
+  gap: 14px
+}
+
+.ip-form label {
+  display: grid;
+  gap: 6px
+}
+
+.ip-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px
+}
+
+.ip-form input,
+.ip-form select,
+.ip-form textarea {
+  width: 100%
+}
+
+.ip-form textarea {
+  min-height: 80px;
+  resize: vertical
+}
+
+.privacy-on .ip-chart-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 230px
+}
+
+.privacy-on .ip-chart,
+.privacy-on .ip-chart-legend,
+.privacy-on .ip-chart-readout {
+  display: none
+}
+
+.privacy-on .ip-chart-wrap::after {
+  content: '••••';
+  font-variant-numeric: tabular-nums;
+  font-size: 1.35rem;
+  letter-spacing: .18em;
+  opacity: .72
+}
+
+.privacy-on .ip-row .fp-muted {
+  font-size: 0
+}
+
+.privacy-on .ip-row .fp-muted::after {
+  content: '••••';
+  font-size: .82rem;
+  letter-spacing: .12em
+}
+
+.privacy-on .ip-bar-row>div {
+  visibility: hidden
+}
+
+@media(max-width:720px) {
+  .ip-dialog,
+  .ip-small-dialog {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    max-height: none;
+    border: 0;
+    border-radius: 0
+  }
+  .ip-card,
+  .ip-form {
+    max-height: none;
+    height: 100%;
+    overflow: auto;
+    border-radius: 0
+  }
+  .ip-head {
+    top: 0
+  }
+  .ip-tabs {
+    top: 62px
+  }
+  .ip-form-grid {
+    grid-template-columns: 1fr
+  }
+  .ip-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface,Canvas);
+    padding: 10px 0
+  }
+  .ip-row {
+    align-items: flex-start
+  }
+  .ip-metrics {
+    grid-template-columns: repeat(2,minmax(0,1fr))
+  }
+
+}
