@@ -433,6 +433,10 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         createdAt = RawSql.Timestamp(reader, "CreatedAt"),
         completedAt = RawSql.NullableTimestamp(reader, "CompletedAt"),
         rolledBackAt = RawSql.NullableTimestamp(reader, "RolledBackAt"),
-        linkCount = RawSql.Int(reader, "LinkCount")
+        // Only offered when the job actually left a trace to undo - an import committed before
+        // provenance existed has no links, so the button would promise something it cannot do.
+        rollbackAvailable = RawSql.String(reader, "Status") == "completed"
+            && RawSql.NullableTimestamp(reader, "RolledBackAt") is null
+            && RawSql.Int(reader, "LinkCount") > 0
     };
 }

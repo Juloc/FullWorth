@@ -100,6 +100,46 @@ public sealed class ImportRollbackRegressionTests
         Assert.Equal(HttpStatusCode.BadRequest, rollback.Status);
     }
 
+    /// <summary>
+    /// Der Knopf zum Zuruecknehmen haengt an genau einem Feld der Liste. Es fehlte zwischen
+    /// 2026-09-15 (fe9331da) und heute: beim Herausloesen des Stores wurde daraus versehentlich ein
+    /// roher <c>linkCount</c>, und damit war der Knopf in der Oberflaeche verschwunden - das
+    /// Zuruecknehmen selbst funktionierte weiter, nur kam niemand mehr daran.
+    /// </summary>
+    [Fact]
+    public async Task TheHistorySaysWhenARollbackIsStillPossible()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await Seed(factory, owner, account);
+
+        var jobId = await UploadAndCommit(client, owner, account,
+            "Datum;Betrag;Empfänger\r\n29.08.2026;-12,34;REWE\r\n");
+
+        Assert.True(await RollbackAvailable(client, owner, jobId));
+
+        var rollback = await Rollback(client, owner, jobId);
+        Assert.Equal(HttpStatusCode.OK, rollback.Status);
+
+        // Zweimal zuruecknehmen geht nicht, also darf die Liste es auch nicht mehr anbieten.
+        Assert.False(await RollbackAvailable(client, owner, jobId));
+    }
+
+    private static async Task<bool> RollbackAvailable(HttpClient client, Guid owner, Guid jobId)
+    {
+        using var request = UserRequest(HttpMethod.Get,
+            $"/api/import-jobs?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var job = doc.RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("id").GetGuid() == jobId);
+        return job.GetProperty("rollbackAvailable").GetBoolean();
+    }
+
     private static async Task<(HttpStatusCode Status, JsonElement? Body)> Rollback(HttpClient client, Guid owner, Guid jobId)
     {
         using var request = UserRequest(HttpMethod.Post,
