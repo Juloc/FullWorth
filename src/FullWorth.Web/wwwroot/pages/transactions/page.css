@@ -57,15 +57,6 @@
 
 .tx-date-head td>span{opacity:.85}
 
-/* Scope banner: account/group name + back path (UX rework §3) */
-.tx-scopebar{display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)}
-
-.tx-scope-back{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--text);cursor:pointer;font-size:17px;line-height:1;padding:0}
-
-.tx-scope-back:hover{background:var(--surface-2)}
-
-.tx-scope-label{font-weight:600;font-size:15px}
-
 .tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
 
 .tx-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--cta);color:var(--cta-text);font-size:11px;font-weight:700;line-height:1}
@@ -130,18 +121,6 @@
 .tx-close{padding:0}
 
 .tx-close svg{display:block}
-
-.tx-summary .tx-summary-figs{gap:var(--s6)}
-
-.tx-summary .tx-summary-fig{display:flex;flex-direction:column}
-
-.tx-summary .fw-summary-value{font-size:20px}
-
-.tx-summary .tx-summary-income{color:var(--positive)}
-
-.tx-summary .tx-summary-expense{color:var(--text)}
-
-.tx-summary .tx-summary-meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 .tx-skeleton td{vertical-align:middle}
 
@@ -231,3 +210,43 @@
 .tx-table th:nth-child(4){width:8.5%}
 .tx-table th:nth-child(5){width:11%}
 .tx-table th:nth-child(6){width:3.5%}
+
+/* --- #126: Kopf, Tagesstand, Umbuchungshinweis, Buchungsknopf --- */
+
+.tx-toolbar{align-items:center;flex-wrap:nowrap}
+
+.tx-back{width:36px;min-width:36px;height:36px;display:grid;place-items:center;border-radius:50%;padding:0;font-size:17px;line-height:1}
+
+/* Die Suche nimmt den Platz, der uebrig ist - der Filterknopf behaelt seinen. */
+.tx-search{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;min-height:36px;padding-inline:9px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+
+.tx-search-icon{width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
+
+.tx-search input{flex:1 1 auto;min-width:0;border:0;background:none;padding:0}
+
+.tx-search input:focus{outline:none}
+
+/* Der Tagesstand steht unter dem Kopf und bleibt beim Scrollen stehen. Seine Hoehe ist fest, damit ein
+   Wechsel von Datum und Betrag die Liste nicht verschiebt. */
+.tx-daybar{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3);min-height:38px;padding:0 var(--s2);background:var(--surface);border-bottom:1px solid var(--line)}
+
+.tx-daybar-date{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.tx-daybar-balance{color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.tx-daybar-today{min-height:30px;padding:3px 10px}
+
+.tx-daybar-today[aria-disabled="true"]{opacity:.45}
+
+/* Der Hinweis auf Umbuchungen steht nur da, wenn es Kandidaten gibt - und bleibt beim Scrollen NICHT
+   stehen: er ist eine Nachricht, keine Werkzeugleiste. */
+.tx-transfer-hint{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s2);padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+
+.tx-transfer-hint-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Ein schwebender Knopf, und nur im Bereich eines Kontos, das seine Buchungen selbst fuehrt. */
+.tx-fab{position:fixed;right:max(var(--s4),env(safe-area-inset-right));bottom:calc(72px + var(--s4));width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;line-height:1;padding:0;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:3}
+
+@media (min-width:768px){
+  .tx-fab{bottom:var(--s4)}
+}

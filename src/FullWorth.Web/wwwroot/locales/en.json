@@ -261,7 +261,15 @@
     "bankDebtor": "Debtor",
     "bankAccount": "Counterparty account",
     "bankCode": "Bank transaction code",
-    "bankRemittance": "Remittance information"
+    "bankRemittance": "Remittance information",
+    "balanceOfDay": "Balance",
+    "balanceIncomplete": "At least one exchange rate is missing for this day.",
+    "transferCandidates": "{count} possible transfers detected",
+    "transferCandidateOne": "1 possible transfer detected",
+    "review": "Review",
+    "noHits": "No results for this search",
+    "noneWithFilters": "No transactions with these filters",
+    "nonePeriod": "No transactions in this period"
   },
   "purchases": {
     "title": "Purchases",
@@ -596,7 +604,8 @@
     "refresh": "Refresh",
     "confirmTitle": "Are you sure?",
     "confirm": "Confirm",
-    "fxIncomplete": "Excludes amounts in currencies without a conversion rate."
+    "fxIncomplete": "Excludes amounts in currencies without a conversion rate.",
+    "filter": "Filter"
   },
   "auth": {
     "appDescription": "Private access to FullWorth",

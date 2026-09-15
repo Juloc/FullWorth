@@ -74,6 +74,7 @@ GET              /api/account-experience/
 GET              /api/account-experience/group-appearances
 GET              /api/account-groups/
 GET              /api/accounts/
+GET              /api/accounts/daily-balances
 GET              /api/accounts/{id:guid}
 GET              /api/accounts/{id:guid}/link
 GET              /api/accounts/{id:guid}/owners

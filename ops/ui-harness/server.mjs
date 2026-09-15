@@ -122,6 +122,9 @@ createServer(async (req, res) => {
     const JOB = '22222222-2222-2222-2222-222222222222';
     const IMPORT = {
       'fullworth-spaces': [{ id: '11111111-1111-1111-1111-111111111111', name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
+      // Die Tagesstaende der Buchungsseite kommen aus den Fixtures. Der Schluessel muss VOR 'accounts'
+      // stehen: getroffen wird per Teilzeichenkette in Einfuegereihenfolge, sonst faengt 'accounts' ihn ab.
+      'accounts/daily-balances': [{"date":"2026-09-02","amount":19385.45,"currency":"EUR","incomplete":true},{"date":"2026-09-03","amount":19522.85,"currency":"EUR","incomplete":false},{"date":"2026-09-04","amount":19660.25,"currency":"EUR","incomplete":false},{"date":"2026-09-05","amount":19797.65,"currency":"EUR","incomplete":false},{"date":"2026-09-06","amount":19935.05,"currency":"EUR","incomplete":false},{"date":"2026-09-07","amount":20072.45,"currency":"EUR","incomplete":false},{"date":"2026-09-08","amount":20209.85,"currency":"EUR","incomplete":false},{"date":"2026-09-09","amount":20347.25,"currency":"EUR","incomplete":false},{"date":"2026-09-10","amount":20484.65,"currency":"EUR","incomplete":false},{"date":"2026-09-11","amount":20622.05,"currency":"EUR","incomplete":false},{"date":"2026-09-12","amount":20759.45,"currency":"EUR","incomplete":false},{"date":"2026-09-13","amount":20896.85,"currency":"EUR","incomplete":false},{"date":"2026-09-14","amount":21034.25,"currency":"EUR","incomplete":false},{"date":"2026-09-15","amount":21171.65,"currency":"EUR","incomplete":false}],
       'accounts': [{ id: 'a1', displayName: 'Girokonto', institutionName: 'Sparkasse', ibanLast4: '2051', isActive: true, currency: 'EUR' },
                    { id: 'a2', displayName: 'Tagesgeld', institutionName: 'ING', ibanLast4: '5030', isActive: true, currency: 'EUR' }],
       // Muss ÜBER 'categories' stehen: der Pfad enthält dieses Wort ebenfalls, und die Zuordnung

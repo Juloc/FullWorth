@@ -240,6 +240,7 @@ public static class BackendApplication
         builder.Services.AddScoped<PurchaseDiscountAnalyticsService>();
         builder.Services.AddScoped<FinTsInvestmentSnapshotStore>();
         builder.Services.AddScoped<AccountGroupStore>();
+        builder.Services.AddScoped<AccountBalanceHistoryStore>();
         builder.Services.AddScoped<TransactionBulkStore>();
         builder.Services.AddScoped<WealthPreviewBasisService>();
         builder.Services.AddScoped<CloudRequestContextStore>();

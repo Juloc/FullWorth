@@ -32,7 +32,6 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
    advanced filters (direction/date/category/flags). The old inline direction/flags selects move into it. */
 .tx-filter-btn{position:relative;display:inline-flex;align-items:center;gap:6px}
 
-#view-transactions .toolbar #tx-direction,#view-transactions .toolbar #tx-flags{display:none}
 
 /* Account/group drill-down affordance (UX rework §3) */
 .row.is-drillable{cursor:pointer}

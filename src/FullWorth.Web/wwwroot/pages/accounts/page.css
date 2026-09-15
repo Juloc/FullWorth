@@ -639,7 +639,7 @@ button:hover,
 }
 
 .accounts-total .amount {
-  font-size: var(--fs-lg, 1.05rem);
+  font-size: 17px;
 }
 
 .row-chevron {
@@ -692,7 +692,7 @@ button:hover,
   .accounts-search {
     width: 44px;
     min-height: 44px;
-    transition: width var(--motion-fast, .15s) ease;
+    transition: width .15s ease;
   }
 
   .accounts-search:focus-within {

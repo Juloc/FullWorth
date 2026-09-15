@@ -49,6 +49,9 @@
       { id: 'c3', name: 'Gehalt', kind: 'income', parentId: null, isArchived: false, icon: 'salary' },
       { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, icon: 'groceries' }
     ],
+    // Tagesendstaende fuer die Buchungsseite (#126). Der laengere Schluessel steht vor 'accounts',
+    // weil die Fixtures per Teilzeichenkette in Einfuegereihenfolge getroffen werden.
+    'accounts/daily-balances': [{"date":"2026-09-02","amount":19385.45,"currency":"EUR","incomplete":true},{"date":"2026-09-03","amount":19522.85,"currency":"EUR","incomplete":false},{"date":"2026-09-04","amount":19660.25,"currency":"EUR","incomplete":false},{"date":"2026-09-05","amount":19797.65,"currency":"EUR","incomplete":false},{"date":"2026-09-06","amount":19935.05,"currency":"EUR","incomplete":false},{"date":"2026-09-07","amount":20072.45,"currency":"EUR","incomplete":false},{"date":"2026-09-08","amount":20209.85,"currency":"EUR","incomplete":false},{"date":"2026-09-09","amount":20347.25,"currency":"EUR","incomplete":false},{"date":"2026-09-10","amount":20484.65,"currency":"EUR","incomplete":false},{"date":"2026-09-11","amount":20622.05,"currency":"EUR","incomplete":false},{"date":"2026-09-12","amount":20759.45,"currency":"EUR","incomplete":false},{"date":"2026-09-13","amount":20896.85,"currency":"EUR","incomplete":false},{"date":"2026-09-14","amount":21034.25,"currency":"EUR","incomplete":false},{"date":"2026-09-15","amount":21171.65,"currency":"EUR","incomplete":false}],
     'accounts': [
       // The two everyday accounts carry the two balance types a reader has to be able to tell apart:
       // a1 is the bank's AVAILABLE figure (pending authorisations already deducted) with the bank's own

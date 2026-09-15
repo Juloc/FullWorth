@@ -3,8 +3,8 @@
 .account-detail-head{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) 0}
 .account-detail-head .account-identity-icon{flex:none}
 .account-detail-names{min-width:0;flex:1}
-.account-detail-name{font-weight:600;font-size:var(--fs-lg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.account-detail-provider{color:var(--muted);font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-detail-name{font-weight:600;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-detail-provider{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-detail-amount{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 /* Feld links, Wert rechts - und der Wert darf umbrechen, der Feldname nicht. */
 #account-detail-info .row{align-items:flex-start}

@@ -86,11 +86,17 @@ function updateCoachSelectionBar() {
 
 export function bindTransactions(context) {
   ctx = context;
-  ctx.$('#tx-apply').addEventListener('click', applySearch);
-  ctx.$('#tx-query').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applySearch(); } });
+  // Kein Anwenden-Knopf mehr (#126): die Suche wirkt von selbst, kurz nach dem Tippen. Enter loest sie
+  // sofort aus, weil das jeder erwartet, der ihn drueckt.
+  ctx.$('#tx-query').addEventListener('input', scheduleSearch);
+  ctx.$('#tx-query').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); applySearch(); } });
   ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
-  ctx.$('#tx-detect').addEventListener('click', detectTransfers);
-  ctx.$('#tx-add').addEventListener('click', openBookingDialog);
+  ctx.$('#tx-add').addEventListener('click', () => openBookingDialog(ctx.$('#tx-add').dataset.accountId || ''));
+  ctx.$('#tx-daybar-today').addEventListener('click', () => {
+    const host = scrollHost();
+    if (host === window) window.scrollTo({ top: 0, behavior: 'smooth' });
+    else host.scrollTo({ top: 0, behavior: 'smooth' });
+  });
   window.addEventListener('fullworth:open-transaction', event => {
     const item = currentItemsById.get(String(event.detail?.id || ''));
     if (item) openDetail(item);
@@ -107,6 +113,131 @@ function applySearch() {
   if (v) params.set('query', v); else params.delete('query');
   const qs = params.toString();
   ctx.showView('transactions', { query: qs, replace: true });
+}
+
+// --- Sticky-Tagesstand, Suche, Umbuchungshinweis und der Knopf fuer manuelle Buchungen (#126) ---
+
+// Welcher Container scrollt: oberhalb von 1023 px die Tabelle selbst, darunter die Seite. Dieselbe
+// Unterscheidung wie in components/list-position.js - wer nur window nimmt, repariert die halbe App.
+function scrollHost() {
+  const panel = document.querySelector('#view-transactions .table-panel');
+  return panel && panel.scrollHeight > panel.clientHeight + 1 ? panel : window;
+}
+
+// Datum -> Tagesendstand fuer den aktuellen KONTEN-Bereich. Er folgt nicht der Suche und nicht den
+// Kategoriefiltern: wer nach "Lebensmittel" filtert, sieht weiterhin den echten Kontostand des Kontos
+// und keinen erfundenen Saldo aus Lebensmittelbuchungen (#126).
+let dayBalances = new Map();
+let dayAnchors = [];
+let dayBarFrame = 0;
+
+async function loadDayBalances(scope, days) {
+  dayBalances = new Map();
+  if (!days.length) return;
+  const sorted = [...days].sort();
+  const query = new URLSearchParams({ from: sorted[0], to: sorted[sorted.length - 1] });
+  if (scope.accountId) query.set('accountId', scope.accountId);
+  else if (scope.groupId) query.set('groupId', scope.groupId);
+  try {
+    const points = await ctx.api(`api/accounts/daily-balances?${query}`);
+    for (const point of points || []) dayBalances.set(String(point.date).slice(0, 10), point);
+  } catch {
+    // Kein Stand ist besser als ein falscher: die Leiste zeigt dann nur das Datum.
+  }
+}
+
+function paintDayBar() {
+  const bar = ctx.$('#tx-daybar');
+  if (!bar) return;
+  if (!dayAnchors.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+
+  // Die massgebliche Tagesgruppe ist die letzte, deren Kopf oberhalb der Leiste steht.
+  const edge = bar.getBoundingClientRect().bottom;
+  let current = dayAnchors[0];
+  for (const anchor of dayAnchors) {
+    if (anchor.element.getBoundingClientRect().top <= edge + 1) current = anchor;
+    else break;
+  }
+
+  ctx.$('#tx-daybar-date').textContent = current.label;
+  const point = dayBalances.get(current.day);
+  const balance = ctx.$('#tx-daybar-balance');
+  if (point) {
+    const mark = point.incomplete ? '*' : '';
+    balance.textContent = `${ctx.get('transactions.balanceOfDay')} ${ctx.money(point.amount, point.currency)}${mark}`;
+    balance.title = point.incomplete ? ctx.get('transactions.balanceIncomplete') : '';
+  } else {
+    // Kein Punkt heisst: fuer diesen Tag gibt es keinen belastbaren Stand. Dann steht dort nichts,
+    // statt eine Zahl aus den gerade geladenen Zeilen zu erfinden.
+    balance.textContent = '';
+    balance.title = '';
+  }
+
+  const today = ctx.$('#tx-daybar-today');
+  const atTop = current === dayAnchors[0];
+  today.disabled = atTop;
+  today.setAttribute('aria-disabled', String(atTop));
+}
+
+function trackDayBar() {
+  const host = scrollHost();
+  const onScroll = () => {
+    if (dayBarFrame) return;
+    dayBarFrame = requestAnimationFrame(() => { dayBarFrame = 0; paintDayBar(); });
+  };
+  // Beide Container bekommen den Zuhoerer: welcher scrollt, entscheidet die Breite, und sie aendert
+  // sich ohne Neuzeichnen.
+  window.removeEventListener('scroll', onScroll);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  if (host !== window) host.addEventListener('scroll', onScroll, { passive: true });
+  paintDayBar();
+}
+
+// Die Suche wirkt sofort und ohne Knopf. Eine noch laufende Antwort einer aelteren Eingabe darf das
+// Ergebnis der neueren nicht ueberschreiben - deshalb die Marke.
+let searchTimer = 0;
+const SEARCH_DELAY = 300;
+
+function scheduleSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(applySearch, SEARCH_DELAY);
+}
+
+// Der Hinweis auf erkannte Umbuchungen. Frueher stand hier ein dauerhafter Knopf "Umbuchungen
+// erkennen" - eine wiederkehrende Pflicht fuer den Benutzer, obwohl das Erkennen die Aufgabe der
+// Anwendung ist. Der Hinweis steht nur da, wenn es wirklich ungeprüfte Kandidaten gibt (#126).
+async function showTransferCandidates() {
+  const hint = ctx.$('#tx-transfer-hint');
+  if (!hint) return;
+  let pairs = [];
+  try { pairs = await ctx.api('api/transfers/candidates'); }
+  catch { pairs = []; }
+  const count = (pairs || []).length;
+  if (!count) { hint.hidden = true; hint.innerHTML = ''; return; }
+  const label = count === 1
+    ? ctx.get('transactions.transferCandidateOne')
+    : ctx.get('transactions.transferCandidates').replace('{count}', count);
+  hint.innerHTML = `<span class="tx-transfer-hint-text"><span aria-hidden="true">⟳</span> ${ctx.esc(label)}</span>` +
+    `<button type="button" class="ghost" data-review>${ctx.esc(ctx.get('transactions.review'))}</button>`;
+  hint.hidden = false;
+  hint.querySelector('[data-review]').onclick = () => detectTransfers();
+}
+
+// Eine manuelle Buchung braucht ein eindeutiges Zielkonto, und sie darf nicht neben den Buchungen
+// einer Bank entstehen. Der Knopf erscheint deshalb nur im Bereich EINES Kontos, das seine Buchungen
+// selbst fuehrt - abgeleitet aus dem Kontomodell, nicht aus dem Namen (#126).
+async function updateBookingAction(accountId) {
+  const button = ctx.$('#tx-add');
+  if (!button) return;
+  if (!accountId) { button.hidden = true; return; }
+  let account = null;
+  try { account = (await ctx.api('api/accounts')).find(item => String(item.id) === String(accountId)); }
+  catch { account = null; }
+  const manual = !!account && !account.bankConnectionId
+    && (account.provider === 'manual' || account.provider === 'finanzguru-import');
+  button.hidden = !manual;
+  button.dataset.accountId = manual ? String(account.id) : '';
 }
 
 function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
@@ -265,7 +396,6 @@ async function openFilterSheet() {
   function reset({ close }) {
     const p = new URLSearchParams(location.search);
     ['accountId','groupId','direction','status','from','to','categoryId','includeDescendants','merchant','merchantId','minAmount','maxAmount','transfersOnly','ignoredOnly','refundOnly','hasReceipt'].forEach(k => p.delete(k));
-    ctx.$('#tx-direction').value = ''; ctx.$('#tx-flags').value = '';
     close('reset');
     txReplaceUrl(p);
   }
@@ -290,8 +420,6 @@ async function openFilterSheet() {
     for (const key of ['transfersOnly', 'ignoredOnly', 'refundOnly', 'hasReceipt']) {
       if (values[key]) p.set(key, 'true'); else p.delete(key);
     }
-    ctx.$('#tx-direction').value = String(values.direction || '');
-    ctx.$('#tx-flags').value = '';
     txReplaceUrl(p);
   }
 
@@ -299,7 +427,7 @@ async function openFilterSheet() {
 }
 // Manual booking (UI_UX_SPEC §9.4): hand-enter an income/expense on a MANUAL account. Only manual
 // accounts are offered; the server rejects booking on a synced account. Currency follows the account.
-async function openBookingDialog() {
+async function openBookingDialog(preselectedAccountId = '') {
   let accounts, options;
   try {
     accounts = (await ctx.api('api/accounts')).filter(a => a.provider !== 'finanzguru-import' && a.isActive !== false);
@@ -308,7 +436,9 @@ async function openBookingDialog() {
   if (!accounts.length) { ctx.toast(ctx.get('common.empty')); return; }
 
   const today = new Date().toISOString().slice(0, 10);
-  const accountOptions = accounts.map(a => `<option value="${a.id}" data-currency="${ctx.esc(a.currency)}">${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
+  // Aus dem Bereich EINES Kontos heraus ist das Zielkonto bekannt - es steht vorgewaehlt da, statt
+  // den Benutzer es in einer Liste wiederfinden zu lassen (#126).
+  const accountOptions = accounts.map(a => `<option value="${a.id}" data-currency="${ctx.esc(a.currency)}"${String(a.id) === String(preselectedAccountId) ? ' selected' : ''}>${ctx.esc(a.displayName || a.institutionName)}</option>`).join('');
   const dlg = ctx.dialog(`<form class="dialog-card" method="dialog">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.addTitle'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.cancel'))}">×</button></div>
     <label>${ctx.esc(ctx.get('transactions.account'))}<select name="account" required>${accountOptions}</select></label>
@@ -383,8 +513,6 @@ export async function renderTransactions(context) {
   const ignoredOnly = params.get('ignoredOnly') === 'true';
   const refundOnly = params.get('refundOnly') === 'true';
   const hasReceipt = params.get('hasReceipt') === 'true';
-  ctx.$('#tx-direction').value = dir;
-  ctx.$('#tx-flags').value = '';
   if (text) q.set('query', text);
   if (dir) q.set('direction', dir);
   if (status) q.set('status', status);
@@ -408,7 +536,6 @@ export async function renderTransactions(context) {
   const data = await ctx.api(`api/transactions?${q}`);
   const items = data.items || [];
 
-  renderSummary(items);
   currentItemsById = new Map(items.map(item => [String(item.id), item]));
   selectedForCoach.clear();
   updateCoachSelectionBar();
@@ -433,7 +560,7 @@ export async function renderTransactions(context) {
       const day = String(transactionDate(x) || '').slice(0, 10);
       if (day !== lastDate) {
         lastDate = day;
-        body.appendChild(groupHeaderRow(dateHeading(day)));
+        body.appendChild(groupHeaderRow(dateHeading(day), day));
       }
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
@@ -466,30 +593,20 @@ export async function renderTransactions(context) {
     tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     body.appendChild(tr);
   }
+  // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
+  // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
+  // Blaetterung eine andere Zahl (#126).
+  dayAnchors = [...body.querySelectorAll('.tx-date-head[data-day]')]
+    .map(element => ({ element, day: element.dataset.day, label: element.dataset.label }));
+  await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day));
+  trackDayBar();
+  await showTransferCandidates();
+  await updateBookingAction(accountId);
+
   if (!items.length) {
     const filtered = !!(text || dir || status || merchantId || merchant || minAmount || maxAmount || transfersOnly || ignoredOnly || refundOnly || hasReceipt || fromDate || toDate || categoryId || accountId || groupId);
-    body.innerHTML = txEmptyState(filtered);
+    body.innerHTML = txEmptyState(filtered, text ? 'search' : (fromDate || toDate) ? 'period' : 'filters');
   }
-}
-
-// Period summary strip (Finanzguru-style): income vs expense for the shown range. Transfers are neutral
-// and excluded-from-statistics rows don't count, so the two figures agree with what analytics reports.
-function renderSummary(items) {
-  const bar = ctx.$('#tx-summary');
-  if (!items.length) { bar.textContent = ''; return; }
-  let income = 0, expense = 0;
-  const cur = items[0]?.currency;
-  for (const x of items) {
-    if (x.isTransfer || x.isIgnored) continue;
-    const amt = Number(x.amount) || 0;
-    if (amt >= 0) income += amt; else expense += amt;
-  }
-  const count = deLabel(`${items.length} Buchungen`, `${items.length} transactions`);
-  bar.innerHTML =
-    `<div class="fw-summary tx-summary-figs">` +
-    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.income'))}</span><span class="fw-summary-value tx-summary-income">${ctx.money(income, cur)}</span></div>` +
-    `<div class="tx-summary-fig"><span class="fw-summary-label">${ctx.esc(ctx.get('transactions.expenses'))}</span><span class="fw-summary-value tx-summary-expense">${ctx.money(expense, cur)}</span></div>` +
-    `</div><div class="tx-summary-meta">${ctx.esc(count)}</div>`;
 }
 
 // Loading skeleton rows: monochrome shimmer placeholders matching the row layout while the list loads.
@@ -506,8 +623,11 @@ function txSkeletonRows(n = 7) {
 }
 
 // Empty state: a monochrome glyph plus a context-aware hint (filters active vs. genuinely no bookings yet).
-function txEmptyState(filtered) {
-  const title = ctx.get('common.empty');
+function txEmptyState(filtered, reason = 'filters') {
+  const title = reason === 'search' ? ctx.get('transactions.noHits')
+    : reason === 'period' ? ctx.get('transactions.nonePeriod')
+    : filtered ? ctx.get('transactions.noneWithFilters')
+    : ctx.get('common.empty');
   const hint = filtered
     ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
     : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
@@ -555,9 +675,11 @@ function quickEditCategory(x) {
   });
 }
 
-function groupHeaderRow(label) {
+function groupHeaderRow(label, day = '') {
   const head = document.createElement('tr');
   head.className = 'tx-date-head';
+  if (day) head.dataset.day = day;
+  head.dataset.label = label;
   head.innerHTML = `<td colspan="6"><span>${ctx.esc(label)}</span></td>`;
   return head;
 }
@@ -576,11 +698,11 @@ function dateHeading(day) {
 // with its name and a clear back path (accounts for an account/group drill, all-bookings otherwise).
 async function renderScope(scope) {
   const { accountId, groupId, categoryId, query } = scope;
-  const bar = ctx.$('#tx-scopebar');
-  if (!accountId && !groupId && !categoryId && !query) { bar.hidden = true; return; }
-  // Sichtbar machen, bevor der Name da ist: die Höhe der Leiste hängt nicht am Namen, und wer
-  // erst danach einblendet, schiebt die fertige Liste ein zweites Mal nach unten.
-  bar.hidden = false;
+  const back = ctx.$('#tx-back');
+  // Der Zurueckpfeil gehoert zu einem Bereich, der aus den Konten kommt - bei der gewoehnlichen
+  // Navigation auf die Buchungen fuehrt er nirgendwohin und steht deshalb nicht da (#126).
+  back.hidden = !(accountId || groupId);
+  if (!accountId && !groupId && !categoryId && !query) return;
   let label = '';
   try {
     if (accountId) { const a = (await ctx.api('api/accounts')).find(a => String(a.id) === String(accountId)); label = displayAccountName(a?.displayName || a?.institutionName || ''); }
@@ -588,9 +710,8 @@ async function renderScope(scope) {
     else if (categoryId) { const c = (await ctx.api('api/categories').catch(() => [])).find(c => String(c.id) === String(categoryId)); label = c?.name || ''; }
     else if (query) { label = query; }
   } catch { /* label is best-effort; the list itself is already scoped server-side */ }
-  const backTo = (accountId || groupId) ? 'accounts' : 'transactions';
-  bar.innerHTML = `<button type="button" class="tx-scope-back" data-back aria-label="${ctx.esc(ctx.get('common.back'))}">←</button><span class="tx-scope-label">${ctx.esc(label || ctx.get('nav.transactions'))}</span>`;
-  bar.querySelector('[data-back]').onclick = () => ctx.navScope(backTo, '');
+  back.onclick = () => ctx.navScope('accounts', '');
+  // Der Titel ist der Bereich: "Girokonto" statt "Buchungen". Ohne Bereich bleibt es der Seitentitel.
   const title = ctx.$('#page-title'); if (title && label) title.textContent = label;
 }
 

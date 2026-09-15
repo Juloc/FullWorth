@@ -261,7 +261,15 @@
     "bankDebtor": "Zahlender",
     "bankAccount": "Gegenkonto",
     "bankCode": "Bank-Buchungscode",
-    "bankRemittance": "Verwendungszweck"
+    "bankRemittance": "Verwendungszweck",
+    "balanceOfDay": "Kontostand",
+    "balanceIncomplete": "Für diesen Tag fehlt mindestens ein Wechselkurs.",
+    "transferCandidates": "{count} mögliche Umbuchungen erkannt",
+    "transferCandidateOne": "1 mögliche Umbuchung erkannt",
+    "review": "Prüfen",
+    "noHits": "Keine Treffer für diese Suche",
+    "noneWithFilters": "Keine Buchungen mit diesen Filtern",
+    "nonePeriod": "Keine Buchungen in diesem Zeitraum"
   },
   "purchases": {
     "title": "Käufe",
@@ -596,7 +604,8 @@
     "refresh": "Aktualisieren",
     "confirmTitle": "Bist du sicher?",
     "confirm": "Bestätigen",
-    "fxIncomplete": "Ohne Beträge in Währungen ohne Umrechnungskurs."
+    "fxIncomplete": "Ohne Beträge in Währungen ohne Umrechnungskurs.",
+    "filter": "Filter"
   },
   "auth": {
     "appDescription": "Privater Zugang zu FullWorth",

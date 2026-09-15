@@ -17,6 +17,21 @@ public static class AccountEndpoints
             return item is null ? Results.NotFound() : Results.Ok(item);
         });
 
+        // Der historische Tagesendstand (#126). Er folgt dem KONTEN-Bereich, nicht den uebrigen Filtern:
+        // wer nach "Lebensmittel" filtert, sieht weiterhin den echten Kontostand des Kontos und keinen
+        // erfundenen Saldo aus Lebensmittelbuchungen.
+        group.MapGet("/daily-balances", async (
+            Guid fullWorthSpaceId, DateOnly from, DateOnly to, Guid? accountId, Guid? groupId,
+            CurrentUserContext currentUser, AccountBalanceHistoryStore store, CancellationToken ct) =>
+        {
+            // Ein offenes Fenster waere eine Einladung, die ganze Historie eines Bereichs in einem Zug zu
+            // ziehen; 400 Tage decken die Jahresansicht und lassen die Antwort klein.
+            if (to < from || to.DayNumber - from.DayNumber > 400)
+                return Results.BadRequest(new { error = "The range must be ordered and at most 400 days." });
+            return Results.Ok(await store.DailyAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, from, to, accountId, groupId, ct));
+        });
+
         group.MapPost("/", async (AccountCreateRequest request, CurrentUserContext currentUser, AccountStore store, CancellationToken ct) =>
         {
             try
