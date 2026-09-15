@@ -1025,14 +1025,13 @@ public sealed class BankSyncService(
         // stays EUR - an account has to be storable even with nothing to go on - but it is now only
         // reached when the provider named no currency AND sent no readable balance, and it is logged
         // instead of passing silently.
-        if (string.IsNullOrWhiteSpace(account.Currency))
+        if (!IsRealCurrency(account.Currency))
         {
-            var reported = balances.Select(balance => balance.Currency)
-                .FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency));
-            if (string.IsNullOrWhiteSpace(reported))
+            var reported = balances.Select(balance => balance.Currency).FirstOrDefault(IsRealCurrency);
+            if (reported is null)
                 logger.LogWarning(
-                    "Account {Account} reported no currency and no readable balance; defaulting to EUR.",
-                    account.ProviderAccountId);
+                    "Account {Account} reported currency {Currency} and no readable balance; defaulting to EUR.",
+                    account.ProviderAccountId, account.Currency ?? "(none)");
             account = account with { Currency = reported ?? "EUR" };
         }
 
@@ -1305,7 +1304,8 @@ public sealed class BankSyncService(
             PsuStatus = GetString(details, "psu_status") ?? account.PsuStatus,
             CreditLimitAmount = GetNestedDecimal(details, "credit_limit", "amount") ?? account.CreditLimitAmount,
             CreditLimitCurrency = GetNestedString(details, "credit_limit", "currency") ?? account.CreditLimitCurrency,
-            Currency = GetString(details, "currency") ?? account.Currency,
+            // Eine Waehrung, die keine ist, darf die vorhandene nicht ueberschreiben.
+            Currency = RealCurrencyOrNull(GetString(details, "currency")) ?? account.Currency,
             IbanLast4 = GetIbanLast4(details) ?? account.IbanLast4,
             Iban = GetIban(details) ?? account.Iban
         };
@@ -1358,6 +1358,24 @@ public sealed class BankSyncService(
     /// stored: a balance nobody could read must not reach the user as a real 0.
     /// </param>
     private sealed record BalanceParseResult(List<BalanceBatchItem> Items, int Unreadable);
+
+    /// <summary>
+    /// „XXX" ist in ISO 4217 der Code fuer KEINE Waehrung, und Enable Banking schickt ihn fuer ein
+    /// PayPal-Wallet: das haelt Geld in mehreren Waehrungen, also nennt die Schnittstelle keine.
+    ///
+    /// Bis 2026-09-15 kam er als gueltiger Wert durch - die Pruefung fragte nur auf leer. Das Konto
+    /// stand danach als „PayPal · XXX" in der Anwendung, und weil der Finanzguru-Import ein Zielkonto
+    /// mit GLEICHER Waehrung verlangt, liess es sich mit keinem Import verknuepfen (#112). Der Wert
+    /// wird jetzt dort verworfen, wo er entsteht, und aus dem tatsaechlich gemeldeten Saldo ersetzt.
+    ///
+    /// Beim naechsten Sync korrigiert sich ein bereits gespeichertes Konto von selbst:
+    /// IngestionService schreibt die Waehrung jedes Mal neu.
+    /// </summary>
+    private static bool IsRealCurrency(string? currency) =>
+        !string.IsNullOrWhiteSpace(currency)
+        && !string.Equals(currency.Trim(), "XXX", StringComparison.OrdinalIgnoreCase);
+
+    private static string? RealCurrencyOrNull(string? currency) => IsRealCurrency(currency) ? currency : null;
 
     private static BalanceParseResult ParseBalances(AccountState account, JsonElement json)
     {

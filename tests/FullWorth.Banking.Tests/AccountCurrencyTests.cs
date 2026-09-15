@@ -48,6 +48,71 @@ public sealed class AccountCurrencyTests
         Assert.Equal("EUR", account.Currency);
     }
 
+    /// <summary>
+    /// „XXX" ist in ISO 4217 der Code fuer KEINE Waehrung, und Enable Banking schickt ihn fuer ein
+    /// PayPal-Wallet - das haelt Geld in mehreren Waehrungen, also nennt die Schnittstelle keine.
+    ///
+    /// Die Pruefung fragte nur auf leer, also kam „XXX" als gueltiger Wert durch. Das Konto stand
+    /// danach als „PayPal · XXX" in der Anwendung, und der Finanzguru-Import verlangt fuer ein
+    /// Zielkonto dieselbe Waehrung wie der Import - es liess sich mit keinem verknuepfen (#112).
+    /// </summary>
+    [Fact]
+    public async Task XXX_is_not_a_currency_and_the_balance_answers_instead()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = Provider(
+            accountDetails: "{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"details\":\"PayPal\",\"currency\":\"XXX\"}",
+            balances: "{\"balances\":[{\"balance_amount\":{\"amount\":42.10,\"currency\":\"EUR\"},\"balance_type\":\"CLBD\"}]}");
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.SyncAllAsync(CancellationToken.None);
+
+        var account = Assert.Single(backend.Ingests.SelectMany(batch => batch.Accounts).DistinctBy(x => x.IdentificationHash));
+        Assert.Equal("EUR", account.Currency);
+        Assert.NotEqual("XXX", account.Currency);
+    }
+
+    /// <summary>Und wenn gar nichts Brauchbares kommt, bleibt es beim letzten Ausweg - aber nicht bei „XXX".</summary>
+    [Fact]
+    public async Task XXX_without_a_readable_balance_falls_back_like_a_missing_currency()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = Provider(
+            accountDetails: "{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"details\":\"PayPal\",\"currency\":\"XXX\"}",
+            balances: "{\"balances\":[]}");
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.SyncAllAsync(CancellationToken.None);
+
+        var account = Assert.Single(backend.Ingests.SelectMany(batch => batch.Accounts).DistinctBy(x => x.IdentificationHash));
+        Assert.Equal("EUR", account.Currency);
+    }
+
+    /// <summary>Kleinschreibung ist derselbe Code, und ein Saldo, der auch nur „xxx" meldet, ist keine Antwort.</summary>
+    [Fact]
+    public async Task A_lowercase_xxx_balance_is_no_answer_either()
+    {
+        using var environment = new TestBankingEnvironment();
+        var backend = new FakeBackendHandler();
+        backend.Connections.Add(TestBankingEnvironment.AuthorizedConnection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1)));
+        var provider = Provider(
+            accountDetails: "{\"uid\":\"account-1\",\"identification_hash\":\"hash-1\",\"details\":\"PayPal\",\"currency\":\"xxx\"}",
+            balances: "{\"balances\":[{\"balance_amount\":{\"amount\":5,\"currency\":\"xxx\"},\"balance_type\":\"CLBD\"},{\"balance_amount\":{\"amount\":7,\"currency\":\"USD\"},\"balance_type\":\"CLBD\"}]}");
+        var service = environment.CreateSyncService(provider, backend);
+
+        await service.SyncAllAsync(CancellationToken.None);
+
+        var account = Assert.Single(backend.Ingests.SelectMany(batch => batch.Accounts).DistinctBy(x => x.IdentificationHash));
+        Assert.Equal("USD", account.Currency);
+    }
+
     // Nothing to go on anywhere: the account still has to be storable, so EUR remains the last resort -
     // but it is only reached here, and it is logged.
     [Fact]

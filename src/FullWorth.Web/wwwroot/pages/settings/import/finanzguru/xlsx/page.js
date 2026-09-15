@@ -162,6 +162,9 @@ function buildImportLinkCard(item){
     option.value=target.id;
     option.textContent=targetLabel(target);
     option.disabled=target.currency!==item.currency;
+    // Ein ausgegrauter Eintrag ohne Begruendung ist eine Sackgasse: „PayPal · XXX" stand da und sagte
+    // nicht, warum es nicht geht. Der Grund steht jetzt im Eintrag selbst (#112).
+    if(option.disabled){option.textContent+=` — ${text.currencyMismatch}`;option.title=text.currencyMismatch;}
     if(target.id===(item.linkedTargetAccountId||item.suggestedTargetAccountId))option.selected=true;
     select.append(option);
   }
