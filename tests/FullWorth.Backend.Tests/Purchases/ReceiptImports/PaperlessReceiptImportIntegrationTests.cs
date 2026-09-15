@@ -43,9 +43,15 @@ public sealed class PaperlessReceiptImportIntegrationTests
             Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
             using var json = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
             Assert.Equal(1, json.RootElement.GetProperty("total").GetInt32());
+            // Die Zeile wartet (der Zaehler fasst wartend und eingereiht zusammen) - aber der Request
+            // hat NICHTS heruntergeladen (#127). Bei 115 Dokumenten hiess das frueher 115 Downloads,
+            // bevor der Benutzer eine Antwort sah.
             Assert.Equal(1, json.RootElement.GetProperty("queued").GetInt32());
             Assert.Equal(0, json.RootElement.GetProperty("skippedDuplicates").GetInt32());
         }
+        Assert.Equal(0, paperless.DownloadCount);
+
+        Assert.Equal(1, await FetchPendingAsync(factory));
 
         using (var second = PaperlessImportRequest(spaceId, userId))
         using (var secondResponse = await client.SendAsync(second))
@@ -57,6 +63,9 @@ public sealed class PaperlessReceiptImportIntegrationTests
             Assert.Equal(1, json.RootElement.GetProperty("skippedDuplicates").GetInt32());
         }
 
+        // Auch ein zweiter Durchgang des Hintergrunddienstes fragt nichts nach: die Zeile ist erledigt,
+        // und genau das ist der Wiederaufnahmepunkt nach einem Neustart.
+        Assert.Equal(0, await FetchPendingAsync(factory));
         Assert.Equal(1, paperless.DownloadCount);
         await factory.SeedAsync(async db =>
         {
@@ -99,6 +108,7 @@ public sealed class PaperlessReceiptImportIntegrationTests
         using (var import = PaperlessImportRequest(spaceId, userId))
         using (var response = await client.SendAsync(import))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await FetchPendingAsync(factory);
 
         using (var preview = Request(
                    HttpMethod.Post,
@@ -152,8 +162,21 @@ public sealed class PaperlessReceiptImportIntegrationTests
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             batchId = json.RootElement.GetProperty("batch").GetProperty("id").GetGuid();
             Assert.Equal("USD", json.RootElement.GetProperty("batch").GetProperty("currency").GetString());
+            Assert.Equal(1, json.RootElement.GetProperty("queued").GetInt32());
+            Assert.Equal(0, json.RootElement.GetProperty("failed").GetInt32());
+        }
+
+        // Der Fehlschlag entsteht beim Holen, nicht mehr im Request (#127) - und er bleibt an der Zeile
+        // stehen, damit "Fehlgeschlagene wiederholen" etwas zu wiederholen hat.
+        Assert.Equal(0, await FetchPendingAsync(factory));
+        using (var batch = Request(HttpMethod.Get,
+                   $"/api/purchases/receipt-imports/batches/{batchId:D}?fullWorthSpaceId={spaceId:D}",
+                   userId))
+        using (var response = await client.SendAsync(batch))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.Equal(1, json.RootElement.GetProperty("failed").GetInt32());
-            Assert.Equal(0, json.RootElement.GetProperty("queued").GetInt32());
             var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
             Assert.Equal(JsonValueKind.Null, item.GetProperty("receiptScanJobId").ValueKind);
         }
@@ -178,6 +201,17 @@ public sealed class PaperlessReceiptImportIntegrationTests
             var purchase = await db.Purchases.SingleAsync(x => x.FullWorthSpaceId == spaceId && x.Source == "receipt");
             Assert.Equal("USD", purchase.Currency);
         });
+    }
+
+    /// <summary>
+    /// Ein Durchgang des Hintergrunddienstes (#127). Die Tests fahren ihn von Hand, damit der Ablauf
+    /// - erst die Zeile, dann der Download - ueberpruefbar bleibt, ohne auf einen Takt zu warten.
+    /// </summary>
+    private static async Task<int> FetchPendingAsync(BackendWebApplicationFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ReceiptImportService>();
+        return await service.FetchPendingPaperlessAsync(50, CancellationToken.None);
     }
 
     private static BackendWebApplicationFactory CreateFactory(PaperlessHttpClientFactory paperless, string? encryptionKey = null) =>
@@ -283,7 +317,10 @@ public sealed class PaperlessReceiptImportIntegrationTests
                 {
                     Interlocked.Increment(ref owner.downloadCount);
                     if (owner.ShouldFailDownload())
-                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                        // 500 und nicht 503: seit #127 wiederholt der Client eine vorübergehende Antwort von
+                        // selbst, und dieser Test braucht einen Download, der wirklich scheitert - sonst
+                        // prueft er die Wiederholung des Clients statt "Fehlgeschlagene wiederholen".
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
 
                     var response = new HttpResponseMessage(HttpStatusCode.OK)
                     {

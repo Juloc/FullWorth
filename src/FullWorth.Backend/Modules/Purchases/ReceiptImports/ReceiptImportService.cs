@@ -323,7 +323,16 @@ public sealed class ReceiptImportService(
                 string.IsNullOrWhiteSpace(document.Title) ? $"Paperless {document.Id}" : document.Title,
                 $"paperless:{document.Id}",
                 null,
-                ct);
+                ct,
+                // Was Paperless ohnehin mitgeliefert hat, bleibt am Beleg stehen (#128) - sonst muesste
+                // FullWorth spaeter fuer jedes Dokument noch einmal nachfragen.
+                new ReceiptSourceMetadata(
+                    document.Created,
+                    document.MimeType,
+                    document.Correspondent?.ToString(),
+                    [.. document.Tags.Select(tag => tag.ToString())],
+                    document.Content,
+                    document.Modified));
 
             if (!created.Created && created.Item.ReceiptScanJobId.HasValue) continue;
             if (prior is not null && prior.BatchId != batch.Id && prior.ReceiptScanJobId.HasValue && prior.JobStatus != ReceiptScanJobStatuses.Error)

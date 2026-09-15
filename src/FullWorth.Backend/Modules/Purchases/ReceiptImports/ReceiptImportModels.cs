@@ -84,6 +84,22 @@ public sealed record ReceiptImportBatchRow(
     public bool IsPaused => PausedAt.HasValue;
 }
 
+/// <summary>
+/// Was die Quelle ueber einen Beleg weiss (#128). Ein Datensatz fuer alle Quellen - Paperless, Datei,
+/// Kamera - damit nicht jede ihren eigenen Speicherweg bekommt. Fehlt ein Feld bei einer Quelle, steht
+/// dort nichts; erfunden wird keines.
+/// </summary>
+public sealed record ReceiptSourceMetadata(
+    DateOnly? DocumentDate = null,
+    string? MimeType = null,
+    string? Correspondent = null,
+    IReadOnlyList<string>? Tags = null,
+    string? Text = null,
+    DateTimeOffset? ModifiedAt = null)
+{
+    public static readonly ReceiptSourceMetadata None = new();
+}
+
 /// <summary>Ein Beleg, der auf seinen Download aus Paperless wartet (#127).</summary>
 public sealed record PendingPaperlessItem(
     Guid ItemId,
@@ -206,7 +222,10 @@ public sealed record PaperlessDocumentSummary(
     int? Correspondent,
     IReadOnlyList<int> Tags,
     string? OriginalFileName = null,
-    bool Imported = false);
+    bool Imported = false,
+    string? MimeType = null,
+    string? Content = null,
+    DateTimeOffset? Modified = null);
 
 public sealed record PaperlessPreviewResult(
     int Count,

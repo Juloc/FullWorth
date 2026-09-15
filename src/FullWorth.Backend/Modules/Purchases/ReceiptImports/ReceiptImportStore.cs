@@ -47,6 +47,15 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         return rows.Count == 0 ? null : ToRow(rows[0]);
     }
 
+    /// <summary>
+    /// Legt die Zeile an - samt dem, was die Quelle ueber den Beleg weiss (#128).
+    ///
+    /// Gibt es sie schon, wird NICHT einfach nichts getan: die Quelldaten werden aufgefrischt, wenn das
+    /// Dokument dort seither geaendert wurde. Das ist die Antwort auf "Aktualisierung ueberschreibt
+    /// denselben Beleg statt einen neuen anzulegen" - und sie kostet keine zusaetzliche Anfrage, weil
+    /// alles ohnehin in der Liste stand. <c>Created</c> bleibt in diesem Fall false; der Beleg ist
+    /// derselbe, und nichts wird ein zweites Mal verarbeitet.
+    /// </summary>
     public async Task<(bool Created, ReceiptImportItemRow Item)> CreateItemAsync(
         Guid batchId,
         Guid fullWorthSpaceId,
@@ -55,27 +64,43 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         string displayName,
         string? sourceReference,
         string? fingerprint,
-        CancellationToken ct)
+        CancellationToken ct,
+        ReceiptSourceMetadata? source = null)
     {
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         var safeKey = Cap(externalKey, 500);
+        var meta = source ?? ReceiptSourceMetadata.None;
+        var tagsJson = meta.Tags is { Count: > 0 } ? System.Text.Json.JsonSerializer.Serialize(meta.Tags) : null;
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "ReceiptImportItems"
                 ("Id", "BatchId", "FullWorthSpaceId", "SourceType", "ExternalKey", "DisplayName", "SourceReference",
-                 "ContentFingerprint", "Status", "CreatedAt", "UpdatedAt")
+                 "ContentFingerprint", "Status", "CreatedAt", "UpdatedAt",
+                 "SourceDocumentDate", "SourceMimeType", "SourceCorrespondent", "SourceTagsJson", "SourceText", "SourceModifiedAt")
             VALUES
                 ({id}, {batchId}, {fullWorthSpaceId}, {Cap(sourceType, 32)}, {safeKey}, {Cap(displayName, 500)},
-                 {CapNullable(sourceReference, 1000)}, {CapNullable(fingerprint, 64)}, {ReceiptImportItemStatuses.Pending}, {now}, {now})
-            ON CONFLICT ("BatchId", "ExternalKey") DO NOTHING
+                 {CapNullable(sourceReference, 1000)}, {CapNullable(fingerprint, 64)}, {ReceiptImportItemStatuses.Pending}, {now}, {now},
+                 {meta.DocumentDate}, {CapNullable(meta.MimeType, 128)}, {CapNullable(meta.Correspondent, 200)},
+                 {tagsJson}::jsonb, {meta.Text}, {meta.ModifiedAt})
+            ON CONFLICT ("BatchId", "ExternalKey") DO UPDATE SET
+                "DisplayName" = EXCLUDED."DisplayName",
+                "SourceDocumentDate" = EXCLUDED."SourceDocumentDate",
+                "SourceMimeType" = EXCLUDED."SourceMimeType",
+                "SourceCorrespondent" = EXCLUDED."SourceCorrespondent",
+                "SourceTagsJson" = EXCLUDED."SourceTagsJson",
+                "SourceText" = EXCLUDED."SourceText",
+                "SourceModifiedAt" = EXCLUDED."SourceModifiedAt",
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
+            WHERE "ReceiptImportItems"."SourceModifiedAt" IS DISTINCT FROM EXCLUDED."SourceModifiedAt"
             """, ct);
 
-        var row = affected > 0
-            ? await GetItemAsync(id, ct)
-            : await GetItemForBatchAsync(batchId, safeKey, ct);
+        // ON CONFLICT DO UPDATE meldet ebenfalls eine betroffene Zeile. Ob der Beleg NEU ist, entscheidet
+        // deshalb seine Kennung und nicht die Zahl: nur wenn die eben erzeugte Id wirklich in der
+        // Tabelle steht, wurde eingefuegt.
+        var row = await GetItemAsync(id, ct) ?? await GetItemForBatchAsync(batchId, safeKey, ct);
         return row is null
             ? throw new InvalidOperationException("Receipt import item could not be created or reloaded.")
-            : (affected > 0, row);
+            : (row.Id == id, row);
     }
 
     public Task MarkQueuedAsync(Guid itemId, Guid jobId, Guid purchaseId, CancellationToken ct) =>

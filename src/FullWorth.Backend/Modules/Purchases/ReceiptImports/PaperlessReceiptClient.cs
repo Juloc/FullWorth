@@ -328,7 +328,16 @@ public sealed class PaperlessReceiptClient(
         if (document.TryGetProperty("tags", out var tagsNode) && tagsNode.ValueKind == JsonValueKind.Array)
             foreach (var tag in tagsNode.EnumerateArray()) if (tag.TryGetInt32(out var value)) tags.Add(value);
         var originalFileName = document.TryGetProperty("original_file_name", out var fileNode) ? fileNode.GetString() : null;
-        return new PaperlessDocumentSummary(id, title, created, documentType, correspondent, tags, originalFileName);
+        // Diese drei standen immer schon in der Antwort und wurden weggeworfen (#128). Der Text vor
+        // allem: Paperless liefert seine OCR in derselben Liste mit, und FullWorth hat ihn danach ein
+        // zweites Mal selbst erzeugt.
+        var mimeType = document.TryGetProperty("mime_type", out var mimeNode) ? mimeNode.GetString() : null;
+        var content = document.TryGetProperty("content", out var contentNode) ? contentNode.GetString() : null;
+        DateTimeOffset? modified = document.TryGetProperty("modified", out var modifiedNode)
+            && DateTimeOffset.TryParse(modifiedNode.GetString(), out var parsedModified) ? parsedModified : null;
+        return new PaperlessDocumentSummary(
+            id, title, created, documentType, correspondent, tags, originalFileName,
+            Imported: false, MimeType: mimeType, Content: content, Modified: modified);
     }
 
     private static int? ReadNullableInt(JsonElement element, string property)
