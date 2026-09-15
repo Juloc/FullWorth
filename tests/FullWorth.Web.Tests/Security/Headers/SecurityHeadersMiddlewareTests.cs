@@ -108,6 +108,7 @@ public sealed class SecurityHeadersMiddlewareTests
         app.MapGet("/ok", () => Results.Ok(new { ok = true }));
         app.MapGet("/auth/login", () => Results.Text("<html>login</html>", "text/html"));
         app.MapGet("/auth/register", () => Results.Text("<html>register</html>", "text/html"));
+        app.MapGet("/auth/register/", () => Results.Text("<html>register</html>", "text/html"));
         app.MapGet("/auth/forgot-password", () => Results.Text("<html>forgot</html>", "text/html"));
         app.MapGet("/auth/reset-password", () => Results.Text("<html>reset</html>", "text/html"));
         app.MapGet("/auth/two-factor", () => Results.Text("<html>two-factor</html>", "text/html"));
