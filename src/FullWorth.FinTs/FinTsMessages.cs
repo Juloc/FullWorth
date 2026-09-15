@@ -37,7 +37,7 @@ internal static class FinTsMessages
 
         var outer = new List<FinTsSegment>
         {
-            EncryptionHeader(bank.Blz, credentials.UserId, session.Parameters.SystemId),
+            EncryptionHeader(bank.Blz, credentials.UserId, session.Parameters.SystemId, session.Parameters.SecurityFunction),
             new([Header("HNVSD", 999, 1), FinTsGroup.Of(FinTsValue.B(innerBytes))]),
             new([Header("HNHBS", number, 1), FinTsGroup.Of(FinTsValue.T(session.MessageNumber.ToString(CultureInfo.InvariantCulture)))])
         };
@@ -190,12 +190,12 @@ internal static class FinTsMessages
             FinTsGroup.Of(FinTsValue.T(messageNumber.ToString(CultureInfo.InvariantCulture)))
         ]);
 
-    private static FinTsSegment EncryptionHeader(string blz, string userId, string systemId)
+    private static FinTsSegment EncryptionHeader(string blz, string userId, string systemId, string securityFunction)
     {
         var now = DateTime.Now;
         return new([
             Header("HNVSK", 998, 3),
-            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T("1")),
+            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T(ProfileVersion(securityFunction))),
             FinTsGroup.Of(FinTsValue.T("998")),
             FinTsGroup.Of(FinTsValue.T("1")),
             FinTsGroup.Of(FinTsValue.T("2"), FinTsValue.E(), FinTsValue.T(systemId)),
@@ -212,23 +212,32 @@ internal static class FinTsMessages
     internal const string OneStepSecurityFunction = "999";
 
     /// <summary>
+    /// Die Version des Sicherheitsverfahrens im Sicherheitsprofil: 1 fuer das Einschritt-, 2 fuer das
+    /// Zwei-Schritt-Verfahren.
+    ///
+    /// Verschluesselungskopf und Signaturkopf beschreiben die Sicherheit DERSELBEN Nachricht. Sagen
+    /// sie Verschiedenes, widerspricht sich die Nachricht in sich selbst. Genau das war der zweite
+    /// Stand: HNSHK trug schon die 2, HNVSK noch die fest verdrahtete 1 - und ING blieb bei
+    /// "9010 Ungueltiger Signaturaufbau". Deshalb steht die Ableitung hier einmal und nicht zweimal.
+    /// </summary>
+    private static string ProfileVersion(string securityFunction)
+        => securityFunction == OneStepSecurityFunction ? "1" : "2";
+
+    /// <summary>
     /// Der Signaturkopf.
     ///
-    /// Das Sicherheitsprofil an Stelle 1 hat zwei Teile: das Verfahren ("PIN") und SEINE VERSION -
-    /// 1 fuer das Einschritt-, 2 fuer das Zwei-Schritt-Verfahren. Hier stand fest die 1, auch wenn
-    /// die Sicherheitsfunktion daneben ein Zwei-Schritt-Verfahren benannte. Aufgefallen ist es lange
-    /// nicht, weil der Synchronisationsdialog mit Sicherheitsfunktion 999 laeuft - dort IST es das
-    /// Einschritt-Verfahren, und die 1 stimmt. Erst der Anmeldedialog schickt die echte
-    /// Sicherheitsfunktion, und ING beantwortet die Mischung aus beidem mit
-    /// "9010 Ungueltiger Signaturaufbau: Fehler im Segmentaufbau".
+    /// Das Sicherheitsprofil an Stelle 1 hat zwei Teile: das Verfahren ("PIN") und SEINE VERSION.
+    /// Hier stand fest die 1, auch wenn die Sicherheitsfunktion daneben ein Zwei-Schritt-Verfahren
+    /// benannte. Aufgefallen ist es lange nicht, weil der Synchronisationsdialog mit
+    /// Sicherheitsfunktion 999 laeuft - dort IST es das Einschritt-Verfahren, und die 1 stimmt. Erst
+    /// der Anmeldedialog schickt die echte Sicherheitsfunktion.
     /// </summary>
     private static FinTsSegment SignatureHeader(int number, string securityFunction, int reference, string blz, string userId, string systemId)
     {
         var now = DateTime.Now;
-        var profileVersion = securityFunction == OneStepSecurityFunction ? "1" : "2";
         return new([
             Header("HNSHK", number, 4),
-            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T(profileVersion)),
+            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T(ProfileVersion(securityFunction))),
             FinTsGroup.Of(FinTsValue.T(securityFunction)),
             FinTsGroup.Of(FinTsValue.T(reference.ToString(CultureInfo.InvariantCulture))),
             FinTsGroup.Of(FinTsValue.T("1")), FinTsGroup.Of(FinTsValue.T("1")),

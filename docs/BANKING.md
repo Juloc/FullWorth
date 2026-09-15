@@ -318,6 +318,11 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
    the procedure: `1` for one-step, `2` for two-step. It has to agree with the security function next
    to it. The sync dialog runs with `999` — genuinely one-step — which is why a hardcoded `1` survived
    there and only the login dialog answered `9010 Ungültiger Signaturaufbau`.
+
+   The **encryption head `HNVSK` carries the same Sicherheitsprofil**, and both describe the security
+   of one and the same message, so they must say the same thing. Fixing only `HNSHK` left the message
+   contradicting itself and `9010` stayed. `FinTsMessages.ProfileVersion` is the single place both
+   read it from.
 4. The whole state — bank id, login, PIN, product id, discovered `FinTsBankParameters`, the open
    session and any pending challenge — is serialised to JSON into `BankConnection.AuthorizationId`,
    which the backend stores encrypted (`FieldCipher`). `ProviderSessionId` is a synthetic

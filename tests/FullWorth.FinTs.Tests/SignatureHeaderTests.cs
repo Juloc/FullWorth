@@ -44,6 +44,35 @@ public sealed class SignatureHeaderTests
     }
 
     /// <summary>
+    /// Verschluesselungskopf und Signaturkopf beschreiben die Sicherheit derselben Nachricht - sie
+    /// sagen dasselbe ueber sie.
+    ///
+    /// Das war der zweite Anlauf an derselben Meldung: HNSHK trug schon die 2, HNVSK noch die fest
+    /// verdrahtete 1, und die Nachricht widersprach sich in sich selbst. ING blieb bei
+    /// "9010 Ungueltiger Signaturaufbau".
+    /// </summary>
+    [Theory]
+    [InlineData("999", "1")]
+    [InlineData("942", "2")]
+    public async Task BothSecurityHeadsCarryTheSameProcedureVersion(string securityFunction, string expected)
+    {
+        var transport = new CapturingTransport();
+        var client = new FinTsClient(transport);
+
+        if (securityFunction == FinTsMessages.OneStepSecurityFunction)
+            await client.SynchronizeAsync(Bank, Credentials);
+        else
+            await client.OpenAsync(Bank, Credentials, TwoStep(securityFunction));
+
+        var sent = transport.Sent();
+        var encryption = sent.Find("HNVSK");
+        Assert.NotNull(encryption);
+        Assert.Equal("PIN", encryption!.GetText(1, 0));
+        Assert.Equal(expected, encryption.GetText(1, 1));
+        Assert.Equal(expected, Signature(transport).GetText(1, 1));
+    }
+
+    /// <summary>
     /// Der Anmeldedialog: Zwei-Schritt-Verfahren, also Profilversion 2. Hier stand vorher die 1, und
     /// genau diese Mischung beantwortet ING mit 9010.
     /// </summary>
@@ -54,14 +83,8 @@ public sealed class SignatureHeaderTests
     public async Task TheLoginDialogSignsAsTwoStep(string securityFunction)
     {
         var transport = new CapturingTransport();
-        var parameters = Empty with
-        {
-            SystemId = "1234",
-            SecurityFunction = securityFunction,
-            TanMethods = [new FinTsTanMethod(securityFunction, "pushTAN", "2", false, false, 0, 0, 0, 6)]
-        };
 
-        await new FinTsClient(transport).OpenAsync(Bank, Credentials, parameters);
+        await new FinTsClient(transport).OpenAsync(Bank, Credentials, TwoStep(securityFunction));
 
         var signature = Signature(transport);
         Assert.Equal("2", signature.GetText(1, 1));
@@ -77,15 +100,9 @@ public sealed class SignatureHeaderTests
     public async Task TheLoggedShapeCoversTheEnvelopeAndTheSignatureBlock()
     {
         var transport = new CapturingTransport();
-        var parameters = Empty with
-        {
-            SystemId = "1234",
-            SecurityFunction = "942",
-            TanMethods = [new FinTsTanMethod("942", "pushTAN", "2", false, false, 0, 0, 0, 6)]
-        };
 
         var error = await Assert.ThrowsAsync<FinTsException>(
-            () => new FinTsClient(new RejectingTransport(transport)).OpenAsync(Bank, Credentials, parameters));
+            () => new FinTsClient(new RejectingTransport(transport)).OpenAsync(Bank, Credentials, TwoStep("942")));
 
         foreach (var expected in new[] { "HNHBK", "HNVSK", "HNSHK", "HKIDN", "HKVVB", "HKTAN", "HNSHA", "HNHBS" })
             Assert.Contains(expected, error.SentShapeSummary);
@@ -101,10 +118,12 @@ public sealed class SignatureHeaderTests
         return hnshk!;
     }
 
-    private static FinTsBankParameters Empty => new(0, 0, "0", FinTsMessages.OneStepSecurityFunction, null,
+    /// <summary>Eine Installation, die ein Zwei-Schritt-Verfahren gelernt hat.</summary>
+    private static FinTsBankParameters TwoStep(string securityFunction) => new(
+        0, 0, "1234", securityFunction, null,
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
         new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
-        [], []);
+        [new FinTsTanMethod(securityFunction, "pushTAN", "2", false, false, 0, 0, 0, 6)], []);
 
     /// <summary>Antwortet wie ING im Fehlerfall: 9800 als Sammelmeldung, 9010 als Grund.</summary>
     private sealed class RejectingTransport(CapturingTransport inner) : IFinTsTransport
