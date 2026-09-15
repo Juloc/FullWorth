@@ -107,12 +107,12 @@ public sealed class FinTsBankCodeTests
         var shape = new[]
         {
             new FinTsSegmentShape("HKIDN", 2, 4),
-            new FinTsSegmentShape("HKTAN", 7, 8)
+            new FinTsSegmentShape("HKTAN", 7, 11)
         };
 
         var error = Assert.Throws<FinTsException>(() => response.ThrowOnError(shape));
 
-        Assert.Equal("HKIDN:v2:4, HKTAN:v7:8", error.SentShapeSummary);
+        Assert.Equal("HKIDN:v2:4, HKTAN:v7:11", error.SentShapeSummary);
         // Struktur, keine Werte: weder Benutzername noch PIN noch TAN koennen hier auftauchen.
         Assert.DoesNotContain("=", error.SentShapeSummary);
     }

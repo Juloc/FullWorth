@@ -109,29 +109,40 @@ internal static class FinTsMessages
         return new(groups);
     }
 
+    /// <summary>
+    /// HKTAN mit TAN-Prozess 4: der Auftrag wird angekuendigt, seine Daten stehen im Segment, das
+    /// <paramref name="referencedSegment"/> benennt.
+    ///
+    /// Der Aufbau ab Segmentversion 6, nach Stellen:
+    /// 1 TAN-Prozess, 2 Segmentkennung, 3 Kontoverbindung, 4 Auftrags-Hashwert, 5 Auftragsreferenz,
+    /// 6 weitere TAN folgt, 7 Auftrag storniert, 8 SMS-Abbuchungskonto, 9 Challenge-Klasse,
+    /// 10 Parameter Challenge-Klasse, 11 Bezeichnung des TAN-Mediums.
+    ///
+    /// Die Segmentkennung an Stelle 2 gibt es erst ab dieser Version; davor steht dort der
+    /// Auftrags-Hashwert. Es gab hier einen Zweig fuer aeltere Versionen, der die Segmentkennung
+    /// trotzdem schrieb und alles Weitere wegliess - also den Namen "HKIDN" in ein Hashfeld. Der
+    /// Zweig ist weg: <paramref name="version"/> kommt aus <c>FinTsClient.TanVersion</c> und ist
+    /// nie kleiner als 6.
+    /// </summary>
     internal static FinTsSegment TanProcess4(string referencedSegment, int version, string? medium)
     {
         var groups = new List<FinTsGroup>
         {
-            Header("HKTAN", 0, version), FinTsGroup.Of(FinTsValue.T("4")), FinTsGroup.Of(FinTsValue.T(referencedSegment))
+            Header("HKTAN", 0, version),
+            FinTsGroup.Of(FinTsValue.T("4")),                    // 1 TAN-Prozess
+            FinTsGroup.Of(FinTsValue.T(referencedSegment)),      // 2 Segmentkennung
+            FinTsGroup.Of(FinTsValue.E()),                       // 3 Kontoverbindung
+            FinTsGroup.Of(FinTsValue.E()),                       // 4 Auftrags-Hashwert
+            FinTsGroup.Of(FinTsValue.E()),                       // 5 Auftragsreferenz
+            FinTsGroup.Of(FinTsValue.E()),                       // 6 weitere TAN folgt
+            FinTsGroup.Of(FinTsValue.E())                        // 7 Auftrag storniert
         };
-        if (version >= 6)
-        {
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-        }
         if (!string.IsNullOrWhiteSpace(medium))
         {
-            if (version >= 6)
-            {
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            }
-            groups.Add(FinTsGroup.Of(FinTsValue.T(medium)));
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 8 SMS-Abbuchungskonto
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 9 Challenge-Klasse
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 10 Parameter Challenge-Klasse
+            groups.Add(FinTsGroup.Of(FinTsValue.T(medium)));     // 11 Bezeichnung des TAN-Mediums
         }
         return new(groups);
     }
@@ -142,34 +153,30 @@ internal static class FinTsMessages
     internal static FinTsSegment TanPoll(string taskReference, int version, string? medium)
         => TanContinuation("S", taskReference, version, medium);
 
+    /// <summary>
+    /// HKTAN mit TAN-Prozess 2 (TAN einreichen) oder S (nachfragen, ob der Benutzer in der App
+    /// freigegeben hat). Stellen wie in <see cref="TanProcess4"/>; die Auftragsreferenz steht an 5,
+    /// "weitere TAN folgt" an 6.
+    /// </summary>
     private static FinTsSegment TanContinuation(string process, string taskReference, int version, string? medium)
     {
-        var groups = new List<FinTsGroup> { Header("HKTAN", 0, version), FinTsGroup.Of(FinTsValue.T(process)) };
-        if (version >= 6)
+        var groups = new List<FinTsGroup>
         {
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.T(taskReference)));
-            groups.Add(FinTsGroup.Of(FinTsValue.T("N")));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-        }
-        else
-        {
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            groups.Add(FinTsGroup.Of(FinTsValue.T(taskReference)));
-            groups.Add(FinTsGroup.Of(FinTsValue.T("N")));
-        }
+            Header("HKTAN", 0, version),
+            FinTsGroup.Of(FinTsValue.T(process)),                // 1 TAN-Prozess
+            FinTsGroup.Of(FinTsValue.E()),                       // 2 Segmentkennung
+            FinTsGroup.Of(FinTsValue.E()),                       // 3 Kontoverbindung
+            FinTsGroup.Of(FinTsValue.E()),                       // 4 Auftrags-Hashwert
+            FinTsGroup.Of(FinTsValue.T(taskReference)),          // 5 Auftragsreferenz
+            FinTsGroup.Of(FinTsValue.T("N")),                    // 6 weitere TAN folgt
+            FinTsGroup.Of(FinTsValue.E())                        // 7 Auftrag storniert
+        };
         if (!string.IsNullOrWhiteSpace(medium))
         {
-            if (version >= 6)
-            {
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-                groups.Add(FinTsGroup.Of(FinTsValue.E()));
-            }
-            groups.Add(FinTsGroup.Of(FinTsValue.T(medium)));
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 8 SMS-Abbuchungskonto
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 9 Challenge-Klasse
+            groups.Add(FinTsGroup.Of(FinTsValue.E()));           // 10 Parameter Challenge-Klasse
+            groups.Add(FinTsGroup.Of(FinTsValue.T(medium)));     // 11 Bezeichnung des TAN-Mediums
         }
         return new(groups);
     }

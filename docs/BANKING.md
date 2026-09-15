@@ -306,6 +306,13 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
 3. `OpenAsync`: a real dialog with the discovered system id, plus `HKTAN` process 4 referencing `HKIDN`
    when the bank has TAN methods. The security function is chosen from the `3920` allowed list,
    preferring a decoupled method.
+
+   The `HKTAN` segment version is the **highest** one the bank announced for that security function,
+   never below 6. Banks announce the same method in several `HITANS` versions at once, oldest first,
+   and process 4 with a Segmentkennung in element 2 only exists from version 6 — below that, element 2
+   is the order hash. Sending a version-4 header with a version-6 body is what ING answered with
+   `9110 Unbekannter Aufbau der Kundennachricht`, hidden behind the umbrella code
+   `9800 Der Dialog wurde abgebrochen`.
 4. The whole state — bank id, login, PIN, product id, discovered `FinTsBankParameters`, the open
    session and any pending challenge — is serialised to JSON into `BankConnection.AuthorizationId`,
    which the backend stores encrypted (`FieldCipher`). `ProviderSessionId` is a synthetic

@@ -233,8 +233,32 @@ public sealed class FinTsClient(IFinTsTransport transport)
         return challenge.IsDecoupled ? FinTsResult<T>.TanPending(session, challenge) : FinTsResult<T>.TanRequired(session, challenge);
     }
 
+    /// <summary>
+    /// Die aelteste Segmentversion, in der dieser Code HKTAN ueberhaupt schreiben kann.
+    ///
+    /// <see cref="FinTsMessages.TanProcess4"/> und die Fortsetzungen bauen den Aufbau ab Version 6:
+    /// Segmentkennung an Stelle 2, Auftragsreferenz an Stelle 5, TAN-Medium an Stelle 11. Den gibt es
+    /// darunter nicht - vor Version 5 steht an Stelle 2 der Auftrags-Hashwert, und TAN-Prozess 4
+    /// ("Auftrag ankuendigen") existiert dort gar nicht.
+    /// </summary>
+    private const int LowestTanVersion = 6;
+
+    /// <summary>
+    /// Die Segmentversion, in der HKTAN gebaut wird: was die Bank fuer das gewaehlte Verfahren
+    /// ankuendigt, sonst die hoechste ueberhaupt angekuendigte.
+    ///
+    /// Hier stand eine Untergrenze von 4. Zusammen mit dem HITANS-Zusammenfuehren, das die zuerst
+    /// gesehene statt der hoechsten Version behielt, kam bei ING eine 4 heraus - und damit eine
+    /// Nachricht mit Versionskopf 4 und dem Aufbau von Version 6 dahinter. Genau die weist die Bank
+    /// mit "9110 Unbekannter Aufbau der Kundennachricht" zurueck; sichtbar war davon nur die
+    /// Sammelmeldung "9800 Der Dialog wurde abgebrochen".
+    /// </summary>
     private static int TanVersion(FinTsBankParameters parameters)
-        => Math.Max(4, parameters.TanMethods.Where(x => x.SecurityFunction == parameters.SecurityFunction).Select(x => x.SegmentVersion).DefaultIfEmpty(parameters.TanMethods.Select(x => x.SegmentVersion).DefaultIfEmpty(7).Max()).Max());
+        => Math.Max(LowestTanVersion, parameters.TanMethods
+            .Where(x => x.SecurityFunction == parameters.SecurityFunction)
+            .Select(x => x.SegmentVersion)
+            .DefaultIfEmpty(parameters.TanMethods.Select(x => x.SegmentVersion).DefaultIfEmpty(0).Max())
+            .Max());
 
     private static FinTsBankParameters EmptyParameters()
         => new(0, 0, "0", "999", null,

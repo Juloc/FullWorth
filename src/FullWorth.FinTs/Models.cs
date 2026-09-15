@@ -205,7 +205,7 @@ public sealed class FinTsException(
     /// </summary>
     public IReadOnlyList<FinTsSegmentShape> SentShape { get; } = sentShape ?? [];
 
-    /// <summary>Der Bauplan als "HKIDN:v2:4, HKVVB:v3:5, HKTAN:v7:8".</summary>
+    /// <summary>Der Bauplan als "HKIDN:v2:4, HKVVB:v3:5, HKTAN:v7:11".</summary>
     public string SentShapeSummary => string.Join(", ", SentShape);
 
     /// <summary>Alle Codes als "9800 Der Dialog wurde abgebrochen; 9010 …" - fuer ein Protokoll, eine Zeile.</summary>

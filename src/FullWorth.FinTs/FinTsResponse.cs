@@ -132,8 +132,17 @@ internal static class FinTsResponseParser
                     foreach (var pair in ParsePinTanRules(segment)) tanRequired[pair.Key] = pair.Value;
                     break;
                 case "HITANS":
+                    // Eine Bank kuendigt dasselbe Verfahren in MEHREREN Segmentversionen an - ING
+                    // schickt HITANS:4 und HITANS:6 nebeneinander. Vorher gewann das zuerst gesehene,
+                    // und das ist regelmaessig das aelteste: fuer Sicherheitsfunktion 942 blieb
+                    // Version 4 stehen, die Version 6 daneben wurde weggeworfen. Gebraucht wird die
+                    // hoechste, denn nach ihr wird HKTAN gebaut (#130 §8).
                     foreach (var method in ParseTanMethods(segment))
-                        if (!methods.Any(x => x.SecurityFunction == method.SecurityFunction)) methods.Add(method);
+                    {
+                        var existing = methods.FindIndex(x => x.SecurityFunction == method.SecurityFunction);
+                        if (existing < 0) methods.Add(method);
+                        else if (methods[existing].SegmentVersion < method.SegmentVersion) methods[existing] = method;
+                    }
                     break;
                 default:
                     if (segment.Type.StartsWith("HI", StringComparison.Ordinal) && segment.Type.EndsWith("S", StringComparison.Ordinal) && segment.Version > 0)
