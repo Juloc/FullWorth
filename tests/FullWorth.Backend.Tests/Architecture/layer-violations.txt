@@ -1,5 +1,4 @@
 Categories/CategoryIntelligenceModule.cs
-Contracts/ContractParityModule.cs
 Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs

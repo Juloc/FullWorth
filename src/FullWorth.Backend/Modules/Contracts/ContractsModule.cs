@@ -326,6 +326,160 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return new(ContractMutationResult.Success, await GetForUserAsync(userId, fullWorthSpaceId, target.Id, ct));
     }
 
+    /// <summary>Die noch eigenstaendigen Vertraege einer Auswahl - wer schon zusammengefuehrt ist, faellt raus.</summary>
+    public Task<List<RecurringContract>> UnmergedAsync(Guid fullWorthSpaceId, IReadOnlyList<Guid> ids, CancellationToken ct) =>
+        db.Contracts
+            .Where(contract =>
+                contract.FullWorthSpaceId == fullWorthSpaceId &&
+                contract.MergedIntoContractId == null &&
+                ids.Contains(contract.Id))
+            .ToListAsync(ct);
+
+    public Task<RecurringContract?> FindInSpaceAsync(Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
+        db.Contracts.SingleOrDefaultAsync(contract =>
+            contract.Id == contractId && contract.FullWorthSpaceId == fullWorthSpaceId, ct);
+
+    public Task<bool> CategoryBelongsToSpaceAsync(Guid fullWorthSpaceId, Guid categoryId, CancellationToken ct) =>
+        db.Categories.AsNoTracking().AnyAsync(category =>
+            category.Id == categoryId && category.FullWorthSpaceId == fullWorthSpaceId, ct);
+
+    /// <summary>
+    /// Zusammenfuehren und dabei den ueberlebenden Vertrag umbenennen, umkategorisieren oder auf ein
+    /// anderes Konto legen. Beides gehoert in dieselbe Transaktion: scheitert das Zusammenfuehren,
+    /// darf der neue Name nicht stehenbleiben.
+    /// </summary>
+    public async Task<ContractMutationOutcome> MergeWithEditsAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid targetContractId,
+        IReadOnlyList<Guid> sourceIds,
+        string? name,
+        Guid? categoryId,
+        Guid? accountId,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        var target = await db.Contracts.SingleOrDefaultAsync(contract =>
+            contract.Id == targetContractId &&
+            contract.FullWorthSpaceId == fullWorthSpaceId &&
+            contract.MergedIntoContractId == null, ct);
+        if (target is null) return new(ContractMutationResult.NotFound);
+
+        if (!string.IsNullOrWhiteSpace(name)) target.Name = name.Trim();
+        if (categoryId.HasValue) target.CategoryId = categoryId;
+        if (accountId.HasValue) target.AccountId = accountId;
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var outcome = await MergeForUserAsync(
+            userId, fullWorthSpaceId, targetContractId, new ContractMergeRequest(sourceIds), ct);
+        if (outcome.Result != ContractMutationResult.Success) return outcome;
+
+        await transaction.CommitAsync(ct);
+        return outcome;
+    }
+
+    /// <summary>
+    /// Teilt einen Vertrag auf: ein Buendel, je ein neuer Vertrag pro Bestandteil, der alte wird
+    /// stillgelegt statt geloescht - seine Buchungen haengen weiter an ihm.
+    ///
+    /// <paramref name="copyHistory"/> haengt jede bisherige Zahlung zusaetzlich anteilig an jeden
+    /// neuen Vertrag; ohne das faengt die Historie der Teile bei null an. Der Anteil ist der
+    /// Betragsanteil des Bestandteils am alten Vertrag.
+    /// </summary>
+    public async Task<(Guid BundleId, List<RecurringContract> Children)> SplitAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        RecurringContract parent,
+        string? bundleName,
+        IReadOnlyList<ContractSplitComponent> components,
+        bool copyHistory,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var bundleId = Guid.NewGuid();
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var connection = await RawSql.OpenAsync(db, ct);
+
+        await using (var bundle = RawSql.Command(connection,
+            "INSERT INTO \"ContractBundles\" (\"Id\",\"FullWorthSpaceId\",\"Name\",\"ProviderName\",\"AccountId\",\"Currency\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@name,@provider,@account,@currency,@now,@now)",
+            ("@id", bundleId), ("@space", fullWorthSpaceId),
+            ("@name", string.IsNullOrWhiteSpace(bundleName) ? parent.Name : bundleName.Trim()),
+            ("@provider", parent.ProviderName), ("@account", parent.AccountId),
+            ("@currency", parent.Currency), ("@now", now)))
+            await bundle.ExecuteNonQueryAsync(ct);
+
+        var children = new List<(RecurringContract Contract, decimal Share)>();
+        foreach (var part in components)
+        {
+            var child = new RecurringContract
+            {
+                FullWorthSpaceId = fullWorthSpaceId,
+                Name = part.Name.Trim(),
+                ProviderName = parent.ProviderName,
+                Kind = string.IsNullOrWhiteSpace(part.Kind) ? parent.Kind : part.Kind.Trim().ToLowerInvariant(),
+                CategoryId = part.CategoryId,
+                AccountId = parent.AccountId,
+                Amount = part.Amount,
+                Currency = parent.Currency,
+                BillingCycle = parent.BillingCycle,
+                Interval = parent.Interval,
+                StartDate = parent.StartDate,
+                EndDate = parent.EndDate,
+                NextDueDate = parent.NextDueDate,
+                AutoDetected = false,
+                IsActive = true,
+                Notes = parent.Notes,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.Contracts.Add(child);
+            children.Add((child, part.Amount / parent.Amount));
+        }
+        await db.SaveChangesAsync(ct);
+
+        foreach (var child in children)
+        {
+            await using var member = RawSql.Command(connection,
+                "INSERT INTO \"ContractBundleMembers\" (\"BundleId\",\"ContractId\") VALUES (@b,@c)",
+                ("@b", bundleId), ("@c", child.Contract.Id));
+            await member.ExecuteNonQueryAsync(ct);
+        }
+
+        if (copyHistory)
+        {
+            var payments = new List<(Guid TransactionId, decimal Amount)>();
+            await using (var links = RawSql.Command(connection,
+                "SELECT \"TransactionId\",\"Amount\" FROM \"ContractTransactionLinks\" WHERE \"ContractId\"=@id",
+                ("@id", parent.Id)))
+            {
+                await using var reader = await links.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                    payments.Add((RawSql.Guid(reader, "TransactionId"), RawSql.Decimal(reader, "Amount")));
+            }
+
+            foreach (var payment in payments)
+                foreach (var child in children)
+                {
+                    await using var add = RawSql.Command(connection,
+                        "INSERT INTO \"ContractTransactionLinks\" (\"Id\",\"FullWorthSpaceId\",\"ContractId\",\"TransactionId\",\"Amount\",\"LinkSource\",\"CreatedAt\") VALUES (@id,@space,@contract,@tx,@amount,'manual',@now) ON CONFLICT (\"ContractId\",\"TransactionId\") DO NOTHING",
+                        ("@id", Guid.NewGuid()), ("@space", fullWorthSpaceId), ("@contract", child.Contract.Id),
+                        ("@tx", payment.TransactionId), ("@amount", Math.Round(payment.Amount * child.Share, 2)),
+                        ("@now", now));
+                    await add.ExecuteNonQueryAsync(ct);
+                }
+        }
+
+        parent.IsActive = false;
+        parent.UpdatedAt = now;
+        audit.Record(fullWorthSpaceId, userId, "contract.split", "RecurringContract", parent.Id);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return (bundleId, children.Select(x => x.Contract).ToList());
+    }
+
     public async Task<ContractMutationResult> UnmergeForUserAsync(
         Guid userId,
         Guid fullWorthSpaceId,

@@ -1,9 +1,5 @@
 using System.Text;
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
-using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Contracts;
 
@@ -47,76 +43,140 @@ public static class ContractParityEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetContractLinks(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    private static async Task<IResult> GetContractLinks(
+        Guid contractId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var visible=await RawSql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT l."Id",l."TransactionId",l."Amount",l."LinkSource",l."Confidence",l."CreatedAt",t."BookingDate",t."ValueDate",t."Counterparty",t."Amount" AS "TransactionAmount",t."Currency",t."AccountId"
-FROM "ContractTransactionLinks" l
-JOIN "Transactions" t ON t."Id"=l."TransactionId"
-JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
-WHERE (l."ContractId"=@id OR source_contract."MergedIntoContractId"=@id)
-  AND l."FullWorthSpaceId"=@space
-ORDER BY COALESCE(t."BookingDate",t."ValueDate") DESC
-""",("@id",contractId),("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var account=RawSql.Guid(r,"AccountId");if(!visible.Contains(account))continue;rows.Add(new{id=RawSql.Guid(r,"Id"),transactionId=RawSql.Guid(r,"TransactionId"),amount=RawSql.Decimal(r,"Amount"),linkSource=RawSql.String(r,"LinkSource"),confidence=RawSql.NullableDecimal(r,"Confidence"),date=RawSql.NullableDate(r,"BookingDate")??RawSql.NullableDate(r,"ValueDate"),counterparty=RawSql.NullableString(r,"Counterparty"),transactionAmount=RawSql.Decimal(r,"TransactionAmount"),currency=RawSql.String(r,"Currency")});}return Results.Ok(rows);
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanReadContract(uid, fullWorthSpaceId, contractId, ct)) return Results.NotFound();
+
+        var visible = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        var rows = (await store.LinksOfContractAsync(contractId, fullWorthSpaceId, ct))
+            .Where(row => visible.Contains(row.AccountId))
+            .Select(row => new
+            {
+                id = row.Id,
+                transactionId = row.TransactionId,
+                amount = row.Amount,
+                linkSource = row.LinkSource,
+                confidence = row.Confidence,
+                date = row.Date,
+                counterparty = row.Counterparty,
+                transactionAmount = row.TransactionAmount,
+                currency = row.Currency
+            });
+        return Results.Ok(rows);
     }
 
-    private static async Task<IResult> GetTransactionLinks(Guid transactionId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    private static async Task<IResult> GetTransactionLinks(
+        Guid transactionId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();var visible=await RawSql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var tx=await db.Transactions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==transactionId&&visible.Contains(x.AccountId),ct);if(tx is null)return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT l."Id",
-       COALESCE(c."MergedIntoContractId",l."ContractId") AS "ContractId",
-       l."Amount",l."LinkSource",
-       COALESCE(target."Name",c."Name") AS "Name",
-       COALESCE(target."Currency",c."Currency") AS "Currency",
-       COALESCE(target."AccountId",c."AccountId") AS "AccountId"
-FROM "ContractTransactionLinks" l
-JOIN "Contracts" c ON c."Id"=l."ContractId"
-LEFT JOIN "Contracts" target ON target."Id"=c."MergedIntoContractId"
-WHERE l."TransactionId"=@tx AND l."FullWorthSpaceId"=@space
-ORDER BY COALESCE(target."Name",c."Name")
-""",("@tx",transactionId),("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var accountId=RawSql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;rows.Add(new{id=RawSql.Guid(r,"Id"),contractId=RawSql.Guid(r,"ContractId"),amount=RawSql.Decimal(r,"Amount"),linkSource=RawSql.String(r,"LinkSource"),name=RawSql.String(r,"Name"),currency=RawSql.String(r,"Currency")});}return Results.Ok(rows);
+        var uid = currentUser.RequireUserId();
+        var visible = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        if (await store.FindTransactionAsync(transactionId, visible, ct) is null) return Results.NotFound();
+
+        var rows = (await store.ContractsOfTransactionAsync(transactionId, fullWorthSpaceId, ct))
+            .Where(row => !row.AccountId.HasValue || visible.Contains(row.AccountId.Value))
+            .Select(row => new
+            {
+                id = row.Id,
+                contractId = row.ContractId,
+                amount = row.Amount,
+                linkSource = row.LinkSource,
+                name = row.Name,
+                currency = row.Currency
+            });
+        return Results.Ok(rows);
     }
 
-    private static async Task<IResult> AddContractLink(Guid contractId,Guid fullWorthSpaceId,ContractLinkWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> AddContractLink(
+        Guid contractId, Guid fullWorthSpaceId, ContractLinkWrite request, CurrentUserContext currentUser,
+        SpaceAccess space, ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);var writable=await RawSql.WritableAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var tx=await db.Transactions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==request.TransactionId&&writable.Contains(x.AccountId),ct);if(tx is null)return Results.NotFound();if(tx.Amount>=0||request.Amount<=0)return Results.BadRequest(new{error="Only expense transactions can be linked as contract payments."});
-        var c=await RawSql.OpenAsync(db,ct);decimal allocated=0;await using(var sum=RawSql.Command(c,"SELECT COALESCE(SUM(\"Amount\"),0) FROM \"ContractTransactionLinks\" WHERE \"TransactionId\"=@tx",("@tx",request.TransactionId))){allocated=Convert.ToDecimal(await sum.ExecuteScalarAsync(ct));}if(allocated+request.Amount>Math.Abs(tx.Amount)+0.01m)return Results.BadRequest(new{error="Contract link amounts exceed the transaction amount."});
-        var id=Guid.NewGuid();await using var cmd=RawSql.Command(c,"INSERT INTO \"ContractTransactionLinks\" (\"Id\",\"FullWorthSpaceId\",\"ContractId\",\"TransactionId\",\"Amount\",\"LinkSource\",\"Confidence\",\"CreatedAt\") VALUES (@id,@space,@contract,@tx,@amount,@source,@confidence,@now) ON CONFLICT (\"ContractId\",\"TransactionId\") DO UPDATE SET \"Amount\"=EXCLUDED.\"Amount\",\"LinkSource\"=EXCLUDED.\"LinkSource\",\"Confidence\"=EXCLUDED.\"Confidence\"",("@id",id),("@space",fullWorthSpaceId),("@contract",contractId),("@tx",request.TransactionId),("@amount",request.Amount),("@source",NormalizeSource(request.LinkSource)),("@confidence",request.Confidence),("@now",DateTimeOffset.UtcNow));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"contract.transaction_linked","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.Ok(new{id});
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanWriteContract(uid, fullWorthSpaceId, contractId, ct)) return Results.StatusCode(403);
+
+        var writable = await space.WritableAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        var transaction = await store.FindTransactionAsync(request.TransactionId, writable, ct);
+        if (transaction is null) return Results.NotFound();
+        if (transaction.Amount >= 0 || request.Amount <= 0)
+            return Results.BadRequest(new { error = "Only expense transactions can be linked as contract payments." });
+
+        // Eine Buchung kann auf mehrere Vertraege verteilt sein, aber nie ueber ihren Betrag hinaus.
+        var allocated = await store.AllocatedAmountAsync(request.TransactionId, ct);
+        if (allocated + request.Amount > Math.Abs(transaction.Amount) + 0.01m)
+            return Results.BadRequest(new { error = "Contract link amounts exceed the transaction amount." });
+
+        var id = await store.AddLinkAsync(uid, fullWorthSpaceId, contractId, request.TransactionId,
+            request.Amount, NormalizeSource(request.LinkSource), request.Confidence, ct);
+        return Results.Ok(new { id });
     }
 
-    private static async Task<IResult> DeleteContractLink(Guid contractId,Guid linkId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> DeleteContractLink(
+        Guid contractId, Guid linkId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
+        ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct)||!await CanWriteContractLinkAsync(db,uid,fullWorthSpaceId,contractId,linkId,ct))return Results.StatusCode(403);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-DELETE FROM "ContractTransactionLinks" l
-USING "Contracts" source_contract
-WHERE l."Id"=@id
-  AND l."ContractId"=source_contract."Id"
-  AND l."FullWorthSpaceId"=@space
-  AND (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
-""",("@id",linkId),("@contract",contractId),("@space",fullWorthSpaceId));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"contract.transaction_unlinked","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.NoContent();
+        var uid = currentUser.RequireUserId();
+        // Zwei Rechte: der Vertrag UND das Konto der Buchung, die daran haengt.
+        if (!await store.CanWriteContract(uid, fullWorthSpaceId, contractId, ct)
+            || !await store.CanWriteContractLinkAsync(uid, fullWorthSpaceId, contractId, linkId, ct))
+            return Results.StatusCode(403);
+
+        return await store.DeleteLinkAsync(uid, fullWorthSpaceId, contractId, linkId, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
-    private static async Task<IResult> SplitContract(Guid contractId,Guid fullWorthSpaceId,ContractSplitWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> SplitContract(
+        Guid contractId, Guid fullWorthSpaceId, ContractSplitWrite request, CurrentUserContext currentUser,
+        ContractStore contracts, ContractLinkStore links, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);var parent=await db.Contracts.SingleOrDefaultAsync(x=>x.Id==contractId&&x.FullWorthSpaceId==fullWorthSpaceId,ct);if(parent is null)return Results.NotFound();var components=(request.Components??[]).Where(x=>!string.IsNullOrWhiteSpace(x.Name)&&x.Amount>0).ToArray();if(components.Length<2||Math.Abs(components.Sum(x=>x.Amount)-parent.Amount)>0.01m)return Results.BadRequest(new{error="Split components must contain at least two rows and equal the expected contract amount."});if(components.Any(x=>x.CategoryId.HasValue&&!db.Categories.Any(c=>c.Id==x.CategoryId&&c.FullWorthSpaceId==fullWorthSpaceId)))return Results.BadRequest(new{error="Split contains an invalid category."});
-        var copyHistory=string.Equals(request.HistoryMode,"same_split",StringComparison.OrdinalIgnoreCase);if(copyHistory&&!await AllContractLinksWritableAsync(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);
-        await using var tx=await db.Database.BeginTransactionAsync(ct);var bundleId=Guid.NewGuid();var c=await RawSql.OpenAsync(db,ct);var now=DateTimeOffset.UtcNow;await using(var bundle=RawSql.Command(c,"INSERT INTO \"ContractBundles\" (\"Id\",\"FullWorthSpaceId\",\"Name\",\"ProviderName\",\"AccountId\",\"Currency\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@name,@provider,@account,@currency,@now,@now)",("@id",bundleId),("@space",fullWorthSpaceId),("@name",string.IsNullOrWhiteSpace(request.BundleName)?parent.Name:request.BundleName.Trim()),("@provider",parent.ProviderName),("@account",parent.AccountId),("@currency",parent.Currency),("@now",now)))await bundle.ExecuteNonQueryAsync(ct);
-        var children=new List<(RecurringContract Contract,decimal Share)>();foreach(var part in components){var child=new RecurringContract{FullWorthSpaceId=fullWorthSpaceId,Name=part.Name.Trim(),ProviderName=parent.ProviderName,Kind=string.IsNullOrWhiteSpace(part.Kind)?parent.Kind:part.Kind.Trim().ToLowerInvariant(),CategoryId=part.CategoryId,AccountId=parent.AccountId,Amount=part.Amount,Currency=parent.Currency,BillingCycle=parent.BillingCycle,Interval=parent.Interval,StartDate=parent.StartDate,EndDate=parent.EndDate,NextDueDate=parent.NextDueDate,AutoDetected=false,IsActive=true,Notes=parent.Notes,CreatedAt=now,UpdatedAt=now};db.Contracts.Add(child);children.Add((child,part.Amount/parent.Amount));}
-        await db.SaveChangesAsync(ct);foreach(var child in children){await using var member=RawSql.Command(c,"INSERT INTO \"ContractBundleMembers\" (\"BundleId\",\"ContractId\") VALUES (@b,@c)",("@b",bundleId),("@c",child.Contract.Id));await member.ExecuteNonQueryAsync(ct);}
-        if(copyHistory){var oldLinks=new List<(Guid Tx,decimal Amount)>();await using(var links=RawSql.Command(c,"SELECT \"TransactionId\",\"Amount\" FROM \"ContractTransactionLinks\" WHERE \"ContractId\"=@id",("@id",contractId))){await using var r=await links.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))oldLinks.Add((RawSql.Guid(r,"TransactionId"),RawSql.Decimal(r,"Amount")));}foreach(var old in oldLinks){foreach(var child in children){await using var add=RawSql.Command(c,"INSERT INTO \"ContractTransactionLinks\" (\"Id\",\"FullWorthSpaceId\",\"ContractId\",\"TransactionId\",\"Amount\",\"LinkSource\",\"CreatedAt\") VALUES (@id,@space,@contract,@tx,@amount,'manual',@now) ON CONFLICT (\"ContractId\",\"TransactionId\") DO NOTHING",("@id",Guid.NewGuid()),("@space",fullWorthSpaceId),("@contract",child.Contract.Id),("@tx",old.Tx),("@amount",Math.Round(old.Amount*child.Share,2)),("@now",now));await add.ExecuteNonQueryAsync(ct);}}}
-        parent.IsActive=false;parent.UpdatedAt=now;audit.Record(fullWorthSpaceId,uid,"contract.split","RecurringContract",contractId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.Ok(new{bundleId,archivedContractId=contractId,contracts=children.Select(x=>new{x.Contract.Id,x.Contract.Name,x.Contract.Amount})});
+        var uid = currentUser.RequireUserId();
+        if (!await links.CanWriteContract(uid, fullWorthSpaceId, contractId, ct)) return Results.StatusCode(403);
+
+        var parent = await contracts.FindInSpaceAsync(fullWorthSpaceId, contractId, ct);
+        if (parent is null) return Results.NotFound();
+
+        var components = (request.Components ?? [])
+            .Where(part => !string.IsNullOrWhiteSpace(part.Name) && part.Amount > 0)
+            .ToArray();
+        if (components.Length < 2 || Math.Abs(components.Sum(part => part.Amount) - parent.Amount) > 0.01m)
+            return Results.BadRequest(new { error = "Split components must contain at least two rows and equal the expected contract amount." });
+
+        foreach (var part in components)
+            if (part.CategoryId.HasValue
+                && !await contracts.CategoryBelongsToSpaceAsync(fullWorthSpaceId, part.CategoryId.Value, ct))
+                return Results.BadRequest(new { error = "Split contains an invalid category." });
+
+        // Die Historie mitzunehmen heisst, fremde Buchungen anzufassen - dafuer reicht das
+        // Vertragsrecht allein nicht, es braucht auch das Recht an jedem beteiligten Konto.
+        var copyHistory = string.Equals(request.HistoryMode, "same_split", StringComparison.OrdinalIgnoreCase);
+        if (copyHistory && !await links.AllContractLinksWritableAsync(uid, fullWorthSpaceId, contractId, ct))
+            return Results.StatusCode(403);
+
+        var (bundleId, children) = await contracts.SplitAsync(
+            uid, fullWorthSpaceId, parent, request.BundleName, components, copyHistory, ct);
+
+        return Results.Ok(new
+        {
+            bundleId,
+            archivedContractId = contractId,
+            contracts = children.Select(child => new { child.Id, child.Name, child.Amount })
+        });
     }
 
     private static async Task<IResult> MergeContracts(
         Guid fullWorthSpaceId,
         ContractMergeWrite request,
         CurrentUserContext currentUser,
-        FullWorthDbContext db,
-        ContractStore store,
+        SpaceAccess space,
+        ContractStore contracts,
+        ContractLinkStore links,
         CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "contracts.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "contracts.manage", ct))
             return Results.StatusCode(403);
 
         var ids = (request.ContractIds ?? Array.Empty<Guid>())
@@ -125,53 +185,37 @@ WHERE l."Id"=@id
             .ToArray();
         if (ids.Length < 2) return Results.BadRequest(new { error = "Select at least two contracts." });
 
-        var contracts = await db.Contracts
-            .Where(contract =>
-                contract.FullWorthSpaceId == fullWorthSpaceId &&
-                contract.MergedIntoContractId == null &&
-                ids.Contains(contract.Id))
-            .ToListAsync(ct);
-        if (contracts.Count != ids.Length) return Results.NotFound();
+        var selected = await contracts.UnmergedAsync(fullWorthSpaceId, ids, ct);
+        if (selected.Count != ids.Length) return Results.NotFound();
 
-        foreach (var contract in contracts)
-            if (!await CanWriteContract(db, userId, fullWorthSpaceId, contract.Id, ct))
+        foreach (var contract in selected)
+            if (!await links.CanWriteContract(userId, fullWorthSpaceId, contract.Id, ct))
                 return Results.NotFound();
 
-        var selectedCurrencies = contracts.Select(contract => contract.Currency).ToArray();
+        var selectedCurrencies = selected.Select(contract => contract.Currency).ToArray();
         if (!ContractMergeCurrency.TryResolve(selectedCurrencies, out _))
             return Results.BadRequest(new { error = ContractMergeCurrency.ConflictError(selectedCurrencies) });
 
         var target = request.TargetContractId.HasValue
-            ? contracts.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)
-            : contracts[0];
+            ? selected.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)
+            : selected[0];
         if (target is null) return Results.BadRequest(new { error = "Target contract must be part of the selection." });
 
         if (request.TargetCategoryId.HasValue &&
-            !await db.Categories.AsNoTracking().AnyAsync(category =>
-                category.Id == request.TargetCategoryId.Value &&
-                category.FullWorthSpaceId == fullWorthSpaceId, ct))
+            !await contracts.CategoryBelongsToSpaceAsync(fullWorthSpaceId, request.TargetCategoryId.Value, ct))
             return Results.BadRequest(new { error = "Target category is invalid." });
 
         if (request.TargetAccountId.HasValue)
         {
-            var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+            var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
             if (!writable.Contains(request.TargetAccountId.Value))
                 return Results.BadRequest(new { error = "Target account is inaccessible." });
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        if (!string.IsNullOrWhiteSpace(request.TargetName)) target.Name = request.TargetName.Trim();
-        if (request.TargetCategoryId.HasValue) target.CategoryId = request.TargetCategoryId;
-        if (request.TargetAccountId.HasValue) target.AccountId = request.TargetAccountId;
-        target.UpdatedAt = DateTimeOffset.UtcNow;
-
         var sourceIds = ids.Where(id => id != target.Id).ToArray();
-        var outcome = await store.MergeForUserAsync(
-            userId,
-            fullWorthSpaceId,
-            target.Id,
-            new ContractMergeRequest(sourceIds),
-            ct);
+        var outcome = await contracts.MergeWithEditsAsync(
+            userId, fullWorthSpaceId, target.Id, sourceIds,
+            request.TargetName, request.TargetCategoryId, request.TargetAccountId, ct);
 
         if (outcome.Result != ContractMutationResult.Success)
             return outcome.Result switch
@@ -182,7 +226,6 @@ WHERE l."Id"=@id
                 _ => Results.StatusCode(409)
             };
 
-        await transaction.CommitAsync(ct);
         // Keep the legacy "archived" response field for existing clients. The IDs are now hidden
         // merge aliases rather than destructively archived rows.
         return Results.Ok(new { targetId = target.Id, archived = sourceIds, merged = sourceIds });
@@ -213,110 +256,109 @@ WHERE l."Id"=@id
         };
     }
 
-    private static async Task<IResult> ListCancellations(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    private static async Task<IResult> ListCancellations(
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();
-        var visible=await RawSql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var c=await RawSql.OpenAsync(db,ct);
-        await using var cmd=RawSql.Command(c,"""
-SELECT c."Id" AS "ContractId",c."AccountId",d."MinimumTermEnd",d."CancellationDeadline",d."CancellationStatus",d."AutoRenews",d."CancellationSentAt",d."CancellationConfirmedAt"
-FROM "Contracts" c
-JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id"
-WHERE c."FullWorthSpaceId"=@space AND c."MergedIntoContractId" IS NULL
-ORDER BY c."Name"
-""",("@space",fullWorthSpaceId));
-        await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
-        while(await r.ReadAsync(ct))
-        {
-            var accountId=RawSql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;
-            rows.Add(new{
-                contractId=RawSql.Guid(r,"ContractId"),
-                minimumTermEnd=RawSql.NullableDate(r,"MinimumTermEnd"),
-                cancellationDeadline=RawSql.NullableDate(r,"CancellationDeadline"),
-                cancellationStatus=RawSql.String(r,"CancellationStatus"),
-                autoRenews=RawSql.Bool(r,"AutoRenews"),
-                cancellationSentAt=RawSql.NullableTimestamp(r,"CancellationSentAt"),
-                cancellationConfirmedAt=RawSql.NullableTimestamp(r,"CancellationConfirmedAt")
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var visible = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        var rows = (await store.ListCancellationsAsync(fullWorthSpaceId, ct))
+            .Where(row => !row.AccountId.HasValue || visible.Contains(row.AccountId.Value))
+            .Select(row => new
+            {
+                contractId = row.ContractId,
+                minimumTermEnd = row.MinimumTermEnd,
+                cancellationDeadline = row.CancellationDeadline,
+                cancellationStatus = row.CancellationStatus,
+                autoRenews = row.AutoRenews,
+                cancellationSentAt = row.CancellationSentAt,
+                cancellationConfirmedAt = row.CancellationConfirmedAt
             });
-        }
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> GetCancellation(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct)
+    private static async Task<IResult> GetCancellation(
+        Guid contractId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
+        ContractLinkStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();
-        var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT "MinimumTermEnd","NoticePeriodValue","NoticePeriodUnit","RenewalPeriodValue","RenewalPeriodUnit","AutoRenews","CancellationDeadline","CancellationStatus","CustomerNumber","ProviderContact","CancellationSentAt","CancellationConfirmedAt","UpdatedAt"
-FROM "ContractCancellationDetails" WHERE "ContractId"=@id
-""",("@id",contractId));
-        await using var r=await cmd.ExecuteReaderAsync(ct);
-        if(!await r.ReadAsync(ct))return Results.Ok(new CancellationDetailsView(null,null,null,null,null,false,null,"none",null,null,null,null,null));
-        return Results.Ok(new CancellationDetailsView(
-            RawSql.NullableDate(r,"MinimumTermEnd"),
-            r.IsDBNull(r.GetOrdinal("NoticePeriodValue"))?null:RawSql.Int(r,"NoticePeriodValue"),
-            RawSql.NullableString(r,"NoticePeriodUnit"),
-            r.IsDBNull(r.GetOrdinal("RenewalPeriodValue"))?null:RawSql.Int(r,"RenewalPeriodValue"),
-            RawSql.NullableString(r,"RenewalPeriodUnit"),
-            RawSql.Bool(r,"AutoRenews"),
-            RawSql.NullableDate(r,"CancellationDeadline"),
-            RawSql.String(r,"CancellationStatus"),
-            RawSql.NullableString(r,"CustomerNumber"),
-            RawSql.NullableString(r,"ProviderContact"),
-            RawSql.NullableTimestamp(r,"CancellationSentAt"),
-            RawSql.NullableTimestamp(r,"CancellationConfirmedAt"),
-            RawSql.NullableTimestamp(r,"UpdatedAt")));
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanReadContract(uid, fullWorthSpaceId, contractId, ct)) return Results.NotFound();
+
+        // Ohne Eintrag ist nichts gekuendigt - das ist eine gueltige Antwort, kein Fehlen.
+        return Results.Ok(await store.ReadCancellationDetailsAsync(contractId, ct)
+            ?? new CancellationDetailsView(null, null, null, null, null, false, null, "none", null, null, null, null, null));
     }
 
-    private static async Task<IResult> PutCancellation(Guid contractId,Guid fullWorthSpaceId,CancellationWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanWriteContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.StatusCode(403);if(request.NoticePeriodValue<0||request.RenewalPeriodValue<0||request.CancellationStatus is not("none" or "planned" or "sent" or "confirmed" or "cancelled"))return Results.BadRequest(new{error="Invalid cancellation metadata."});var deadline=request.CancellationDeadline??CalculateDeadline(request.MinimumTermEnd,request.NoticePeriodValue,request.NoticePeriodUnit);var now=DateTimeOffset.UtcNow;var sent=request.CancellationStatus is "sent" or "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var confirmed=request.CancellationStatus is "confirmed" or "cancelled"?now:(DateTimeOffset?)null;var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-INSERT INTO "ContractCancellationDetails" ("ContractId","MinimumTermEnd","NoticePeriodValue","NoticePeriodUnit","RenewalPeriodValue","RenewalPeriodUnit","AutoRenews","CancellationDeadline","CancellationStatus","CancellationSentAt","CancellationConfirmedAt","CustomerNumber","ProviderContact","UpdatedAt") VALUES (@id,@term,@npv,@npu,@rpv,@rpu,@renews,@deadline,@status,@sent,@confirmed,@customer,@contact,@now)
-ON CONFLICT ("ContractId") DO UPDATE SET
-"MinimumTermEnd"=EXCLUDED."MinimumTermEnd",
-"NoticePeriodValue"=EXCLUDED."NoticePeriodValue",
-"NoticePeriodUnit"=EXCLUDED."NoticePeriodUnit",
-"RenewalPeriodValue"=EXCLUDED."RenewalPeriodValue",
-"RenewalPeriodUnit"=EXCLUDED."RenewalPeriodUnit",
-"AutoRenews"=EXCLUDED."AutoRenews",
-"CancellationDeadline"=EXCLUDED."CancellationDeadline",
-"CancellationStatus"=EXCLUDED."CancellationStatus",
-"CancellationSentAt"=CASE
-  WHEN EXCLUDED."CancellationStatus" IN ('none','planned') THEN NULL
-  ELSE COALESCE("ContractCancellationDetails"."CancellationSentAt",EXCLUDED."CancellationSentAt")
-END,
-"CancellationConfirmedAt"=CASE
-  WHEN EXCLUDED."CancellationStatus" IN ('none','planned','sent') THEN NULL
-  ELSE COALESCE("ContractCancellationDetails"."CancellationConfirmedAt",EXCLUDED."CancellationConfirmedAt")
-END,
-"CustomerNumber"=EXCLUDED."CustomerNumber",
-"ProviderContact"=EXCLUDED."ProviderContact",
-"UpdatedAt"=EXCLUDED."UpdatedAt"
-""",("@id",contractId),("@term",request.MinimumTermEnd),("@npv",request.NoticePeriodValue),("@npu",NormalizeUnit(request.NoticePeriodUnit)),("@rpv",request.RenewalPeriodValue),("@rpu",NormalizeUnit(request.RenewalPeriodUnit)),("@renews",request.AutoRenews),("@deadline",deadline),("@status",request.CancellationStatus),("@sent",sent),("@confirmed",confirmed),("@customer",request.CustomerNumber?.Trim()),("@contact",request.ProviderContact?.Trim()),("@now",now));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"contract.cancellation.updated","RecurringContract",contractId);await db.SaveChangesAsync(ct);return Results.Ok(new{deadline,status=request.CancellationStatus});}
+    private static async Task<IResult> PutCancellation(
+        Guid contractId, Guid fullWorthSpaceId, CancellationWrite request, CurrentUserContext currentUser,
+        ContractLinkStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanWriteContract(uid, fullWorthSpaceId, contractId, ct)) return Results.StatusCode(403);
+        if (request.NoticePeriodValue < 0 || request.RenewalPeriodValue < 0
+            || request.CancellationStatus is not ("none" or "planned" or "sent" or "confirmed" or "cancelled"))
+            return Results.BadRequest(new { error = "Invalid cancellation metadata." });
 
-    private static async Task<IResult> CancellationLetter(Guid contractId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanReadContract(db,uid,fullWorthSpaceId,contractId,ct))return Results.NotFound();var contract=await db.Contracts.AsNoTracking().SingleAsync(x=>x.Id==contractId,ct);var details=await ReadCancellation(db,contractId,ct);var sb=new StringBuilder();sb.AppendLine("Kündigung meines Vertrags").AppendLine().AppendLine($"Anbieter: {contract.ProviderName??contract.Name}");if(!string.IsNullOrWhiteSpace(details.CustomerNumber))sb.AppendLine($"Kunden-/Vertragsnummer: {details.CustomerNumber}");sb.AppendLine().Append("Hiermit kündige ich den oben genannten Vertrag fristgerecht ");sb.AppendLine(details.Deadline.HasValue?$"zum nächstmöglichen Zeitpunkt unter Berücksichtigung der Kündigungsfrist (aktuelle Frist: {details.Deadline:dd.MM.yyyy}).":"zum nächstmöglichen Zeitpunkt.");sb.AppendLine("Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich.");return Results.Text(sb.ToString(),"text/plain; charset=utf-8");}
-    private static async Task<IResult> CancellationDeadlines(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var visible=await RawSql.VisibleAccountIdsAsync(db,uid,fullWorthSpaceId,ct);var today=DateOnly.FromDateTime(DateTime.UtcNow);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT c."Id",c."Name",c."AccountId",d."CancellationDeadline",d."CancellationStatus" FROM "Contracts" c JOIN "ContractCancellationDetails" d ON d."ContractId"=c."Id" WHERE c."FullWorthSpaceId"=@space AND c."MergedIntoContractId" IS NULL AND c."IsActive"=true AND d."CancellationDeadline" IS NOT NULL AND d."CancellationStatus" IN ('none','planned') ORDER BY d."CancellationDeadline"
-""",("@space",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct)){var accountId=RawSql.NullableGuid(r,"AccountId");if(accountId.HasValue&&!visible.Contains(accountId.Value))continue;var d=RawSql.NullableDate(r,"CancellationDeadline")!.Value;rows.Add(new{id=RawSql.Guid(r,"Id"),name=RawSql.String(r,"Name"),deadline=d,days=d.DayNumber-today.DayNumber,status=RawSql.String(r,"CancellationStatus")});}return Results.Ok(rows);}
+        // Eine mitgeschickte Frist gewinnt; sonst wird sie aus Mindestlaufzeit und Kuendigungsfrist gerechnet.
+        var deadline = request.CancellationDeadline
+            ?? CalculateDeadline(request.MinimumTermEnd, request.NoticePeriodValue, request.NoticePeriodUnit);
+        var now = DateTimeOffset.UtcNow;
+        var sent = request.CancellationStatus is "sent" or "confirmed" or "cancelled" ? now : (DateTimeOffset?)null;
+        var confirmed = request.CancellationStatus is "confirmed" or "cancelled" ? now : (DateTimeOffset?)null;
 
-    private sealed record CancellationRow(DateOnly? Deadline,string? CustomerNumber);
-    private static async Task<CancellationRow> ReadCancellation(FullWorthDbContext db,Guid id,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"CancellationDeadline\",\"CustomerNumber\" FROM \"ContractCancellationDetails\" WHERE \"ContractId\"=@id",("@id",id));await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?new(RawSql.NullableDate(r,"CancellationDeadline"),RawSql.NullableString(r,"CustomerNumber")):new(null,null);}
+        await store.SaveCancellationAsync(uid, fullWorthSpaceId, contractId, request, deadline, sent, confirmed,
+            NormalizeUnit(request.NoticePeriodUnit), NormalizeUnit(request.RenewalPeriodUnit), ct);
+        return Results.Ok(new { deadline, status = request.CancellationStatus });
+    }
+
+    private static async Task<IResult> CancellationLetter(
+        Guid contractId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
+        ContractLinkStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanReadContract(uid, fullWorthSpaceId, contractId, ct)) return Results.NotFound();
+
+        var contract = await store.ContractAsync(contractId, ct);
+        var details = await store.ReadCancellation(contractId, ct);
+
+        var letter = new StringBuilder();
+        letter.AppendLine("Kündigung meines Vertrags").AppendLine()
+            .AppendLine($"Anbieter: {contract.ProviderName ?? contract.Name}");
+        if (!string.IsNullOrWhiteSpace(details.CustomerNumber))
+            letter.AppendLine($"Kunden-/Vertragsnummer: {details.CustomerNumber}");
+        letter.AppendLine().Append("Hiermit kündige ich den oben genannten Vertrag fristgerecht ");
+        letter.AppendLine(details.Deadline.HasValue
+            ? $"zum nächstmöglichen Zeitpunkt unter Berücksichtigung der Kündigungsfrist (aktuelle Frist: {details.Deadline:dd.MM.yyyy})."
+            : "zum nächstmöglichen Zeitpunkt.");
+        letter.AppendLine("Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich.");
+
+        return Results.Text(letter.ToString(), "text/plain; charset=utf-8");
+    }
+    private static async Task<IResult> CancellationDeadlines(
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ContractLinkStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var visible = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var rows = (await store.UpcomingDeadlinesAsync(fullWorthSpaceId, ct))
+            .Where(row => !row.AccountId.HasValue || visible.Contains(row.AccountId.Value))
+            .Select(row => new
+            {
+                id = row.Id,
+                name = row.Name,
+                deadline = row.Deadline,
+                days = row.Deadline.DayNumber - today.DayNumber,
+                status = row.Status
+            });
+        return Results.Ok(rows);
+    }
+
     private static DateOnly? CalculateDeadline(DateOnly? term,int? value,string? unit){if(!term.HasValue||!value.HasValue)return null;return unit?.ToLowerInvariant() switch{"days"=>term.Value.AddDays(-value.Value),"weeks"=>term.Value.AddDays(-7*value.Value),"months"=>term.Value.AddMonths(-value.Value),_=>null};}
     private static string? NormalizeUnit(string? value)=>value?.Trim().ToLowerInvariant() switch{"days"=>"days","weeks"=>"weeks","months"=>"months",_=>null};
     private static string NormalizeSource(string? value)=>value?.Trim().ToLowerInvariant() switch{"detection"=>"detection","import"=>"import",_=>"manual"};
-    private static async Task<bool> CanReadContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await RawSql.IsMemberAsync(db,uid,space,ct))return false;var visible=await RawSql.VisibleAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&c.MergedIntoContractId==null&&(c.AccountId==null||visible.Contains(c.AccountId.Value)),ct);}
-    private static async Task<bool> CanWriteContract(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await SpaceCapabilities.HasCapabilityAsync(db,uid,space,"contracts.manage",ct))return false;var writable=await RawSql.WritableAccountIdsAsync(db,uid,space,ct);return await db.Contracts.AsNoTracking().AnyAsync(c=>c.Id==id&&c.FullWorthSpaceId==space&&c.MergedIntoContractId==null&&(c.AccountId==null||writable.Contains(c.AccountId.Value)),ct);}
-    private static async Task<bool> CanWriteContractLinkAsync(FullWorthDbContext db,Guid uid,Guid space,Guid contractId,Guid linkId,CancellationToken ct){var writable=await RawSql.WritableAccountIdsAsync(db,uid,space,ct);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT t."AccountId"
-FROM "ContractTransactionLinks" l
-JOIN "Transactions" t ON t."Id"=l."TransactionId"
-JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
-WHERE l."Id"=@link
-  AND (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
-  AND l."FullWorthSpaceId"=@space
-""",("@link",linkId),("@contract",contractId),("@space",space));var value=await cmd.ExecuteScalarAsync(ct);return value is Guid accountId&&writable.Contains(accountId);}
-    private static async Task<bool> AllContractLinksWritableAsync(FullWorthDbContext db,Guid uid,Guid space,Guid contractId,CancellationToken ct){var writable=await RawSql.WritableAccountIdsAsync(db,uid,space,ct);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT t."AccountId"
-FROM "ContractTransactionLinks" l
-JOIN "Transactions" t ON t."Id"=l."TransactionId"
-JOIN "Contracts" source_contract ON source_contract."Id"=l."ContractId"
-WHERE (l."ContractId"=@contract OR source_contract."MergedIntoContractId"=@contract)
-  AND l."FullWorthSpaceId"=@space
-""",("@contract",contractId),("@space",space));await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))if(!writable.Contains(RawSql.Guid(r,"AccountId")))return false;return true;}
 }
