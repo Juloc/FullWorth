@@ -204,8 +204,15 @@ public static class AccountGroupEndpoints
         });
 
         group.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, AccountStore store, CancellationToken ct) =>
-            await store.DeleteGroupForMemberAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)
-                ? Results.NoContent() : Results.NotFound());
+        {
+            try
+            {
+                return await store.DeleteGroupForMemberAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)
+                    ? Results.NoContent() : Results.NotFound();
+            }
+            // Die Standardgruppe laesst sich nicht loeschen - das ist eine Regel, kein fehlender Datensatz.
+            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
+        });
 
         return app;
     }

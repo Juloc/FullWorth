@@ -78,7 +78,7 @@
     },
     "accounts": {
       "title": "Konten",
-      "subtitle": "Bankverbindungen, Konten und Bargeld verwalten"
+      "subtitle": ""
     },
     "networth": {
       "title": "Vermögen",
@@ -139,6 +139,14 @@
     "coach": {
       "title": "Coach",
       "subtitle": "Deine Daten erklären, Ausgaben bewerten und Ziele berechnen."
+    },
+    "account-detail": {
+      "title": "Konto",
+      "subtitle": ""
+    },
+    "bank-connections": {
+      "title": "Bankverbindungen",
+      "subtitle": "Verbundene Banken synchronisieren, erneuern oder trennen"
     }
   },
   "dashboard": {
@@ -840,7 +848,24 @@
     "linked": "Konten verknüpft – die Summe zählt nur einmal.",
     "unlinkSame": "Verknüpfung aufheben",
     "unlinkConfirm": "Verknüpfung mit „{name}“ aufheben? Es wurde nichts verschoben, das Konto zählt danach wieder wie vorher.",
-    "unlinked": "Verknüpfung aufgehoben."
+    "unlinked": "Verknüpfung aufgehoben.",
+    "details": "Kontodetails",
+    "total": "Gesamt",
+    "search": "Konto suchen…",
+    "searchEmpty": "Kein Konto passt zur Suche.",
+    "countOne": "1 Konto",
+    "countMany": "{count} Konten",
+    "ownName": "Eigener Name",
+    "providerName": "Originalname",
+    "bank": "Bank",
+    "identifier": "IBAN/Kennung",
+    "kind": "Kontotyp",
+    "group": "Gruppe",
+    "connection": "Verbindung",
+    "backToList": "Konten",
+    "notFound": "Dieses Konto gibt es nicht (mehr).",
+    "noConnection": "Ohne Bankverbindung",
+    "defaultGroupLocked": "Die Standardgruppe bleibt bestehen."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
@@ -915,7 +940,9 @@
     "deleteAccountConfirm": "Ich verstehe, dass die Löschung nach Ablauf der 7 Tage nicht rückgängig gemacht werden kann.",
     "deleteAccountAction": "Konto zur Löschung vormerken",
     "deleteAccountPasswordInvalid": "Das aktuelle Passwort ist nicht korrekt.",
-    "deleteAccountFailed": "Die Kontolöschung konnte nicht sicher vorgemerkt werden."
+    "deleteAccountFailed": "Die Kontolöschung konnte nicht sicher vorgemerkt werden.",
+    "bankConnections": "Bankverbindungen",
+    "bankConnectionsHint": "Verbundene Banken synchronisieren, erneuern oder trennen"
   },
   "merchants": {
     "title": "Händler",
@@ -1111,7 +1138,8 @@
     "ingTanHint": "Bestätige die Anmeldung mit dem von ING verlangten Verfahren.",
     "ingDecoupledHint": "Freigabe in der ING-App bestätigen und anschließend prüfen.",
     "ingPoll": "Freigabe prüfen",
-    "ingConnected": "ING verbunden"
+    "ingConnected": "ING verbunden",
+    "addConnection": "Bank verbinden"
   },
   "aiAccess": {
     "title": "KI-Zugang",

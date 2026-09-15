@@ -154,6 +154,8 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasOne<EnableBankingProfile>().WithMany().HasForeignKey(x => x.EnableBankingProfileId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        b.Entity<AccountGroup>(e => e.HasIndex(x => new { x.FullWorthSpaceId, x.IsDefault }));
+
         b.Entity<FinanceAccount>(e =>
         {
             e.HasIndex(x => new { x.Provider, x.IdentificationHash });

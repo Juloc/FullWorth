@@ -11,7 +11,9 @@ namespace FullWorth.Backend.Tests.Accounts;
 /// <summary>
 /// Account groups (§8.1): members create/rename/delete named groups in their space; account owners
 /// assign an account to a group. Group CRUD is space-member gated; assignment is account-owner gated.
-/// Deleting a group ungroups (SetNull) its accounts rather than orphaning or blocking.
+/// Seit #125 hat jeder Space eine Standardgruppe: sie entsteht beim ersten Lesen der Liste, ein Konto
+/// ohne eigene Gruppe landet in ihr, und sie laesst sich nicht loeschen. Eine andere Gruppe zu loeschen
+/// schiebt deren Konten dorthin, statt sie gruppenlos zu machen - gruppenlos gibt es nicht mehr.
 /// </summary>
 public sealed class AccountGroupTests
 {
@@ -27,8 +29,50 @@ public sealed class AccountGroupTests
 
         using var list = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
         var groups = await list.Content.ReadFromJsonAsync<List<AccountGroupDto>>();
-        Assert.Single(groups!);
-        Assert.Equal("Savings", groups![0].Name);
+        // Die eigene Gruppe und die Standardgruppe - und die eigene ist nicht die Standardgruppe.
+        Assert.Equal(2, groups!.Count);
+        var own = Assert.Single(groups.Where(group => group.Name == "Savings"));
+        Assert.False(own.IsDefault);
+        Assert.Single(groups.Where(group => group.IsDefault));
+    }
+
+    [Fact]
+    public async Task EverySpaceHasExactlyOneDefaultGroupAndItSurvivesRepeatedReads()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var first = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
+        var initial = await first.Content.ReadFromJsonAsync<List<AccountGroupDto>>();
+        var standard = Assert.Single(initial!);
+        Assert.True(standard.IsDefault);
+
+        // Jeder weitere Aufruf legt NICHT noch eine an.
+        using var second = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
+        var again = await second.Content.ReadFromJsonAsync<List<AccountGroupDto>>();
+        Assert.Equal(standard.Id, Assert.Single(again!).Id);
+
+        // Und das vorhandene Konto steht darin, statt gruppenlos zu sein.
+        var account = await GetAccountAsync(client, s, s.Owner);
+        Assert.Equal(standard.Id, account.GroupId);
+    }
+
+    [Fact]
+    public async Task DefaultGroupCannotBeDeleted()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var s = await SeedAsync(factory);
+        using var client = factory.CreateClient();
+
+        using var list = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
+        var standard = Assert.Single((await list.Content.ReadFromJsonAsync<List<AccountGroupDto>>())!);
+
+        using var del = await client.SendAsync(Req(HttpMethod.Delete, $"/api/account-groups/{standard.Id}?fullWorthSpaceId={s.Space}", s.Owner));
+        Assert.Equal(HttpStatusCode.BadRequest, del.StatusCode);
+
+        using var after = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
+        Assert.Equal(standard.Id, Assert.Single((await after.Content.ReadFromJsonAsync<List<AccountGroupDto>>())!).Id);
     }
 
     [Fact]
@@ -70,7 +114,7 @@ public sealed class AccountGroupTests
     }
 
     [Fact]
-    public async Task AssignNullGroupUngroupsAccount()
+    public async Task AssignNullGroupMovesAccountIntoTheDefaultGroup()
     {
         using var factory = new BackendWebApplicationFactory();
         var s = await SeedAsync(factory);
@@ -81,7 +125,7 @@ public sealed class AccountGroupTests
         using var clear = await client.SendAsync(Req(HttpMethod.Put, $"/api/accounts/{s.Account}/group?fullWorthSpaceId={s.Space}", s.Owner, new { groupId = (Guid?)null }));
         Assert.Equal(HttpStatusCode.NoContent, clear.StatusCode);
         var account = await GetAccountAsync(client, s, s.Owner);
-        Assert.Null(account.GroupId);
+        Assert.Equal(await DefaultGroupIdAsync(client, s), account.GroupId);
     }
 
     [Fact]
@@ -110,7 +154,7 @@ public sealed class AccountGroupTests
     }
 
     [Fact]
-    public async Task DeletingGroupUngroupsItsAccounts()
+    public async Task DeletingGroupMovesItsAccountsIntoTheDefaultGroup()
     {
         using var factory = new BackendWebApplicationFactory();
         var s = await SeedAsync(factory);
@@ -121,8 +165,8 @@ public sealed class AccountGroupTests
         using var del = await client.SendAsync(Req(HttpMethod.Delete, $"/api/account-groups/{group}?fullWorthSpaceId={s.Space}", s.Owner));
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
-        var account = await GetAccountAsync(client, s, s.Owner); // still listed, just ungrouped
-        Assert.Null(account.GroupId);
+        var account = await GetAccountAsync(client, s, s.Owner); // weiterhin gelistet, nur woanders
+        Assert.Equal(await DefaultGroupIdAsync(client, s), account.GroupId);
     }
 
     [Fact]
@@ -138,7 +182,7 @@ public sealed class AccountGroupTests
 
         using var list = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
         var groups = await list.Content.ReadFromJsonAsync<List<AccountGroupDto>>();
-        Assert.Equal("New", groups!.Single().Name);
+        Assert.Single(groups!.Where(group => group.Name == "New"));
     }
 
     [Fact]
@@ -172,6 +216,14 @@ public sealed class AccountGroupTests
 
     private sealed record Scenario(Guid Space, Guid OtherSpace, Guid Owner, Guid Viewer, Guid Outsider, Guid Account, Guid OtherSpaceGroup);
     private sealed record AccountProbe(Guid Id, Guid? GroupId, string? GroupName);
+
+    private static async Task<Guid> DefaultGroupIdAsync(HttpClient client, Scenario s)
+    {
+        using var r = await client.SendAsync(Req(HttpMethod.Get, $"/api/account-groups?fullWorthSpaceId={s.Space}", s.Owner));
+        r.EnsureSuccessStatusCode();
+        var groups = await r.Content.ReadFromJsonAsync<List<AccountGroupDto>>();
+        return Assert.Single(groups!.Where(group => group.IsDefault)).Id;
+    }
 
     private static async Task<Guid> CreateGroupAsync(HttpClient client, Scenario s, string name)
     {

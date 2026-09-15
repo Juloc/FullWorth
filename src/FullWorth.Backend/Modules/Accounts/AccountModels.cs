@@ -79,6 +79,18 @@ public sealed class AccountGroup
     public Guid FullWorthSpaceId { get; set; }
     public string Name { get; set; } = string.Empty;
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Die Standardgruppe des Space. Es gibt genau eine, sie laesst sich nicht loeschen, und ein Konto
+    /// ohne eigene Gruppe landet in ihr.
+    ///
+    /// Vorher konnte ein Konto gruppenlos sein, und die Oberflaeche zeigte dafuer einen Eimer "Ohne
+    /// Gruppe", der keine Gruppe war: er liess sich nicht anklicken wie eine, denn es gibt keinen
+    /// Serverfilter fuer "hat keine Gruppe". #125 verlangt, dass jede Gruppenzeile die Buchungen genau
+    /// ihrer Konten oeffnet - also muss auch die Standardgruppe eine echte Gruppe sein.
+    /// </summary>
+    public bool IsDefault { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

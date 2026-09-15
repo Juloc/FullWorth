@@ -159,7 +159,7 @@
   .tx-coach-selection>div{gap:6px}
   .tx-coach-selection button{min-height:38px}
   .tx-select-wrap{width:28px;height:28px;margin-right:2px}
-  .account-coach-button,.nw-coach{min-height:34px}
+  .nw-coach{min-height:34px}
 }
 @media(max-width:560px){
   .contracts-listcard{padding-left:var(--s3);padding-right:var(--s3)}

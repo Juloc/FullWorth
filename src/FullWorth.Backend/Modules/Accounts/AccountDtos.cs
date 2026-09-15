@@ -33,7 +33,7 @@ public sealed record BalanceView(
 // data the other does not - so the row has to say why one of them is not in the totals.
 // DuplicateLinkExplicit separates the two sources: only a link the owner made can be taken back, and
 // the row's actions must not offer "unlink" for a plain IBAN match.
-public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null, bool DuplicateLinkExplicit = false);
+public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankConnectionId, string InstitutionName, string DisplayName, string? ProviderDisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool IncludeInNetWorth, int SortOrder, DateTimeOffset UpdatedAt, string Provider, BalanceView? LatestBalance, Guid? GroupId = null, string? GroupName = null, decimal? BaseValue = null, string? BaseCurrency = null, IReadOnlyList<BalanceView>? Balances = null, Guid? DuplicateOfAccountId = null, string? DuplicateOfDisplayName = null, bool DuplicateLinkExplicit = false);
 
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 
@@ -43,7 +43,7 @@ public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive,
 // owner's remark about where the figure came from.
 public sealed record ManualBalanceRequest(decimal Amount, string? Currency, DateOnly? AsOf = null, string? Note = null);
 
-public sealed record AccountGroupDto(Guid Id, Guid FullWorthSpaceId, string Name, int SortOrder);
+public sealed record AccountGroupDto(Guid Id, Guid FullWorthSpaceId, string Name, int SortOrder, bool IsDefault);
 
 public sealed record AccountGroupWrite(string Name, int? SortOrder);
 

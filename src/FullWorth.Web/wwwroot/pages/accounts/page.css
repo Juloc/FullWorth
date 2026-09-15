@@ -96,7 +96,6 @@ button:hover,
   display: none !important;
 }
 
-.accounts-local-nav button svg,
 .ux-button-icon,
 .account-drag-handle svg,
 .icon-mini svg,
@@ -107,33 +106,6 @@ button:hover,
   flex: 0 0 auto;
 }
 
-.accounts-local-nav {
-  display: flex;
-  gap: 6px;
-  margin: 0 0 14px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.accounts-local-nav::-webkit-scrollbar {
-  display: none;
-}
-
-.accounts-local-nav button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
-.accounts-local-nav button.active {
-  background: var(--accent-soft, rgba(45, 111, 255, .12));
-  color: var(--accent, #2d6fff);
-}
-
 .ux-icon-text-button {
   display: inline-flex !important;
   align-items: center;
@@ -141,21 +113,12 @@ button:hover,
   gap: 7px;
 }
 
-.has-account-identity {
-  display: grid !important;
-  grid-template-columns: 38px minmax(0, 1fr);
-  column-gap: 10px;
-}
-
-.has-account-identity > .row-title,
-.has-account-identity > .row-sub {
-  grid-column: 2;
-}
-
-.has-account-identity > .account-identity-icon {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  align-self: center;
+/* Das Symbol steht VOR .row-main, ist also ein drittes Kind - und .row ist ein Raster mit zwei
+   Spalten. Es rutschte damit in eine zweite Rasterzeile, und jede Kontozeile war dadurch 123 statt
+   67 Pixel hoch. Dass .row-main selbst ein Raster mit einer 38px-Spalte fuer das Symbol war, half
+   nicht: das Symbol lag ja gar nicht darin, also blieb die Spalte leer und nahm dem Namen 48 Pixel. */
+#accounts-view-list .row:has(> .account-identity-icon) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .account-identity-icon,
@@ -215,15 +178,6 @@ button:hover,
   width: 30px;
   height: 30px;
   border-radius: 9px;
-}
-
-.account-visual-edit {
-  display: inline-grid;
-  place-items: center;
-}
-
-.account-more {
-  display: none;
 }
 
 .account-unread-dot,
@@ -573,26 +527,6 @@ button:hover,
 }
 
 @media (max-width: 760px) {
-  #accounts-view-list .row:not(.group-head) .row-end > [data-move],
-  #accounts-view-list .row:not(.group-head) .row-end > [data-rename-account],
-  #accounts-view-list .row:not(.group-head) .row-end > [data-edit-balance],
-  #accounts-view-list .row:not(.group-head) .row-end > [data-delete],
-  #accounts-view-list .row:not(.group-head) .row-end > .account-coach-button,
-  #accounts-view-list .row:not(.group-head) .row-end > .account-visual-edit {
-    display: none !important;
-  }
-
-  #accounts-view-list .account-more {
-    display: inline-grid;
-    place-items: center;
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    padding: 0;
-    font-size: 22px;
-    line-height: 1;
-  }
-
   #accounts-view-list .row:not(.group-head) .row-end {
     gap: 7px;
     min-width: 0;
@@ -612,20 +546,6 @@ button:hover,
     width: 44px;
     min-width: 44px;
     padding-inline: 0 !important;
-  }
-
-  /* Primary local navigation: the app-wide 44px touch floor applies; the 38px base is desktop. */
-  .accounts-local-nav button {
-    min-height: 44px;
-  }
-
-  .accounts-local-nav {
-    margin-inline: -2px;
-  }
-
-  .accounts-local-nav button {
-    flex: 1 0 auto;
-    justify-content: center;
   }
 
   .account-ux-dialog {
@@ -695,5 +615,98 @@ button:hover,
 
   .account-color-fields {
     grid-template-columns: 1fr;
+  }
+}
+
+/* --- #125: Gesamt, Gruppenkopf, Suche --- */
+
+/* Das Auslassungszeichen ist die einzige Aktion der Zeile und steht auf jedem Geraet da. 44 px ist
+   die Fingerkuppe; auf dem Rechner darf es kleiner sein, aber nicht verschwinden. */
+.account-more {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Gesamt steht ueber den Gruppen und ist etwas staerker als eine Gruppe - eine Kachel ist es nicht. */
+.accounts-total {
+  font-weight: 600;
+}
+
+.accounts-total .amount {
+  font-size: var(--fs-lg, 1.05rem);
+}
+
+.row-chevron {
+  color: var(--muted);
+  padding-inline-start: var(--s2, 8px);
+}
+
+.group-count {
+  white-space: nowrap;
+}
+
+/* Die Suche steht im Kopf neben den beiden Aktionen. Auf dem Handy ist sie so breit wie ihr Symbol
+   und wird erst breit, wenn sie den Fokus hat - eingefuegt wird dabei nichts, sie ist immer da. */
+.accounts-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding-inline: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2, transparent);
+}
+
+.accounts-search-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.accounts-search input {
+  border: 0;
+  background: none;
+  padding: 0;
+  min-width: 0;
+  width: 150px;
+}
+
+.accounts-search input:focus {
+  outline: none;
+}
+
+/* Sekundaerangaben, fuer die auf dem Handy kein Platz ist. Sie stehen auf der Kontodetailseite. */
+@media (max-width: 767px) {
+  .row-sub-wide {
+    display: none;
+  }
+
+  .accounts-search {
+    width: 44px;
+    min-height: 44px;
+    transition: width var(--motion-fast, .15s) ease;
+  }
+
+  .accounts-search:focus-within {
+    width: 100%;
+  }
+
+  .accounts-search input {
+    width: 100%;
+  }
+
+  .account-more {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    font-size: 22px;
   }
 }

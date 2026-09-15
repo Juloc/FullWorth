@@ -58,6 +58,13 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
             entity.ToTable("BankingInstanceSettings");
         });
 
+        modelBuilder.Entity("FullWorth.Backend.Modules.Accounts.AccountGroup", entity =>
+        {
+            // 20260915200000_AccountGroupDefault. Rohes SQL, also muss der Snapshot es kennen.
+            entity.Property<bool>("IsDefault").HasColumnType("boolean");
+            entity.HasIndex("FullWorthSpaceId", "IsDefault");
+        });
+
         modelBuilder.Entity("FullWorth.Backend.Modules.Accounts.FinanceAccount", entity =>
         {
             // 20260915190000_AccountProviderDisplayName. Rohes SQL, also muss der Snapshot dieselbe

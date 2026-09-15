@@ -295,6 +295,9 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             CreatedAt = now
         });
 
+        // Ein Konto ohne Gruppe gibt es seit #125 nicht mehr; ohne Angabe ist es die Standardgruppe.
+        account.GroupId = await DefaultGroupIdAsync(request.FullWorthSpaceId, ct);
+
         db.Accounts.Add(account);
 
         BalanceView? initialBalance = null;
@@ -320,7 +323,9 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
 
         var created = new AccountListItem(
             account.Id, account.FullWorthSpaceId, account.BankConnectionId, account.InstitutionName, account.DisplayName,
-            account.Product, account.AccountType, account.Currency, account.IbanLast4, account.IsActive,
+            // Der Name, den die Bank dem Konto gibt (#125): die Uebersicht zeigt ihn, wo Platz ist, die
+            // Kontodetailseite immer.
+            account.ProviderDisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4, account.IsActive,
             account.IncludeInNetWorth, account.SortOrder, account.UpdatedAt, account.Provider, initialBalance);
         return WithDisplayIdentifiers([created])[0];
     }
@@ -554,12 +559,64 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
     public async Task<(bool Found, List<AccountGroupDto>? Groups)> ListGroupsForUserAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return (false, null);
+        await EnsureDefaultGroupAsync(fullWorthSpaceId, ct);
         var groups = await db.AccountGroups.AsNoTracking()
             .Where(g => g.FullWorthSpaceId == fullWorthSpaceId)
             .OrderBy(g => g.SortOrder).ThenBy(g => g.Name)
-            .Select(g => new AccountGroupDto(g.Id, g.FullWorthSpaceId, g.Name, g.SortOrder))
+            .Select(g => new AccountGroupDto(g.Id, g.FullWorthSpaceId, g.Name, g.SortOrder, g.IsDefault))
             .ToListAsync(ct);
         return (true, groups);
+    }
+
+    /// <summary>
+    /// Sorgt dafuer, dass der Space genau eine Standardgruppe hat und kein Konto ohne Gruppe dasteht.
+    ///
+    /// Das geschieht beim Lesen und nicht in einer Migration, weil der Name an der Sprache des Space
+    /// haengt - und weil ein Space auch ohne den Seeder entstehen kann. Geschrieben wird nur, wenn
+    /// wirklich etwas fehlt; im Normalfall sind es zwei Abfragen, die nichts finden.
+    /// </summary>
+    private async Task EnsureDefaultGroupAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        var standard = await db.AccountGroups
+            .SingleOrDefaultAsync(g => g.FullWorthSpaceId == fullWorthSpaceId && g.IsDefault, ct);
+
+        if (standard is null)
+        {
+            // Eine eigene Gruppe, nie eine vorhandene dazu erklaert. Wer schon Gruppen angelegt hat, soll
+            // nicht erleben, dass eine davon ploetzlich unloeschbar ist, weil sie zufaellig die erste war.
+            var language = await db.FullWorthSpaces.AsNoTracking()
+                .Where(space => space.Id == fullWorthSpaceId)
+                .Select(space => space.DefaultCategoryLanguage)
+                .SingleOrDefaultAsync(ct);
+            standard = new AccountGroup
+            {
+                FullWorthSpaceId = fullWorthSpaceId,
+                Name = DefaultGroupName(language),
+                SortOrder = 0,
+                IsDefault = true
+            };
+            db.AccountGroups.Add(standard);
+        }
+
+        var orphans = await db.Accounts
+            .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.GroupId == null)
+            .ToListAsync(ct);
+        foreach (var account in orphans) account.GroupId = standard.Id;
+
+        if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync(ct);
+    }
+
+    private static string DefaultGroupName(string? language) =>
+        (language ?? "de").StartsWith("en", StringComparison.OrdinalIgnoreCase) ? "General" : "Allgemein";
+
+    /// <summary>Die Standardgruppe des Space, nachdem sichergestellt wurde, dass es sie gibt.</summary>
+    private async Task<Guid> DefaultGroupIdAsync(Guid fullWorthSpaceId, CancellationToken ct)
+    {
+        await EnsureDefaultGroupAsync(fullWorthSpaceId, ct);
+        return await db.AccountGroups.AsNoTracking()
+            .Where(g => g.FullWorthSpaceId == fullWorthSpaceId && g.IsDefault)
+            .Select(g => g.Id)
+            .SingleAsync(ct);
     }
 
     public async Task<AccountGroupDto?> CreateGroupForMemberAsync(Guid userId, Guid fullWorthSpaceId, AccountGroupWrite request, CancellationToken ct)
@@ -570,7 +627,7 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         var group = new AccountGroup { FullWorthSpaceId = fullWorthSpaceId, Name = name, SortOrder = request.SortOrder ?? 0 };
         db.AccountGroups.Add(group);
         await db.SaveChangesAsync(ct);
-        return new AccountGroupDto(group.Id, group.FullWorthSpaceId, group.Name, group.SortOrder);
+        return new AccountGroupDto(group.Id, group.FullWorthSpaceId, group.Name, group.SortOrder, group.IsDefault);
     }
 
     public async Task<bool> RenameGroupForMemberAsync(Guid userId, Guid fullWorthSpaceId, Guid groupId, AccountGroupWrite request, CancellationToken ct)
@@ -591,7 +648,19 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return false;
         var group = await db.AccountGroups.SingleOrDefaultAsync(g => g.Id == groupId && g.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (group is null) return false;
-        db.AccountGroups.Remove(group); // FK SetNull auto-ungroups its accounts
+        // Die Standardgruppe ersatzlos zu loeschen hiesse, Konten wieder gruppenlos zu machen - genau den
+        // Zustand, den es seit #125 nicht mehr gibt.
+        if (group.IsDefault) throw new ArgumentException("The default group cannot be deleted.");
+
+        // Der Fremdschluessel setzt die Gruppe sonst auf NULL. Die Konten gehoeren in die Standardgruppe,
+        // damit sie nicht in einem Eimer landen, den es nicht mehr gibt.
+        var fallback = await DefaultGroupIdAsync(fullWorthSpaceId, ct);
+        var moved = await db.Accounts
+            .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.GroupId == groupId)
+            .ToListAsync(ct);
+        foreach (var account in moved) account.GroupId = fallback;
+
+        db.AccountGroups.Remove(group);
         await db.SaveChangesAsync(ct);
         return true;
     }
@@ -614,7 +683,9 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
         if (groupId.HasValue && !await db.AccountGroups.AsNoTracking().AnyAsync(g => g.Id == groupId.Value && g.FullWorthSpaceId == fullWorthSpaceId, ct))
             return AccountGroupResult.NotFound;
 
-        account.GroupId = groupId;
+        // Keine Gruppe zu waehlen heisst seit #125: die Standardgruppe. Ein Konto ganz ohne Gruppe
+        // gibt es nicht mehr, und die Kontenuebersicht haette keine Zeile, unter der es stehen koennte.
+        account.GroupId = groupId ?? await DefaultGroupIdAsync(fullWorthSpaceId, ct);
         account.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return AccountGroupResult.Ok;
@@ -690,7 +761,9 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
     private IQueryable<AccountListItem> Project(IQueryable<FinanceAccount> accounts) =>
         accounts.Select(account => new AccountListItem(
             account.Id, account.FullWorthSpaceId, account.BankConnectionId, account.InstitutionName, account.DisplayName,
-            account.Product, account.AccountType, account.Currency, account.IbanLast4, account.IsActive,
+            // Der Name, den die Bank dem Konto gibt (#125): die Uebersicht zeigt ihn, wo Platz ist, die
+            // Kontodetailseite immer.
+            account.ProviderDisplayName, account.Product, account.AccountType, account.Currency, account.IbanLast4, account.IsActive,
             account.IncludeInNetWorth, account.SortOrder, account.UpdatedAt, account.Provider,
             // No balance here, on purpose. This used to be a correlated subquery carrying a hand-written
             // copy of the balance-type preference, because EF cannot expand a method inside a projection

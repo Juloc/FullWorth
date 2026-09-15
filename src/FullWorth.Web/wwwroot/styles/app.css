@@ -384,7 +384,7 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 .tx-coach-selection{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:10px 12px;margin:0 0 var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
 .tx-coach-selection>div{display:flex;align-items:center;gap:var(--s2)}
 
-.budget-coach,.nw-coach,.account-coach-button{min-height:30px;padding:4px 9px;font-size:11px}
+.budget-coach,.nw-coach{min-height:30px;padding:4px 9px;font-size:11px}
 
 .fw-dialog-card{transition:transform .16s ease}
 .fw-dialog-card.fw-dialog-swiping{transition:none}

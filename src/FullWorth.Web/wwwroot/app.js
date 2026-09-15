@@ -22,7 +22,8 @@ import { renderAudit, bindAudit } from './pages/audit/page.js';
 import { renderDashboardInsights, mountInsights } from './pages/insights/page.js';
 
 import { createAccessSetup } from './pages/settings/access-setup.js';
-import { bindAccounts, renderAccounts, openAddAccount, openBankingSetup, renderBankingSettings } from './pages/accounts/page.js';
+import { bindAccounts, renderAccounts, renderAccountDetail, openAddAccount } from './pages/accounts/page.js';
+import { renderBankConnections, openBankConnection, openBankingSetup, renderBankingSettings } from './pages/settings/bank-connections/page.js';
 import { bindSettings, renderSettings } from './pages/settings/page.js';
 import { renderBudgets, newBudget, openBudgetDetail } from './pages/budgets/page.js';
 
@@ -57,7 +58,11 @@ const SUBPAGES={
   import:{path:'/settings/import',parent:'settings'},
   'import-finanzguru-xlsx':{path:'/settings/import/finanzguru/xlsx',parent:'settings'},
   'import-broker-pdf':{path:'/settings/import/broker-pdf',parent:'settings'},
-  intelligence:{path:'/settings/intelligence',parent:'settings'}
+  intelligence:{path:'/settings/intelligence',parent:'settings'},
+  'bank-connections':{path:'/settings/bank-connections',parent:'settings'},
+  // Die Kontodetails liegen unter den Konten, nicht daneben: der Zurueckweg fuehrt in die Liste, und
+  // die Seitenleiste markiert weiter "Konten".
+  'account-detail':{path:'/accounts/detail',parent:'accounts'}
 };
 const ALL_VIEWS=[...VIEWS,...Object.keys(SUBPAGES)];
 const SUBPAGE_PATHS=Object.fromEntries(Object.entries(SUBPAGES).map(([view,page])=>[view,page.path]));
@@ -172,7 +177,7 @@ function bind(){
   }));
   $('#topbar-more').addEventListener('click',openTopbarMenu);
   bindTransactions(ctx);
-  bindAccounts(ctx);
+  bindAccounts(ctx,()=>openBankConnection(ctx));
   bindSettings(ctx);
   $('[data-action="new-budget"]').addEventListener('click',()=>newBudget(ctx));
   bindContracts(ctx);
@@ -424,6 +429,8 @@ const featureRegistry=createFeatureRegistry()
   .register('coach',()=>renderCoach())
   .register('transactions',()=>renderTransactions(ctx))
   .register('accounts',()=>renderAccounts(ctx))
+  .register('account-detail',()=>renderAccountDetail(ctx))
+  .register('bank-connections',()=>renderBankConnections(ctx))
   .register('budgets',()=>renderBudgets(ctx))
   .register('contracts',()=>renderContracts(ctx))
   .register('networth',async()=>{await renderNetWorth(ctx);await renderLoans(ctx)})

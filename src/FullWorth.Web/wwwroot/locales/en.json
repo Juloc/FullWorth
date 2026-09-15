@@ -78,7 +78,7 @@
     },
     "accounts": {
       "title": "Accounts",
-      "subtitle": "Manage bank connections, accounts and cash"
+      "subtitle": ""
     },
     "networth": {
       "title": "Net worth",
@@ -139,6 +139,14 @@
     "coach": {
       "title": "Coach",
       "subtitle": "Explain your data, review spending and calculate goals."
+    },
+    "account-detail": {
+      "title": "Account",
+      "subtitle": ""
+    },
+    "bank-connections": {
+      "title": "Bank connections",
+      "subtitle": "Sync, renew or disconnect connected banks"
     }
   },
   "dashboard": {
@@ -840,7 +848,24 @@
     "linked": "Accounts linked – the money counts once.",
     "unlinkSame": "Remove link",
     "unlinkConfirm": "Remove the link with “{name}”? Nothing was moved, so the account simply counts as it did before.",
-    "unlinked": "Link removed."
+    "unlinked": "Link removed.",
+    "details": "Account details",
+    "total": "Total",
+    "search": "Find account…",
+    "searchEmpty": "No account matches the search.",
+    "countOne": "1 account",
+    "countMany": "{count} accounts",
+    "ownName": "Your name",
+    "providerName": "Original name",
+    "bank": "Bank",
+    "identifier": "IBAN/identifier",
+    "kind": "Account type",
+    "group": "Group",
+    "connection": "Connection",
+    "backToList": "Accounts",
+    "notFound": "This account no longer exists.",
+    "noConnection": "No bank connection",
+    "defaultGroupLocked": "The default group stays."
   },
   "a11y": {
     "skipToContent": "Skip to content"
@@ -915,7 +940,9 @@
     "deleteAccountConfirm": "I understand that deletion cannot be undone after the seven-day recovery period.",
     "deleteAccountAction": "Schedule account deletion",
     "deleteAccountPasswordInvalid": "The current password is incorrect.",
-    "deleteAccountFailed": "Account deletion could not be scheduled safely."
+    "deleteAccountFailed": "Account deletion could not be scheduled safely.",
+    "bankConnections": "Bank connections",
+    "bankConnectionsHint": "Sync, renew or disconnect connected banks"
   },
   "merchants": {
     "title": "Merchants",
@@ -1111,7 +1138,8 @@
     "ingTanHint": "Confirm the sign-in using the method requested by ING.",
     "ingDecoupledHint": "Approve the request in the ING app, then check the approval.",
     "ingPoll": "Check approval",
-    "ingConnected": "ING connected"
+    "ingConnected": "ING connected",
+    "addConnection": "Connect a bank"
   },
   "aiAccess": {
     "title": "AI access",

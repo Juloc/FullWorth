@@ -1,0 +1,14 @@
+/* Die Kontodetailseite: oben Symbol, Name und Betrag, darunter eine Liste aus Feld und Wert.
+   Sie benutzt dieselben .row-Regeln wie die Übersicht; hier steht nur, was sie nicht kann. */
+.account-detail-head{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) 0}
+.account-detail-head .account-identity-icon{flex:none}
+.account-detail-names{min-width:0;flex:1}
+.account-detail-name{font-weight:600;font-size:var(--fs-lg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-detail-provider{color:var(--muted);font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-detail-amount{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+/* Feld links, Wert rechts - und der Wert darf umbrechen, der Feldname nicht. */
+#account-detail-info .row{align-items:flex-start}
+#account-detail-info .row-title{color:var(--muted);font-weight:400}
+#account-detail-info .row-end{text-align:right;min-width:0}
+.account-detail-value{overflow-wrap:anywhere}
+.account-detail-back{justify-self:start}

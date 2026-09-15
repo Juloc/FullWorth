@@ -55,9 +55,9 @@
       // as-of date, a2 is a BOOKED figure with no as-of date at all - so the row must say "Abgerufen",
       // not "Datenstand". `meaning` is what the server derives from balanceType.
       {
-        id: 'a1', name: 'Girokonto', displayName: 'Girokonto', institutionName: 'Sparkasse',
+        id: 'a1', name: 'Girokonto', displayName: 'Haushaltskonto', providerDisplayName: 'Girokonto', institutionName: 'Sparkasse',
         iban: 'DE02120300000000202051', ibanLast4: '2051', provider: 'test', accountType: 'checking',
-        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: null, sortOrder: 1,
+        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: 'g0', sortOrder: 1,
         ownerUserIds: [],
         latestBalance: {
           amount: 2431.55, currency: 'EUR', balanceType: 'interimAvailable', meaning: 'available',
@@ -72,7 +72,7 @@
         id: 'a2', name: 'Tagesgeld mit langem Namen', displayName: 'Tagesgeld mit langem Namen',
         institutionName: 'Sparkasse', iban: 'DE02500105170137075030', ibanLast4: '5030',
         provider: 'test', accountType: 'savings', currency: 'EUR', isActive: true,
-        includeInNetWorth: true, groupId: null, sortOrder: 2, ownerUserIds: [],
+        includeInNetWorth: true, groupId: 'g0', sortOrder: 2, ownerUserIds: [],
         latestBalance: {
           amount: 18250.10, currency: 'EUR', balanceType: 'closingBooked', meaning: 'booked',
           capturedAt: iso('2026-09-09T06:12:00Z'), source: 'provider'
@@ -110,7 +110,7 @@
       {
         id: 'a6', displayName: 'Bargeld', institutionName: 'Haushalt', provider: 'manual',
         accountType: 'cash', currency: 'EUR', isActive: true, includeInNetWorth: true,
-        groupId: null, sortOrder: 6,
+        groupId: 'g0', sortOrder: 6,
         latestBalance: {
           amount: 240, currency: 'EUR', balanceType: 'manual', meaning: 'recorded',
           referenceDate: '2026-08-31', capturedAt: iso('2026-09-01T09:00:00Z'),
@@ -129,11 +129,12 @@
       {
         id: 'a5', displayName: 'Bargeld (Import)', institutionName: 'Finanzguru Import',
         provider: 'finanzguru-import', product: 'Imported history', accountType: 'checking',
-        currency: 'EUR', isActive: false, includeInNetWorth: false, groupId: null, sortOrder: 5,
+        currency: 'EUR', isActive: false, includeInNetWorth: false, groupId: 'g0', sortOrder: 5,
         latestBalance: null, balances: [], baseValue: null, baseCurrency: null
       }
     ],
-    'account-groups': [{ id: 'g1', name: 'Alltag', sortOrder: 1 }],
+    // Seit #125 hat jeder Bereich eine Standardgruppe; Konten ohne eigene Gruppe stehen darin.
+    'account-groups': [{ id: 'g0', name: 'Allgemein', sortOrder: 0, isDefault: true }, { id: 'g1', name: 'Alltag', sortOrder: 1, isDefault: false }],
     // Two connections: one healthy, one FinTS parked on a TAN. The second must offer "TAN eingeben",
     // never "Neu verbinden" - reconnecting discards the challenge the bank is waiting for.
     'bank-connections': [
