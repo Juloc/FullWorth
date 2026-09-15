@@ -3,6 +3,16 @@ using Fido2NetLib.Objects;
 
 namespace FullWorth.Web.Modules.Passkeys;
 
+/// <summary>
+/// Passkeys gibt es noch nicht, weil die Installation ihre oeffentliche Adresse noch nicht kennt.
+///
+/// Das ist ein Zustand, kein Fehler: eine frische Installation lernt die Adresse bei der ersten
+/// Anmeldung ueber die echte Domain, und bis dahin gibt es nichts, wogegen ein Passkey gelten koennte.
+/// Frueher flog an dieser Stelle eine InvalidOperationException, die als 500 mit Stapelverfolgung
+/// endete - der Benutzer sah einen Absturz, wo eine Auskunft hingehoert.
+/// </summary>
+public sealed class PasskeysNotReadyException(string message) : Exception(message);
+
 public sealed class PasskeyOptions
 {
     public const string SectionName = "Passkeys";
@@ -16,12 +26,20 @@ public sealed class PasskeyOptions
 
     public void Validate(bool production = false)
     {
+        // Dieselbe Sache wie ein fehlender Origin: beide kommen aus der oeffentlichen Adresse, und
+        // wer sie noch nicht kennt, hat noch keine Passkeys - das ist ein Zustand, kein Fehler.
         if (string.IsNullOrWhiteSpace(RelyingPartyId))
-            throw new InvalidOperationException("Passkeys:RelyingPartyId is required.");
+            throw new PasskeysNotReadyException(
+                "Diese Installation kennt ihre oeffentliche Adresse noch nicht, deshalb sind Passkeys noch nicht verfuegbar.");
         if (string.IsNullOrWhiteSpace(RelyingPartyName))
             throw new InvalidOperationException("Passkeys:RelyingPartyName is required.");
+        // Kein Origin heisst nicht "falsch konfiguriert", sondern "diese Installation kennt ihre
+        // oeffentliche Adresse noch nicht". Sie lernt sie bei der ersten Anmeldung ueber die echte
+        // Domain; bis dahin gibt es schlicht nichts, wogegen ein Passkey gelten koennte. Eine eigene
+        // Ausnahme, damit daraus eine Aussage wird statt eines 500ers mit Stapelverfolgung.
         if (Origins.Length == 0 || Origins.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("At least one explicit Passkeys:Origins value is required.");
+            throw new PasskeysNotReadyException(
+                "Diese Installation kennt ihre oeffentliche Adresse noch nicht, deshalb sind Passkeys noch nicht verfuegbar.");
         if (ChallengeLifetime <= TimeSpan.Zero || ChallengeLifetime > TimeSpan.FromMinutes(10))
             throw new InvalidOperationException("Passkey challenge lifetime must be greater than zero and no more than 10 minutes.");
 
@@ -36,6 +54,7 @@ public sealed class PasskeyOptions
 
             if (production && origin.Scheme != Uri.UriSchemeHttps)
                 throw new InvalidOperationException("Production Passkeys:Origins values must use HTTPS.");
+
         }
     }
 }

@@ -28,8 +28,40 @@ public sealed class ComposedConnectionStringTests
         SecretBootstrap.AddComposedConnectionStrings(configuration);
 
         Assert.Equal(
-            "Host=db.internal;Port=5432;Database=fullworth_prod;Username=fullworth_app;Password=from-the-file",
+            "Host=db.internal;Port=5432;Database=fullworth_prod;Username=fullworth_app;Password=from-the-file;Maximum Pool Size=40",
             configuration.GetConnectionString("FullWorth"));
+    }
+
+    /// <summary>
+    /// Der Pool ist gedeckelt, und zwar unter dem, was eine Postgres-Standardinstallation vergibt.
+    ///
+    /// Ohne Deckel nimmt Npgsql 100 - genau so viele, wie der Server insgesamt hat. Die Anwendung
+    /// konnte ihn damit allein ausschoepfen; das Erste, was danach scheiterte, war der Healthcheck des
+    /// Containers mit "FATAL: sorry, too many clients already", alle zehn Sekunden.
+    /// </summary>
+    [Fact]
+    public void The_pool_is_capped_below_what_a_default_server_allows()
+    {
+        var configuration = Manager(new() { ["Database:Password"] = "from-the-file" });
+
+        SecretBootstrap.AddComposedConnectionStrings(configuration);
+
+        var connectionString = configuration.GetConnectionString("FullWorth");
+        Assert.Contains("Maximum Pool Size=40", connectionString);
+    }
+
+    [Fact]
+    public void An_operator_can_raise_the_pool_without_writing_the_whole_connection_string()
+    {
+        var configuration = Manager(new()
+        {
+            ["Database:Password"] = "from-the-file",
+            ["Database:MaxPoolSize"] = "120"
+        });
+
+        SecretBootstrap.AddComposedConnectionStrings(configuration);
+
+        Assert.Contains("Maximum Pool Size=120", configuration.GetConnectionString("FullWorth"));
     }
 
     /// <summary>

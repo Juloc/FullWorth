@@ -203,7 +203,20 @@ public static class SecretBootstrap
         var port = Value(configuration, "Database:Port", "5432");
         var database = Value(configuration, "Database:Name", "fullworth");
         var user = Value(configuration, "Database:User", "fullworth");
-        var composed = $"Host={host};Port={port};Database={database};Username={user};Password={password}";
+
+        // Eine Obergrenze fuer den Verbindungspool, und zwar eine, die KLEINER ist als das, was der
+        // Server erlaubt.
+        //
+        // Ohne sie nimmt Npgsql 100 - genau so viele, wie eine Postgres-Standardinstallation insgesamt
+        // vergibt. Die Anwendung konnte den Server damit allein ausschoepfen, und das Erste, was danach
+        // scheiterte, war der Healthcheck des Containers: "FATAL: sorry, too many clients already", alle
+        // zehn Sekunden. Ein Healthcheck, der lange genug scheitert, gilt als ungesund - und daran
+        // haengen die uebrigen Dienste.
+        //
+        // 40 laesst dem Server Luft fuer den Healthcheck, ein psql und eine Sicherung. Wer mehr braucht,
+        // setzt Database:MaxPoolSize - oder gleich die ganze Verbindungszeichenfolge, die ohnehin gewinnt.
+        var maxPoolSize = Value(configuration, "Database:MaxPoolSize", "40");
+        var composed = $"Host={host};Port={port};Database={database};Username={user};Password={password};Maximum Pool Size={maxPoolSize}";
 
         var overlay = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         // Both names, one database: the finance model and ASP.NET Identity share it, and the deploy

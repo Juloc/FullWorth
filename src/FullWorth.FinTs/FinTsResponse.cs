@@ -25,22 +25,55 @@ internal sealed class FinTsResponse
     public bool DecoupledPending => Codes.Any(x => x.DecoupledPending);
     public string? Touchdown => Codes.FirstOrDefault(x => x.Touchdown)?.Parameters.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
+    /// <summary>
+    /// Wirft, wenn die Bank einen Fehler gemeldet hat - und zwar mit ALLEN Codes, die sie geschickt hat
+    /// (#130 §9).
+    ///
+    /// Die erste Meldung ist bei ING regelmaessig 9800 "Der Dialog wurde abgebrochen". Das ist die
+    /// Sammelmeldung: sie sagt, dass der Dialog endete, nicht warum. Der Grund steht in den Codes
+    /// dahinter - falsche Zugangsdaten, gesperrter Zugang, nicht zugelassene Produkt-ID. Genau die
+    /// wurden bisher verworfen, und im Protokoll stand eine Meldung, mit der niemand etwas anfangen
+    /// konnte.
+    ///
+    /// Eingeordnet wird deshalb ueber alle Fehlercodes, und die gesprechendste Einordnung gewinnt:
+    /// 9800 allein bleibt "bank_error", 9800 zusammen mit 9942 ist "pin_wrong".
+    /// </summary>
     public void ThrowOnError()
     {
-        var error = Codes.FirstOrDefault(x => x.IsError);
-        if (error is null) return;
-        var code = error.Code switch
-        {
-            "9942" or "9340" => "pin_wrong",
-            "9930" or "9931" => "access_locked",
-            _ => "bank_error"
-        };
-        var message = string.IsNullOrWhiteSpace(error.Text) ? $"FinTS bank error {error.Code}." : error.Text;
-        throw new FinTsException(message, code,
-            bankCode: error.Code,
-            segmentReference: string.IsNullOrWhiteSpace(error.Reference) ? null : error.Reference,
-            bankMessage: string.IsNullOrWhiteSpace(error.Text) ? null : error.Text);
+        var errors = Codes.Where(x => x.IsError).ToList();
+        if (errors.Count == 0) return;
+
+        var classified = errors.Select(x => (Error: x, Kind: Classify(x.Code)))
+            .Where(x => x.Kind != "bank_error")
+            .ToList();
+        // Der Code, der die Einordnung traegt - sonst der erste. Die Meldung kommt von demselben.
+        var leading = classified.Count > 0 ? classified[0].Error : errors[0];
+        var kind = classified.Count > 0 ? classified[0].Kind : "bank_error";
+
+        var message = string.IsNullOrWhiteSpace(leading.Text) ? $"FinTS bank error {leading.Code}." : leading.Text;
+        throw new FinTsException(message, kind,
+            bankCode: leading.Code,
+            segmentReference: string.IsNullOrWhiteSpace(leading.Reference) ? null : leading.Reference,
+            bankMessage: string.IsNullOrWhiteSpace(leading.Text) ? null : leading.Text,
+            bankCodes: [.. errors.Select(x => new FinTsBankCode(x.Code, string.IsNullOrWhiteSpace(x.Reference) ? null : x.Reference, x.Text))]);
     }
+
+    /// <summary>
+    /// Die Einordnung - und nur fuer die Codes, deren Bedeutung belegt ist.
+    ///
+    /// Die uebrigen Faelle aus #130 §9 (Produkt-ID nicht zugelassen, Segmentversion nicht
+    /// unterstuetzt, Dialog abgelaufen, Bank nicht erreichbar) fehlen hier mit Absicht: ich kenne die
+    /// zugehoerigen DK-Codes nicht sicher, und eine falsche Einordnung ist schlimmer als keine - sie
+    /// zeigt dem Benutzer eine Ursache, die nicht stimmt. Sichtbar sind sie trotzdem, weil seit #130 §9
+    /// ALLE Codes mitgefuehrt und protokolliert werden. Wer eine echte Bankantwort mit einem dieser
+    /// Codes hat, kann die Zeile hier belegt ergaenzen.
+    /// </summary>
+    private static string Classify(string code) => code switch
+    {
+        "9340" or "9942" => "pin_wrong",       // Zugangsdaten falsch
+        "9930" or "9931" => "access_locked",   // Zugang gesperrt
+        _ => "bank_error"
+    };
 }
 
 internal static class FinTsResponseParser

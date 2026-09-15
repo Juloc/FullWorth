@@ -157,18 +157,39 @@ public sealed record FinTsResult<T>(
         => new(FinTsResultKind.TanPending, default, session, challenge);
 }
 
+/// <summary>Ein Rueckmeldecode der Bank, so wie er kam.</summary>
+public sealed record FinTsBankCode(string Code, string? SegmentReference, string Text);
+
 public sealed class FinTsException(
     string message,
     string? code = null,
     Exception? inner = null,
     string? bankCode = null,
     string? segmentReference = null,
-    string? bankMessage = null) : Exception(message, inner)
+    string? bankMessage = null,
+    IReadOnlyList<FinTsBankCode>? bankCodes = null) : Exception(message, inner)
 {
     public string? Code { get; } = code;
     public string? BankCode { get; } = bankCode;
     public string? SegmentReference { get; } = segmentReference;
     public string? BankMessage { get; } = bankMessage;
+
+    /// <summary>
+    /// ALLE Rueckmeldungen der Bank, in der Reihenfolge, in der sie kamen (#130 §9).
+    ///
+    /// Frueher stand hier nur die erste. Bei ING heisst die erste regelmaessig 9800 "Der Dialog wurde
+    /// abgebrochen" - das ist die Sammelmeldung und nicht der Grund. Der Grund steht in den Codes
+    /// dahinter, und die wurden weggeworfen: im Protokoll stand, DASS es scheiterte, nie WORAN.
+    /// </summary>
+    public IReadOnlyList<FinTsBankCode> BankCodes { get; } = bankCodes ?? [];
+
+    /// <summary>Alle Codes als "9800 Der Dialog wurde abgebrochen; 9010 …" - fuer ein Protokoll, eine Zeile.</summary>
+    public string BankCodeSummary => BankCodes.Count == 0
+        ? BankCode ?? string.Empty
+        : string.Join("; ", BankCodes.Select(entry =>
+            string.IsNullOrWhiteSpace(entry.SegmentReference)
+                ? $"{entry.Code} {entry.Text}"
+                : $"{entry.Code}@{entry.SegmentReference} {entry.Text}"));
 }
 
 public sealed record FinTsOpenResult(FinTsResultKind Kind, FinTsSessionState Session, FinTsTanChallenge? Challenge = null)

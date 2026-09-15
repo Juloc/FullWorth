@@ -411,13 +411,17 @@ public sealed class IngFinTsService(
 
     private void LogFinTsFailure(string operation, FinTsException ex)
     {
+        // AlleCodes steht daneben, nicht statt BankCode: die fuehrende Meldung bleibt an ihrem Platz,
+        // und dahinter steht, was die Bank sonst noch geschickt hat (#130 §9). Ohne das stand im
+        // Protokoll bei ING nur 9800 "Der Dialog wurde abgebrochen" - die Sammelmeldung, nie der Grund.
         logger.LogWarning(
-            "ING FinTS {Operation} failed. ErrorCode={ErrorCode}, BankCode={BankCode}, SegmentReference={SegmentReference}, BankMessage={BankMessage}",
+            "ING FinTS {Operation} failed. ErrorCode={ErrorCode}, BankCode={BankCode}, SegmentReference={SegmentReference}, BankMessage={BankMessage}, AllCodes={AllCodes}",
             operation,
             ex.Code ?? "bank_error",
             ex.BankCode ?? "-",
             ex.SegmentReference ?? "-",
-            SanitizeBankMessage(ex.BankMessage ?? ex.Message));
+            SanitizeBankMessage(ex.BankMessage ?? ex.Message),
+            SanitizeBankMessage(ex.BankCodeSummary));
     }
 
     private static string SanitizeBankMessage(string? message)
