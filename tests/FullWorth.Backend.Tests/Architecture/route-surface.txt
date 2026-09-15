@@ -117,13 +117,11 @@ GET              /api/budget-scopes/{budgetId:guid}/status
 GET              /api/budgets/
 GET              /api/budgets/{id:guid}
 GET              /api/budgets/{id:guid}/status
-GET              /api/capabilities
-GET              /api/capability-grants/
 GET              /api/cashflow/available
 GET              /api/cashflow/settings
 GET              /api/categories/
+GET              /api/categories/{categoryId:guid}/references
 GET              /api/categorization-rules/
-GET              /api/category-ergonomics/{categoryId:guid}/references
 GET              /api/category-intelligence/category-appearances
 GET              /api/category-intelligence/overview
 GET              /api/category-intelligence/tags
@@ -229,8 +227,6 @@ GET              /api/pension/documents/{documentId:guid}
 GET              /api/pension/documents/{documentId:guid}/content
 GET              /api/pension/overview
 GET              /api/preferences/{key}
-GET              /api/product-intelligence/history
-GET              /api/product-intelligence/summary
 GET              /api/product-learning/category-suggestions
 GET              /api/product-learning/products/{productId:guid}/aliases
 GET              /api/products/
@@ -361,8 +357,6 @@ POST             /api/categories/{id:guid}/restore
 POST             /api/categorization-rules/
 POST             /api/categorization-rules/preview
 POST             /api/categorization-rules/reapply
-POST             /api/category-ergonomics/reorder
-POST             /api/category-ergonomics/{categoryId:guid}/merge
 POST             /api/category-intelligence/bulk
 POST             /api/category-intelligence/learn
 POST             /api/category-intelligence/review
@@ -557,7 +551,6 @@ PUT              /api/assets/{id:guid}
 PUT              /api/budget-groups/{id:guid}
 PUT              /api/budget-scopes/{budgetId:guid}
 PUT              /api/budgets/{id:guid}
-PUT              /api/capability-grants/
 PUT              /api/cashflow/settings
 PUT              /api/categories/{id:guid}
 PUT              /api/categorization-rules/{id:guid}
@@ -591,7 +584,6 @@ PUT              /api/merchants/{id:guid}
 PUT              /api/pension/contracts/{contractId:guid}
 PUT              /api/pension/documents/{documentId:guid}/review
 PUT              /api/preferences/{key}
-PUT              /api/product-intelligence/aliases/{normalizedName}
 PUT              /api/purchases/receipt-imports/paperless/connection
 PUT              /api/purchases/receipt-imports/paperless/presets/{presetId:guid}
 PUT              /api/purchases/receipt-scan/jobs/{jobId:guid}/sources/order

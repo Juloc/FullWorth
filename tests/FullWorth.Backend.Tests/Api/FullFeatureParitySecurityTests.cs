@@ -125,8 +125,8 @@ VALUES ({FullWorthSpaceDefaults.LegacyId},{caller},{"sharing.manage"},{true},{Da
         });
 
         using var request = UserRequest(HttpMethod.Post,
-            $"/api/category-ergonomics/{sourceId:D}/merge?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
-        request.Content = JsonContent.Create(new { targetCategoryId = childId, archiveSource = true });
+            $"/api/category-merge/{sourceId:D}?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        request.Content = JsonContent.Create(new { targetCategoryId = childId, deleteSource = false });
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -136,6 +136,68 @@ VALUES ({FullWorthSpaceDefaults.LegacyId},{caller},{"sharing.manage"},{true},{Da
             var child = await db.Categories.AsNoTracking().SingleAsync(x => x.Id == childId);
             Assert.False(source.IsArchived);
             Assert.Equal(sourceId, child.ParentId);
+        });
+    }
+
+    /// <summary>
+    /// Die Luecke, die beim Aufraeumen der doppelten Zusammenfuehrung sichtbar wurde: die Pruefung
+    /// zaehlte nur DIREKTE AKTIVE Kinder. Ein archiviertes Zwischenkind zaehlte dort nicht mit, sein
+    /// aktives Kind aber schon - Quelle -> archiviertes Kind -> Enkelkind kam also durch, und danach
+    /// haette das Enkelkind unter sich selbst gehangen.
+    /// </summary>
+    [Fact]
+    public async Task CategoryMergeIntoGrandchildBehindAnArchivedChildIsRejected()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+        var archivedChildId = Guid.NewGuid();
+        var grandchildId = Guid.NewGuid();
+
+        await SeedMember(factory, owner, "owner");
+        await factory.SeedAsync(async db =>
+        {
+            db.Categories.AddRange(
+                new FinanceCategory
+                {
+                    Id = sourceId,
+                    FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                    Key = $"test.{sourceId:N}",
+                    Name = "Grandparent"
+                },
+                new FinanceCategory
+                {
+                    Id = archivedChildId,
+                    FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                    Key = $"test.{archivedChildId:N}",
+                    Name = "Archived middle",
+                    ParentId = sourceId,
+                    IsArchived = true
+                },
+                new FinanceCategory
+                {
+                    Id = grandchildId,
+                    FullWorthSpaceId = FullWorthSpaceDefaults.LegacyId,
+                    Key = $"test.{grandchildId:N}",
+                    Name = "Grandchild",
+                    ParentId = archivedChildId
+                });
+            await db.SaveChangesAsync();
+        });
+
+        using var request = UserRequest(HttpMethod.Post,
+            $"/api/category-merge/{sourceId:D}?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        request.Content = JsonContent.Create(new { targetCategoryId = grandchildId, deleteSource = false });
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await factory.SeedAsync(async db =>
+        {
+            var middle = await db.Categories.AsNoTracking().SingleAsync(x => x.Id == archivedChildId);
+            var grandchild = await db.Categories.AsNoTracking().SingleAsync(x => x.Id == grandchildId);
+            Assert.Equal(sourceId, middle.ParentId);
+            Assert.Equal(archivedChildId, grandchild.ParentId);
         });
     }
 

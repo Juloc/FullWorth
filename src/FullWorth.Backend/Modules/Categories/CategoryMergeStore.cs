@@ -43,6 +43,34 @@ public sealed class CategoryMergeStore(FullWorthDbContext db, AuditService audit
         db.Categories.AsNoTracking().SingleOrDefaultAsync(category =>
             category.Id == targetCategoryId && category.FullWorthSpaceId == fullWorthSpaceId, ct);
 
+    /// <summary>
+    /// Haengt <paramref name="target"/> irgendwo unter <paramref name="source"/>? Dann baut das
+    /// Zusammenfuehren einen Kreis: <see cref="MergeAsync"/> haengt die Kinder der Quelle an das Ziel
+    /// um, und das Ziel haengt danach unter sich selbst.
+    ///
+    /// Die Elternkette wird ganz gelaufen, nicht nur eine Ebene geprueft. <c>activeChildren</c> allein
+    /// reicht dafuer nicht: ein ARCHIVIERTES Zwischenkind zaehlt dort nicht mit, seine aktiven Kinder
+    /// aber schon - Quelle -> archiviertes Kind -> aktives Enkelkind kam durch.
+    /// </summary>
+    public async Task<bool> IsDescendantAsync(
+        Guid fullWorthSpaceId, Guid source, Guid target, CancellationToken ct)
+    {
+        var parentOf = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .Select(category => new { category.Id, category.ParentId })
+            .ToDictionaryAsync(row => row.Id, row => row.ParentId, ct);
+
+        // Ein bereits kaputter Baum darf keine Endlosschleife werden.
+        var seen = new HashSet<Guid>();
+        var cursor = parentOf.GetValueOrDefault(target);
+        while (cursor.HasValue && seen.Add(cursor.Value))
+        {
+            if (cursor.Value == source) return true;
+            cursor = parentOf.GetValueOrDefault(cursor.Value);
+        }
+        return false;
+    }
+
     public async Task<MergeCounts> CountsAsync(Guid fullWorthSpaceId, Guid source, CancellationToken ct)
     {
         var transactions = await db.Transactions.AsNoTracking()

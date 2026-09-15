@@ -231,7 +231,6 @@ public static class BackendApplication
         builder.Services.AddScoped<PortfolioValuationService>();
         builder.Services.AddScoped<CategoryOrderService>();
         builder.Services.AddScoped<IntelligenceDigestStore>();
-        builder.Services.AddScoped<CapabilityGrantStore>();
         builder.Services.AddScoped<BankingSyncStateStore>();
         builder.Services.AddScoped<RefundCandidateStore>();
         builder.Services.AddScoped<AccountAppearanceStore>();
@@ -240,7 +239,6 @@ public static class BackendApplication
         builder.Services.AddScoped<PurchaseDiscountAnalyticsService>();
         builder.Services.AddScoped<FinTsInvestmentSnapshotStore>();
         builder.Services.AddScoped<AccountGroupStore>();
-        builder.Services.AddScoped<CategoryErgonomicsStore>();
         builder.Services.AddScoped<TransactionBulkStore>();
         builder.Services.AddScoped<WealthPreviewBasisService>();
         builder.Services.AddScoped<CloudRequestContextStore>();
@@ -248,7 +246,6 @@ public static class BackendApplication
         builder.Services.AddScoped<CloudPriceStore>();
         builder.Services.AddScoped<MerchantSpendStore>();
         builder.Services.AddScoped<ContractBenchmarkStore>();
-        builder.Services.AddScoped<ProductIntelligenceStore>();
         builder.Services.AddScoped<AnalysisContributionStore>();
         builder.Services.AddScoped<AnalysisContributionService>();
         builder.Services.AddScoped<SavedAnalysisStore>();
@@ -256,6 +253,7 @@ public static class BackendApplication
         builder.Services.AddScoped<PurchaseInsightStore>();
         builder.Services.AddScoped<AdvancedBulkStore>();
         builder.Services.AddScoped<CategoryMergeStore>();
+        builder.Services.AddScoped<CategoryReferenceStore>();
         builder.Services.AddScoped<BudgetScopeStore>();
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
@@ -550,13 +548,10 @@ public static class BackendApplication
         endpoints.MapTransactionBulkAdvancedEndpoints();
         endpoints.MapXlsxExportEndpoints();
         endpoints.MapCsvZipExportEndpoints();
-        endpoints.MapAccountAppearanceEndpoints()
-            .MapProductIntelligenceEndpoints()
-            .MapCapabilityGrantEndpoints();
+        endpoints.MapAccountAppearanceEndpoints();
         endpoints.MapAccountExperienceEndpoints()
             .MapBankCapabilityEndpoints();
         endpoints.MapAccessEndpoints()
-            .MapCategoryErgonomicsEndpoints()
             .MapTransactionBulkEndpoints();
     }
 

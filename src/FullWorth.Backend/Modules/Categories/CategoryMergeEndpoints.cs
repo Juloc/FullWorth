@@ -39,6 +39,7 @@ public static class CategoryMergeEndpoints
             return Results.BadRequest(new { error = "Target category must be active." });
 
         var counts = await store.CountsAsync(fullWorthSpaceId, sourceCategoryId, ct);
+        var targetIsDescendant = await store.IsDescendantAsync(fullWorthSpaceId, sourceCategoryId, targetCategoryId, ct);
         return Results.Ok(new
         {
             source = new { source.Id, source.Name, source.IsArchived, source.IsSystem },
@@ -52,9 +53,11 @@ public static class CategoryMergeEndpoints
             counts.purchaseItems,
             counts.productDefaults,
             counts.activeChildren,
-            // Solange aktive Unterkategorien darunter haengen, wuerden sie elternlos zurueckbleiben.
-            canApply = counts.activeChildren == 0,
-            canDeleteSource = counts.activeChildren == 0 && !source.IsSystem
+            targetIsDescendant,
+            // Solange aktive Unterkategorien darunter haengen, wuerden sie elternlos zurueckbleiben -
+            // und in ein eigenes Enkelkind hinein wuerde der Baum einen Kreis schliessen.
+            canApply = counts.activeChildren == 0 && !targetIsDescendant,
+            canDeleteSource = counts.activeChildren == 0 && !targetIsDescendant && !source.IsSystem
         });
     }
 
@@ -77,6 +80,9 @@ public static class CategoryMergeEndpoints
         // sie ist Teil des Standardbaums, den eine frische Installation wieder anlegt.
         if (request.DeleteSource && source.IsSystem)
             return Results.BadRequest(new { error = "Built-in categories can be archived after reassignment but not permanently deleted." });
+        // Vor jeder Zaehlung und vor jeder Bewegung: in ein eigenes Enkelkind hinein entsteht ein Kreis.
+        if (await store.IsDescendantAsync(fullWorthSpaceId, sourceCategoryId, request.TargetCategoryId, ct))
+            return Results.BadRequest(new { error = "Target category is a descendant of the source. Reparent it first." });
 
         var counts = await store.CountsAsync(fullWorthSpaceId, sourceCategoryId, ct);
         if (counts.activeChildren > 0)

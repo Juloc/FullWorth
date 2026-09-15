@@ -12,12 +12,6 @@ public static class ExportEndpoints
             return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
         }).WithTags("Export");
 
-        app.MapGet("/api/capabilities", () => Results.Ok(new
-        {
-            version = "0.3.0",
-            resources = new[] { "accounts", "transactions", "purchases", "purchase-items", "categories", "categorization-rules", "contracts", "budgets", "assets", "liabilities", "analytics", "net-worth", "export" },
-            fullSnapshot = "/api/export/snapshot"
-        })).WithTags("Meta");
         return app;
     }
 }
