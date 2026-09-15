@@ -55,6 +55,58 @@ public sealed class ReceiptScanLocalBuilderUiBaselineTests : IClassFixture<FullW
         Assert.DoesNotContain("draft.ctx.api", cancelBody);
     }
 
+    /// <summary>
+    /// Waehrend der Verarbeitung blieb vom fotografierten Beleg eine Liste von Dateinamen uebrig -
+    /// das Bild lag direkt daneben und wurde weggeworfen (#129). Es bleibt jetzt stehen, und darueber
+    /// steht, WELCHE Strecke laeuft: Texterkennung oder KI.
+    /// </summary>
+    [Fact]
+    public void The_receipt_stays_visible_while_it_is_processed()
+    {
+        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+        var start = builder.IndexOf("function renderProgress(draft)", StringComparison.Ordinal);
+        var end = builder.IndexOf("function engineLine(draft)", start, StringComparison.Ordinal);
+        var progress = builder[start..end];
+
+        // Dieselbe Vorschau wie beim Sammeln, nicht eine Liste von Namen.
+        Assert.Contains("data-file-preview", progress);
+        Assert.Contains("singleRow(draft.files[0])", progress);
+        Assert.Contains("hydratePreviews(dialog, draft.files)", progress);
+        Assert.DoesNotContain("receipt-set-sources compact", builder);
+
+        // Und die Strecke steht da, in beide Richtungen.
+        Assert.Contains("keine KI beteiligt", builder);
+        Assert.Contains("no AI involved", builder);
+        Assert.Contains("KI-Analyse (GPT) liest den Beleg", builder);
+        Assert.Contains("data-engine", progress);
+    }
+
+    /// <summary>
+    /// Ein Fehler beendet den Vorgang nicht mehr: die Dateien liegen noch da, der Auftrag oft auch.
+    /// Wichtig ist dabei, dass ein zweiter Versuch WEITER beobachtet statt neu hochzuladen - sonst
+    /// entstuenden aus einem Einkauf zwei Belege.
+    /// </summary>
+    [Fact]
+    public void A_failed_scan_can_be_retried_without_uploading_twice()
+    {
+        var builder = Read("pages", "purchases", "receipt-scan-set.js");
+
+        Assert.Contains("data-retry", builder);
+        Assert.Contains("Erneut versuchen", builder);
+        Assert.Contains("function retryDraft(draft)", builder);
+        Assert.Contains("if (draft.row?.id)", builder);
+        Assert.Contains("void followDraft(draft)", builder);
+
+        // Der Fehler meldet sich erst nach aussen, wenn der Benutzer aufgibt - vorher steht der
+        // Dialog noch und bietet den zweiten Versuch an.
+        var failStart = builder.IndexOf("function failDraft(draft, error)", StringComparison.Ordinal);
+        var failEnd = builder.IndexOf("function renderProgress(draft)", failStart, StringComparison.Ordinal);
+        var fail = builder[failStart..failEnd];
+        Assert.DoesNotContain("draft.reject", fail);
+        Assert.DoesNotContain("draft.finished = true", fail);
+        Assert.Contains("draft.reject?.(error)", builder[builder.IndexOf("function abandonDraft(draft)", StringComparison.Ordinal)..]);
+    }
+
     [Fact]
     public void Service_worker_precaches_local_builder()
     {

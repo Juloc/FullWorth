@@ -19,6 +19,9 @@ public sealed class FullWorthSpaceConfiguration : IEntityTypeConfiguration<FullW
         entity.HasKey(x => x.Id);
         entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
         entity.Property(x => x.BaseCurrency).HasMaxLength(3).IsRequired();
+        // Ein Sprachcode, kein Freitext - und das Modell muss dasselbe sagen wie die Migration
+        // 20260915140000_DefaultCategoryLanguage, sonst faellt der Start ueber PendingModelChangesWarning.
+        entity.Property(x => x.DefaultCategoryLanguage).HasMaxLength(8);
         entity.HasData(new FullWorthSpace
         {
             Id = FullWorthSpaceDefaults.LegacyId,
