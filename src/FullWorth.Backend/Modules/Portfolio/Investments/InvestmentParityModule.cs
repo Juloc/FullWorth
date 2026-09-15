@@ -1,7 +1,4 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
@@ -25,61 +22,456 @@ public static class InvestmentParityEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListPortfolios(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"Name\",\"Currency\",\"AccountId\",\"BenchmarkSecurityId\",\"IsArchived\",\"CreatedAt\",\"UpdatedAt\" FROM \"InvestmentPortfolios\" WHERE \"FullWorthSpaceId\"=@s ORDER BY \"IsArchived\",\"Name\"",("@s",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(PortfolioRow(r));return Results.Ok(rows);}
-    private static Task<IResult> CreatePortfolio(Guid fullWorthSpaceId,PortfolioWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WritePortfolio(Guid.NewGuid(),fullWorthSpaceId,request,currentUser,db,audit,false,ct);
-    private static Task<IResult> UpdatePortfolio(Guid id,Guid fullWorthSpaceId,PortfolioWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WritePortfolio(id,fullWorthSpaceId,request,currentUser,db,audit,true,ct);
-    private static async Task<IResult> WritePortfolio(Guid id,Guid space,PortfolioWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,bool update,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanManageInvestments(db,uid,space,ct))return Results.StatusCode(403);if(string.IsNullOrWhiteSpace(request.Name)||request.Currency.Trim().Length!=3)return Results.BadRequest();if(request.AccountId.HasValue){var visible=await RawSql.VisibleAccountIdsAsync(db,uid,space,ct);if(!visible.Contains(request.AccountId.Value))return Results.BadRequest(new{error="Portfolio account is inaccessible."});}if(request.BenchmarkSecurityId.HasValue&&!await SecurityExists(db,space,request.BenchmarkSecurityId.Value,ct))return Results.BadRequest(new{error="Benchmark security is invalid."});var c=await RawSql.OpenAsync(db,ct);var now=DateTimeOffset.UtcNow;await using var cmd=update?RawSql.Command(c,"UPDATE \"InvestmentPortfolios\" SET \"Name\"=@name,\"Currency\"=@currency,\"AccountId\"=@account,\"BenchmarkSecurityId\"=@benchmark,\"IsArchived\"=@archived,\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space",("@name",request.Name.Trim()),("@currency",request.Currency.Trim().ToUpperInvariant()),("@account",request.AccountId),("@benchmark",request.BenchmarkSecurityId),("@archived",request.IsArchived),("@now",now),("@id",id),("@space",space)):RawSql.Command(c,"INSERT INTO \"InvestmentPortfolios\" (\"Id\",\"FullWorthSpaceId\",\"Name\",\"Currency\",\"AccountId\",\"BenchmarkSecurityId\",\"IsArchived\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@name,@currency,@account,@benchmark,@archived,@now,@now)",("@id",id),("@space",space),("@name",request.Name.Trim()),("@currency",request.Currency.Trim().ToUpperInvariant()),("@account",request.AccountId),("@benchmark",request.BenchmarkSecurityId),("@archived",request.IsArchived),("@now",now));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(space,uid,update?"investment.portfolio.updated":"investment.portfolio.created","InvestmentPortfolio",id);await db.SaveChangesAsync(ct);return Results.Ok(new{id});}
-    private static async Task<IResult> ArchivePortfolio(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioWritable(db,uid,fullWorthSpaceId,id,ct))return Results.StatusCode(403);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"UPDATE \"InvestmentPortfolios\" SET \"IsArchived\"=true,\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space",("@now",DateTimeOffset.UtcNow),("@id",id),("@space",fullWorthSpaceId));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"investment.portfolio.archived","InvestmentPortfolio",id);await db.SaveChangesAsync(ct);return Results.NoContent();}
+    private static async Task<IResult> ListPortfolios(
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
 
-    private static async Task<IResult> ListSecurities(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"Name\",\"Isin\",\"Wkn\",\"Ticker\",\"AssetType\",\"Currency\",\"Exchange\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=@s ORDER BY \"Name\"",("@s",fullWorthSpaceId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(SecurityRow(r));return Results.Ok(rows);}
-    private static Task<IResult> CreateSecurity(Guid fullWorthSpaceId,SecurityWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteSecurity(Guid.NewGuid(),fullWorthSpaceId,request,currentUser,db,audit,false,ct);
-    private static Task<IResult> UpdateSecurity(Guid id,Guid fullWorthSpaceId,SecurityWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteSecurity(id,fullWorthSpaceId,request,currentUser,db,audit,true,ct);
-    private static async Task<IResult> WriteSecurity(Guid id,Guid space,SecurityWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,bool update,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanManageInvestments(db,uid,space,ct))return Results.StatusCode(403);if(string.IsNullOrWhiteSpace(request.Name)||request.Currency.Trim().Length!=3)return Results.BadRequest();var type=NormalizeAssetType(request.AssetType);var c=await RawSql.OpenAsync(db,ct);var now=DateTimeOffset.UtcNow;await using var cmd=update?RawSql.Command(c,"UPDATE \"Securities\" SET \"Name\"=@name,\"Isin\"=@isin,\"Wkn\"=@wkn,\"Ticker\"=@ticker,\"AssetType\"=@type,\"Currency\"=@currency,\"Exchange\"=@exchange,\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space",("@name",request.Name.Trim()),("@isin",request.Isin?.Trim().ToUpperInvariant()),("@wkn",request.Wkn?.Trim().ToUpperInvariant()),("@ticker",request.Ticker?.Trim().ToUpperInvariant()),("@type",type),("@currency",request.Currency.Trim().ToUpperInvariant()),("@exchange",request.Exchange?.Trim()),("@now",now),("@id",id),("@space",space)):RawSql.Command(c,"INSERT INTO \"Securities\" (\"Id\",\"FullWorthSpaceId\",\"Name\",\"Isin\",\"Wkn\",\"Ticker\",\"AssetType\",\"Currency\",\"Exchange\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@name,@isin,@wkn,@ticker,@type,@currency,@exchange,@now,@now)",("@id",id),("@space",space),("@name",request.Name.Trim()),("@isin",request.Isin?.Trim().ToUpperInvariant()),("@wkn",request.Wkn?.Trim().ToUpperInvariant()),("@ticker",request.Ticker?.Trim().ToUpperInvariant()),("@type",type),("@currency",request.Currency.Trim().ToUpperInvariant()),("@exchange",request.Exchange?.Trim()),("@now",now));try{if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();}catch(Exception){return Results.Conflict(new{error="A security with this ISIN may already exist."});}audit.Record(space,uid,update?"investment.security.updated":"investment.security.created","Security",id);await db.SaveChangesAsync(ct);return Results.Ok(new{id});}
+        var rows = (await store.ListPortfoliosAsync(fullWorthSpaceId, ct))
+            .Select(row => new
+            {
+                id = row.Id,
+                name = row.Name,
+                currency = row.Currency,
+                accountId = row.AccountId,
+                benchmarkSecurityId = row.BenchmarkSecurityId,
+                isArchived = row.IsArchived,
+                createdAt = row.CreatedAt,
+                updatedAt = row.UpdatedAt
+            });
+        return Results.Ok(rows);
+    }
 
-    private static async Task<IResult> ListTrades(Guid portfolioId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioReadable(db,uid,fullWorthSpaceId,portfolioId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"SecurityId\",\"TradeType\",\"TradeDate\",\"Quantity\",\"Price\",\"Amount\",\"Currency\",\"Fees\",\"Taxes\",\"ExternalKey\",\"Notes\" FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@p ORDER BY \"TradeDate\" DESC,\"CreatedAt\" DESC",("@p",portfolioId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(TradeRow(r));return Results.Ok(rows);}
-    private static Task<IResult> CreateTrade(Guid portfolioId,Guid fullWorthSpaceId,TradeWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteTrade(Guid.NewGuid(),portfolioId,fullWorthSpaceId,request,currentUser,db,audit,false,ct);
-    private static Task<IResult> UpdateTrade(Guid id,Guid portfolioId,Guid fullWorthSpaceId,TradeWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteTrade(id,portfolioId,fullWorthSpaceId,request,currentUser,db,audit,true,ct);
-    private static async Task<IResult> WriteTrade(Guid id,Guid portfolioId,Guid space,TradeWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,bool update,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioWritable(db,uid,space,portfolioId,ct))return Results.StatusCode(403);var type=NormalizeTradeType(request.TradeType);if(request.Amount<0||request.Fees<0||request.Taxes<0||request.Currency.Trim().Length!=3)return Results.BadRequest();if(type is "buy" or "sell" or "cancellation" or "security_transfer_in" or "security_transfer_out"&&(request.SecurityId is null||request.Quantity is null or <=0))return Results.BadRequest(new{error="This trade type requires a security and positive quantity."});if(request.SecurityId.HasValue&&!await SecurityExists(db,space,request.SecurityId.Value,ct))return Results.BadRequest(new{error="Security is invalid."});var c=await RawSql.OpenAsync(db,ct);var now=DateTimeOffset.UtcNow;var parameters=new(string,object?)[]{("@security",request.SecurityId),("@type",type),("@date",request.TradeDate),("@quantity",request.Quantity),("@price",request.Price),("@amount",request.Amount),("@currency",request.Currency.Trim().ToUpperInvariant()),("@fees",request.Fees),("@taxes",request.Taxes),("@external",request.ExternalKey?.Trim()),("@notes",request.Notes?.Trim()),("@now",now),("@id",id),("@portfolio",portfolioId),("@space",space)};await using var cmd=update?RawSql.Command(c,"UPDATE \"InvestmentTrades\" SET \"SecurityId\"=@security,\"TradeType\"=@type,\"TradeDate\"=@date,\"Quantity\"=@quantity,\"Price\"=@price,\"Amount\"=@amount,\"Currency\"=@currency,\"Fees\"=@fees,\"Taxes\"=@taxes,\"ExternalKey\"=@external,\"Notes\"=@notes,\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"PortfolioId\"=@portfolio AND \"FullWorthSpaceId\"=@space",parameters):RawSql.Command(c,"INSERT INTO \"InvestmentTrades\" (\"Id\",\"FullWorthSpaceId\",\"PortfolioId\",\"SecurityId\",\"TradeType\",\"TradeDate\",\"Quantity\",\"Price\",\"Amount\",\"Currency\",\"Fees\",\"Taxes\",\"ExternalKey\",\"Notes\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@portfolio,@security,@type,@date,@quantity,@price,@amount,@currency,@fees,@taxes,@external,@notes,@now,@now)",parameters);if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(space,uid,update?"investment.trade.updated":"investment.trade.created","InvestmentTrade",id);await db.SaveChangesAsync(ct);return Results.Ok(new{id});}
-    private static async Task<IResult> DeleteTrade(Guid id,Guid portfolioId,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioWritable(db,uid,fullWorthSpaceId,portfolioId,ct))return Results.StatusCode(403);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id AND \"PortfolioId\"=@p AND \"FullWorthSpaceId\"=@space",("@id",id),("@p",portfolioId),("@space",fullWorthSpaceId));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"investment.trade.deleted","InvestmentTrade",id);await db.SaveChangesAsync(ct);return Results.NoContent();}
+    private static Task<IResult> CreatePortfolio(
+        Guid fullWorthSpaceId, PortfolioWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, CancellationToken ct) =>
+        WritePortfolio(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, space, store, false, ct);
 
-    private static async Task<IResult> PutPrice(Guid fullWorthSpaceId,PriceWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await CanManageInvestments(db,uid,fullWorthSpaceId,ct))return Results.StatusCode(403);if(request.Price<=0||request.Currency.Trim().Length!=3||!await SecurityExists(db,fullWorthSpaceId,request.SecurityId,ct))return Results.BadRequest();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"INSERT INTO \"SecurityPrices\" (\"SecurityId\",\"PriceDate\",\"Price\",\"Currency\",\"Source\",\"CreatedAt\") VALUES (@s,@date,@price,@currency,@source,@now) ON CONFLICT (\"SecurityId\",\"PriceDate\",\"Source\") DO UPDATE SET \"Price\"=EXCLUDED.\"Price\",\"Currency\"=EXCLUDED.\"Currency\"",("@s",request.SecurityId),("@date",request.PriceDate),("@price",request.Price),("@currency",request.Currency.Trim().ToUpperInvariant()),("@source",string.IsNullOrWhiteSpace(request.Source)?"manual":request.Source.Trim()),("@now",DateTimeOffset.UtcNow));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"investment.price.updated","Security",request.SecurityId);await db.SaveChangesAsync(ct);return Results.NoContent();}
+    private static Task<IResult> UpdatePortfolio(
+        Guid id, Guid fullWorthSpaceId, PortfolioWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, CancellationToken ct) =>
+        WritePortfolio(id, fullWorthSpaceId, request, currentUser, space, store, true, ct);
 
-    private static async Task<IResult> Positions(Guid portfolioId,Guid fullWorthSpaceId,DateOnly? asOf,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioReadable(db,uid,fullWorthSpaceId,portfolioId,ct))return Results.NotFound();var day=asOf??DateOnly.FromDateTime(DateTime.UtcNow);var data=await LoadInvestmentData(db,portfolioId,day,ct);var positions=ComputePositions(data.Trades,data.Prices,day,data.Securities);return Results.Ok(new{asOf=day,positions,totalMarketValue=positions.Sum(x=>x.MarketValue),totalCostBasis=positions.Sum(x=>x.CostBasis),unrealizedGain=positions.Sum(x=>x.UnrealizedGain)});}
+    private static async Task<IResult> WritePortfolio(
+        Guid id, Guid fullWorthSpaceId, PortfolioWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, bool update, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanManageAsync(uid, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Currency.Trim().Length != 3) return Results.BadRequest();
 
-    private static async Task<IResult> Performance(Guid portfolioId,Guid fullWorthSpaceId,DateOnly? from,DateOnly? to,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioReadable(db,uid,fullWorthSpaceId,portfolioId,ct))return Results.NotFound();var end=to??DateOnly.FromDateTime(DateTime.UtcNow);var start=from??end.AddYears(-1);if(start>end)return Results.BadRequest();var data=await LoadInvestmentData(db,portfolioId,end,ct);var dates=data.Prices.Where(x=>x.Date>=start&&x.Date<=end).Select(x=>x.Date).Concat(data.Trades.Where(x=>x.Date>=start&&x.Date<=end).Select(x=>x.Date)).Append(start).Append(end).Distinct().OrderBy(x=>x).ToArray();decimal twr=1m;decimal? previous=null;var points=new List<object>();foreach(var date in dates){var pos=ComputePositions(data.Trades,data.Prices,date,data.Securities);var value=pos.Sum(x=>x.MarketValue);var external=ExternalFlow(data.Trades.Where(x=>x.Date==date));if(previous.HasValue&&previous.Value!=0){var r=(value-external-previous.Value)/previous.Value;twr*=1+r;}points.Add(new{date,value});previous=value;}var terminal=ComputePositions(data.Trades,data.Prices,end,data.Securities).Sum(x=>x.MarketValue);var flows=new List<(DateOnly Date,decimal Amount)>();foreach(var t in data.Trades.Where(x=>x.Date>=start&&x.Date<=end)){if(t.Type=="deposit")flows.Add((t.Date,-t.Amount));else if(t.Type=="withdrawal")flows.Add((t.Date,t.Amount));}if(terminal>0)flows.Add((end,terminal));var xirr=Xirr(flows);decimal? benchmark=null;if(data.BenchmarkSecurityId.HasValue){var bp=data.Prices.Where(x=>x.SecurityId==data.BenchmarkSecurityId.Value&&x.Date>=start&&x.Date<=end).OrderBy(x=>x.Date).ToArray();if(bp.Length>=2&&bp[0].Price!=0)benchmark=bp[^1].Price/bp[0].Price-1;}
-        return Results.Ok(new{from=start,to=end,twr=dates.Length>1?twr-1:(decimal?)null,xirr,benchmarkReturn=benchmark,marketValue=terminal,points});}
+        if (request.AccountId.HasValue)
+        {
+            var visible = await space.VisibleAccountIdsAsync(uid, fullWorthSpaceId, ct);
+            if (!visible.Contains(request.AccountId.Value))
+                return Results.BadRequest(new { error = "Portfolio account is inaccessible." });
+        }
+        if (request.BenchmarkSecurityId.HasValue
+            && !await store.SecurityExistsAsync(fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
+            return Results.BadRequest(new { error = "Benchmark security is invalid." });
 
-    private static async Task<IResult> Dividends(Guid portfolioId,Guid fullWorthSpaceId,int? year,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await PortfolioReadable(db,uid,fullWorthSpaceId,portfolioId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);var sql="SELECT t.\"Id\",t.\"SecurityId\",t.\"TradeDate\",t.\"Amount\",t.\"Currency\",t.\"Taxes\",s.\"Name\" FROM \"InvestmentTrades\" t LEFT JOIN \"Securities\" s ON s.\"Id\"=t.\"SecurityId\" WHERE t.\"PortfolioId\"=@p AND t.\"TradeType\"='dividend'"+(year.HasValue?" AND EXTRACT(YEAR FROM t.\"TradeDate\")=@year":"")+" ORDER BY t.\"TradeDate\" DESC";await using var cmd=year.HasValue?RawSql.Command(c,sql,("@p",portfolioId),("@year",year.Value)):RawSql.Command(c,sql,("@p",portfolioId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();decimal total=0;while(await r.ReadAsync(ct)){var amount=RawSql.Decimal(r,"Amount");total+=amount;rows.Add(new{id=RawSql.Guid(r,"Id"),securityId=RawSql.NullableGuid(r,"SecurityId"),security=RawSql.NullableString(r,"Name"),date=RawSql.NullableDate(r,"TradeDate"),amount,currency=RawSql.String(r,"Currency"),taxes=RawSql.Decimal(r,"Taxes")});}return Results.Ok(new{total,items=rows});}
+        return await store.SavePortfolioBasicsAsync(uid, fullWorthSpaceId, id, request, update, ct)
+            ? Results.Ok(new { id })
+            : Results.NotFound();
+    }
 
-    private static async Task<IResult> ListWatchlists(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"Name\" FROM \"Watchlists\" WHERE \"FullWorthSpaceId\"=@s AND \"OwnerUserId\"=@u ORDER BY \"Name\"",("@s",fullWorthSpaceId),("@u",uid));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(new{id=RawSql.Guid(r,"Id"),name=RawSql.String(r,"Name")});return Results.Ok(rows);}
-    private static Task<IResult> CreateWatchlist(Guid fullWorthSpaceId,WatchlistWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteWatchlist(Guid.NewGuid(),fullWorthSpaceId,request,currentUser,db,audit,false,ct);
-    private static Task<IResult> UpdateWatchlist(Guid id,Guid fullWorthSpaceId,WatchlistWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)=>WriteWatchlist(id,fullWorthSpaceId,request,currentUser,db,audit,true,ct);
-    private static async Task<IResult> WriteWatchlist(Guid id,Guid space,WatchlistWrite request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,bool update,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,space,ct))return Results.NotFound();if(string.IsNullOrWhiteSpace(request.Name))return Results.BadRequest();var c=await RawSql.OpenAsync(db,ct);var now=DateTimeOffset.UtcNow;await using var cmd=update?RawSql.Command(c,"UPDATE \"Watchlists\" SET \"Name\"=@n,\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s AND \"OwnerUserId\"=@u",("@n",request.Name.Trim()),("@now",now),("@id",id),("@s",space),("@u",uid)):RawSql.Command(c,"INSERT INTO \"Watchlists\" (\"Id\",\"FullWorthSpaceId\",\"OwnerUserId\",\"Name\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@s,@u,@n,@now,@now)",("@id",id),("@s",space),("@u",uid),("@n",request.Name.Trim()),("@now",now));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(space,uid,update?"watchlist.updated":"watchlist.created","Watchlist",id);await db.SaveChangesAsync(ct);return Results.Ok(new{id});}
-    private static async Task<IResult> DeleteWatchlist(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"DELETE FROM \"Watchlists\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s AND \"OwnerUserId\"=@u",("@id",id),("@s",fullWorthSpaceId),("@u",uid));if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();audit.Record(fullWorthSpaceId,uid,"watchlist.deleted","Watchlist",id);await db.SaveChangesAsync(ct);return Results.NoContent();}
-    private static async Task<IResult> PutWatchlistItems(Guid id,Guid fullWorthSpaceId,IReadOnlyList<WatchlistItemWrite> request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnWatchlist(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();if(request.Any(x=>!SecurityExists(db,fullWorthSpaceId,x.SecurityId,ct).GetAwaiter().GetResult()))return Results.BadRequest();var c=await RawSql.OpenAsync(db,ct);await using var tx=await db.Database.BeginTransactionAsync(ct);await using(var del=RawSql.Command(c,"DELETE FROM \"WatchlistItems\" WHERE \"WatchlistId\"=@id",("@id",id)))await del.ExecuteNonQueryAsync(ct);foreach(var item in request.DistinctBy(x=>x.SecurityId)){await using var add=RawSql.Command(c,"INSERT INTO \"WatchlistItems\" (\"WatchlistId\",\"SecurityId\",\"TargetPrice\",\"Notes\") VALUES (@w,@s,@p,@n)",("@w",id),("@s",item.SecurityId),("@p",item.TargetPrice),("@n",item.Notes?.Trim()));await add.ExecuteNonQueryAsync(ct);}audit.Record(fullWorthSpaceId,uid,"watchlist.items.updated","Watchlist",id);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.NoContent();}
-    private static async Task<IResult> GetWatchlistItems(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnWatchlist(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"""
-SELECT i."SecurityId",s."Name",s."Ticker",s."AssetType",i."TargetPrice",i."Notes",p."Price",p."PriceDate",p."Currency" FROM "WatchlistItems" i JOIN "Securities" s ON s."Id"=i."SecurityId" LEFT JOIN LATERAL (SELECT "Price","PriceDate","Currency" FROM "SecurityPrices" WHERE "SecurityId"=s."Id" ORDER BY "PriceDate" DESC LIMIT 1) p ON true WHERE i."WatchlistId"=@id ORDER BY s."Name"
-""",("@id",id));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(new{securityId=RawSql.Guid(r,"SecurityId"),name=RawSql.String(r,"Name"),ticker=RawSql.NullableString(r,"Ticker"),assetType=RawSql.String(r,"AssetType"),targetPrice=RawSql.NullableDecimal(r,"TargetPrice"),notes=RawSql.NullableString(r,"Notes"),price=RawSql.NullableDecimal(r,"Price"),priceDate=RawSql.NullableDate(r,"PriceDate"),currency=RawSql.NullableString(r,"Currency")});return Results.Ok(rows);}
+    private static async Task<IResult> ArchivePortfolio(
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioWritableAsync(uid, fullWorthSpaceId, id, ct)) return Results.StatusCode(403);
 
-    private sealed record TradeRowData(Guid Id,Guid? SecurityId,string Type,DateOnly Date,decimal? Quantity,decimal? Price,decimal Amount,string Currency,decimal Fees,decimal Taxes);
-    private sealed record PriceRowData(Guid SecurityId,DateOnly Date,decimal Price,string Currency);
-    private sealed record SecurityRowData(Guid Id,string Name,string AssetType,string Currency);
-    private sealed record InvestmentData(List<TradeRowData> Trades,List<PriceRowData> Prices,Dictionary<Guid,SecurityRowData> Securities,Guid? BenchmarkSecurityId);
+        return await store.ArchivePortfolioAsync(uid, fullWorthSpaceId, id, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
+    }
+
+    private static async Task<IResult> ListSecurities(
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListSecuritiesAsync(fullWorthSpaceId, ct))
+            .Select(row => new
+            {
+                id = row.Id,
+                name = row.Name,
+                isin = row.Isin,
+                wkn = row.Wkn,
+                ticker = row.Ticker,
+                assetType = row.AssetType,
+                currency = row.Currency,
+                exchange = row.Exchange
+            });
+        return Results.Ok(rows);
+    }
+
+    private static Task<IResult> CreateSecurity(
+        Guid fullWorthSpaceId, SecurityWrite request, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct) =>
+        WriteSecurity(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, store, false, ct);
+
+    private static Task<IResult> UpdateSecurity(
+        Guid id, Guid fullWorthSpaceId, SecurityWrite request, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct) =>
+        WriteSecurity(id, fullWorthSpaceId, request, currentUser, store, true, ct);
+
+    private static async Task<IResult> WriteSecurity(
+        Guid id, Guid fullWorthSpaceId, SecurityWrite request, CurrentUserContext currentUser, InvestmentStore store,
+        bool update, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanManageAsync(uid, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Currency.Trim().Length != 3) return Results.BadRequest();
+
+        try
+        {
+            // Dieselbe ISIN zweimal im selben Bereich laesst die Datenbank nicht zu - das ist ein
+            // Konflikt und kein Serverfehler.
+            return await store.SaveSecurityBasicsAsync(
+                uid, fullWorthSpaceId, id, request, NormalizeAssetType(request.AssetType), update, ct)
+                ? Results.Ok(new { id })
+                : Results.NotFound();
+        }
+        catch (Exception)
+        {
+            return Results.Conflict(new { error = "A security with this ISIN may already exist." });
+        }
+    }
+
+    private static async Task<IResult> ListTrades(
+        Guid portfolioId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioReadableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListTradesAsync(portfolioId, ct))
+            .Select(row => new
+            {
+                id = row.Id,
+                securityId = row.SecurityId,
+                tradeType = row.TradeType,
+                tradeDate = row.TradeDate,
+                quantity = row.Quantity,
+                price = row.Price,
+                amount = row.Amount,
+                currency = row.Currency,
+                fees = row.Fees,
+                taxes = row.Taxes,
+                externalKey = row.ExternalKey,
+                notes = row.Notes
+            });
+        return Results.Ok(rows);
+    }
+
+    private static Task<IResult> CreateTrade(
+        Guid portfolioId, Guid fullWorthSpaceId, TradeWrite request, CurrentUserContext currentUser,
+        InvestmentStore store, CancellationToken ct) =>
+        WriteTrade(Guid.NewGuid(), portfolioId, fullWorthSpaceId, request, currentUser, store, false, ct);
+
+    private static Task<IResult> UpdateTrade(
+        Guid id, Guid portfolioId, Guid fullWorthSpaceId, TradeWrite request, CurrentUserContext currentUser,
+        InvestmentStore store, CancellationToken ct) =>
+        WriteTrade(id, portfolioId, fullWorthSpaceId, request, currentUser, store, true, ct);
+
+    private static async Task<IResult> WriteTrade(
+        Guid id, Guid portfolioId, Guid fullWorthSpaceId, TradeWrite request, CurrentUserContext currentUser,
+        InvestmentStore store, bool update, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioWritableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.StatusCode(403);
+
+        var type = NormalizeTradeType(request.TradeType);
+        if (request.Amount < 0 || request.Fees < 0 || request.Taxes < 0 || request.Currency.Trim().Length != 3)
+            return Results.BadRequest();
+        if (type is "buy" or "sell" or "cancellation" or "security_transfer_in" or "security_transfer_out"
+            && (request.SecurityId is null || request.Quantity is null or <= 0))
+            return Results.BadRequest(new { error = "This trade type requires a security and positive quantity." });
+        if (request.SecurityId.HasValue
+            && !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId.Value, ct))
+            return Results.BadRequest(new { error = "Security is invalid." });
+
+        return await store.SaveTradeBasicsAsync(uid, fullWorthSpaceId, portfolioId, id, request, type, update, ct)
+            ? Results.Ok(new { id })
+            : Results.NotFound();
+    }
+
+    private static async Task<IResult> DeleteTrade(
+        Guid id, Guid portfolioId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioWritableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.StatusCode(403);
+
+        return await store.DeleteTradeAsync(uid, fullWorthSpaceId, portfolioId, id, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
+    }
+
+    private static async Task<IResult> PutPrice(
+        Guid fullWorthSpaceId, PriceWrite request, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.CanManageAsync(uid, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (request.Price <= 0 || request.Currency.Trim().Length != 3
+            || !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId, ct))
+            return Results.BadRequest();
+
+        await store.SavePriceAsync(uid, fullWorthSpaceId, request.SecurityId, request.PriceDate, request.Price,
+            request.Currency.Trim().ToUpperInvariant(),
+            string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim(), ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> Positions(
+        Guid portfolioId, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser,
+        InvestmentStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioReadableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+
+        var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var data = await store.LoadValuationAsync(portfolioId, day, ct);
+        var positions = ComputePositions(data.Trades, data.Prices, day, data.Securities);
+
+        return Results.Ok(new
+        {
+            asOf = day,
+            positions,
+            totalMarketValue = positions.Sum(x => x.MarketValue),
+            totalCostBasis = positions.Sum(x => x.CostBasis),
+            unrealizedGain = positions.Sum(x => x.UnrealizedGain)
+        });
+    }
+
+    private static async Task<IResult> Performance(
+        Guid portfolioId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CurrentUserContext currentUser,
+        InvestmentStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioReadableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+
+        var end = to ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var start = from ?? end.AddYears(-1);
+        if (start > end) return Results.BadRequest();
+
+        var data = await store.LoadValuationAsync(portfolioId, end, ct);
+
+        // Die Kette bricht an jedem Tag, an dem sich etwas bewegt hat - sonst wuerde eine Einzahlung
+        // wie ein Kursgewinn aussehen.
+        var dates = data.Prices.Where(x => x.Date >= start && x.Date <= end).Select(x => x.Date)
+            .Concat(data.Trades.Where(x => x.Date >= start && x.Date <= end).Select(x => x.Date))
+            .Append(start).Append(end).Distinct().OrderBy(x => x).ToArray();
+
+        decimal twr = 1m;
+        decimal? previous = null;
+        var points = new List<object>();
+        foreach (var date in dates)
+        {
+            var value = ComputePositions(data.Trades, data.Prices, date, data.Securities).Sum(x => x.MarketValue);
+            var external = ExternalFlow(data.Trades.Where(x => x.Date == date));
+            if (previous.HasValue && previous.Value != 0) twr *= 1 + (value - external - previous.Value) / previous.Value;
+            points.Add(new { date, value });
+            previous = value;
+        }
+
+        var terminal = ComputePositions(data.Trades, data.Prices, end, data.Securities).Sum(x => x.MarketValue);
+        var flows = new List<(DateOnly Date, decimal Amount)>();
+        foreach (var trade in data.Trades.Where(x => x.Date >= start && x.Date <= end))
+        {
+            if (trade.Type == "deposit") flows.Add((trade.Date, -trade.Amount));
+            else if (trade.Type == "withdrawal") flows.Add((trade.Date, trade.Amount));
+        }
+        if (terminal > 0) flows.Add((end, terminal));
+
+        decimal? benchmark = null;
+        if (data.BenchmarkSecurityId.HasValue)
+        {
+            var prices = data.Prices
+                .Where(x => x.SecurityId == data.BenchmarkSecurityId.Value && x.Date >= start && x.Date <= end)
+                .OrderBy(x => x.Date).ToArray();
+            if (prices.Length >= 2 && prices[0].Price != 0) benchmark = prices[^1].Price / prices[0].Price - 1;
+        }
+
+        return Results.Ok(new
+        {
+            from = start,
+            to = end,
+            twr = dates.Length > 1 ? twr - 1 : (decimal?)null,
+            xirr = Xirr(flows),
+            benchmarkReturn = benchmark,
+            marketValue = terminal,
+            points
+        });
+    }
+
+    private static async Task<IResult> Dividends(
+        Guid portfolioId, Guid fullWorthSpaceId, int? year, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.PortfolioReadableAsync(uid, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+
+        var dividends = await store.ListDividendsAsync(portfolioId, year, ct);
+        return Results.Ok(new
+        {
+            total = dividends.Sum(row => row.Amount),
+            items = dividends.Select(row => new
+            {
+                id = row.Id,
+                securityId = row.SecurityId,
+                security = row.Security,
+                date = row.Date,
+                amount = row.Amount,
+                currency = row.Currency,
+                taxes = row.Taxes
+            })
+        });
+    }
+
+    private static async Task<IResult> ListWatchlists(
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
+        CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListWatchlistsAsync(fullWorthSpaceId, uid, ct))
+            .Select(row => new { id = row.Id, name = row.Name });
+        return Results.Ok(rows);
+    }
+
+    private static Task<IResult> CreateWatchlist(
+        Guid fullWorthSpaceId, WatchlistWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, CancellationToken ct) =>
+        WriteWatchlist(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, space, store, false, ct);
+
+    private static Task<IResult> UpdateWatchlist(
+        Guid id, Guid fullWorthSpaceId, WatchlistWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, CancellationToken ct) =>
+        WriteWatchlist(id, fullWorthSpaceId, request, currentUser, space, store, true, ct);
+
+    private static async Task<IResult> WriteWatchlist(
+        Guid id, Guid fullWorthSpaceId, WatchlistWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        InvestmentStore store, bool update, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest();
+
+        return await store.SaveWatchlistAsync(uid, fullWorthSpaceId, id, request.Name, update,
+            update ? "watchlist.updated" : "watchlist.created", ct)
+            ? Results.Ok(new { id })
+            : Results.NotFound();
+    }
+
+    private static async Task<IResult> DeleteWatchlist(
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct) =>
+        await store.DeleteWatchlistAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
+
+    private static async Task<IResult> PutWatchlistItems(
+        Guid id, Guid fullWorthSpaceId, IReadOnlyList<WatchlistItemWrite> request, CurrentUserContext currentUser,
+        InvestmentStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.OwnsWatchlistAsync(uid, fullWorthSpaceId, id, ct)) return Results.NotFound();
+
+        var items = request.DistinctBy(item => item.SecurityId).ToArray();
+        if (!await store.AllSecuritiesExistAsync(fullWorthSpaceId, items.Select(item => item.SecurityId).ToArray(), ct))
+            return Results.BadRequest();
+
+        await store.ReplaceWatchlistItemsAsync(uid, fullWorthSpaceId, id,
+            items.Select(item => (item.SecurityId, item.TargetPrice, item.Notes?.Trim(), 0)).ToArray(),
+            "watchlist.items.updated", ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> GetWatchlistItems(
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.OwnsWatchlistAsync(uid, fullWorthSpaceId, id, ct)) return Results.NotFound();
+
+        var rows = (await store.ListWatchlistItemsAsync(id, ct))
+            .Select(row => new
+            {
+                securityId = row.SecurityId,
+                name = row.Name,
+                ticker = row.Ticker,
+                assetType = row.AssetType,
+                targetPrice = row.TargetPrice,
+                notes = row.Notes,
+                price = row.Price,
+                priceDate = row.PriceDate,
+                currency = row.PriceCurrency
+            });
+        return Results.Ok(rows);
+    }
+
     private sealed record PositionView(Guid SecurityId,string Name,string AssetType,decimal Quantity,decimal LastPrice,string Currency,decimal MarketValue,decimal CostBasis,decimal UnrealizedGain,decimal? UnrealizedPercent);
-    private static async Task<InvestmentData> LoadInvestmentData(FullWorthDbContext db,Guid portfolio,DateOnly asOf,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);var trades=new List<TradeRowData>();await using(var cmd=RawSql.Command(c,"SELECT \"Id\",\"SecurityId\",\"TradeType\",\"TradeDate\",\"Quantity\",\"Price\",\"Amount\",\"Currency\",\"Fees\",\"Taxes\" FROM \"InvestmentTrades\" WHERE \"PortfolioId\"=@p AND \"TradeDate\"<=@date ORDER BY \"TradeDate\",\"CreatedAt\"",("@p",portfolio),("@date",asOf))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))trades.Add(new(RawSql.Guid(r,"Id"),RawSql.NullableGuid(r,"SecurityId"),RawSql.String(r,"TradeType"),RawSql.NullableDate(r,"TradeDate")!.Value,RawSql.NullableDecimal(r,"Quantity"),RawSql.NullableDecimal(r,"Price"),RawSql.Decimal(r,"Amount"),RawSql.String(r,"Currency"),RawSql.Decimal(r,"Fees"),RawSql.Decimal(r,"Taxes")));}var securities=new Dictionary<Guid,SecurityRowData>();await using(var cmd=RawSql.Command(c,"SELECT \"Id\",\"Name\",\"AssetType\",\"Currency\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=(SELECT \"FullWorthSpaceId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@p)",("@p",portfolio))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct)){var row=new SecurityRowData(RawSql.Guid(r,"Id"),RawSql.String(r,"Name"),RawSql.String(r,"AssetType"),RawSql.String(r,"Currency"));securities[row.Id]=row;}}var prices=new List<PriceRowData>();await using(var cmd=RawSql.Command(c,"SELECT \"SecurityId\",\"PriceDate\",\"Price\",\"Currency\" FROM \"SecurityPrices\" WHERE \"PriceDate\"<=@date AND \"SecurityId\" IN (SELECT \"Id\" FROM \"Securities\" WHERE \"FullWorthSpaceId\"=(SELECT \"FullWorthSpaceId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@p)) ORDER BY \"PriceDate\"",("@date",asOf),("@p",portfolio))){await using var r=await cmd.ExecuteReaderAsync(ct);while(await r.ReadAsync(ct))prices.Add(new(RawSql.Guid(r,"SecurityId"),RawSql.NullableDate(r,"PriceDate")!.Value,RawSql.Decimal(r,"Price"),RawSql.String(r,"Currency")));}Guid? benchmark=null;await using(var cmd=RawSql.Command(c,"SELECT \"BenchmarkSecurityId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@p",("@p",portfolio))){var v=await cmd.ExecuteScalarAsync(ct);benchmark=v is null or DBNull?null:(Guid)v;}return new(trades,prices,securities,benchmark);}
-    private static List<PositionView> ComputePositions(List<TradeRowData> trades,List<PriceRowData> prices,DateOnly date,Dictionary<Guid,SecurityRowData> securities){var result=new List<PositionView>();foreach(var group in trades.Where(t=>t.SecurityId.HasValue&&t.Date<=date&&(t.Type=="buy"||t.Type=="sell"||t.Type=="cancellation"||t.Type=="security_transfer_in"||t.Type=="security_transfer_out"||t.Type=="split")).GroupBy(t=>t.SecurityId!.Value)){decimal qty=0,cost=0;foreach(var t in group.OrderBy(x=>x.Date).ThenBy(x=>InvestmentTradeOrder(x.Type))){var q=t.Quantity??0;if(t.Type=="buy"){qty+=q;cost+=t.Amount+t.Fees+t.Taxes;}else if(t.Type=="security_transfer_in"){qty+=q;}else if(t.Type=="split"&&q>0){qty*=q;}else if(t.Type is "sell" or "security_transfer_out" or "cancellation"){var avg=qty==0?0:cost/qty;qty-=q;if(t.Type=="cancellation")cost=Math.Max(0,cost-Math.Min(cost,t.Amount+t.Fees+t.Taxes));else cost=Math.Max(0,cost-avg*q);}}if(qty<=0)continue;var security=securities[group.Key];var price=prices.Where(p=>p.SecurityId==group.Key&&p.Date<=date).OrderByDescending(p=>p.Date).FirstOrDefault()?.Price??group.Where(t=>t.Price.HasValue).OrderByDescending(t=>t.Date).FirstOrDefault()?.Price??0;var value=qty*price;var gain=value-cost;result.Add(new(group.Key,security.Name,security.AssetType,qty,price,security.Currency,value,cost,gain,cost==0?null:gain/cost));}return result;}
-    private static decimal ExternalFlow(IEnumerable<TradeRowData> trades)=>trades.Sum(t=>t.Type switch{"deposit"=>t.Amount,"withdrawal"=>-t.Amount,_=>0});
+
+    /// <summary>
+    /// Bestand und Einstandswert je Wertpapier zum Stichtag. Die Reihenfolge innerhalb eines Tages ist
+    /// festgelegt (Kauf vor Split vor Verkauf), weil ein Verkauf vor dem Split eine andere Stueckzahl
+    /// ergaebe als danach.
+    /// </summary>
+    private static List<PositionView> ComputePositions(
+        List<InvestmentTradeData> trades, List<InvestmentPriceData> prices, DateOnly date,
+        Dictionary<Guid, InvestmentSecurityData> securities)
+    {
+        var result = new List<PositionView>();
+        foreach (var group in trades
+            .Where(t => t.SecurityId.HasValue && t.Date <= date && t.Type is "buy" or "sell" or "cancellation"
+                or "security_transfer_in" or "security_transfer_out" or "split")
+            .GroupBy(t => t.SecurityId!.Value))
+        {
+            decimal quantity = 0, cost = 0;
+            foreach (var trade in group.OrderBy(x => x.Date).ThenBy(x => InvestmentTradeOrder(x.Type)))
+            {
+                var amount = trade.Quantity ?? 0;
+                if (trade.Type == "buy") { quantity += amount; cost += trade.Amount + trade.Fees + trade.Taxes; }
+                else if (trade.Type == "security_transfer_in") quantity += amount;
+                else if (trade.Type == "split" && amount > 0) quantity *= amount;
+                else if (trade.Type is "sell" or "security_transfer_out" or "cancellation")
+                {
+                    var average = quantity == 0 ? 0 : cost / quantity;
+                    quantity -= amount;
+                    // Eine Stornierung nimmt den tatsaechlich gebuchten Betrag heraus, ein Verkauf den
+                    // Durchschnittspreis der verkauften Stuecke.
+                    cost = trade.Type == "cancellation"
+                        ? Math.Max(0, cost - Math.Min(cost, trade.Amount + trade.Fees + trade.Taxes))
+                        : Math.Max(0, cost - average * amount);
+                }
+            }
+            if (quantity <= 0) continue;
+
+            var security = securities[group.Key];
+            var price = prices.Where(p => p.SecurityId == group.Key && p.Date <= date)
+                    .OrderByDescending(p => p.Date).FirstOrDefault()?.Price
+                ?? group.Where(t => t.Price.HasValue).OrderByDescending(t => t.Date).FirstOrDefault()?.Price
+                ?? 0;
+            var value = quantity * price;
+            var gain = value - cost;
+            result.Add(new PositionView(group.Key, security.Name, security.AssetType, quantity, price,
+                security.Currency, value, cost, gain, cost == 0 ? null : gain / cost));
+        }
+        return result;
+    }
+
+    private static decimal ExternalFlow(IEnumerable<InvestmentTradeData> trades) =>
+        trades.Sum(t => t.Type switch { "deposit" => t.Amount, "withdrawal" => -t.Amount, _ => 0 });
+
     private static decimal? Xirr(List<(DateOnly Date,decimal Amount)> flows){if(flows.Count<2||!flows.Any(x=>x.Amount<0)||!flows.Any(x=>x.Amount>0))return null;var first=flows.Min(x=>x.Date);double rate=.1;for(var iter=0;iter<100;iter++){double f=0,df=0;foreach(var flow in flows){var years=(flow.Date.DayNumber-first.DayNumber)/365.0;var denom=Math.Pow(1+rate,years);f+=(double)flow.Amount/denom;if(years!=0)df-=years*(double)flow.Amount/Math.Pow(1+rate,years+1);}if(Math.Abs(f)<1e-7)return(decimal)rate;if(Math.Abs(df)<1e-12)break;var next=rate-f/df;if(next<=-0.9999||double.IsNaN(next)||double.IsInfinity(next))break;if(Math.Abs(next-rate)<1e-9)return(decimal)next;rate=next;}return null;}
 
-    private static object PortfolioRow(System.Data.Common.DbDataReader r)=>new{id=RawSql.Guid(r,"Id"),name=RawSql.String(r,"Name"),currency=RawSql.String(r,"Currency"),accountId=RawSql.NullableGuid(r,"AccountId"),benchmarkSecurityId=RawSql.NullableGuid(r,"BenchmarkSecurityId"),isArchived=RawSql.Bool(r,"IsArchived"),createdAt=RawSql.Timestamp(r,"CreatedAt"),updatedAt=RawSql.Timestamp(r,"UpdatedAt")};
-    private static object SecurityRow(System.Data.Common.DbDataReader r)=>new{id=RawSql.Guid(r,"Id"),name=RawSql.String(r,"Name"),isin=RawSql.NullableString(r,"Isin"),wkn=RawSql.NullableString(r,"Wkn"),ticker=RawSql.NullableString(r,"Ticker"),assetType=RawSql.String(r,"AssetType"),currency=RawSql.String(r,"Currency"),exchange=RawSql.NullableString(r,"Exchange")};
-    private static object TradeRow(System.Data.Common.DbDataReader r)=>new{id=RawSql.Guid(r,"Id"),securityId=RawSql.NullableGuid(r,"SecurityId"),tradeType=RawSql.String(r,"TradeType"),tradeDate=RawSql.NullableDate(r,"TradeDate"),quantity=RawSql.NullableDecimal(r,"Quantity"),price=RawSql.NullableDecimal(r,"Price"),amount=RawSql.Decimal(r,"Amount"),currency=RawSql.String(r,"Currency"),fees=RawSql.Decimal(r,"Fees"),taxes=RawSql.Decimal(r,"Taxes"),externalKey=RawSql.NullableString(r,"ExternalKey"),notes=RawSql.NullableString(r,"Notes")};
     private static string NormalizeAssetType(string? v)=>v?.Trim().ToLowerInvariant() switch{"etf"=>"etf","stock"=>"stock","fund"=>"fund","bond"=>"bond","crypto"=>"crypto","commodity"=>"commodity","metal"=>"commodity","derivative"=>"derivative","cash"=>"cash",_=>"other"};
     private static int InvestmentTradeOrder(string type)=>type switch{"buy" or "security_transfer_in"=>0,"split"=>1,"sell" or "security_transfer_out" or "cancellation"=>2,_=>3};
     private static string NormalizeTradeType(string? v)=>v?.Trim().ToLowerInvariant() switch{"buy"=>"buy","sell"=>"sell","cancellation"=>"cancellation","dividend"=>"dividend","interest"=>"interest","fee"=>"fee","tax"=>"tax","deposit"=>"deposit","withdrawal"=>"withdrawal","security_transfer_in"=>"security_transfer_in","security_transfer_out"=>"security_transfer_out","split"=>"split",_=>"other"};
-    private static async Task<bool> SecurityExists(FullWorthDbContext db,Guid space,Guid id,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT 1 FROM \"Securities\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s",("@id",id),("@s",space));return await cmd.ExecuteScalarAsync(ct)is not null;}
-    private static async Task<bool> PortfolioReadable(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await RawSql.IsMemberAsync(db,uid,space,ct))return false;var visible=await RawSql.VisibleAccountIdsAsync(db,uid,space,ct);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"AccountId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s",("@id",id),("@s",space));var value=await cmd.ExecuteScalarAsync(ct);return value switch{null=>false,DBNull=>true,Guid account=>visible.Contains(account),_=>false};}
-    private static async Task<bool> PortfolioWritable(FullWorthDbContext db,Guid uid,Guid space,Guid id,CancellationToken ct){if(!await CanManageInvestments(db,uid,space,ct))return false;var writable=await RawSql.WritableAccountIdsAsync(db,uid,space,ct);var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"AccountId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s",("@id",id),("@s",space));var value=await cmd.ExecuteScalarAsync(ct);return value switch{null=>false,DBNull=>true,Guid account=>writable.Contains(account),_=>false};}
-    private static Task<bool> CanManageInvestments(FullWorthDbContext db,Guid uid,Guid space,CancellationToken ct)=>SpaceCapabilities.HasCapabilityAsync(db,uid,space,"investments.manage",ct);
-    private static async Task<bool> OwnWatchlist(FullWorthDbContext db,Guid id,Guid space,Guid uid,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT 1 FROM \"Watchlists\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@s AND \"OwnerUserId\"=@u",("@id",id),("@s",space),("@u",uid));return await cmd.ExecuteScalarAsync(ct)is not null;}
 }

@@ -224,6 +224,7 @@ public static class BackendApplication
         builder.Services.AddSingleton<ISecurityPriceProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
         builder.Services.AddScoped<SecurityMarketDataService>();
         builder.Services.AddScoped<InvestmentPerformanceStore>();
+        builder.Services.AddScoped<InvestmentStore>();
         builder.Services.AddScoped<CategoryOrderService>();
         builder.Services.AddScoped<IntelligenceDigestStore>();
         builder.Services.AddScoped<CapabilityGrantStore>();
