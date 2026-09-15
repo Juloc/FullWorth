@@ -269,7 +269,6 @@ public static class BackendApplication
         // facades over these services and no longer own a second product or reconciliation model.
         builder.Services.AddScoped<PurchaseStore>();
         builder.Services.AddScoped<PurchaseAuthorizationStore>();
-        builder.Services.AddScoped<ProductIdentityStore>();
         builder.Services.AddScoped<PurchaseReconciliationStore>();
         builder.Services.AddScoped<PurchaseCaptureService>();
         builder.Services.AddSingleton<ReceiptScanQueueSignal>();
@@ -545,7 +544,6 @@ public static class BackendApplication
         endpoints.MapInvestmentPdfImportParityEndpoints();
         endpoints.MapInvestmentPdfOcrImportParityEndpoints();
         endpoints.MapMarketDataEndpoints();
-        endpoints.MapProductIdentityParityEndpoints();
         endpoints.MapProductLearningEndpoints();
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeEndpoints();

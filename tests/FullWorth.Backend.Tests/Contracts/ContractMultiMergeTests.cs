@@ -146,20 +146,28 @@ public sealed class ContractMultiMergeTests
     }
 
     [Fact]
-    public async Task ParityMerge_AlsoAcceptsAContractWithoutACurrency()
+    public async Task MergeExecute_AlsoAcceptsAContractWithoutACurrency()
     {
         using var factory = new BackendWebApplicationFactory();
         var s = await SeedAsync(factory);
         using var client = factory.CreateClient();
 
+        using var preview = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Middle, s.WithoutCurrency }, preferredCanonicalContractId = s.Middle }));
+        using var previewJson = JsonDocument.Parse(await preview.Content.ReadAsStringAsync());
+
         using var response = await client.SendAsync(Request(
             HttpMethod.Post,
-            $"/api/contract-parity/merge?fullWorthSpaceId={s.Space}",
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
             s.Owner,
             new
             {
                 contractIds = new[] { s.Middle, s.WithoutCurrency },
-                targetContractId = s.Middle
+                canonicalContractId = s.Middle,
+                previewToken = previewJson.RootElement.GetProperty("previewToken").GetString()
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

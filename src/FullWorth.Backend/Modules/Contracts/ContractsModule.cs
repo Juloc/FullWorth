@@ -326,15 +326,6 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
         return new(ContractMutationResult.Success, await GetForUserAsync(userId, fullWorthSpaceId, target.Id, ct));
     }
 
-    /// <summary>Die noch eigenstaendigen Vertraege einer Auswahl - wer schon zusammengefuehrt ist, faellt raus.</summary>
-    public Task<List<RecurringContract>> UnmergedAsync(Guid fullWorthSpaceId, IReadOnlyList<Guid> ids, CancellationToken ct) =>
-        db.Contracts
-            .Where(contract =>
-                contract.FullWorthSpaceId == fullWorthSpaceId &&
-                contract.MergedIntoContractId == null &&
-                ids.Contains(contract.Id))
-            .ToListAsync(ct);
-
     public Task<RecurringContract?> FindInSpaceAsync(Guid fullWorthSpaceId, Guid contractId, CancellationToken ct) =>
         db.Contracts.SingleOrDefaultAsync(contract =>
             contract.Id == contractId && contract.FullWorthSpaceId == fullWorthSpaceId, ct);
@@ -342,42 +333,6 @@ public sealed class ContractStore(FullWorthDbContext db, AuditService? auditServ
     public Task<bool> CategoryBelongsToSpaceAsync(Guid fullWorthSpaceId, Guid categoryId, CancellationToken ct) =>
         db.Categories.AsNoTracking().AnyAsync(category =>
             category.Id == categoryId && category.FullWorthSpaceId == fullWorthSpaceId, ct);
-
-    /// <summary>
-    /// Zusammenfuehren und dabei den ueberlebenden Vertrag umbenennen, umkategorisieren oder auf ein
-    /// anderes Konto legen. Beides gehoert in dieselbe Transaktion: scheitert das Zusammenfuehren,
-    /// darf der neue Name nicht stehenbleiben.
-    /// </summary>
-    public async Task<ContractMutationOutcome> MergeWithEditsAsync(
-        Guid userId,
-        Guid fullWorthSpaceId,
-        Guid targetContractId,
-        IReadOnlyList<Guid> sourceIds,
-        string? name,
-        Guid? categoryId,
-        Guid? accountId,
-        CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        var target = await db.Contracts.SingleOrDefaultAsync(contract =>
-            contract.Id == targetContractId &&
-            contract.FullWorthSpaceId == fullWorthSpaceId &&
-            contract.MergedIntoContractId == null, ct);
-        if (target is null) return new(ContractMutationResult.NotFound);
-
-        if (!string.IsNullOrWhiteSpace(name)) target.Name = name.Trim();
-        if (categoryId.HasValue) target.CategoryId = categoryId;
-        if (accountId.HasValue) target.AccountId = accountId;
-        target.UpdatedAt = DateTimeOffset.UtcNow;
-
-        var outcome = await MergeForUserAsync(
-            userId, fullWorthSpaceId, targetContractId, new ContractMergeRequest(sourceIds), ct);
-        if (outcome.Result != ContractMutationResult.Success) return outcome;
-
-        await transaction.CommitAsync(ct);
-        return outcome;
-    }
 
     /// <summary>
     /// Teilt einen Vertrag auf: ein Buendel, je ein neuer Vertrag pro Bestandteil, der alte wird

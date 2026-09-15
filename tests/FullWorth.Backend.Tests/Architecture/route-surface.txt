@@ -43,9 +43,6 @@ DELETE           /api/merchants/{id:guid}
 DELETE           /api/merchants/{id:guid}/aliases/{aliasId:guid}
 DELETE           /api/pension/contracts/{contractId:guid}
 DELETE           /api/pension/documents/{documentId:guid}
-DELETE           /api/product-identities/purchase-items/{purchaseItemId:guid}
-DELETE           /api/product-identities/{id:guid}
-DELETE           /api/product-identities/{id:guid}/aliases/{aliasId:guid}
 DELETE           /api/products/{id:guid}
 DELETE           /api/products/{id:guid}/aliases/{aliasId:guid}
 DELETE           /api/products/{id:guid}/barcodes/{barcodeId:guid}
@@ -240,9 +237,6 @@ GET              /api/pension/documents/{documentId:guid}
 GET              /api/pension/documents/{documentId:guid}/content
 GET              /api/pension/overview
 GET              /api/preferences/{key}
-GET              /api/product-identities/
-GET              /api/product-identities/suggest
-GET              /api/product-identities/{id:guid}/history
 GET              /api/product-intelligence/history
 GET              /api/product-intelligence/summary
 GET              /api/product-learning/category-suggestions
@@ -395,7 +389,6 @@ POST             /api/compensation/payslips/
 POST             /api/compensation/payslips/extract
 POST             /api/compensation/payslips/extract-batch
 POST             /api/compensation/scenarios
-POST             /api/contract-parity/merge
 POST             /api/contract-parity/{contractId:guid}/links
 POST             /api/contract-parity/{contractId:guid}/split
 POST             /api/contracts/
@@ -474,8 +467,6 @@ POST             /api/pension/documents
 POST             /api/pension/documents/{documentId:guid}/commit
 POST             /api/pension/projection
 POST             /api/pension/projection/compare
-POST             /api/product-identities/
-POST             /api/product-identities/{id:guid}/aliases
 POST             /api/product-learning/category-suggestions/accept
 POST             /api/products/
 POST             /api/products/merge
@@ -617,8 +608,6 @@ PUT              /api/merchants/{id:guid}
 PUT              /api/pension/contracts/{contractId:guid}
 PUT              /api/pension/documents/{documentId:guid}/review
 PUT              /api/preferences/{key}
-PUT              /api/product-identities/purchase-items/{purchaseItemId:guid}
-PUT              /api/product-identities/{id:guid}
 PUT              /api/product-intelligence/aliases/{normalizedName}
 PUT              /api/purchases/receipt-imports/paperless/connection
 PUT              /api/purchases/receipt-imports/paperless/presets/{presetId:guid}

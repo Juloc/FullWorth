@@ -33,7 +33,6 @@ public static class ContractParityEndpoints
         group.MapDelete("/{contractId:guid}/links/{linkId:guid}",DeleteContractLink);
         group.MapGet("/transaction/{transactionId:guid}/links",GetTransactionLinks);
         group.MapPost("/{contractId:guid}/split",SplitContract);
-        group.MapPost("/merge",MergeContracts);
         group.MapDelete("/merge/{targetContractId:guid}/{sourceContractId:guid}",UnmergeContracts);
         group.MapGet("/cancellations",ListCancellations);
         group.MapGet("/{contractId:guid}/cancellation",GetCancellation);
@@ -164,71 +163,6 @@ public static class ContractParityEndpoints
             archivedContractId = contractId,
             contracts = children.Select(child => new { child.Id, child.Name, child.Amount })
         });
-    }
-
-    private static async Task<IResult> MergeContracts(
-        Guid fullWorthSpaceId,
-        ContractMergeWrite request,
-        CurrentUserContext currentUser,
-        SpaceAccess space,
-        ContractStore contracts,
-        ContractLinkStore links,
-        CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "contracts.manage", ct))
-            return Results.StatusCode(403);
-
-        var ids = (request.ContractIds ?? Array.Empty<Guid>())
-            .Where(id => id != Guid.Empty)
-            .Distinct()
-            .ToArray();
-        if (ids.Length < 2) return Results.BadRequest(new { error = "Select at least two contracts." });
-
-        var selected = await contracts.UnmergedAsync(fullWorthSpaceId, ids, ct);
-        if (selected.Count != ids.Length) return Results.NotFound();
-
-        foreach (var contract in selected)
-            if (!await links.CanWriteContract(userId, fullWorthSpaceId, contract.Id, ct))
-                return Results.NotFound();
-
-        var selectedCurrencies = selected.Select(contract => contract.Currency).ToArray();
-        if (!ContractMergeCurrency.TryResolve(selectedCurrencies, out _))
-            return Results.BadRequest(new { error = ContractMergeCurrency.ConflictError(selectedCurrencies) });
-
-        var target = request.TargetContractId.HasValue
-            ? selected.SingleOrDefault(contract => contract.Id == request.TargetContractId.Value)
-            : selected[0];
-        if (target is null) return Results.BadRequest(new { error = "Target contract must be part of the selection." });
-
-        if (request.TargetCategoryId.HasValue &&
-            !await contracts.CategoryBelongsToSpaceAsync(fullWorthSpaceId, request.TargetCategoryId.Value, ct))
-            return Results.BadRequest(new { error = "Target category is invalid." });
-
-        if (request.TargetAccountId.HasValue)
-        {
-            var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
-            if (!writable.Contains(request.TargetAccountId.Value))
-                return Results.BadRequest(new { error = "Target account is inaccessible." });
-        }
-
-        var sourceIds = ids.Where(id => id != target.Id).ToArray();
-        var outcome = await contracts.MergeWithEditsAsync(
-            userId, fullWorthSpaceId, target.Id, sourceIds,
-            request.TargetName, request.TargetCategoryId, request.TargetAccountId, ct);
-
-        if (outcome.Result != ContractMutationResult.Success)
-            return outcome.Result switch
-            {
-                ContractMutationResult.NotFound => Results.NotFound(),
-                ContractMutationResult.Forbidden => Results.StatusCode(403),
-                ContractMutationResult.Invalid => Results.BadRequest(new { error = outcome.Error ?? "Invalid contract merge." }),
-                _ => Results.StatusCode(409)
-            };
-
-        // Keep the legacy "archived" response field for existing clients. The IDs are now hidden
-        // merge aliases rather than destructively archived rows.
-        return Results.Ok(new { targetId = target.Id, archived = sourceIds, merged = sourceIds });
     }
 
     private static async Task<IResult> UnmergeContracts(

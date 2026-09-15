@@ -468,11 +468,23 @@ public sealed class ContractMergeTests
         var s = await SeedAsync(factory);
         using var client = factory.CreateClient();
 
+        using var preview = await client.SendAsync(Request(
+            HttpMethod.Post,
+            $"/api/contracts/merge-preview?fullWorthSpaceId={s.Space}",
+            s.Owner,
+            new { contractIds = new[] { s.Target, s.Source }, preferredCanonicalContractId = s.Target }));
+        using var previewJson = JsonDocument.Parse(await preview.Content.ReadAsStringAsync());
+
         using var merge = await client.SendAsync(Request(
             HttpMethod.Post,
-            $"/api/contract-parity/merge?fullWorthSpaceId={s.Space}",
+            $"/api/contracts/merge-execute?fullWorthSpaceId={s.Space}",
             s.Owner,
-            new { contractIds = new[] { s.Target, s.Source }, targetContractId = s.Target }));
+            new
+            {
+                contractIds = new[] { s.Target, s.Source },
+                canonicalContractId = s.Target,
+                previewToken = previewJson.RootElement.GetProperty("previewToken").GetString()
+            }));
         Assert.Equal(HttpStatusCode.OK, merge.StatusCode);
 
         using var listResponse = await client.SendAsync(Request(
