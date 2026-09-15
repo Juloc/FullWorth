@@ -180,6 +180,7 @@ function bind(){
   bindLoans(ctx);
   bindAnalytics(ctx);
   $('[data-action="new-category"]').addEventListener('click',()=>newCategory(ctx));
+  $('[data-action="new-collection"]').addEventListener('click',()=>newCollection(ctx));
   bindCategories(ctx);
   bindCollections(ctx);
   bindRules(ctx);
