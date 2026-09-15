@@ -29,6 +29,7 @@ const icon = {
   rules: '<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="7" cy="17" r="2"/>',
   notifications: '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   audit: '<path d="M5 4h14v16H5Z"/><path d="M8 9h8M8 13h8M8 17h4"/>',
+  collections: '<path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4h4"/>',
   settings: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m0-11.9 1.4 1.4m8.2 8.2 1.4 1.4"/>',
   admin: '<path d="M12 3 19 6v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6Z"/><path d="M9.5 12h5M12 9.5v5"/>'
 };
@@ -46,7 +47,8 @@ export const MENU = [
     { view: 'accounts', label: 'nav.accounts', icon: icon.accounts },
     { view: 'transactions', label: 'nav.transactions', icon: icon.transactions },
     { view: 'purchases', label: 'nav.purchases', icon: icon.purchases },
-    { view: 'merchants', label: 'nav.merchants', icon: icon.merchants }
+    { view: 'merchants', label: 'nav.merchants', icon: icon.merchants },
+    { view: 'collections', label: 'nav.collections', icon: icon.collections }
   ] },
   { id: 'planning', label: 'nav.group.planning', items: [
     { view: 'budgets', label: 'nav.budgets', icon: icon.budgets },

@@ -31,7 +31,8 @@
       "planning": "Planung",
       "analysis": "Auswertung",
       "administration": "Verwaltung"
-    }
+    },
+    "collections": "Sammlungen"
   },
   "theme": {
     "system": "System",
@@ -1342,5 +1343,37 @@
     "good": "Gut",
     "bad": "Schlecht",
     "reviewMore": "Mehr Ausgaben bewerten, damit die Auswertung persönlicher wird."
+  },
+  "collections": {
+    "title": "Sammlungen",
+    "search": "Sammlung suchen…",
+    "new": "Neue Sammlung",
+    "edit": "Sammlung bearbeiten",
+    "delete": "Sammlung löschen",
+    "deleteConfirm": "Sammlung „{name}\" wirklich löschen? Die Buchungen bleiben, nur die Zuordnung verschwindet.",
+    "description": "Beschreibung",
+    "start": "Beginnt am",
+    "end": "Endet am",
+    "periodHint": "Optional. Ein Zeitraum hilft beim Vorschlagen — er schließt nichts aus.",
+    "icon": "Symbol",
+    "status": "Status",
+    "status_active": "Aktiv",
+    "status_completed": "Abgeschlossen",
+    "status_archived": "Archiviert",
+    "ongoing": "laufend",
+    "since": "seit",
+    "until": "bis",
+    "expenses": "Ausgaben",
+    "income": "Einnahmen",
+    "net": "Netto",
+    "byCategory": "Nach Kategorie",
+    "addTransactions": "Buchungen hinzufügen",
+    "candidateHint": "{count} Buchungen könnten dazugehören. Der Grund steht bei jeder.",
+    "noCandidates": "Keine passenden Buchungen gefunden.",
+    "reason_merchant": "Händler passt",
+    "reason_category": "Kategorie passt",
+    "reason_period": "Im Zeitraum",
+    "incomplete": "unvollständig",
+    "incompleteHint": "Unvollständig: für {currencies} fehlt ein historischer Wechselkurs."
   }
 }

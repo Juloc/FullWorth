@@ -31,7 +31,8 @@
       "planning": "Planning",
       "analysis": "Analysis",
       "administration": "Administration"
-    }
+    },
+    "collections": "Collections"
   },
   "theme": {
     "system": "System",
@@ -1342,5 +1343,37 @@
     "good": "Good",
     "bad": "Bad",
     "reviewMore": "Review more spending to make the analysis personal."
+  },
+  "collections": {
+    "title": "Collections",
+    "search": "Search collections…",
+    "new": "New collection",
+    "edit": "Edit collection",
+    "delete": "Delete collection",
+    "deleteConfirm": "Delete the collection “{name}”? The transactions stay; only the assignment goes.",
+    "description": "Description",
+    "start": "Starts on",
+    "end": "Ends on",
+    "periodHint": "Optional. A period helps with suggestions — it excludes nothing.",
+    "icon": "Icon",
+    "status": "Status",
+    "status_active": "Active",
+    "status_completed": "Completed",
+    "status_archived": "Archived",
+    "ongoing": "ongoing",
+    "since": "since",
+    "until": "until",
+    "expenses": "Expenses",
+    "income": "Income",
+    "net": "Net",
+    "byCategory": "By category",
+    "addTransactions": "Add transactions",
+    "candidateHint": "{count} transactions might belong here. Each one says why.",
+    "noCandidates": "No matching transactions found.",
+    "reason_merchant": "Merchant matches",
+    "reason_category": "Category matches",
+    "reason_period": "Within the period",
+    "incomplete": "incomplete",
+    "incompleteHint": "Incomplete: a historical exchange rate is missing for {currencies}."
   }
 }

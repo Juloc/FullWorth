@@ -7,6 +7,7 @@ import { renderDashboard, bindDashboard, toggleDashboardEdit, invalidateLayout }
 import { renderCoach, bindCoach } from './pages/coach/page.js';
 import { renderTransactions, bindTransactions } from './pages/transactions/page.js';
 import { renderCategories, bindCategories, newCategory } from './pages/categories/page.js';
+import { renderCollections, bindCollections, newCollection } from './pages/collections/page.js';
 import { renderRules, bindRules, newRule } from './pages/rules/page.js';
 import { renderContracts, bindContracts, newContract } from './pages/contracts/page.js';
 import { renderNetWorth, bindNetWorth, newAsset } from './pages/networth/page.js';
@@ -71,7 +72,7 @@ const viewFromPath=router.viewFromPath;
 // in-page add control so there is a single code path.
 // [messageKey, handler, kind]. `kind` drives the mobile glyph; it used to be guessed by matching a
 // regex against the rendered label from a MutationObserver, which a new label or language broke.
-const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
+const PRIMARY_ACTION={dashboard:['dashboard.edit',()=>toggleDashboardEdit(ctx),'edit'],budgets:['budgets.new',()=>newBudget(ctx)],contracts:['contracts.new',()=>newContract(ctx)],rules:['rules.new',()=>newRule(ctx)],categories:['categories.new',()=>newCategory(ctx)],collections:['collections.new',()=>newCollection(ctx)],accounts:['accounts.add',()=>openAddAccount(ctx)],networth:['networth.newAsset',()=>newAsset(ctx)],merchants:['merchants.new',()=>newMerchant(ctx)]};
 const media=matchMedia('(prefers-color-scheme: dark)');
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 const root=document.documentElement;
@@ -180,6 +181,7 @@ function bind(){
   bindAnalytics(ctx);
   $('[data-action="new-category"]').addEventListener('click',()=>newCategory(ctx));
   bindCategories(ctx);
+  bindCollections(ctx);
   bindRules(ctx);
   bindPurchases(ctx);
   bindTax(ctx);
@@ -429,6 +431,7 @@ const featureRegistry=createFeatureRegistry()
   .register('tax',()=>renderTax(ctx))
   .register('pension',()=>renderPension(ctx))
   .register('categories',()=>renderCategories(ctx))
+  .register('collections',()=>renderCollections(ctx))
   .register('rules',()=>renderRules(ctx))
   .register('notifications',()=>renderNotifications(ctx))
   .register('merchants',()=>renderMerchants(ctx))

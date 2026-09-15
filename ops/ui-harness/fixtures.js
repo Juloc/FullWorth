@@ -17,6 +17,31 @@
     'fullworth-spaces': [{ id: SPACE, name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
     // Die Frage aus dem Einrichtungsassistenten (#117). canChange ist true, solange niemand eine
     // Standardkategorie umbenannt hat - nur dann wird die Auswahl ueberhaupt angeboten.
+    // Sammlungen (#124). Zwei Faelle, die sich unterscheiden muessen: eine dauerhafte Sammlung
+    // ohne Zeitraum und ein abgeschlossenes Projekt mit einem - und bei letzterem fehlt ein
+    // historischer Kurs, damit sich messen laesst, ob die Oberflaeche einen unvollstaendigen
+    // Betrag als solchen zeigt statt eine exakte Summe vorzutaeuschen.
+    //
+    // Die Detail- und Kandidatenschluessel stehen UEBER dem Listenschluessel: die Harness ordnet
+    // per Praefix zu und nimmt den laengsten Treffer, aber ein Eintrag ohne eigenen Schluessel
+    // fiele in die Aufloesung "Listeneintrag nach id" und bekaeme still das falsche Gegenstueck.
+    'collections/col1/candidates': [
+      { transactionId: 't1', date: '2026-08-20', amount: -184, currency: 'EUR', counterparty: 'BAUHAUS', categoryName: 'Baumarkt', accountName: 'Girokonto', reasons: ['merchant', 'category'], score: 5 }
+    ],
+    'collections/col2/candidates': [
+      { transactionId: 't2', date: '2026-08-13', amount: -680, currency: 'EUR', counterparty: 'Hotel Garda', categoryName: 'Hotel', accountName: 'Girokonto', reasons: ['merchant', 'period'], score: 5 },
+      { transactionId: 't3', date: '2026-08-15', amount: -900, currency: 'EUR', counterparty: 'Vermieter', categoryName: null, accountName: 'Girokonto', reasons: ['period'], score: 2 }
+    ],
+    'collections/col1': { collection: { id: 'col1', name: 'Wohnung', description: 'Alles rund um die Wohnung', icon: 'home', color: null, startDate: null, endDate: null, status: 'active', transactionCount: 14, expenses: 14820, income: 0, net: -14820, currency: 'EUR', isComplete: true, missingCurrencies: [] }, categories: [
+      { categoryId: 'c-mob', categoryName: 'Möbel', expenses: 4200, count: 3 },
+      { categoryId: 'c-bau', categoryName: 'Baumarkt', expenses: 3100, count: 6 },
+      { categoryId: 'c-ele', categoryName: 'Elektrogeräte', expenses: 2600, count: 2 }
+    ], transactionIds: [] },
+    'collections/col2': { collection: { id: 'col2', name: 'Gardasee 2026', description: null, icon: 'travel', color: null, startDate: '2026-08-12', endDate: '2026-08-17', status: 'completed', transactionCount: 9, expenses: 1436, income: 0, net: -1436, currency: 'EUR', isComplete: false, missingCurrencies: ['CHF'] }, categories: [
+      { categoryId: 'c-hot', categoryName: 'Hotel', expenses: 680, count: 1 },
+      { categoryId: 'c-res', categoryName: 'Restaurant', expenses: 286, count: 4 }
+    ], transactionIds: [] },
+    'collections': [{ id: 'col1', name: 'Wohnung', description: 'Alles rund um die Wohnung', icon: 'home', color: null, startDate: null, endDate: null, status: 'active', transactionCount: 14, expenses: 14820, income: 0, net: -14820, currency: 'EUR', isComplete: true, missingCurrencies: [] }, { id: 'col2', name: 'Gardasee 2026', description: null, icon: 'travel', color: null, startDate: '2026-08-12', endDate: '2026-08-17', status: 'completed', transactionCount: 9, expenses: 1436, income: 0, net: -1436, currency: 'EUR', isComplete: false, missingCurrencies: ['CHF'] }],
     'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
     'categories': [
       { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },

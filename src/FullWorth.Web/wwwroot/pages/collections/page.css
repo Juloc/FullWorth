@@ -2,6 +2,11 @@
    Dieselbe Zeilenform wie Konten und Verträge: Symbol links, Name und Zeitraum zusammen, Betrag
    rechts. Keine eigene Kachelsprache — eine Sammlung ist eine Zeile in einer Liste, kein Dashboard. */
 
+/* Die geteilte .row ist ein Zweispalter (row-main | row-side). Ein Symbol davor ist ein DRITTES
+   Kind, und ohne diese Zeile rutscht auf 375 px die ganze rechte Seite in eine zweite Zeile - die
+   Zeile wuchs auf 123 px. Dieselbe Loesung wie bei der Haendlerliste (styles/app.css:360). */
+.collection-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--s3);align-items:center}
+
 .col-row-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
   background:var(--surface-2);color:var(--muted)}
 .col-row-icon svg{width:18px;height:18px}

@@ -8,7 +8,7 @@
 // mehrere wäre doppelt gezählt. Deshalb steht hier auch bewusst keine Gesamtzeile über der Liste.
 
 import { emptyRow } from '../../components/empty.js';
-import { categoryIconInner, categoryIconPicker, selectedIconKey, TRASH_ICON } from '../../components/icons.js';
+import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { keepListPosition } from '../../components/list-position.js';
 
@@ -75,7 +75,7 @@ function periodLabel(row) {
 
 function collectionRow(row) {
   const element = document.createElement('div');
-  element.className = 'row';
+  element.className = 'row collection-row';
   element.dataset.collectionId = row.id;
   // Ein unvollständiger Betrag sagt es hier, statt eine exakte Summe vorzutäuschen.
   const amount = row.isComplete
@@ -85,15 +85,9 @@ function collectionRow(row) {
   element.innerHTML = `<div class="col-row-icon" aria-hidden="true">${categoryIconInner(row.icon)}</div>
     <div class="row-main">
       <div class="row-title">${ctx.esc(row.name)} <span class="col-status is-${ctx.esc(row.status)}">${ctx.esc(t('status_' + row.status))}</span></div>
-      <div class="row-sub">${ctx.esc(periodLabel(row))} · ${row.transactionCount} ${ctx.esc(ctx.get('transactions.title'))}</div>
+      <div class="row-sub">${ctx.esc(periodLabel(row))} · ${row.transactionCount} ${ctx.esc(ctx.get('nav.transactions'))}</div>
     </div>
-    <div class="row-side"><span class="amount">${amount}</span>
-      <button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button>
-      <button class="icon-button" data-delete title="${ctx.esc(ctx.get('common.delete'))}" aria-label="${ctx.esc(ctx.get('common.delete'))}">${TRASH_ICON}</button>
-    </div>`;
-
-  element.querySelector('[data-edit]').onclick = event => { event.stopPropagation(); void openEditor(row); };
-  element.querySelector('[data-delete]').onclick = event => { event.stopPropagation(); void remove(row); };
+    <div class="row-side"><span class="amount">${amount}</span></div>`;
   element.onclick = () => { state.openId = row.id; void renderDetail(); };
   return element;
 }
@@ -137,8 +131,11 @@ async function openEditor(existing) {
       endDate: existing?.endDate || '',
       status: existing?.status || 'active'
     },
-    submitLabel: ctx.get('common.save'),
-    onSubmit: async values => {
+    actions: [
+      { name: 'cancel', label: ctx.get('common.cancel'), role: 'secondary', onClick: ({ close }) => close() },
+      { name: 'save', label: ctx.get(existing ? 'common.save' : 'common.create'), role: 'primary', submit: true }
+    ],
+    onSubmit: async ({ values, setFormError, close }) => {
       const body = {
         name: values.name,
         description: values.description || null,
@@ -148,8 +145,14 @@ async function openEditor(existing) {
         endDate: values.endDate || null,
         status: values.status
       };
-      await ctx.api(existing ? `api/collections/${existing.id}` : 'api/collections',
-        ctx.jsonBody(body, existing ? 'PUT' : 'POST'));
+      try {
+        await ctx.api(existing ? `api/collections/${existing.id}` : 'api/collections',
+          ctx.jsonBody(body, existing ? 'PUT' : 'POST'));
+      } catch (error) {
+        setFormError(error.message || ctx.get('common.error'));
+        return;
+      }
+      close();
       await refresh();
     }
   });
@@ -195,7 +198,7 @@ async function renderDetail() {
       ${metric(t('expenses'), ctx.money(row.expenses, row.currency))}
       ${metric(t('income'), ctx.money(row.income, row.currency))}
       ${metric(t('net'), ctx.money(row.net, row.currency))}
-      ${metric(ctx.get('transactions.title'), String(row.transactionCount))}
+      ${metric(ctx.get('nav.transactions'), String(row.transactionCount))}
     </div>
     ${row.isComplete ? '' : `<p class="col-incomplete">${ctx.esc(t('incompleteHint').replace('{currencies}', row.missingCurrencies.join(', ')))}</p>`}
     <h3>${ctx.esc(t('byCategory'))}</h3>
@@ -203,6 +206,7 @@ async function renderDetail() {
     <div id="collection-candidates"></div>`;
 
   ctx.$('#col-edit').onclick = () => openEditor(row);
+  ctx.$('#col-delete').onclick = () => remove(row);
   ctx.$('#col-add-transactions').onclick = () => openCandidates(row);
 }
 
