@@ -248,6 +248,8 @@ public static class BackendApplication
         builder.Services.AddScoped<AnalysisContributionService>();
         builder.Services.AddScoped<SavedAnalysisStore>();
         builder.Services.AddScoped<ProductLearningStore>();
+        builder.Services.AddScoped<PurchaseInsightStore>();
+        builder.Services.AddScoped<AdvancedBulkStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility

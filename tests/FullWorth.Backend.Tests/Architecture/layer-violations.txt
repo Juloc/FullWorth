@@ -10,5 +10,3 @@ Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs
 Portfolio/Investments/InvestmentParityModule.cs
 Purchases/ProductIdentityParityModule.cs
-Purchases/PurchaseAdvancedInsights.cs
-Transactions/AdvancedTransactionBulkParityModule.cs
