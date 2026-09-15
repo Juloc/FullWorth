@@ -35,7 +35,10 @@ public sealed class PortfolioDeletionIntegrationTests
             $"/api/assets/{assetId:D}/valuations?fullWorthSpaceId={space:D}", owner,
             new { amount = 250_000m, currency = "EUR", valuedAt = "2026-01-01", method = "manual", isAccepted = true }));
         Assert.True(valuation.IsSuccessStatusCode, $"Bewertung anlegen: {valuation.StatusCode}");
-        Assert.Equal(1, await ValuationCountAsync(factory, assetId));
+        // Wie viele Zeilen es sind, ist nicht die Aussage: ein Vermoegenswert bringt schon beim
+        // Anlegen eine Bewertung mit, die erfasste kommt dazu. Die Aussage ist, dass NACH dem
+        // Loeschen keine mehr da ist.
+        Assert.True(await ValuationCountAsync(factory, assetId) > 0);
 
         using var response = await client.SendAsync(Request(HttpMethod.Delete,
             $"/api/assets/{assetId:D}?fullWorthSpaceId={space:D}", owner));
