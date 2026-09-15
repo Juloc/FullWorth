@@ -3,7 +3,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 

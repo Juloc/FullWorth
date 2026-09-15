@@ -1,12 +1,10 @@
 // Den Text aus einem PDF holen. Gehoerte nie zu einer Route (#134).
 
-using FullWorth.Backend.Validation;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 

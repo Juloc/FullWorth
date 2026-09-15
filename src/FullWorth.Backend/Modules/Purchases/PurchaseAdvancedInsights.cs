@@ -1,4 +1,3 @@
-using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Fx;
 
 namespace FullWorth.Backend.Modules.Purchases;

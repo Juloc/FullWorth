@@ -1,77 +1,9 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.FullWorthSpaces;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FullWorth.Backend.Modules.Merchants;
-
-public sealed class Merchant
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string NormalizedName { get; set; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed class MerchantAlias
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid MerchantId { get; set; }
-    public Guid FullWorthSpaceId { get; set; }
-    public string NormalizedAlias { get; set; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-/// <summary>Deterministic counterparty normalization shared by ingestion and the merchant registry.</summary>
-public static class MerchantNormalization
-{
-    public static string? Normalize(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var chars = value.Trim().ToUpperInvariant().Select(c => char.IsLetterOrDigit(c) ? c : ' ').ToArray();
-        var normalized = string.Join(' ', new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
-        return normalized.Length == 0 ? null : normalized;
-    }
-}
-
-public sealed class MerchantConfiguration : IEntityTypeConfiguration<Merchant>
-{
-    public void Configure(EntityTypeBuilder<Merchant> e)
-    {
-        e.ToTable("Merchants");
-        e.HasKey(x => x.Id);
-        e.Property(x => x.Name).HasMaxLength(200);
-        e.Property(x => x.NormalizedName).HasMaxLength(200);
-        e.HasIndex(x => new { x.FullWorthSpaceId, x.NormalizedName }).IsUnique();
-        e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public sealed class MerchantAliasConfiguration : IEntityTypeConfiguration<MerchantAlias>
-{
-    public void Configure(EntityTypeBuilder<MerchantAlias> e)
-    {
-        e.ToTable("MerchantAliases");
-        e.HasKey(x => x.Id);
-        e.Property(x => x.NormalizedAlias).HasMaxLength(200);
-        e.HasIndex(x => new { x.FullWorthSpaceId, x.NormalizedAlias }).IsUnique();
-        e.HasIndex(x => x.MerchantId);
-        e.HasOne<Merchant>().WithMany().HasForeignKey(x => x.MerchantId).OnDelete(DeleteBehavior.Cascade);
-        e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public enum MerchantResult { Success, NotFound, Forbidden, Invalid }
-public sealed record MerchantOutcome<T>(MerchantResult Result, T? Value = default, string? Error = null);
-
-public sealed record MerchantAliasView(Guid Id, string NormalizedAlias);
-public sealed record MerchantView(Guid Id, string Name, string NormalizedName, IReadOnlyList<MerchantAliasView> Aliases);
-public sealed record ResolveView(string? Normalized, Guid? MerchantId, string? MerchantName);
-public sealed record MerchantWrite(string Name);
-public sealed record AliasWrite(string Alias);
-public sealed record MerchantMergeWrite(Guid SourceMerchantId);
 
 public sealed class MerchantStore(FullWorthDbContext db)
 {

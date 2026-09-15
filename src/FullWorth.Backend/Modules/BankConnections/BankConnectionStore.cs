@@ -7,53 +7,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.BankConnections;
 
-public sealed class BankConnection
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public Guid? EnableBankingProfileId { get; set; }
-    public string Provider { get; set; } = "enable-banking";
-    public string InstitutionName { get; set; } = string.Empty;
-    public string Country { get; set; } = "DE";
-    public string PsuType { get; set; } = "personal";
-    public string? AuthMethod { get; set; }
-    public string RequiredPsuHeadersJson { get; set; } = "[]";
-    public string? AuthorizationState { get; set; }
-    // The OAuth state is bound to the user who initiated the connect and expires; it is consumed
-    // exactly once at callback so a replayed callback cannot re-drive the flow.
-    public Guid? AuthorizationUserId { get; set; }
-    public DateTimeOffset? AuthorizationStateExpiresAt { get; set; }
-    public string? AuthorizationId { get; set; }
-    // Encrypted at rest (P0.4). ProviderSessionIdLookup is a keyed blind index that keeps the value
-    // uniquely constrained and findable (ingest batch -> connection) without storing it in the clear.
-    public string? ProviderSessionId { get; set; }
-    public string? ProviderSessionIdLookup { get; set; }
-    public string Status { get; set; } = "PENDING_AUTHORIZATION";
-    public DateTimeOffset? ValidUntil { get; set; }
-    public DateTimeOffset? LastAttemptAt { get; set; }
-    public DateTimeOffset? LastSyncedAt { get; set; }
-    public DateTimeOffset? NextSyncAllowedAt { get; set; }
-    public int ConsecutiveFailures { get; set; }
-    public string? LastError { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed record BankConnectionStatusView(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    string Provider,
-    string InstitutionName,
-    string Country,
-    string PsuType,
-    string Status,
-    DateTimeOffset? ValidUntil,
-    DateTimeOffset? LastSyncedAt,
-    DateTimeOffset? NextSyncAllowedAt,
-    DateTimeOffset UpdatedAt,
-    string HealthStatus,
-    int? DaysUntilExpiry);
-
 public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? auditService = null, FullWorth.Backend.Security.FieldCipher? fieldCipher = null, FullWorth.Backend.Modules.Notifications.NotificationDispatcher? notifications = null)
 {
     private readonly AuditService audit = auditService ?? new AuditService(db);
@@ -565,50 +518,3 @@ public sealed class BankConnectionStore(FullWorthDbContext db, AuditService? aud
     private Task<bool> IsMemberAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
         db.FullWorthSpaceMembers.AsNoTracking().AnyAsync(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId, ct);
 }
-
-public sealed record BankSyncHistoryWrite(
-    DateTimeOffset StartedAt,
-    DateTimeOffset CompletedAt,
-    string Result,
-    string? ErrorCode);
-
-public sealed record BankSyncHistoryItem(
-    Guid Id,
-    DateTimeOffset StartedAt,
-    DateTimeOffset CompletedAt,
-    long DurationMs,
-    string Result,
-    string? ErrorCode);
-
-public sealed record BankConnectionWrite(
-    Guid? Id,
-    string Provider,
-    string InstitutionName,
-    string Country,
-    string? AuthorizationState,
-    string? AuthorizationId,
-    string? ProviderSessionId,
-    string Status,
-    DateTimeOffset? ValidUntil,
-    DateTimeOffset? LastAttemptAt,
-    DateTimeOffset? LastSyncedAt,
-    DateTimeOffset? NextSyncAllowedAt,
-    int ConsecutiveFailures,
-    string? LastError,
-    // Required for a NEW connection (validated, owner-checked space). Absent/empty is rejected — there
-    // is no LegacyId fallback on the live connect path any more.
-    Guid? FullWorthSpaceId = null,
-    Guid? AuthorizationUserId = null,
-    DateTimeOffset? AuthorizationStateExpiresAt = null,
-    Guid? EnableBankingProfileId = null,
-    string PsuType = "personal",
-    string? AuthMethod = null,
-    string RequiredPsuHeadersJson = "[]");
-
-public sealed record BankConnectionAuthorizeRequest(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
-
-public enum BankConnectionAuthorizeResult { Authorized, Forbidden, NotFound }
-
-public sealed record ConsumeStateRequest(string State);
-public sealed record DeleteBankConnectionInternalRequest(Guid FullWorthSpaceId);
-public sealed record CloseBankConnectionInternalRequest(Guid FullWorthSpaceId);

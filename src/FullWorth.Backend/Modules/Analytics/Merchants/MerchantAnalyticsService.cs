@@ -1,6 +1,5 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Merchants;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Analytics.Merchants;

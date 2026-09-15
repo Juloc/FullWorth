@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Compensation;

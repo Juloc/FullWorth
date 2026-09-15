@@ -4,11 +4,6 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Accounts;
-using FullWorth.Backend.Modules.Audit;
-using FullWorth.Backend.Modules.Merchants;
-using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 

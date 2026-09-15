@@ -2,7 +2,6 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Budgets.CarryOver;
 using FullWorth.Backend.Modules.Budgets.Cycles;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Analytics;

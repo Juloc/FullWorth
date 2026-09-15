@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using System.Xml;
 using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Accounts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

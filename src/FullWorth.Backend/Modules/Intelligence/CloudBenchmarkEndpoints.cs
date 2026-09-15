@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;

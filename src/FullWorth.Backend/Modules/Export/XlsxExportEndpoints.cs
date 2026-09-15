@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security;
 using System.Text;
-using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Portfolio;

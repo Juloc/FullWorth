@@ -1,6 +1,3 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
-using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
 using Microsoft.Extensions.Options;
 

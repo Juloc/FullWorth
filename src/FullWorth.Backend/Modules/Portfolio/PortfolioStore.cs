@@ -1,127 +1,9 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.FullWorthSpaces;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Portfolio;
-
-public sealed class Asset
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Kind { get; set; } = "other";
-    public decimal CurrentValue { get; set; }
-    public string Currency { get; set; } = "EUR";
-
-    /// <summary>
-    /// The date somebody stated this value holds for — the owner, a document, a provider. NULL means
-    /// nobody ever said, and nothing invents one: a stamped "today" used to be indistinguishable from
-    /// an appraisal and always looked newer than a real one. Use <see cref="ValueRecordedAt"/> for
-    /// "since when do we know this figure".
-    /// </summary>
-    public DateOnly? ValuedAt { get; set; }
-
-    /// <summary>
-    /// When FullWorth last learned this value. Maintained by <c>fullworth_prepare_asset</c> and moves
-    /// only when value, currency or stated date change — unlike <see cref="UpdatedAt"/>, which a
-    /// rename also bumps. It says nothing about when the asset was appraised.
-    /// </summary>
-    public DateTimeOffset ValueRecordedAt { get; set; } = DateTimeOffset.UtcNow;
-    public decimal? AnnualGrowthRate { get; set; }
-    public bool IncludeInNetWorth { get; set; } = true;
-    public string? Notes { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed class Liability
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Kind { get; set; } = "loan";
-    public decimal CurrentBalance { get; set; }
-    public string Currency { get; set; } = "EUR";
-    public decimal? InterestRate { get; set; }
-    public decimal? RegularPayment { get; set; }
-    public string PaymentCycle { get; set; } = "monthly";
-    public DateOnly? NextDueDate { get; set; }
-    public DateOnly? EndDate { get; set; }
-    public bool IncludeInNetWorth { get; set; } = true;
-    public string? Notes { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed class NetWorthSnapshot
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public Guid? UserId { get; set; }
-    public DateOnly Date { get; set; }
-    public string Currency { get; set; } = "EUR";
-    public decimal Accounts { get; set; }
-    public decimal Assets { get; set; }
-    public decimal Liabilities { get; set; }
-    public decimal NetWorth { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed record AssetView(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    string Name,
-    string Kind,
-    decimal CurrentValue,
-    string Currency,
-    DateOnly? ValuedAt,
-    DateTimeOffset ValueRecordedAt,
-    decimal? AnnualGrowthRate,
-    bool IncludeInNetWorth,
-    string? Notes,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record LiabilityView(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    string Name,
-    string Kind,
-    decimal CurrentBalance,
-    string Currency,
-    decimal? InterestRate,
-    decimal? RegularPayment,
-    string PaymentCycle,
-    DateOnly? NextDueDate,
-    DateOnly? EndDate,
-    bool IncludeInNetWorth,
-    string? Notes,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record NetWorthSnapshotView(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    DateOnly Date,
-    string Currency,
-    decimal Accounts,
-    decimal Assets,
-    decimal Liabilities,
-    decimal NetWorth,
-    DateTimeOffset CreatedAt);
-
-public enum PortfolioMutationResult
-{
-    Success,
-    NotFound,
-    Forbidden,
-    Invalid
-}
-
-public sealed record AssetMutationOutcome(PortfolioMutationResult Result, AssetView? Asset = null, string? Error = null);
-public sealed record LiabilityMutationOutcome(PortfolioMutationResult Result, LiabilityView? Liability = null, string? Error = null);
 
 public sealed class PortfolioStore(FullWorthDbContext db, AuditService? auditService = null)
 {
@@ -372,6 +254,3 @@ public sealed class PortfolioStore(FullWorthDbContext db, AuditService? auditSer
         entity.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
-
-public sealed record AssetWrite(string Name, string Kind, decimal CurrentValue, string Currency, DateOnly? ValuedAt, decimal? AnnualGrowthRate, bool IncludeInNetWorth, string? Notes);
-public sealed record LiabilityWrite(string Name, string Kind, decimal CurrentBalance, string Currency, decimal? InterestRate, decimal? RegularPayment, string PaymentCycle, DateOnly? NextDueDate, DateOnly? EndDate, bool IncludeInNetWorth, string? Notes);

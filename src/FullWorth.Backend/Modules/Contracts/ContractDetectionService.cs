@@ -2,7 +2,6 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Intelligence;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Contracts;

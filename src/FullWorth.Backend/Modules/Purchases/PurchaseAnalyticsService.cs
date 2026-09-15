@@ -1,5 +1,4 @@
 using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Fx;
 using Microsoft.EntityFrameworkCore;
 

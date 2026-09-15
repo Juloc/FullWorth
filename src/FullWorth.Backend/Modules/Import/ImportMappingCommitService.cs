@@ -5,7 +5,6 @@ using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.Transactions;
 using FullWorth.Backend.Security;
-using FullWorth.Backend.Validation;
 
 namespace FullWorth.Backend.Modules.Import;
 

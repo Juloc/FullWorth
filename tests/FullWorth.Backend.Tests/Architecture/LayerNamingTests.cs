@@ -8,14 +8,14 @@ namespace FullWorth.Backend.Tests.Architecture;
 /// Schichtentrennung selbst hält <see cref="LayerSeparationTests"/> fest; dieser Wächter hält den
 /// Namen fest, damit die getrennte Bauform auch ablesbar bleibt.
 ///
-/// Das ist eine Ratsche, keine Forderung nach null: die heute vorhandenen Dateien stehen in der
-/// Liste, eine neue macht rot. Wer eine umbenennt oder aufteilt, streicht sie - der zweite Test
-/// besteht darauf. Siehe #113, Regel 6.
+/// Das war eine Ratsche und ist jetzt eine Regel: die Liste begann mit 26 Dateien und ist leer.
+/// Eine neue <c>*Module.cs</c> macht rot, ohne Verhandlung. Siehe #113 Regel 6 und #134.
 ///
-/// „Parity" steht bewusst noch in einigen Namen. Es beschreibt eine abgeschlossene Migration statt
-/// einer Fachlichkeit und gehört ebenso weg - aber die zugehörigen Routen heißen selbst
-/// <c>/api/*-parity</c>, und die verschwinden mit #110. Eine Klasse umzubenennen, während ihre Route
-/// den alten Namen trägt, macht es schlechter, nicht besser.
+/// Was in den 26 steckte, war dreimal dasselbe Muster: eine EF-Entität, ein Dutzend DTOs und ein
+/// Store in einer Datei. Sie liegen jetzt als <c>*Models.cs</c>, <c>*Dtos.cs</c> und <c>*Store.cs</c>
+/// nebeneinander - dieselbe Aufteilung, die Pension schon hatte.
+///
+/// „Parity" und „V2" sind mit #133 aus jedem Routen- und Typnamen verschwunden.
 /// </summary>
 public sealed class LayerNamingTests
 {

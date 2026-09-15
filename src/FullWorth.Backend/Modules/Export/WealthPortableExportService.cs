@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Purchases;
-using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

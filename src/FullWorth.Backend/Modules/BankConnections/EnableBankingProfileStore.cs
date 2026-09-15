@@ -10,53 +10,6 @@ namespace FullWorth.Backend.Modules.BankConnections;
 /// Control Panel refresh token are encrypted with FieldCipher and are only returned through the
 /// ingest-key-protected internal banking API.
 /// </summary>
-public sealed class EnableBankingProfile
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid UserId { get; set; }
-    public string ApplicationId { get; set; } = string.Empty;
-    public string PrivateKeyPem { get; set; } = string.Empty;
-    public string? ControlPanelRefreshToken { get; set; }
-    public string KeyFingerprint { get; set; } = string.Empty;
-    public string Environment { get; set; } = "SANDBOX";
-    public string ApplicationName { get; set; } = string.Empty;
-    public bool Active { get; set; }
-    public string ServicesJson { get; set; } = "[]";
-    public string RedirectUrlsJson { get; set; } = "[]";
-    public DateTimeOffset? VerifiedAt { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed record EnableBankingProfileInternalDto(
-    Guid Id,
-    Guid UserId,
-    string ApplicationId,
-    string PrivateKeyPem,
-    string KeyFingerprint,
-    string Environment,
-    string ApplicationName,
-    bool Active,
-    IReadOnlyList<string> Services,
-    IReadOnlyList<string> RedirectUrls,
-    DateTimeOffset? VerifiedAt,
-    DateTimeOffset UpdatedAt,
-    string? ControlPanelRefreshToken = null);
-
-public sealed record EnableBankingProfileWrite(
-    Guid UserId,
-    string ApplicationId,
-    string PrivateKeyPem,
-    string KeyFingerprint,
-    string Environment,
-    string ApplicationName,
-    bool Active,
-    IReadOnlyList<string> Services,
-    IReadOnlyList<string> RedirectUrls,
-    DateTimeOffset VerifiedAt,
-    string? ControlPanelRefreshToken = null);
-
-public enum EnableBankingProfileDeleteResult { Deleted, NotFound, InUse }
 
 public sealed class EnableBankingProfileStore(FullWorthDbContext db, FieldCipher cipher)
 {

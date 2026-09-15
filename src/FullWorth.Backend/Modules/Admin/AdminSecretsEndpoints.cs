@@ -1,7 +1,4 @@
 using System.Text.Json;
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.BankConnections;
-using FullWorth.Backend.Modules.Intelligence;
 using FullWorth.Backend.Security;
 using FullWorth.Shared;
 using Microsoft.EntityFrameworkCore;

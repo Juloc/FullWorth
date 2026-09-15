@@ -1,74 +1,10 @@
 using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Accounts;
-using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.FullWorthSpaces;
 using FullWorth.Backend.Modules.Loans.Amortization;
-using FullWorth.Backend.Security;
 using FullWorth.Backend.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Loans;
-
-public sealed class Loan
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FullWorthSpaceId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public decimal OriginalPrincipal { get; set; }
-    public decimal CurrentBalance { get; set; }
-    public decimal PaymentAmount { get; set; }
-    public decimal NominalInterestRate { get; set; }
-    public DateOnly StartDate { get; set; }
-    public DateOnly? EndDate { get; set; }
-    public int? FixedTermMonths { get; set; }
-    public decimal Fees { get; set; }
-    public string PaymentFrequency { get; set; } = "monthly";
-    public string Currency { get; set; } = "EUR";
-    public Guid? CategoryId { get; set; }
-    public Guid? AccountId { get; set; }
-    public bool IsActive { get; set; } = true;
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-public sealed record LoanView(
-    Guid Id,
-    Guid FullWorthSpaceId,
-    string Name,
-    decimal OriginalPrincipal,
-    decimal CurrentBalance,
-    decimal PaymentAmount,
-    decimal NominalInterestRate,
-    DateOnly StartDate,
-    DateOnly? EndDate,
-    int? FixedTermMonths,
-    decimal Fees,
-    string PaymentFrequency,
-    string Currency,
-    Guid? CategoryId,
-    Guid? AccountId,
-    bool IsActive,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public enum LoanMutationResult
-{
-    Success,
-    NotFound,
-    Forbidden,
-    Invalid
-}
-
-public enum AmortizationStatus
-{
-    Ok,
-    NotFound,
-    Insufficient
-}
-
-public sealed record AmortizationOutcome(AmortizationStatus Status, object? Result = null);
-
-public sealed record LoanMutationOutcome(LoanMutationResult Result, LoanView? Loan = null, string? Error = null);
 
 public sealed class LoanStore(FullWorthDbContext db)
 {
@@ -236,19 +172,3 @@ public sealed class LoanStore(FullWorthDbContext db)
         entity.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
-
-public sealed record LoanWrite(
-    string Name,
-    decimal OriginalPrincipal,
-    decimal CurrentBalance,
-    decimal PaymentAmount,
-    decimal NominalInterestRate,
-    DateOnly StartDate,
-    DateOnly? EndDate,
-    int? FixedTermMonths,
-    decimal Fees,
-    string PaymentFrequency,
-    string Currency,
-    Guid? CategoryId,
-    Guid? AccountId,
-    bool IsActive);

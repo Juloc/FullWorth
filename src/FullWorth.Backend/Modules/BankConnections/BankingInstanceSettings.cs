@@ -17,18 +17,3 @@ public sealed class BankingInstanceSettings
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
-/// <summary>
-/// Compile-time marker for the pre-cutover host registration. It intentionally exposes no read/write
-/// operation. The registration and historical entity are removed with the #104 baseline squash.
-/// </summary>
-public sealed class BankingInstanceSettingsStore { }
-
-public static class BankingInstanceSettingsEndpoints
-{
-    /// <summary>
-    /// No legacy endpoint is mapped. /internal/banking/settings was a runtime compatibility fallback
-    /// and is intentionally gone; FinTS reads only the canonical reloadable configuration path.
-    /// </summary>
-    public static IEndpointRouteBuilder MapBankingInstanceSettingsEndpoints(this IEndpointRouteBuilder app)
-        => app;
-}

@@ -1,6 +1,3 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
-using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;

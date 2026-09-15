@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Fx;
@@ -9,29 +8,6 @@ namespace FullWorth.Backend.Modules.Fx;
 /// of 1.08 means 1 EUR = 1.08 USD). EUR itself is never stored (its rate is 1 by definition). Any
 /// cross-rate (e.g. USD→GBP, or converting to a non-EUR base) is derived through EUR.
 /// </summary>
-public sealed class FxRate
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public DateOnly Date { get; set; }
-    public string Currency { get; set; } = string.Empty;
-    public decimal Rate { get; set; }
-    public DateTimeOffset FetchedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
-/// <summary>
-/// One conversion, with what it was done WITH. A converted total used to be a bare number: the user
-/// could not tell which rate produced it or how old that rate was, and a fixing up to two weeks old
-/// looked exactly like this morning's.
-///
-/// <see cref="Rate"/> is the effective rate actually applied (base per unit of the original
-/// currency), and <see cref="RateDate"/> is the OLDEST fixing the conversion relied on — a cross-rate
-/// through EUR uses two, and a total is only as current as its stalest input.
-/// </summary>
-public sealed record FxConversion(decimal Amount, string From, decimal Rate, DateOnly RateDate)
-{
-    /// <summary>How old the fixing was, relative to the date the conversion was asked for.</summary>
-    public int AgeInDays(DateOnly asOf) => Math.Max(0, asOf.DayNumber - RateDate.DayNumber);
-}
 
 /// <summary>
 /// An in-memory snapshot of the rate table over a date window, so an aggregation can convert many
@@ -119,41 +95,4 @@ public sealed class FxSnapshot
 
     public static string Normalize(string? currency) =>
         string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
-}
-
-/// <summary>Builds <see cref="FxSnapshot"/>s from the stored rate table for a base currency + date window.</summary>
-public sealed class CurrencyConverter(FullWorthDbContext db)
-{
-    public async Task<FxSnapshot> PrepareAsync(string baseCurrency, DateOnly from, DateOnly to, CancellationToken ct)
-    {
-        // Pull a little before `from` so a date whose exact fixing is a weekend still resolves.
-        var start = from.AddDays(-14);
-        var rows = await db.FxRates.AsNoTracking()
-            .Where(rate => rate.Date >= start && rate.Date <= to)
-            .Select(rate => new { rate.Date, rate.Currency, rate.Rate })
-            .ToListAsync(ct);
-        return new FxSnapshot(baseCurrency, rows.Select(r => (r.Date, r.Currency, r.Rate)));
-    }
-
-    /// <summary>Snapshot for converting current values (balances/net worth) at the latest available rate.</summary>
-    public Task<FxSnapshot> PrepareLatestAsync(string baseCurrency, DateOnly asOf, CancellationToken ct) =>
-        PrepareAsync(baseCurrency, asOf, asOf, ct);
-}
-
-/// <summary>
-/// Accumulates base-currency conversions for one analytics request and remembers whether any amount
-/// could not be converted (no rate in the lookback window). Analytics surface that single flag as
-/// "incomplete" (spec §18) and skip the unconvertible line — a missing rate is never assumed 1:1.
-/// </summary>
-public sealed class FxAccumulator(FxSnapshot snapshot)
-{
-    public bool Incomplete { get; private set; }
-
-    /// <summary>Converts to the base currency at the given date, or returns null (and flags Incomplete) when no rate is available.</summary>
-    public decimal? Convert(decimal amount, string currency, DateOnly date)
-    {
-        var converted = snapshot.ToBaseOn(amount, currency, date);
-        if (converted is null) Incomplete = true;
-        return converted;
-    }
 }

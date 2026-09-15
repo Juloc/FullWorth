@@ -1,7 +1,6 @@
 using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Fx;
 using FullWorth.Backend.Modules.Merchants;
-using FullWorth.Backend.Modules.Transactions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Reconciliation;

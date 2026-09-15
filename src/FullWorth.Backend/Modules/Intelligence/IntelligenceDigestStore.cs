@@ -1,4 +1,3 @@
-using FullWorth.Backend.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Intelligence;
