@@ -252,6 +252,10 @@ public static class BackendApplication
         builder.Services.AddScoped<AdvancedBulkStore>();
         builder.Services.AddScoped<CategoryMergeStore>();
         builder.Services.AddScoped<BudgetScopeStore>();
+        builder.Services.AddScoped<ImportMappingStore>();
+        builder.Services.AddScoped<ImportMappingCommitService>();
+        builder.Services.AddScoped<ImportJobStore>();
+        builder.Services.AddScoped<CashflowStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
@@ -517,7 +521,7 @@ public static class BackendApplication
         
         // Main feature-parity surfaces remain available. Product/review endpoints are compatibility facades
         // over the canonical purchase stack rather than parallel storage models.
-        endpoints.MapCashflowParityEndpoints();
+        endpoints.MapCashflowEndpoints();
         endpoints.MapBudgetScopeEndpoints();
         endpoints.MapContractParityEndpoints();
         endpoints.MapRefundCandidateEndpoints();

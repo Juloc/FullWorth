@@ -47,10 +47,10 @@ public static class ImportMappingParityEndpoints
     }
 
     private static async Task<IResult> Detect(
-        Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser, SpaceAccess space, ImportMappingStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var fileResult = await ReadFile(request, ct);
         if (fileResult.Error is not null) return Results.BadRequest(new { error = fileResult.Error });
@@ -76,10 +76,10 @@ public static class ImportMappingParityEndpoints
 
     private static async Task<IResult> UploadMapped(
         Guid fullWorthSpaceId, HttpRequest request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        SpaceAccess space, ImportMappingStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!request.HasFormContentType) return Results.BadRequest(new { error = "Expected multipart/form-data." });
         var form = await request.ReadFormAsync(ct);
@@ -107,11 +107,7 @@ public static class ImportMappingParityEndpoints
         var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         // A file without a currency column states no currency; the space's own base currency is the
         // honest reading of that, not a hardcoded EUR.
-        var spaceCurrency = await db.FullWorthSpaces.AsNoTracking()
-            .Where(space => space.Id == fullWorthSpaceId)
-            .Select(space => space.BaseCurrency)
-            .SingleOrDefaultAsync(ct);
-        if (string.IsNullOrWhiteSpace(spaceCurrency)) spaceCurrency = "EUR";
+        var spaceCurrency = await store.BaseCurrencyAsync(fullWorthSpaceId, ct);
         var candidates = new List<MappedCandidate>(); var errorCount = 0;
         for (var index = 0; index < rows.Count; index++)
         {
@@ -137,146 +133,88 @@ public static class ImportMappingParityEndpoints
             }
         }
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using (var command = RawSql.Command(connection, """
-INSERT INTO "ImportJobs" ("Id","FullWorthSpaceId","UserId","FileName","FileSha256","AdapterKey","Status","SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@user,@file,@sha,@adapter,@status,@source,@ready,0,0,@errors,@now,@now)
-""", ("@id", jobId), ("@space", fullWorthSpaceId), ("@user", userId), ("@file", Path.GetFileName(file.FileName)),
-            ("@sha", sha), ("@adapter", Path.GetExtension(file.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase) ? "mapped_csv" : "mapped_xlsx"),
-            ("@status", errorCount == candidates.Count ? "failed" : "mapping_required"), ("@source", candidates.Count),
-            ("@ready", candidates.Count-errorCount), ("@errors", errorCount), ("@now", now))) await command.ExecuteNonQueryAsync(ct);
-        foreach (var candidate in candidates)
-        {
-            await using var command = RawSql.Command(connection, """
-INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency","Counterparty","Description","CategoryText","ExternalKey","RowFingerprint","DuplicateStatus","ValidationStatus","ValidationError")
-VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@external,@fingerprint,'new',@status,@error)
-""", ("@id", candidate.Id), ("@job", jobId), ("@account", candidate.SourceAccount), ("@date", candidate.Date),
-                ("@amount", candidate.Amount), ("@currency", candidate.Currency), ("@party", candidate.Counterparty),
-                ("@description", candidate.Description), ("@category", candidate.Category), ("@external", candidate.ExternalKey),
-                ("@fingerprint", candidate.Fingerprint), ("@status", candidate.Status), ("@error", candidate.Error));
-            await command.ExecuteNonQueryAsync(ct);
-        }
-        audit.Record(fullWorthSpaceId, userId, "import.mapped.uploaded", "ImportJob", jobId);
-        await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
+        await store.CreateJobAsync(
+            userId, fullWorthSpaceId, jobId, Path.GetFileName(file.FileName), sha,
+            Path.GetExtension(file.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase) ? "mapped_csv" : "mapped_xlsx",
+            candidates, errorCount, ct);
+
         return Results.Ok(new { jobId, sourceRows = candidates.Count, ready = candidates.Count-errorCount, errors = errorCount });
     }
 
     private static async Task<IResult> MappingSummary(
-        Guid jobId, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid jobId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, ImportMappingStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        var connection = await RawSql.OpenAsync(db, ct);
-        var accounts = new List<object>();
-        await using (var command = RawSql.Command(connection, """
-SELECT COALESCE("SourceAccount",''),count(*) FROM "ImportCandidates"
-WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("SourceAccount",'') ORDER BY count(*) DESC
-""", ("@job", jobId)))
-        { await using var reader = await command.ExecuteReaderAsync(ct); while(await reader.ReadAsync(ct)) accounts.Add(new { source = reader.GetString(0), count = reader.GetInt64(1) }); }
-        var categories = new List<object>();
-        await using (var command = RawSql.Command(connection, """
-SELECT COALESCE("CategoryText",''),count(*) FROM "ImportCandidates"
-WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("CategoryText",'') ORDER BY count(*) DESC
-""", ("@job", jobId)))
-        { await using var reader = await command.ExecuteReaderAsync(ct); while(await reader.ReadAsync(ct)) categories.Add(new { source = reader.GetString(0), count = reader.GetInt64(1) }); }
-        return Results.Ok(new { sourceAccounts = accounts, sourceCategories = categories });
+        if (!await store.OwnsOpenJobAsync(jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
+        var accounts = await store.SourceAccountCountsAsync(jobId, ct);
+        var categories = await store.SourceCategoryCountsAsync(jobId, ct);
+        return Results.Ok(new
+        {
+            sourceAccounts = accounts.Select(row => new { source = row.Source, count = row.Count }),
+            sourceCategories = categories.Select(row => new { source = row.Source, count = row.Count })
+        });
     }
 
     private static async Task<IResult> CommitMapped(
         Guid jobId, Guid fullWorthSpaceId, ImportMappedCommitWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, FieldCipher cipher, AuditService audit, CancellationToken ct)
+        SpaceAccess space, ImportMappingStore store, ImportMappingCommitService commit, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await store.OwnsOpenJobAsync(jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
         var accountMap = request.SourceAccountMappings ?? new Dictionary<string, Guid?>();
         var allMappedIds = accountMap.Values.Where(value => value.HasValue).Select(value => value!.Value)
             .Concat(request.DefaultAccountId.HasValue ? [request.DefaultAccountId.Value] : []).Distinct().ToArray();
         if (allMappedIds.Any(id => !writable.Contains(id))) return Results.BadRequest(new { error = "An account mapping is inaccessible." });
         var categoryMap = request.CategoryMappings ?? new Dictionary<string, Guid?>();
         var mappedCategories = categoryMap.Values.Where(value => value.HasValue).Select(value => value!.Value).Distinct().ToArray();
-        if (mappedCategories.Length > 0 && await db.Categories.AsNoTracking().CountAsync(c => c.FullWorthSpaceId == fullWorthSpaceId && mappedCategories.Contains(c.Id), ct) != mappedCategories.Length)
+        if (mappedCategories.Length > 0 && await store.CountCategoriesAsync(fullWorthSpaceId, mappedCategories, ct) != mappedCategories.Length)
             return Results.BadRequest(new { error = "A category mapping is invalid." });
 
         var selected = request.CandidateIds?.ToHashSet();
-        var candidates = await ReadCandidates(db, jobId, ct);
+        var candidates = await store.ReadCandidatesAsync(jobId, ct);
         if (selected is not null) candidates = candidates.Where(candidate => selected.Contains(candidate.Id)).ToList();
         candidates = candidates.Where(candidate => candidate.Status == "ready" && candidate.Date.HasValue).ToList();
-        var roleOwner = await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct);
+        var roleOwner = await space.IsOwnerAsync(userId, fullWorthSpaceId, ct);
         if (request.CreateMissingCategories && !roleOwner) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var existingCategories = await db.Categories.Where(c => c.FullWorthSpaceId == fullWorthSpaceId).ToListAsync(ct);
-        var ruleList = request.RunFullWorthCategorization
-            ? await db.CategorizationRules.AsNoTracking().Where(r => r.FullWorthSpaceId == fullWorthSpaceId && r.IsEnabled && r.Target == "transaction").OrderBy(r => r.Priority).ToListAsync(ct)
-            : [];
-        var categoryIdsByKey = existingCategories.Where(c => !c.IsArchived).ToDictionary(c => c.Key, c => c.Id, StringComparer.OrdinalIgnoreCase);
-
-        var imported=0;var duplicates=0;var skipped=0;
-        // Collected so the job can be rolled back: without a link row the commit leaves no record of
-        // WHICH transactions it created.
-        var createdTransactions=new List<FinanceTransaction>();
-        // Same classifier the preview endpoint uses, so what the review list shows and what the
-        // commit actually skips can never drift apart.
-        var classifications = (await ClassifyAsync(db, candidates, accountMap, request.DefaultAccountId, ct))
+        // Derselbe Klassifizierer wie in der Vorschau, damit die Pruefliste und das, was der
+        // Import tatsaechlich ueberspringt, nie auseinanderlaufen koennen.
+        var classifications = (await ClassifyAsync(store, candidates, accountMap, request.DefaultAccountId, ct))
             .ToDictionary(entry => entry.CandidateId);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        foreach (var candidate in candidates)
-        {
-            var classification = classifications[candidate.Id];
-            if (classification.Status == "unmapped") { skipped++; continue; }
-            var account = await db.Accounts.AsNoTracking().SingleAsync(a => a.Id == classification.AccountId!.Value, ct);
-            var normalized = classification.NormalizedCounterparty;
-            var external = classification.ExternalKey;
-            if (classification.Status == "duplicate") { duplicates++; await MarkCandidate(db,candidate.Id,"duplicate",ct); continue; }
 
-            Guid? categoryId = null;
-            var categorySource = "none";
-            if (!string.IsNullOrWhiteSpace(candidate.Category))
-            {
-                if (categoryMap.TryGetValue(candidate.Category, out var mapped)) categoryId = mapped;
-                else categoryId = existingCategories.FirstOrDefault(c => string.Equals(c.Name, candidate.Category, StringComparison.OrdinalIgnoreCase))?.Id;
-                if (!categoryId.HasValue && request.CreateMissingCategories)
-                {
-                    var hash=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{fullWorthSpaceId:N}|{candidate.Category.ToUpperInvariant()}"))).ToLowerInvariant();
-                    var created=new FinanceCategory{FullWorthSpaceId=fullWorthSpaceId,Key=$"import-{hash[..24]}",Name=candidate.Category.Trim(),IsSystem=false,IsArchived=false,SortOrder=0,CreatedAt=DateTimeOffset.UtcNow};
-                    db.Categories.Add(created);existingCategories.Add(created);categoryIdsByKey[created.Key]=created.Id;categoryId=created.Id;
-                }
-                if(categoryId.HasValue)categorySource="import";
-            }
-            var entity=new FinanceTransaction{AccountId=account.Id,CategoryId=categoryId,ExternalKey=external,Status="BOOK",BookingDate=candidate.Date,ValueDate=candidate.Date,Amount=candidate.Amount,Currency=candidate.Currency,Counterparty=candidate.Counterparty,NormalizedCounterparty=normalized,Description=candidate.Description,CategorizationSource=categorySource,RawJson=cipher.Protect("{\"source\":\"mapped-import\"}")??"{}",FirstSeenAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow};
-            if(!categoryId.HasValue&&request.RunFullWorthCategorization)
-            {
-                var evaluation=TransactionRuleEngine.EvaluateWithGermanyCatalog(entity,ruleList,categoryIdsByKey);
-                entity.CategoryId=evaluation.CategoryId;entity.IsTransfer=evaluation.MarkAsTransfer;entity.CategorizationSource=evaluation.CategoryId.HasValue?evaluation.Source:"none";
-            }
-            db.Transactions.Add(entity);createdTransactions.Add(entity);imported++;await MarkCandidate(db,candidate.Id,"imported",ct);
-        }
-        await db.SaveChangesAsync(ct);
-        await ImportTransactionProvenance.LinkAsync(db,jobId,createdTransactions.Select(entity=>entity.Id).ToArray(),ct);
-        var connection=await RawSql.OpenAsync(db,ct);await using(var command=RawSql.Command(connection,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",jobId)))await command.ExecuteNonQueryAsync(ct);
-        audit.Record(fullWorthSpaceId,userId,"import.mapped.completed","ImportJob",jobId);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);
-        return Results.Ok(new{imported,duplicates,skipped,total=candidates.Count});
+        var outcome = await commit.CommitAsync(
+            userId, fullWorthSpaceId, jobId, candidates, classifications, categoryMap,
+            request.CreateMissingCategories, request.RunFullWorthCategorization, ct);
+
+        return Results.Ok(new
+        {
+            imported = outcome.Imported,
+            duplicates = outcome.Duplicates,
+            skipped = outcome.Skipped,
+            total = outcome.Total
+        });
     }
+
 
     private static async Task<IResult> PreviewDuplicates(
         Guid jobId, Guid fullWorthSpaceId, ImportDuplicatePreviewWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, CancellationToken ct)
+        SpaceAccess space, ImportMappingStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await OwnJob(db, jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "transactions.write", ct))
+        if (!await store.OwnsOpenJobAsync(jobId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var writable = await RawSql.WritableAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
         var accountMap = request.SourceAccountMappings ?? new Dictionary<string, Guid?>();
         var allMappedIds = accountMap.Values.Where(value => value.HasValue).Select(value => value!.Value)
             .Concat(request.DefaultAccountId.HasValue ? [request.DefaultAccountId.Value] : []).Distinct().ToArray();
         if (allMappedIds.Any(id => !writable.Contains(id))) return Results.BadRequest(new { error = "An account mapping is inaccessible." });
 
-        var candidates = (await ReadCandidates(db, jobId, ct))
+        var candidates = (await store.ReadCandidatesAsync(jobId, ct))
             .Where(candidate => candidate.Status == "ready" && candidate.Date.HasValue).ToList();
-        var classifications = await ClassifyAsync(db, candidates, accountMap, request.DefaultAccountId, ct);
+        var classifications = await ClassifyAsync(store, candidates, accountMap, request.DefaultAccountId, ct);
         // Nothing is written here: the same rows classified against a different account mapping get a
         // different answer, so persisting this would make the stored status a guess about the future.
         return Results.Ok(new
@@ -292,12 +230,19 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
     // "external_key": the source system's own booking id is already stored on that account.
     // "existing": same account, date, amount, currency and normalised counterparty.
     private static async Task<List<CandidateClassification>> ClassifyAsync(
-        FullWorthDbContext db, IReadOnlyList<MappedCandidate> candidates,
+        ImportMappingStore store, IReadOnlyList<MappedCandidate> candidates,
         IReadOnlyDictionary<string, Guid?> accountMap, Guid? defaultAccountId, CancellationToken ct)
     {
         var result = new List<CandidateClassification>(candidates.Count);
         var seenImportKeys = new HashSet<(Guid AccountId, string ExternalKey)>();
         var seenSemanticKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        // Einmal fuer alle betroffenen Konten laden statt zweimal je Zeile: bei einer Datei mit 5000
+        // Zeilen waren das 10 000 Runden zur Datenbank.
+        var targetAccounts = candidates
+            .Select(candidate => accountMap.TryGetValue(candidate.SourceAccount ?? "", out var mapped) ? mapped : defaultAccountId)
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        var (existingExternalKeys, existingSemantic) = await store.ExistingKeysAsync(targetAccounts, ct);
         foreach (var candidate in candidates)
         {
             var sourceKey = candidate.SourceAccount ?? "";
@@ -311,11 +256,10 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
             var external = StableExternalKey(candidate);
             var semanticKey = SemanticKey(accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized);
             var reason = !seenImportKeys.Add((accountId.Value, external)) || !seenSemanticKeys.Add(semanticKey) ? "in_file" : null;
-            if (reason is null && await db.Transactions.AsNoTracking().AnyAsync(t =>
-                    t.AccountId == accountId.Value && t.ExternalKey == external, ct)) reason = "external_key";
-            if (reason is null && await db.Transactions.AsNoTracking().AnyAsync(t => t.AccountId == accountId.Value &&
-                    (t.BookingDate ?? t.ValueDate) == candidate.Date && t.Amount == candidate.Amount &&
-                    t.Currency == candidate.Currency && t.NormalizedCounterparty == normalized, ct)) reason = "existing";
+            if (reason is null && existingExternalKeys.Contains((accountId.Value, external))) reason = "external_key";
+            if (reason is null && existingSemantic.Contains(
+                    (accountId.Value, candidate.Date.Value, candidate.Amount, candidate.Currency, normalized)))
+                reason = "existing";
             result.Add(new(candidate.Id, accountId, external, normalized, reason is null ? "new" : "duplicate", reason));
         }
         return result;
@@ -358,10 +302,4 @@ WHERE "ImportJobId"=@job AND "ValidationStatus"='ready' GROUP BY COALESCE("Categ
     private static List<string> ReadSharedStrings(ZipArchive zip){var entry=zip.GetEntry("xl/sharedStrings.xml");if(entry is null)return[];using var s=entry.Open();var doc=XDocument.Load(s);XNamespace ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";return doc.Descendants(ns+"si").Select(si=>string.Concat(si.Descendants(ns+"t").Select(t=>t.Value))).ToList();}
     private static List<string> ReadXlsxRow(XElement row,XNamespace ns,IReadOnlyList<string> shared){var values=new SortedDictionary<int,string>();foreach(var cell in row.Elements(ns+"c")){var reference=(string?)cell.Attribute("r")??"A1";var column=ColumnIndex(reference);var type=(string?)cell.Attribute("t");var value=type=="inlineStr"?string.Concat(cell.Descendants(ns+"t").Select(t=>t.Value)):cell.Element(ns+"v")?.Value??"";if(type=="s"&&int.TryParse(value,out var si)&&si>=0&&si<shared.Count)value=shared[si];values[column]=value;}var max=values.Count==0?-1:values.Keys.Max();return Enumerable.Range(0,max+1).Select(i=>values.GetValueOrDefault(i,"")).ToList();}
     private static int ColumnIndex(string reference){var letters=new string(reference.TakeWhile(char.IsLetter).ToArray()).ToUpperInvariant();var n=0;foreach(var ch in letters)n=n*26+(ch-'A'+1);return Math.Max(0,n-1);}
-
-    private sealed record MappedCandidate(Guid Id,string? SourceAccount,DateOnly? Date,decimal Amount,string Currency,string? Counterparty,string? Description,string? Category,string? ExternalKey,string Fingerprint,string Status,string? Error);
-    private sealed record CandidateClassification(Guid CandidateId,Guid? AccountId,string ExternalKey,string? NormalizedCounterparty,string Status,string? Reason);
-    private static async Task<bool> OwnJob(FullWorthDbContext db,Guid jobId,Guid space,Guid user,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT EXISTS(SELECT 1 FROM \"ImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@user AND \"Status\" NOT IN ('completed','cancelled'))",("@id",jobId),("@space",space),("@user",user));return Convert.ToBoolean(await cmd.ExecuteScalarAsync(ct));}
-    private static async Task<List<MappedCandidate>> ReadCandidates(FullWorthDbContext db,Guid jobId,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"RowFingerprint\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",("@job",jobId));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<MappedCandidate>();while(await r.ReadAsync(ct))rows.Add(new(RawSql.Guid(r,"Id"),RawSql.NullableString(r,"SourceAccount"),RawSql.NullableDate(r,"BookingDate"),RawSql.Decimal(r,"Amount"),RawSql.String(r,"Currency"),RawSql.NullableString(r,"Counterparty"),RawSql.NullableString(r,"Description"),RawSql.NullableString(r,"CategoryText"),RawSql.NullableString(r,"ExternalKey"),RawSql.String(r,"RowFingerprint"),RawSql.String(r,"ValidationStatus"),RawSql.NullableString(r,"ValidationError")));return rows;}
-    private static async Task MarkCandidate(FullWorthDbContext db,Guid id,string state,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@state WHERE \"Id\"=@id",("@state",state),("@id",id));await cmd.ExecuteNonQueryAsync(ct);}
 }

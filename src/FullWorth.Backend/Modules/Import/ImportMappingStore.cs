@@ -1,4 +1,5 @@
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.Transactions;

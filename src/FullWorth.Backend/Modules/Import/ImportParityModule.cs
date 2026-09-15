@@ -32,27 +32,24 @@ public static class ImportParityEndpoints
         return app;
     }
 
-    private static async Task<IResult> Upload(Guid fullWorthSpaceId,HttpRequest request,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> Upload(Guid fullWorthSpaceId,HttpRequest request,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx")&&!BankStatementFile.CouldBeStatement(ext))return Results.BadRequest(new{error="Supported formats are CSV, XLSX, MT940 and CAMT XML."});
+        var uid=currentUser.RequireUserId();if(!await space.IsMemberAsync(uid,fullWorthSpaceId,ct))return Results.NotFound();if(!request.HasFormContentType)return Results.BadRequest(new{error="Expected multipart/form-data."});var form=await request.ReadFormAsync(ct);var file=form.Files.GetFile("file");if(file is null||file.Length==0)return Results.BadRequest(new{error="No file uploaded."});if(file.Length>MaxUploadBytes)return Results.BadRequest(new{error="Maximum file size is 25 MB."});var ext=Path.GetExtension(file.FileName).ToLowerInvariant();if(ext is not(".csv" or ".xlsx")&&!BankStatementFile.CouldBeStatement(ext))return Results.BadRequest(new{error="Supported formats are CSV, XLSX, MT940 and CAMT XML."});
         await using var ms=new MemoryStream(checked((int)file.Length));await file.CopyToAsync(ms,ct);var bytes=ms.ToArray();var sha=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         // A statement file (MT940 / CAMT) is not a table of rows, and it carries what a CSV export
         // almost never does: the closing balance with the date it is valid for. It goes through the same
         // job, review and commit as every other import - only the reading differs.
         if(BankStatementFile.CouldBeStatement(ext))
-            return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,db,audit,ct);
+            return await UploadStatementAsync(fullWorthSpaceId,uid,file.FileName,bytes,sha,store,ct);
         List<Dictionary<string,string>> rows;try{rows=ext==".csv"?ParseCsv(bytes):ParseXlsx(bytes);}catch(Exception e) when(e is InvalidDataException or FormatException){return Results.BadRequest(new{error=e.Message});}if(rows.Count==0)return Results.BadRequest(new{error="No data rows found."});
         var mapping=DetectMapping(rows[0].Keys);if(mapping.Date is null||mapping.Amount is null)return Results.BadRequest(new{error="Could not detect date and amount columns. Rename columns or use common names such as Date/Datum and Amount/Betrag."});var jobId=Guid.NewGuid();var now=DateTimeOffset.UtcNow;var candidates=new List<Candidate>();var errors=0;
         // A file without a currency column states no currency, so the space's own base currency is the
         // honest reading - not a hardcoded EUR, which mislabelled every row for a space that is not in
         // euro. (A row that DOES carry an unreadable currency becomes an error below.)
-        var spaceCurrency=await db.FullWorthSpaces.AsNoTracking().Where(x=>x.Id==fullWorthSpaceId).Select(x=>x.BaseCurrency).SingleOrDefaultAsync(ct);
-        if(string.IsNullOrWhiteSpace(spaceCurrency))spaceCurrency="EUR";
+        var spaceCurrency=await store.BaseCurrencyAsync(fullWorthSpaceId,ct);
         for(var i=0;i<rows.Count;i++){var row=rows[i];try{var date=ParseDate(row.GetValueOrDefault(mapping.Date));var amount=ParseAmount(row.GetValueOrDefault(mapping.Amount));var currency=RowCurrency(mapping.Currency is null?null:row.GetValueOrDefault(mapping.Currency),spaceCurrency);var party=mapping.Counterparty is null?null:Clean(row.GetValueOrDefault(mapping.Counterparty));var description=mapping.Description is null?null:Clean(row.GetValueOrDefault(mapping.Description));var account=mapping.Account is null?null:Clean(row.GetValueOrDefault(mapping.Account));var external=mapping.ExternalKey is null?null:Clean(row.GetValueOrDefault(mapping.ExternalKey));var fingerprint=Fingerprint(date,amount,currency,party,description,external);candidates.Add(new(Guid.NewGuid(),account,date,amount,currency,party,description,mapping.Category is null?null:Clean(row.GetValueOrDefault(mapping.Category)),external,fingerprint,"ready",null));}catch(Exception e){errors++;candidates.Add(new(Guid.NewGuid(),null,null,0,spaceCurrency,null,null,null,null,Fingerprint(null,0,spaceCurrency,null,$"row-{i}",null),"error",e.Message));}}
-        var connection=await RawSql.OpenAsync(db,ct);await using var tx=await db.Database.BeginTransactionAsync(ct);await using(var job=RawSql.Command(connection,"INSERT INTO \"ImportJobs\" (\"Id\",\"FullWorthSpaceId\",\"UserId\",\"FileName\",\"FileSha256\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"UpdatedAt\") VALUES (@id,@space,@uid,@name,@sha,@adapter,@status,@source,@ready,0,0,@errors,@now,@now)",("@id",jobId),("@space",fullWorthSpaceId),("@uid",uid),("@name",Path.GetFileName(file.FileName)),("@sha",sha),("@adapter",ext==".csv"?"generic_csv":"generic_xlsx"),("@status",errors==candidates.Count?"failed":"ready"),("@source",candidates.Count),("@ready",candidates.Count-errors),("@errors",errors),("@now",now)))await job.ExecuteNonQueryAsync(ct);
-        foreach(var c in candidates){await using var cmd=RawSql.Command(connection,"""
-INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate","Amount","Currency","Counterparty","Description","CategoryText","ExternalKey","RowFingerprint","DuplicateStatus","ValidationStatus","ValidationError") VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,@external,@fingerprint,'new',@status,@error)
-""",("@id",c.Id),("@job",jobId),("@account",c.SourceAccount),("@date",c.Date),("@amount",c.Amount),("@currency",c.Currency),("@party",c.Counterparty),("@description",c.Description),("@category",c.Category),("@external",c.ExternalKey),("@fingerprint",c.Fingerprint),("@status",c.Status),("@error",c.Error));await cmd.ExecuteNonQueryAsync(ct);}audit.Record(fullWorthSpaceId,uid,"import.uploaded","ImportJob",jobId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return Results.Ok(new{jobId,fileName=file.FileName,adapter=ext==".csv"?"generic_csv":"generic_xlsx",sourceRows=candidates.Count,ready=candidates.Count-errors,errors,mapping});
+        await store.CreateTableJobAsync(uid,fullWorthSpaceId,jobId,file.FileName,sha,ext==".csv"?"generic_csv":"generic_xlsx",candidates,errors,ct);
+        return Results.Ok(new{jobId,fileName=file.FileName,adapter=ext==".csv"?"generic_csv":"generic_xlsx",sourceRows=candidates.Count,ready=candidates.Count-errors,errors,mapping});
     }
 
     /// <summary>
@@ -65,8 +62,7 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
         string fileName,
         byte[] bytes,
         string sha,
-        FullWorthDbContext db,
-        AuditService audit,
+        ImportJobStore store,
         CancellationToken ct)
     {
         BankStatement statement;
@@ -95,34 +91,12 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
             .ToList();
 
         // A statement with a balance but no bookings is a legitimate file: it anchors the account.
-        var status = candidates.Count == 0 && statement.ClosingBalance is null ? "failed" : "ready";
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await using (var job = RawSql.Command(
-            connection,
-            "INSERT INTO \"ImportJobs\" (\"Id\",\"FullWorthSpaceId\",\"UserId\",\"FileName\",\"FileSha256\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"UpdatedAt\",\"StatementBalance\",\"StatementBalanceCurrency\",\"StatementBalanceDate\",\"StatementAccount\") VALUES (@id,@space,@uid,@name,@sha,@adapter,@status,@source,@ready,0,0,0,@now,@now,@balance,@balanceCurrency,@balanceDate,@account)",
-            ("@id", jobId), ("@space", fullWorthSpaceId), ("@uid", uid), ("@name", Path.GetFileName(fileName)),
-            ("@sha", sha), ("@adapter", statement.AdapterKey), ("@status", status),
-            ("@source", candidates.Count), ("@ready", candidates.Count), ("@now", now),
-            ("@balance", statement.ClosingBalance?.Amount), ("@balanceCurrency", statement.ClosingBalance?.Currency),
-            ("@balanceDate", statement.ClosingBalance?.AsOf), ("@account", statement.AccountIdentifier)))
-            await job.ExecuteNonQueryAsync(ct);
-
-        foreach (var candidate in candidates)
-        {
-            await using var cmd = RawSql.Command(
-                connection,
-                "INSERT INTO \"ImportCandidates\" (\"Id\",\"ImportJobId\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"ExternalKey\",\"RowFingerprint\",\"DuplicateStatus\",\"ValidationStatus\") VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@external,@fingerprint,'new','ready')",
-                ("@id", candidate.Id), ("@job", jobId), ("@account", candidate.SourceAccount),
-                ("@date", candidate.Date), ("@amount", candidate.Amount), ("@currency", candidate.Currency),
-                ("@party", candidate.Counterparty), ("@description", candidate.Description),
-                ("@external", candidate.ExternalKey), ("@fingerprint", candidate.Fingerprint));
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-
-        audit.Record(fullWorthSpaceId, uid, "import.uploaded", "ImportJob", jobId);
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        await store.CreateStatementJobAsync(
+            uid, fullWorthSpaceId, jobId, fileName, sha, statement.AdapterKey, candidates,
+            statement.ClosingBalance is null
+                ? null
+                : new JobStatementBalance(statement.ClosingBalance.Amount, statement.ClosingBalance.Currency, statement.ClosingBalance.AsOf),
+            statement.AccountIdentifier, ct);
         return Results.Ok(new
         {
             jobId,
@@ -142,21 +116,49 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
                 }
         });
     }
-    private static async Task<IResult> ListJobs(Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await RawSql.IsMemberAsync(db,uid,fullWorthSpaceId,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,$"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid ORDER BY \"CreatedAt\" DESC",("@space",fullWorthSpaceId),("@uid",uid));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(JobRow(r));return Results.Ok(rows);}
-    private static async Task<IResult> GetJob(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,$"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid",("@id",id),("@space",fullWorthSpaceId),("@uid",uid));await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?Results.Ok(JobRow(r)):Results.NotFound();}
-    private static async Task<IResult> GetCandidates(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"DuplicateStatus\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job ORDER BY \"BookingDate\",\"Id\"",("@job",id));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(new{id=RawSql.Guid(r,"Id"),sourceAccount=RawSql.NullableString(r,"SourceAccount"),bookingDate=RawSql.NullableDate(r,"BookingDate"),amount=RawSql.Decimal(r,"Amount"),currency=RawSql.String(r,"Currency"),counterparty=RawSql.NullableString(r,"Counterparty"),description=RawSql.NullableString(r,"Description"),categoryText=RawSql.NullableString(r,"CategoryText"),externalKey=RawSql.NullableString(r,"ExternalKey"),duplicateStatus=RawSql.String(r,"DuplicateStatus"),validationStatus=RawSql.String(r,"ValidationStatus"),validationError=RawSql.NullableString(r,"ValidationError")});return Results.Ok(rows);}
-
-    private static async Task<IResult> Commit(Guid id,Guid fullWorthSpaceId,ImportCommitWrite request,CurrentUserContext currentUser,FullWorthDbContext db,FieldCipher cipher,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> ListJobs(Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var writable=await RawSql.WritableAccountIdsAsync(db,uid,fullWorthSpaceId,ct);if(!writable.Contains(request.AccountId))return Results.StatusCode(403);var account=await db.Accounts.SingleAsync(x=>x.Id==request.AccountId,ct);var selected=request.CandidateIds?.ToHashSet();var candidates=await ReadCandidates(db,id,ct);if(selected is not null)candidates=candidates.Where(x=>selected.Contains(x.Id)).ToList();candidates=candidates.Where(x=>x.Status=="ready"&&x.Date.HasValue).ToList();var imported=0;var duplicates=0;var created=new List<FinanceTransaction>();await using var transaction=await db.Database.BeginTransactionAsync(ct);
-        foreach(var c in candidates){var normalized=MerchantNormalization.Normalize(c.Counterparty);var exists=await db.Transactions.AsNoTracking().AnyAsync(t=>t.AccountId==account.Id&&(t.BookingDate??t.ValueDate)==c.Date&&t.Amount==c.Amount&&t.Currency==c.Currency&&t.NormalizedCounterparty==normalized,ct);if(exists){duplicates++;await MarkCandidate(db,c.Id,"duplicate",ct);continue;}var external=!string.IsNullOrWhiteSpace(c.ExternalKey)?$"import:{id:N}:{c.ExternalKey}":$"import:{id:N}:{c.Fingerprint}";if(await db.Transactions.AnyAsync(t=>t.AccountId==account.Id&&t.ExternalKey==external,ct)){duplicates++;await MarkCandidate(db,c.Id,"duplicate",ct);continue;}var entity=new FinanceTransaction{AccountId=account.Id,ExternalKey=external,Status="BOOK",BookingDate=c.Date,ValueDate=c.Date,Amount=c.Amount,Currency=c.Currency,Counterparty=c.Counterparty,NormalizedCounterparty=normalized,Description=c.Description,CategorizationSource="none",RawJson=cipher.Protect("{\"source\":\"generic-import\"}")??"{}",FirstSeenAt=DateTimeOffset.UtcNow,UpdatedAt=DateTimeOffset.UtcNow};db.Transactions.Add(entity);created.Add(entity);imported++;await MarkCandidate(db,c.Id,"imported",ct);}
-        await db.SaveChangesAsync(ct);
-        // A statement states the account's closing balance; a CSV almost never does. Applying it here
-        // is what turns an imported history into an account with a value, without a bank connection
-        // and without a link to another account.
-        var fileName=await JobFileNameAsync(db,id,ct);
-        var (balanceApplied,balanceSkipped)=await ApplyStatementBalanceAsync(db,id,account,fileName,ct);
-        await ImportTransactionProvenance.LinkAsync(db,id,created.Select(entity=>entity.Id).ToArray(),ct);var conn=await RawSql.OpenAsync(db,ct);await using(var cmd=RawSql.Command(conn,"UPDATE \"ImportJobs\" SET \"Status\"='completed',\"ImportedCount\"=@imported,\"DuplicateCount\"=@duplicates,\"UpdatedAt\"=@now,\"CompletedAt\"=@now WHERE \"Id\"=@id",("@imported",imported),("@duplicates",duplicates),("@now",DateTimeOffset.UtcNow),("@id",id)))await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"import.completed","ImportJob",id);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return Results.Ok(new{imported,duplicates,total=candidates.Count,balanceApplied,balanceSkipped});
+        var uid=currentUser.RequireUserId();
+        if(!await space.IsMemberAsync(uid,fullWorthSpaceId,ct))return Results.NotFound();
+        return Results.Ok(await store.ListJobsAsync(fullWorthSpaceId,uid,ct));
+    }
+    private static async Task<IResult> GetJob(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
+    {
+        var job=await store.FindJobAsync(id,fullWorthSpaceId,currentUser.RequireUserId(),ct);
+        return job is null?Results.NotFound():Results.Ok(job);
+    }
+    private static async Task<IResult> GetCandidates(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
+    {
+        var uid=currentUser.RequireUserId();
+        if(!await store.OwnsJobAsync(id,fullWorthSpaceId,uid,ct))return Results.NotFound();
+        return Results.Ok(await store.ListCandidateViewsAsync(id,ct));
+    }
+
+    private static async Task<IResult> Commit(
+        Guid id, Guid fullWorthSpaceId, ImportCommitWrite request, CurrentUserContext currentUser,
+        SpaceAccess space, ImportJobStore store, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await store.OwnsJobAsync(id, fullWorthSpaceId, uid, ct)) return Results.NotFound();
+
+        var writable = await space.WritableAccountIdsAsync(uid, fullWorthSpaceId, ct);
+        if (!writable.Contains(request.AccountId)) return Results.StatusCode(403);
+
+        var account = await store.AccountAsync(request.AccountId, ct);
+        var selected = request.CandidateIds?.ToHashSet();
+        var candidates = await store.ReadCandidatesAsync(id, ct);
+        if (selected is not null) candidates = candidates.Where(row => selected.Contains(row.Id)).ToList();
+        candidates = candidates.Where(row => row.Status == "ready" && row.Date.HasValue).ToList();
+
+        var outcome = await store.CommitAsync(uid, fullWorthSpaceId, id, account, candidates, ct);
+        return Results.Ok(new
+        {
+            imported = outcome.Imported,
+            duplicates = outcome.Duplicates,
+            total = candidates.Count,
+            balanceApplied = outcome.BalanceApplied,
+            balanceSkipped = outcome.BalanceSkipReason
+        });
     }
 
     /// <summary>
@@ -166,107 +168,42 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
     /// Nothing is overwritten and nothing is deleted: a balance is a snapshot, so declining to add one
     /// simply leaves the existing anchor in place.
     /// </summary>
-    private static async Task<(bool Applied, string? Reason)> ApplyStatementBalanceAsync(
-        FullWorthDbContext db,
-        Guid jobId,
-        FinanceAccount account,
-        string fileName,
-        CancellationToken ct)
+    private static async Task<IResult> Cancel(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {
-        var connection = await RawSql.OpenAsync(db, ct);
-        decimal amount;
-        string currency;
-        DateOnly asOf;
-        await using (var read = RawSql.Command(
-            connection,
-            "SELECT \"StatementBalance\",\"StatementBalanceCurrency\",\"StatementBalanceDate\" FROM \"ImportJobs\" WHERE \"Id\"=@id",
-            ("@id", jobId)))
-        {
-            await using var reader = await read.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) return (false, null);
-            if (reader.IsDBNull(0) || reader.IsDBNull(1) || reader.IsDBNull(2)) return (false, null);
-            amount = reader.GetDecimal(0);
-            currency = reader.GetString(1);
-            asOf = DateOnly.FromDateTime(reader.GetDateTime(2));
-        }
-
-        var existing = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => balance.AccountId == account.Id)
-            .Select(balance => new { balance.Source, balance.Currency, balance.ReferenceDate, balance.CapturedAt })
-            .ToListAsync(ct);
-        var outcome = StatementBalanceAnchor.Decide(
-            new StatementBalance(amount, currency, asOf),
-            account.Currency,
-            existing.Select(balance => new StatementBalanceAnchor.ExistingBalance(
-                balance.Source,
-                balance.Currency,
-                // A row written before as-of dates existed has only its capture time to go on.
-                balance.ReferenceDate ?? DateOnly.FromDateTime(balance.CapturedAt.UtcDateTime))));
-        if (outcome != StatementBalanceOutcome.Apply) return (false, StatementBalanceAnchor.SkipReason(outcome));
-
-        db.BalanceSnapshots.Add(new BalanceSnapshot
-        {
-            AccountId = account.Id,
-            Amount = amount,
-            Currency = currency,
-            BalanceType = "closingBooked",
-            Source = BalanceSources.Import,
-            Note = Path.GetFileName(fileName),
-            ReferenceDate = asOf,
-            CapturedAt = DateTimeOffset.UtcNow
-        });
-
-        // An account kept current by statement import is a real account with a real value, exactly like
-        // one anchored by hand. Leaving it archived and out of the totals is the whole complaint.
-        if (account.BankConnectionId is null && !account.IncludeInNetWorth)
-        {
-            var tracked = await db.Accounts.SingleAsync(x => x.Id == account.Id, ct);
-            tracked.IsActive = true;
-            tracked.IncludeInNetWorth = true;
-            tracked.UpdatedAt = DateTimeOffset.UtcNow;
-        }
-
-        return (true, null);
+        var uid=currentUser.RequireUserId();
+        if(!await store.OwnsJobAsync(id,fullWorthSpaceId,uid,ct))return Results.NotFound();
+        await store.CancelAsync(uid,fullWorthSpaceId,id,ct);
+        return Results.NoContent();
     }
-    private static async Task<IResult> Cancel(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct){var uid=currentUser.RequireUserId();if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"UPDATE \"ImportJobs\" SET \"Status\"='cancelled',\"UpdatedAt\"=@now WHERE \"Id\"=@id AND \"Status\" NOT IN ('completed','cancelled')",("@now",DateTimeOffset.UtcNow),("@id",id));await cmd.ExecuteNonQueryAsync(ct);audit.Record(fullWorthSpaceId,uid,"import.cancelled","ImportJob",id);await db.SaveChangesAsync(ct);return Results.NoContent();}
 
     // Depot imports could be undone since provenance links exist; a wrong transaction file had to be
     // cleaned up by hand. Transactions the user has since worked on are kept, not deleted - see the
     // SQL in ImportTransactionProvenance for what counts as "worked on".
-    private static async Task<IResult> Rollback(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,FullWorthDbContext db,AuditService audit,CancellationToken ct)
+    private static async Task<IResult> Rollback(
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ImportJobStore store, CancellationToken ct)
     {
-        var uid=currentUser.RequireUserId();
-        if(!await OwnJob(db,id,fullWorthSpaceId,uid,ct))return Results.NotFound();
-        if(!await SpaceCapabilities.HasCapabilityAsync(db,uid,fullWorthSpaceId,"transactions.write",ct))return Results.StatusCode(403);
-        var connection=await RawSql.OpenAsync(db,ct);
-        string status;DateTimeOffset? rolledBackAt;
-        await using(var read=RawSql.Command(connection,"SELECT \"Status\",\"RolledBackAt\" FROM \"ImportJobs\" WHERE \"Id\"=@id",("@id",id)))
-        await using(var reader=await read.ExecuteReaderAsync(ct))
-        {
-            if(!await reader.ReadAsync(ct))return Results.NotFound();
-            status=RawSql.String(reader,"Status");rolledBackAt=RawSql.NullableTimestamp(reader,"RolledBackAt");
-        }
-        if(rolledBackAt is not null||status=="rolled_back")return Results.BadRequest(new{error="This import has already been rolled back."});
-        if(status!="completed")return Results.BadRequest(new{error="Only a completed import can be rolled back."});
-        var linked=await ImportTransactionProvenance.LinkCountAsync(db,id,ct);
-        if(linked==0)return Results.BadRequest(new{error="This import predates exact provenance tracking or created no transactions, so automatic rollback is not available."});
+        var uid = currentUser.RequireUserId();
+        if (!await store.OwnsJobAsync(id, fullWorthSpaceId, uid, ct)) return Results.NotFound();
+        if (!await space.HasCapabilityAsync(uid, fullWorthSpaceId, "transactions.write", ct))
+            return Results.StatusCode(403);
 
-        await using var transaction=await db.Database.BeginTransactionAsync(ct);
-        int removed;
-        await using(var delete=RawSql.Command(connection,ImportTransactionProvenance.DeleteImportedTransactionsSql,("@job",id),("@space",fullWorthSpaceId)))
-            removed=await delete.ExecuteNonQueryAsync(ct);
-        var now=DateTimeOffset.UtcNow;
-        await using(var candidates=RawSql.Command(connection,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"='rolled_back' WHERE \"ImportJobId\"=@job AND \"DuplicateStatus\"='imported'",("@job",id)))
-            await candidates.ExecuteNonQueryAsync(ct);
-        await using(var job=RawSql.Command(connection,"UPDATE \"ImportJobs\" SET \"Status\"='rolled_back',\"RolledBackAt\"=@now,\"UpdatedAt\"=@now WHERE \"Id\"=@id",("@id",id),("@now",now)))
-            await job.ExecuteNonQueryAsync(ct);
-        audit.Record(fullWorthSpaceId,uid,"import.rolled_back","ImportJob",id);
-        await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);
-        return Results.Ok(new{jobId=id,removed,kept=linked-removed});
+        if (await store.JobStateAsync(id, ct) is not { } state) return Results.NotFound();
+        var (status, rolledBackAt) = state;
+        if (rolledBackAt is not null || status == "rolled_back")
+            return Results.BadRequest(new { error = "This import has already been rolled back." });
+        if (status != "completed")
+            return Results.BadRequest(new { error = "Only a completed import can be rolled back." });
+
+        var linked = await store.LinkCountAsync(id, ct);
+        if (linked == 0)
+            return Results.BadRequest(new { error = "This import predates exact provenance tracking or created no transactions, so automatic rollback is not available." });
+
+        var removed = await store.RollbackAsync(uid, fullWorthSpaceId, id, ct);
+        return Results.Ok(new { jobId = id, removed, kept = linked - removed });
     }
 
     private sealed record Mapping(string? Date,string? Amount,string? Currency,string? Counterparty,string? Description,string? Account,string? Category,string? ExternalKey);
-    private sealed record Candidate(Guid Id,string? SourceAccount,DateOnly? Date,decimal Amount,string Currency,string? Counterparty,string? Description,string? Category,string? ExternalKey,string Fingerprint,string Status,string? Error);
     private static Mapping DetectMapping(IEnumerable<string> headers){var h=headers.ToArray();string? Find(params string[] names)=>h.FirstOrDefault(x=>names.Any(n=>string.Equals(Norm(x),Norm(n),StringComparison.OrdinalIgnoreCase)));return new(Find("date","datum","booking date","buchungsdatum"),Find("amount","betrag","value","umsatz"),Find("currency","währung","waehrung"),Find("counterparty","empfänger","empfaenger","payee","merchant","gegenpartei"),Find("description","verwendungszweck","text","purpose","memo"),Find("account","konto","account name","referenzkonto"),Find("category","kategorie"),Find("id","booking id","transaction id","buchungs-id"));}
     private static string Norm(string value)=>new(value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? v)=>string.IsNullOrWhiteSpace(v)?null:v.Trim();
@@ -302,14 +239,5 @@ INSERT INTO "ImportCandidates" ("Id","ImportJobId","SourceAccount","BookingDate"
         // Only offered when the job actually left a trace to undo - an import committed before
         // provenance existed has no links, so the button would promise something it cannot do.
         rollbackAvailable=RawSql.String(r,"Status")=="completed"&&RawSql.NullableTimestamp(r,"RolledBackAt") is null&&RawSql.Int(r,"LinkCount")>0};
-    private static async Task<bool> OwnJob(FullWorthDbContext db,Guid id,Guid space,Guid uid,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT 1 FROM \"ImportJobs\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid",("@id",id),("@space",space),("@uid",uid));return await cmd.ExecuteScalarAsync(ct) is not null;}
-    private static async Task<List<Candidate>> ReadCandidates(FullWorthDbContext db,Guid job,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"SELECT \"Id\",\"SourceAccount\",\"BookingDate\",\"Amount\",\"Currency\",\"Counterparty\",\"Description\",\"CategoryText\",\"ExternalKey\",\"RowFingerprint\",\"ValidationStatus\",\"ValidationError\" FROM \"ImportCandidates\" WHERE \"ImportJobId\"=@job",("@job",job));await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<Candidate>();while(await r.ReadAsync(ct))rows.Add(new(RawSql.Guid(r,"Id"),RawSql.NullableString(r,"SourceAccount"),RawSql.NullableDate(r,"BookingDate"),RawSql.Decimal(r,"Amount"),RawSql.String(r,"Currency"),RawSql.NullableString(r,"Counterparty"),RawSql.NullableString(r,"Description"),RawSql.NullableString(r,"CategoryText"),RawSql.NullableString(r,"ExternalKey"),RawSql.String(r,"RowFingerprint"),RawSql.String(r,"ValidationStatus"),RawSql.NullableString(r,"ValidationError")));return rows;}
-    private static async Task<string> JobFileNameAsync(FullWorthDbContext db,Guid id,CancellationToken ct)
-    {
-        var connection=await RawSql.OpenAsync(db,ct);
-        await using var cmd=RawSql.Command(connection,"SELECT \"FileName\" FROM \"ImportJobs\" WHERE \"Id\"=@id",("@id",id));
-        return await cmd.ExecuteScalarAsync(ct) as string ?? string.Empty;
-    }
 
-    private static async Task MarkCandidate(FullWorthDbContext db,Guid id,string status,CancellationToken ct){var c=await RawSql.OpenAsync(db,ct);await using var cmd=RawSql.Command(c,"UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"=@status WHERE \"Id\"=@id",("@status",status),("@id",id));await cmd.ExecuteNonQueryAsync(ct);}
 }
