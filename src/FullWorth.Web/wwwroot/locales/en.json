@@ -864,6 +864,7 @@
     "pick": "Choose category",
     "pickSearch": "Search categories…",
     "icon": "Icon",
+    "iconNone": "No icon",
     "parent": "Parent category",
     "topLevel": "Top level",
     "childOf": "Under {parent}",

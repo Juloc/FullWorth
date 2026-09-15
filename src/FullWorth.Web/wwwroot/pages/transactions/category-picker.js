@@ -10,6 +10,7 @@
 // 'change', so every existing form (FormData reads, plain sel.value reads) keeps working unchanged.
 
 import { attachCombobox, openCombobox } from '../../components/combobox.js';
+import { categoryIconInner } from '../../components/icons.js';
 
 export function attachCategoryPicker(ctx, selectEl) {
   return attachCombobox(ctx, selectEl, {
@@ -20,26 +21,48 @@ export function attachCategoryPicker(ctx, selectEl) {
   });
 }
 
-function pathOf(category, byId) {
+function chainOf(category, byId) {
   const chain = [];
   let current = category;
   while (current) {
-    chain.unshift(current.name);
+    chain.unshift(current);
     current = current.parentId ? byId.get(current.parentId) : null;
   }
-  return chain.join(' › ');
+  return chain;
 }
 
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
 }
 
+// Die Liste steht als Baum: sortiert nach dem vollen Pfad, angezeigt nur mit dem eigenen Namen und
+// einer Einrueckung. Der volle Pfad bleibt als `hint` erhalten - danach wird auch gesucht, sonst
+// fände "Supermarkt" die Unterkategorie von "Lebensmittel" nicht mehr, sobald man nach dem Elternteil
+// sucht. Das Symbol kommt fertig gerendert herein; die Combobox weiß nichts von Kategorien.
 async function loadItems(ctx) {
   const categories = await ctx.api('api/categories');
   const byId = new Map(categories.map(category => [category.id, category]));
   return categories
-    .map(category => ({ id: category.id, icon: category.icon, label: pathOf(category, byId) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .map(category => {
+      const chain = chainOf(category, byId);
+      const path = chain.map(node => node.name).join(' › ');
+      return {
+        id: category.id,
+        label: category.name,
+        hint: chain.length > 1 ? path : null,
+        depth: chain.length - 1,
+        iconHtml: categoryIconInner(category.icon || inheritedIcon(chain)),
+        sortKey: path,
+      };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+}
+
+// Eine Unterkategorie ohne eigenes Symbol zeigt das ihres Elternteils, statt gar keines - sonst
+// stehen in einem Baum lauter leere Stellen neben genau einem Symbol ganz oben.
+function inheritedIcon(chain) {
+  for (let index = chain.length - 1; index >= 0; index--) if (chain[index].icon) return chain[index].icon;
+  return null;
 }
 
 /** The inline "create a category" form, as the combobox's caller-supplied slot. */

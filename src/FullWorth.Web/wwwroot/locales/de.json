@@ -864,6 +864,7 @@
     "pick": "Kategorie wählen",
     "pickSearch": "Kategorien durchsuchen…",
     "icon": "Symbol",
+    "iconNone": "Kein Symbol",
     "parent": "Übergeordnete Kategorie",
     "topLevel": "Oberste Ebene",
     "childOf": "Unter {parent}",

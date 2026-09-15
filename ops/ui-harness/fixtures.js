@@ -16,10 +16,10 @@
     // what makes the row visible here at all.
     'fullworth-spaces': [{ id: SPACE, name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
     'categories': [
-      { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, iconKey: 'groceries' },
-      { id: 'c2', name: 'Restaurant', kind: 'expense', parentId: null, isArchived: false, iconKey: 'restaurants' },
-      { id: 'c3', name: 'Gehalt', kind: 'income', parentId: null, isArchived: false, iconKey: 'salary' },
-      { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, iconKey: 'groceries' }
+      { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },
+      { id: 'c2', name: 'Restaurant', kind: 'expense', parentId: null, isArchived: false, icon: 'restaurants' },
+      { id: 'c3', name: 'Gehalt', kind: 'income', parentId: null, isArchived: false, icon: 'salary' },
+      { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, icon: 'groceries' }
     ],
     'accounts': [
       // The two everyday accounts carry the two balance types a reader has to be able to tell apart:

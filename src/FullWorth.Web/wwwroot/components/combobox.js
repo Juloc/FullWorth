@@ -15,7 +15,15 @@
  * phone's own wheel, type-ahead and zero code beat a custom dialog every time.
  */
 
-/** @typedef {{ id: string, label: string, icon?: string|null, hint?: string|null }} ComboboxItem */
+/**
+ * `iconHtml` ist fertiges Markup und wird roh eingesetzt, `icon` ist Text und wird escaped.
+ * Der Unterschied ist Absicht: dieses Modul darf nicht wissen, was eine Kategorie ist, also rendert
+ * der Aufrufer sein Symbol selbst (z. B. mit `categoryIconInner`) und reicht es fertig herein.
+ * Vorher stand hier `esc(item.icon)` - und damit las man in der Auswahl "groceries" statt des
+ * Einkaufswagens, den dieselbe Kategorie in der Buchungsliste zeigte.
+ *
+ * @typedef {{ id: string, label: string, icon?: string|null, iconHtml?: string|null, hint?: string|null, depth?: number }} ComboboxItem
+ */
 
 /** Items read from the select itself — the default, and why this needs no new plumbing per list. */
 export function itemsFromSelect(selectEl) {
@@ -88,10 +96,16 @@ export async function openCombobox(ctx, {
 
   const render = query => {
     const needle = query.trim().toLowerCase();
-    shown = needle ? list.filter(item => item.label.toLowerCase().includes(needle)) : list;
+    // Auch im Hinweis suchen: bei einem Baum steht dort der volle Pfad, und wer nach dem Elternteil
+    // sucht, erwartet dessen Unterkategorien zu finden.
+    shown = needle
+      ? list.filter(item => `${item.label} ${item.hint || ''}`.toLowerCase().includes(needle))
+      : list;
     rows.innerHTML = shown.length
-      ? shown.map((item, index) => `<button type="button" class="row candidate-row" role="option" data-id="${ctx.esc(item.id)}" data-index="${index}">`
-        + `<div class="row-main"><div class="row-title">${item.icon ? ctx.esc(item.icon) + ' ' : ''}${ctx.esc(item.label)}</div>`
+      ? shown.map((item, index) => `<button type="button" class="row candidate-row" role="option" data-id="${ctx.esc(item.id)}" data-index="${index}"${item.depth ? ` style="--combobox-depth:${item.depth}"` : ''}>`
+        + `<div class="row-main"><div class="row-title">`
+        + (item.iconHtml ? `<span class="combobox-icon" aria-hidden="true">${item.iconHtml}</span>` : item.icon ? ctx.esc(item.icon) + ' ' : '')
+        + `${ctx.esc(item.label)}</div>`
         + (item.hint ? `<div class="row-sub">${ctx.esc(item.hint)}</div>` : '')
         + `</div></button>`).join('')
       : `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`;

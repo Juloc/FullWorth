@@ -1,5 +1,6 @@
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { emptyRow } from '../../components/empty.js';
+import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
 // Category tree (UI_UX_SPEC §10). Hierarchical view with expand/collapse; each node can be renamed,
 // re-iconed and MOVED to another parent (accessible explicit Move via the edit dialog, §10.2), or
 // archived (§10.4). Archived categories stay on history and are hidden unless "Show archived" is on.
@@ -27,7 +28,7 @@ export async function newCategory(context) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <h2>${ctx.esc(ctx.get('categories.new'))}</h2>
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120"></label>
-    <label>${ctx.esc(ctx.get('categories.icon'))}<input name="icon" maxlength="8" placeholder="🏷️"></label>
+    <label>${ctx.esc(ctx.get('categories.icon'))}<span data-icon-picker></span></label>
     <label>${ctx.esc(ctx.get('categories.parent'))}
       <select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${options}</select>
     </label>
@@ -37,6 +38,8 @@ export async function newCategory(context) {
     </div>
   </form>`);
 
+  const iconPicker = categoryIconPicker(null, { none: ctx.get('categories.iconNone') });
+  dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
@@ -49,7 +52,7 @@ export async function newCategory(context) {
         key,
         name,
         parentId: form.get('parent') || null,
-        icon: form.get('icon') || null,
+        icon: selectedIconKey(iconPicker),
         sortOrder: null
       }));
       dlg.close();
@@ -112,7 +115,7 @@ function renderNode(node, byParent, parent, depth, all, catIndex) {
     <div class="cat-row">
       <button class="cat-twist" ${children.length ? '' : 'disabled'} aria-label="${ctx.esc(ctx.get(isCollapsed ? 'categories.expand' : 'categories.collapse'))}">${children.length ? (isCollapsed ? '▸' : '▾') : '·'}</button>
       <span class="cat-dot" data-cat="${catIndex}" aria-hidden="true"></span>
-      <span class="cat-name">${node.icon ? ctx.esc(node.icon) + ' ' : ''}${ctx.esc(node.name)}${node.isArchived ? ` <span class="tx-marker">${ctx.esc(ctx.get('categories.archived'))}</span>` : ''}</span>
+      <span class="cat-icon" aria-hidden="true">${categoryIconInner(node.icon) || ''}</span><span class="cat-name">${ctx.esc(node.name)}${node.isArchived ? ` <span class="tx-marker">${ctx.esc(ctx.get('categories.archived'))}</span>` : ''}</span>
       <span class="cat-actions">
         <button class="icon-button" data-edit aria-label="${ctx.esc(ctx.get('categories.edit'))}" title="${ctx.esc(ctx.get('categories.edit'))}">✎</button>
         ${node.isArchived
@@ -147,16 +150,18 @@ function parentOptions(node, all, selected) {
 function openEdit(node, all) {
   const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get('categories.edit'))}</h2><button type="button" data-close>×</button></div>
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="120" value="${ctx.esc(node.name)}"></label>
-    <label>${ctx.esc(ctx.get('categories.icon'))}<input name="icon" maxlength="8" value="${ctx.esc(node.icon || '')}"></label>
+    <label>${ctx.esc(ctx.get('categories.icon'))}<span data-icon-picker></span></label>
     <label>${ctx.esc(ctx.get('categories.parent'))}<select name="parent"><option value="">${ctx.esc(ctx.get('categories.topLevel'))}</option>${parentOptions(node, all, node.parentId)}</select></label>
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
+  const iconPicker = categoryIconPicker(node.icon, { none: ctx.get('categories.iconNone') });
+  dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     try {
-      await ctx.api(`api/categories/${node.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fd.get('name'), parentId: fd.get('parent') || null, icon: fd.get('icon') || null, sortOrder: node.sortOrder ?? null }) });
+      await ctx.api(`api/categories/${node.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fd.get('name'), parentId: fd.get('parent') || null, icon: selectedIconKey(iconPicker), sortOrder: node.sortOrder ?? null }) });
       dlg.close(); ctx.toast(ctx.get('common.saved')); await renderCategories(ctx);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
