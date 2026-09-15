@@ -129,9 +129,9 @@ Check the browser console for module errors after any frontend refactor. Measure
 
 ## Backend rules
 
-The frontend has six rules and three guards. The backend now has six and three too, and they are the
-same idea applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerSeparationTests` and
-`RouteSurfaceTests` hold them.
+The frontend has six rules and three guards. The backend has six rules and four guards, the same idea
+applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerSeparationTests`,
+`LayerNamingTests` and `RouteSurfaceTests` hold them.
 
 1. **One layer per file.** `*Endpoints.cs` maps routes and translates HTTP — nothing else. `*Store.cs`
    owns the data. `*Service.cs` is a flow that needs several stores or an outside system. `Pension` is
@@ -140,8 +140,11 @@ same idea applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerS
 2. **The store is the only way to the database.** No `db.Anything` outside a store. Everything else
    follows from this one: as long as a handler queries for itself, the query gets copied to the next
    handler instead of named — and a copied query is eventually fixed in only one of the copies.
-   `LayerSeparationTests` is a ratchet: 97 files mix the two today, a 98th turns it red, and a file
-   that gets split is struck from `tests/…/Architecture/layer-violations.txt`.
+   `LayerSeparationTests` enforces it. It started as a ratchet over 97 mixed files and is now a plain
+   rule: `tests/…/Architecture/layer-violations.txt` is empty, and any file that maps routes and
+   touches the database turns it red. Six real defects surfaced on the way there — five N+1 loops and
+   a product suggestion that never matched past the 2000th product — all of them only visible once the
+   query had a name and a home.
 3. **A store method does one thing and is named after it.** `AddSnapshotAsync` adds a snapshot. Not
    "save and compute and notify". What happens next is the caller's decision.
 4. **No module knows another sideways.** What two need belongs to the module it belongs to, or to a
@@ -153,7 +156,9 @@ same idea applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerS
    relocated. Word for word the frontend's rule 6.
 6. **The name says the layer.** `Endpoints`, `Store`, `Service`. No "Module" that can mean anything,
    and no "Parity" — that described a finished migration, not a subject. `Modules/Parity` is gone;
-   its 43 files and 151 endpoints live in the eleven modules they belong to.
+   its 43 files and 151 endpoints live in the eleven modules they belong to. `LayerNamingTests` is a
+   ratchet over the 26 `*Module.cs` files that are left: a 27th turns it red. "Parity" still sits in a
+   few class names on purpose — their routes are still `/api/*-parity`, and those go with #110.
 
 Two places exist because something belonged to no module at all, and that is a legitimate answer:
 `Modules/Reconciliation` (Budgets, Analytics and Notifications all need it) and `Modules/DataErasure`
@@ -166,7 +171,7 @@ this matters: when you *move* a file a lost route is obvious, when you *split* o
 
 ## Money rules that must not be broken
 
-- **Parse imported numbers with `Modules/Parity/ImportNumber.cs`, never with a culture.** Every importer used to bring its own parser, and two of them read `"1234.56"` as `123456` because a German culture with `AllowThousands` accepted the dot as a group separator and .NET does not validate group sizes.
+- **Parse imported numbers with `Validation/ImportNumber.cs`, never with a culture.** Every importer used to bring its own parser, and two of them read `"1234.56"` as `123456` because a German culture with `AllowThousands` accepted the dot as a group separator and .NET does not validate group sizes.
 - **Never overwrite an original-currency amount with a base-currency conversion.** A conversion is a derived value.
 - **An account's own balance must reach the user without a link to a separate asset entity.** Correct display may never depend on a manual post-import step.
 - **A missing FX rate marks the result incomplete** — never 1:1, never 0.

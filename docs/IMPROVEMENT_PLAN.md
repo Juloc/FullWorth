@@ -60,7 +60,7 @@ OOXML always stores cell values invariant.
 **Impact.** A 0.99 coffee was committed as 99.00. Every affected account's balance history, budgets,
 analytics and net worth were wrong by a factor of 100, with nothing to indicate it.
 
-**Fix.** All four importers now share `Modules/Parity/ImportNumber.cs`, which decides from the
+**Fix.** All four importers now share `Validation/ImportNumber.cs`, which decides from the
 separators in the text, not from a culture, and rejects malformed input on the segments. The genuinely
 ambiguous "single separator plus exactly three digits" case is a caller policy: statements read it as
 grouping, prices as decimals. `FinanzguruWorkbookReader` had the same bug mirrored and is fixed too.
