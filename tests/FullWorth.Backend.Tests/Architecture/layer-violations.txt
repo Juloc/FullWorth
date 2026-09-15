@@ -1,4 +1,3 @@
-Analytics/AnalyticsParityModule.cs
 Analytics/CashflowParityModule.cs
 Budgets/BudgetScopeParityModule.cs
 Categories/CategoryIntelligenceModule.cs
@@ -11,7 +10,5 @@ Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs
 Portfolio/Investments/InvestmentParityModule.cs
 Purchases/ProductIdentityParityModule.cs
-Purchases/ProductIntelligenceEndpoints.cs
-Purchases/ProductLearningParityModule.cs
 Purchases/PurchaseAdvancedInsights.cs
 Transactions/AdvancedTransactionBulkParityModule.cs

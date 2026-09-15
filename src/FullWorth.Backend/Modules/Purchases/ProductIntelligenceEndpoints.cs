@@ -1,8 +1,5 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.Merchants;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
@@ -24,21 +21,15 @@ public static class ProductIntelligenceEndpoints
     }
 
     private static async Task<IResult> ProductSummary(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIntelligenceStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
-        var purchases = await db.Purchases.AsNoTracking()
-            .Where(purchase => purchase.FullWorthSpaceId == fullWorthSpaceId &&
-                (purchase.TransactionId == null || db.Transactions.Any(transaction =>
-                    transaction.Id == purchase.TransactionId.Value && visibleAccounts.Contains(transaction.AccountId))))
-            .Include(purchase => purchase.Items)
-            .OrderByDescending(purchase => purchase.PurchaseDate)
-            .Take(5000)
-            .ToListAsync(ct);
-        var aliases = await LoadAliases(db, fullWorthSpaceId, ct);
+        var visibleAccounts = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
+        var purchases = await store.RecentPurchasesAsync(fullWorthSpaceId, visibleAccounts, ct);
+        var aliases = await store.AliasesAsync(fullWorthSpaceId, ct);
 
         var rows = purchases
             .SelectMany(purchase => purchase.Items.Select(item => new
@@ -77,19 +68,15 @@ public static class ProductIntelligenceEndpoints
     }
 
     private static async Task<IResult> ProductHistory(
-        Guid fullWorthSpaceId, string name, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, string name, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIntelligenceStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var visibleAccounts = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-        var normalized = NormalizeProduct(name);
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
-        var purchases = await db.Purchases.AsNoTracking()
-            .Where(purchase => purchase.FullWorthSpaceId == fullWorthSpaceId &&
-                (purchase.TransactionId == null || db.Transactions.Any(transaction =>
-                    transaction.Id == purchase.TransactionId.Value && visibleAccounts.Contains(transaction.AccountId))))
-            .Include(purchase => purchase.Items)
-            .ToListAsync(ct);
+        var normalized = NormalizeProduct(name);
+        var visibleAccounts = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
+        var purchases = await store.AllPurchasesAsync(fullWorthSpaceId, visibleAccounts, ct);
 
         var rows = purchases.SelectMany(purchase => purchase.Items
                 .Where(item => NormalizeProduct(item.Name) == normalized)
@@ -110,73 +97,21 @@ public static class ProductIntelligenceEndpoints
 
     private static async Task<IResult> PutProductAlias(
         string normalizedName, Guid fullWorthSpaceId, ProductIntelligenceAliasWrite request,
-        CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        CurrentUserContext currentUser, SpaceAccess space, ProductIntelligenceStore store,
+        CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsOwnerAsync(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+        if (!await space.IsOwnerAsync(userId, fullWorthSpaceId, ct)) return Results.StatusCode(403);
+
         var normalized = NormalizeProduct(normalizedName);
         if (string.IsNullOrWhiteSpace(request.DisplayName) || normalized.Length < 2) return Results.BadRequest();
-        if (request.CategoryId.HasValue && !await db.Categories.AsNoTracking().AnyAsync(category =>
-                category.Id == request.CategoryId.Value && category.FullWorthSpaceId == fullWorthSpaceId, ct))
+        if (request.CategoryId.HasValue &&
+            !await store.CategoryExistsAsync(fullWorthSpaceId, request.CategoryId.Value, ct))
             return Results.BadRequest(new { error = "Category is invalid." });
 
-        // Canonical model: a product carries the display (CanonicalName) + default category, and aliases
-        // link normalized names to it. Upsert by finding an existing product through a matching alias in
-        // this space, otherwise create the product and its manual alias.
-        var displayName = request.DisplayName.Trim();
-        var now = DateTimeOffset.UtcNow;
-        var product = await db.Set<ProductAlias>()
-            .Where(alias => alias.NormalizedAlias == normalized && alias.Product.FullWorthSpaceId == fullWorthSpaceId)
-            .Select(alias => alias.Product)
-            .FirstOrDefaultAsync(ct);
-        if (product is not null)
-        {
-            product.CanonicalName = displayName;
-            product.DefaultCategoryId = request.CategoryId;
-            product.UpdatedAt = now;
-        }
-        else
-        {
-            product = new Product
-            {
-                FullWorthSpaceId = fullWorthSpaceId,
-                CanonicalName = displayName,
-                DefaultCategoryId = request.CategoryId,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            db.Add(product);
-            db.Add(new ProductAlias
-            {
-                ProductId = product.Id,
-                Alias = displayName,
-                NormalizedAlias = normalized,
-                AliasType = "manual",
-                CreatedAt = now
-            });
-        }
-        audit.Record(fullWorthSpaceId, userId, "product.alias.updated", "ProductAlias", product.Id);
-        await db.SaveChangesAsync(ct);
+        await store.UpsertAliasAsync(
+            userId, fullWorthSpaceId, normalized, request.DisplayName.Trim(), request.CategoryId, ct);
         return Results.NoContent();
-    }
-
-
-    private sealed record AliasRow(string? DisplayName, Guid? CategoryId);
-
-    private static async Task<Dictionary<string, AliasRow>> LoadAliases(
-        FullWorthDbContext db, Guid fullWorthSpaceId, CancellationToken ct)
-    {
-        var result = new Dictionary<string, AliasRow>(StringComparer.OrdinalIgnoreCase);
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var cmd = RawSql.Command(connection,
-            "SELECT a.\"NormalizedAlias\" AS \"NormalizedName\", p.\"CanonicalName\" AS \"DisplayName\", p.\"DefaultCategoryId\" AS \"CategoryId\" " +
-            "FROM \"ProductAliases\" a JOIN \"Products\" p ON p.\"Id\"=a.\"ProductId\" WHERE p.\"FullWorthSpaceId\"=@space",
-            ("@space", fullWorthSpaceId));
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            result[RawSql.String(reader, "NormalizedName")] = new(
-                RawSql.NullableString(reader, "DisplayName"), RawSql.NullableGuid(reader, "CategoryId"));
-        return result;
     }
 
     private static string NormalizeProduct(string? value) => MerchantNormalization.Normalize(value)?.ToLowerInvariant() ?? string.Empty;

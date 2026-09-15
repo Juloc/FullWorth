@@ -243,6 +243,11 @@ public static class BackendApplication
         builder.Services.AddScoped<CloudPriceStore>();
         builder.Services.AddScoped<MerchantSpendStore>();
         builder.Services.AddScoped<ContractBenchmarkStore>();
+        builder.Services.AddScoped<ProductIntelligenceStore>();
+        builder.Services.AddScoped<AnalysisContributionStore>();
+        builder.Services.AddScoped<AnalysisContributionService>();
+        builder.Services.AddScoped<SavedAnalysisStore>();
+        builder.Services.AddScoped<ProductLearningStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility
@@ -512,7 +517,7 @@ public static class BackendApplication
         endpoints.MapBudgetScopeParityEndpoints();
         endpoints.MapContractParityEndpoints();
         endpoints.MapRefundCandidateEndpoints();
-        endpoints.MapAnalyticsParityEndpoints();
+        endpoints.MapAnalysisQueryEndpoints();
         endpoints.MapImportParityEndpoints();
         endpoints.MapImportMappingParityEndpoints();
         endpoints.MapInvestmentParityEndpoints();
@@ -525,7 +530,7 @@ public static class BackendApplication
         endpoints.MapInvestmentPdfOcrImportParityEndpoints();
         endpoints.MapMarketDataEndpoints();
         endpoints.MapProductIdentityParityEndpoints();
-        endpoints.MapProductLearningParityEndpoints();
+        endpoints.MapProductLearningEndpoints();
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeParityEndpoints();
         endpoints.MapCategoryOrderEndpoints();
