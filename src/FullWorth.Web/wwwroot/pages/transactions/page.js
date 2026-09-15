@@ -4,6 +4,7 @@
 // and links to a receipt when a purchase is attached.
 
 import { attachCategoryPicker, openCategoryPicker } from './category-picker.js';
+import { keepListPosition } from '../../components/list-position.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
@@ -339,11 +340,17 @@ async function openBookingDialog() {
       await ctx.api('api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       dlg.close();
       ctx.toast(ctx.get('transactions.created'));
-      await renderTransactions(ctx);
+      await refreshList();
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   attachCategoryPicker(ctx, dlg.querySelector('select[name="category"]'));
   dlg.showModal();
+}
+
+// Nach einer Aenderung neu zeichnen, ohne den Benutzer an den Listenanfang zu werfen.
+// Die bearbeitete Zeile ist der Anker: existiert sie noch, bleibt sie sichtbar.
+async function refreshList(anchorId) {
+  await keepListPosition(() => renderTransactions(ctx), anchorId ? { anchor: `[data-tx-id="${anchorId}"]` } : {});
 }
 
 export async function renderTransactions(context) {
@@ -543,7 +550,7 @@ function quickEditCategory(x) {
         body: JSON.stringify({ categoryId: id || null, isIgnored: !!t.isIgnored, isTransfer: !!t.isTransfer, transferPurpose: t.transferPurpose || null, userNote: t.userNote || null }),
       });
       ctx.toast(ctx.get('common.saved'));
-      await renderTransactions(ctx);
+      await refreshList(x.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
 }
@@ -632,7 +639,7 @@ async function detectTransfers() {
       } catch { /* one rejected pair (e.g. already linked meanwhile) must not block the rest */ }
     }
     ctx.toast(ctx.get('transactions.detectResult').replace('{n}', linked));
-    await renderTransactions(ctx);
+    await refreshList();
   });
   dlg.showModal();
 }
@@ -661,7 +668,7 @@ async function openTransferPicker(t) {
       await ctx.api(`api/transactions/${t.id}/transfer-link`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ otherTransactionId: row.dataset.id }) });
       dlg.close();
       ctx.toast(ctx.get('common.saved'));
-      await renderTransactions(ctx);
+      await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   }));
   dlg.showModal();
@@ -764,18 +771,18 @@ async function openDetail(listItem) {
       await ctx.api(`api/transactions/${t.id}`, { method: 'DELETE' });
       dlg.close();
       ctx.toast(ctx.get('transactions.deleted'));
-      await renderTransactions(ctx);
+      await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
   dlg.querySelector('[data-refund-link]')?.addEventListener('click', () => { dlg.close(); openRefundPicker(t); });
   dlg.querySelector('[data-refund-clear]')?.addEventListener('click', async () => {
-    try { await setRefund(t.id, null); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderTransactions(ctx); }
+    try { await setRefund(t.id, null); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
   dlg.querySelector('[data-transfer-link]')?.addEventListener('click', () => { dlg.close(); openTransferPicker(t); });
   dlg.querySelector('[data-transfer-unpair]')?.addEventListener('click', async () => {
     if (!await ctx.confirm(ctx.get('transactions.unpairConfirm'), { destructive: true, confirmLabel: ctx.get('transactions.unpair') })) return;
-    try { await ctx.api(`api/transactions/${t.id}/transfer-link`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderTransactions(ctx); }
+    try { await ctx.api(`api/transactions/${t.id}/transfer-link`, { method: 'DELETE' }); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   });
   const sel = dlg.querySelector('select[name="category"]');
@@ -803,7 +810,7 @@ async function openDetail(listItem) {
       await ctx.api(`api/transactions/${t.id}/classification`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       dlg.close();
       ctx.toast(ctx.get('common.saved'));
-      await renderTransactions(ctx);
+      await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   dlg.showModal();
@@ -953,7 +960,7 @@ async function openSplitDialog(t) {
       await ctx.api(`api/transactions/${t.id}/allocations`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       dlg.close();
       ctx.toast(ctx.get('common.saved'));
-      await renderTransactions(ctx);
+      await refreshList(t.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
   dlg.showModal();
@@ -982,7 +989,7 @@ async function openRefundPicker(t) {
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
 
   const link = async (originalId, categoryId) => {
-    try { await setRefund(t.id, originalId, categoryId); dlg.close(); ctx.toast(ctx.get('common.saved')); await renderTransactions(ctx); }
+    try { await setRefund(t.id, originalId, categoryId); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
   };
 
