@@ -3,9 +3,9 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
-public static class InvestmentNetWorthV2Endpoints
+public static class InvestmentNetWorthEndpoints
 {
-    public static IEndpointRouteBuilder MapInvestmentNetWorthV2Endpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentNetWorthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/investments/net-worth-contribution", GetContribution)
             .WithTags("Investments");

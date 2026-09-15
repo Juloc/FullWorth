@@ -2,19 +2,16 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
-public sealed record InvestmentPriceManageWrite(
-    Guid SecurityId, DateOnly PriceDate, decimal Price, string Currency, string Source = "manual");
-
 /// <summary>
-/// Was die Depotansicht schreibt und <c>/api/investments</c> nicht in dieser Form kann: einen Kurs
-/// erfassen und einen Handel loeschen oder mit allen Feldern aendern.
+/// Einen gebuchten Handel aendern oder loeschen - die beiden Wege, die das Anlegen unter
+/// <c>POST /api/investments/portfolios/{id}/trades</c> offen laesst.
 ///
-/// Diese Flaeche hatte einmal zwoelf Routen - eigene Anlege- und Aenderungswege fuer Depots,
-/// Wertpapiere und Merklisten, jede ein zweiter Weg zu dem, was <c>/api/investments</c> schon konnte.
-/// Neun davon hatte nie jemand aufgerufen; sie sind am 2026-09-15 weggefallen. Was bleibt, ist das,
-/// was die Oberflaeche tatsaechlich benutzt.
+/// Lag unter <c>/api/investment-management</c>, einer zweiten Adresse fuer dieselbe Sache: zwoelf
+/// Routen, die groesstenteils nachbauten, was <c>/api/investments</c> schon konnte. Neun hatte nie
+/// jemand aufgerufen und sind am 2026-09-15 weggefallen, der Kurs-Schreibweg lag doppelt vor. Was
+/// bleibt, steht jetzt dort, wo alles andere zu Depots steht.
 /// </summary>
-public static class InvestmentManagementParityEndpoints
+public static class InvestmentTradeEndpoints
 {
     private static readonly HashSet<string> TradeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -22,36 +19,16 @@ public static class InvestmentManagementParityEndpoints
         "security_transfer_in", "security_transfer_out", "split", "other"
     };
 
-    public static IEndpointRouteBuilder MapInvestmentManagementParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentTradeEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/investment-management").WithTags("Investments");
-        group.MapPut("/prices", PutPrice);
+        var group = app.MapGroup("/api/investments").WithTags("Investments");
         group.MapPut("/portfolios/{portfolioId:guid}/trades/{tradeId:guid}", UpdateTrade);
         group.MapDelete("/portfolios/{portfolioId:guid}/trades/{tradeId:guid}", DeleteTrade);
         return app;
     }
 
-    private static async Task<IResult> PutPrice(
-        Guid fullWorthSpaceId, InvestmentPriceManageWrite request, CurrentUserContext currentUser,
-        InvestmentStore store, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (request.Price <= 0 || !ValidCurrency(request.Currency)
-            || !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId, ct))
-            return Results.BadRequest(new { error = "Security, positive price and valid currency are required." });
-
-        var source = string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim().ToLowerInvariant();
-        if (source.Length > 64) return Results.BadRequest(new { error = "Price source is too long." });
-
-        await store.SavePriceAsync(userId, fullWorthSpaceId, request.SecurityId, request.PriceDate, request.Price,
-            request.Currency.Trim().ToUpperInvariant(), source, ct);
-        return Results.NoContent();
-    }
-
     private static async Task<IResult> UpdateTrade(
-        Guid portfolioId, Guid tradeId, Guid fullWorthSpaceId, InvestmentTradeV2Write request,
+        Guid portfolioId, Guid tradeId, Guid fullWorthSpaceId, InvestmentTradeWrite request,
         CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
@@ -95,7 +72,7 @@ public static class InvestmentManagementParityEndpoints
     }
 
     private static async Task<string?> ValidateTrade(
-        InvestmentStore store, Guid fullWorthSpaceId, InvestmentTradeV2Write request, string type, CancellationToken ct)
+        InvestmentStore store, Guid fullWorthSpaceId, InvestmentTradeWrite request, string type, CancellationToken ct)
     {
         if (!TradeTypes.Contains(type)) return "Unsupported investment transaction type.";
         if (!ValidCurrency(request.Currency) || request.Amount < 0 || request.Fees < 0 || request.Taxes < 0 || request.WithholdingTax < 0)

@@ -2,6 +2,9 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Contracts;
 
+public sealed record ContractSplitComponent(string Name, decimal Amount, Guid? CategoryId, string? Kind);
+public sealed record ContractSplitWrite(string BundleName, IReadOnlyList<ContractSplitComponent> Components, string HistoryMode = "from_now");
+
 public static class ContractEndpoints
 {
     public static IEndpointRouteBuilder MapContractEndpoints(this IEndpointRouteBuilder app)
@@ -73,6 +76,11 @@ public static class ContractEndpoints
             };
         });
 
+        // Die Gegenrichtung zu merge-execute, und deshalb hier und nicht woanders: ein Vertrag, den
+        // ein Zusammenfuehren geschluckt hat, wird wieder herausgeloest.
+        group.MapDelete("/merge/{targetContractId:guid}/{sourceContractId:guid}", UnmergeContracts);
+        group.MapPost("/{contractId:guid}/split", SplitContract);
+
         group.MapPost("/", async (Guid fullWorthSpaceId, ContractWrite request, CurrentUserContext currentUser, ContractStore store, CancellationToken ct) =>
             ToResult(await store.CreateForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
 
@@ -83,6 +91,54 @@ public static class ContractEndpoints
             ToResult(await store.ArchiveForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
 
         return app;
+    }
+
+    private static async Task<IResult> UnmergeContracts(
+        Guid targetContractId,
+        Guid sourceContractId,
+        Guid fullWorthSpaceId,
+        CurrentUserContext currentUser,
+        ContractStore store,
+        CancellationToken ct)
+        => ToResult(await store.UnmergeForUserAsync(
+            currentUser.RequireUserId(), fullWorthSpaceId, targetContractId, sourceContractId, ct));
+
+    private static async Task<IResult> SplitContract(
+        Guid contractId, Guid fullWorthSpaceId, ContractSplitWrite request, CurrentUserContext currentUser,
+        ContractStore contracts, ContractLinkStore links, CancellationToken ct)
+    {
+        var uid = currentUser.RequireUserId();
+        if (!await links.CanWriteContract(uid, fullWorthSpaceId, contractId, ct)) return Results.StatusCode(403);
+
+        var parent = await contracts.FindInSpaceAsync(fullWorthSpaceId, contractId, ct);
+        if (parent is null) return Results.NotFound();
+
+        var components = (request.Components ?? [])
+            .Where(part => !string.IsNullOrWhiteSpace(part.Name) && part.Amount > 0)
+            .ToArray();
+        if (components.Length < 2 || Math.Abs(components.Sum(part => part.Amount) - parent.Amount) > 0.01m)
+            return Results.BadRequest(new { error = "Split components must contain at least two rows and equal the expected contract amount." });
+
+        foreach (var part in components)
+            if (part.CategoryId.HasValue
+                && !await contracts.CategoryBelongsToSpaceAsync(fullWorthSpaceId, part.CategoryId.Value, ct))
+                return Results.BadRequest(new { error = "Split contains an invalid category." });
+
+        // Die Historie mitzunehmen heisst, fremde Buchungen anzufassen - dafuer reicht das
+        // Vertragsrecht allein nicht, es braucht auch das Recht an jedem beteiligten Konto.
+        var copyHistory = string.Equals(request.HistoryMode, "same_split", StringComparison.OrdinalIgnoreCase);
+        if (copyHistory && !await links.AllContractLinksWritableAsync(uid, fullWorthSpaceId, contractId, ct))
+            return Results.StatusCode(403);
+
+        var (bundleId, children) = await contracts.SplitAsync(
+            uid, fullWorthSpaceId, parent, request.BundleName, components, copyHistory, ct);
+
+        return Results.Ok(new
+        {
+            bundleId,
+            archivedContractId = contractId,
+            contracts = children.Select(child => new { child.Id, child.Name, child.Amount })
+        });
     }
 
     private static IResult ToResult(ContractMutationOutcome outcome) => outcome.Result switch

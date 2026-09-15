@@ -2,17 +2,17 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
-public sealed record PortfolioV2Write(
+public sealed record PortfolioSettingsWrite(
     string Name, string Currency, Guid? AccountId, Guid? BenchmarkSecurityId,
     string? ProviderName, bool IsManual = true, bool IncludeInNetWorth = true, bool IsArchived = false);
-public sealed record InvestmentTradeV2Write(
+public sealed record InvestmentTradeWrite(
     Guid? SecurityId, string TradeType, DateOnly TradeDate, DateOnly? SettlementDate,
     decimal? Quantity, decimal? Price, decimal? GrossAmount, decimal Amount, string Currency,
     decimal Fees = 0, decimal Taxes = 0, decimal WithholdingTax = 0,
     string Source = "manual", string? ExternalKey = null, string? Notes = null);
 public sealed record BenchmarkWrite(string Name, Guid? SecurityId, string? ProviderSeriesKey);
 
-public static class InvestmentCompletionParityEndpoints
+public static class InvestmentPortfolioEndpoints
 {
     private static readonly HashSet<string> TradeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -20,12 +20,12 @@ public static class InvestmentCompletionParityEndpoints
         "security_transfer_in", "security_transfer_out", "split", "other"
     };
 
-    public static IEndpointRouteBuilder MapInvestmentCompletionParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentPortfolioEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/investments").WithTags("Investments");
-        group.MapPut("/portfolios/{portfolioId:guid}/settings", PutPortfolioV2);
-        group.MapPost("/portfolios/{portfolioId:guid}/trades", CreateTradeV2);
-        group.MapGet("/portfolios/{portfolioId:guid}/overview", OverviewV2);
+        group.MapPut("/portfolios/{portfolioId:guid}/settings", PutPortfolioSettings);
+        group.MapPost("/portfolios/{portfolioId:guid}/trades", CreateTrade);
+        group.MapGet("/portfolios/{portfolioId:guid}/overview", PortfolioOverview);
         group.MapGet("/benchmarks", ListBenchmarks);
         group.MapPost("/benchmarks", CreateBenchmark);
         group.MapPut("/benchmarks/{benchmarkId:guid}", UpdateBenchmark);
@@ -33,8 +33,8 @@ public static class InvestmentCompletionParityEndpoints
         return app;
     }
 
-    private static async Task<IResult> PutPortfolioV2(
-        Guid portfolioId, Guid fullWorthSpaceId, PortfolioV2Write request, CurrentUserContext currentUser,
+    private static async Task<IResult> PutPortfolioSettings(
+        Guid portfolioId, Guid fullWorthSpaceId, PortfolioSettingsWrite request, CurrentUserContext currentUser,
         SpaceAccess space, InvestmentStore investments, PortfolioValuationStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
@@ -59,8 +59,8 @@ public static class InvestmentCompletionParityEndpoints
             : Results.NotFound();
     }
 
-    private static async Task<IResult> CreateTradeV2(
-        Guid portfolioId, Guid fullWorthSpaceId, InvestmentTradeV2Write request, CurrentUserContext currentUser,
+    private static async Task<IResult> CreateTrade(
+        Guid portfolioId, Guid fullWorthSpaceId, InvestmentTradeWrite request, CurrentUserContext currentUser,
         InvestmentStore investments, PortfolioValuationStore store, PortfolioValuationService valuation,
         CancellationToken ct)
     {
@@ -113,7 +113,7 @@ public static class InvestmentCompletionParityEndpoints
         }
     }
 
-    private static async Task<IResult> OverviewV2(
+    private static async Task<IResult> PortfolioOverview(
         Guid portfolioId, Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser,
         SpaceAccess space, PortfolioValuationStore store, PortfolioValuationService valuation, CancellationToken ct)
     {

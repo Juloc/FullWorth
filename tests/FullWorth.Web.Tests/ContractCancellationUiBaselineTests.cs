@@ -14,7 +14,7 @@ public sealed class ContractCancellationUiBaselineTests : IClassFixture<FullWort
     {
         var js = await GetAsync("/pages/contracts/page.js");
 
-        Assert.Contains("api/contract-parity/cancellations", js);
+        Assert.Contains("api/contracts/cancellations", js);
         Assert.Contains("data-cancellation", js);
         Assert.Contains("openCancellationDialog", js);
         Assert.Contains("cancelEffectiveDate", js);

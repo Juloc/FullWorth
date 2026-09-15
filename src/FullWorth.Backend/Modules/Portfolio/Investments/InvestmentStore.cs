@@ -371,7 +371,7 @@ WHERE i."WatchlistId"=@watchlist ORDER BY i."SortOrder",s."Name"
     /// Quellensteuer und Herkunft.
     /// </summary>
     public async Task<bool> UpdateTradeAsync(
-        Guid userId, Guid space, Guid portfolioId, Guid tradeId, InvestmentTradeV2Write request, string type,
+        Guid userId, Guid space, Guid portfolioId, Guid tradeId, InvestmentTradeWrite request, string type,
         string source, string? externalKey, string? notes, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);

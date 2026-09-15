@@ -5,19 +5,18 @@ namespace FullWorth.Backend.Modules.Portfolio;
 public sealed record PortfolioWrite(string Name,string Currency,Guid? AccountId,Guid? BenchmarkSecurityId,bool IsArchived=false);
 public sealed record SecurityWrite(string Name,string? Isin,string? Wkn,string? Ticker,string AssetType,string Currency,string? Exchange);
 public sealed record TradeWrite(Guid? SecurityId,string TradeType,DateOnly TradeDate,decimal? Quantity,decimal? Price,decimal Amount,string Currency,decimal Fees=0,decimal Taxes=0,string? ExternalKey=null,string? Notes=null);
-public sealed record PriceWrite(Guid SecurityId,DateOnly PriceDate,decimal Price,string Currency,string Source="manual");
 public sealed record WatchlistWrite(string Name);
 public sealed record WatchlistItemWrite(Guid SecurityId,decimal? TargetPrice,string? Notes);
 
-public static class InvestmentParityEndpoints
+public static class InvestmentEndpoints
 {
-    public static IEndpointRouteBuilder MapInvestmentParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentEndpoints(this IEndpointRouteBuilder app)
     {
         var p=app.MapGroup("/api/investments").WithTags("Investments");
         p.MapGet("/portfolios",ListPortfolios);p.MapPost("/portfolios",CreatePortfolio);p.MapPut("/portfolios/{id:guid}",UpdatePortfolio);p.MapDelete("/portfolios/{id:guid}",ArchivePortfolio);
         p.MapGet("/securities",ListSecurities);p.MapPost("/securities",CreateSecurity);p.MapPut("/securities/{id:guid}",UpdateSecurity);
         p.MapGet("/portfolios/{portfolioId:guid}/trades",ListTrades);
-        p.MapPut("/prices",PutPrice);p.MapGet("/portfolios/{portfolioId:guid}/dividends",Dividends);
+        p.MapGet("/portfolios/{portfolioId:guid}/dividends",Dividends);
         p.MapGet("/watchlists",ListWatchlists);p.MapPost("/watchlists",CreateWatchlist);p.MapPut("/watchlists/{id:guid}",UpdateWatchlist);p.MapDelete("/watchlists/{id:guid}",DeleteWatchlist);p.MapPut("/watchlists/{id:guid}/items",PutWatchlistItems);p.MapGet("/watchlists/{id:guid}/items",GetWatchlistItems);
         return app;
     }
@@ -167,22 +166,6 @@ public static class InvestmentParityEndpoints
                 notes = row.Notes
             });
         return Results.Ok(rows);
-    }
-
-    private static async Task<IResult> PutPrice(
-        Guid fullWorthSpaceId, PriceWrite request, CurrentUserContext currentUser, InvestmentStore store,
-        CancellationToken ct)
-    {
-        var uid = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(uid, fullWorthSpaceId, ct)) return Results.StatusCode(403);
-        if (request.Price <= 0 || request.Currency.Trim().Length != 3
-            || !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId, ct))
-            return Results.BadRequest();
-
-        await store.SavePriceAsync(uid, fullWorthSpaceId, request.SecurityId, request.PriceDate, request.Price,
-            request.Currency.Trim().ToUpperInvariant(),
-            string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim(), ct);
-        return Results.NoContent();
     }
 
     private static async Task<IResult> Dividends(

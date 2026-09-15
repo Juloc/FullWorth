@@ -124,7 +124,7 @@ async function renderTransactions(state,container){
     $$('[data-ip-delete]',container).forEach(button=>button.onclick=async()=>{
       if(!await confirmMessage({message:text('Investment-Transaktion wirklich löschen?','Delete this investment transaction?'),title:text('Transaktion löschen','Delete transaction'),confirmLabel:text('Löschen','Delete'),cancelLabel:text('Abbrechen','Cancel'),destructive:true}))return;
       button.disabled=true;
-      try{await api(`api/investment-management/portfolios/${state.portfolio.id}/trades/${button.dataset.ipDelete}`,{method:'DELETE'});toast(text('Transaktion gelöscht.','Transaction deleted.'));await renderShell(state)}catch(error){toast(error.message);button.disabled=false}
+      try{await api(`api/investments/portfolios/${state.portfolio.id}/trades/${button.dataset.ipDelete}`,{method:'DELETE'});toast(text('Transaktion gelöscht.','Transaction deleted.'));await renderShell(state)}catch(error){toast(error.message);button.disabled=false}
     });
   }
 }
@@ -231,7 +231,7 @@ async function openTradeDialog(state){
 async function openPriceDialog(state){
   const securities=await api('api/investments/securities');
   const dialog=createDialog(`<form class="dialog-card fp-dialog-card ip-form"><div class="panel-head fp-dialog-head"><h2>${esc(text('Kurs erfassen','Add price'))}</h2></div><label>${esc(text('Wertpapier','Security'))}<select name="security">${securities.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><label>${esc(text('Datum','Date'))}<input name="date" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>${esc(text('Kurs','Price'))}<input name="price" type="number" step="0.0000000001" required></label><label>${esc(text('Währung','Currency'))}<input name="currency" maxlength="3" value="${esc(state.portfolio.currency)}"></label><div class="ip-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Speichern','Save'))}</button></div></form>`,{className:'fp-dialog ip-small-dialog',closeLabel:text('Schließen','Close')});
-  $('form',dialog).onsubmit=async event=>{event.preventDefault();const submit=$('button[type="submit"]',event.currentTarget);submit.disabled=true;const data=new FormData(event.currentTarget);try{await api('api/investment-management/prices',json('PUT',{securityId:data.get('security'),priceDate:data.get('date'),price:Number(data.get('price')),currency:data.get('currency'),source:'manual'}));toast(text('Kurs gespeichert.','Price saved.'));dialog.close();await renderShell(state)}catch(error){toast(error.message);submit.disabled=false}};dialog.showModal();
+  $('form',dialog).onsubmit=async event=>{event.preventDefault();const submit=$('button[type="submit"]',event.currentTarget);submit.disabled=true;const data=new FormData(event.currentTarget);try{await api('api/investments/prices',json('PUT',{securityId:data.get('security'),priceDate:data.get('date'),price:Number(data.get('price')),currency:data.get('currency'),source:'manual'}));toast(text('Kurs gespeichert.','Price saved.'));dialog.close();await renderShell(state)}catch(error){toast(error.message);submit.disabled=false}};dialog.showModal();
 }
 
 async function openSettingsDialog(state,current){

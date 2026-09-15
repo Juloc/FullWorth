@@ -272,7 +272,7 @@ public static class ImportMappingEndpoints
     private static string Norm(string value)=>new(value.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
     /// <summary>
-    /// Same rule as ImportParityModule.RowCurrency: a mapped currency column that IS present but
+    /// Same rule as ImportJobEndpoints.RowCurrency: a mapped currency column that IS present but
     /// unreadable makes the row an error the user can see, instead of being relabelled to a currency the
     /// file never stated. A file with no currency column falls back to the space base currency.
     /// </summary>

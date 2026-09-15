@@ -19,7 +19,7 @@ public sealed record ImportCommitWrite(Guid AccountId,IReadOnlyList<Guid>? Candi
 public static class ImportJobEndpoints
 {
     private const long MaxUploadBytes=25L*1024*1024;
-    public static IEndpointRouteBuilder MapImportParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapImportJobEndpoints(this IEndpointRouteBuilder app)
     {
         var group=app.MapGroup("/api/import-jobs").WithTags("Import");
         group.MapPost("/upload",Upload);

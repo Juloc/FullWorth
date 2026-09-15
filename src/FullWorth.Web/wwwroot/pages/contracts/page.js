@@ -266,7 +266,7 @@ export async function renderContracts(context) {
   try { rows = (await ctx.api('api/contracts')) || []; }
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); rows = []; }
   try {
-    const cancellationRows = (await ctx.api('api/contract-parity/cancellations')) || [];
+    const cancellationRows = (await ctx.api('api/contracts/cancellations')) || [];
     const cancellationById = new Map(cancellationRows.map(item => [item.contractId, item]));
     rows.forEach(contract => { contract.cancellation = cancellationById.get(contract.id) || null; });
   } catch {
@@ -1102,7 +1102,7 @@ async function openDetail(id) {
     [contract, activity, cancellation, cloudBenchmark, mergedSources] = await Promise.all([
       ctx.api(`api/contracts/${id}`),
       ctx.api(`api/contracts/${id}/activity`),
-      ctx.api(`api/contract-parity/${id}/cancellation`).catch(() => null),
+      ctx.api(`api/contracts/${id}/cancellation`).catch(() => null),
       ctx.api(`api/intelligence/benchmarks/contracts/${id}`).catch(() => null),
       ctx.api(`api/contracts/${id}/merged-sources`).catch(() => [])
     ]);
@@ -1250,7 +1250,7 @@ async function openDetail(id) {
   dlg.querySelectorAll('[data-unmerge]').forEach(button => button.addEventListener('click', async () => {
     button.disabled = true;
     try {
-      await ctx.api(`api/contract-parity/merge/${id}/${button.dataset.unmerge}`, { method: 'DELETE' });
+      await ctx.api(`api/contracts/merge/${id}/${button.dataset.unmerge}`, { method: 'DELETE' });
       dlg.close();
       ctx.toast(ctx.get('contracts.unmergedToast'));
       await renderContracts(ctx);
@@ -1434,7 +1434,7 @@ async function openMergeDialog(contract, preselectedIds = []) {
 async function openCancellationDialog(contract, existing) {
   let details = existing;
   if (!details) {
-    try { details = await ctx.api(`api/contract-parity/${contract.id}/cancellation`); }
+    try { details = await ctx.api(`api/contracts/${contract.id}/cancellation`); }
     catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   }
   details ||= {};
@@ -1515,7 +1515,7 @@ async function openCancellationDialog(contract, existing) {
         providerContact: values.providerContact
       };
       try {
-        await ctx.api(`api/contract-parity/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
+        await ctx.api(`api/contracts/${contract.id}/cancellation`, jsonBody(body, 'PUT'));
         // The end date lives on the contract, not on its cancellation record, so it is a second call -
         // and only when it actually changed, because the contract PUT rewrites the whole contract.
         if (effectiveEndDate !== (contract.endDate || null)) {

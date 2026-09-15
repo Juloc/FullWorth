@@ -525,21 +525,23 @@ public static class BackendApplication
         endpoints.MapIntelligenceSuggestionEndpoints();
         endpoints.MapFinancialSignalEndpoints();
         
-        // Main feature-parity surfaces remain available. Product/review endpoints are compatibility facades
-        // over the canonical purchase stack rather than parallel storage models.
+        // Product/review endpoints are compatibility facades over the canonical purchase stack rather
+        // than parallel storage models.
         endpoints.MapCashflowEndpoints();
         endpoints.MapBudgetScopeEndpoints();
-        endpoints.MapContractParityEndpoints();
+        endpoints.MapContractLinkEndpoints();
+        endpoints.MapContractCancellationEndpoints();
         endpoints.MapRefundCandidateEndpoints();
         endpoints.MapAnalysisQueryEndpoints();
-        endpoints.MapImportParityEndpoints();
+        endpoints.MapImportJobEndpoints();
         endpoints.MapImportMappingEndpoints();
-        endpoints.MapInvestmentParityEndpoints();
-        endpoints.MapInvestmentCompletionParityEndpoints();
-        endpoints.MapInvestmentManagementParityEndpoints();
-        endpoints.MapInvestmentPerformanceV2Endpoints();
-        endpoints.MapInvestmentNetWorthV2Endpoints();
-        endpoints.MapInvestmentImportParityEndpoints();
+        endpoints.MapInvestmentEndpoints();
+        endpoints.MapInvestmentPortfolioEndpoints();
+        endpoints.MapInvestmentTradeEndpoints();
+        endpoints.MapInvestmentPriceEndpoints();
+        endpoints.MapInvestmentPerformanceEndpoints();
+        endpoints.MapInvestmentNetWorthEndpoints();
+        endpoints.MapInvestmentImportEndpoints();
         endpoints.MapInvestmentPdfImportEndpoints();
         endpoints.MapInvestmentPdfOcrImportEndpoints();
         endpoints.MapMarketDataEndpoints();
@@ -548,7 +550,7 @@ public static class BackendApplication
         endpoints.MapCategoryMergeEndpoints();
         endpoints.MapCategoryOrderEndpoints();
         endpoints.MapTransactionBulkAdvancedEndpoints();
-        endpoints.MapXlsxExportV2Endpoints();
+        endpoints.MapXlsxExportEndpoints();
         endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints()
             .MapProductIntelligenceEndpoints()

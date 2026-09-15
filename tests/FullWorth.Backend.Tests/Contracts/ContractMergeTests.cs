@@ -516,7 +516,7 @@ public sealed class ContractMergeTests
 
         using var unmerge = await client.SendAsync(Request(
             HttpMethod.Delete,
-            $"/api/contract-parity/merge/{s.Target}/{s.Source}?fullWorthSpaceId={s.Space}",
+            $"/api/contracts/merge/{s.Target}/{s.Source}?fullWorthSpaceId={s.Space}",
             s.Owner));
         Assert.Equal(HttpStatusCode.NoContent, unmerge.StatusCode);
 

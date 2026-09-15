@@ -11,9 +11,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Export;
 
-public static class XlsxExportV2Endpoints
+public static class XlsxExportEndpoints
 {
-    public static IEndpointRouteBuilder MapXlsxExportV2Endpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapXlsxExportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/export/xlsx", Export).WithTags("Export");
         return app;

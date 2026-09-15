@@ -260,14 +260,26 @@
     // sent timestamp that the dialog must show as history rather than as an editable field. k2 has
     // nothing filled in, which is what the endpoint returns for a contract nobody has touched - the
     // shape the dialog has to survive is 'every field null, status "none"'.
-    'contract-parity/k1/cancellation': {
+    // Die Liste, die die Vertragsseite beim Aufbau zieht. Ohne eigenen Schluessel beantwortet sie das
+    // Array 'contracts' nach id - und 'cancellations' ist keine id, also kam still undefined zurueck
+    // und die Kuendigungsspalte blieb im Harness leer, ohne dass etwas kaputt war.
+    'contracts/cancellations': [
+      { contractId: 'k1', minimumTermEnd: '2026-12-31', cancellationDeadline: '2026-09-30',
+        cancellationStatus: 'planned', autoRenews: true, cancellationSentAt: null, cancellationConfirmedAt: null },
+      { contractId: 'k2', minimumTermEnd: null, cancellationDeadline: null,
+        cancellationStatus: 'none', autoRenews: false, cancellationSentAt: null, cancellationConfirmedAt: null }
+    ],
+    'contracts/cancellation-deadlines': [
+      { id: 'k1', name: 'Stadtwerke Strom', deadline: '2026-09-30', days: 15, status: 'planned' }
+    ],
+    'contracts/k1/cancellation': {
       minimumTermEnd: '2026-12-31', noticePeriodValue: 3, noticePeriodUnit: 'months',
       renewalPeriodValue: 12, renewalPeriodUnit: 'months', autoRenews: true,
       cancellationDeadline: '2026-09-30', cancellationStatus: 'planned',
       customerNumber: 'KD-4711-2019', providerContact: 'kundenservice@stadtwerke.example\nTel. 0800 1234567',
       cancellationSentAt: null, cancellationConfirmedAt: null, updatedAt: '2026-09-05T09:12:00Z'
     },
-    'contract-parity/k2/cancellation': {
+    'contracts/k2/cancellation': {
       minimumTermEnd: null, noticePeriodValue: null, noticePeriodUnit: null,
       renewalPeriodValue: null, renewalPeriodUnit: null, autoRenews: false,
       cancellationDeadline: null, cancellationStatus: 'none',

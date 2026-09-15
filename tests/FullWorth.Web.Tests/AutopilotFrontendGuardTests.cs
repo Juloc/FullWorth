@@ -90,7 +90,7 @@ public sealed class AutopilotFrontendGuardTests
         Assert.DoesNotContain("api/contracts/", featureWithoutAllowedContractActions, StringComparison.Ordinal);
         Assert.DoesNotContain("api/transactions/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("api/budgets/", feature, StringComparison.Ordinal);
-        Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/contracts/merge/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("PriceChangeSuggestion", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("ai-badge", feature, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ai-gradient", feature, StringComparison.OrdinalIgnoreCase);
@@ -117,7 +117,7 @@ public sealed class AutopilotFrontendGuardTests
         Assert.Contains("insight-merge-preview", css);
         Assert.Contains("insight-merge-stale", css);
 
-        Assert.DoesNotContain("api/contract-parity/merge", feature, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/contracts/merge/", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("window.confirm", feature, StringComparison.Ordinal);
         Assert.DoesNotContain("fetch(", feature, StringComparison.Ordinal);
     }

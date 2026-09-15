@@ -4,9 +4,9 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
-public static class InvestmentPerformanceV2Endpoints
+public static class InvestmentPerformanceEndpoints
 {
-    public static IEndpointRouteBuilder MapInvestmentPerformanceV2Endpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentPerformanceEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/investments/portfolios/{portfolioId:guid}/performance", GetPerformance)
             .WithTags("Investments");

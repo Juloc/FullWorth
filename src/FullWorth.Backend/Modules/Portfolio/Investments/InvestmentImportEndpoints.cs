@@ -35,11 +35,11 @@ public sealed record InvestmentImportCommitWrite(
     IReadOnlyList<Guid>? CandidateIds = null,
     InvestmentImportPortfolioCreate? CreatePortfolio = null);
 
-public static class InvestmentImportParityEndpoints
+public static class InvestmentImportEndpoints
 {
     private const long MaxUploadBytes = 25L * 1024 * 1024;
 
-    public static IEndpointRouteBuilder MapInvestmentImportParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapInvestmentImportEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/investment-import").WithTags("Investments", "Import");
         group.MapPost("/detect", Detect);

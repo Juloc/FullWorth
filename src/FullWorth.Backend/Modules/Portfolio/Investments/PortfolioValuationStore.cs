@@ -65,7 +65,7 @@ FROM "InvestmentPortfolios" WHERE "Id"=@id AND "FullWorthSpaceId"=@space
     }
 
     public async Task<bool> SavePortfolioSettingsAsync(
-        Guid userId, Guid space, Guid portfolioId, PortfolioV2Write request, string? providerName,
+        Guid userId, Guid space, Guid portfolioId, PortfolioSettingsWrite request, string? providerName,
         CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
@@ -87,7 +87,7 @@ WHERE "Id"=@id AND "FullWorthSpaceId"=@space
     }
 
     public async Task<Guid> CreateTradeAsync(
-        Guid userId, Guid space, Guid portfolioId, InvestmentTradeV2Write request, string type, string source,
+        Guid userId, Guid space, Guid portfolioId, InvestmentTradeWrite request, string type, string source,
         string? externalKey, string? notes, CancellationToken ct)
     {
         var id = Guid.NewGuid();

@@ -564,7 +564,7 @@ Two things.
 
 *Cause.* Four places compared currency strings for exact equality — the candidate list in
 `contracts.js`, `ContractMergePreviewService`, `ContractStore.MergeForUserAsync` and the
-`/api/contract-parity/merge` pre-check — so a contract row without a currency (older imports and
+`DELETE /api/contracts/merge/…` pre-check — so a contract row without a currency (older imports and
 hand-written rows) could not be merged with a EUR one, from any entry point. On top of that the only
 entry points were one contract at a time, and the preview always picked the survivor itself, so even a
 successful merge could not keep the row the owner wanted.

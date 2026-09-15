@@ -157,8 +157,9 @@ applied to C#. They are not aspiration: `ModuleBoundaryTests`, `LayerSeparationT
 6. **The name says the layer.** `Endpoints`, `Store`, `Service`. No "Module" that can mean anything,
    and no "Parity" — that described a finished migration, not a subject. `Modules/Parity` is gone;
    its 43 files and 151 endpoints live in the eleven modules they belong to. `LayerNamingTests` is a
-   ratchet over the 26 `*Module.cs` files that are left: a 27th turns it red. "Parity" still sits in a
-   few class names on purpose — their routes are still `/api/*-parity`, and those go with #110.
+   ratchet over the 16 `*Module.cs` files that are left: a 17th turns it red. "Parity" and "V2" are
+   gone from every route and every type name; where the word still appears, it is in a comment saying
+   where a file came from, which is the one place it is still true.
 
 Two places exist because something belonged to no module at all, and that is a legitimate answer:
 `Modules/Reconciliation` (Budgets, Analytics and Notifications all need it) and `Modules/DataErasure`
