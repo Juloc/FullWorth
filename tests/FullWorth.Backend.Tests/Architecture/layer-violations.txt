@@ -1,7 +1,5 @@
 Analytics/CashflowParityModule.cs
-Budgets/BudgetScopeParityModule.cs
 Categories/CategoryIntelligenceModule.cs
-Categories/CategoryMergeParityModule.cs
 Contracts/ContractParityModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
