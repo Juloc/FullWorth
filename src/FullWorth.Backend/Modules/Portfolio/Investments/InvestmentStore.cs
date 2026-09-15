@@ -413,7 +413,8 @@ VALUES (@id,@space,@user,@name,@now,@now)
         return true;
     }
 
-    public async Task<bool> DeleteWatchlistAsync(Guid userId, Guid space, Guid id, CancellationToken ct)
+    public async Task<bool> DeleteWatchlistAsync(
+        Guid userId, Guid space, Guid id, string auditAction, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         await using var command = RawSql.Command(connection,
@@ -421,7 +422,7 @@ VALUES (@id,@space,@user,@name,@now,@now)
             ("@id", id), ("@space", space), ("@user", userId));
         if (await command.ExecuteNonQueryAsync(ct) == 0) return false;
 
-        audit.Record(space, userId, "watchlist.deleted", "Watchlist", id);
+        audit.Record(space, userId, auditAction, "Watchlist", id);
         await db.SaveChangesAsync(ct);
         return true;
     }
@@ -487,6 +488,98 @@ WHERE i."WatchlistId"=@watchlist ORDER BY i."SortOrder",s."Name"
                 RawSql.Int(reader, "SortOrder"), RawSql.NullableDecimal(reader, "Price"),
                 RawSql.NullableDate(reader, "PriceDate"), RawSql.NullableString(reader, "Currency")));
         return rows;
+    }
+
+    /// <summary>
+    /// Das Anlegen eines Depots aus der Verwaltungsoberflaeche. Es kennt drei Angaben mehr als
+    /// <see cref="SavePortfolioBasicsAsync"/>: den Anbieter, ob es von Hand gefuehrt wird und ob es
+    /// ins Vermoegen zaehlt. Darum eine eigene Anweisung statt eines Schalters in einer gemeinsamen.
+    /// </summary>
+    public async Task<Guid> CreatePortfolioAsync(
+        Guid userId, Guid space, InvestmentPortfolioCreateWrite request, string? providerName, CancellationToken ct)
+    {
+        var id = Guid.NewGuid();
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
+INSERT INTO "InvestmentPortfolios"
+("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual",
+ "IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
+VALUES (@id,@space,@name,@currency,@account,@benchmark,@provider,@manual,@include,false,@now,@now)
+""", ("@id", id), ("@space", space), ("@name", request.Name.Trim()),
+            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@account", request.AccountId),
+            ("@benchmark", request.BenchmarkSecurityId), ("@provider", providerName),
+            ("@manual", request.IsManual), ("@include", request.IncludeInNetWorth),
+            ("@now", DateTimeOffset.UtcNow));
+        await command.ExecuteNonQueryAsync(ct);
+
+        audit.Record(space, userId, "investment.portfolio.created", "InvestmentPortfolio", id);
+        await db.SaveChangesAsync(ct);
+        return id;
+    }
+
+    /// <summary>Die vollen Stammdaten eines Wertpapiers, einschliesslich Anbieterschluessel und aktiv/inaktiv.</summary>
+    public async Task<bool> SaveSecurityAsync(
+        Guid userId, Guid space, Guid id, InvestmentSecurityManageWrite request, string assetType, string? isin,
+        string? wkn, string? ticker, string? exchange, string? providerKey, bool update, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        var now = DateTimeOffset.UtcNow;
+        var name = request.Name.Trim();
+        var currency = request.Currency.Trim().ToUpperInvariant();
+
+        await using var command = update
+            ? RawSql.Command(connection, """
+UPDATE "Securities"
+SET "Name"=@name,"Isin"=@isin,"Wkn"=@wkn,"Ticker"=@ticker,"AssetType"=@type,"Currency"=@currency,
+    "Exchange"=@exchange,"ProviderKey"=@provider,"IsActive"=@active,"UpdatedAt"=@now
+WHERE "Id"=@id AND "FullWorthSpaceId"=@space
+""", ("@name", name), ("@isin", isin), ("@wkn", wkn), ("@ticker", ticker), ("@type", assetType),
+                ("@currency", currency), ("@exchange", exchange), ("@provider", providerKey),
+                ("@active", request.IsActive), ("@now", now), ("@id", id), ("@space", space))
+            : RawSql.Command(connection, """
+INSERT INTO "Securities"
+("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","Exchange","ProviderKey",
+ "IsActive","CreatedAt","UpdatedAt")
+VALUES (@id,@space,@name,@isin,@wkn,@ticker,@type,@currency,@exchange,@provider,@active,@now,@now)
+""", ("@id", id), ("@space", space), ("@name", name), ("@isin", isin), ("@wkn", wkn), ("@ticker", ticker),
+                ("@type", assetType), ("@currency", currency), ("@exchange", exchange),
+                ("@provider", providerKey), ("@active", request.IsActive), ("@now", now));
+
+        if (await command.ExecuteNonQueryAsync(ct) == 0) return false;
+        audit.Record(space, userId, update ? "investment.security.updated" : "investment.security.created",
+            "Security", id);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Ein Handel mit allem, was die Verwaltungsoberflaeche kennt: Valuta, Bruttobetrag,
+    /// Quellensteuer und Herkunft.
+    /// </summary>
+    public async Task<bool> UpdateTradeAsync(
+        Guid userId, Guid space, Guid portfolioId, Guid tradeId, InvestmentTradeV2Write request, string type,
+        string source, string? externalKey, string? notes, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
+UPDATE "InvestmentTrades"
+SET "SecurityId"=@security,"TradeType"=@type,"TradeDate"=@date,"SettlementDate"=@settlement,
+    "Quantity"=@quantity,"Price"=@price,"GrossAmount"=@gross,"Amount"=@amount,"Currency"=@currency,
+    "Fees"=@fees,"Taxes"=@taxes,"WithholdingTax"=@withholding,"Source"=@source,"ExternalKey"=@external,
+    "Notes"=@notes,"UpdatedAt"=@now
+WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
+""", ("@security", request.SecurityId), ("@type", type), ("@date", request.TradeDate),
+            ("@settlement", request.SettlementDate), ("@quantity", request.Quantity), ("@price", request.Price),
+            ("@gross", request.GrossAmount), ("@amount", request.Amount),
+            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@fees", request.Fees),
+            ("@taxes", request.Taxes), ("@withholding", request.WithholdingTax), ("@source", source),
+            ("@external", externalKey), ("@notes", notes), ("@now", DateTimeOffset.UtcNow),
+            ("@id", tradeId), ("@portfolio", portfolioId), ("@space", space));
+
+        if (await command.ExecuteNonQueryAsync(ct) == 0) return false;
+        audit.Record(space, userId, "investment.trade.updated", "InvestmentTrade", tradeId);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<bool> SecurityExistsAsync(Guid space, Guid id, CancellationToken ct)

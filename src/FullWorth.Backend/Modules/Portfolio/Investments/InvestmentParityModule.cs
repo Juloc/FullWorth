@@ -373,7 +373,7 @@ public static class InvestmentParityEndpoints
 
     private static async Task<IResult> DeleteWatchlist(
         Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct) =>
-        await store.DeleteWatchlistAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)
+        await store.DeleteWatchlistAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, "watchlist.deleted", ct)
             ? Results.NoContent()
             : Results.NotFound();
 

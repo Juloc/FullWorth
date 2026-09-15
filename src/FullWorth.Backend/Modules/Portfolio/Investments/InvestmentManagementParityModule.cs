@@ -1,7 +1,4 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
@@ -47,310 +44,245 @@ public static class InvestmentManagementParityEndpoints
 
     private static async Task<IResult> CreatePortfolio(
         Guid fullWorthSpaceId, InvestmentPortfolioCreateWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        SpaceAccess space, InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name) || !ValidCurrency(request.Currency))
             return Results.BadRequest(new { error = "Name and valid currency are required." });
+
         if (request.AccountId.HasValue)
         {
-            var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
-            if (!visible.Contains(request.AccountId.Value)) return Results.BadRequest(new { error = "Linked account is inaccessible." });
+            var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
+            if (!visible.Contains(request.AccountId.Value))
+                return Results.BadRequest(new { error = "Linked account is inaccessible." });
         }
-        if (request.BenchmarkSecurityId.HasValue && !await SecurityExists(db, fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
+        if (request.BenchmarkSecurityId.HasValue
+            && !await store.SecurityExistsAsync(fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
             return Results.BadRequest(new { error = "Benchmark security is invalid." });
 
-        var id = Guid.NewGuid();
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-INSERT INTO "InvestmentPortfolios"
-("Id","FullWorthSpaceId","Name","Currency","AccountId","BenchmarkSecurityId","ProviderName","IsManual","IncludeInNetWorth","IsArchived","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@name,@currency,@account,@benchmark,@provider,@manual,@include,false,@now,@now)
-""", ("@id", id), ("@space", fullWorthSpaceId), ("@name", request.Name.Trim()),
-            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@account", request.AccountId),
-            ("@benchmark", request.BenchmarkSecurityId), ("@provider", Clean(request.ProviderName)),
-            ("@manual", request.IsManual), ("@include", request.IncludeInNetWorth), ("@now", DateTimeOffset.UtcNow));
-        await command.ExecuteNonQueryAsync(ct);
-        audit.Record(fullWorthSpaceId, userId, "investment.portfolio.created", "InvestmentPortfolio", id);
-        await db.SaveChangesAsync(ct);
+        var id = await store.CreatePortfolioAsync(userId, fullWorthSpaceId, request, Clean(request.ProviderName), ct);
         return Results.Created($"/api/investments/portfolios/{id}", new { id });
     }
 
-    private static async Task<IResult> CreateSecurity(
+    private static Task<IResult> CreateSecurity(
         Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-        await WriteSecurity(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, db, audit, false, ct);
+        InvestmentStore store, CancellationToken ct) =>
+        WriteSecurity(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, store, false, ct);
 
-    private static async Task<IResult> UpdateSecurity(
+    private static Task<IResult> UpdateSecurity(
         Guid securityId, Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-        await WriteSecurity(securityId, fullWorthSpaceId, request, currentUser, db, audit, true, ct);
+        InvestmentStore store, CancellationToken ct) =>
+        WriteSecurity(securityId, fullWorthSpaceId, request, currentUser, store, true, ct);
 
     private static async Task<IResult> WriteSecurity(
         Guid id, Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, bool update, CancellationToken ct)
+        InvestmentStore store, bool update, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name) || !ValidCurrency(request.Currency))
             return Results.BadRequest(new { error = "Name and valid currency are required." });
+
         var assetType = request.AssetType.Trim().ToLowerInvariant();
         if (!AssetTypes.Contains(assetType)) return Results.BadRequest(new { error = "Unsupported asset type." });
-        var isin = Clean(request.Isin)?.ToUpperInvariant();
-        if (isin is { Length: > 0 } && isin.Length != 12) return Results.BadRequest(new { error = "ISIN must contain 12 characters." });
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        var now = DateTimeOffset.UtcNow;
-        await using var command = update
-            ? RawSql.Command(connection, """
-UPDATE "Securities" SET "Name"=@name,"Isin"=@isin,"Wkn"=@wkn,"Ticker"=@ticker,"AssetType"=@type,
- "Currency"=@currency,"Exchange"=@exchange,"ProviderKey"=@provider,"IsActive"=@active,"UpdatedAt"=@now
-WHERE "Id"=@id AND "FullWorthSpaceId"=@space
-""", ("@name", request.Name.Trim()), ("@isin", isin), ("@wkn", Clean(request.Wkn)?.ToUpperInvariant()),
-                ("@ticker", Clean(request.Ticker)?.ToUpperInvariant()), ("@type", assetType),
-                ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@exchange", Clean(request.Exchange)),
-                ("@provider", Clean(request.ProviderKey)), ("@active", request.IsActive), ("@now", now),
-                ("@id", id), ("@space", fullWorthSpaceId))
-            : RawSql.Command(connection, """
-INSERT INTO "Securities"
-("Id","FullWorthSpaceId","Name","Isin","Wkn","Ticker","AssetType","Currency","Exchange","ProviderKey","IsActive","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@name,@isin,@wkn,@ticker,@type,@currency,@exchange,@provider,@active,@now,@now)
-""", ("@id", id), ("@space", fullWorthSpaceId), ("@name", request.Name.Trim()), ("@isin", isin),
-                ("@wkn", Clean(request.Wkn)?.ToUpperInvariant()), ("@ticker", Clean(request.Ticker)?.ToUpperInvariant()),
-                ("@type", assetType), ("@currency", request.Currency.Trim().ToUpperInvariant()),
-                ("@exchange", Clean(request.Exchange)), ("@provider", Clean(request.ProviderKey)),
-                ("@active", request.IsActive), ("@now", now));
+        var isin = Clean(request.Isin)?.ToUpperInvariant();
+        if (isin is { Length: > 0 } && isin.Length != 12)
+            return Results.BadRequest(new { error = "ISIN must contain 12 characters." });
+
         try
         {
-            if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
+            return await store.SaveSecurityAsync(userId, fullWorthSpaceId, id, request, assetType, isin,
+                Clean(request.Wkn)?.ToUpperInvariant(), Clean(request.Ticker)?.ToUpperInvariant(),
+                Clean(request.Exchange), Clean(request.ProviderKey), update, ct)
+                ? Results.Ok(new { id })
+                : Results.NotFound();
         }
-        catch (Exception exception) when (exception.Message.Contains("IX_Securities_Space_Isin", StringComparison.OrdinalIgnoreCase) ||
-                                          exception.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+        catch (Exception exception) when (
+            exception.Message.Contains("IX_Securities_Space_Isin", StringComparison.OrdinalIgnoreCase) ||
+            exception.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
         {
             return Results.Conflict(new { error = "A security with this ISIN already exists." });
         }
-        audit.Record(fullWorthSpaceId, userId, update ? "investment.security.updated" : "investment.security.created", "Security", id);
-        await db.SaveChangesAsync(ct);
-        return Results.Ok(new { id });
     }
 
     private static async Task<IResult> PutPrice(
         Guid fullWorthSpaceId, InvestmentPriceManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (request.Price <= 0 || !ValidCurrency(request.Currency) || !await SecurityExists(db, fullWorthSpaceId, request.SecurityId, ct))
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (request.Price <= 0 || !ValidCurrency(request.Currency)
+            || !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId, ct))
             return Results.BadRequest(new { error = "Security, positive price and valid currency are required." });
+
         var source = string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim().ToLowerInvariant();
         if (source.Length > 64) return Results.BadRequest(new { error = "Price source is too long." });
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-INSERT INTO "SecurityPrices" ("SecurityId","PriceDate","Price","Currency","Source","CreatedAt")
-VALUES (@security,@date,@price,@currency,@source,@now)
-ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."Price","Currency"=EXCLUDED."Currency"
-""", ("@security", request.SecurityId), ("@date", request.PriceDate), ("@price", request.Price),
-            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@source", source), ("@now", DateTimeOffset.UtcNow));
-        await command.ExecuteNonQueryAsync(ct);
-        audit.Record(fullWorthSpaceId, userId, "investment.price.updated", "Security", request.SecurityId);
-        await db.SaveChangesAsync(ct);
+
+        await store.SavePriceAsync(userId, fullWorthSpaceId, request.SecurityId, request.PriceDate, request.Price,
+            request.Currency.Trim().ToUpperInvariant(), source, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> UpdateTrade(
         Guid portfolioId, Guid tradeId, Guid fullWorthSpaceId, InvestmentTradeV2Write request,
-        CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await PortfolioExists(db, fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.PortfolioExistsAsync(fullWorthSpaceId, portfolioId, ct)) return Results.NotFound();
+
         var type = request.TradeType.Trim().ToLowerInvariant();
-        var error = await ValidateTrade(db, fullWorthSpaceId, request, type, ct);
+        var error = await ValidateTrade(store, fullWorthSpaceId, request, type, ct);
         if (error is not null) return Results.BadRequest(new { error });
 
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-UPDATE "InvestmentTrades" SET "SecurityId"=@security,"TradeType"=@type,"TradeDate"=@date,
- "SettlementDate"=@settlement,"Quantity"=@quantity,"Price"=@price,"GrossAmount"=@gross,"Amount"=@amount,
- "Currency"=@currency,"Fees"=@fees,"Taxes"=@taxes,"WithholdingTax"=@withholding,"Source"=@source,
- "ExternalKey"=@external,"Notes"=@notes,"UpdatedAt"=@now
-WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
-""", ("@security", request.SecurityId), ("@type", type), ("@date", request.TradeDate),
-            ("@settlement", request.SettlementDate), ("@quantity", request.Quantity), ("@price", request.Price),
-            ("@gross", request.GrossAmount), ("@amount", request.Amount),
-            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@fees", request.Fees),
-            ("@taxes", request.Taxes), ("@withholding", request.WithholdingTax),
-            ("@source", NormalizeSource(request.Source)), ("@external", Clean(request.ExternalKey)),
-            ("@notes", Clean(request.Notes)), ("@now", DateTimeOffset.UtcNow), ("@id", tradeId),
-            ("@portfolio", portfolioId), ("@space", fullWorthSpaceId));
         try
         {
-            if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
+            // Die Datenbank laesst keinen Bestand unter null zu. Der Versuch ist ein Konflikt, kein
+            // Serverfehler - und ihre Meldung sagt genauer, welcher Handel im Weg steht.
+            return await store.UpdateTradeAsync(userId, fullWorthSpaceId, portfolioId, tradeId, request, type,
+                NormalizeSource(request.Source), Clean(request.ExternalKey), Clean(request.Notes), ct)
+                ? Results.NoContent()
+                : Results.NotFound();
         }
-        catch (Exception exception) when (exception.Message.Contains("Cannot sell", StringComparison.OrdinalIgnoreCase) ||
-                                          exception.Message.Contains("Cannot dispose", StringComparison.OrdinalIgnoreCase) ||
-                                          exception.Message.Contains("oversold", StringComparison.OrdinalIgnoreCase))
+        catch (Exception exception) when (
+            exception.Message.Contains("Cannot sell", StringComparison.OrdinalIgnoreCase) ||
+            exception.Message.Contains("Cannot dispose", StringComparison.OrdinalIgnoreCase) ||
+            exception.Message.Contains("oversold", StringComparison.OrdinalIgnoreCase))
         {
             return Results.Conflict(new { error = exception.Message });
         }
-        audit.Record(fullWorthSpaceId, userId, "investment.trade.updated", "InvestmentTrade", tradeId);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
     }
 
     private static async Task<IResult> DeleteTrade(
         Guid portfolioId, Guid tradeId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection,
-            "DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id AND \"PortfolioId\"=@portfolio AND \"FullWorthSpaceId\"=@space",
-            ("@id", tradeId), ("@portfolio", portfolioId), ("@space", fullWorthSpaceId));
-        if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
-        audit.Record(fullWorthSpaceId, userId, "investment.trade.deleted", "InvestmentTrade", tradeId);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        return await store.DeleteTradeAsync(userId, fullWorthSpaceId, portfolioId, tradeId, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
     private static async Task<IResult> ListWatchlists(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
+        CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT "Id","Name","CreatedAt","UpdatedAt" FROM "Watchlists"
-WHERE "FullWorthSpaceId"=@space AND "OwnerUserId"=@user ORDER BY "Name"
-""", ("@space", fullWorthSpaceId), ("@user", userId));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<object>();
-        while (await reader.ReadAsync(ct)) rows.Add(new
-        {
-            id = RawSql.Guid(reader, "Id"), name = RawSql.String(reader, "Name"),
-            createdAt = RawSql.Timestamp(reader, "CreatedAt"), updatedAt = RawSql.Timestamp(reader, "UpdatedAt")
-        });
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListWatchlistsAsync(fullWorthSpaceId, userId, ct))
+            .Select(row => new
+            {
+                id = row.Id,
+                name = row.Name,
+                createdAt = row.CreatedAt,
+                updatedAt = row.UpdatedAt
+            });
         return Results.Ok(rows);
     }
 
     private static async Task<IResult> CreateWatchlist(
         Guid fullWorthSpaceId, InvestmentWatchlistManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
-        var id = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-INSERT INTO "Watchlists" ("Id","FullWorthSpaceId","OwnerUserId","Name","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@user,@name,@now,@now)
-""", ("@id", id), ("@space", fullWorthSpaceId), ("@user", userId), ("@name", request.Name.Trim()), ("@now", now));
-        await command.ExecuteNonQueryAsync(ct);
-        audit.Record(fullWorthSpaceId, userId, "investment.watchlist.created", "Watchlist", id);
-        await db.SaveChangesAsync(ct);
+
+        var id = Guid.NewGuid();
+        await store.SaveWatchlistAsync(userId, fullWorthSpaceId, id, request.Name, false,
+            "investment.watchlist.created", ct);
         return Results.Created($"/api/investment-management/watchlists/{id}", new { id });
     }
 
     private static async Task<IResult> UpdateWatchlist(
-        Guid watchlistId, Guid fullWorthSpaceId, InvestmentWatchlistManageWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        Guid watchlistId, Guid fullWorthSpaceId, InvestmentWatchlistManageWrite request,
+        CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-UPDATE "Watchlists" SET "Name"=@name,"UpdatedAt"=@now
-WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user
-""", ("@name", request.Name.Trim()), ("@now", DateTimeOffset.UtcNow), ("@id", watchlistId),
-            ("@space", fullWorthSpaceId), ("@user", userId));
-        if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
-        audit.Record(fullWorthSpaceId, userId, "investment.watchlist.updated", "Watchlist", watchlistId);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
+
+        return await store.SaveWatchlistAsync(userId, fullWorthSpaceId, watchlistId, request.Name, true,
+            "investment.watchlist.updated", ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
     private static async Task<IResult> DeleteWatchlist(
-        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection,
-            "DELETE FROM \"Watchlists\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space AND \"OwnerUserId\"=@user",
-            ("@id", watchlistId), ("@space", fullWorthSpaceId), ("@user", userId));
-        if (await command.ExecuteNonQueryAsync(ct) == 0) return Results.NotFound();
-        audit.Record(fullWorthSpaceId, userId, "investment.watchlist.deleted", "Watchlist", watchlistId);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        return await store.DeleteWatchlistAsync(userId, fullWorthSpaceId, watchlistId,
+            "investment.watchlist.deleted", ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
     private static async Task<IResult> GetWatchlistItems(
-        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
-        FullWorthDbContext db, CancellationToken ct)
+        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
+        CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await OwnWatchlist(db, watchlistId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT i."SecurityId",s."Name",s."Ticker",i."TargetPrice",i."Notes",i."SortOrder"
-FROM "WatchlistItems" i JOIN "Securities" s ON s."Id"=i."SecurityId"
-WHERE i."WatchlistId"=@id ORDER BY i."SortOrder",s."Name"
-""", ("@id", watchlistId));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<object>();
-        while (await reader.ReadAsync(ct)) rows.Add(new
-        {
-            securityId = RawSql.Guid(reader, "SecurityId"), name = RawSql.String(reader, "Name"),
-            ticker = RawSql.NullableString(reader, "Ticker"), targetPrice = RawSql.NullableDecimal(reader, "TargetPrice"),
-            notes = RawSql.NullableString(reader, "Notes"), sortOrder = RawSql.Int(reader, "SortOrder")
-        });
+        if (!await store.OwnsWatchlistAsync(userId, fullWorthSpaceId, watchlistId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListWatchlistItemsAsync(watchlistId, ct))
+            .Select(row => new
+            {
+                securityId = row.SecurityId,
+                name = row.Name,
+                ticker = row.Ticker,
+                targetPrice = row.TargetPrice,
+                notes = row.Notes,
+                sortOrder = row.SortOrder
+            });
         return Results.Ok(rows);
     }
 
     private static async Task<IResult> PutWatchlistItems(
         Guid watchlistId, Guid fullWorthSpaceId, IReadOnlyList<InvestmentWatchlistItemManageWrite> request,
-        CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await CanManage(db, userId, fullWorthSpaceId, ct)) return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await OwnWatchlist(db, watchlistId, fullWorthSpaceId, userId, ct)) return Results.NotFound();
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (!await store.OwnsWatchlistAsync(userId, fullWorthSpaceId, watchlistId, ct)) return Results.NotFound();
+
         var items = request.DistinctBy(item => item.SecurityId).ToArray();
         if (items.Length > 500) return Results.BadRequest(new { error = "Watchlist is too large." });
-        foreach (var item in items)
-        {
-            if (item.TargetPrice is <= 0) return Results.BadRequest(new { error = "Target price must be positive." });
-            if (!await SecurityExists(db, fullWorthSpaceId, item.SecurityId, ct)) return Results.BadRequest(new { error = "Security is invalid." });
-        }
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await using (var delete = RawSql.Command(connection, "DELETE FROM \"WatchlistItems\" WHERE \"WatchlistId\"=@id", ("@id", watchlistId)))
-            await delete.ExecuteNonQueryAsync(ct);
-        foreach (var item in items)
-        {
-            await using var command = RawSql.Command(connection, """
-INSERT INTO "WatchlistItems" ("WatchlistId","SecurityId","TargetPrice","Notes","SortOrder")
-VALUES (@watchlist,@security,@target,@notes,@sort)
-""", ("@watchlist", watchlistId), ("@security", item.SecurityId), ("@target", item.TargetPrice),
-                ("@notes", Clean(item.Notes)), ("@sort", item.SortOrder));
-            await command.ExecuteNonQueryAsync(ct);
-        }
-        audit.Record(fullWorthSpaceId, userId, "investment.watchlist.items.updated", "Watchlist", watchlistId);
-        await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
+        if (items.Any(item => item.TargetPrice is <= 0))
+            return Results.BadRequest(new { error = "Target price must be positive." });
+        if (!await store.AllSecuritiesExistAsync(fullWorthSpaceId, items.Select(item => item.SecurityId).ToArray(), ct))
+            return Results.BadRequest(new { error = "Security is invalid." });
+
+        await store.ReplaceWatchlistItemsAsync(userId, fullWorthSpaceId, watchlistId,
+            items.Select(item => (item.SecurityId, item.TargetPrice, Clean(item.Notes), item.SortOrder)).ToArray(),
+            "investment.watchlist.items.updated", ct);
         return Results.NoContent();
     }
 
     private static async Task<string?> ValidateTrade(
-        FullWorthDbContext db, Guid fullWorthSpaceId, InvestmentTradeV2Write request, string type, CancellationToken ct)
+        InvestmentStore store, Guid fullWorthSpaceId, InvestmentTradeV2Write request, string type, CancellationToken ct)
     {
         if (!TradeTypes.Contains(type)) return "Unsupported investment transaction type.";
         if (!ValidCurrency(request.Currency) || request.Amount < 0 || request.Fees < 0 || request.Taxes < 0 || request.WithholdingTax < 0)
             return "Amounts and currency are invalid.";
-        if (request.SecurityId.HasValue && !await SecurityExists(db, fullWorthSpaceId, request.SecurityId.Value, ct))
+        if (request.SecurityId.HasValue && !await store.SecurityExistsAsync(fullWorthSpaceId, request.SecurityId.Value, ct))
             return "Security is invalid.";
         if (type is "buy" or "sell" or "cancellation" or "security_transfer_in" or "security_transfer_out" &&
             (!request.SecurityId.HasValue || request.Quantity is null or <= 0))
@@ -360,36 +292,6 @@ VALUES (@watchlist,@security,@target,@notes,@sort)
         if (type == "split" && (!request.SecurityId.HasValue || request.Quantity is null or <= 0))
             return "Split quantity stores the positive split ratio, e.g. 2 for 2:1.";
         return null;
-    }
-
-    private static async Task<bool> CanManage(FullWorthDbContext db, Guid userId, Guid space, CancellationToken ct) =>
-        await SpaceCapabilities.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
-
-    private static async Task<bool> SecurityExists(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection,
-            "SELECT EXISTS(SELECT 1 FROM \"Securities\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
-            ("@id", id), ("@space", space));
-        return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
-    }
-
-    private static async Task<bool> PortfolioExists(FullWorthDbContext db, Guid space, Guid id, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection,
-            "SELECT EXISTS(SELECT 1 FROM \"InvestmentPortfolios\" WHERE \"Id\"=@id AND \"FullWorthSpaceId\"=@space)",
-            ("@id", id), ("@space", space));
-        return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
-    }
-
-    private static async Task<bool> OwnWatchlist(FullWorthDbContext db, Guid id, Guid space, Guid userId, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        await using var command = RawSql.Command(connection, """
-SELECT EXISTS(SELECT 1 FROM "Watchlists" WHERE "Id"=@id AND "FullWorthSpaceId"=@space AND "OwnerUserId"=@user)
-""", ("@id", id), ("@space", space), ("@user", userId));
-        return Convert.ToBoolean(await command.ExecuteScalarAsync(ct));
     }
 
     private static bool ValidCurrency(string? value) => value is { Length: 3 } && value.All(char.IsLetter);
