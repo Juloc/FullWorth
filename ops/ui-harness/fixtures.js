@@ -15,6 +15,9 @@
     // Admin-only on the server; the settings row hides itself when the call fails, so the fixture is
     // what makes the row visible here at all.
     'fullworth-spaces': [{ id: SPACE, name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
+    // Die Frage aus dem Einrichtungsassistenten (#117). canChange ist true, solange niemand eine
+    // Standardkategorie umbenannt hat - nur dann wird die Auswahl ueberhaupt angeboten.
+    'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
     'categories': [
       { id: 'c1', name: 'Lebensmittel', kind: 'expense', parentId: null, isArchived: false, icon: 'groceries' },
       { id: 'c2', name: 'Restaurant', kind: 'expense', parentId: null, isArchived: false, icon: 'restaurants' },

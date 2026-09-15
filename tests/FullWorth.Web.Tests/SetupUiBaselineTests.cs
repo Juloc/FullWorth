@@ -110,6 +110,44 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("enhancePasswordInputs(form, passwordLabels)", formDialog, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Der Assistent fragte nie, in welcher Sprache die Standardkategorien heissen sollen (#117) -
+    /// und es gab auch nur Englisch. Jetzt ist es der erste Schritt, weil er als einziger Daten
+    /// anfasst; die drei anderen richten nur Zugaenge ein.
+    ///
+    /// Die Frage darf folgenlos bleiben, wenn jemand schon eine Standardkategorie umbenannt hat: eine
+    /// Umbenennung ist eine Entscheidung, und eine Spracheinstellung ueberschreibt sie nicht. Dann
+    /// steht der Grund da, statt dass ein Klick still nichts tut.
+    /// </summary>
+    [Fact]
+    public void TheSetupWizardAsksForTheCategoryLanguageFirst()
+    {
+        var wizard = ReadSource(Path.Combine("pages", "settings", "access-setup.js"));
+        var de = JsonDocument.Parse(ReadSource(Path.Combine("locales", "de.json")));
+        var en = JsonDocument.Parse(ReadSource(Path.Combine("locales", "en.json")));
+
+        Assert.Contains("api/categories/language", wizard);
+        Assert.Contains("categoryStep", wizard);
+        Assert.Contains("[data-start]').onclick = categoryStep", wizard);
+        Assert.Contains("1 / 4", wizard);
+        Assert.Contains("2 / 4", wizard);
+        Assert.Contains("3 / 4", wizard);
+        Assert.Contains("4 / 4", wizard);
+        Assert.DoesNotContain("/ 3</div>", wizard);
+
+        // Gesperrt heisst gesperrt: keine Auswahl, keine Anfrage, aber eine Begruendung.
+        Assert.Contains("state?.canChange", wizard);
+        Assert.Contains("onboarding.categoriesLocked", wizard);
+        Assert.Contains("if (!state?.canChange || picked === current)", wizard);
+
+        foreach (var key in new[]
+                 { "categoriesTitle", "categoriesText", "categoriesGerman", "categoriesEnglish", "categoriesLocked" })
+        {
+            Assert.True(de.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"de.json: onboarding.{key}");
+            Assert.True(en.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"en.json: onboarding.{key}");
+        }
+    }
+
     private static string ReadSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -124,6 +124,9 @@ createServer(async (req, res) => {
       'fullworth-spaces': [{ id: '11111111-1111-1111-1111-111111111111', name: 'Haushalt', baseCurrency: 'EUR', role: 'owner', isDefault: true }],
       'accounts': [{ id: 'a1', displayName: 'Girokonto', institutionName: 'Sparkasse', ibanLast4: '2051', isActive: true, currency: 'EUR' },
                    { id: 'a2', displayName: 'Tagesgeld', institutionName: 'ING', ibanLast4: '5030', isActive: true, currency: 'EUR' }],
+      // Muss ÜBER 'categories' stehen: der Pfad enthält dieses Wort ebenfalls, und die Zuordnung
+      // unten geht der Reihe nach über Teilstrings - dieselbe Falle wie bei 'rollback'/'import-jobs'.
+      'categories/language': { language: 'en', canChange: true, systemCategories: 80, renamedByUser: 0 },
       'categories': [{ id: 'c1', name: 'Lebensmittel' }, { id: 'c2', name: 'Restaurant' }, { id: 'c3', name: 'Gehalt' }],
       'portfolios': [], 'securities': [], 'investment-import/jobs': [],
       'import-mapping/detect': { rowCount: 5, headers: ['Datum','Betrag','Empfänger','Verwendungszweck','Kategorie','Konto'],

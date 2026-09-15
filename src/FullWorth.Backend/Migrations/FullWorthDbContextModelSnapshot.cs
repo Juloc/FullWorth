@@ -58,6 +58,14 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
             entity.ToTable("BankingInstanceSettings");
         });
 
+        modelBuilder.Entity("FullWorth.Backend.Modules.FullWorthSpaces.FullWorthSpace", entity =>
+        {
+            // 20260915140000_DefaultCategoryLanguage. Raw SQL, also muss der Snapshot es kennen,
+            // sonst faellt der Start ueber PendingModelChangesWarning.
+            entity.Property<string>("DefaultCategoryLanguage").HasMaxLength(8).HasColumnType("character varying(8)");
+            entity.Property<DateTimeOffset?>("DefaultCategoriesSeededAt").HasColumnType("timestamp with time zone");
+        });
+
         modelBuilder.Entity("FullWorth.Backend.Security.InstallationEncryptionMarker", entity =>
         {
             // 20260912220000_InstallationEncryptionMarker. Raw SQL again, so the snapshot has to carry

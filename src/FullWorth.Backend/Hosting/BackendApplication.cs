@@ -254,6 +254,7 @@ public static class BackendApplication
         builder.Services.AddScoped<AdvancedBulkStore>();
         builder.Services.AddScoped<CategoryMergeStore>();
         builder.Services.AddScoped<CategoryReferenceStore>();
+        builder.Services.AddScoped<CategoryLanguageStore>();
         builder.Services.AddScoped<BudgetScopeStore>();
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
@@ -544,6 +545,7 @@ public static class BackendApplication
         endpoints.MapProductLearningEndpoints();
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeEndpoints();
+        endpoints.MapCategoryLanguageEndpoints();
         endpoints.MapCategoryOrderEndpoints();
         endpoints.MapTransactionBulkAdvancedEndpoints();
         endpoints.MapXlsxExportEndpoints();

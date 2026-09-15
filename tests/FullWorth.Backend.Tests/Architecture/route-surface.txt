@@ -122,6 +122,7 @@ GET              /api/budgets/{id:guid}/status
 GET              /api/cashflow/available
 GET              /api/cashflow/settings
 GET              /api/categories/
+GET              /api/categories/language
 GET              /api/categories/{categoryId:guid}/references
 GET              /api/categorization-rules/
 GET              /api/category-intelligence/category-appearances
@@ -554,6 +555,7 @@ PUT              /api/budget-groups/{id:guid}
 PUT              /api/budget-scopes/{budgetId:guid}
 PUT              /api/budgets/{id:guid}
 PUT              /api/cashflow/settings
+PUT              /api/categories/language
 PUT              /api/categories/{id:guid}
 PUT              /api/categorization-rules/{id:guid}
 PUT              /api/category-intelligence/category-appearances/{categoryId:guid}

@@ -494,7 +494,43 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<p>' + esc(get('onboarding.intro')) + '</p>' +
         '<p class="row-sub">' + esc(get('onboarding.optional')) + '</p>' +
         '<div class="dialog-actions"><button type="button" data-start>' + esc(get('onboarding.start')) + '</button></div>';
-      step.querySelector('[data-start]').onclick = aiStep;
+      step.querySelector('[data-start]').onclick = categoryStep;
+    };
+
+    // Die Frage, die der Assistent nie gestellt hat (#117). Der Space ist beim Registrieren schon
+    // gesaet worden, also wird hier nichts angelegt, sondern umbenannt - nach Schluessel, und nur,
+    // solange niemand eine Standardkategorie selbst umbenannt hat. Wer das getan hat, hat
+    // entschieden; dann steht hier der Hinweis statt der Auswahl.
+    const categoryStep = async () => {
+      let state = null;
+      try { state = await api('api/categories/language'); }
+      catch { await aiStep(); return; }
+
+      const current = state?.language === 'de' ? 'de' : 'en';
+      const choice = language =>
+        '<label class="check"><input type="radio" name="category-language" value="' + language + '"' +
+        (current === language ? ' checked' : '') + (state?.canChange ? '' : ' disabled') + '> ' +
+        esc(get(language === 'de' ? 'onboarding.categoriesGerman' : 'onboarding.categoriesEnglish')) + '</label>';
+
+      step.innerHTML =
+        '<div class="setup-progress">1 / 4</div>' +
+        '<h3>' + esc(get('onboarding.categoriesTitle')) + '</h3>' +
+        '<p>' + esc(get('onboarding.categoriesText')) + '</p>' +
+        choice('de') + choice('en') +
+        (state?.canChange ? '' : '<p class="row-sub">' + esc(get('onboarding.categoriesLocked')) + '</p>') +
+        '<div class="dialog-actions">' +
+          '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
+        '</div>';
+
+      step.querySelector('[data-next]').onclick = async event => {
+        const button = event.currentTarget;
+        const picked = step.querySelector('[name="category-language"]:checked')?.value || current;
+        if (!state?.canChange || picked === current) { await aiStep(); return; }
+        button.disabled = true;
+        try { await api('api/categories/language', jsonBody({ language: picked }, 'PUT')); }
+        catch (error) { toast(error.message || get('common.error')); }
+        await aiStep();
+      };
     };
 
     const aiStep = async () => {
@@ -502,7 +538,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       try { ai = await api('api/intelligence/access'); } catch {}
 
       step.innerHTML =
-        '<div class="setup-progress">1 / 3</div>' +
+        '<div class="setup-progress">2 / 4</div>' +
         '<h3>' + esc(get('onboarding.aiTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.aiText')) + '</p>' +
         '<div class="row-sub">' +
@@ -528,7 +564,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       const configured = Boolean(bank?.profile);
 
       step.innerHTML =
-        '<div class="setup-progress">2 / 3</div>' +
+        '<div class="setup-progress">3 / 4</div>' +
         '<h3>' + esc(get('onboarding.bankTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.bankText')) + '</p>' +
         '<p class="row-sub">' + esc(get('onboarding.bankHow')) + '</p>' +
@@ -564,7 +600,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
       const checked = cloud.requiresSetupDecision ? true : cloud.mode === 'enabled';
       step.innerHTML =
-        '<div class="setup-progress">3 / 3</div>' +
+        '<div class="setup-progress">4 / 4</div>' +
         '<h3>' + esc(get('onboarding.cloudTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.cloudText')) + '</p>' +
         '<label class="check"><input type="checkbox" data-cloud ' + (checked ? 'checked' : '') + '> ' +

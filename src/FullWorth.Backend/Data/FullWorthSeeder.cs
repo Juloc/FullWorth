@@ -99,18 +99,49 @@ public sealed class FullWorthSeeder
     /// <summary>Number of default categories seeded into a fresh FullWorth Space.</summary>
     public static int DefaultCategoryCount => DefaultCategories.Length;
 
-    public async Task SeedAsync(FullWorthDbContext db, CancellationToken cancellationToken)
-    {
-        var fullWorthSpaceIds = await db.FullWorthSpaces.AsNoTracking()
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken);
+    /// <summary>Die Standardschluessel, damit ein Test sie gegen die Uebersetzungsliste halten kann.</summary>
+    public static IEnumerable<string> DefaultCategoryKeys => DefaultCategories.Select(entry => entry.Key);
 
-        foreach (var fullWorthSpaceId in fullWorthSpaceIds)
-            await SeedDefaultCategoriesForSpaceAsync(db, fullWorthSpaceId, cancellationToken);
+    /// <summary>
+    /// Der Standardname eines Schluessels in einer Sprache, oder null fuer einen Schluessel, den es
+    /// nicht gibt. Der Einrichtungsassistent braucht das, um nachtraeglich umzustellen.
+    /// </summary>
+    public static string? DefaultNameFor(string key, string language)
+    {
+        foreach (var (entryKey, name, _, _) in DefaultCategories)
+            if (string.Equals(entryKey, key, StringComparison.OrdinalIgnoreCase))
+                return DefaultCategoryNames.For(entryKey, language, name);
+        return null;
     }
 
-    public async Task SeedDefaultCategoriesForSpaceAsync(FullWorthDbContext db, Guid fullWorthSpaceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Der Start saet nur, wo noch nie gesaet wurde.
+    ///
+    /// Vorher lief das hier bei JEDEM Start fuer JEDEN Space und legte jeden Standardschluessel an,
+    /// der gerade fehlte. Wer eine Standardkategorie loeschte - ueber das Zusammenfuehren mit
+    /// "Quelle loeschen" geht das - hatte sie nach dem naechsten Neustart wieder. Zusammen mit
+    /// Kategorien, die ein Import auf Deutsch angelegt hat, ist das das gemischte Set aus #117.
+    /// </summary>
+    public async Task SeedAsync(FullWorthDbContext db, CancellationToken cancellationToken)
     {
+        var unseeded = await db.FullWorthSpaces
+            .Where(space => space.DefaultCategoriesSeededAt == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var space in unseeded)
+            await SeedDefaultCategoriesForSpaceAsync(db, space.Id, cancellationToken, space.DefaultCategoryLanguage);
+    }
+
+    /// <param name="language">
+    /// <c>de</c> oder <c>en</c>. Null heisst: nimm, was am Space steht, sonst Englisch.
+    /// </param>
+    public async Task SeedDefaultCategoriesForSpaceAsync(
+        FullWorthDbContext db, Guid fullWorthSpaceId, CancellationToken cancellationToken, string? language = null)
+    {
+        var space = await db.FullWorthSpaces
+            .SingleOrDefaultAsync(item => item.Id == fullWorthSpaceId, cancellationToken);
+        var chosen = DefaultCategoryNames.Normalize(language ?? space?.DefaultCategoryLanguage);
+
         var existing = await db.Categories
             .AsNoTracking()
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId)
@@ -136,7 +167,7 @@ public sealed class FullWorthSeeder
             {
                 FullWorthSpaceId = fullWorthSpaceId,
                 Key = key,
-                Name = name,
+                Name = DefaultCategoryNames.For(key, chosen, name),
                 ParentId = parentId,
                 SortOrder = sortOrder,
                 IsSystem = true
@@ -145,9 +176,15 @@ public sealed class FullWorthSeeder
             idByKey[key] = entity.Id;
         }
 
-        if (toAdd.Count == 0) return;
+        // Der Marker faellt auch dann, wenn nichts anzulegen war: gesaet ist gesaet, und beim
+        // naechsten Start soll hier nichts mehr nachwachsen.
+        if (space is not null)
+        {
+            space.DefaultCategoryLanguage = chosen;
+            space.DefaultCategoriesSeededAt = DateTimeOffset.UtcNow;
+        }
 
-        db.Categories.AddRange(toAdd);
+        if (toAdd.Count > 0) db.Categories.AddRange(toAdd);
         await db.SaveChangesAsync(cancellationToken);
     }
 }

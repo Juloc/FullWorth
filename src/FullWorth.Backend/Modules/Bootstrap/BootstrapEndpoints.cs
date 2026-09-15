@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Bootstrap;
 
-public sealed record BootstrapAdminRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
-public sealed record BootstrapRegistrationRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency);
+public sealed record BootstrapAdminRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency, string? CategoryLanguage = null);
+public sealed record BootstrapRegistrationRequest(string Email, string DisplayName, string? SpaceName, string? BaseCurrency, string? CategoryLanguage = null);
 public sealed record BootstrapUserLifecycleRequest(Guid FinanceUserId);
 public sealed record BootstrapAdminResponse(Guid FinanceUserId, Guid FullWorthSpaceId);
 
@@ -46,7 +46,7 @@ public static class BootstrapEndpoints
             }
 
             var spaceName = string.IsNullOrWhiteSpace(request.SpaceName) ? "Household" : request.SpaceName.Trim();
-            var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct);
+            var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct, request.CategoryLanguage);
             await intelligenceAdminBootstrapper.EnsureBootstrapAdminAsync(ct);
 
             return Results.Ok(new BootstrapAdminResponse(user.Id, space.Id));
@@ -65,7 +65,7 @@ public static class BootstrapEndpoints
             {
                 var user = await users.CreateAsync(new CreateUserRequest(request.Email, request.DisplayName), ct);
                 var spaceName = string.IsNullOrWhiteSpace(request.SpaceName) ? "Household" : request.SpaceName.Trim();
-                var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct);
+                var space = await spaces.CreateAsync(user.Id, spaceName, request.BaseCurrency, ct, request.CategoryLanguage);
                 return Results.Ok(new BootstrapAdminResponse(user.Id, space.Id));
             }
             catch (InvalidOperationException)
