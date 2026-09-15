@@ -16,7 +16,7 @@ namespace FullWorth.Backend.Modules.Import;
 
 public sealed record ImportCommitWrite(Guid AccountId,IReadOnlyList<Guid>? CandidateIds=null);
 
-public static class ImportParityEndpoints
+public static class ImportJobEndpoints
 {
     private const long MaxUploadBytes=25L*1024*1024;
     public static IEndpointRouteBuilder MapImportParityEndpoints(this IEndpointRouteBuilder app)

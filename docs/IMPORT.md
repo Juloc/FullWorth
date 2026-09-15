@@ -87,7 +87,7 @@ source row carrying the parsed values plus a `RowFingerprint` (SHA-256 over
 date|amount|currency|counterparty|description|externalKey).
 
 **Duplicate detection** runs at commit time and is previewable, because the answer depends on the
-account mapping and therefore cannot be decided at upload. `ImportMappingParityEndpoints.ClassifyAsync`
+account mapping and therefore cannot be decided at upload. `ImportMappingEndpoints.ClassifyAsync`
 is the single classifier used by both the preview and the commit, so the review list and the commit can
 never disagree. Three reasons:
 

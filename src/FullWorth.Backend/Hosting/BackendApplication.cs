@@ -533,21 +533,21 @@ public static class BackendApplication
         endpoints.MapRefundCandidateEndpoints();
         endpoints.MapAnalysisQueryEndpoints();
         endpoints.MapImportParityEndpoints();
-        endpoints.MapImportMappingParityEndpoints();
+        endpoints.MapImportMappingEndpoints();
         endpoints.MapInvestmentParityEndpoints();
         endpoints.MapInvestmentCompletionParityEndpoints();
         endpoints.MapInvestmentManagementParityEndpoints();
         endpoints.MapInvestmentPerformanceV2Endpoints();
         endpoints.MapInvestmentNetWorthV2Endpoints();
         endpoints.MapInvestmentImportParityEndpoints();
-        endpoints.MapInvestmentPdfImportParityEndpoints();
-        endpoints.MapInvestmentPdfOcrImportParityEndpoints();
+        endpoints.MapInvestmentPdfImportEndpoints();
+        endpoints.MapInvestmentPdfOcrImportEndpoints();
         endpoints.MapMarketDataEndpoints();
         endpoints.MapProductLearningEndpoints();
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeEndpoints();
         endpoints.MapCategoryOrderEndpoints();
-        endpoints.MapAdvancedTransactionBulkParityEndpoints();
+        endpoints.MapTransactionBulkAdvancedEndpoints();
         endpoints.MapXlsxExportV2Endpoints();
         endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints()

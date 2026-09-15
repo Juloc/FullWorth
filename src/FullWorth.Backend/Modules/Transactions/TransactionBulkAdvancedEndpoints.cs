@@ -36,12 +36,12 @@ public sealed record AdvancedTransactionBulkRequest(
     bool ConfirmReplaceNotes = false,
     bool PairAsTransfer = false);
 
-public static class AdvancedTransactionBulkParityEndpoints
+public static class TransactionBulkAdvancedEndpoints
 {
     private const int MaxExplicitIds = 1000;
     private const int MaxFilterMatches = 5000;
 
-    public static IEndpointRouteBuilder MapAdvancedTransactionBulkParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapTransactionBulkAdvancedEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/transaction-bulk").WithTags("Transactions");
         group.MapPost("/advanced-preview", Preview);

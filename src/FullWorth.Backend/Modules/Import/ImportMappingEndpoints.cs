@@ -31,11 +31,11 @@ public sealed record ImportDuplicatePreviewWrite(
     IReadOnlyDictionary<string, Guid?>? SourceAccountMappings,
     Guid? DefaultAccountId);
 
-public static class ImportMappingParityEndpoints
+public static class ImportMappingEndpoints
 {
     private const long MaxUploadBytes = 25L * 1024 * 1024;
 
-    public static IEndpointRouteBuilder MapImportMappingParityEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapImportMappingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/import-mapping").WithTags("Import");
         group.MapPost("/detect", Detect);
