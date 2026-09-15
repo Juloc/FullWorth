@@ -58,6 +58,13 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
             entity.ToTable("BankingInstanceSettings");
         });
 
+        modelBuilder.Entity("FullWorth.Backend.Modules.Accounts.FinanceAccount", entity =>
+        {
+            // 20260915190000_AccountProviderDisplayName. Rohes SQL, also muss der Snapshot dieselbe
+            // Laenge nennen wie Migration und Entitaetskonfiguration.
+            entity.Property<string>("ProviderDisplayName").HasMaxLength(200).HasColumnType("character varying(200)");
+        });
+
         modelBuilder.Entity("FullWorth.Backend.Modules.Purchases.FinanceTag", entity =>
         {
             // 20260915170000_Collections. Rohes SQL, also muss der Snapshot es kennen - und dieselben

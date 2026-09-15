@@ -172,6 +172,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.Property(x => x.IbanLookup).HasMaxLength(128);
             e.HasIndex(x => new { x.FullWorthSpaceId, x.IbanLookup });
             e.HasIndex(x => x.GroupId);
+            e.Property(x => x.ProviderDisplayName).HasMaxLength(200);
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<BankConnection>().WithMany().HasForeignKey(x => x.BankConnectionId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<FinanceAccount>().WithMany().HasForeignKey(x => x.ImportLinkedAccountId).OnDelete(DeleteBehavior.SetNull);

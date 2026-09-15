@@ -192,14 +192,25 @@ public sealed class IngestionService(
                 AccountHashes(entity).Concat(incomingHashes));
             entity.IdentificationHashesJson = JsonSerializer.Serialize(mergedHashes);
 
+            // Ob der Benutzer den Namen selbst gesetzt hat, ist seit #125 keine Vermutung mehr: er hat es
+            // genau dann getan, wenn der jetzige Name nicht mehr dem entspricht, was der Anbieter zuletzt
+            // geliefert hat. Vorher entschied das eine Rateregel, die nur GROSS_MIT_UNTERSTRICH erkannte -
+            // "DE123_GIRO" wurde ueberschrieben, "Girokonto Gemeinschaft" nie, obwohl beides vom Anbieter
+            // kommen kann.
+            //
+            // Ist noch kein Anbietername bekannt (Konto aus der Zeit vor der Spalte), bleibt der vorhandene
+            // Name stehen. Die Migration traegt bewusst nichts nach: welcher Name damals vom Anbieter kam,
+            // weiss niemand, und die sichere Annahme ist, dass der jetzige dem Benutzer gehoert.
             var mayRefreshDisplayName = isNew ||
                 string.IsNullOrWhiteSpace(entity.DisplayName) ||
                 string.Equals(entity.DisplayName, entity.InstitutionName, StringComparison.OrdinalIgnoreCase) ||
-                LooksProviderGeneratedDisplayName(entity.DisplayName);
+                (!string.IsNullOrWhiteSpace(entity.ProviderDisplayName) &&
+                    string.Equals(entity.DisplayName, entity.ProviderDisplayName, StringComparison.Ordinal));
 
             entity.BankConnectionId = connection.Id; entity.ProviderAccountId = item.ProviderAccountId; entity.InstitutionName = item.InstitutionName;
             if (item.HasDetails || isNew)
             {
+                if (!string.IsNullOrWhiteSpace(item.DisplayName)) entity.ProviderDisplayName = item.DisplayName;
                 if (mayRefreshDisplayName) entity.DisplayName = item.DisplayName;
                 entity.Product = item.Product; entity.AccountType = item.AccountType; entity.Currency = item.Currency;
                 entity.Usage = item.Usage; entity.PsuStatus = item.PsuStatus;
@@ -249,13 +260,6 @@ public sealed class IngestionService(
         await db.SaveChangesAsync(ct);
         await EnsureOrphanedAccountsHaveOwnerAsync(connection, result.Values, ct);
         return result;
-    }
-
-    private static bool LooksProviderGeneratedDisplayName(string? value)
-    {
-        var text = value?.Trim();
-        if (string.IsNullOrWhiteSpace(text) || !text.Contains('_')) return false;
-        return text.All(character => char.IsUpper(character) || char.IsDigit(character) || character == '_');
     }
 
     private static IReadOnlyList<string> AccountHashes(FinanceAccount account)

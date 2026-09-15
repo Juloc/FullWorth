@@ -23,6 +23,17 @@ public sealed class FinanceAccount
     public Guid? ImportLinkedAccountId { get; set; }
     public string InstitutionName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Wie die Bank das Konto nennt. Bleibt als Herkunftsangabe erhalten und wird nie von einer
+    /// Umbenennung ueberschrieben; <see cref="DisplayName"/> ist der Name, den der Benutzer sieht.
+    ///
+    /// Es gab die Spalte nicht, und deshalb entschied beim Sync eine Rateregel, ob der vorhandene
+    /// Name ueberschrieben werden darf (GROSS_MIT_UNTERSTRICH = wohl vom Anbieter). Mit zwei Spalten
+    /// ist es keine Frage mehr: der Sync schreibt hierhin, und DisplayName nur dann, wenn er noch
+    /// gleich dem bisherigen Anbieternamen ist - also niemand ihn geaendert hat (#125).
+    /// </summary>
+    public string? ProviderDisplayName { get; set; }
     public string? Product { get; set; }
     public string? AccountType { get; set; }
     public string? Usage { get; set; }

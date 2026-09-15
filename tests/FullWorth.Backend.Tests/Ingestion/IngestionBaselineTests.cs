@@ -86,6 +86,48 @@ public sealed class IngestionBaselineTests
     }
 
     [Fact]
+    public async Task RenamedAccountKeepsItsNameAndUntouchedOneFollowsTheProvider()
+    {
+        // Frueher entschied eine Rateregel, ob der vorhandene Name ueberschrieben werden darf: sie hielt
+        // nur GROSS_MIT_UNTERSTRICH fuer anbietergeneriert. Damit blieb ein nie angefasstes "Girokonto
+        // Gemeinschaft" fuer immer stehen, auch wenn die Bank es laengst umbenannt hatte. Jetzt zaehlt die
+        // Tatsache: gleich dem zuletzt gelieferten Anbieternamen heisst "nicht vom Benutzer gesetzt".
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(CreateAccountOnlyBatch("enable-banking", "session-a", "hash-follow", "acc-1", "Girokonto Gemeinschaft"), CancellationToken.None);
+        await service.IngestAsync(CreateAccountOnlyBatch("enable-banking", "session-a", "hash-follow", "acc-1", "Gemeinschaftskonto"), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var followed = await db.Accounts.AsNoTracking().SingleAsync(x => x.IdentificationHash == "hash-follow");
+        Assert.Equal("Gemeinschaftskonto", followed.DisplayName);
+        Assert.Equal("Gemeinschaftskonto", followed.ProviderDisplayName);
+    }
+
+    [Fact]
+    public async Task ProviderNameSurvivesALocalRenameAsProvenance()
+    {
+        // #125 verlangt, dass der Originalname als Herkunftsangabe erhalten bleibt. Mit nur einer Spalte
+        // war er nach der ersten Umbenennung fuer immer weg.
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(CreateAccountOnlyBatch("enable-banking", "session-a", "hash-keep", "acc-1", "DE123_GIRO"), CancellationToken.None);
+        var account = await db.Accounts.SingleAsync(x => x.IdentificationHash == "hash-keep");
+        account.DisplayName = "Haushalt";
+        await db.SaveChangesAsync();
+
+        await service.IngestAsync(CreateAccountOnlyBatch("enable-banking", "session-a", "hash-keep", "acc-1", "DE123_GIRO"), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var stored = await db.Accounts.AsNoTracking().SingleAsync(x => x.IdentificationHash == "hash-keep");
+        Assert.Equal("Haushalt", stored.DisplayName);
+        Assert.Equal("DE123_GIRO", stored.ProviderDisplayName);
+    }
+
+    [Fact]
     public async Task ProviderPlaceholderNameCanBeReplacedWhenRealDetailsArrive()
     {
         await using var database = await SqliteFullWorthDatabase.CreateAsync();
