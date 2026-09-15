@@ -185,6 +185,8 @@ public static class BackendApplication
         builder.Services.AddScoped<ICoachProviderResolver, UserAiCoachProviderResolver>();
         builder.Services.AddScoped<CoachService>();
         builder.Services.AddScoped<CategoryStore>();
+        builder.Services.AddScoped<CategoryIntelligenceStore>();
+        builder.Services.AddScoped<CategoryIntelligenceService>();
         builder.Services.AddScoped<ContractStore>();
         builder.Services.AddScoped<ContractLinkStore>();
         builder.Services.AddScoped<ContractMergePreviewService>();
