@@ -112,6 +112,10 @@ VALUES ({FullWorthSpaceDefaults.LegacyId},{userId},{"export.read"},{true},{DateT
         var transactionTags = await ReadAsync(archive, "transaction_tags.csv");
 
         Assert.Contains("URLAUB_ETIKETT", tags, StringComparison.Ordinal);
+        // Seit #124 ist ein Etikett eine Sammlung. Ein Export, der Symbol, Beschreibung, Zeitraum und
+        // Status weglaesst, laesst den Stand nicht wiederherstellen - und dafuer gibt es ihn.
+        foreach (var column in new[] { "Icon", "Description", "StartDate", "EndDate", "Status" })
+            Assert.Contains(column, tags, StringComparison.Ordinal);
         Assert.Contains(etikett.ToString(), transactionTags, StringComparison.Ordinal);
         Assert.Contains(eigeneBuchung.ToString(), transactionTags, StringComparison.Ordinal);
         Assert.DoesNotContain(fremdeBuchung.ToString(), transactionTags, StringComparison.Ordinal);

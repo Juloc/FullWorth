@@ -7,7 +7,7 @@ namespace FullWorth.Backend.Modules.Purchases;
 public sealed record TagWrite(string Name);
 public sealed record AttachTagWrite(Guid TagId);
 
-public sealed class PurchaseMetadataService(FullWorthDbContext db)
+public sealed class PurchaseMetadataService(FullWorthDbContext db, FullWorth.Backend.Security.SpaceAccess access)
 {
     public async Task<object?> ListTagsAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
     {
@@ -28,9 +28,17 @@ public sealed class PurchaseMetadataService(FullWorthDbContext db)
         return (PurchaseMutationResult.Success, new { tag.Id, tag.Name }, null);
     }
 
+    /// <summary>
+    /// Ein Etikett ist seit #124 eine Sammlung, und an einer Sammlung haengen Buchungen: TransactionTags
+    /// zeigt mit ON DELETE CASCADE darauf. Loeschen ist hier deshalb dieselbe Handlung wie unter
+    /// /api/collections und braucht dasselbe Recht - sonst waere die Artikelansicht die offene
+    /// Hintertuer zu den Sammlungen des ganzen Space.
+    /// </summary>
     public async Task<PurchaseMutationResult> DeleteTagAsync(Guid userId, Guid fullWorthSpaceId, Guid tagId, CancellationToken ct)
     {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return PurchaseMutationResult.NotFound;
+        if (!await access.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.categorize", ct))
+            return PurchaseMutationResult.Forbidden;
         var tag = await db.Set<FinanceTag>().SingleOrDefaultAsync(x => x.Id == tagId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (tag is null) return PurchaseMutationResult.NotFound;
         db.Remove(tag); await db.SaveChangesAsync(ct); return PurchaseMutationResult.Success;

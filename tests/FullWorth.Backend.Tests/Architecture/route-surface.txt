@@ -20,7 +20,6 @@ DELETE           /api/budgets/{id:guid}
 DELETE           /api/categories/{id:guid}
 DELETE           /api/coach/conversations/{id:guid}
 DELETE           /api/collections/{id:guid}
-DELETE           /api/collections/{id:guid}/transactions
 DELETE           /api/compensation/history/{id:guid}
 DELETE           /api/compensation/other-income/{id:guid}
 DELETE           /api/compensation/payslips/{id:guid}
@@ -373,6 +372,7 @@ POST             /api/coach/conversations
 POST             /api/coach/conversations/{id:guid}/messages
 POST             /api/collections/
 POST             /api/collections/{id:guid}/transactions
+POST             /api/collections/{id:guid}/transactions/remove
 POST             /api/compensation/calculate
 POST             /api/compensation/compare
 POST             /api/compensation/history

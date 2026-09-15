@@ -35,7 +35,10 @@ public static class CollectionEndpoints
         group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
         group.MapPost("/{id:guid}/transactions", AddTransactions);
-        group.MapDelete("/{id:guid}/transactions", RemoveTransactions);
+        // Kein DELETE mit Rumpf: minimal APIs leiten fuer DELETE keinen Body ab, und die Anwendung
+        // startet dann gar nicht erst ("Body was inferred but the method does not allow inferred body
+        // parameters"). Eine Liste von Buchungen gehoert in den Rumpf, also ist es ein POST.
+        group.MapPost("/{id:guid}/transactions/remove", RemoveTransactions);
         group.MapGet("/{id:guid}/candidates", Candidates);
 
         // Die Sammlungen einer Buchung - die Gegenrichtung, fuer das Buchungsdetail.

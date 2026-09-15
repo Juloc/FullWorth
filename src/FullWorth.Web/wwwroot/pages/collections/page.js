@@ -1,0 +1,265 @@
+// Sammlungen: „wofür gehörte diese Buchung zusammen?" (#124)
+//
+// Die Kategorie beantwortet „was wurde gekauft", die Sammlung „zu welchem Vorhaben gehört es".
+// Beide Achsen sind unabhängig; eine Sammlung ändert nie Kategorie, Betrag oder Buchung.
+//
+// Gerechnet wird ausschließlich im Backend. Diese Datei summiert nichts: Sammlungen überschneiden
+// sich — dieselbe Bauhaus-Buchung gehört zu „Wohnung" UND zu „Badrenovierung" —, und eine Summe über
+// mehrere wäre doppelt gezählt. Deshalb steht hier auch bewusst keine Gesamtzeile über der Liste.
+
+import { emptyRow } from '../../components/empty.js';
+import { categoryIconInner, categoryIconPicker, selectedIconKey, TRASH_ICON } from '../../components/icons.js';
+import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { keepListPosition } from '../../components/list-position.js';
+
+const STATUSES = ['active', 'completed', 'archived'];
+
+let ctx = null;
+let state = { rows: [], openId: null, status: '', query: '' };
+
+const t = key => ctx.get('collections.' + key);
+
+export async function renderCollections(pageContext) {
+  ctx = pageContext;
+  await refresh();
+}
+
+export function bindCollections(pageContext) {
+  ctx = pageContext;
+  ctx.$('#col-status')?.addEventListener('change', event => { state.status = event.target.value; void refresh(); });
+  // Die Suche filtert die bereits geladene Liste - sie ist kurz, und eine Runde zum Server für ein
+  // Wort wäre langsamer als das Tippen.
+  ctx.$('#col-search')?.addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); renderList(); });
+  ctx.$('#col-close')?.addEventListener('click', () => { state.openId = null; renderDetail(); });
+}
+
+/** Der Eintrag „Hinzufügen" der Kopfzeile - dieselbe Aktion wie auf anderen Seiten. */
+export function newCollection(pageContext) {
+  ctx = pageContext;
+  return openEditor(null);
+}
+
+async function refresh() {
+  try {
+    state.rows = (await ctx.api(`api/collections${state.status ? `?status=${encodeURIComponent(state.status)}` : ''}`)) || [];
+  } catch (error) {
+    ctx.toast(error.message || ctx.get('common.error'));
+    state.rows = [];
+  }
+  renderList();
+  await renderDetail();
+}
+
+function visibleRows() {
+  if (!state.query) return state.rows;
+  return state.rows.filter(row => `${row.name} ${row.description || ''}`.toLowerCase().includes(state.query));
+}
+
+function renderList() {
+  const list = ctx.$('#collections-list');
+  if (!list) return;
+  const rows = visibleRows();
+  if (!rows.length) { list.innerHTML = emptyRow(ctx.get('common.empty')); return; }
+
+  const fragment = document.createDocumentFragment();
+  for (const row of rows) fragment.appendChild(collectionRow(row));
+  list.innerHTML = '';
+  list.appendChild(fragment);
+}
+
+function periodLabel(row) {
+  if (!row.startDate && !row.endDate) return t('ongoing');
+  if (row.startDate && row.endDate) return `${ctx.date(row.startDate)} – ${ctx.date(row.endDate)}`;
+  return row.startDate ? `${t('since')} ${ctx.date(row.startDate)}` : `${t('until')} ${ctx.date(row.endDate)}`;
+}
+
+function collectionRow(row) {
+  const element = document.createElement('div');
+  element.className = 'row';
+  element.dataset.collectionId = row.id;
+  // Ein unvollständiger Betrag sagt es hier, statt eine exakte Summe vorzutäuschen.
+  const amount = row.isComplete
+    ? ctx.money(row.expenses, row.currency)
+    : `${ctx.money(row.expenses, row.currency)} <span class="col-incomplete">${ctx.esc(t('incomplete'))}</span>`;
+
+  element.innerHTML = `<div class="col-row-icon" aria-hidden="true">${categoryIconInner(row.icon)}</div>
+    <div class="row-main">
+      <div class="row-title">${ctx.esc(row.name)} <span class="col-status is-${ctx.esc(row.status)}">${ctx.esc(t('status_' + row.status))}</span></div>
+      <div class="row-sub">${ctx.esc(periodLabel(row))} · ${row.transactionCount} ${ctx.esc(ctx.get('transactions.title'))}</div>
+    </div>
+    <div class="row-side"><span class="amount">${amount}</span>
+      <button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button>
+      <button class="icon-button" data-delete title="${ctx.esc(ctx.get('common.delete'))}" aria-label="${ctx.esc(ctx.get('common.delete'))}">${TRASH_ICON}</button>
+    </div>`;
+
+  element.querySelector('[data-edit]').onclick = event => { event.stopPropagation(); void openEditor(row); };
+  element.querySelector('[data-delete]').onclick = event => { event.stopPropagation(); void remove(row); };
+  element.onclick = () => { state.openId = row.id; void renderDetail(); };
+  return element;
+}
+
+async function remove(row) {
+  // Was verschwindet, ist die Sammlung - nicht eine einzige Buchung. Das steht in der Frage.
+  if (!await ctx.confirm(t('deleteConfirm').replace('{name}', row.name),
+    { title: t('delete'), destructive: true, confirmLabel: ctx.get('common.delete') })) return;
+  try {
+    await ctx.api(`api/collections/${row.id}`, { method: 'DELETE' });
+    if (state.openId === row.id) state.openId = null;
+    ctx.toast(ctx.get('common.deleted'));
+    await refresh();
+  } catch (error) {
+    ctx.toast(error.message || ctx.get('common.error'));
+  }
+}
+
+async function openEditor(existing) {
+  const iconHost = document.createElement('span');
+  const handles = openFormDialog({
+    title: existing ? t('edit') : t('new'),
+    closeLabel: ctx.get('common.close'),
+    advancedLabel: ctx.get('common.more') || 'Mehr',
+    fallbackError: ctx.get('common.error'),
+    create: html => ctx.dialog(html),
+    fields: [
+      { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 100 },
+      { name: 'description', kind: FieldKind.Text, label: t('description'), maxLength: 500 },
+      // Ein Zeitraum ist optional: „Wohnung" läuft dauerhaft. Er hilft beim Vorschlagen, er grenzt nicht ein.
+      { name: 'startDate', kind: FieldKind.Date, label: t('start'), group: 'period', hint: t('periodHint') },
+      { name: 'endDate', kind: FieldKind.Date, label: t('end'), group: 'period' },
+      { name: 'status', kind: FieldKind.Select, label: t('status'),
+        rawOptions: STATUSES.map(status =>
+          `<option value="${status}">${ctx.esc(t('status_' + status))}</option>`).join('') }
+    ],
+    values: {
+      name: existing?.name || '',
+      description: existing?.description || '',
+      startDate: existing?.startDate || '',
+      endDate: existing?.endDate || '',
+      status: existing?.status || 'active'
+    },
+    submitLabel: ctx.get('common.save'),
+    onSubmit: async values => {
+      const body = {
+        name: values.name,
+        description: values.description || null,
+        icon: selectedIconKey(iconHost),
+        color: existing?.color || null,
+        startDate: values.startDate || null,
+        endDate: values.endDate || null,
+        status: values.status
+      };
+      await ctx.api(existing ? `api/collections/${existing.id}` : 'api/collections',
+        ctx.jsonBody(body, existing ? 'PUT' : 'POST'));
+      await refresh();
+    }
+  });
+
+  // Das Symbol ist derselbe Wähler wie bei Kategorien - eine Sammlung ist auch nur etwas mit einem Namen.
+  const nameField = handles.form.querySelector('[name="name"]')?.closest('label');
+  if (nameField) {
+    const wrapper = document.createElement('label');
+    wrapper.innerHTML = `<span>${ctx.esc(t('icon'))}</span>`;
+    iconHost.append(categoryIconPicker(existing?.icon || null, { none: ctx.get('common.empty') }));
+    wrapper.append(iconHost);
+    nameField.insertAdjacentElement('afterend', wrapper);
+  }
+  return handles;
+}
+
+async function renderDetail() {
+  const panel = ctx.$('#collection-detail');
+  if (!panel) return;
+  if (!state.openId) { panel.hidden = true; return; }
+
+  let detail = null;
+  try { detail = await ctx.api(`api/collections/${state.openId}`); }
+  catch (error) { ctx.toast(error.message || ctx.get('common.error')); panel.hidden = true; return; }
+
+  panel.hidden = false;
+  const row = detail.collection;
+  ctx.$('#collection-detail-title').textContent = row.name;
+
+  const total = detail.categories.reduce((sum, share) => sum + Number(share.expenses || 0), 0);
+  const split = detail.categories.length
+    ? `<div class="col-split">${detail.categories.map(share => `
+        <div class="col-split-row">
+          <span>${ctx.esc(share.categoryName || ctx.get('common.uncategorized'))}</span>
+          <span class="amount">${ctx.money(share.expenses, row.currency)}</span>
+          <span class="col-split-bar"><span style="width:${total > 0 ? Math.round((share.expenses / total) * 100) : 0}%"></span></span>
+        </div>`).join('')}</div>`
+    : `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`;
+
+  ctx.$('#collection-detail-body').innerHTML = `
+    ${row.description ? `<p class="row-sub">${ctx.esc(row.description)}</p>` : ''}
+    <div class="col-metrics">
+      ${metric(t('expenses'), ctx.money(row.expenses, row.currency))}
+      ${metric(t('income'), ctx.money(row.income, row.currency))}
+      ${metric(t('net'), ctx.money(row.net, row.currency))}
+      ${metric(ctx.get('transactions.title'), String(row.transactionCount))}
+    </div>
+    ${row.isComplete ? '' : `<p class="col-incomplete">${ctx.esc(t('incompleteHint').replace('{currencies}', row.missingCurrencies.join(', ')))}</p>`}
+    <h3>${ctx.esc(t('byCategory'))}</h3>
+    ${split}
+    <div id="collection-candidates"></div>`;
+
+  ctx.$('#col-edit').onclick = () => openEditor(row);
+  ctx.$('#col-add-transactions').onclick = () => openCandidates(row);
+}
+
+function metric(label, value) {
+  return `<div class="col-metric"><span class="col-metric-label">${ctx.esc(label)}</span><span class="col-metric-value">${value}</span></div>`;
+}
+
+/**
+ * Buchungen hinzufügen: der Server schlägt vor, der Mensch entscheidet.
+ *
+ * Jeder Vorschlag trägt seinen Grund — Händler, Kategorie, Zeitraum. Das ist nicht Zierde: der
+ * Zeitraum allein bedeutet ausdrücklich nicht, dass eine Buchung dazugehört (während einer Reise
+ * läuft die Miete weiter), und nur mit dem Grund daneben kann das jemand beurteilen.
+ */
+async function openCandidates(row) {
+  let candidates = [];
+  try { candidates = (await ctx.api(`api/collections/${row.id}/candidates`)) || []; }
+  catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }
+
+  if (!candidates.length) { ctx.toast(t('noCandidates')); return; }
+
+  const rows = candidates.map(candidate => `<label class="row check-row">
+      <input type="checkbox" value="${ctx.esc(candidate.transactionId)}">
+      <div class="row-main">
+        <div class="row-title">${ctx.esc(candidate.counterparty || ctx.get('common.empty'))}</div>
+        <div class="row-sub">${candidate.date ? ctx.date(candidate.date) : ''}${candidate.categoryName ? ` · ${ctx.esc(candidate.categoryName)}` : ''}${candidate.accountName ? ` · ${ctx.esc(candidate.accountName)}` : ''}</div>
+        <div class="col-candidate-reasons">${candidate.reasons.map(reason => `<span class="col-reason">${ctx.esc(t('reason_' + reason))}</span>`).join('')}</div>
+      </div>
+      <span class="amount">${ctx.money(candidate.amount, candidate.currency)}</span>
+    </label>`).join('');
+
+  const dialog = ctx.dialog(`<div class="dialog-card">
+    <div class="panel-head"><h2>${ctx.esc(t('addTransactions'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+    <p class="row-sub">${ctx.esc(t('candidateHint').replace('{count}', String(candidates.length)))}</p>
+    <div class="rows">${rows}</div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+    </div>
+  </div>`);
+
+  const close = () => dialog.close();
+  dialog.querySelector('[data-close]').onclick = close;
+  dialog.querySelector('[data-cancel]').onclick = close;
+  dialog.querySelector('[data-apply]').onclick = async event => {
+    const chosen = [...dialog.querySelectorAll('input:checked')].map(input => input.value);
+    if (!chosen.length) { close(); return; }
+    event.currentTarget.disabled = true;
+    try {
+      // Eine Anweisung für alle Ausgewählten - nicht eine Runde je Buchung.
+      await ctx.api(`api/collections/${row.id}/transactions`, ctx.jsonBody({ transactionIds: chosen }));
+      close();
+      await keepListPosition(() => refresh());
+    } catch (error) {
+      ctx.toast(error.message || ctx.get('common.error'));
+      event.currentTarget.disabled = false;
+    }
+  };
+  dialog.showModal();
+}

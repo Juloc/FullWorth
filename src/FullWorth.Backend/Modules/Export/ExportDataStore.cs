@@ -23,14 +23,33 @@ namespace FullWorth.Backend.Modules.Export;
 /// </summary>
 public sealed class ExportDataStore(FullWorthDbContext db)
 {
-    /// <summary>Die Etiketten dieses Space.</summary>
+    /// <summary>
+    /// Die Sammlungen dieses Space - seit #124 mit allem, was eine Sammlung ausmacht.
+    ///
+    /// Vorher standen hier nur Id, Name und Farbe. Symbol, Beschreibung, Zeitraum und Status haetten
+    /// im Export gefehlt, und ein Export, aus dem sich der Stand nicht wiederherstellen laesst, ist
+    /// keiner.
+    /// </summary>
     public async Task<List<string[]>> Tags(Guid space, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
-        var result = Table(new[] { "Id", "Name", "Color" });
-        await using var command = RawSql.Command(connection, "SELECT \"Id\",\"Name\",\"Color\" FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"", ("@space", space));
+        var result = Table(new[] { "Id", "Name", "Color", "Icon", "Description", "StartDate", "EndDate", "Status" });
+        await using var command = RawSql.Command(connection,
+            "SELECT \"Id\",\"Name\",\"Color\",\"Icon\",\"Description\",\"StartDate\",\"EndDate\",\"Status\" FROM \"FinanceTags\" WHERE \"FullWorthSpaceId\"=@space ORDER BY \"Name\"",
+            ("@space", space));
         await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) result.Add(new[] { RawSql.Guid(reader, "Id").ToString(), RawSql.String(reader, "Name"), RawSql.NullableString(reader, "Color") ?? "" });
+        while (await reader.ReadAsync(ct))
+            result.Add(new[]
+            {
+                RawSql.Guid(reader, "Id").ToString(),
+                RawSql.String(reader, "Name"),
+                RawSql.NullableString(reader, "Color") ?? "",
+                RawSql.NullableString(reader, "Icon") ?? "",
+                RawSql.NullableString(reader, "Description") ?? "",
+                RawSql.NullableDate(reader, "StartDate")?.ToString("yyyy-MM-dd") ?? "",
+                RawSql.NullableDate(reader, "EndDate")?.ToString("yyyy-MM-dd") ?? "",
+                RawSql.String(reader, "Status")
+            });
         return result;
     }
 

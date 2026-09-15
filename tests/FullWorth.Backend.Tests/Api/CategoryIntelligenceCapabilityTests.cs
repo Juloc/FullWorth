@@ -12,8 +12,13 @@ namespace FullWorth.Backend.Tests.Api;
 
 public sealed class CategoryIntelligenceCapabilityTests
 {
+    /// <summary>
+    /// Die Etiketten dieser Fluche heissen seit #124 Sammlungen und liegen unter /api/collections.
+    /// Die Invariante ist dieselbe geblieben und genau deshalb steht der Test noch hier: wer
+    /// kategorisieren darf, darf eine Sammlung anlegen - wer nur zusieht, nicht.
+    /// </summary>
     [Fact]
-    public async Task CategorizeCapability_AllowsTagsButViewerWithoutCapabilityIsForbidden()
+    public async Task CategorizeCapability_AllowsCollectionsButViewerWithoutCapabilityIsForbidden()
     {
         using var factory = new BackendWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -24,14 +29,14 @@ public sealed class CategoryIntelligenceCapabilityTests
         await Grant(factory, editor, "transactions.categorize", true);
 
         using var create = UserRequest(HttpMethod.Post,
-            $"/api/category-intelligence/tags?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
-        create.Content = JsonContent.Create(new { name = "Urlaub", color = "#336699" });
+            $"/api/collections?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", editor);
+        create.Content = JsonContent.Create(new { name = "Urlaub" });
         using var created = await client.SendAsync(create);
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
 
         using var denied = UserRequest(HttpMethod.Post,
-            $"/api/category-intelligence/tags?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", viewer);
-        denied.Content = JsonContent.Create(new { name = "Privat", color = "#123456" });
+            $"/api/collections?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", viewer);
+        denied.Content = JsonContent.Create(new { name = "Privat" });
         using var deniedResponse = await client.SendAsync(denied);
         Assert.Equal(HttpStatusCode.Forbidden, deniedResponse.StatusCode);
     }
