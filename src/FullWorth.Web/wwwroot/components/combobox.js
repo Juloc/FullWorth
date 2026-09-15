@@ -45,6 +45,15 @@ export function attachCombobox(ctx, selectEl, options = {}) {
   selectEl.dataset.combobox = 'on';
 
   const label = options.title || ctx.get('combobox.pick');
+
+  // `anchored`: das Feld SELBST ist die Auswahl. Das native <select> bleibt als Wahrheit im
+  // Formular stehen (nur versteckt, damit FormData es weiter sieht) und bekommt einen Knopf davor,
+  // der den aktuellen Wert samt Symbol zeigt und die Liste am Feld aufklappt.
+  //
+  // Ohne `anchored` bleibt es beim alten Nebeneinander aus Feld und Lupe. Das ist fuer kurze Listen
+  // richtig: dort schlaegt das Rad des Telefons jeden Eigenbau.
+  if (options.anchored) return attachAnchored(ctx, selectEl, options, label);
+
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'icon-button combobox-trigger';
@@ -64,13 +73,61 @@ export function attachCombobox(ctx, selectEl, options = {}) {
   return button;
 }
 
+function attachAnchored(ctx, selectEl, options, label) {
+  const field = document.createElement('button');
+  field.type = 'button';
+  field.className = 'combobox-field';
+  field.setAttribute('aria-haspopup', 'listbox');
+  field.setAttribute('aria-expanded', 'false');
+  field.setAttribute('aria-label', label);
+
+  selectEl.hidden = true;
+  selectEl.insertAdjacentElement('afterend', field);
+
+  let cache = null;
+  const itemFor = id => cache?.find(item => String(item.id) === String(id)) || null;
+
+  const paint = () => {
+    const chosen = itemFor(selectEl.value);
+    const fallback = selectEl.selectedOptions[0]?.textContent?.trim();
+    const text = chosen?.label || (selectEl.value ? fallback : '') || options.placeholder || label;
+    field.innerHTML = (chosen?.iconHtml ? `<span class="combobox-icon" aria-hidden="true">${chosen.iconHtml}</span>` : '')
+      + `<span class="combobox-field-text${selectEl.value ? '' : ' is-placeholder'}">${ctx.esc(text)}</span>`
+      + `<span class="combobox-field-caret" aria-hidden="true">▾</span>`;
+  };
+
+  // Der Wert kann auch von aussen gesetzt werden (Formular zuruecksetzen, Vorbelegung) - dann muss
+  // die sichtbare Seite mitgehen.
+  selectEl.addEventListener('change', paint);
+  paint();
+
+  field.addEventListener('click', async () => {
+    field.setAttribute('aria-expanded', 'true');
+    await openCombobox(ctx, {
+      ...options,
+      selectEl,
+      anchorTo: field,
+      onItems: list => { cache = list; },
+      onSelect: id => {
+        selectEl.value = id;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    field.setAttribute('aria-expanded', 'false');
+    paint();
+  });
+  return field;
+}
+
 export async function openCombobox(ctx, {
   title,
   searchPlaceholder,
   items,
   selectEl = null,
   onSelect,
-  extra = null
+  extra = null,
+  anchorTo = null,
+  onItems = null
 } = {}) {
   let list;
   try {
@@ -79,14 +136,25 @@ export async function openCombobox(ctx, {
     ctx.toast(error.message || ctx.get('common.error'));
     return;
   }
+  onItems?.(list);
 
   const heading = title || ctx.get('combobox.pick');
-  const dialog = ctx.dialog(`<div class="dialog-card drawer combobox-dialog">
-    <div class="panel-head"><h2>${ctx.esc(heading)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
+  const inner = `<div class="panel-head"><h2>${ctx.esc(heading)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <input type="search" data-search placeholder="${ctx.esc(searchPlaceholder || ctx.get('combobox.search'))}" autocomplete="off">
     <div class="refund-candidates" data-list role="listbox"></div>
-    ${extra?.html || ''}
-  </div>`);
+    ${extra?.html || ''}`;
+
+  // Am Feld aufklappen statt als grosser Dialog in der Mitte. `<dialog>` bleibt es trotzdem: das
+  // bringt Fokusfang, Escape und den Rueckweg zum ausloesenden Element geschenkt - nur eben ohne
+  // Verdunklung und an der Stelle, an der der Benutzer gerade hinsieht. Unter 768 px wird daraus
+  // wieder ein Blatt von unten; dieselbe Komponente, andere Dichte.
+  const dialog = anchorTo
+    // `mobileMode:'sheet'` nimmt das Popover aus der Ganzseiten-Behandlung heraus, die
+    // `dialogs.css` unter 768 px jedem Dialog gibt - und bringt die Wischgeste zum Schliessen mit.
+    ? ctx.dialog(`<div class="dialog-card combobox-dialog combobox-popover">${inner}</div>`,
+        { className: 'combobox-popover-host', mobileMode: 'sheet' })
+    : ctx.dialog(`<div class="dialog-card drawer combobox-dialog">${inner}</div>`);
+  if (anchorTo) placeAt(dialog, anchorTo);
 
   const rows = dialog.querySelector('[data-list]');
   const search = dialog.querySelector('[data-search]');
@@ -152,5 +220,42 @@ export async function openCombobox(ctx, {
 
   dialog.showModal();
   search.focus();
-  return dialog;
+  // Ein Klick neben die Liste schliesst sie. Bei einem Popover erwartet das jeder; beim grossen
+  // Dialog gilt weiter der Schliessen-Knopf.
+  if (anchorTo) {
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+  }
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog), { once: true }));
+}
+
+/**
+ * Die Liste unter das Feld legen - und darueber, wenn darunter kein Platz mehr ist.
+ *
+ * `position:fixed` gegen das Ansichtsfenster, weil ein `<dialog>` in der Top-Layer liegt und
+ * deshalb ohnehin nicht mehr im Fluss seines Formulars steht. Gerechnet wird nach dem Zeichnen,
+ * sonst ist die eigene Hoehe noch 0 und die Liste kleht oben.
+ */
+function placeAt(dialog, anchor) {
+  const card = dialog.querySelector('.combobox-popover');
+  const apply = () => {
+    // Am Telefon positioniert das Stylesheet (Blatt von unten). Hier nichts zu setzen ist besser,
+    // als es hinterher mit !important wieder einzufangen - inline schlaegt sonst die Medienabfrage.
+    if (matchMedia('(max-width:767px)').matches) {
+      card.style.cssText = '';
+      return;
+    }
+    const field = anchor.getBoundingClientRect();
+    const gap = 6;
+    const below = window.innerHeight - field.bottom - gap;
+    const above = field.top - gap;
+    const wanted = card.offsetHeight || 320;
+    const openUp = below < Math.min(wanted, 240) && above > below;
+
+    card.style.maxHeight = `${Math.max(160, (openUp ? above : below))}px`;
+    card.style.width = `${Math.max(240, field.width)}px`;
+    card.style.left = `${Math.min(field.left, window.innerWidth - card.offsetWidth - 8)}px`;
+    card.style.top = openUp ? `${Math.max(8, field.top - card.offsetHeight - gap)}px` : `${field.bottom + gap}px`;
+  };
+  apply();
+  requestAnimationFrame(apply);
 }

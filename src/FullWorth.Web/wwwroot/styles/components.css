@@ -163,7 +163,7 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 
 /* Die Kategorie-Auswahl zeigt den Baum: Einrückung je Ebene, Symbol vor dem Namen.
    Vorher stand dort der volle Pfad als eine Zeile Text und als Symbol der blanke Schlüssel. */
-.candidate-row{padding-left:calc(var(--s3) + var(--combobox-depth,0) * var(--s4))}
+.candidate-row{--combobox-depth:0;padding-left:calc(var(--s3) + var(--combobox-depth) * var(--s4))}
 .combobox-icon{display:inline-flex;width:18px;height:18px;margin-right:var(--s2);vertical-align:-3px;color:var(--text-muted)}
 .combobox-icon svg{width:100%;height:100%}
 
@@ -173,3 +173,25 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 .category-icon-choice svg{width:20px;height:20px}
 .category-icon-choice:hover{background:var(--surface-3)}
 .category-icon-choice.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+
+/* Die Kategorie-Auswahl AM FELD statt als Dialog in der Bildschirmmitte.
+   Vorher standen dort ein natives <select> UND ein Lupe-Knopf daneben - zwei Wege zum selben Wert.
+   Jetzt ist das Feld selbst die Auswahl; das <select> bleibt versteckt als Formularwahrheit. */
+.combobox-field{display:flex;align-items:center;gap:var(--s2);width:100%;min-width:0;text-align:left;font:inherit;color:inherit}
+.combobox-field-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combobox-field-text.is-placeholder{color:var(--muted)}
+.combobox-field-caret{flex:0 0 auto;color:var(--muted);font-size:11px}
+
+/* Das Popover haengt an der Stelle, an der der Benutzer hinsieht - ohne Verdunklung. */
+dialog.combobox-popover-host{max-width:none;width:auto}
+dialog.combobox-popover-host::backdrop{background:transparent}
+.combobox-popover{position:fixed;margin:0;overflow:auto;padding:var(--s2);gap:var(--s2);box-shadow:var(--shadow-menu)}
+.combobox-popover .panel-head h2{font-size:14px}
+
+@media (max-width:767px){
+  /* Am Telefon wieder ein Blatt von unten: dieselbe Komponente, andere Dichte - keine zweite
+     fachliche Umsetzung, wie das Issue es verlangt. */
+  .combobox-popover{inset:auto 0 0 0;max-height:min(72dvh,560px);border-radius:18px 18px 0 0;
+    padding-bottom:calc(var(--s3) + env(safe-area-inset-bottom,0px))}
+  dialog.combobox-popover-host::backdrop{background:rgba(11,15,20,.42)}
+}

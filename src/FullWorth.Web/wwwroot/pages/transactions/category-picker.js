@@ -17,7 +17,10 @@ export function attachCategoryPicker(ctx, selectEl) {
     title: ctx.get('categories.pick'),
     searchPlaceholder: ctx.get('categories.pickSearch'),
     items: () => loadItems(ctx),
-    extra: createSlot(ctx)
+    extra: createSlot(ctx),
+    // Das Feld selbst ist die Auswahl - kein natives Feld mit Lupe daneben (#121).
+    anchored: true,
+    placeholder: ctx.get('common.uncategorized')
   });
 }
 
