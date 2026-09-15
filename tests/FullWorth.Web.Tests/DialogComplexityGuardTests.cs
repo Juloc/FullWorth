@@ -52,8 +52,9 @@ public sealed class DialogComplexityGuardTests
     {
         ["styles/app.css"] = 1,
         ["pages/purchases/page.css"] = 1,
-        ["auth/auth.css"] = 5,
-        ["passkeys/passkeys.css"] = 4
+        ["auth/auth.css"] = 5
+        // passkeys/passkeys.css stand hier mit 4. Alle vier standen in Kommentaren und waren nie
+        // Farben; seit die Zaehlung Kommentare ueberspringt, hat die Datei keine einzige.
     };
 
     /// <summary>Standalone pages that do not link tokens.css, so a local palette is correct there.</summary>
@@ -130,9 +131,13 @@ public sealed class DialogComplexityGuardTests
             if (SelfContainedPages.Any(page => relative.StartsWith(page + "/", StringComparison.Ordinal))) continue;
 
             var css = File.ReadAllText(file);
+            // Ein Kommentar faerbt nichts. "(#129)" als Verweis auf ein Issue sieht wie eine Hexfarbe
+            // aus und wurde als eine gezaehlt - der Waechter meldete dann eine Farbe, die es nicht gibt,
+            // und haette jeden weiteren Issue-Verweis in einem Stylesheet ebenso gemeldet.
+            var withoutComments = Regex.Replace(css, @"/\*.*?\*/", " ", RegexOptions.Singleline);
             // A hex inside a var() fallback is unreachable while the token exists, so it is noise, not a
             // hardcoded colour. Strip those before counting.
-            var withoutFallbacks = Regex.Replace(css, @"var\(--[a-z0-9-]+\s*,[^)]*\)", "VAR");
+            var withoutFallbacks = Regex.Replace(withoutComments, @"var\(--[a-z0-9-]+\s*,[^)]*\)", "VAR");
             var count = Regex.Matches(withoutFallbacks, "#[0-9a-fA-F]{3,8}\\b").Count;
             if (count > 0) offenders[relative] = count;
         }

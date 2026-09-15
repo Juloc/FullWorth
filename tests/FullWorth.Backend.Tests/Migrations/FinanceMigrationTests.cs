@@ -100,8 +100,21 @@ public sealed class FinanceMigrationTests
         Assert.Equal(FullWorthSeeder.DefaultCategoryCount, await db.Categories.CountAsync(x => x.FullWorthSpaceId == FullWorthSpaceDefaults.LegacyId));
     }
 
+    /// <summary>
+    /// Gesaet wird einmal je Space, danach nie wieder - und zwar auch dann nicht, wenn eine
+    /// Standardkategorie fehlt.
+    ///
+    /// Bis #117 legte der Seeder bei jedem Lauf jeden fehlenden Standardschluessel nach. Dieser Test
+    /// hielt genau das fest ("loesche 'cash', saee erneut, sie ist wieder da"). Im Betrieb laeuft der
+    /// Seeder bei jedem Start, und damit kam eine geloeschte Standardkategorie nach dem naechsten
+    /// Neustart zurueck - auf Englisch, neben der deutschen, auf die der Benutzer sie gerade
+    /// zusammengefuehrt hatte. Das war das gemeldete gemischte Kategorie-Set.
+    ///
+    /// Was unveraendert gilt: eine Umbenennung wird nie ueberschrieben, und ein zweiter Space stoert
+    /// den ersten nicht.
+    /// </summary>
     [Fact]
-    public async Task SeederIsPerSpaceIdempotentAndDoesNotOverwriteExistingCategoryEdits()
+    public async Task SeederRunsOncePerSpaceAndNeverResurrectsADeletedDefaultCategory()
     {
         using var factory = new BackendWebApplicationFactory();
         using var client = factory.CreateClient();
@@ -129,12 +142,21 @@ public sealed class FinanceMigrationTests
         await seeder.SeedAsync(db, CancellationToken.None);
 
         Assert.Equal(FullWorthSeeder.DefaultCategoryCount, await db.Categories.CountAsync(x => x.FullWorthSpaceId == FullWorthSpaceDefaults.LegacyId));
-        Assert.Equal(FullWorthSeeder.DefaultCategoryCount, await db.Categories.CountAsync(x => x.FullWorthSpaceId == secondSpace.Id));
+        // Eine weniger, und sie bleibt weg: was der Benutzer geloescht hat, waechst nicht nach.
+        Assert.Equal(FullWorthSeeder.DefaultCategoryCount - 1, await db.Categories.CountAsync(x => x.FullWorthSpaceId == secondSpace.Id));
+        Assert.False(await db.Categories.AnyAsync(x => x.FullWorthSpaceId == secondSpace.Id && x.Key == "cash"));
         Assert.Equal("Custom housing", await db.Categories
             .Where(x => x.FullWorthSpaceId == secondSpace.Id && x.Key == "housing")
             .Select(x => x.Name)
             .SingleAsync());
-        Assert.True(await db.Categories.AnyAsync(x => x.FullWorthSpaceId == secondSpace.Id && x.Key == "cash"));
+
+        // Und der Marker sagt, dass hier gesaet wurde - er ist der Grund, warum nichts nachwaechst.
+        var seeded = await db.FullWorthSpaces.AsNoTracking()
+            .Where(space => space.Id == secondSpace.Id)
+            .Select(space => new { space.DefaultCategoriesSeededAt, space.DefaultCategoryLanguage })
+            .SingleAsync();
+        Assert.NotNull(seeded.DefaultCategoriesSeededAt);
+        Assert.Equal("en", seeded.DefaultCategoryLanguage);
     }
 
     [Fact]
