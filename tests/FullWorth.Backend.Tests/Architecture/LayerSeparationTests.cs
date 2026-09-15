@@ -5,19 +5,17 @@ namespace FullWorth.Backend.Tests.Architecture;
 /// <summary>
 /// Eine Schicht je Datei: <c>*Endpoints.cs</c> übersetzt HTTP, <c>*Store.cs</c> besitzt die Daten.
 ///
-/// Gemessen am 2026-09-14: von 112 Dateien, die Routen mappen, greifen 96 aus dem Handler heraus
-/// selbst in die Datenbank. Gleichzeitig gibt es 30 <c>*Store.cs</c> — die Bauform ist da, sie wird
-/// nur nicht durchgehalten. <c>Pension</c> zeigt, wie es aussieht, wenn man es tut: PensionEndpoints
-/// mappt, PensionStore besitzt, und die Reihenfolge nicht-gefunden → verboten → Konflikt steht an
-/// einer Stelle statt in jedem Handler neu.
+/// Am 2026-09-14 griffen 96 von 112 Dateien, die Routen mappen, aus dem Handler heraus selbst in die
+/// Datenbank. Die Liste ist seit 2026-09-15 leer: keine einzige mehr. Damit ist aus der Ratsche eine
+/// Regel geworden - jede Datei, die Routen mappt und dabei die Datenbank anfasst, macht rot.
 ///
 /// Der Punkt ist nicht Schönheit. Solange ein Handler selbst abfragt, wird die Abfrage beim nächsten
-/// Handler kopiert statt benannt — und eine kopierte Abfrage wird irgendwann nur an einer der Stellen
-/// korrigiert.
+/// Handler kopiert statt benannt - und eine kopierte Abfrage wird irgendwann nur an einer der Stellen
+/// korrigiert. Genau so sind auf dem Weg hierher sechs echte Fehler aufgefallen, darunter fünf
+/// N+1-Schleifen und ein Vorschlag, der ab dem 2001. Produkt nie mehr traf.
 ///
-/// Das ist eine Ratsche, keine Forderung nach null: die 96 sind aufgeschrieben, ein 97. macht rot.
-/// Wer eine Datei aufteilt, streicht sie aus der Liste — und der zweite Test besteht darauf.
-/// Siehe #113.
+/// <c>Pension</c> war das Muster: PensionEndpoints mappt, PensionStore besitzt, und die Reihenfolge
+/// nicht-gefunden → verboten → Konflikt steht an einer Stelle statt in jedem Handler neu. Siehe #113.
 /// </summary>
 public sealed class LayerSeparationTests
 {
