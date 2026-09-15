@@ -358,6 +358,8 @@ POST             /api/bootstrap/purge-user
 POST             /api/bootstrap/reactivate-user
 POST             /api/bootstrap/register
 POST             /api/budget-groups/
+POST             /api/budget-suggestions/
+POST             /api/budget-suggestions/preview
 POST             /api/budgets/
 POST             /api/categories/
 POST             /api/categories/{id:guid}/restore

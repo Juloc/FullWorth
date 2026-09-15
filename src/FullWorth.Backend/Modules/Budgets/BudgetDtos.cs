@@ -18,6 +18,12 @@ public sealed record BudgetView(
     DateTimeOffset UpdatedAt)
 {
     public bool CarryOverOverspend { get; init; }
+
+    /// <summary>Ab wann der Uebertrag gerechnet wird (#115). NULL heisst so weit zurueck wie moeglich.</summary>
+    public string? CarryOverStart { get; init; }
+
+    /// <summary>Das selbst gewaehlte Startdatum, wenn <see cref="CarryOverStart"/> "from-date" ist.</summary>
+    public DateOnly? CarryOverFrom { get; init; }
 }
 
 /// <summary>Budget-vs-actual for the budget's current cycle window, plus a cycle-end forecast (§12)
@@ -73,4 +79,9 @@ public sealed record BudgetWrite(string Name, Guid? CategoryId, decimal Amount, 
 {
     // Nullable preserves compatibility with older clients: omitted means the old full carry-over behavior.
     public bool? CarryOverOverspend { get; init; }
+
+    /// <summary>Ab wann der Uebertrag gerechnet wird (#115). Weggelassen heisst so weit zurueck wie moeglich.</summary>
+    public string? CarryOverStart { get; init; }
+
+    public DateOnly? CarryOverFrom { get; init; }
 }

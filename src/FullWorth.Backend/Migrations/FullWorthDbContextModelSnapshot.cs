@@ -32,6 +32,9 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
         modelBuilder.Entity("FullWorth.Backend.Modules.Budgets.Budget", entity =>
         {
             entity.Property<bool>("CarryOverOverspend").HasColumnType("boolean");
+            // 20260915210000_BudgetCarryOverStart. Rohes SQL, also muss der Snapshot es kennen.
+            entity.Property<string>("CarryOverStart").HasMaxLength(32).HasColumnType("character varying(32)");
+            entity.Property<DateOnly?>("CarryOverFrom").HasColumnType("date");
         });
         modelBuilder.Entity("FullWorth.Backend.Modules.Contracts.RecurringContract", entity =>
         {

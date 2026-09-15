@@ -14,6 +14,7 @@ using FullWorth.Backend.Modules.Audit;
 using FullWorth.Backend.Modules.BankConnections;
 using FullWorth.Backend.Modules.Bootstrap;
 using FullWorth.Backend.Modules.Budgets;
+using FullWorth.Backend.Modules.Budgets.Suggestions;
 using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.Coach;
 using FullWorth.Backend.Modules.Collections;
@@ -259,6 +260,7 @@ public static class BackendApplication
         builder.Services.AddScoped<CategoryLanguageStore>();
         builder.Services.AddScoped<FullWorth.Backend.Modules.Collections.CollectionStore>();
         builder.Services.AddScoped<BudgetScopeStore>();
+        builder.Services.AddScoped<FullWorth.Backend.Modules.Budgets.Suggestions.BudgetSuggestionStore>();
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
         builder.Services.AddScoped<ImportJobStore>();
@@ -529,6 +531,7 @@ public static class BackendApplication
         // than parallel storage models.
         endpoints.MapCashflowEndpoints();
         endpoints.MapBudgetScopeEndpoints();
+        endpoints.MapBudgetSuggestionEndpoints();
         endpoints.MapContractLinkEndpoints();
         endpoints.MapContractCancellationEndpoints();
         endpoints.MapRefundCandidateEndpoints();

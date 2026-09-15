@@ -12,11 +12,8 @@
 /* Budget cards (§12) */
 .budget-wizard{min-width:min(520px,92vw)}
 
-.budget-wizard-presets{display:grid;gap:7px;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
 
-.budget-preset-row{display:flex;gap:8px;flex-wrap:wrap}
 
-.budget-preset-row .btn-secondary{font-size:12px}
 
 .budget-wizard-section{display:grid;gap:var(--s3);padding:var(--s3) 0;border-bottom:1px solid var(--line)}
 
@@ -67,3 +64,7 @@
 .budget-detail-rows{max-height:40dvh;overflow:auto}
 
 .budget-card-head-actions{display:flex;align-items:center;gap:var(--s2)}
+
+/* Die Zeile, die sagt, woraus der Vorschlag entstanden ist (#115). Sie steht ueber den Feldern,
+   weil sie sie erklaert - und sie ist Text, kein Knopf: geaendert wird unten. */
+.budget-suggestion{padding-bottom:var(--s3);border-bottom:1px solid var(--line)}

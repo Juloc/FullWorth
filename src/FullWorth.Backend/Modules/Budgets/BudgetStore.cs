@@ -213,8 +213,22 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             ? CarryOverMode.Disabled
             : budget.CarryOverOverspend ? CarryOverMode.Enabled : CarryOverMode.PositiveOnly;
 
+    /// <summary>
+    /// Ab wann der Uebertrag zaehlt. Das ist NICHT der Periodenbeginn: die Periode sagt, wie lang ein
+    /// Fenster ist, diese Angabe sagt, ab welchem Fenster ueberhaupt gerechnet wird (#115).
+    ///
+    /// Ohne Angabe bleibt es beim bisherigen Verhalten - ab dem Startdatum, sonst ab der Anlage.
+    /// </summary>
     private static DateOnly BudgetActiveFrom(Budget budget, BudgetCycleDefinition cycle)
     {
+        var current = BudgetCycleCalculator.CurrentPeriod(cycle, DateOnly.FromDateTime(DateTime.UtcNow));
+        switch (budget.CarryOverStart)
+        {
+            // Nur diese Periode: aeltere Historie beeinflusst den Uebertrag nicht.
+            case "this-period": return current.Start;
+            case "from-date" when budget.CarryOverFrom is { } chosen:
+                return BudgetCycleCalculator.CurrentPeriod(cycle, chosen).Start;
+        }
         if (budget.StartDate is { } explicitStart) return explicitStart;
         var created = DateOnly.FromDateTime(budget.CreatedAt.UtcDateTime);
         return BudgetCycleCalculator.CurrentPeriod(cycle, created).Start;
@@ -329,7 +343,9 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
             budget.CreatedAt,
             budget.UpdatedAt)
         {
-            CarryOverOverspend = budget.CarryOverOverspend
+            CarryOverOverspend = budget.CarryOverOverspend,
+            CarryOverStart = budget.CarryOverStart,
+            CarryOverFrom = budget.CarryOverFrom
         });
 
     private Task<string?> GetSpaceRoleAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct) =>
@@ -357,6 +373,8 @@ public sealed class BudgetStore(FullWorthDbContext db, AuditService? auditServic
         entity.Period = request.Period.Trim().ToLowerInvariant();
         entity.CarryOver = request.CarryOver;
         entity.CarryOverOverspend = request.CarryOver && (request.CarryOverOverspend ?? true);
+        entity.CarryOverStart = string.IsNullOrWhiteSpace(request.CarryOverStart) ? null : request.CarryOverStart.Trim();
+        entity.CarryOverFrom = request.CarryOverFrom;
         entity.IsActive = request.IsActive;
         entity.StartDate = request.StartDate;
         entity.EndDate = request.EndDate;

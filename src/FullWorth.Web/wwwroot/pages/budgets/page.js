@@ -250,7 +250,11 @@ async function openBudgetDialog(existing) {
     .map(period => `<option value="${period}"${selectedPeriod === period ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.period_' + period))}</option>`)
     .join('');
 
-  const rollover = !existing?.carryOver
+  // Der Uebertrag ist standardmaessig AN (#115): ein Rest, der am Periodenende verfaellt, ist der
+  // Normalfall in keinem Haushalt. Bestehende Budgets behalten, was sie haben.
+  const rollover = !existing
+    ? 'full'
+    : !existing.carryOver
     ? 'reset'
     : existing?.carryOverOverspend === false
       ? 'positive'
@@ -259,15 +263,10 @@ async function openBudgetDialog(existing) {
     .map(mode => `<option value="${mode}"${rollover === mode ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.rollover_' + mode))}</option>`)
     .join('');
 
-  const presets = !existing ? `
-    <div class="budget-wizard-presets">
-      <div class="row-sub">${ctx.esc(ctx.get('budgets.quickStart'))}</div>
-      <div class="budget-preset-row">
-        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="weekly-groceries">${ctx.esc(ctx.get('budgets.preset_weeklyGroceries'))}</button>
-        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="monthly">${ctx.esc(ctx.get('budgets.preset_monthly'))}</button>
-        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-budget-preset="paycycle">${ctx.esc(ctx.get('budgets.preset_paycycle'))}</button>
-      </div>
-    </div>` : '';
+  const carryStart = existing?.carryOverStart || 'as-far-back-as-possible';
+  const carryStartOptions = ['as-far-back-as-possible','this-period','from-date']
+    .map(mode => `<option value="${mode}"${carryStart === mode ? ' selected' : ''}>${ctx.esc(ctx.get('budgets.carryStart_' + mode))}</option>`)
+    .join('');
 
   // Visible: what a budget IS - a name, an amount, how often, and for what. The anchor date, the end
   // date and the carry-over are settings you touch once, so they sit in the disclosure.
@@ -295,7 +294,13 @@ async function openBudgetDialog(existing) {
       { name: 'endDate', kind: FieldKind.Date, label: ctx.get('budgets.endDate'), advanced: true, group: 'cycle' },
       // 'reset' is the default, so counting it would make an untouched form announce a setting nobody made.
       { name: 'rollover', kind: FieldKind.Select, label: ctx.get('budgets.rollover'), advanced: true,
-        rawOptions: rolloverOptions, emptyValue: 'reset', hint: ctx.get('budgets.rolloverHint_' + rollover) }
+        rawOptions: rolloverOptions, emptyValue: 'full', hint: ctx.get('budgets.rolloverHint_' + rollover) },
+      // "Ab wann rechnen wir den Uebertrag?" ist eine andere Frage als "wann beginnt eine Periode?".
+      // Beides zu vermischen hiess: ein neues Budget trug ein Minus aus dem letzten Jahr sofort mit.
+      { name: 'carryStart', kind: FieldKind.Select, label: ctx.get('budgets.carryStart'), advanced: true,
+        group: 'carry', emptyValue: 'as-far-back-as-possible',
+        rawOptions: carryStartOptions, hint: ctx.get('budgets.carryStartHint') },
+      { name: 'carryFrom', kind: FieldKind.Date, label: ctx.get('budgets.carryFrom'), advanced: true, group: 'carry' }
     ],
     values: {
       name: existing?.name || '',
@@ -305,7 +310,9 @@ async function openBudgetDialog(existing) {
       category: existing?.categoryId || '',
       startDate: existing?.startDate || '',
       endDate: existing?.endDate || '',
-      rollover
+      rollover,
+      carryStart,
+      carryFrom: existing?.carryOverFrom || ''
     },
     actions: [
       ...(existing ? [{ name: 'delete', label: ctx.get('common.delete'), role: 'danger', onClick: () => remove() }] : []),
@@ -320,6 +327,8 @@ async function openBudgetDialog(existing) {
   const rolloverSelect = form.elements.namedItem('rollover');
   const startInput = form.elements.namedItem('startDate');
   const nameInput = form.elements.namedItem('name');
+  const amountInput = form.elements.namedItem('amount');
+  const categorySelect = form.elements.namedItem('category');
   const disclosure = form.querySelector('details');
   const hintOf = name => handles.field(name)?.querySelector('.fw-field-hint');
 
@@ -356,36 +365,79 @@ async function openBudgetDialog(existing) {
     if (hint) hint.textContent = ctx.get('budgets.rolloverHint_' + rolloverSelect.value);
   };
 
+  const carryStartSelect = form.elements.namedItem('carryStart');
+  const syncCarryFields = () => {
+    const needsDate = carryStartSelect.value === 'from-date';
+    handles.field('carryFrom').hidden = !needsDate;
+    form.elements.namedItem('carryFrom').required = needsDate;
+    if (needsDate) disclosure?.setAttribute('open', '');
+  };
+  carryStartSelect.addEventListener('change', syncCarryFields);
+  syncCarryFields();
+
   periodSelect.addEventListener('change', syncCycleFields);
   rolloverSelect.addEventListener('change', syncRolloverHint);
 
-  // The presets belong above the fields they fill, which is before everything the primitive renders.
-  if (presets) {
-    form.querySelector('.panel-head')?.insertAdjacentHTML('afterend', presets);
-    form.querySelectorAll('[data-budget-preset]').forEach(button => {
-      button.addEventListener('click', () => {
-        const preset = button.dataset.budgetPreset;
-        if (preset === 'weekly-groceries') {
-          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_weeklyGroceries');
-          periodSelect.value = 'weekly';
-          rolloverSelect.value = 'positive';
-          startInput.value = mondayIso();
-        } else if (preset === 'paycycle') {
-          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_paycycle');
-          periodSelect.value = 'paycycle';
-          rolloverSelect.value = 'full';
-          startInput.value = localIso(new Date());
-        } else {
-          if (!nameInput.value) nameInput.value = ctx.get('budgets.presetName_monthly');
-          periodSelect.value = 'monthly';
-          rolloverSelect.value = 'reset';
-        }
-        syncCycleFields();
-        syncRolloverHint();
-        form.elements.namedItem('amount').focus();
+  // Der Vorschlag kommt aus den Buchungen, nicht aus einer Liste fester Regeln (#115). Vorher standen
+  // hier drei Knoepfe, von denen einer "Wocheneinkauf" hiess und Lebensmittel fest auf woechentlich
+  // stellte - das stimmt fuer den einen und fuer den naechsten nicht, und niemand konnte es widerlegen,
+  // weil die Regel nicht aus Daten kam.
+  //
+  // Der Server bewertet stattdessen die Historie der gewaehlten Kategorie: Abstaende, Anteil aktiver
+  // Perioden, Schwankung, Aktualitaet. Es gibt IMMER einen Vorschlag; ist die Grundlage duenn, sagt die
+  // Zeile das, statt eine Sicherheit vorzutaeuschen.
+  const suggestionLine = document.createElement('div');
+  suggestionLine.className = 'row-sub budget-suggestion';
+  suggestionLine.hidden = true;
+  form.querySelector('.panel-head')?.insertAdjacentElement('afterend', suggestionLine);
+
+  const CADENCE_TO_PERIOD = { Weekly: 'weekly', Monthly: 'monthly', Quarterly: 'quarterly', Yearly: 'yearly' };
+  let suggestionToken = 0;
+
+  async function refreshSuggestion({ fill }) {
+    const categoryId = categorySelect.value;
+    if (!categoryId) { suggestionLine.hidden = true; return; }
+
+    // Eine aeltere Antwort darf eine neuere nicht ueberschreiben - die Auswahl aendert sich schneller,
+    // als der Server rechnet.
+    const token = ++suggestionToken;
+    let suggestion;
+    try {
+      suggestion = await ctx.api(`api/budget-suggestions?fullWorthSpaceId=${encodeURIComponent(state.space?.id || '')}`, {
+        ...ctx.jsonBody({ categories: [{ categoryId, includeDescendants: true }], incomeCategoryId: null }),
+        method: 'POST'
       });
-    });
+    } catch {
+      // Ohne Vorschlag bleibt das Formular vollstaendig bedienbar; er ist eine Hilfe, keine Bedingung.
+      suggestionLine.hidden = true;
+      return;
+    }
+    if (token !== suggestionToken) return;
+
+    const period = CADENCE_TO_PERIOD[suggestion.cadence] || 'monthly';
+    const average = ctx.money(suggestion.average, suggestion.currency);
+    const proposed = ctx.money(suggested(suggestion), suggestion.currency);
+    const periodLabel = ctx.get('budgets.period_' + period);
+    suggestionLine.textContent = suggestion.matchingTransactions === 0
+      ? ctx.get('budgets.suggestNoHistory')
+      : ctx.get(suggestion.weakData ? 'budgets.suggestWeak' : 'budgets.suggestStrong')
+          .replace('{period}', periodLabel)
+          .replace('{average}', average)
+          .replace('{amount}', proposed);
+    suggestionLine.hidden = false;
+
+    // Vorgefuellt wird nur, was der Benutzer noch nicht selbst gesetzt hat.
+    if (!fill || suggestion.matchingTransactions === 0) return;
+    periodSelect.value = period;
+    if (!amountInput.value) amountInput.value = String(suggested(suggestion));
+    if (period === 'weekly' && !startInput.value) startInput.value = mondayIso();
+    syncCycleFields();
   }
+
+  const suggested = suggestion => Number(suggestion.suggested) || Number(suggestion.average) || 0;
+
+  categorySelect.addEventListener('change', () => { void refreshSuggestion({ fill: true }); });
+  if (!existing) void refreshSuggestion({ fill: true });
 
   syncCycleFields();
   syncRolloverHint();
@@ -420,6 +472,8 @@ async function openBudgetDialog(existing) {
       period,
       carryOver: rolloverMode !== 'reset',
       carryOverOverspend: rolloverMode === 'full',
+      carryOverStart: rolloverMode === 'reset' ? null : String(values.carryStart || 'as-far-back-as-possible'),
+      carryOverFrom: values.carryStart === 'from-date' ? (values.carryFrom || null) : null,
       isActive: true,
       startDate: usesAnchor ? (values.startDate || null) : null,
       endDate: period === 'custom' ? (values.endDate || null) : null
