@@ -77,8 +77,7 @@
       "subtitle": "Manage automatic rules"
     },
     "accounts": {
-      "title": "Accounts",
-      "subtitle": ""
+      "title": "Accounts"
     },
     "networth": {
       "title": "Net worth",
@@ -141,8 +140,7 @@
       "subtitle": "Explain your data, review spending and calculate goals."
     },
     "account-detail": {
-      "title": "Account",
-      "subtitle": ""
+      "title": "Account"
     },
     "bank-connections": {
       "title": "Bank connections",

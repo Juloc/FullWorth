@@ -77,8 +77,7 @@
       "subtitle": "Automatische Regeln verwalten"
     },
     "accounts": {
-      "title": "Konten",
-      "subtitle": ""
+      "title": "Konten"
     },
     "networth": {
       "title": "Vermögen",
@@ -141,8 +140,7 @@
       "subtitle": "Deine Daten erklären, Ausgaben bewerten und Ziele berechnen."
     },
     "account-detail": {
-      "title": "Konto",
-      "subtitle": ""
+      "title": "Konto"
     },
     "bank-connections": {
       "title": "Bankverbindungen",

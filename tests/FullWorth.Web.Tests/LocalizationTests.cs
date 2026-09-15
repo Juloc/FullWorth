@@ -35,7 +35,10 @@ public sealed class LocalizationTests : IClassFixture<FullWorthWebFactory>
             Assert.False(string.IsNullOrWhiteSpace(navValue.GetString()), $"Empty nav.{key} in {locale}.json");
             Assert.True(pages.TryGetProperty(key, out var page), $"Missing pages.{key} in {locale}.json");
             Assert.False(string.IsNullOrWhiteSpace(page.GetProperty("title").GetString()), $"Empty pages.{key}.title in {locale}.json");
-            Assert.False(string.IsNullOrWhiteSpace(page.GetProperty("subtitle").GetString()), $"Empty pages.{key}.subtitle in {locale}.json");
+            // Ein Untertitel ist optional: die Kontenseite hat seit #125 bewusst keine Beschreibung
+            // unter dem Titel. Steht einer da, muss er aber etwas sagen.
+            if (page.TryGetProperty("subtitle", out var subtitle))
+                Assert.False(string.IsNullOrWhiteSpace(subtitle.GetString()), $"Empty pages.{key}.subtitle in {locale}.json");
         }
 
         foreach (var key in new[] { "system", "light", "dark" })

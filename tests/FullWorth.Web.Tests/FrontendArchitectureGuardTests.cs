@@ -208,7 +208,9 @@ public sealed class FrontendArchitectureGuardTests
         Assert.DoesNotContain("pools(", accounts);
         Assert.DoesNotContain("groupFromHead", accounts);
         Assert.Contains("[data-account-id]", accounts);
-        Assert.Contains("[data-connection-id]", accounts);
+        // Die Bankverbindungen zeichnet seit #125 ihre eigene Seite unter den Einstellungen;
+        // presentation.js dekoriert nur noch Konten und Gruppen.
+        Assert.DoesNotContain("[data-connection-id]", accounts);
         Assert.Contains("[data-group-id]", accounts);
     }
 

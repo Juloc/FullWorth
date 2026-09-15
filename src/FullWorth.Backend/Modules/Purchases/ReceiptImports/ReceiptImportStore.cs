@@ -386,6 +386,30 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         return rows.Count == 0 ? null : ToRow(rows[0]);
     }
 
+    /// <summary>
+    /// Die Paperless-Belege, die noch heruntergeladen werden muessen (#127).
+    ///
+    /// Das ist der Wiederaufnahmepunkt: was hier nicht mehr auftaucht, ist erledigt. Ein Neustart
+    /// mitten im Import faengt genau hier weiter an, ohne eine einzige Anfrage fuer das zu stellen,
+    /// was schon da ist - und ein pausierter Stapel liefert nichts, weil Pause "keine neue Arbeit"
+    /// heisst.
+    /// </summary>
+    public async Task<IReadOnlyList<PendingPaperlessItem>> ListPendingPaperlessItemsAsync(int limit, CancellationToken ct)
+    {
+        var rows = await db.Database.SqlQuery<PendingPaperlessItem>($"""
+            SELECT i."Id" AS "ItemId", i."BatchId", i."FullWorthSpaceId", i."SourceReference", b."UserId", b."Currency", b."AutoStart", b."PausedAt"
+            FROM "ReceiptImportItems" i
+            JOIN "ReceiptImportBatches" b ON b."Id" = i."BatchId"
+            WHERE i."SourceType" = {ReceiptImportSourceTypes.Paperless}
+              AND i."Status" = {ReceiptImportItemStatuses.Pending}
+              AND i."ReceiptScanJobId" IS NULL
+              AND b."PausedAt" IS NULL
+            ORDER BY i."CreatedAt", i."Id"
+            LIMIT {limit}
+            """).ToListAsync(ct);
+        return rows;
+    }
+
     private async Task<ReceiptImportItemRow?> GetItemForBatchAsync(Guid batchId, string externalKey, CancellationToken ct)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportItemProjection>($"""

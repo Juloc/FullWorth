@@ -129,7 +129,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("fullworth:coach-open", transactions);
         Assert.Contains("fullworth:coach-open", contracts);
         Assert.Contains("fullworth:coach-open", networth);
-        Assert.Contains("fullworth:coach-open", accounts);
+        // Der Coach haengt nicht mehr als dauerhafter Knopf in jeder Kontozeile (#125): er steht im
+        // Menue hinter dem Auslassungszeichen, also in der Seite statt in ihrer Dekoration.
+        Assert.Contains("fullworth:coach-open", await GetAsync("/pages/accounts/page.js"));
         Assert.Contains("installMobileSwipe", dialogs);
     }
 

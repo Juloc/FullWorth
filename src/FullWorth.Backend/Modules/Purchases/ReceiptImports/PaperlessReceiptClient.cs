@@ -123,11 +123,87 @@ public sealed class PaperlessReceiptClient(
         return new PaperlessDocumentDownload(documentId, fileName, contentType, buffer);
     }
 
+    /// <summary>
+    /// Wie viele Anfragen gleichzeitig zu EINER Paperless-Instanz unterwegs sein duerfen (#127).
+    ///
+    /// Statisch, weil die Grenze der Instanz gehoert und nicht dem Aufrufer: zwei gleichzeitige Importe
+    /// in zwei Bereichen sind fuer Paperless dieselbe Last wie einer mit doppelter Geschwindigkeit.
+    /// Der Schluessel ist der Server, damit zwei verschiedene Instanzen einander nicht bremsen.
+    /// </summary>
+    private static readonly Dictionary<string, SemaphoreSlim> Gates = [];
+
+    private SemaphoreSlim GateFor(Uri target)
+    {
+        var key = target.GetLeftPart(UriPartial.Authority);
+        lock (Gates)
+        {
+            if (!Gates.TryGetValue(key, out var gate))
+                Gates[key] = gate = new SemaphoreSlim(Math.Clamp(settings.PaperlessMaxConcurrentRequests, 1, 8));
+            return gate;
+        }
+    }
+
+    /// <summary>
+    /// Eine Anfrage, die sich an die Antwort haelt: bei 429 oder 503 wird gewartet, was der Server
+    /// sagt (<c>Retry-After</c>), sonst exponentiell. Vorher lief jede Anfrage ungebremst weiter, und
+    /// eine ueberlastete Instanz bekam als Antwort auf "zu viel" noch mehr.
+    /// </summary>
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completion, CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient("PaperlessReceipts");
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.PaperlessTimeoutSeconds, 5, 300));
-        return await client.SendAsync(request, completion, ct);
+        var gate = GateFor(request.RequestUri!);
+        var attempts = Math.Clamp(settings.PaperlessMaxRetries, 1, 6);
+
+        for (var attempt = 1; ; attempt++)
+        {
+            await gate.WaitAsync(ct);
+            HttpResponseMessage response;
+            try
+            {
+                // Eine HttpRequestMessage ist nach dem Senden verbraucht; fuer den zweiten Versuch
+                // braucht es eine neue mit demselben Inhalt.
+                response = await client.SendAsync(attempt == 1 ? request : Clone(request), completion, ct);
+            }
+            finally
+            {
+                gate.Release();
+            }
+
+            if (attempt >= attempts || !ShouldRetry(response.StatusCode)) return response;
+
+            var wait = RetryDelay(response, attempt);
+            response.Dispose();
+            await Task.Delay(wait, ct);
+        }
+    }
+
+    private static bool ShouldRetry(System.Net.HttpStatusCode status) =>
+        status is System.Net.HttpStatusCode.TooManyRequests
+            or System.Net.HttpStatusCode.ServiceUnavailable
+            or System.Net.HttpStatusCode.BadGateway
+            or System.Net.HttpStatusCode.GatewayTimeout;
+
+    /// <summary>Was der Server sagt, sonst 2, 4, 8 Sekunden - hoechstens eine Minute.</summary>
+    private static TimeSpan RetryDelay(HttpResponseMessage response, int attempt)
+    {
+        var after = response.Headers.RetryAfter;
+        if (after?.Delta is { } delta && delta > TimeSpan.Zero) return Cap(delta);
+        if (after?.Date is { } date)
+        {
+            var until = date - DateTimeOffset.UtcNow;
+            if (until > TimeSpan.Zero) return Cap(until);
+        }
+        return Cap(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+        static TimeSpan Cap(TimeSpan value) => value > TimeSpan.FromMinutes(1) ? TimeSpan.FromMinutes(1) : value;
+    }
+
+    private static HttpRequestMessage Clone(HttpRequestMessage request)
+    {
+        var copy = new HttpRequestMessage(request.Method, request.RequestUri);
+        foreach (var header in request.Headers) copy.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        return copy;
     }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, string baseUrl, string token, string relativeOrAbsolute)

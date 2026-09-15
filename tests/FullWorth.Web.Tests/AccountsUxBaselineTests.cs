@@ -81,10 +81,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void BankPicker_UsesOnlyNativeAppLogoRenderer()
     {
-        var accounts = ReadAsset("pages", "accounts", "page.js");
+        // Der Bankdialog gehoert seit #125 zu den Bankverbindungen, nicht zur Kontenseite - die Regel
+        // ist dieselbe geblieben, nur die Datei ist eine andere.
+        var connections = ReadAsset("pages", "settings", "bank-connections", "page.js");
         var ux = ReadAsset("pages", "accounts", "presentation.js");
 
-        Assert.Contains("logo.className='bank-option-logo'", accounts);
+        Assert.Contains("logo.className='bank-option-logo'", connections);
         Assert.DoesNotContain("decorateBankPicker", ux);
         Assert.DoesNotContain("className='bank-logo'", ux);
     }
@@ -112,9 +114,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("data-account-more", accounts);
         Assert.Contains("openAccountActionsDialog", accounts);
         Assert.Contains("editAccountVisualById", accounts);
-        Assert.Contains("#accounts-view-list .account-more", css);
-        Assert.Contains("[data-rename-account]", css);
-        Assert.Contains(".account-coach-button", css);
+        Assert.Contains(".account-more", css);
+        // Seit #125 ist das Auslassungszeichen die EINZIGE Aktion der Zeile - die Kette aus Stift,
+        // Ordner, Kontostand, Papierkorb und Coach ist weg, nicht nur auf dem Handy versteckt.
+        Assert.DoesNotContain("[data-rename-account]", accounts);
+        Assert.DoesNotContain(".account-coach-button", css);
+        Assert.Contains("accounts.details", accounts);
     }
 
     [Fact]
@@ -136,12 +141,12 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public void Ing_DefaultsToOwnedFinTs_WithoutRequiringEnableBanking()
     {
-        var accounts = ReadAsset("pages", "accounts", "page.js");
+        var connections = ReadAsset("pages", "settings", "bank-connections", "page.js");
         var de = ReadAsset("locales", "de.json");
 
-        Assert.Contains("fullworthProvider:'fints'", accounts);
-        Assert.Contains("api/banking/fints/ing/connect", accounts);
-        Assert.Contains("api/banking/fints/connections/", accounts);
+        Assert.Contains("fullworthProvider:'fints'", connections);
+        Assert.Contains("api/banking/fints/ing/connect", connections);
+        Assert.Contains("api/banking/fints/connections/", connections);
         Assert.Contains("ingFinTsFull", de);
         Assert.Contains("ingEnableBankingOnly", de);
     }
@@ -180,7 +185,7 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     [Fact]
     public async Task BankPicker_ExplainsThatOnlyEnabledInstitutionsAppear()
     {
-        var js = await GetAsync("/pages/accounts/page.js");
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
 
         Assert.Contains("bankingSetup.bankMissingHint", js);
         Assert.Contains("https://enablebanking.com/cp/applications", js);

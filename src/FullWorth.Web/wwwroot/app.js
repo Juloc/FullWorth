@@ -124,7 +124,9 @@ function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');i
   $$('.nav-item[data-entry]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){
   const p=state.messages.pages?.[state.view];
-  if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle}
+  // Eine Seite ohne Untertitel hat keinen Schluessel dafuer - #125 nimmt der Kontenseite die
+  // Beschreibung. Ein leerer Wert in der Sprachdatei waere eine vergessene Uebersetzung.
+  if(p){$('#page-title').textContent=p.title;$('#page-subtitle').textContent=p.subtitle??''}
   // A view whose copy lives in its own module has no pages.* entry. Without this it would keep the
   // PREVIOUS screen's heading, which reads as a broken navigation. Fall back to the view's own nav
   // label from the shell and clear the subtitle.

@@ -332,24 +332,85 @@ public sealed class ReceiptImportService(
                 continue;
             }
 
-            try
-            {
-                await using var download = await paperless.DownloadAsync(connection.BaseUrl, connection.Token, document.Id, ct);
-                var fingerprint = await HashAsync(download.Content, ct);
-                await store.UpdateFingerprintAsync(created.Item.Id, fingerprint, ct);
-                download.Content.Position = 0;
-                var file = CreateFormFile(download.Content, download.FileName, download.ContentType);
-                await QueueFileAsync(userId, fullWorthSpaceId, created.Item, file, currency, autoStart, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                await store.MarkFailedAsync(created.Item.Id, SafeError(ex), ct);
-            }
+            // Hier wurde frueher heruntergeladen - im HTTP-Request, ein Dokument nach dem anderen. Bei
+            // 115 Dokumenten hiess das 115 Downloads, bevor der Benutzer eine Antwort sah, und eine
+            // abgebrochene Verbindung liess den halben Import als "ausstehend" zurueck (#127).
+            //
+            // Die Zeile ist jetzt der Auftrag. Sie steht mit Status "pending" in der Datenbank, und der
+            // Hintergrunddienst holt sie in kleinen Portionen. Das ist zugleich der Wiederaufnahmepunkt:
+            // was schon geholt wurde, wird nie ein zweites Mal angefragt.
         }
 
         await store.TouchPaperlessSyncAsync(fullWorthSpaceId, ct);
         return await store.GetBatchAsync(userId, fullWorthSpaceId, batch.Id, ct)
             ?? throw new ReceiptImportException("Paperless import batch could not be reloaded.");
+    }
+
+    /// <summary>
+    /// Holt bis zu <paramref name="limit"/> wartende Paperless-Belege und stellt sie in die
+    /// Verarbeitung (#127).
+    ///
+    /// Nacheinander, nicht gleichzeitig: die Begrenzung im Client deckelt zwar die Anfragen, aber der
+    /// Sinn der Portion ist, dass zwischen zwei Portionen eine Pause liegt. Gibt die Zahl der geholten
+    /// Belege zurueck, damit der Dienst weiss, ob es sich lohnt, gleich weiterzumachen.
+    /// </summary>
+    public async Task<int> FetchPendingPaperlessAsync(int limit, CancellationToken ct)
+    {
+        var pending = await store.ListPendingPaperlessItemsAsync(limit, ct);
+        if (pending.Count == 0) return 0;
+
+        var fetched = 0;
+        // Eine Verbindung je Bereich, nicht je Beleg - die Einstellungen aendern sich waehrend eines
+        // Imports nicht, und jedes Mal neu zu laden waere eine Datenbankabfrage pro Dokument.
+        var connections = new Dictionary<Guid, PaperlessRuntimeConnection?>();
+
+        foreach (var item in pending)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!connections.TryGetValue(item.FullWorthSpaceId, out var connection))
+            {
+                // Eine abgeschaltete oder geloeschte Verbindung ist kein Fehler des Belegs - aber ohne sie
+                // laesst er sich nicht holen, und das gehoert an die Zeile geschrieben.
+                try { connection = await RequirePaperlessAsync(item.FullWorthSpaceId, ct); }
+                catch (ReceiptImportException) { connection = null; }
+                connections[item.FullWorthSpaceId] = connection;
+            }
+
+            var documentId = ParsePaperlessDocumentId(item.SourceReference);
+            if (connection is null || documentId is null)
+            {
+                await store.MarkFailedAsync(item.ItemId, "Paperless connection is no longer configured.", ct);
+                continue;
+            }
+
+            var row = await store.GetItemAsync(item.BatchId, item.ItemId, ct);
+            if (row is null) continue;
+
+            try
+            {
+                await using var download = await paperless.DownloadAsync(
+                    connection.BaseUrl, connection.Token, documentId.Value, ct);
+                var fingerprint = await HashAsync(download.Content, ct);
+                await store.UpdateFingerprintAsync(item.ItemId, fingerprint, ct);
+                download.Content.Position = 0;
+                var file = CreateFormFile(download.Content, download.FileName, download.ContentType);
+                await QueueFileAsync(item.UserId, item.FullWorthSpaceId, row, file, item.Currency, item.AutoStart, ct);
+                fetched++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                await store.MarkFailedAsync(item.ItemId, SafeError(ex), ct);
+            }
+        }
+        return fetched;
+    }
+
+    /// <summary>Die Dokumentnummer aus "paperless:123". Null, wenn dort etwas anderes steht.</summary>
+    private static int? ParsePaperlessDocumentId(string? sourceReference)
+    {
+        var text = sourceReference?.Trim();
+        if (string.IsNullOrEmpty(text) || !text.StartsWith("paperless:", StringComparison.OrdinalIgnoreCase)) return null;
+        return int.TryParse(text.AsSpan("paperless:".Length), out var id) ? id : null;
     }
 
     public async Task<FolderPreviewResult> PreviewFolderAsync(CancellationToken ct)

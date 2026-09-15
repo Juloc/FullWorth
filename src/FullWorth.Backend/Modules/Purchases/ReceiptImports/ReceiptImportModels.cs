@@ -35,6 +35,22 @@ public sealed class ReceiptImportOptions
     public int MaxBatchItems { get; set; } = 500;
     public long MaxUploadBytes { get; set; } = 512L * 1024 * 1024;
     public int MaxParallelImports { get; set; } = 2;
+
+    /// <summary>
+    /// Wie viele Anfragen gleichzeitig an EINE Paperless-Instanz gehen duerfen (#127). Zwei, weil die
+    /// typische Instanz ein kleiner Container neben der Anwendung ist und ein Import von 115 Dokumenten
+    /// sie sonst fuer die Dauer des Imports unbenutzbar macht.
+    /// </summary>
+    public int PaperlessMaxConcurrentRequests { get; set; } = 2;
+
+    /// <summary>Wie viele wartende Dokumente ein Durchgang des Hintergrunddienstes holt.</summary>
+    public int PaperlessFetchBatchSize { get; set; } = 5;
+
+    /// <summary>Wie oft der Hintergrunddienst nach wartenden Dokumenten sieht.</summary>
+    public int PaperlessFetchIntervalSeconds { get; set; } = 10;
+
+    /// <summary>Wie oft eine abgewiesene Anfrage hoechstens wiederholt wird, bevor sie als Fehler gilt.</summary>
+    public int PaperlessMaxRetries { get; set; } = 3;
     public int PaperlessPageSize { get; set; } = 100;
     public int PaperlessTimeoutSeconds { get; set; } = 60;
     public int PaperlessAutoImportIntervalMinutes { get; set; } = 60;
@@ -67,6 +83,17 @@ public sealed record ReceiptImportBatchRow(
 {
     public bool IsPaused => PausedAt.HasValue;
 }
+
+/// <summary>Ein Beleg, der auf seinen Download aus Paperless wartet (#127).</summary>
+public sealed record PendingPaperlessItem(
+    Guid ItemId,
+    Guid BatchId,
+    Guid FullWorthSpaceId,
+    string? SourceReference,
+    Guid UserId,
+    string Currency,
+    bool AutoStart,
+    DateTimeOffset? PausedAt);
 
 public sealed record ReceiptImportItemRow(
     Guid Id,
