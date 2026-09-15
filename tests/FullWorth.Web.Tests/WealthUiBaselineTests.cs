@@ -36,6 +36,30 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("URLSearchParams", js);
     }
 
+    /// <summary>
+    /// Ein Punkt ist kein Verlauf (#123). <c>api/wealth/history</c> haengt den heutigen Stand immer
+    /// an, auch wenn fuer den Zeitraum sonst nichts gespeichert ist. Mit genau einem Punkt zeichnete
+    /// die Seite einen Pfad ohne Laenge - unsichtbar - und der Leerzustand griff nicht, weil
+    /// <c>pts.length</c> ja 1 war. Sichtbar blieb nur die gestrichelte Vorschau: ein Diagramm, das
+    /// kaputt aussieht statt leer.
+    /// </summary>
+    [Fact]
+    public async Task WealthTrendSaysWhyItIsEmptyInsteadOfDrawingNothing()
+    {
+        var js = await GetAsync("/pages/networth/page.js");
+
+        Assert.Contains("if (pts.length > 1)", js);
+        Assert.Contains("pts.length > 1 ? ''", js);
+        Assert.Contains("pts.length === 1 ? t('trendSinglePoint')", js);
+        Assert.Contains("trendSinglePoint:", js);
+        Assert.Contains("ein Verlauf entsteht ab dem zweiten Tag", js);
+        Assert.Contains("a trend starts on the second day", js);
+
+        // Die Vorschau bleibt daneben stehen - sie darf die fehlende Historie nicht ersetzen, aber
+        // auch nicht mit ihr verschwinden.
+        Assert.Contains("nw-chart-forecast", js);
+    }
+
     [Fact]
     public async Task WealthTrendShowsImportedBookingCoverageWithoutTreatingItAsNetWorth()
     {

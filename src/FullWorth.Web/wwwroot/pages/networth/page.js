@@ -67,6 +67,7 @@ const COPY = {
     trendTitle: 'Wie entwickelt sich dein Vermögen?', allocationTitle: 'Verteilung deines Vermögens',
     manageTitle: 'Details & Verwalten', manageHint: 'Vermögenswerte, Schulden und Kredite bearbeiten',
     window: 'Zeitraum', noTrend: 'Noch keine Verlaufsdaten.',
+    trendSinglePoint: 'Bisher ist nur der heutige Stand gespeichert - ein Verlauf entsteht ab dem zweiten Tag.',
     // Deliberately NOT the same word as the hero's "Vermögenswerte": a donut cannot draw a negative
     // slice, so its total only ever covers the categories it can actually show. Naming it "Vermögenswerte"
     // too used to put two different numbers on screen under the identical label.
@@ -119,6 +120,7 @@ const COPY = {
     trendTitle: 'How is your wealth developing?', allocationTitle: 'Your wealth distribution',
     manageTitle: 'Details & manage', manageHint: 'Edit assets, liabilities and loans',
     window: 'Time range', noTrend: 'No history yet.',
+    trendSinglePoint: 'Only today is recorded so far - a trend starts on the second day.',
     assetMix: 'Asset mix', assetMixNote: 'Values with a negative balance are hidden here but still count toward the net worth above.',
     customRange: 'Custom range', from: 'From', to: 'To', applyRange: 'Show', invalidRange: 'Choose a valid date range.',
     bookingActivity: 'Bookings', bookingHistoryHint: 'Older bookings are available. Without a confirmed account mapping and balance they are shown as booking activity, not as net worth.',
@@ -445,7 +447,12 @@ function trendChartSvg(history) {
   const grid = [0.25, 0.5, 0.75].map(f => `<line class="nw-chart-grid" x1="0" y1="${(plotHeight * f).toFixed(1)}" x2="${width}" y2="${(plotHeight * f).toFixed(1)}" vector-effect="non-scaling-stroke"/>`).join('');
   const activity = bookingActivityMarkup(geometry);
   let wealth = '';
-  if (pts.length) {
+  // Ein Punkt ist kein Verlauf. `api/wealth/history` haengt den heutigen Stand immer an, auch wenn
+  // fuer den Zeitraum sonst nichts gespeichert ist - mit genau einem Punkt zeichnete
+  // `smoothLinePath` einen entarteten Pfad ohne Laenge: unsichtbar, und der Leerzustand griff nicht,
+  // weil `pts.length` ja 1 war. Sichtbar blieb nur die gestrichelte Vorschau, und das Diagramm sah
+  // kaputt aus statt leer (#123).
+  if (pts.length > 1) {
     const line = smoothLinePath(pts);
     const firstX = pts[0].x.toFixed(2);
     const lastX = pts.at(-1).x.toFixed(2);
@@ -463,7 +470,10 @@ function trendChartSvg(history) {
     forecast = `${divider}<path class="nw-chart-line nw-chart-forecast" d="${smoothLinePath(geometry.forecastPath)}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke"/>`;
   }
   const label = `${ctx.get('analytics.trend')}${geometry.forecast ? ` · ${t('projectionLabel')}` : ''}`;
-  const empty = pts.length ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(t('noTrend'))}</text>`;
+  // Und die ehrliche Auskunft daneben: nicht "kein Vermoegen", sondern "noch kein Verlauf". Bei
+  // genau einem Messpunkt steht dort, woran das liegt, statt einer leeren Flaeche.
+  const emptyLabel = pts.length === 1 ? t('trendSinglePoint') : t('noTrend');
+  const empty = pts.length > 1 ? '' : `<text class="nw-chart-no-wealth" x="${width / 2}" y="${plotHeight / 2}" text-anchor="middle">${ctx.esc(emptyLabel)}</text>`;
   return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${ctx.esc(label)}"><defs><linearGradient id="nw-trend-grad" x1="0" y1="0" x2="0" y2="1"><stop class="nw-trend-grad-top" offset="0%"/><stop class="nw-trend-grad-bottom" offset="100%"/></linearGradient></defs>${grid}${activity}${wealth}${forecast}${empty}</svg>${bookingHistoryHint()}`;
 }
 
