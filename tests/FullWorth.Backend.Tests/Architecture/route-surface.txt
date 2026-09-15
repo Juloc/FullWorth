@@ -33,7 +33,6 @@ DELETE           /api/intelligence/access/
 DELETE           /api/intelligence/admin/brand-packs/custom/{id:guid}
 DELETE           /api/intelligence/admin/credentials/{id:guid}
 DELETE           /api/investment-management/portfolios/{portfolioId:guid}/trades/{tradeId:guid}
-DELETE           /api/investment-management/watchlists/{watchlistId:guid}
 DELETE           /api/investments/benchmarks/{benchmarkId:guid}
 DELETE           /api/investments/portfolios/{id:guid}
 DELETE           /api/investments/portfolios/{portfolioId:guid}/trades/{id:guid}
@@ -202,8 +201,6 @@ GET              /api/investment-import/history
 GET              /api/investment-import/jobs/{jobId:guid}
 GET              /api/investment-import/jobs/{jobId:guid}/summary
 GET              /api/investment-import/portfolios/{portfolioId:guid}/reconciliation
-GET              /api/investment-management/watchlists
-GET              /api/investment-management/watchlists/{watchlistId:guid}/items
 GET              /api/investments/benchmarks
 GET              /api/investments/net-worth-contribution
 GET              /api/investments/net-worth-contribution-v2
@@ -441,9 +438,6 @@ POST             /api/investment-import/jobs/{jobId:guid}/rollback
 POST             /api/investment-import/pdf/detect
 POST             /api/investment-import/pdf/ocr-detect
 POST             /api/investment-import/upload
-POST             /api/investment-management/portfolios
-POST             /api/investment-management/securities
-POST             /api/investment-management/watchlists
 POST             /api/investments/benchmarks
 POST             /api/investments/portfolios
 POST             /api/investments/portfolios/{portfolioId:guid}/trades
@@ -591,9 +585,6 @@ PUT              /api/intelligence/admin/brand-packs/custom/{id:guid}/enabled
 PUT              /api/intelligence/admin/settings
 PUT              /api/investment-management/portfolios/{portfolioId:guid}/trades/{tradeId:guid}
 PUT              /api/investment-management/prices
-PUT              /api/investment-management/securities/{securityId:guid}
-PUT              /api/investment-management/watchlists/{watchlistId:guid}
-PUT              /api/investment-management/watchlists/{watchlistId:guid}/items
 PUT              /api/investments/benchmarks/{benchmarkId:guid}
 PUT              /api/investments/portfolios/{id:guid}
 PUT              /api/investments/portfolios/{portfolioId:guid}/settings-v2

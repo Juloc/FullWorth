@@ -2,22 +2,20 @@ using FullWorth.Backend.Security;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
-public sealed record InvestmentPortfolioCreateWrite(
-    string Name, string Currency, Guid? AccountId, Guid? BenchmarkSecurityId,
-    string? ProviderName, bool IsManual = true, bool IncludeInNetWorth = true);
-public sealed record InvestmentSecurityManageWrite(
-    string Name, string? Isin, string? Wkn, string? Ticker, string AssetType,
-    string Currency, string? Exchange, string? ProviderKey, bool IsActive = true);
 public sealed record InvestmentPriceManageWrite(
     Guid SecurityId, DateOnly PriceDate, decimal Price, string Currency, string Source = "manual");
-public sealed record InvestmentWatchlistManageWrite(string Name);
-public sealed record InvestmentWatchlistItemManageWrite(Guid SecurityId, decimal? TargetPrice, string? Notes, int SortOrder = 0);
 
+/// <summary>
+/// Was die Depotansicht schreibt und <c>/api/investments</c> nicht in dieser Form kann: einen Kurs
+/// erfassen und einen Handel loeschen oder mit allen Feldern aendern.
+///
+/// Diese Flaeche hatte einmal zwoelf Routen - eigene Anlege- und Aenderungswege fuer Depots,
+/// Wertpapiere und Merklisten, jede ein zweiter Weg zu dem, was <c>/api/investments</c> schon konnte.
+/// Neun davon hatte nie jemand aufgerufen; sie sind am 2026-09-15 weggefallen. Was bleibt, ist das,
+/// was die Oberflaeche tatsaechlich benutzt.
+/// </summary>
 public static class InvestmentManagementParityEndpoints
 {
-    private static readonly HashSet<string> AssetTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "stock", "etf", "fund", "bond", "crypto", "commodity", "derivative", "cash", "other" };
-
     private static readonly HashSet<string> TradeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "buy", "sell", "cancellation", "dividend", "interest", "fee", "tax", "deposit", "withdrawal",
@@ -27,86 +25,10 @@ public static class InvestmentManagementParityEndpoints
     public static IEndpointRouteBuilder MapInvestmentManagementParityEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/investment-management").WithTags("Investments");
-        group.MapPost("/portfolios", CreatePortfolio);
-        group.MapPost("/securities", CreateSecurity);
-        group.MapPut("/securities/{securityId:guid}", UpdateSecurity);
         group.MapPut("/prices", PutPrice);
         group.MapPut("/portfolios/{portfolioId:guid}/trades/{tradeId:guid}", UpdateTrade);
         group.MapDelete("/portfolios/{portfolioId:guid}/trades/{tradeId:guid}", DeleteTrade);
-        group.MapGet("/watchlists", ListWatchlists);
-        group.MapPost("/watchlists", CreateWatchlist);
-        group.MapPut("/watchlists/{watchlistId:guid}", UpdateWatchlist);
-        group.MapDelete("/watchlists/{watchlistId:guid}", DeleteWatchlist);
-        group.MapGet("/watchlists/{watchlistId:guid}/items", GetWatchlistItems);
-        group.MapPut("/watchlists/{watchlistId:guid}/items", PutWatchlistItems);
         return app;
-    }
-
-    private static async Task<IResult> CreatePortfolio(
-        Guid fullWorthSpaceId, InvestmentPortfolioCreateWrite request, CurrentUserContext currentUser,
-        SpaceAccess space, InvestmentStore store, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (string.IsNullOrWhiteSpace(request.Name) || !ValidCurrency(request.Currency))
-            return Results.BadRequest(new { error = "Name and valid currency are required." });
-
-        if (request.AccountId.HasValue)
-        {
-            var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
-            if (!visible.Contains(request.AccountId.Value))
-                return Results.BadRequest(new { error = "Linked account is inaccessible." });
-        }
-        if (request.BenchmarkSecurityId.HasValue
-            && !await store.SecurityExistsAsync(fullWorthSpaceId, request.BenchmarkSecurityId.Value, ct))
-            return Results.BadRequest(new { error = "Benchmark security is invalid." });
-
-        var id = await store.CreatePortfolioAsync(userId, fullWorthSpaceId, request, Clean(request.ProviderName), ct);
-        return Results.Created($"/api/investments/portfolios/{id}", new { id });
-    }
-
-    private static Task<IResult> CreateSecurity(
-        Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        InvestmentStore store, CancellationToken ct) =>
-        WriteSecurity(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, store, false, ct);
-
-    private static Task<IResult> UpdateSecurity(
-        Guid securityId, Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        InvestmentStore store, CancellationToken ct) =>
-        WriteSecurity(securityId, fullWorthSpaceId, request, currentUser, store, true, ct);
-
-    private static async Task<IResult> WriteSecurity(
-        Guid id, Guid fullWorthSpaceId, InvestmentSecurityManageWrite request, CurrentUserContext currentUser,
-        InvestmentStore store, bool update, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (string.IsNullOrWhiteSpace(request.Name) || !ValidCurrency(request.Currency))
-            return Results.BadRequest(new { error = "Name and valid currency are required." });
-
-        var assetType = request.AssetType.Trim().ToLowerInvariant();
-        if (!AssetTypes.Contains(assetType)) return Results.BadRequest(new { error = "Unsupported asset type." });
-
-        var isin = Clean(request.Isin)?.ToUpperInvariant();
-        if (isin is { Length: > 0 } && isin.Length != 12)
-            return Results.BadRequest(new { error = "ISIN must contain 12 characters." });
-
-        try
-        {
-            return await store.SaveSecurityAsync(userId, fullWorthSpaceId, id, request, assetType, isin,
-                Clean(request.Wkn)?.ToUpperInvariant(), Clean(request.Ticker)?.ToUpperInvariant(),
-                Clean(request.Exchange), Clean(request.ProviderKey), update, ct)
-                ? Results.Ok(new { id })
-                : Results.NotFound();
-        }
-        catch (Exception exception) when (
-            exception.Message.Contains("IX_Securities_Space_Isin", StringComparison.OrdinalIgnoreCase) ||
-            exception.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.Conflict(new { error = "A security with this ISIN already exists." });
-        }
     }
 
     private static async Task<IResult> PutPrice(
@@ -170,110 +92,6 @@ public static class InvestmentManagementParityEndpoints
         return await store.DeleteTradeAsync(userId, fullWorthSpaceId, portfolioId, tradeId, ct)
             ? Results.NoContent()
             : Results.NotFound();
-    }
-
-    private static async Task<IResult> ListWatchlists(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
-        CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-
-        var rows = (await store.ListWatchlistsAsync(fullWorthSpaceId, userId, ct))
-            .Select(row => new
-            {
-                id = row.Id,
-                name = row.Name,
-                createdAt = row.CreatedAt,
-                updatedAt = row.UpdatedAt
-            });
-        return Results.Ok(rows);
-    }
-
-    private static async Task<IResult> CreateWatchlist(
-        Guid fullWorthSpaceId, InvestmentWatchlistManageWrite request, CurrentUserContext currentUser,
-        InvestmentStore store, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
-
-        var id = Guid.NewGuid();
-        await store.SaveWatchlistAsync(userId, fullWorthSpaceId, id, request.Name, false,
-            "investment.watchlist.created", ct);
-        return Results.Created($"/api/investment-management/watchlists/{id}", new { id });
-    }
-
-    private static async Task<IResult> UpdateWatchlist(
-        Guid watchlistId, Guid fullWorthSpaceId, InvestmentWatchlistManageWrite request,
-        CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (string.IsNullOrWhiteSpace(request.Name)) return Results.BadRequest(new { error = "Name is required." });
-
-        return await store.SaveWatchlistAsync(userId, fullWorthSpaceId, watchlistId, request.Name, true,
-            "investment.watchlist.updated", ct)
-            ? Results.NoContent()
-            : Results.NotFound();
-    }
-
-    private static async Task<IResult> DeleteWatchlist(
-        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
-        CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-
-        return await store.DeleteWatchlistAsync(userId, fullWorthSpaceId, watchlistId,
-            "investment.watchlist.deleted", ct)
-            ? Results.NoContent()
-            : Results.NotFound();
-    }
-
-    private static async Task<IResult> GetWatchlistItems(
-        Guid watchlistId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore store,
-        CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.OwnsWatchlistAsync(userId, fullWorthSpaceId, watchlistId, ct)) return Results.NotFound();
-
-        var rows = (await store.ListWatchlistItemsAsync(watchlistId, ct))
-            .Select(row => new
-            {
-                securityId = row.SecurityId,
-                name = row.Name,
-                ticker = row.Ticker,
-                targetPrice = row.TargetPrice,
-                notes = row.Notes,
-                sortOrder = row.SortOrder
-            });
-        return Results.Ok(rows);
-    }
-
-    private static async Task<IResult> PutWatchlistItems(
-        Guid watchlistId, Guid fullWorthSpaceId, IReadOnlyList<InvestmentWatchlistItemManageWrite> request,
-        CurrentUserContext currentUser, InvestmentStore store, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await store.OwnsWatchlistAsync(userId, fullWorthSpaceId, watchlistId, ct)) return Results.NotFound();
-
-        var items = request.DistinctBy(item => item.SecurityId).ToArray();
-        if (items.Length > 500) return Results.BadRequest(new { error = "Watchlist is too large." });
-        if (items.Any(item => item.TargetPrice is <= 0))
-            return Results.BadRequest(new { error = "Target price must be positive." });
-        if (!await store.AllSecuritiesExistAsync(fullWorthSpaceId, items.Select(item => item.SecurityId).ToArray(), ct))
-            return Results.BadRequest(new { error = "Security is invalid." });
-
-        await store.ReplaceWatchlistItemsAsync(userId, fullWorthSpaceId, watchlistId,
-            items.Select(item => (item.SecurityId, item.TargetPrice, Clean(item.Notes), item.SortOrder)).ToArray(),
-            "investment.watchlist.items.updated", ct);
-        return Results.NoContent();
     }
 
     private static async Task<string?> ValidateTrade(
