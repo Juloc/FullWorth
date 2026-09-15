@@ -119,7 +119,10 @@ public sealed class FinTsClient(IFinTsTransport transport)
         string? touchdown = null,
         CancellationToken cancellationToken = default)
     {
-        var version = session.Parameters.VersionFor("HIWPDS", 7, 1);
+        // Nennt die Bank keine Version, wird 6 angenommen und nicht 7 (#130 §4): HKWPD gibt es in
+        // den Versionen 5 und 6. Eine 7 zu schicken heisst, eine Nachricht zu behaupten, die es nicht
+        // gibt - die Bank lehnt sie ab, und der Fehler sieht aus, als koenne sie keine Depots.
+        var version = session.Parameters.VersionFor("HIWPDS", 6, 5);
         var request = FinTsMessages.Portfolio(depot, version, currency, touchdown);
         IReadOnlyList<FinTsSegment> segments = touchdown is null ? BusinessWithTan(session.Parameters, "HKWPD", request) : [request];
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);

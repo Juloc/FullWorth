@@ -36,7 +36,28 @@ public sealed record FinTsAccount(
     string? Owner,
     string? ProductName,
     string Currency,
-    bool IsDepot = false);
+    bool IsDepot = false,
+    /// <summary>
+    /// Die Bankleitzahl - der Kreditinstitutscode der klassischen Kontoverbindung (#130 §3).
+    ///
+    /// An dieser Stelle stand bisher der BIC. Das ist nicht dasselbe Feld: bei Laenderkennzeichen 280
+    /// erwartet der Server dort acht Ziffern, und "INGDDEFFXXX" sind sie nicht. Die Bank weist die
+    /// Nachricht ab oder liefert nichts.
+    /// </summary>
+    string? BankCode = null)
+{
+    /// <summary>
+    /// Die Bankleitzahl, die in eine Kontoverbindung gehoert: die genannte, sonst die aus der IBAN.
+    ///
+    /// Eine deutsche IBAN traegt sie an Stelle 5 bis 12 - DE, zwei Pruefziffern, acht Stellen BLZ. Das
+    /// ist keine Schaetzung, sondern die Definition.
+    /// </summary>
+    public string? ResolvedBankCode =>
+        !string.IsNullOrWhiteSpace(BankCode) ? BankCode!.Trim()
+        : Iban is { Length: >= 12 } && Iban.StartsWith("DE", StringComparison.OrdinalIgnoreCase)
+            ? Iban.Substring(4, 8)
+            : null;
+}
 
 public sealed record FinTsBalance(decimal Amount, string Currency, DateOnly Date, decimal? Available = null, decimal? CreditLine = null);
 
@@ -91,6 +112,11 @@ public sealed record FinTsBankParameters(
     IReadOnlyList<FinTsTanMethod> TanMethods,
     IReadOnlyList<FinTsAccount> Accounts)
 {
+    /// <summary>
+    /// Die Version, in der ein Geschaeftsvorfall zu schicken ist: die, die die Bank angekuendigt hat,
+    /// sonst der Rueckfall. <paramref name="minimum"/> ist die aelteste Version, die es fuer diesen
+    /// Vorfall ueberhaupt gibt - eine aeltere anzunehmen erzeugt eine Nachricht, die kein Server kennt.
+    /// </summary>
     public int VersionFor(string responseParameterSegment, int fallback, int minimum = 1)
         => Math.Max(minimum, SegmentVersions.TryGetValue(responseParameterSegment, out var value) ? value : fallback);
 

@@ -229,8 +229,15 @@ internal static class FinTsMessages
         ]);
     }
 
+    /// <summary>
+    /// Die Kontoverbindung. Ab Version 6 ist es die internationale (IBAN + BIC), davor die klassische:
+    /// Kontonummer, Unterkontomerkmal, Laenderkennzeichen, Kreditinstitutscode.
+    ///
+    /// Das letzte Feld ist die BANKLEITZAHL. Hier stand der BIC (#130 §3) - ein anderes Feld mit einer
+    /// anderen Laenge, das der Server bei Laenderkennzeichen 280 nicht annimmt.
+    /// </summary>
     private static FinTsGroup AccountGroup(FinTsAccount account, int version)
         => version >= 6
             ? FinTsGroup.Of(FinTsValue.T(account.Iban), FinTsValue.T(account.Bic))
-            : FinTsGroup.Of(FinTsValue.T(account.AccountNumber ?? account.Iban), FinTsValue.T(account.SubAccount), FinTsValue.T("280"), FinTsValue.T(account.Bic));
+            : FinTsGroup.Of(FinTsValue.T(account.AccountNumber ?? account.Iban), FinTsValue.T(account.SubAccount), FinTsValue.T("280"), FinTsValue.T(account.ResolvedBankCode));
 }

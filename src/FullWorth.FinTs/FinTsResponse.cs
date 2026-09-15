@@ -165,11 +165,31 @@ internal static class FinTsResponseParser
         return items;
     }
 
+    /// <summary>
+    /// Der Depotbestand aus HIWPD.
+    ///
+    /// HIWPD traegt die Aufstellung als MT535 in einem Binaerfeld - das ist das Format, und es wird
+    /// jetzt gelesen (#130 §5). Vorher wurde ausschliesslich geraten: die erste Zahl des Segments galt
+    /// als Stueckzahl, die zweite als Kurs, die dritte als Wert. Das stimmt, solange die Bank genau
+    /// diese drei in genau dieser Reihenfolge schickt, und sonst nie - auffallen wuerde es erst am
+    /// Vermoegen.
+    ///
+    /// Die alte Auslegung bleibt als Rueckfall fuer Antworten OHNE MT535 stehen. Sie raet weiterhin,
+    /// aber sie ist dann das Einzige, was da ist; und sie kommt nicht mehr zum Zug, sobald eine
+    /// richtige Aufstellung vorliegt.
+    /// </summary>
     public static IReadOnlyList<FinTsHolding> Holdings(FinTsResponse response)
     {
         var result = new List<FinTsHolding>();
         foreach (var segment in response.FindAll("HIWPD"))
         {
+            var statement = Mt535Text(segment);
+            if (statement is not null)
+            {
+                result.AddRange(Mt535Parser.Parse(statement));
+                continue;
+            }
+
             for (var i = 2; i < segment.Groups.Count; i++)
             {
                 var holding = ParseHolding(segment.Groups[i]);
@@ -177,6 +197,25 @@ internal static class FinTsResponseParser
             }
         }
         return result;
+    }
+
+    /// <summary>Die MT535-Aufstellung des Segments - als Binaerfeld oder, seltener, als Text.</summary>
+    private static string? Mt535Text(FinTsSegment segment)
+    {
+        foreach (var group in segment.Groups)
+        {
+            foreach (var value in group.Values)
+            {
+                var text = value switch
+                {
+                    FinTsValue.Binary binary => System.Text.Encoding.Latin1.GetString(binary.Value),
+                    FinTsValue.Text plain => plain.Value,
+                    _ => null
+                };
+                if (Mt535Parser.LooksLikeStatement(text)) return text;
+            }
+        }
+        return null;
     }
 
     private static IReadOnlyList<FinTsResponseCode> ParseCodes(IReadOnlyList<FinTsSegment> segments)
@@ -211,8 +250,12 @@ internal static class FinTsResponseParser
         var owner = FirstUseful(segment, 6, 7);
         var product = FirstUseful(segment, 8, 9);
         var depot = (product ?? string.Empty).Contains("Depot", StringComparison.OrdinalIgnoreCase);
+        // Stelle 4 der klassischen Kontoverbindung ist der Kreditinstitutscode. Nennt die Bank ihn,
+        // wird er uebernommen; sonst steht er in der IBAN (#130 §3).
+        var bankCode = Text(accountGroup, 3);
         if (string.IsNullOrWhiteSpace(iban) && string.IsNullOrWhiteSpace(accountNumber)) return null;
-        return new FinTsAccount(iban, bic, accountNumber, sub, owner, product, currency, depot);
+        return new FinTsAccount(iban, bic, accountNumber, sub, owner, product, currency, depot,
+            string.IsNullOrWhiteSpace(bankCode) ? null : bankCode);
     }
 
     private static Dictionary<string, bool> ParsePinTanRules(FinTsSegment segment)
