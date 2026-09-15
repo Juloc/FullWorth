@@ -35,7 +35,6 @@ DELETE           /api/intelligence/admin/credentials/{id:guid}
 DELETE           /api/investment-management/portfolios/{portfolioId:guid}/trades/{tradeId:guid}
 DELETE           /api/investments/benchmarks/{benchmarkId:guid}
 DELETE           /api/investments/portfolios/{id:guid}
-DELETE           /api/investments/portfolios/{portfolioId:guid}/trades/{id:guid}
 DELETE           /api/investments/watchlists/{id:guid}
 DELETE           /api/loans/{id:guid}
 DELETE           /api/merchants/{id:guid}
@@ -156,12 +155,11 @@ GET              /api/contracts/price-changes/
 GET              /api/contracts/{id:guid}
 GET              /api/contracts/{id:guid}/activity
 GET              /api/contracts/{id:guid}/merged-sources
-GET              /api/export/csv-zip-v2
+GET              /api/export/csv-zip
 GET              /api/export/snapshot
 GET              /api/export/wealth-backup
 GET              /api/export/wealth-full
 GET              /api/export/xlsx
-GET              /api/export/xlsx-v2
 GET              /api/fullworth-spaces/
 GET              /api/fullworth-spaces/{spaceId:guid}/invites
 GET              /api/fullworth-spaces/{spaceId:guid}/members
@@ -203,13 +201,10 @@ GET              /api/investment-import/jobs/{jobId:guid}/summary
 GET              /api/investment-import/portfolios/{portfolioId:guid}/reconciliation
 GET              /api/investments/benchmarks
 GET              /api/investments/net-worth-contribution
-GET              /api/investments/net-worth-contribution-v2
 GET              /api/investments/portfolios
 GET              /api/investments/portfolios/{portfolioId:guid}/dividends
-GET              /api/investments/portfolios/{portfolioId:guid}/overview-v2
+GET              /api/investments/portfolios/{portfolioId:guid}/overview
 GET              /api/investments/portfolios/{portfolioId:guid}/performance
-GET              /api/investments/portfolios/{portfolioId:guid}/performance-v2
-GET              /api/investments/portfolios/{portfolioId:guid}/positions
 GET              /api/investments/portfolios/{portfolioId:guid}/trades
 GET              /api/investments/securities
 GET              /api/investments/watchlists
@@ -441,7 +436,6 @@ POST             /api/investment-import/upload
 POST             /api/investments/benchmarks
 POST             /api/investments/portfolios
 POST             /api/investments/portfolios/{portfolioId:guid}/trades
-POST             /api/investments/portfolios/{portfolioId:guid}/trades-v2
 POST             /api/investments/securities
 POST             /api/investments/watchlists
 POST             /api/liabilities/
@@ -587,8 +581,7 @@ PUT              /api/investment-management/portfolios/{portfolioId:guid}/trades
 PUT              /api/investment-management/prices
 PUT              /api/investments/benchmarks/{benchmarkId:guid}
 PUT              /api/investments/portfolios/{id:guid}
-PUT              /api/investments/portfolios/{portfolioId:guid}/settings-v2
-PUT              /api/investments/portfolios/{portfolioId:guid}/trades/{id:guid}
+PUT              /api/investments/portfolios/{portfolioId:guid}/settings
 PUT              /api/investments/prices
 PUT              /api/investments/securities/{id:guid}
 PUT              /api/investments/watchlists/{id:guid}

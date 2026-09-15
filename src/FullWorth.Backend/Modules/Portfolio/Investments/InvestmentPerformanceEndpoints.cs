@@ -8,7 +8,7 @@ public static class InvestmentPerformanceV2Endpoints
 {
     public static IEndpointRouteBuilder MapInvestmentPerformanceV2Endpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/investments/portfolios/{portfolioId:guid}/performance-v2", GetPerformance)
+        app.MapGet("/api/investments/portfolios/{portfolioId:guid}/performance", GetPerformance)
             .WithTags("Investments");
         return app;
     }

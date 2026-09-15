@@ -102,7 +102,7 @@ VALUES ({FullWorthSpaceDefaults.LegacyId},{userId},{"export.read"},{true},{DateT
         });
 
         using var request = UserRequest(
-            $"/api/export/csv-zip-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&includePurchases=false&includeInvestments=false",
+            $"/api/export/csv-zip?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&includePurchases=false&includeInvestments=false",
             userId);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

@@ -43,7 +43,7 @@ VALUES ({portfolioId},{FullWorthSpaceDefaults.LegacyId},{"Performance Depot"},{"
         });
 
         using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/portfolios/{portfolioId:D}/performance-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&from=2026-01-01&to=2026-12-31", owner);
+            $"/api/investments/portfolios/{portfolioId:D}/performance?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&from=2026-01-01&to=2026-12-31", owner);
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -90,7 +90,7 @@ VALUES ({portfolioId},{FullWorthSpaceDefaults.LegacyId},{"Hidden Performance Dep
         });
 
         using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/portfolios/{portfolioId:D}/performance-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", viewer);
+            $"/api/investments/portfolios/{portfolioId:D}/performance?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", viewer);
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

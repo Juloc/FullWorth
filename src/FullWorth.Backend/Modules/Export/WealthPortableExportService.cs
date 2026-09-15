@@ -91,7 +91,7 @@ public sealed class WealthPortableExportService(
             snapshot,
             wealth,
             [],
-            new { canonical = true, xlsx = "/api/export/xlsx-v2?includeInvestments=true", note = "Investment rows are exported from the existing canonical investment ledger." });
+            new { canonical = true, xlsx = "/api/export/xlsx?includeInvestments=true", note = "Investment rows are exported from the existing canonical investment ledger." });
     }
 
     public async Task<WealthBackupResult?> BackupAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)

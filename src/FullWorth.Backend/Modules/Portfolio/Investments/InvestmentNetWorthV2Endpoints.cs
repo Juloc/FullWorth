@@ -7,7 +7,7 @@ public static class InvestmentNetWorthV2Endpoints
 {
     public static IEndpointRouteBuilder MapInvestmentNetWorthV2Endpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/investments/net-worth-contribution-v2", GetContribution)
+        app.MapGet("/api/investments/net-worth-contribution", GetContribution)
             .WithTags("Investments");
         return app;
     }

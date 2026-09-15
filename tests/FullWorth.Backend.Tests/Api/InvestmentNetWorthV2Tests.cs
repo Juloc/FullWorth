@@ -58,7 +58,7 @@ VALUES
         });
 
         using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/net-worth-contribution-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
+            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -104,7 +104,7 @@ VALUES ({portfolio},{FullWorthSpaceDefaults.LegacyId},{"GBP Depot"},{"GBP"},{tru
         });
 
         using var request = UserRequest(HttpMethod.Get,
-            $"/api/investments/net-worth-contribution-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
+            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={day:yyyy-MM-dd}", owner);
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

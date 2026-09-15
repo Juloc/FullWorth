@@ -31,22 +31,6 @@ public sealed record WatchlistItemRow(
     Guid SecurityId, string Name, string? Ticker, string AssetType, decimal? TargetPrice, string? Notes,
     int SortOrder, decimal? Price, DateOnly? PriceDate, string? PriceCurrency);
 
-/// <summary>Ein Handel, so weit die Bewertung ihn braucht.</summary>
-public sealed record InvestmentTradeData(
-    Guid Id, Guid? SecurityId, string Type, DateOnly Date, decimal? Quantity, decimal? Price, decimal Amount,
-    string Currency, decimal Fees, decimal Taxes);
-
-/// <summary>Ein Kurs, so weit die Bewertung ihn braucht.</summary>
-public sealed record InvestmentPriceData(Guid SecurityId, DateOnly Date, decimal Price, string Currency);
-
-/// <summary>Ein Wertpapier, so weit die Bewertung es braucht.</summary>
-public sealed record InvestmentSecurityData(Guid Id, string Name, string AssetType, string Currency);
-
-/// <summary>Alles, was eine Depotbewertung an Rohdaten braucht.</summary>
-public sealed record InvestmentValuationData(
-    List<InvestmentTradeData> Trades, List<InvestmentPriceData> Prices,
-    Dictionary<Guid, InvestmentSecurityData> Securities, Guid? BenchmarkSecurityId);
-
 /// <summary>
 /// Depots, Wertpapiere, Handel, Kurse und Merklisten - der Datenzugriff hinter <c>/api/investments</c>.
 ///
@@ -205,44 +189,6 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio ORDER BY "TradeDate" DESC
         return rows;
     }
 
-    public async Task<bool> SaveTradeBasicsAsync(
-        Guid userId, Guid space, Guid portfolioId, Guid id, TradeWrite request, string type, bool update,
-        CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-        var parameters = new (string, object?)[]
-        {
-            ("@security", request.SecurityId), ("@type", type), ("@date", request.TradeDate),
-            ("@quantity", request.Quantity), ("@price", request.Price), ("@amount", request.Amount),
-            ("@currency", request.Currency.Trim().ToUpperInvariant()), ("@fees", request.Fees),
-            ("@taxes", request.Taxes), ("@external", request.ExternalKey?.Trim()),
-            ("@notes", request.Notes?.Trim()), ("@now", DateTimeOffset.UtcNow), ("@id", id),
-            ("@portfolio", portfolioId), ("@space", space)
-        };
-
-        await using var command = update
-            ? RawSql.Command(connection, """
-UPDATE "InvestmentTrades"
-SET "SecurityId"=@security,"TradeType"=@type,"TradeDate"=@date,"Quantity"=@quantity,"Price"=@price,
-    "Amount"=@amount,"Currency"=@currency,"Fees"=@fees,"Taxes"=@taxes,"ExternalKey"=@external,
-    "Notes"=@notes,"UpdatedAt"=@now
-WHERE "Id"=@id AND "PortfolioId"=@portfolio AND "FullWorthSpaceId"=@space
-""", parameters)
-            : RawSql.Command(connection, """
-INSERT INTO "InvestmentTrades"
-("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","Quantity","Price","Amount",
- "Currency","Fees","Taxes","ExternalKey","Notes","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@portfolio,@security,@type,@date,@quantity,@price,@amount,@currency,@fees,@taxes,
-        @external,@notes,@now,@now)
-""", parameters);
-
-        if (await command.ExecuteNonQueryAsync(ct) == 0) return false;
-        audit.Record(space, userId, update ? "investment.trade.updated" : "investment.trade.created",
-            "InvestmentTrade", id);
-        await db.SaveChangesAsync(ct);
-        return true;
-    }
-
     public async Task<bool> DeleteTradeAsync(
         Guid userId, Guid space, Guid portfolioId, Guid id, CancellationToken ct)
     {
@@ -303,76 +249,6 @@ WHERE t."PortfolioId"=@portfolio AND t."TradeType"='dividend'
                 RawSql.Decimal(reader, "Amount"), RawSql.String(reader, "Currency"),
                 RawSql.Decimal(reader, "Taxes")));
         return rows;
-    }
-
-    /// <summary>
-    /// Handel, Wertpapiere und Kurse eines Depots bis zum Stichtag - die Rohdaten jeder Bewertung.
-    /// Gerechnet wird hier nichts; das ist Sache des Endpunkts, der die Zahlen ausliefert.
-    /// </summary>
-    public async Task<InvestmentValuationData> LoadValuationAsync(
-        Guid portfolioId, DateOnly asOf, CancellationToken ct)
-    {
-        var connection = await RawSql.OpenAsync(db, ct);
-
-        var trades = new List<InvestmentTradeData>();
-        await using (var command = RawSql.Command(connection, """
-SELECT "Id","SecurityId","TradeType","TradeDate","Quantity","Price","Amount","Currency","Fees","Taxes"
-FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@date
-ORDER BY "TradeDate","CreatedAt"
-""", ("@portfolio", portfolioId), ("@date", asOf)))
-        {
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                trades.Add(new InvestmentTradeData(
-                    RawSql.Guid(reader, "Id"), RawSql.NullableGuid(reader, "SecurityId"),
-                    RawSql.String(reader, "TradeType"), RawSql.NullableDate(reader, "TradeDate")!.Value,
-                    RawSql.NullableDecimal(reader, "Quantity"), RawSql.NullableDecimal(reader, "Price"),
-                    RawSql.Decimal(reader, "Amount"), RawSql.String(reader, "Currency"),
-                    RawSql.Decimal(reader, "Fees"), RawSql.Decimal(reader, "Taxes")));
-        }
-
-        var securities = new Dictionary<Guid, InvestmentSecurityData>();
-        await using (var command = RawSql.Command(connection, """
-SELECT "Id","Name","AssetType","Currency" FROM "Securities"
-WHERE "FullWorthSpaceId"=(SELECT "FullWorthSpaceId" FROM "InvestmentPortfolios" WHERE "Id"=@portfolio)
-""", ("@portfolio", portfolioId)))
-        {
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                var row = new InvestmentSecurityData(
-                    RawSql.Guid(reader, "Id"), RawSql.String(reader, "Name"),
-                    RawSql.String(reader, "AssetType"), RawSql.String(reader, "Currency"));
-                securities[row.Id] = row;
-            }
-        }
-
-        var prices = new List<InvestmentPriceData>();
-        await using (var command = RawSql.Command(connection, """
-SELECT "SecurityId","PriceDate","Price","Currency" FROM "SecurityPrices"
-WHERE "PriceDate"<=@date AND "SecurityId" IN (
-    SELECT "Id" FROM "Securities"
-    WHERE "FullWorthSpaceId"=(SELECT "FullWorthSpaceId" FROM "InvestmentPortfolios" WHERE "Id"=@portfolio))
-ORDER BY "PriceDate"
-""", ("@date", asOf), ("@portfolio", portfolioId)))
-        {
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                prices.Add(new InvestmentPriceData(
-                    RawSql.Guid(reader, "SecurityId"), RawSql.NullableDate(reader, "PriceDate")!.Value,
-                    RawSql.Decimal(reader, "Price"), RawSql.String(reader, "Currency")));
-        }
-
-        Guid? benchmark = null;
-        await using (var command = RawSql.Command(connection,
-            "SELECT \"BenchmarkSecurityId\" FROM \"InvestmentPortfolios\" WHERE \"Id\"=@portfolio",
-            ("@portfolio", portfolioId)))
-        {
-            var value = await command.ExecuteScalarAsync(ct);
-            benchmark = value is null or DBNull ? null : (Guid)value;
-        }
-
-        return new InvestmentValuationData(trades, prices, securities, benchmark);
     }
 
     public async Task<List<WatchlistRow>> ListWatchlistsAsync(Guid space, Guid userId, CancellationToken ct)

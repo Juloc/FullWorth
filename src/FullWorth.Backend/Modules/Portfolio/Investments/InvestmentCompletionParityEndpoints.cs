@@ -23,10 +23,9 @@ public static class InvestmentCompletionParityEndpoints
     public static IEndpointRouteBuilder MapInvestmentCompletionParityEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/investments").WithTags("Investments");
-        group.MapPut("/portfolios/{portfolioId:guid}/settings-v2", PutPortfolioV2);
-        group.MapPost("/portfolios/{portfolioId:guid}/trades-v2", CreateTradeV2);
-        group.MapGet("/portfolios/{portfolioId:guid}/overview-v2", OverviewV2);
-        group.MapGet("/net-worth-contribution", NetWorthContribution);
+        group.MapPut("/portfolios/{portfolioId:guid}/settings", PutPortfolioV2);
+        group.MapPost("/portfolios/{portfolioId:guid}/trades", CreateTradeV2);
+        group.MapGet("/portfolios/{portfolioId:guid}/overview", OverviewV2);
         group.MapGet("/benchmarks", ListBenchmarks);
         group.MapPost("/benchmarks", CreateBenchmark);
         group.MapPut("/benchmarks/{benchmarkId:guid}", UpdateBenchmark);
@@ -150,45 +149,6 @@ public static class InvestmentCompletionParityEndpoints
             stalePrices = calculation.Positions
                 .Where(position => position.PriceState != "current")
                 .Select(position => new { position.SecurityId, position.Name, position.PriceDate, position.PriceState })
-        });
-    }
-
-    private static async Task<IResult> NetWorthContribution(
-        Guid fullWorthSpaceId, DateOnly? asOf, CurrentUserContext currentUser, SpaceAccess space,
-        PortfolioValuationStore store, PortfolioValuationService valuation, CancellationToken ct)
-    {
-        var userId = currentUser.RequireUserId();
-        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
-
-        var day = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var portfolios = await store.ListPortfoliosAsync(fullWorthSpaceId, includeArchived: false, ct);
-        var visible = await space.VisibleAccountIdsAsync(userId, fullWorthSpaceId, ct);
-
-        var rows = new List<object>();
-        decimal total = 0;
-        var incomplete = false;
-        var linkedAccounts = new List<Guid>();
-
-        foreach (var portfolio in portfolios.Where(item => item.IncludeInNetWorth))
-        {
-            if (portfolio.AccountId.HasValue && !visible.Contains(portfolio.AccountId.Value)) continue;
-
-            var value = await valuation.CalculateAsync(portfolio, day, ct);
-            total += value.TotalValue;
-            incomplete |= value.Incomplete;
-            // Das verknuepfte Konto zaehlt schon im Depot mit - wer es zusaetzlich addiert, zaehlt doppelt.
-            if (portfolio.AccountId.HasValue) linkedAccounts.Add(portfolio.AccountId.Value);
-            rows.Add(new { portfolio.Id, portfolio.Name, portfolio.Currency, value = value.TotalValue, value.Incomplete });
-        }
-
-        return Results.Ok(new
-        {
-            asOf = day,
-            total,
-            incomplete,
-            currencyMode = "portfolio-native-sum",
-            excludedLinkedAccountIds = linkedAccounts.Distinct(),
-            portfolios = rows
         });
     }
 

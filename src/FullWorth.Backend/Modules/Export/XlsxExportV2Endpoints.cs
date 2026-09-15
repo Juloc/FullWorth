@@ -15,7 +15,7 @@ public static class XlsxExportV2Endpoints
 {
     public static IEndpointRouteBuilder MapXlsxExportV2Endpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/export/xlsx-v2", Export).WithTags("Export");
+        app.MapGet("/api/export/xlsx", Export).WithTags("Export");
         return app;
     }
 

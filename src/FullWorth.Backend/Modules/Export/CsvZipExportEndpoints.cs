@@ -14,7 +14,7 @@ public static class CsvZipExportEndpoints
 {
     public static IEndpointRouteBuilder MapCsvZipExportEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/export/csv-zip-v2", Export).WithTags("Export");
+        app.MapGet("/api/export/csv-zip", Export).WithTags("Export");
         return app;
     }
 

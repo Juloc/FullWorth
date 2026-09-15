@@ -168,7 +168,7 @@ VALUES ({Guid.NewGuid()},{FullWorthSpaceDefaults.LegacyId},{portfolioId},{securi
         });
 
         using var request = UserRequest(HttpMethod.Post,
-            $"/api/investments/portfolios/{portfolioId:D}/trades-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+            $"/api/investments/portfolios/{portfolioId:D}/trades?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
         request.Content = JsonContent.Create(new
         {
             securityId,

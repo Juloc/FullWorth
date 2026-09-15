@@ -115,7 +115,7 @@ VALUES ({FullWorthSpaceDefaults.LegacyId},{userId},{"export.read"},{true},{DateT
         });
 
         using var request = new HttpRequestMessage(HttpMethod.Get,
-            $"/api/export/xlsx-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&includePurchases=false&includeInvestments=false");
+            $"/api/export/xlsx?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&includePurchases=false&includeInvestments=false");
         request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
         request.Headers.Add("X-FullWorth-User-Id", userId.ToString("D"));
         using var response = await client.SendAsync(request);

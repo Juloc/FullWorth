@@ -166,7 +166,7 @@ public sealed class FinTsDepotSnapshotValueTests
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"/api/investments/net-worth-contribution-v2?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={asOf:yyyy-MM-dd}");
+            $"/api/investments/net-worth-contribution?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}&asOf={asOf:yyyy-MM-dd}");
         request.Headers.Add("X-FullWorth-Internal-Key", BackendWebApplicationFactory.InternalKey);
         request.Headers.Add("X-FullWorth-User-Id", owner.ToString("D"));
         using var response = await client.SendAsync(request);

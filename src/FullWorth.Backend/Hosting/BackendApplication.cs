@@ -236,7 +236,6 @@ public static class BackendApplication
         builder.Services.AddScoped<BankingSyncStateStore>();
         builder.Services.AddScoped<RefundCandidateStore>();
         builder.Services.AddScoped<AccountAppearanceStore>();
-        builder.Services.AddScoped<XlsxExportService>();
         builder.Services.AddScoped<ExportDataStore>();
         builder.Services.AddScoped<MemberAccessStore>();
         builder.Services.AddScoped<PurchaseDiscountAnalyticsService>();
@@ -553,8 +552,7 @@ public static class BackendApplication
         endpoints.MapCsvZipExportEndpoints();
         endpoints.MapAccountAppearanceEndpoints()
             .MapProductIntelligenceEndpoints()
-            .MapCapabilityGrantEndpoints()
-            .MapXlsxExportEndpoints();
+            .MapCapabilityGrantEndpoints();
         endpoints.MapAccountExperienceEndpoints()
             .MapBankCapabilityEndpoints();
         endpoints.MapAccessEndpoints()

@@ -173,7 +173,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // stopImmediatePropagation -, und genau dafür lud es zur Laufzeit nach.
         Assert.Contains("dialog.dataset.portfolio", portfolioUi);
         Assert.Contains("dialog?.dataset.portfolio", adapter);
-        Assert.Contains("overview-v2", adapter);
+        Assert.Contains("overview", adapter);
         Assert.Contains("api/investments/securities", adapter);
         Assert.Contains("api/investments/portfolios/${portfolioId}/trades", adapter);
         Assert.Contains("api/market-data/securities/${securityId}/effective-price", adapter);
@@ -181,7 +181,7 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("priceStateText", adapter);
         Assert.Contains("Asset allocation", adapter);
         Assert.Contains("dataset.ipSecurity", adapter);
-        Assert.Contains("performance-v2", portfolioUi);
+        Assert.Contains("performance", portfolioUi);
         Assert.Contains("TWR", portfolioUi);
         Assert.Contains("XIRR", portfolioUi);
         Assert.DoesNotContain("api/assets", adapter);

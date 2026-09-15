@@ -64,7 +64,7 @@ async function enhanceWealthRows() {
 }
 
 async function portfolioOverview(portfolioId) {
-  if (!overviewCache.has(portfolioId)) overviewCache.set(portfolioId, api(`api/investments/portfolios/${portfolioId}/overview-v2`));
+  if (!overviewCache.has(portfolioId)) overviewCache.set(portfolioId, api(`api/investments/portfolios/${portfolioId}/overview`));
   return overviewCache.get(portfolioId);
 }
 
@@ -101,7 +101,7 @@ async function enhancePortfolioDialog(dialog) {
   }
 
   // Existing portfolio rows do not expose the security id. Match the rendered canonical position
-  // names against overview-v2 and annotate the rows, then open the security drilldown on demand.
+  // names against overview and annotate the rows, then open the security drilldown on demand.
   const byName = new Map((overview.positions || []).map(position => [position.name, position]));
   $$('.ip-row', content).forEach(row => {
     if (row.dataset.ipSecurity) return;
