@@ -38,7 +38,7 @@ internal sealed class FinTsResponse
     /// Eingeordnet wird deshalb ueber alle Fehlercodes, und die gesprechendste Einordnung gewinnt:
     /// 9800 allein bleibt "bank_error", 9800 zusammen mit 9942 ist "pin_wrong".
     /// </summary>
-    public void ThrowOnError()
+    public void ThrowOnError(IReadOnlyList<FinTsSegmentShape>? sentShape = null)
     {
         var errors = Codes.Where(x => x.IsError).ToList();
         if (errors.Count == 0) return;
@@ -55,7 +55,8 @@ internal sealed class FinTsResponse
             bankCode: leading.Code,
             segmentReference: string.IsNullOrWhiteSpace(leading.Reference) ? null : leading.Reference,
             bankMessage: string.IsNullOrWhiteSpace(leading.Text) ? null : leading.Text,
-            bankCodes: [.. errors.Select(x => new FinTsBankCode(x.Code, string.IsNullOrWhiteSpace(x.Reference) ? null : x.Reference, x.Text))]);
+            bankCodes: [.. errors.Select(x => new FinTsBankCode(x.Code, string.IsNullOrWhiteSpace(x.Reference) ? null : x.Reference, x.Text))],
+            sentShape: sentShape);
     }
 
     /// <summary>

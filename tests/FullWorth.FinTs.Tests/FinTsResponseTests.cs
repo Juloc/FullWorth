@@ -64,7 +64,7 @@ public sealed class FinTsResponseTests
         ]);
 
         var response = FinTsResponseParser.Parse(responseBytes);
-        var error = Assert.Throws<FinTsException>(response.ThrowOnError);
+        var error = Assert.Throws<FinTsException>(() => response.ThrowOnError());
 
         Assert.Equal("bank_error", error.Code);
         Assert.Equal("9010", error.BankCode);

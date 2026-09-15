@@ -52,7 +52,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
                             ?? throw new FinTsException("Bank requires TAN but returned no HITAN challenge.", "tan_challenge_missing");
             return new FinTsOpenResult(challenge.IsDecoupled ? FinTsResultKind.TanPending : FinTsResultKind.TanRequired, opened, challenge);
         }
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         return new FinTsOpenResult(FinTsResultKind.Success, opened);
     }
 
@@ -188,11 +188,29 @@ public sealed class FinTsClient(IFinTsTransport transport)
         return value is null ? empty(response, next) : FinTsResult<T>.Success(value, next, response.Touchdown);
     }
 
+    /// <summary>
+    /// Der Bauplan der zuletzt gesendeten Nachricht (#130 §11): Segmentart, Version, Anzahl der
+    /// Datenelemente. Keine Werte - die Nachricht selbst traegt im PIN/TAN-Verfahren die PIN.
+    /// </summary>
+    private IReadOnlyList<FinTsSegmentShape> lastSentShape = [];
+
     private async Task<FinTsResponse> SendAsync(FinTsBankProfile bank, FinTsCredentials credentials, FinTsSessionState session, IEnumerable<FinTsSegment> segments, string? tan, CancellationToken cancellationToken)
     {
-        var message = FinTsMessages.Build(bank, credentials, session, segments, tan);
+        var sent = segments as IReadOnlyList<FinTsSegment> ?? [.. segments];
+        lastSentShape = [.. sent.Select(Shape)];
+        var message = FinTsMessages.Build(bank, credentials, session, sent, tan);
         var bytes = await transport.SendAsync(bank.Endpoint, message, cancellationToken);
         return FinTsResponseParser.Parse(bytes);
+    }
+
+    /// <summary>Art, Version und Zahl der Datenelemente eines Segments - alles aus dem Kopf, kein Inhalt.</summary>
+    private static FinTsSegmentShape Shape(FinTsSegment segment)
+    {
+        var header = segment.Groups.Count > 0 ? segment.Groups[0] : null;
+        var type = header?.Values.Count > 0 && header.Values[0] is FinTsValue.Text name ? name.Value : "?";
+        var version = header?.Values.Count > 2 && header.Values[2] is FinTsValue.Text raw
+            && int.TryParse(raw.Value, out var parsed) ? parsed : 0;
+        return new FinTsSegmentShape(type, version, segment.Groups.Count - 1);
     }
 
     private static FinTsSessionState Advance(FinTsSessionState session, FinTsResponse response)

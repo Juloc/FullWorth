@@ -157,6 +157,19 @@ public sealed record FinTsResult<T>(
         => new(FinTsResultKind.TanPending, default, session, challenge);
 }
 
+/// <summary>
+/// Der AUFBAU einer gesendeten Nachricht: welche Segmente in welcher Version, und wie viele
+/// Datenelemente jedes hatte. Keine Werte - kein Benutzername, keine PIN, keine TAN, keine Betraege.
+///
+/// Dafuer, dass "Unbekannter Aufbau der Kundennachricht" (9110) beantwortbar wird, ohne die Nachricht
+/// selbst zu protokollieren. Die traegt in PIN/TAN-Verfahren die PIN im Signaturblock, und die gehoert
+/// in kein Protokoll - auch nicht in ein Fehlerprotokoll.
+/// </summary>
+public sealed record FinTsSegmentShape(string Type, int Version, int Elements)
+{
+    public override string ToString() => $"{Type}:v{Version}:{Elements}";
+}
+
 /// <summary>Ein Rueckmeldecode der Bank, so wie er kam.</summary>
 public sealed record FinTsBankCode(string Code, string? SegmentReference, string Text);
 
@@ -167,7 +180,8 @@ public sealed class FinTsException(
     string? bankCode = null,
     string? segmentReference = null,
     string? bankMessage = null,
-    IReadOnlyList<FinTsBankCode>? bankCodes = null) : Exception(message, inner)
+    IReadOnlyList<FinTsBankCode>? bankCodes = null,
+    IReadOnlyList<FinTsSegmentShape>? sentShape = null) : Exception(message, inner)
 {
     public string? Code { get; } = code;
     public string? BankCode { get; } = bankCode;
@@ -182,6 +196,17 @@ public sealed class FinTsException(
     /// dahinter, und die wurden weggeworfen: im Protokoll stand, DASS es scheiterte, nie WORAN.
     /// </summary>
     public IReadOnlyList<FinTsBankCode> BankCodes { get; } = bankCodes ?? [];
+
+    /// <summary>
+    /// Der Aufbau der Nachricht, die zu diesem Fehler gefuehrt hat (#130 §11).
+    ///
+    /// Bei 9110 "Unbekannter Aufbau der Kundennachricht" ist das die einzige Spur, die weiterhilft:
+    /// die Bank sagt, dass sie die Nachricht nicht lesen kann, und ohne ihren Bauplan bleibt nur Raten.
+    /// </summary>
+    public IReadOnlyList<FinTsSegmentShape> SentShape { get; } = sentShape ?? [];
+
+    /// <summary>Der Bauplan als "HKIDN:v2:4, HKVVB:v3:5, HKTAN:v7:8".</summary>
+    public string SentShapeSummary => string.Join(", ", SentShape);
 
     /// <summary>Alle Codes als "9800 Der Dialog wurde abgebrochen; 9010 …" - fuer ein Protokoll, eine Zeile.</summary>
     public string BankCodeSummary => BankCodes.Count == 0
