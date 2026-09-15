@@ -126,3 +126,14 @@ export function categoryIconPicker(currentKey, labels = {}) {
 export function selectedIconKey(pickerElement) {
   return pickerElement?.querySelector('.category-icon-choice.selected')?.dataset.icon || null;
 }
+
+/**
+ * Der Papierkorb. Ein SVG und kein Emoji: ein Emoji sieht auf jedem Betriebssystem anders aus,
+ * traegt seine eigene Grundlinie mit und laesst sich nicht einfaerben - neben den uebrigen
+ * Strichsymbolen faellt es auf, ohne etwas zu sagen.
+ *
+ * Er lag als Konstante in pages/accounts/page.js, wo ihn nur diese eine Seite hatte. Dieselbe
+ * Handlung braucht dasselbe Symbol.
+ */
+export const TRASH_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';

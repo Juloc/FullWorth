@@ -14,6 +14,7 @@ DELETE           /api/assets/{assetId:guid}/real-estate/leases/{leaseId:guid}
 DELETE           /api/assets/{assetId:guid}/real-estate/units/{unitId:guid}
 DELETE           /api/assets/{assetId:guid}/recurring-contracts/{contractId:guid}
 DELETE           /api/assets/{assetId:guid}/vehicle/
+DELETE           /api/assets/{id:guid}
 DELETE           /api/budget-groups/{id:guid}
 DELETE           /api/budgets/{id:guid}
 DELETE           /api/categories/{id:guid}
@@ -36,6 +37,7 @@ DELETE           /api/investments/benchmarks/{benchmarkId:guid}
 DELETE           /api/investments/portfolios/{id:guid}
 DELETE           /api/investments/portfolios/{portfolioId:guid}/trades/{tradeId:guid}
 DELETE           /api/investments/watchlists/{id:guid}
+DELETE           /api/liabilities/{id:guid}
 DELETE           /api/loans/{id:guid}
 DELETE           /api/merchants/{id:guid}
 DELETE           /api/merchants/{id:guid}/aliases/{aliasId:guid}

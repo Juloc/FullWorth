@@ -1,3 +1,4 @@
+import { TRASH_ICON } from '../../components/icons.js';
 import { money, converted, maskIdentifier } from '../../components/money.js';
 import { balanceMeaningLine } from '../../components/balance-meaning.js';
 import { state } from '../../core/state.js';
@@ -41,7 +42,6 @@ const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 const canSetBalance = account =>
   !account.bankConnectionId && (account.provider === 'manual' || account.provider === 'finanzguru-import');
 
-const ACCT_TRASH='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
 const ACCT_EDIT='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
 const ACCT_FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v10H4Z"/></svg>';
 
@@ -143,7 +143,7 @@ function accountRow(x,groups){
   const moveBtn=(groups||[]).length?`<button type="button" class="icon-button" data-move title="${esc(get('accounts.moveToGroup'))}" aria-label="${esc(get('accounts.moveToGroup'))}">${ACCT_FOLDER}</button>`:'';
   const renameBtn=`<button type="button" class="icon-button" data-rename-account title="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}" aria-label="${esc(get('common.edit'))}: ${esc(get('accounts.name'))}">${ACCT_EDIT}</button>`;
   const balanceBtn=canSetBalance(x)?`<button type="button" class="icon-button" data-edit-balance title="${esc(get('accounts.updateBalance'))}" aria-label="${esc(get('accounts.updateBalance'))}">±</button>`:'';
-  const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${ACCT_TRASH}</button>`:'';
+  const deleteBtn=isManual?`<button type="button" class="icon-button" data-delete title="${esc(get('accounts.delete'))}" aria-label="${esc(get('accounts.delete'))}">${TRASH_ICON}</button>`:'';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
   row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${kind?` · ${esc(kind)}`:''}${acctId(x.ibanLast4)}${dataAsOf}${balanceSource}${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${walletsLine}${convertedAmt}</div>${moveBtn}${renameBtn}${balanceBtn}${deleteBtn}${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
@@ -207,7 +207,7 @@ async function loadAccountsView(){
     // The chevron only expands/collapses; the name is a separate drill-down that opens all bookings of
     // the group's accounts (UX rework §3). The name keeps class `group-toggle` for accounts-ux decoration.
     const toggle=()=>{collapsed.has(gid)?collapsed.delete(gid):collapsed.add(gid);localStorage.setItem('finance.groupsCollapsed',JSON.stringify([...collapsed]));loadAccountsView();};
-    head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${totalMarkup(accts)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${ACCT_TRASH}</button>`:''}</div>`;
+    head.innerHTML=`<div class="row-main"><button type="button" class="group-chevron" data-toggle aria-label="${esc(get(isCollapsed?'nav.expand':'nav.collapse'))}">${isCollapsed?'▸':'▾'}</button><button type="button" class="group-toggle${g?' is-drillable':''}" data-group-open>${esc(g?g.name:get('accounts.ungrouped'))}</button></div><div class="row-side"><span class="amount">${totalMarkup(accts)}</span>${g?`<button type="button" class="icon-button" data-rename aria-label="${esc(get('accounts.renameGroup'))}" title="${esc(get('accounts.renameGroup'))}">${ACCT_EDIT}</button><button type="button" class="icon-button" data-delgroup aria-label="${esc(get('accounts.deleteGroup'))}" title="${esc(get('accounts.deleteGroup'))}">${TRASH_ICON}</button>`:''}</div>`;
     head.querySelector('[data-toggle]').addEventListener('click',toggle);
     head.querySelector('[data-group-open]').addEventListener('click',()=>{if(g)ctx.showView('transactions',{query:'groupId='+encodeURIComponent(g.id)});else toggle();});
     head.querySelector('[data-rename]')?.addEventListener('click',()=>openGroupDialog(g));

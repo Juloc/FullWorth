@@ -420,6 +420,36 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("money(rate.rate", js);
     }
 
+    /// <summary>
+    /// Hinzufuegen gab es, Wegnehmen nicht (#122). Der Kreis-Knopf nahm eine Zeile nur aus der Summe
+    /// heraus - er ist das Gegenteil von Loeschen, nicht dasselbe, und beide muessen da sein.
+    /// </summary>
+    [Fact]
+    public async Task WealthRowsCanBeDeletedAndAskFirst()
+    {
+        var js = await GetAsync("/pages/networth/page.js");
+
+        Assert.Contains("data-delete", js);
+        Assert.Contains("removeWealthRow", js);
+        Assert.Contains("removeWealthRow('assets'", js);
+        Assert.Contains("removeWealthRow('liabilities'", js);
+        Assert.Contains("method: 'DELETE'", js);
+        // Das Papierkorb-Symbol ist das gemeinsame SVG, kein Emoji: ein Emoji sieht auf jedem System
+        // anders aus und laesst sich nicht einfaerben.
+        Assert.Contains("TRASH_ICON", js);
+        Assert.DoesNotContain("\U0001F5D1", js);
+
+        // Gefragt wird vorher, und die Frage sagt, was mitgeht.
+        Assert.Contains("destructive: true", js);
+        Assert.Contains("deleteAssetConfirm", js);
+        Assert.Contains("deleteLiabilityConfirm", js);
+        Assert.Contains("Bewertungen, Belege und Detailangaben verschwinden mit", js);
+
+        // Der Ein-/Ausschluss bleibt daneben bestehen - er ist nicht der Ersatz dafuer.
+        Assert.Contains("data-toggle", js);
+        Assert.Contains("includeInNetWorth: !asset.includeInNetWorth", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await client.GetAsync(path);

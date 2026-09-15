@@ -1,3 +1,4 @@
+import { TRASH_ICON } from '../../components/icons.js';
 import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
 import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
@@ -47,6 +48,10 @@ const COPY = {
     investmentHint: 'Aktien, ETFs und andere Wertpapiere werden über ein Depot verwaltet und nicht als manueller Wert angelegt.',
     investmentTotal: 'Investments gesamt', portfolio: 'Depot', active: 'Aktiv',
     realEstate: 'Immobilien', vehicles: 'Fahrzeuge', otherValues: 'Weitere Werte',
+    deleteAsset: 'Vermögenswert löschen',
+    deleteAssetConfirm: 'Diesen Vermögenswert wirklich löschen? Bewertungen, Belege und Detailangaben verschwinden mit. Buchungen und Verträge bleiben.',
+    deleteLiability: 'Schuld löschen',
+    deleteLiabilityConfirm: 'Diese Schuld wirklich löschen? Die Verknüpfung zu einem Vermögenswert wird dabei gelöst.',
     pensionAssets: 'Altersvorsorge',
     tiedLabel: 'davon gebunden',
     tiedNote: 'Altersvorsorge – dieses Guthaben steht erst ab Rentenbeginn zur Verfügung.',
@@ -95,6 +100,10 @@ const COPY = {
     investmentHint: 'Stocks, ETFs and other securities are managed through an investment portfolio, not as manual assets.',
     investmentTotal: 'Investments total', portfolio: 'Portfolio', active: 'Active',
     realEstate: 'Real estate', vehicles: 'Vehicles', otherValues: 'Other assets',
+    deleteAsset: 'Delete asset',
+    deleteAssetConfirm: 'Delete this asset? Its valuations, documents and details go with it. Transactions and contracts stay.',
+    deleteLiability: 'Delete debt',
+    deleteLiabilityConfirm: 'Delete this debt? Its link to an asset is released.',
     pensionAssets: 'Pension',
     tiedLabel: 'of which tied',
     tiedNote: 'Pension — this balance is not available to you before retirement.',
@@ -1309,6 +1318,20 @@ function askCoachAboutWealth(entityType, item, label, amount) {
   }}));
 }
 
+// Hinzufuegen gab es, Wegnehmen nicht: das Auge-Symbol nahm eine Zeile nur aus der Summe heraus,
+// die Kachel blieb stehen - und nach dem Neuladen stand sie wieder da (#122). Beide Listen loeschen
+// jetzt ueber denselben Weg, und beide fragen vorher.
+async function removeWealthRow(resource, id, title, message) {
+  if (!await ctx.confirm(message, { title, destructive: true, confirmLabel: ctx.get('common.delete') })) return;
+  try {
+    await ctx.api(`api/${resource}/${id}`, { method: 'DELETE' });
+    ctx.toast(ctx.get('common.deleted'));
+    await renderNetWorth(ctx);
+  } catch (error) {
+    ctx.toast(error.message || ctx.get('common.error'));
+  }
+}
+
 function wealthCoachButton(onclick) {
   const button = document.createElement('button');
   button.type = 'button'; button.className = 'ghost nw-coach'; button.textContent = 'Coach';
@@ -1321,9 +1344,10 @@ function assetRow(asset) {
   const detailAction = asset.kind === 'real_estate'
     ? `<button class="icon-button" data-detail title="${ctx.esc(t('details'))}" aria-label="${ctx.esc(t('details'))}">›</button>`
     : `<button class="icon-button" data-history title="${ctx.esc(t('valueHistory'))}" aria-label="${ctx.esc(t('valueHistory'))}">↗</button>`;
-  row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(asset.name)}${asset.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(t(asset.kind || 'other'))}${asset.valuedAt ? ` · ${ctx.esc(dateValue(asset.valuedAt))}` : ''}</div></div><div class="row-side"><span class="amount">${ctx.money(asset.currentValue, asset.currency)}</span>${detailAction}<button class="icon-button" data-toggle title="${ctx.esc(ctx.get(asset.includeInNetWorth ? 'networth.exclude' : 'networth.include'))}">${asset.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button></div>`;
+  row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(asset.name)}${asset.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(t(asset.kind || 'other'))}${asset.valuedAt ? ` · ${ctx.esc(dateValue(asset.valuedAt))}` : ''}</div></div><div class="row-side"><span class="amount">${ctx.money(asset.currentValue, asset.currency)}</span>${detailAction}<button class="icon-button" data-toggle title="${ctx.esc(ctx.get(asset.includeInNetWorth ? 'networth.exclude' : 'networth.include'))}">${asset.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button><button class="icon-button" data-delete title="${ctx.esc(t('deleteAsset'))}" aria-label="${ctx.esc(t('deleteAsset'))}">${TRASH_ICON}</button></div>`;
   row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('asset', asset, asset.name, asset.currentValue)));
   row.querySelector('[data-edit]').onclick = () => openAssetForm(asset.kind || 'other', asset);
+  row.querySelector('[data-delete]').onclick = () => removeWealthRow('assets', asset.id, t('deleteAsset'), t('deleteAssetConfirm'));
   row.querySelector('[data-history]')?.addEventListener('click', () => openValuationHistory(asset));
   row.querySelector('[data-detail]')?.addEventListener('click', () => openRealEstateDetail(ctx, asset, () => renderNetWorth(ctx)));
   row.querySelector('[data-toggle]').onclick = async () => {
@@ -1339,9 +1363,10 @@ function renderLiabilities(liabilities) {
   const frag = document.createDocumentFragment();
   for (const item of liabilities) {
     const row = document.createElement('div'); row.className = `row nw-item${item.includeInNetWorth ? '' : ' nw-excluded'}`;
-    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name)}${item.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(ctx.get(`networth.liabilityKind_${item.kind || 'other'}`))}</div></div><div class="row-side"><span class="amount">${ctx.money(item.currentBalance, item.currency)}</span><button class="icon-button" data-toggle>${item.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit>✎</button></div>`;
+    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name)}${item.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(ctx.get(`networth.liabilityKind_${item.kind || 'other'}`))}</div></div><div class="row-side"><span class="amount">${ctx.money(item.currentBalance, item.currency)}</span><button class="icon-button" data-toggle>${item.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit>✎</button><button class="icon-button" data-delete title="${ctx.esc(t('deleteLiability'))}" aria-label="${ctx.esc(t('deleteLiability'))}">${TRASH_ICON}</button></div>`;
     row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('liability', item, item.name, item.currentBalance)));
     row.querySelector('[data-edit]').onclick = () => openLiabilityDialog(item);
+    row.querySelector('[data-delete]').onclick = () => removeWealthRow('liabilities', item.id, t('deleteLiability'), t('deleteLiabilityConfirm'));
     row.querySelector('[data-toggle]').onclick = async () => {
       try { await ctx.api(`api/liabilities/${item.id}`, jsonBody({ ...liabilityToWrite(item), includeInNetWorth: !item.includeInNetWorth }, 'PUT')); await renderNetWorth(ctx); }
       catch (error) { ctx.toast(error.message || ctx.get('common.error')); }

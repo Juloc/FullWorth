@@ -185,6 +185,11 @@ function openCatalog(ctx) {
   const dlg = ctx.dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${ctx.esc(ctx.get('dashboard.addWidget'))}</h2><button value="cancel" data-close>×</button></div><div class="choice-grid widget-catalog">${options}</div></form>`);
   dlg.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', async () => {
     dlg.close();
+    // Wer gerade eine Kachel hinzugefuegt hat, bleibt im Bearbeiten-Modus - sonst zeichnet die Seite
+    // sie ohne ×, ohne ⚙ und ohne Pfeile, und die frisch gesetzte Kachel ist nicht mehr wegzubekommen.
+    // Aus dem Leerzustand heraus war das der Normalfall: dort steht der Hinzufuegen-Knopf auch
+    // ausserhalb der Bearbeitungsleiste (#122).
+    editing = true;
     await mutate(ctx, l => [...l, { id: 'w' + Date.now().toString(36), type: b.dataset.add }]);
   }));
   dlg.showModal();

@@ -18,6 +18,8 @@ public static class PortfolioEndpoints
             ToResult(await store.CreateAssetForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
         assets.MapPut("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, AssetWrite request, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
             ToResult(await store.UpdateAssetForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct)));
+        assets.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
+            ToResult(await store.DeleteAssetForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
 
         var liabilities = app.MapGroup("/api/liabilities").WithTags("Liabilities");
         liabilities.MapGet("/", async (Guid fullWorthSpaceId, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
@@ -31,11 +33,23 @@ public static class PortfolioEndpoints
             ToResult(await store.CreateLiabilityForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct)));
         liabilities.MapPut("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, LiabilityWrite request, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
             ToResult(await store.UpdateLiabilityForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, request, ct)));
+        liabilities.MapDelete("/{id:guid}", async (Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
+            ToResult(await store.DeleteLiabilityForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct)));
 
         app.MapGet("/api/net-worth/history", async (Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, CurrentUserContext currentUser, PortfolioStore store, CancellationToken ct) =>
             Results.Ok(await store.HistoryViewForUserAsync(fullWorthSpaceId, currentUser.RequireUserId(), from, to, ct))).WithTags("Net worth");
         return app;
     }
+
+    // Eine geloeschte Zeile hat nichts mehr zurueckzugeben - deshalb 204 und nicht 200 mit Rumpf.
+    private static IResult ToResult(PortfolioMutationResult result) => result switch
+    {
+        PortfolioMutationResult.Success => Results.NoContent(),
+        PortfolioMutationResult.NotFound => Results.NotFound(),
+        PortfolioMutationResult.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+        PortfolioMutationResult.Invalid => Results.BadRequest(),
+        _ => Results.StatusCode(StatusCodes.Status409Conflict)
+    };
 
     private static IResult ToResult(AssetMutationOutcome outcome) => outcome.Result switch
     {

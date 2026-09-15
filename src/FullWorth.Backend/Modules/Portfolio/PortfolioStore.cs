@@ -122,6 +122,58 @@ public sealed class PortfolioStore(FullWorthDbContext db, AuditService? auditSer
         return new(PortfolioMutationResult.Success, await GetAssetForUserAsync(userId, fullWorthSpaceId, assetId, ct));
     }
 
+    /// <summary>
+    /// Loescht einen Vermoegenswert samt allem, was an ihm haengt.
+    ///
+    /// Das Aufraeumen macht die Datenbank: jede Detailtabelle (Immobilie, Fahrzeug, Edelmetall,
+    /// Forderung, Sammlerstueck, Beteiligung, Versicherung, Bewertungen, Belege, Zahlungsstroeme,
+    /// Schuldverknuepfungen, Vertragsverknuepfungen) haengt mit ON DELETE CASCADE daran. Ein
+    /// bAV-Vertrag ueberlebt und verliert nur die Verknuepfung (ON DELETE SET NULL) - er ist ein
+    /// eigener Vertrag, kein Teil des Vermoegenswerts.
+    ///
+    /// Die Vermoegenshistorie bleibt unangetastet: NetWorthSnapshots speichert Summen je Tag, keine
+    /// einzelnen Werte. Was gestern galt, galt gestern.
+    /// </summary>
+    public async Task<PortfolioMutationResult> DeleteAssetForUserAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid assetId, CancellationToken ct)
+    {
+        var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
+        if (role is null) return PortfolioMutationResult.NotFound;
+        if (!await VisibleAssets(userId, fullWorthSpaceId).AnyAsync(asset => asset.Id == assetId, ct))
+            return PortfolioMutationResult.NotFound;
+        if (role != FullWorthSpaceRoles.Owner) return PortfolioMutationResult.Forbidden;
+
+        var entity = await WritableAssets(userId, fullWorthSpaceId).SingleOrDefaultAsync(asset => asset.Id == assetId, ct);
+        if (entity is null) return PortfolioMutationResult.NotFound;
+
+        db.Assets.Remove(entity);
+        audit.Record(fullWorthSpaceId, userId, "asset.deleted", "Asset", entity.Id);
+        await db.SaveChangesAsync(ct);
+        return PortfolioMutationResult.Success;
+    }
+
+    /// <summary>
+    /// Loescht eine Verbindlichkeit. Eine Verknuepfung zu einem Vermoegenswert (AssetDebtLinks)
+    /// faellt mit, der Vermoegenswert selbst bleibt.
+    /// </summary>
+    public async Task<PortfolioMutationResult> DeleteLiabilityForUserAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid liabilityId, CancellationToken ct)
+    {
+        var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
+        if (role is null) return PortfolioMutationResult.NotFound;
+        if (!await VisibleLiabilities(userId, fullWorthSpaceId).AnyAsync(liability => liability.Id == liabilityId, ct))
+            return PortfolioMutationResult.NotFound;
+        if (role != FullWorthSpaceRoles.Owner) return PortfolioMutationResult.Forbidden;
+
+        var entity = await WritableLiabilities(userId, fullWorthSpaceId).SingleOrDefaultAsync(liability => liability.Id == liabilityId, ct);
+        if (entity is null) return PortfolioMutationResult.NotFound;
+
+        db.Liabilities.Remove(entity);
+        audit.Record(fullWorthSpaceId, userId, "liability.deleted", "Liability", entity.Id);
+        await db.SaveChangesAsync(ct);
+        return PortfolioMutationResult.Success;
+    }
+
     public async Task<LiabilityMutationOutcome> CreateLiabilityForUserAsync(Guid userId, Guid fullWorthSpaceId, LiabilityWrite request, CancellationToken ct)
     {
         var role = await GetSpaceRoleAsync(userId, fullWorthSpaceId, ct);
