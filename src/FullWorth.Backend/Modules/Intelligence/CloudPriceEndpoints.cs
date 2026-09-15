@@ -14,7 +14,8 @@ public static class CloudPriceEndpoints
         group.MapGet("/purchase-items/{purchaseItemId:guid}", async (
             Guid purchaseItemId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
+            CloudPriceStore prices,
             CloudRequestContextStore cloudContext,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
@@ -23,36 +24,14 @@ public static class CloudPriceEndpoints
         {
             var userId = currentUser.RequireUserId();
 
-            var item = await financeDb.PurchaseItems.AsNoTracking()
-                .Where(x => x.Id == purchaseItemId)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.ProductId,
-                    x.Barcode,
-                    x.UnitPrice,
-                    x.BaseUnitPrice,
-                    x.Quantity,
-                    x.TotalPrice,
-                    x.Currency,
-                    x.CreatedAt,
-                    x.Purchase.FullWorthSpaceId,
-                    x.Purchase.PurchaseDate
-                })
-                .SingleOrDefaultAsync(ct);
+            var item = await prices.FindPurchaseItemAsync(purchaseItemId, ct);
             if (item is null)
                 return Results.NotFound();
 
-            var isMember = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-                x.FullWorthSpaceId == item.FullWorthSpaceId && x.UserId == userId, ct);
-            if (!isMember)
+            if (!await space.IsMemberAsync(userId, item.FullWorthSpaceId, ct))
                 return Results.NotFound();
 
-            var productKey = await ResolvePublicProductKeyAsync(
-                item.Barcode,
-                item.ProductId,
-                financeDb,
-                ct);
+            var productKey = await ResolvePublicProductKeyAsync(item.Barcode, item.ProductId, prices, ct);
 
             var currency = CloudRequestContextStore.NormalizeCurrency(item.Currency);
             if (productKey is null || currency is null)
@@ -61,23 +40,11 @@ public static class CloudPriceEndpoints
                 {
                     available = false,
                     reason = productKey is null ? "public_product_id_missing" : "currency_invalid",
-                    local = await LocalHistoryAsync(
-                        item.FullWorthSpaceId,
-                        item.ProductId,
-                        item.Barcode,
-                        currency,
-                        financeDb,
-                        ct)
+                    local = await LocalHistoryAsync(item, currency, prices, ct)
                 });
             }
 
-            var local = await LocalHistoryAsync(
-                item.FullWorthSpaceId,
-                item.ProductId,
-                item.Barcode,
-                currency,
-                financeDb,
-                ct);
+            var local = await LocalHistoryAsync(item, currency, prices, ct);
 
             var observedDate = item.PurchaseDate ??
                                DateOnly.FromDateTime(item.CreatedAt.UtcDateTime);
@@ -195,10 +162,14 @@ public static class CloudPriceEndpoints
         return app;
     }
 
+    /// <summary>
+    /// Der oeffentliche Schluessel eines Artikels ist seine GTIN. Steht sie nicht an der Position,
+    /// wird sie unter den Strichcodes des Produkts gesucht.
+    /// </summary>
     private static async Task<string?> ResolvePublicProductKeyAsync(
         string? barcode,
         Guid? productId,
-        FullWorthDbContext db,
+        CloudPriceStore prices,
         CancellationToken ct)
     {
         if (GtinKey.TryCreateGtinSubjectKey(barcode, out var direct))
@@ -207,12 +178,7 @@ public static class CloudPriceEndpoints
         if (!productId.HasValue)
             return null;
 
-        var barcodes = await db.ProductBarcodes.AsNoTracking()
-            .Where(x => x.ProductId == productId.Value)
-            .OrderBy(x => x.CreatedAt)
-            .Select(x => x.Code)
-            .Take(10)
-            .ToListAsync(ct);
+        var barcodes = await prices.ProductBarcodesAsync(productId.Value, ct);
 
         foreach (var candidate in barcodes)
         {
@@ -223,56 +189,25 @@ public static class CloudPriceEndpoints
         return null;
     }
 
+    /// <summary>
+    /// Was der Haushalt selbst fuer denselben Artikel bezahlt hat. Das ist der Vergleich, der auch
+    /// ohne Cloud funktioniert - darum steht er hier und nicht hinter der Verfuegbarkeitspruefung.
+    /// </summary>
     private static async Task<object> LocalHistoryAsync(
-        Guid fullWorthSpaceId,
-        Guid? productId,
-        string? barcode,
-        string? currency,
-        FullWorthDbContext db,
-        CancellationToken ct)
+        PricedPurchaseItem item, string? currency, CloudPriceStore prices, CancellationToken ct)
     {
-        if (currency is null)
-            return new { count = 0 };
+        if (currency is null) return new { count = 0 };
 
-        var query = db.PurchaseItems.AsNoTracking()
-            .Where(x =>
-                x.Purchase.FullWorthSpaceId == fullWorthSpaceId &&
-                x.Purchase.Status == "confirmed" &&
-                x.Currency == currency &&
-                x.LineType == "product");
+        var observations = await prices.LocalHistoryAsync(
+            item.FullWorthSpaceId, item.ProductId, item.Barcode, currency, ct);
 
-        if (productId.HasValue)
-            query = query.Where(x => x.ProductId == productId.Value);
-        else if (!string.IsNullOrWhiteSpace(barcode))
-            query = query.Where(x => x.Barcode == barcode);
-        else
-            return new { count = 0 };
-
-        var rows = await query
-            .OrderByDescending(x => x.Purchase.PurchaseDate)
-            .Take(200)
-            .Select(x => new
-            {
-                x.UnitPrice,
-                x.BaseUnitPrice,
-                x.Quantity,
-                x.TotalPrice
-            })
-            .ToListAsync(ct);
-
-        var values = rows
-            .Select(x => EffectiveUnitPrice(
-                x.UnitPrice,
-                x.BaseUnitPrice,
-                x.Quantity,
-                x.TotalPrice))
-            .Where(x => x is > 0m)
-            .Select(x => x!.Value)
-            .OrderBy(x => x)
+        var values = observations
+            .Select(row => EffectiveUnitPrice(row.UnitPrice, row.BaseUnitPrice, row.Quantity, row.TotalPrice))
+            .Where(price => price is > 0m)
+            .Select(price => price!.Value)
+            .OrderBy(price => price)
             .ToArray();
-
-        if (values.Length == 0)
-            return new { count = 0 };
+        if (values.Length == 0) return new { count = 0 };
 
         return new
         {

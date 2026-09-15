@@ -240,6 +240,9 @@ public static class BackendApplication
         builder.Services.AddScoped<WealthPreviewBasisService>();
         builder.Services.AddScoped<CloudRequestContextStore>();
         builder.Services.AddScoped<AdminSecretsStore>();
+        builder.Services.AddScoped<CloudPriceStore>();
+        builder.Services.AddScoped<MerchantSpendStore>();
+        builder.Services.AddScoped<ContractBenchmarkStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
         // One canonical purchases / receipts / products stack. The parity endpoints below are compatibility

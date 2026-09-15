@@ -6,9 +6,6 @@ Categories/CategoryMergeParityModule.cs
 Contracts/ContractParityModule.cs
 Import/ImportMappingParityModule.cs
 Import/ImportParityModule.cs
-Intelligence/CloudBenchmarkEndpoints.cs
-Intelligence/CloudMerchantBenchmarkEndpoints.cs
-Intelligence/CloudPriceEndpoints.cs
 Portfolio/Investments/InvestmentCompletionParityModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
 Portfolio/Investments/InvestmentManagementParityModule.cs

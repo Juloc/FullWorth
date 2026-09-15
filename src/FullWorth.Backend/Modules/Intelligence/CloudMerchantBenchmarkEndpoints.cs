@@ -13,7 +13,8 @@ public static class CloudMerchantBenchmarkEndpoints
             Guid merchantId,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
+            MerchantSpendStore spend,
             CloudRequestContextStore cloudContext,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
@@ -22,18 +23,12 @@ public static class CloudMerchantBenchmarkEndpoints
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var isMember = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-                x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId, ct);
-            if (!isMember) return Results.NotFound();
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
-            var merchant = await financeDb.Set<Merchant>().AsNoTracking()
-                .SingleOrDefaultAsync(x => x.Id == merchantId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+            var merchant = await spend.FindMerchantAsync(fullWorthSpaceId, merchantId, ct);
             if (merchant is null) return Results.NotFound();
 
-            var aliases = await financeDb.Set<MerchantAlias>().AsNoTracking()
-                .Where(x => x.MerchantId == merchantId && x.FullWorthSpaceId == fullWorthSpaceId)
-                .Select(x => x.NormalizedAlias)
-                .ToListAsync(ct);
+            var aliases = await spend.AliasesAsync(fullWorthSpaceId, merchantId, ct);
             aliases.Add(merchant.NormalizedName);
             var aliasSet = aliases
                 .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -65,54 +60,9 @@ public static class CloudMerchantBenchmarkEndpoints
             var monthEnd = currentMonth;
             var observedMonth = monthStart.ToString("yyyy-MM");
 
-            var expenses = await financeDb.Transactions.AsNoTracking()
-                .Join(
-                    financeDb.Accounts.AsNoTracking().Where(x => x.FullWorthSpaceId == fullWorthSpaceId),
-                    tx => tx.AccountId,
-                    account => account.Id,
-                    (tx, account) => tx)
-                .Where(tx =>
-                    (tx.BookingDate ?? tx.ValueDate) >= monthStart &&
-                    (tx.BookingDate ?? tx.ValueDate) < monthEnd &&
-                    tx.Amount < 0m &&
-                    !tx.IsIgnored &&
-                    !tx.IsTransfer &&
-                    tx.NormalizedCounterparty != null &&
-                    aliasSet.Contains(tx.NormalizedCounterparty))
-                .Select(tx => new { tx.Id, tx.Amount, tx.Currency })
-                .ToListAsync(ct);
-
-            var allMerchantExpenseIds = await financeDb.Transactions.AsNoTracking()
-                .Join(
-                    financeDb.Accounts.AsNoTracking().Where(x => x.FullWorthSpaceId == fullWorthSpaceId),
-                    tx => tx.AccountId,
-                    account => account.Id,
-                    (tx, account) => tx)
-                .Where(tx =>
-                    tx.Amount < 0m &&
-                    tx.NormalizedCounterparty != null &&
-                    aliasSet.Contains(tx.NormalizedCounterparty))
-                .Select(tx => tx.Id)
-                .ToListAsync(ct);
-
-            var refunds = allMerchantExpenseIds.Count == 0
-                ? []
-                : await financeDb.Transactions.AsNoTracking()
-                    .Join(
-                        financeDb.Accounts.AsNoTracking().Where(x => x.FullWorthSpaceId == fullWorthSpaceId),
-                        tx => tx.AccountId,
-                        account => account.Id,
-                        (tx, account) => tx)
-                    .Where(tx =>
-                        (tx.BookingDate ?? tx.ValueDate) >= monthStart &&
-                        (tx.BookingDate ?? tx.ValueDate) < monthEnd &&
-                        tx.Amount > 0m &&
-                        tx.RefundOfTransactionId != null &&
-                        allMerchantExpenseIds.Contains(tx.RefundOfTransactionId.Value) &&
-                        !tx.IsIgnored &&
-                        !tx.IsTransfer)
-                    .Select(tx => new { tx.Amount, tx.Currency })
-                    .ToListAsync(ct);
+            var expenses = await spend.ExpensesAsync(fullWorthSpaceId, aliasSet, monthStart, monthEnd, ct);
+            var allMerchantExpenseIds = await spend.AllExpenseIdsAsync(fullWorthSpaceId, aliasSet, ct);
+            var refunds = await spend.RefundsAsync(fullWorthSpaceId, allMerchantExpenseIds, monthStart, monthEnd, ct);
 
             var spendByCurrency = expenses
                 .Select(x => new { x.Currency, Value = -x.Amount })

@@ -86,16 +86,15 @@ public static class CloudBenchmarkEndpoints
         group.MapGet("/contracts", async (
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
+            ContractBenchmarkStore contracts,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
             IFullWorthCloudClient cloud,
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var isMember = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-                x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId, ct);
-            if (!isMember) return Results.NotFound();
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
             if (!await cloudState.HasCurrentActiveConsentAsync(ct))
                 return Results.Ok(new { available = false, items = Array.Empty<object>() });
@@ -112,28 +111,7 @@ public static class CloudBenchmarkEndpoints
                 return Results.Ok(new { available = false, items = Array.Empty<object>() });
             }
 
-            var rows = await financeDb.Contracts.AsNoTracking()
-                .Where(x => x.FullWorthSpaceId == fullWorthSpaceId &&
-                            x.IsActive &&
-                            x.MergedIntoContractId == null &&
-                            x.CategoryId != null &&
-                            x.Amount != 0m &&
-                            (x.AccountId == null || financeDb.AccountOwners.Any(owner =>
-                                owner.AccountId == x.AccountId && owner.UserId == userId)))
-                .Select(x => new
-                {
-                    x.Amount,
-                    x.Currency,
-                    x.BillingCycle,
-                    x.Interval,
-                    CategoryKey = financeDb.Categories
-                        .Where(category => category.Id == x.CategoryId &&
-                                           category.FullWorthSpaceId == fullWorthSpaceId &&
-                                           !category.IsArchived)
-                        .Select(category => category.Key)
-                        .FirstOrDefault()
-                })
-                .ToListAsync(ct);
+            var rows = await contracts.ListForUserAsync(userId, fullWorthSpaceId, ct);
 
             var local = rows.Select(x =>
                 {
@@ -207,7 +185,8 @@ public static class CloudBenchmarkEndpoints
             Guid contractId,
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
+            ContractBenchmarkStore contracts,
             CloudRequestContextStore cloudContext,
             CloudOperationalRegistryResolver registryResolver,
             CloudIntelligenceStateService cloudState,
@@ -216,29 +195,7 @@ public static class CloudBenchmarkEndpoints
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var contract = await financeDb.Contracts.AsNoTracking()
-                .Where(x =>
-                    x.Id == contractId &&
-                    x.FullWorthSpaceId == fullWorthSpaceId &&
-                    x.MergedIntoContractId == null &&
-                    (x.AccountId == null || financeDb.AccountOwners.Any(owner =>
-                        owner.AccountId == x.AccountId && owner.UserId == userId)))
-                .Select(x => new
-                {
-                    x.ProviderName,
-                    x.Amount,
-                    x.Currency,
-                    x.BillingCycle,
-                    x.Interval,
-                    CategoryKey = financeDb.Categories
-                        .Where(category =>
-                            category.Id == x.CategoryId &&
-                            category.FullWorthSpaceId == fullWorthSpaceId &&
-                            !category.IsArchived)
-                        .Select(category => category.Key)
-                        .FirstOrDefault()
-                })
-                .SingleOrDefaultAsync(ct);
+            var contract = await contracts.FindForUserAsync(userId, fullWorthSpaceId, contractId, ct);
             if (contract is null) return Results.NotFound();
 
             var metricKey = CloudContractBenchmarkContributionService.MetricForCategory(contract.CategoryKey);
@@ -352,7 +309,8 @@ public static class CloudBenchmarkEndpoints
         group.MapGet("/savings", async (
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
-            FullWorthDbContext financeDb,
+            SpaceAccess space,
+            ContractBenchmarkStore contracts,
             CloudSavingsBenchmarkContributionService localSavings,
             CloudIntelligenceStateService cloudState,
             CloudCredentialAcquisition acquisition,
@@ -360,9 +318,7 @@ public static class CloudBenchmarkEndpoints
             CancellationToken ct) =>
         {
             var userId = currentUser.RequireUserId();
-            var isMember = await financeDb.FullWorthSpaceMembers.AsNoTracking().AnyAsync(x =>
-                x.FullWorthSpaceId == fullWorthSpaceId && x.UserId == userId, ct);
-            if (!isMember) return Results.NotFound();
+            if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
 
             var local = await localSavings.ComputeSpaceAsync(
                 fullWorthSpaceId,
