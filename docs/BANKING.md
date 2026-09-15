@@ -313,6 +313,11 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
    is the order hash. Sending a version-4 header with a version-6 body is what ING answered with
    `9110 Unbekannter Aufbau der Kundennachricht`, hidden behind the umbrella code
    `9800 Der Dialog wurde abgebrochen`.
+
+   The signature header `HNSHK` carries a **Sicherheitsprofil** whose second part is the version of
+   the procedure: `1` for one-step, `2` for two-step. It has to agree with the security function next
+   to it. The sync dialog runs with `999` — genuinely one-step — which is why a hardcoded `1` survived
+   there and only the login dialog answered `9010 Ungültiger Signaturaufbau`.
 4. The whole state — bank id, login, PIN, product id, discovered `FinTsBankParameters`, the open
    session and any pending challenge — is serialised to JSON into `BankConnection.AuthorizationId`,
    which the backend stores encrypted (`FieldCipher`). `ProviderSessionId` is a synthetic

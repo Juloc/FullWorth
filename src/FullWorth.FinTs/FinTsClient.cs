@@ -40,7 +40,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
             FinTsMessages.Identify(bank, credentials.UserId, parameters.SystemId),
             FinTsMessages.ProcessPrep(parameters, credentials.ProductId)
         };
-        if (parameters.TanMethods.Count > 0 || parameters.SecurityFunction != "999")
+        if (parameters.TanMethods.Count > 0 || parameters.SecurityFunction != FinTsMessages.OneStepSecurityFunction)
             segments.Add(FinTsMessages.TanProcess4("HKIDN", TanVersion(parameters), parameters.TanMedium));
 
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
@@ -197,8 +197,13 @@ public sealed class FinTsClient(IFinTsTransport transport)
     private async Task<FinTsResponse> SendAsync(FinTsBankProfile bank, FinTsCredentials credentials, FinTsSessionState session, IEnumerable<FinTsSegment> segments, string? tan, CancellationToken cancellationToken)
     {
         var sent = segments as IReadOnlyList<FinTsSegment> ?? [.. segments];
-        lastSentShape = [.. sent.Select(Shape)];
         var message = FinTsMessages.Build(bank, credentials, session, sent, tan);
+        // Der Bauplan kommt aus der Nachricht, die wirklich rausgeht - samt Umschlag und
+        // Signaturblock. Vorher standen nur die Geschaeftssegmente darin, und bei
+        // "9010 Ungueltiger Signaturaufbau" zeigte er auf alles ausser die Stelle, um die es ging.
+        // Werte stehen nicht drin: Art, Version und Zahl der Datenelemente, sonst nichts - im
+        // PIN/TAN-Verfahren traegt der Signaturabschluss die PIN.
+        lastSentShape = [.. FinTsResponseParser.Parse(message).Segments.Select(Shape)];
         var bytes = await transport.SendAsync(bank.Endpoint, message, cancellationToken);
         return FinTsResponseParser.Parse(bytes);
     }
@@ -261,7 +266,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
             .Max());
 
     private static FinTsBankParameters EmptyParameters()
-        => new(0, 0, "0", "999", null,
+        => new(0, 0, "0", FinTsMessages.OneStepSecurityFunction, null,
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
             [], []);

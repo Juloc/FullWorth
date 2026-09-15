@@ -161,7 +161,7 @@ internal static class FinTsResponseParser
             var decoupled = methods.FirstOrDefault(x => x.IsDecoupled && allowed.Contains(x.SecurityFunction));
             security = decoupled?.SecurityFunction ?? methods.FirstOrDefault(x => allowed.Contains(x.SecurityFunction))?.SecurityFunction ?? allowed[0];
         }
-        else if (security == "999" && methods.Count > 0)
+        else if (security == FinTsMessages.OneStepSecurityFunction && methods.Count > 0)
         {
             security = methods.FirstOrDefault(x => x.IsDecoupled)?.SecurityFunction ?? methods[0].SecurityFunction;
         }

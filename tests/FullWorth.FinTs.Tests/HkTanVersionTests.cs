@@ -126,8 +126,8 @@ public sealed class HkTanVersionTests
 
         await new FinTsClient(transport).OpenAsync(Bank, Credentials, parameters);
 
-        var sent = FinTsResponseParser.Parse(Assert.Single(transport.Messages));
-        var hktan = sent.Find("HKTAN");
+        Assert.Single(transport.Messages);
+        var hktan = transport.Sent().Find("HKTAN");
         Assert.NotNull(hktan);
         return hktan!;
     }
@@ -157,28 +157,5 @@ public sealed class HkTanVersionTests
             FinTsGroup.Of(FinTsValue.T("0")),
             new FinTsGroup(method)
         ]);
-    }
-
-    /// <summary>Haelt fest, was gesendet wurde, und antwortet mit einem erfolgreichen Dialog.</summary>
-    private sealed class CapturingTransport : IFinTsTransport
-    {
-        public List<byte[]> Messages { get; } = [];
-
-        public Task<byte[]> SendAsync(Uri endpoint, byte[] message, CancellationToken cancellationToken)
-        {
-            Messages.Add(message);
-            return Task.FromResult(FinTsWire.Serialize([
-                new FinTsSegment([
-                    FinTsGroup.Of(FinTsValue.T("HNHBK"), FinTsValue.T("1"), FinTsValue.T("3")),
-                    FinTsGroup.Of(FinTsValue.T("000000000300")),
-                    FinTsGroup.Of(FinTsValue.T("300")),
-                    FinTsGroup.Of(FinTsValue.T("DIALOG01"))
-                ]),
-                new FinTsSegment([
-                    FinTsGroup.Of(FinTsValue.T("HIRMG"), FinTsValue.T("2"), FinTsValue.T("2")),
-                    FinTsGroup.Of(FinTsValue.T("0010"), FinTsValue.T("-"), FinTsValue.T("Nachricht entgegengenommen."))
-                ])
-            ]));
-        }
     }
 }

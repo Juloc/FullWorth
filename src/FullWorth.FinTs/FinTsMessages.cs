@@ -206,12 +206,29 @@ internal static class FinTsMessages
         ]);
     }
 
+    /// <summary>
+    /// Die Sicherheitsfunktion des Einschritt-Verfahrens. Alles andere ist ein Zwei-Schritt-Verfahren.
+    /// </summary>
+    internal const string OneStepSecurityFunction = "999";
+
+    /// <summary>
+    /// Der Signaturkopf.
+    ///
+    /// Das Sicherheitsprofil an Stelle 1 hat zwei Teile: das Verfahren ("PIN") und SEINE VERSION -
+    /// 1 fuer das Einschritt-, 2 fuer das Zwei-Schritt-Verfahren. Hier stand fest die 1, auch wenn
+    /// die Sicherheitsfunktion daneben ein Zwei-Schritt-Verfahren benannte. Aufgefallen ist es lange
+    /// nicht, weil der Synchronisationsdialog mit Sicherheitsfunktion 999 laeuft - dort IST es das
+    /// Einschritt-Verfahren, und die 1 stimmt. Erst der Anmeldedialog schickt die echte
+    /// Sicherheitsfunktion, und ING beantwortet die Mischung aus beidem mit
+    /// "9010 Ungueltiger Signaturaufbau: Fehler im Segmentaufbau".
+    /// </summary>
     private static FinTsSegment SignatureHeader(int number, string securityFunction, int reference, string blz, string userId, string systemId)
     {
         var now = DateTime.Now;
+        var profileVersion = securityFunction == OneStepSecurityFunction ? "1" : "2";
         return new([
             Header("HNSHK", number, 4),
-            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T("1")),
+            FinTsGroup.Of(FinTsValue.T("PIN"), FinTsValue.T(profileVersion)),
             FinTsGroup.Of(FinTsValue.T(securityFunction)),
             FinTsGroup.Of(FinTsValue.T(reference.ToString(CultureInfo.InvariantCulture))),
             FinTsGroup.Of(FinTsValue.T("1")), FinTsGroup.Of(FinTsValue.T("1")),
