@@ -199,8 +199,23 @@ public sealed class PurchaseItemReturn
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Eine Sammlung: „wofuer gehoerte das zusammen?" - Gardasee 2026, Wohnung, Badrenovierung.
+///
+/// Die Kategorie beantwortet „was wurde gekauft", die Sammlung „zu welchem Vorhaben gehoert es".
+/// Zwei Achsen, unabhaengig voneinander; eine Buchung kann keiner, einer oder mehreren Sammlungen
+/// angehoeren, und keine Sammlung aendert jemals Kategorie oder Betrag einer Buchung.
+///
+/// Es ist BEWUSST dieselbe Zeile, die die Artikelansicht als Etikett kennt (PurchaseTagLinks) und
+/// die Buchungsliste als Sammlung (TransactionTags). Ein Bauhaus-Beleg, der zu
+/// „Wohnungsrenovierung 2026" gehoert, und die Bauhaus-Buchung dazu meinen dasselbe Vorhaben - zwei
+/// getrennte Systeme haetten den Benutzer gezwungen, zwischen Etikett und Sammlung zu unterscheiden,
+/// obwohl zwei Ebenen genuegen (#124).
+/// </summary>
 [Table("FinanceTags")]
 [Index(nameof(FullWorthSpaceId), nameof(NormalizedName), IsUnique = true)]
+// Die Uebersicht filtert nach Status; ohne diesen Index liest sie jedes Mal die ganze Tabelle.
+[Index(nameof(FullWorthSpaceId), nameof(Status))]
 public sealed class FinanceTag
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -209,9 +224,43 @@ public sealed class FinanceTag
     [MaxLength(100)] public string NormalizedName { get; set; } = string.Empty;
     // Optional presentation colour shared with the category-intelligence tag UI (#RRGGBB or #RRGGBBAA).
     [MaxLength(9)] public string? Color { get; set; }
+
+    /// <summary>Symbolschluessel aus components/icons.js - dieselbe Liste wie bei Kategorien.</summary>
+    [MaxLength(64)] public string? Icon { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
+
+    /// <summary>
+    /// Der Zeitraum einer Reise oder eines Projekts. Beide optional: „Wohnung" laeuft dauerhaft und
+    /// braucht keinen. Er ist ein HINWEIS fuer die Vorschlaege, keine Grenze - eine Buchung im
+    /// Zeitraum gehoert nicht automatisch dazu, und eine ausserhalb ist nicht ausgeschlossen.
+    /// </summary>
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+
+    /// <summary>
+    /// <see cref="CollectionStatuses"/>. Der Status ist keine andere technische Art von Sammlung:
+    /// abgeschlossen und archiviert rechnen und zaehlen genau wie aktiv, sie stehen nur nicht mehr
+    /// vorn. Alle Zuordnungen bleiben erhalten.
+    /// </summary>
+    [MaxLength(16)] public string Status { get; set; } = CollectionStatuses.Active;
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public ICollection<PurchaseTagLink> PurchaseLinks { get; set; } = new List<PurchaseTagLink>();
+}
+
+/// <summary>Die drei Zustaende einer Sammlung. Sie aendern nichts an der Rechnung, nur an der Reihenfolge.</summary>
+public static class CollectionStatuses
+{
+    public const string Active = "active";
+    public const string Completed = "completed";
+    public const string Archived = "archived";
+
+    public static bool IsKnown(string? value) =>
+        value is Active or Completed or Archived;
+
+    public static string Normalize(string? value) =>
+        IsKnown(value?.Trim().ToLowerInvariant()) ? value!.Trim().ToLowerInvariant() : Active;
 }
 
 [Table("PurchaseTagLinks")]

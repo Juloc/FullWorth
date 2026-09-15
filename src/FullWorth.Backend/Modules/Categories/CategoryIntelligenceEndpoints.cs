@@ -14,8 +14,6 @@ public sealed record BulkCategoryAction(
     IReadOnlyList<Guid>? AddTagIds = null,
     IReadOnlyList<Guid>? RemoveTagIds = null);
 public sealed record LearnCategoryWrite(Guid TransactionId, Guid CategoryId, string Scope);
-public sealed record TagWrite(string Name, string? Color);
-public sealed record TagAssignmentWrite(IReadOnlyList<Guid>? TagIds);
 public sealed record CategoryAppearanceWrite(string? Color);
 public sealed record IntelligenceTag(Guid Id, string Name, string? Color);
 public sealed record CategoryAppearanceView(Guid CategoryId, string? Color);
@@ -115,62 +113,10 @@ public static class CategoryIntelligenceEndpoints
             catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
         });
 
-        group.MapGet("/tags", async (
-            Guid fullWorthSpaceId, CurrentUserContext currentUser, CategoryIntelligenceService service,
-            CancellationToken ct) =>
-        {
-            var result = await service.ListTagsAsync(currentUser.RequireUserId(), fullWorthSpaceId, ct);
-            return result is null ? Results.NotFound() : Results.Ok(result);
-        });
-
-        group.MapPost("/tags", async (
-            Guid fullWorthSpaceId, TagWrite request, CurrentUserContext currentUser,
-            CategoryIntelligenceService service, CancellationToken ct) =>
-        {
-            try
-            {
-                var result = await service.CreateTagAsync(currentUser.RequireUserId(), fullWorthSpaceId, request, ct);
-                return result is null
-                    ? Results.NotFound()
-                    : Results.Created($"/api/category-intelligence/tags/{result.Id}", result);
-            }
-            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
-        });
-
-        group.MapPut("/tags/{tagId:guid}", async (
-            Guid tagId, Guid fullWorthSpaceId, TagWrite request, CurrentUserContext currentUser,
-            CategoryIntelligenceService service, CancellationToken ct) =>
-        {
-            try
-            {
-                var result = await service.UpdateTagAsync(
-                    currentUser.RequireUserId(), fullWorthSpaceId, tagId, request, ct);
-                return result is null ? Results.NotFound() : Results.Ok(result);
-            }
-            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
-        });
-
-        group.MapDelete("/tags/{tagId:guid}", async (
-            Guid tagId, Guid fullWorthSpaceId, CurrentUserContext currentUser, CategoryIntelligenceService service,
-            CancellationToken ct) =>
-            await service.DeleteTagAsync(currentUser.RequireUserId(), fullWorthSpaceId, tagId, ct)
-                ? Results.NoContent()
-                : Results.NotFound());
-
-        group.MapPut("/transactions/{transactionId:guid}/tags", async (
-            Guid transactionId, Guid fullWorthSpaceId, TagAssignmentWrite request, CurrentUserContext currentUser,
-            CategoryIntelligenceService service, CancellationToken ct) =>
-        {
-            try
-            {
-                return await service.ReplaceTagsAsync(
-                    currentUser.RequireUserId(), fullWorthSpaceId, transactionId, request, ct)
-                    ? Results.NoContent()
-                    : Results.NotFound();
-            }
-            catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
-        });
-
+        // Die fuenf Etikett-Routen, die hier standen, liegen seit #124 unter /api/collections:
+        // GET/POST /tags, PUT/DELETE /tags/{id} und PUT /transactions/{id}/tags. Sie konnten weniger
+        // (kein Symbol, kein Zeitraum, kein Status, keine Massenzuordnung), hiessen nach etwas
+        // anderem als dem, was sie taten, und hatte nie jemand aufgerufen.
         group.MapGet("/category-appearances", async (
             Guid fullWorthSpaceId, CurrentUserContext currentUser, CategoryIntelligenceService service,
             CancellationToken ct) =>

@@ -18,8 +18,9 @@ DELETE           /api/assets/{id:guid}
 DELETE           /api/budget-groups/{id:guid}
 DELETE           /api/budgets/{id:guid}
 DELETE           /api/categories/{id:guid}
-DELETE           /api/category-intelligence/tags/{tagId:guid}
 DELETE           /api/coach/conversations/{id:guid}
+DELETE           /api/collections/{id:guid}
+DELETE           /api/collections/{id:guid}/transactions
 DELETE           /api/compensation/history/{id:guid}
 DELETE           /api/compensation/other-income/{id:guid}
 DELETE           /api/compensation/payslips/{id:guid}
@@ -127,11 +128,13 @@ GET              /api/categories/{categoryId:guid}/references
 GET              /api/categorization-rules/
 GET              /api/category-intelligence/category-appearances
 GET              /api/category-intelligence/overview
-GET              /api/category-intelligence/tags
 GET              /api/category-merge/{sourceCategoryId:guid}/preview
 GET              /api/coach/conversations
 GET              /api/coach/conversations/{id:guid}
 GET              /api/coach/models
+GET              /api/collections/
+GET              /api/collections/{id:guid}
+GET              /api/collections/{id:guid}/candidates
 GET              /api/compensation/benchmarks/
 GET              /api/compensation/benchmarks/metadata
 GET              /api/compensation/benchmarks/series
@@ -303,6 +306,7 @@ GET              /api/transactions/
 GET              /api/transactions/{id:guid}
 GET              /api/transactions/{id:guid}/allocations
 GET              /api/transactions/{refundId:guid}/refund-candidates
+GET              /api/transactions/{transactionId:guid}/collections
 GET              /api/transfers/candidates
 GET              /api/wealth/booking-activity
 GET              /api/wealth/history
@@ -363,11 +367,12 @@ POST             /api/categorization-rules/reapply
 POST             /api/category-intelligence/bulk
 POST             /api/category-intelligence/learn
 POST             /api/category-intelligence/review
-POST             /api/category-intelligence/tags
 POST             /api/category-merge/{sourceCategoryId:guid}
 POST             /api/coach/ask
 POST             /api/coach/conversations
 POST             /api/coach/conversations/{id:guid}/messages
+POST             /api/collections/
+POST             /api/collections/{id:guid}/transactions
 POST             /api/compensation/calculate
 POST             /api/compensation/compare
 POST             /api/compensation/history
@@ -559,9 +564,8 @@ PUT              /api/categories/language
 PUT              /api/categories/{id:guid}
 PUT              /api/categorization-rules/{id:guid}
 PUT              /api/category-intelligence/category-appearances/{categoryId:guid}
-PUT              /api/category-intelligence/tags/{tagId:guid}
-PUT              /api/category-intelligence/transactions/{transactionId:guid}/tags
 PUT              /api/category-order
+PUT              /api/collections/{id:guid}
 PUT              /api/compensation/history/{id:guid}
 PUT              /api/compensation/other-income/{id:guid}
 PUT              /api/compensation/profile
@@ -606,3 +610,4 @@ PUT              /api/tax/candidates/{id:guid}
 PUT              /api/tax/profile/settings
 PUT              /api/tax/settings
 PUT              /api/transactions/{id:guid}/allocations
+PUT              /api/transactions/{transactionId:guid}/collections

@@ -183,60 +183,9 @@ public sealed class CategoryIntelligenceService(CategoryIntelligenceStore store)
         return new LearnResult(affected.Count, ruleId);
     }
 
-    public async Task<IReadOnlyList<IntelligenceTag>?> ListTagsAsync(Guid userId, Guid space, CancellationToken ct) =>
-        await store.IsMemberAsync(userId, space, ct) ? await store.TagsAsync(space, ct) : null;
-
-    public async Task<IntelligenceTag?> CreateTagAsync(
-        Guid userId, Guid space, TagWrite request, CancellationToken ct)
-    {
-        if (!await store.CanCategorizeAsync(userId, space, ct)) return null;
-        var (name, normalized, color) = ValidateTag(request);
-
-        var id = Guid.NewGuid();
-        try
-        {
-            await store.InsertTagAsync(space, id, name, normalized, color, ct);
-        }
-        catch (Exception exception) when (IsUniqueViolation(exception))
-        {
-            throw new ArgumentException("A tag with this name already exists.");
-        }
-        return new IntelligenceTag(id, name, color);
-    }
-
-    public async Task<IntelligenceTag?> UpdateTagAsync(
-        Guid userId, Guid space, Guid tagId, TagWrite request, CancellationToken ct)
-    {
-        if (!await store.CanCategorizeAsync(userId, space, ct)) return null;
-        var (name, normalized, color) = ValidateTag(request);
-
-        try
-        {
-            return await store.UpdateTagAsync(space, tagId, name, normalized, color, ct)
-                ? new IntelligenceTag(tagId, name, color)
-                : null;
-        }
-        catch (Exception exception) when (IsUniqueViolation(exception))
-        {
-            throw new ArgumentException("A tag with this name already exists.");
-        }
-    }
-
-    public async Task<bool> DeleteTagAsync(Guid userId, Guid space, Guid tagId, CancellationToken ct) =>
-        await store.CanCategorizeAsync(userId, space, ct) && await store.DeleteTagAsync(space, tagId, ct);
-
-    public async Task<bool> ReplaceTagsAsync(
-        Guid userId, Guid space, Guid transactionId, TagAssignmentWrite request, CancellationToken ct)
-    {
-        if (!await store.IsWritableAsync(userId, space, transactionId, ct)) return false;
-        var ids = CleanIds(request.TagIds);
-        await EnsureTagsBelongToSpaceAsync(space, ids, ct);
-
-        await store.ClearTagsAsync(transactionId, ct);
-        foreach (var id in ids) await store.AddTagAsync(transactionId, id, ct);
-        return true;
-    }
-
+    // Hier standen ListTagsAsync, CreateTagAsync, UpdateTagAsync, DeleteTagAsync und
+    // ReplaceTagsAsync. Sie bedienten die fuenf Etikett-Routen, die seit #124 als /api/collections
+    // laufen - mit Symbol, Zeitraum, Status und Massenzuordnung, die es hier nie gab.
     public async Task<IReadOnlyList<CategoryAppearanceView>?> ListAppearancesAsync(
         Guid userId, Guid space, CancellationToken ct) =>
         await store.IsMemberAsync(userId, space, ct)
@@ -264,16 +213,6 @@ public sealed class CategoryIntelligenceService(CategoryIntelligenceStore store)
     private static List<Guid> CleanIds(IEnumerable<Guid>? ids) =>
         ids?.Where(id => id != Guid.Empty).Distinct().ToList() ?? [];
 
-    private static (string Name, string Normalized, string? Color) ValidateTag(TagWrite request)
-    {
-        var name = (request.Name ?? string.Empty).Trim();
-        if (name.Length is < 1 or > 80) throw new ArgumentException("Tag name must contain 1 to 80 characters.");
-        var normalized = MerchantNormalization.Normalize(name);
-        if (string.IsNullOrWhiteSpace(normalized))
-            throw new ArgumentException("Tag name must contain a letter or number.");
-        return (name, normalized, ValidateColor(request.Color));
-    }
-
     public static string? ValidateColor(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -283,8 +222,4 @@ public sealed class CategoryIntelligenceService(CategoryIntelligenceStore store)
         return color;
     }
 
-    private static bool IsUniqueViolation(Exception exception) =>
-        exception is System.Data.Common.DbException &&
-        (exception.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) ||
-         exception.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
 }

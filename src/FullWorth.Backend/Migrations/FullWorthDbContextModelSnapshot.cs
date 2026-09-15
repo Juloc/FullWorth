@@ -58,6 +58,18 @@ partial class FullWorthDbContextModelSnapshot : ModelSnapshot
             entity.ToTable("BankingInstanceSettings");
         });
 
+        modelBuilder.Entity("FullWorth.Backend.Modules.Purchases.FinanceTag", entity =>
+        {
+            // 20260915170000_Collections. Rohes SQL, also muss der Snapshot es kennen - und dieselben
+            // Laengen nennen wie die Datenannotationen an der Entitaet, sonst PendingModelChangesWarning.
+            entity.Property<string>("Icon").HasMaxLength(64).HasColumnType("character varying(64)");
+            entity.Property<string>("Description").HasMaxLength(500).HasColumnType("character varying(500)");
+            entity.Property<DateOnly?>("StartDate").HasColumnType("date");
+            entity.Property<DateOnly?>("EndDate").HasColumnType("date");
+            entity.Property<string>("Status").IsRequired().HasMaxLength(16).HasColumnType("character varying(16)");
+            entity.HasIndex("FullWorthSpaceId", "Status");
+        });
+
         modelBuilder.Entity("FullWorth.Backend.Modules.FullWorthSpaces.FullWorthSpace", entity =>
         {
             // 20260915140000_DefaultCategoryLanguage. Raw SQL, also muss der Snapshot es kennen,

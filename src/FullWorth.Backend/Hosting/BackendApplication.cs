@@ -16,6 +16,7 @@ using FullWorth.Backend.Modules.Bootstrap;
 using FullWorth.Backend.Modules.Budgets;
 using FullWorth.Backend.Modules.Categories;
 using FullWorth.Backend.Modules.Coach;
+using FullWorth.Backend.Modules.Collections;
 using FullWorth.Backend.Modules.Compensation;
 using FullWorth.Backend.Modules.Contracts;
 using FullWorth.Backend.Modules.Contracts.Review;
@@ -255,6 +256,7 @@ public static class BackendApplication
         builder.Services.AddScoped<CategoryMergeStore>();
         builder.Services.AddScoped<CategoryReferenceStore>();
         builder.Services.AddScoped<CategoryLanguageStore>();
+        builder.Services.AddScoped<FullWorth.Backend.Modules.Collections.CollectionStore>();
         builder.Services.AddScoped<BudgetScopeStore>();
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
@@ -546,6 +548,7 @@ public static class BackendApplication
         endpoints.MapPurchaseReviewEndpoints();
         endpoints.MapCategoryMergeEndpoints();
         endpoints.MapCategoryLanguageEndpoints();
+        endpoints.MapCollectionEndpoints();
         endpoints.MapCategoryOrderEndpoints();
         endpoints.MapTransactionBulkAdvancedEndpoints();
         endpoints.MapXlsxExportEndpoints();
