@@ -1418,7 +1418,7 @@ public sealed class BankSyncService(
         var value = providerValue;
         var counterparty = GetCounterparty(json);
         var rawDescription = GetProviderDescription(json);
-        var description = NormalizeDescription(rawDescription, counterparty);
+        var description = TransactionPurpose.Normalize(rawDescription, counterparty);
         var transactionId = GetString(json, "transaction_id");
         var entryReference = GetString(json, "entry_reference");
         var status = (GetString(json, "status") ?? "BOOK").ToUpperInvariant();
@@ -1470,66 +1470,11 @@ public sealed class BankSyncService(
         return GetString(json, "note") ?? GetNestedString(json, "bank_transaction_code", "description");
     }
 
-    private static string? NormalizeDescription(string? raw, string? counterparty)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-
-        var sepaPurpose = TryExtractSepaPurpose(raw);
-        if (!string.IsNullOrWhiteSpace(sepaPurpose)) return LimitPurpose(sepaPurpose);
-
-        var candidates = new List<string>();
-        foreach (var piece in raw.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var text = NormalizePurposePart(piece);
-            if (string.IsNullOrWhiteSpace(text) || IsTechnicalPurpose(text)) continue;
-            if (!string.IsNullOrWhiteSpace(counterparty) &&
-                string.Equals(text, NormalizePurposePart(counterparty), StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (candidates.Contains(text, StringComparer.OrdinalIgnoreCase)) continue;
-            candidates.Add(text);
-            if (candidates.Count == 2) break;
-        }
-
-        return candidates.Count == 0 ? null : LimitPurpose(string.Join(" · ", candidates));
-    }
-
-    private static string? TryExtractSepaPurpose(string raw)
-    {
-        var match = Regex.Match(
-            raw,
-            @"(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)",
-            RegexOptions.IgnoreCase | RegexOptions.Singleline,
-            TimeSpan.FromMilliseconds(100));
-        return match.Success ? NormalizePurposePart(match.Groups[1].Value) : null;
-    }
-
     private static string? NormalizePurposePart(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         var normalized = Regex.Replace(value.Trim(), @"\s+", " ");
         return normalized.Length == 0 ? null : normalized;
-    }
-
-    private static bool IsTechnicalPurpose(string value)
-    {
-        var text = value.Trim();
-        if (Regex.IsMatch(
-                text,
-                @"^(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM|ENDTOENDID|MANDATE(?:ID)?|TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]",
-                RegexOptions.IgnoreCase,
-                TimeSpan.FromMilliseconds(100)))
-            return true;
-        if (Guid.TryParse(text, out _)) return true;
-        if (Regex.IsMatch(text, @"^\d{14,}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))) return true;
-        if (Regex.IsMatch(text, @"^[0-9A-F]{20,}$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100))) return true;
-        return false;
-    }
-
-    private static string LimitPurpose(string value)
-    {
-        var normalized = NormalizePurposePart(value) ?? string.Empty;
-        const int max = 180;
-        return normalized.Length <= max ? normalized : normalized[..(max - 1)].TrimEnd() + "…";
     }
 
     private static string NormalizeAccountDisplayName(string fallback, string? candidate, string? product)

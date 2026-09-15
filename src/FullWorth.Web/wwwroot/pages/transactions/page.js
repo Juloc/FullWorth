@@ -110,16 +110,22 @@ function applySearch() {
 
 function deLabel(de, en) { return document.documentElement.lang?.startsWith('en') ? en : de; }
 function transactionDate(item) { return item?.bookingDate || item?.valueDate || null; }
+// Dieselbe Regel steht ein zweites Mal in C#, in Banking/Services/TransactionPurpose.cs: dort beim
+// Import, hier fuer alles, was schon gespeichert ist. Wer eine Seite aendert, aendert beide.
 function transactionListPurpose(item, merchantName, categoryName) {
   const raw = String(item?.description || '').trim();
   if (!raw) return '';
-  const sepa = raw.match(/(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*\|\s*|$)/i);
-  const pieces = sepa?.[1] ? [sepa[1]] : raw.split(/\s*\|\s*|\r?\n/);
-  const technical = /^(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM|ENDTOENDID|MANDATE(?:ID)?|TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]/i;
+  const sepa = raw.match(/(?:^|\s)SVWZ\+(.*?)(?=\s+(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM)\+|\s*[|;]\s*|$)/i);
+  // Banken trennen unterschiedlich: mal |, mal ein Umbruch, mal ;.
+  const pieces = sepa?.[1] ? [sepa[1]] : raw.split(/\s*[|;]\s*|\r?\n/);
+  // Kennungen, hinter denen nie etwas Lesbares steht - das Stueck faellt ganz weg.
+  const technical = /^(?:EREF|MREF|KREF|CRED|DEBT|ABWA|ABWE|PURP|COAM|ENDTOEND\w*|MANDATE\w*|CREDITOR\w*|DEBTOR\w*|TRANSACTION(?:\s+ID)?|TXID|REFERENCE|REF)\s*[:+=]/i;
+  // Beschriftungen, hinter denen der Zweck steht - nur die Beschriftung faellt weg.
+  const label = /^(?:REMITTANCE(?:INFORMATION)?|SVWZ|VERWENDUNGSZWECK|PURPOSE)\s*[:+=]\s*/i;
   const ignored = [merchantName, categoryName, item?.account].map(x => String(x || '').trim().toLowerCase()).filter(Boolean);
   const result = [];
   for (const piece of pieces) {
-    const text = String(piece || '').replace(/\s+/g, ' ').trim();
+    const text = String(piece || '').replace(label, '').replace(/\s+/g, ' ').trim();
     if (!text || technical.test(text)) continue;
     if (/^\d{14,}$/.test(text) || /^[0-9a-f]{20,}$/i.test(text) || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(text)) continue;
     if (ignored.includes(text.toLowerCase())) continue;
