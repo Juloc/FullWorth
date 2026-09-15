@@ -225,6 +225,8 @@ public static class BackendApplication
         builder.Services.AddScoped<SecurityMarketDataService>();
         builder.Services.AddScoped<InvestmentPerformanceStore>();
         builder.Services.AddScoped<InvestmentStore>();
+        builder.Services.AddScoped<PortfolioValuationStore>();
+        builder.Services.AddScoped<PortfolioValuationService>();
         builder.Services.AddScoped<CategoryOrderService>();
         builder.Services.AddScoped<IntelligenceDigestStore>();
         builder.Services.AddScoped<CapabilityGrantStore>();
