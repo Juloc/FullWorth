@@ -44,13 +44,54 @@ public sealed class FinanzguruImportService(
 {
     private const string Provider = "finanzguru-import";
 
-    public async Task<FinanzguruImportResult?> ImportAsync(Guid userId, Guid fullWorthSpaceId, Stream workbook, CancellationToken ct)
+    /// <summary>
+    /// Der Schluessel, unter dem dieser Import in der gemeinsamen Auftragsliste steht. Er sagt, WOHER
+    /// die Datei kam - nicht, was fuer ein Konto daraus wird (#131).
+    /// </summary>
+    private const string AdapterKey = "finanzguru_xlsx";
+
+    /// <summary>
+    /// Schreibt den Auftrag, der diesen Import in der gemeinsamen Liste sichtbar und rueckgaengig
+    /// machbar macht. Zeilen (<c>ImportCandidates</c>) legt er keine an: der Finanzguru-Weg hat keine
+    /// Vorschau, bei der man Zeile fuer Zeile entscheidet - er wird in einem Zug festgeschrieben, und
+    /// eine erfundene Vorschau waere eine Behauptung ueber einen Schritt, den es nicht gab.
+    /// </summary>
+    private async Task WriteImportJobAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid jobId, int sourceRows, int imported, int duplicates,
+        string? fileSha, CancellationToken ct)
     {
-        var rows = reader.Read(workbook);
-        return await ImportRowsAsync(userId, fullWorthSpaceId, rows, ct);
+        var connection = await RawSql.OpenAsync(db, ct);
+        var now = DateTimeOffset.UtcNow;
+        await using var command = RawSql.Command(connection, """
+INSERT INTO "ImportJobs" ("Id","FullWorthSpaceId","UserId","FileName","FileSha256","AdapterKey","Status",
+                          "SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount",
+                          "CreatedAt","UpdatedAt","CompletedAt")
+VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@duplicates,@imported,0,@now,@now,@now)
+""",
+            ("@id", jobId), ("@space", fullWorthSpaceId), ("@uid", userId),
+            // Ohne Datei (der Weg ueber Zeilen, den die Tests nehmen) steht die Auftragskennung dort -
+            // nie eine erfundene Pruefsumme, die eine Datei behaupten wuerde, die es nicht gab.
+            ("@name", "finanzguru.xlsx"), ("@sha", fileSha ?? jobId.ToString("N")), ("@adapter", AdapterKey),
+            ("@source", sourceRows), ("@imported", imported), ("@duplicates", duplicates), ("@now", now));
+        await command.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<FinanzguruImportResult?> ImportRowsAsync(Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct)
+    public async Task<FinanzguruImportResult?> ImportAsync(Guid userId, Guid fullWorthSpaceId, Stream workbook, CancellationToken ct)
+    {
+        // Die Pruefsumme der Datei gehoert in den Auftrag (#131): sie ist es, woran sich spaeter
+        // erkennen laesst, dass dieselbe Datei schon einmal da war.
+        using var buffer = new MemoryStream();
+        await workbook.CopyToAsync(buffer, ct);
+        buffer.Position = 0;
+        var sha = Convert.ToHexString(SHA256.HashData(buffer.ToArray())).ToLowerInvariant();
+        buffer.Position = 0;
+        var rows = reader.Read(buffer);
+        return await ImportRowsAsync(userId, fullWorthSpaceId, rows, ct, sha);
+    }
+
+    public async Task<FinanzguruImportResult?> ImportRowsAsync(
+        Guid userId, Guid fullWorthSpaceId, IReadOnlyList<FinanzguruRow> rows, CancellationToken ct,
+        string? fileSha = null)
     {
         var role = await db.FullWorthSpaceMembers.AsNoTracking()
             .Where(member => member.FullWorthSpaceId == fullWorthSpaceId && member.UserId == userId)
@@ -65,6 +106,13 @@ public sealed class FinanzguruImportService(
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Der gemeinsame Auftrag (#131). Der Finanzguru-Import war der einzige Dateiimport ohne einen:
+        // er schrieb Buchungen direkt, ohne Herkunftsverknuepfung - und damit gab es keinen Weg, ihn
+        // rueckgaengig zu machen. Die Konten laesst dieser Schritt bewusst unangetastet; sie sind
+        // Teil (c) des Umbaus und brauchen ihre eigene Migration.
+        var jobId = Guid.NewGuid();
+        var createdTransactionIds = new List<Guid>();
+
         var accounts = await ResolveAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
         var categoryResolver = await CategoryResolver.CreateAsync(db, fullWorthSpaceId, role == FullWorthSpaceRoles.Owner, ct);
 
@@ -151,6 +199,7 @@ public sealed class FinanzguruImportService(
                     UpdatedAt = now
                 };
                 db.Transactions.Add(entity);
+                createdTransactionIds.Add(entity.Id);
                 existingByKey[key] = entity;
 
                 if (children.Count > 0)
@@ -175,6 +224,11 @@ public sealed class FinanzguruImportService(
 
         audit.Record(fullWorthSpaceId, userId, "finanzguru.imported", "FullWorthSpace", fullWorthSpaceId);
         await db.SaveChangesAsync(ct);
+
+        // Erst jetzt, weil die Verknuepfung die Kennungen der eben geschriebenen Buchungen braucht.
+        await WriteImportJobAsync(userId, fullWorthSpaceId, jobId, rows.Count, imported, alreadyImported, fileSha, ct);
+        await ImportTransactionProvenance.LinkAsync(db, jobId, createdTransactionIds, ct);
+
         await transaction.CommitAsync(ct);
 
         return new FinanzguruImportResult(
