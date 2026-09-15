@@ -1,3 +1,2 @@
 Categories/CategoryIntelligenceModule.cs
 Portfolio/Investments/InvestmentImportParityModule.cs
-Purchases/ProductIdentityParityModule.cs

@@ -1,8 +1,4 @@
-using FullWorth.Backend.Data;
-using FullWorth.Backend.Modules.Audit;
-using FullWorth.Backend.Modules.Purchases;
 using FullWorth.Backend.Security;
-using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
@@ -39,261 +35,204 @@ public static class ProductIdentityParityEndpoints
     }
 
     private static async Task<IResult> List(
-        Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, ProductIdentityStore store,
+        CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
-        var rows = await db.Products.AsNoTracking()
-            .Where(p => p.FullWorthSpaceId == fullWorthSpaceId && !p.IsArchived)
-            .OrderBy(p => p.CanonicalName)
-            .Select(p => new
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+
+        var rows = (await store.ListAsync(fullWorthSpaceId, ct))
+            .Select(row => new
             {
-                id = p.Id,
-                canonicalName = p.CanonicalName,
-                brand = p.Brand,
-                barcode = p.Barcodes.OrderBy(b => b.CreatedAt).Select(b => b.Code).FirstOrDefault(),
-                defaultCategoryId = p.DefaultCategoryId,
-                unitKind = p.DefaultPackageUnit ?? p.DefaultQuantityUnit,
-                unitSize = p.DefaultPackageQuantity,
-                aliasCount = p.Aliases.Count
-            }).ToListAsync(ct);
+                id = row.Id,
+                canonicalName = row.CanonicalName,
+                brand = row.Brand,
+                barcode = row.Barcode,
+                defaultCategoryId = row.DefaultCategoryId,
+                unitKind = row.UnitKind,
+                unitSize = row.UnitSize,
+                aliasCount = row.AliasCount
+            });
         return Results.Ok(rows);
     }
 
     private static Task<IResult> Create(
-        Guid fullWorthSpaceId, ProductIdentityWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-        Write(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, db, audit, false, ct);
+        Guid fullWorthSpaceId, ProductIdentityWrite request, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, CancellationToken ct) =>
+        Write(Guid.NewGuid(), fullWorthSpaceId, request, currentUser, space, store, false, ct);
 
     private static Task<IResult> Update(
         Guid id, Guid fullWorthSpaceId, ProductIdentityWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct) =>
-        Write(id, fullWorthSpaceId, request, currentUser, db, audit, true, ct);
+        SpaceAccess space, ProductIdentityStore store, CancellationToken ct) =>
+        Write(id, fullWorthSpaceId, request, currentUser, space, store, true, ct);
 
     private static async Task<IResult> Write(
         Guid id, Guid fullWorthSpaceId, ProductIdentityWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, bool update, CancellationToken ct)
+        SpaceAccess space, ProductIdentityStore store, bool update, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (string.IsNullOrWhiteSpace(request.CanonicalName)) return Results.BadRequest(new { error = "Product name is required." });
+        if (string.IsNullOrWhiteSpace(request.CanonicalName))
+            return Results.BadRequest(new { error = "Product name is required." });
+
         var unit = NormalizeUnit(request.UnitKind);
-        if (unit is not null && !Units.Contains(unit)) return Results.BadRequest(new { error = "Unsupported product unit." });
+        if (unit is not null && !Units.Contains(unit))
+            return Results.BadRequest(new { error = "Unsupported product unit." });
         if (request.UnitSize is <= 0) return Results.BadRequest(new { error = "Unit size must be positive." });
-        if (request.DefaultCategoryId.HasValue && !await db.Categories.AsNoTracking().AnyAsync(c =>
-                c.Id == request.DefaultCategoryId.Value && c.FullWorthSpaceId == fullWorthSpaceId && !c.IsArchived, ct))
+        if (request.DefaultCategoryId.HasValue
+            && !await store.CategoryUsableAsync(fullWorthSpaceId, request.DefaultCategoryId.Value, ct))
             return Results.BadRequest(new { error = "Category is invalid." });
 
-        var barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
-        if (barcode is not null && await db.ProductBarcodes.AsNoTracking().AnyAsync(b => b.Code == barcode && b.ProductId != id, ct))
+        var barcode = Clean(request.Barcode);
+        if (barcode is not null && await store.BarcodeTakenAsync(barcode, id, ct))
             return Results.Conflict(new { error = "This barcode is already linked to another product." });
 
-        Product product;
-        if (update)
-        {
-            product = await db.Products.Include(p => p.Barcodes)
-                .SingleOrDefaultAsync(p => p.Id == id && p.FullWorthSpaceId == fullWorthSpaceId, ct)
-                ?? null!;
-            if (product is null) return Results.NotFound();
-        }
-        else
-        {
-            product = new Product { Id = id, FullWorthSpaceId = fullWorthSpaceId, CreatedAt = DateTimeOffset.UtcNow };
-            db.Products.Add(product);
-        }
-
-        product.CanonicalName = request.CanonicalName.Trim();
-        product.Brand = Clean(request.Brand);
-        product.DefaultCategoryId = request.DefaultCategoryId;
-        product.DefaultQuantityUnit = "piece";
-        product.DefaultPackageQuantity = request.UnitSize;
-        product.DefaultPackageUnit = unit;
-        product.IsArchived = false;
-        product.UpdatedAt = DateTimeOffset.UtcNow;
-
-        var existingBarcodes = update ? product.Barcodes.ToList() : [];
-        if (barcode is null)
-        {
-            if (existingBarcodes.Count > 0) db.ProductBarcodes.RemoveRange(existingBarcodes);
-        }
-        else
-        {
-            var first = existingBarcodes.FirstOrDefault();
-            if (first is null)
-                db.ProductBarcodes.Add(new ProductBarcode { ProductId = id, Code = barcode, Standard = GuessBarcodeStandard(barcode) });
-            else
-            {
-                first.Code = barcode;
-                first.Standard = GuessBarcodeStandard(barcode);
-                if (existingBarcodes.Count > 1) db.ProductBarcodes.RemoveRange(existingBarcodes.Skip(1));
-            }
-        }
-
-        audit.Record(fullWorthSpaceId, userId, update ? "product.updated" : "product.created", "Product", id);
-        await db.SaveChangesAsync(ct);
-        return Results.Ok(new { id });
+        return await store.SaveAsync(userId, fullWorthSpaceId, id, request, unit, barcode, update, ct)
+            ? Results.Ok(new { id })
+            : Results.NotFound();
     }
 
     private static async Task<IResult> Archive(
-        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var product = await db.Products.SingleOrDefaultAsync(p => p.Id == id && p.FullWorthSpaceId == fullWorthSpaceId, ct);
-        if (product is null) return Results.NotFound();
-        product.IsArchived = true;
-        product.UpdatedAt = DateTimeOffset.UtcNow;
-        audit.Record(fullWorthSpaceId, userId, "product.archived", "Product", id);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
+
+        return await store.ArchiveAsync(userId, fullWorthSpaceId, id, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
     private static async Task<IResult> AddAlias(
         Guid id, Guid fullWorthSpaceId, ProductIdentityAliasWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        SpaceAccess space, ProductIdentityStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await ProductExists(db, fullWorthSpaceId, id, ct)) return Results.NotFound();
+        if (!await store.ExistsAsync(fullWorthSpaceId, id, ct)) return Results.NotFound();
+
         var alias = Clean(request.Text);
         if (alias is null) return Results.BadRequest(new { error = "Alias is required." });
         var normalized = Normalize(alias);
         if (normalized.Length < 2) return Results.BadRequest(new { error = "Alias is too short." });
 
-        var existing = await db.ProductAliases.SingleOrDefaultAsync(a =>
-            a.ProductId == id && a.MerchantId == null && a.NormalizedAlias == normalized, ct);
-        if (existing is null)
-            db.ProductAliases.Add(new ProductAlias
-            {
-                ProductId = id, Alias = alias, NormalizedAlias = normalized,
-                AliasType = NormalizeSource(request.Source), CreatedAt = DateTimeOffset.UtcNow
-            });
-        else
-        {
-            existing.Alias = alias;
-            existing.AliasType = NormalizeSource(request.Source);
-        }
-        audit.Record(fullWorthSpaceId, userId, "product.alias.updated", "Product", id);
-        await db.SaveChangesAsync(ct);
+        await store.SaveAliasAsync(userId, fullWorthSpaceId, id, alias, normalized,
+            NormalizeSource(request.Source), ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> DeleteAlias(
-        Guid id, Guid aliasId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
-        FullWorthDbContext db, AuditService audit, CancellationToken ct)
+        Guid id, Guid aliasId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var alias = await db.ProductAliases.Include(a => a.Product)
-            .SingleOrDefaultAsync(a => a.Id == aliasId && a.ProductId == id && a.Product.FullWorthSpaceId == fullWorthSpaceId, ct);
-        if (alias is null) return Results.NotFound();
-        db.ProductAliases.Remove(alias);
-        audit.Record(fullWorthSpaceId, userId, "product.alias.deleted", "Product", id);
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
+
+        return await store.DeleteAliasAsync(userId, fullWorthSpaceId, id, aliasId, ct)
+            ? Results.NoContent()
+            : Results.NotFound();
     }
 
     private static async Task<IResult> Suggest(
-        Guid fullWorthSpaceId, string text, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid fullWorthSpaceId, string text, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct)) return Results.NotFound();
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+
         var normalized = Normalize(text);
         if (normalized.Length < 2) return Results.Ok(null);
 
-        var alias = await db.ProductAliases.AsNoTracking()
-            .Where(a => a.NormalizedAlias == normalized && a.Product.FullWorthSpaceId == fullWorthSpaceId && !a.Product.IsArchived)
-            .Select(a => new
-            {
-                id = a.Product.Id, canonicalName = a.Product.CanonicalName, brand = a.Product.Brand,
-                defaultCategoryId = a.Product.DefaultCategoryId, confidence = (decimal?)1m, source = a.AliasType
-            }).FirstOrDefaultAsync(ct);
-        if (alias is not null) return Results.Ok(alias);
+        // Eine hinterlegte Schreibweise schlaegt den Produktnamen: sie ist die Entscheidung eines
+        // Menschen, der Namensvergleich nur eine Aehnlichkeit.
+        var match = await store.FindByAliasAsync(fullWorthSpaceId, normalized, ct)
+            ?? await store.FindByCanonicalNameAsync(fullWorthSpaceId, normalized, ct);
 
-        var products = await db.Products.AsNoTracking()
-            .Where(p => p.FullWorthSpaceId == fullWorthSpaceId && !p.IsArchived)
-            .Select(p => new { p.Id, p.CanonicalName, p.Brand, p.DefaultCategoryId })
-            .Take(2000).ToListAsync(ct);
-        var product = products.FirstOrDefault(p => Normalize(p.CanonicalName) == normalized);
-        return product is null
+        return match is null
             ? Results.Ok(null)
-            : Results.Ok(new { id = product.Id, canonicalName = product.CanonicalName, brand = product.Brand, defaultCategoryId = product.DefaultCategoryId, confidence = (decimal?)1m, source = "canonical_name" });
+            : Results.Ok(new
+            {
+                id = match.Id,
+                canonicalName = match.CanonicalName,
+                brand = match.Brand,
+                defaultCategoryId = match.DefaultCategoryId,
+                confidence = (decimal?)1m,
+                source = match.Source
+            });
     }
 
     private static async Task<IResult> History(
-        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, FullWorthDbContext db, CancellationToken ct)
+        Guid id, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await RawSql.IsMemberAsync(db, userId, fullWorthSpaceId, ct) || !await ProductExists(db, fullWorthSpaceId, id, ct))
+        if (!await space.IsMemberAsync(userId, fullWorthSpaceId, ct)
+            || !await store.ExistsAsync(fullWorthSpaceId, id, ct))
             return Results.NotFound();
-        var rows = await db.PurchaseItems.AsNoTracking()
-            .Where(i => i.ProductId == id && i.Purchase.FullWorthSpaceId == fullWorthSpaceId &&
-                (i.Purchase.Visibility != "private" || i.Purchase.CreatedByUserId == userId) &&
-                (i.Purchase.ReviewState == "confirmed" || i.Purchase.Status == "confirmed"))
-            .OrderByDescending(i => i.Purchase.PurchaseDate).ThenByDescending(i => i.CreatedAt)
-            .Select(i => new
+
+        var rows = (await store.HistoryAsync(fullWorthSpaceId, userId, id, ct))
+            .Select(row => new
             {
-                purchaseItemId = i.Id,
-                purchaseDate = i.Purchase.PurchaseDate,
-                merchant = i.Purchase.Merchant,
-                quantity = i.Quantity,
-                packageQuantity = i.PackageQuantity,
-                packageUnit = i.PackageUnit,
-                total = i.TotalPrice,
-                currency = i.Currency,
-                comparableUnitPrice = i.BaseUnitPrice,
-                comparisonSafe = i.BaseUnitPrice != null && i.PackageQuantity != null && i.PackageUnit != null
-            }).Take(500).ToListAsync(ct);
+                purchaseItemId = row.PurchaseItemId,
+                purchaseDate = row.PurchaseDate,
+                merchant = row.Merchant,
+                quantity = row.Quantity,
+                packageQuantity = row.PackageQuantity,
+                packageUnit = row.PackageUnit,
+                total = row.Total,
+                currency = row.Currency,
+                comparableUnitPrice = row.ComparableUnitPrice,
+                comparisonSafe = row.ComparisonSafe
+            });
         return Results.Ok(rows);
     }
 
     private static async Task<IResult> LinkItem(
         Guid purchaseItemId, Guid fullWorthSpaceId, ProductItemLinkWrite request, CurrentUserContext currentUser,
-        FullWorthDbContext db, PurchaseAuthorizationStore purchases, AuditService audit, CancellationToken ct)
+        SpaceAccess space, ProductIdentityStore store, PurchaseAuthorizationStore purchases, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        if (!await ProductExists(db, fullWorthSpaceId, request.ProductIdentityId, ct)) return Results.BadRequest(new { error = "Product is invalid." });
-        var item = await db.PurchaseItems.SingleOrDefaultAsync(i => i.Id == purchaseItemId, ct);
-        if (item is null || await purchases.GetAccessAsync(userId, fullWorthSpaceId, item.PurchaseId, ct) != PurchaseAccessLevel.Write)
+        if (!await store.ExistsAsync(fullWorthSpaceId, request.ProductIdentityId, ct))
+            return Results.BadRequest(new { error = "Product is invalid." });
+        if (!await MayWriteItemAsync(userId, fullWorthSpaceId, purchaseItemId, store, purchases, ct))
             return Results.NotFound();
-        item.ProductId = request.ProductIdentityId;
-        item.IsManuallyCorrected = true;
-        item.UpdatedAt = DateTimeOffset.UtcNow;
-        audit.Record(fullWorthSpaceId, userId, "purchase.item.product.linked", "PurchaseItem", purchaseItemId);
-        await db.SaveChangesAsync(ct);
+
+        await store.SetItemProductAsync(userId, fullWorthSpaceId, purchaseItemId, request.ProductIdentityId,
+            "purchase.item.product.linked", ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> UnlinkItem(
-        Guid purchaseItemId, Guid fullWorthSpaceId, CurrentUserContext currentUser,
-        FullWorthDbContext db, PurchaseAuthorizationStore purchases, AuditService audit, CancellationToken ct)
+        Guid purchaseItemId, Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space,
+        ProductIdentityStore store, PurchaseAuthorizationStore purchases, CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        if (!await SpaceCapabilities.HasCapabilityAsync(db, userId, fullWorthSpaceId, "purchases.manage", ct))
+        if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var item = await db.PurchaseItems.SingleOrDefaultAsync(i => i.Id == purchaseItemId, ct);
-        if (item is null || await purchases.GetAccessAsync(userId, fullWorthSpaceId, item.PurchaseId, ct) != PurchaseAccessLevel.Write)
+        if (!await MayWriteItemAsync(userId, fullWorthSpaceId, purchaseItemId, store, purchases, ct))
             return Results.NotFound();
-        item.ProductId = null;
-        item.IsManuallyCorrected = true;
-        item.UpdatedAt = DateTimeOffset.UtcNow;
-        audit.Record(fullWorthSpaceId, userId, "purchase.item.product.unlinked", "PurchaseItem", purchaseItemId);
-        await db.SaveChangesAsync(ct);
+
+        await store.SetItemProductAsync(userId, fullWorthSpaceId, purchaseItemId, null,
+            "purchase.item.product.unlinked", ct);
         return Results.NoContent();
     }
 
-    private static Task<bool> ProductExists(FullWorthDbContext db, Guid fullWorthSpaceId, Guid id, CancellationToken ct) =>
-        db.Products.AsNoTracking().AnyAsync(p => p.Id == id && p.FullWorthSpaceId == fullWorthSpaceId && !p.IsArchived, ct);
+    /// <summary>Das Recht haengt am Kauf, zu dem die Position gehoert, nicht am Produkt.</summary>
+    private static async Task<bool> MayWriteItemAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid purchaseItemId, ProductIdentityStore store,
+        PurchaseAuthorizationStore purchases, CancellationToken ct) =>
+        await store.PurchaseOfItemAsync(purchaseItemId, ct) is { } purchaseId
+        && await purchases.GetAccessAsync(userId, fullWorthSpaceId, purchaseId, ct) == PurchaseAccessLevel.Write;
 
     private static string Normalize(string value) => new((value ?? string.Empty).Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string? NormalizeUnit(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
     private static string NormalizeSource(string? value) => string.IsNullOrWhiteSpace(value) ? "manual" : value.Trim().ToLowerInvariant()[..Math.Min(32, value.Trim().Length)];
-    private static string GuessBarcodeStandard(string code) => code.Length switch { 8 => "ean8", 12 => "upc", 13 => "ean13", 14 => "gtin14", _ => "unknown" };
 }
