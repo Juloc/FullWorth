@@ -1,7 +1,7 @@
 /* Die Seite zeigt Zeilen und sonst nichts: die gemeinsamen .row-Regeln reichen. Die eine Ergänzung
    ist der Zustand einer Verbindung, der rechts neben dem Namen steht und auf schmalen Geräten sonst
    mit den Knöpfen in eine Zeile rutscht. */
-#view-bank-connections .row-side{flex-wrap:wrap;justify-content:flex-end;gap:var(--s2)}
+#view-bank-connections .row-side{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:var(--s2)}
 /* Die Kontenauswahl beim Verbinden, unpräfixiert: createDialog hängt die Karte an document.body,
    ein #view-Präfix träfe sie nie. Zeile, Titel, Unterzeile, Häkchen und Werkzeugleiste sind geteilte
    Bausteine (.row, .row-main, .row-sub, label.check) — die Liste braucht nur eine Höhenbegrenzung,
@@ -9,3 +9,15 @@
 .ing-select-list{max-height:min(60dvh,26rem);overflow-y:auto}
 /* Die Beschriftung IST das Ziel zum Antippen und wäre sonst 23 Pixel hoch — gemessen, nicht geschätzt. */
 .ing-select-row{min-height:44px}
+
+/* Eine Verbindung hat rechts Status plus bis zu drei Aktionen. Die globale .row ist zweispaltig;
+   auf einem Telefon würde die auto-Spalte deshalb den Text links bis auf wenige Zeichen zusammendrücken.
+   Unter 768px werden Inhalt und Aktionen bewusst zwei Zeilen derselben Karte. */
+@media(max-width:767px){
+  #view-bank-connections .row{grid-template-columns:minmax(0,1fr);align-items:stretch}
+  #view-bank-connections .row-side{width:100%;justify-content:flex-start}
+  #view-bank-connections .row-side>.amount{flex:1 0 100%}
+  #view-bank-connections .row-side>.ghost{flex:1 1 10rem;min-width:0;max-width:100%;white-space:normal}
+  #view-bank-connections .row-side>.icon-button{flex:0 0 44px}
+  #view-bank-connections .row-sub{overflow-wrap:break-word;word-break:normal}
+}
