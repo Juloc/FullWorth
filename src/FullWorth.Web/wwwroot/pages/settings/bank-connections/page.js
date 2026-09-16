@@ -33,6 +33,7 @@ const empty = (el, message) => ctx.empty(el, message);
 function connectionRow(x){
   const health=x.healthStatus||'authorized';
   const label=get(`accounts.health_${health}`);
+  // Rot bleiben beide Sorten - es sind echte Problemzustaende. Unterschiedlich ist nur, was hilft.
   const warn=['reauthorization_required','expired','revoked','closed','error','partial_history'].includes(health);
   // A parked TAN is not a broken connection: Reconnect would start a fresh authorization and throw
   // the pending challenge away. The only action that helps is answering the TAN.
@@ -40,12 +41,20 @@ function connectionRow(x){
   // Und aus demselben Grund: eine Verbindung, die auf die Kontenauswahl wartet, ist ebenfalls nicht
   // kaputt. "Neu verbinden" wuerde die Sitzung wegwerfen und die PIN erneut erfragen.
   const needsSelection=health==='selection_pending';
+  // Und zum dritten Mal derselbe Gedanke: ein Abgleich, der schiefging, ist keine kaputte
+  // Anmeldung. Die Sitzung steht, die Freigabe gilt - es hat nur ein Abruf nicht geklappt. Hier
+  // wurde bisher "Neu verbinden" angeboten, also die PIN erneut verlangt und die gute Sitzung
+  // weggeworfen, fuer einen Fehler, den ein zweiter Versuch behebt. Genau das ist passiert, als die
+  // ING ein Depot ablehnte: vier Konten standen da, das Depot fehlte, und der einzige Weg zurueck
+  // war die komplette Neuanmeldung.
+  const retryable=health==='error'||health==='partial_history';
   const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
   const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
   const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
   row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
   row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
+  row.querySelector('[data-retry-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
   row.querySelector('[data-enter-tan]')?.addEventListener('click',ev=>openPendingTanDialog(x,ev.currentTarget));
   row.querySelector('[data-finish-selection]')?.addEventListener('click',ev=>resumeSelection(x,ev.currentTarget));
@@ -709,7 +718,7 @@ function openIngSelection(initial){
     title.textContent=get(incomplete?'bankingSetup.ingDonePartly':'bankingSetup.ingDone');
     step.innerHTML='<p>'+esc(text)+'</p>'+trouble
       +'<div class="dialog-actions">'
-      +(incomplete?'<button type="button" class="ghost" data-retry>'+esc(get('bankingSetup.ingRetry'))+'</button>':'')
+      +(incomplete?'<button type="button" class="ghost" data-retry>'+esc(get('accounts.retrySync'))+'</button>':'')
       +'<button type="button" data-finish>'+esc(get('common.close'))+'</button></div>';
     step.querySelector('[data-retry]')?.addEventListener('click',()=>{void runImport();});
     step.querySelector('[data-finish]').onclick=async()=>{dlg.close();await ctx.reload();};

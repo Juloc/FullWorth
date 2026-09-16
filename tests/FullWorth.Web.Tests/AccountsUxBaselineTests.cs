@@ -302,8 +302,30 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         {
             Assert.Contains("\"ingImportMissing\"", locale);
             Assert.Contains("\"ingDonePartly\"", locale);
-            Assert.Contains("\"ingRetry\"", locale);
+            Assert.Contains("\"retrySync\"", locale);
         }
+    }
+
+    /// <summary>
+    /// Ein Abgleich, der schiefging, ist keine kaputte Anmeldung - und darf deshalb nicht "Neu
+    /// verbinden" als einzige Handlung anbieten. Das wirft eine gute Sitzung weg und verlangt die
+    /// PIN erneut, fuer einen Fehler, den ein zweiter Versuch behebt.
+    ///
+    /// Dreimal dieselbe Falle, dreimal derselbe Ausgang: tan_required, selection_pending und jetzt
+    /// error. Neu verbinden bleibt den Zustaenden, in denen die Freigabe wirklich weg ist.
+    /// </summary>
+    [Fact]
+    public async Task AFailedSyncOffersARetryAndNotAFullReconnect()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+
+        Assert.Contains("health==='error'||health==='partial_history'", js);
+        Assert.Contains("data-retry-sync", js);
+        Assert.Contains("accounts.retrySync", js);
+        // Der zweite Versuch ist ein erzwungener Abgleich - die Sperrfrist darf ihn nicht schlucken.
+        Assert.Contains("sync?force=true", js);
+        // Und "Neu verbinden" bleibt fuer die Zustaende, in denen die Freigabe wirklich weg ist.
+        Assert.Contains("data-reconnect", js);
     }
 
     private async Task<string> GetAsync(string path)

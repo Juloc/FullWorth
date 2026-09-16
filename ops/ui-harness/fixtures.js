@@ -182,6 +182,15 @@
         status: 'AUTHORIZED', healthStatus: 'selection_pending', validUntil: iso('2026-12-31'),
         lastSyncedAt: null, daysUntilExpiry: 112, nextSyncAllowedAt: null,
         lastError: 'FINTS_SELECTION_PENDING'
+      },
+      // Genau der gemeldete Zustand: angemeldet, gueltig, und ein Abruf ist trotzdem gescheitert.
+      // Die Zeile darf dafuer NICHT "Neu verbinden" anbieten - die PIN erneut zu verlangen behebt
+      // nichts, was eine abgelehnte Depotabfrage verursacht hat.
+      {
+        id: 'c4', provider: 'fints', institutionName: 'ING', country: 'DE',
+        status: 'AUTHORIZED', healthStatus: 'error', validUntil: iso('2026-12-31'),
+        lastSyncedAt: null, daysUntilExpiry: 112, nextSyncAllowedAt: iso('2026-09-17'),
+        lastError: 'FINTS_BANK_ERROR'
       }
     ],
     'transactions': {

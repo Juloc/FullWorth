@@ -879,7 +879,8 @@
     "defaultGroupLocked": "Die Standardgruppe bleibt bestehen.",
     "health_selection_pending": "Auswahl offen",
     "depotValue": "aus Depotbestand",
-    "depotValueHint": "Der Kurswert der Wertpapiere in diesem Depot. Im Nettovermögen zählt er als Depot — derselbe Betrag, nicht zweimal."
+    "depotValueHint": "Der Kurswert der Wertpapiere in diesem Depot. Im Nettovermögen zählt er als Depot — derselbe Betrag, nicht zweimal.",
+    "retrySync": "Erneut versuchen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
@@ -1173,7 +1174,6 @@
     "ingImportedNone": "Es wurde nichts übernommen.",
     "ingDonePartly": "Nicht vollständig",
     "ingImportError": "Die Bank oder der Abruf meldete: {code}.",
-    "ingRetry": "Erneut versuchen",
     "ingImportMissing": "Nicht entstanden: {names}."
   },
   "aiAccess": {

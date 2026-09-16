@@ -879,7 +879,8 @@
     "defaultGroupLocked": "The default group stays.",
     "health_selection_pending": "Selection pending",
     "depotValue": "from holdings",
-    "depotValueHint": "The market value of the securities in this account. Net worth counts it as a securities account — the same amount, not twice."
+    "depotValueHint": "The market value of the securities in this account. Net worth counts it as a securities account — the same amount, not twice.",
+    "retrySync": "Try again"
   },
   "a11y": {
     "skipToContent": "Skip to content"
@@ -1173,7 +1174,6 @@
     "ingImportedNone": "Nothing was imported.",
     "ingDonePartly": "Not complete",
     "ingImportError": "The bank or the retrieval reported: {code}.",
-    "ingRetry": "Try again",
     "ingImportMissing": "Not created: {names}."
   },
   "aiAccess": {
