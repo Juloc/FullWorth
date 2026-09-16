@@ -15,6 +15,9 @@ namespace FullWorth.Backend.Tests.Portfolio;
 
 public sealed class PortfolioAuthorizationIntegrationTests
 {
+    /// <summary>Der Tag, an dem die Historie gemessen wurde - er muss einen Neuaufbau ueberstehen.</summary>
+    private static readonly DateOnly HistoryDay = new(2026, 8, 19);
+
     [Fact]
     public async Task MemberCanReadSharedPortfolioButCannotWrite()
     {
@@ -82,8 +85,13 @@ public sealed class PortfolioAuthorizationIntegrationTests
         var scenario = await SeedScenarioAsync(factory);
         using var client = factory.CreateClient();
 
+        // Gefragt ist der gemessene Tag. Ohne Fenster kaemen die Zeilen dazu, die der Neuaufbau seither
+        // fuer jeden Tag bis heute angelegt hat - und der Test scheiterte an seiner eigenen Enge statt
+        // an der Sache. Die Aussage bleibt dieselbe: an DIESEM Tag genau EIN Punkt, und es ist der des
+        // Eigentuemers (111) und nicht der des Mitglieds (11).
         using var ownerResponse = await client.SendAsync(UserRequest(HttpMethod.Get,
-            $"/api/net-worth/history?fullWorthSpaceId={scenario.SpaceA}", scenario.Owner));
+            $"/api/net-worth/history?fullWorthSpaceId={scenario.SpaceA}&from={HistoryDay:yyyy-MM-dd}&to={HistoryDay:yyyy-MM-dd}",
+            scenario.Owner));
         Assert.Equal(HttpStatusCode.OK, ownerResponse.StatusCode);
         using var json = JsonDocument.Parse(await ownerResponse.Content.ReadAsStringAsync());
         Assert.Single(json.RootElement.EnumerateArray());
@@ -245,9 +253,14 @@ public sealed class PortfolioAuthorizationIntegrationTests
                 new Liability { Id = scenario.LiabilityA, FullWorthSpaceId = scenario.SpaceA, Name = "Shared debt", CurrentBalance = 10m, Currency = "EUR", IncludeInNetWorth = true },
                 new Liability { Id = scenario.LiabilityB, FullWorthSpaceId = scenario.SpaceB, Name = "Other debt", CurrentBalance = 100m, Currency = "EUR", IncludeInNetWorth = true });
 
+            // CreatedAt an ihrem eigenen Tag: nur so sind die Zeilen MESSUNGEN und ueberleben den
+            // Neuaufbau, den jeder vermoegenswirksame Commit anstoesst. Mit dem Vorgabewert "jetzt"
+            // behaupten sie eine Vergangenheit, die heute erfunden wurde - der Neuaufbau verwarf sie
+            // und setzte an ihre Stelle den heute berechneten Wert.
+            var measured = new DateTimeOffset(HistoryDay.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             db.NetWorthSnapshots.AddRange(
-                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.Owner, Date = new DateOnly(2026, 8, 19), Currency = "EUR", Accounts = 100m, Assets = 20m, Liabilities = 9m, NetWorth = 111m },
-                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.Member, Date = new DateOnly(2026, 8, 19), Currency = "EUR", Accounts = 0m, Assets = 20m, Liabilities = 9m, NetWorth = 11m });
+                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.Owner, Date = HistoryDay, Currency = "EUR", Accounts = 100m, Assets = 20m, Liabilities = 9m, NetWorth = 111m, CreatedAt = measured },
+                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.Member, Date = HistoryDay, Currency = "EUR", Accounts = 0m, Assets = 20m, Liabilities = 9m, NetWorth = 11m, CreatedAt = measured });
 
             await db.SaveChangesAsync();
         });

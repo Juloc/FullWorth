@@ -19,6 +19,9 @@ namespace FullWorth.Backend.Tests.Portfolio;
 /// </summary>
 public sealed class PortfolioDeletionIntegrationTests
 {
+    /// <summary>Der Tag, an dem die Historie gemessen wurde - und der einen Neuaufbau ueberstehen muss.</summary>
+    private static readonly DateOnly HistoryDay = new(2026, 1, 31);
+
     [Fact]
     public async Task DeletingAnAssetTakesItsValuationsWithIt()
     {
@@ -168,12 +171,17 @@ public sealed class PortfolioDeletionIntegrationTests
             {
                 FullWorthSpaceId = space,
                 UserId = owner,
-                Date = new DateOnly(2026, 1, 31),
+                Date = HistoryDay,
                 Currency = "EUR",
                 Accounts = 1000m,
                 Assets = 0m,
                 Liabilities = 500m,
-                NetWorth = 500m
+                NetWorth = 500m,
+                // An seinem eigenen Tag entstanden - so schreibt der Worker ihn, und nur so ist er eine
+                // MESSUNG. Mit dem Vorgabewert "jetzt" behauptet die Zeile eine Vergangenheit, die
+                // heute erfunden wurde; der Neuaufbau verwirft sie dann zu Recht, und der Test
+                // prueft anschliessend eine Zeile, die es gar nicht mehr gibt.
+                CreatedAt = new DateTimeOffset(HistoryDay.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
             });
             await db.SaveChangesAsync();
         });
@@ -184,9 +192,16 @@ public sealed class PortfolioDeletionIntegrationTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         // Was gestern galt, galt gestern: NetWorthSnapshots speichert Summen je Tag, keine Einzelwerte.
+        //
+        // Gefragt ist die Zeile DIESES Tages. Frueher stand hier ein Single ueber den ganzen Space -
+        // das ging nur durch, solange nach dem Loeschen niemand die Historie nachzog. Sobald der
+        // Konsistenz-Koordinator mitlaeuft, kommt die Zeile von heute dazu, und der Test scheiterte an
+        // seiner eigenen Enge statt an der Sache. Dass die Vergangenheit einen Neuaufbau UEBERSTEHT,
+        // ist genau das, was er behauptet - jetzt prueft er es auch.
         await factory.SeedAsync(async db =>
         {
-            var snapshot = await db.NetWorthSnapshots.SingleAsync(row => row.FullWorthSpaceId == space);
+            var snapshot = await db.NetWorthSnapshots.SingleAsync(row =>
+                row.FullWorthSpaceId == space && row.Date == HistoryDay && row.Currency == "EUR");
             Assert.Equal(500m, snapshot.Liabilities);
             Assert.Equal(500m, snapshot.NetWorth);
         });

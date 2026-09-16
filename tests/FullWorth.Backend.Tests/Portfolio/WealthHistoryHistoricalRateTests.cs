@@ -146,7 +146,12 @@ public sealed class WealthHistoryHistoricalRateTests
         {
             CurrencyScenario.AddOwnerAndSpace(db, owner, space, "EUR", "Trend");
 
-            // One snapshot row per currency for the past day, exactly as the snapshot worker writes them.
+            // One snapshot row per currency for the past day, exactly as the snapshot worker writes them
+            // - INCLUDING CreatedAt. The worker writes a day's row on that day, and the rebuild reads
+            // exactly that to tell a measurement from a later reconstruction (IsObservedSnapshot). With
+            // the default CreatedAt of "now" these rows claimed to be a past that was invented today,
+            // and the rebuild discarded them - rightly so. They then never reached the endpoint, and the
+            // test could not say anything about the rule it is here for.
             foreach (var (currency, amount) in new[] { ("EUR", 100m), ("IDR", 5_000_000m) })
                 db.NetWorthSnapshots.Add(new NetWorthSnapshot
                 {
@@ -157,7 +162,8 @@ public sealed class WealthHistoryHistoricalRateTests
                     Accounts = amount,
                     Assets = 0m,
                     Liabilities = 0m,
-                    NetWorth = amount
+                    NetWorth = amount,
+                    CreatedAt = PastDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
                 });
 
             // A row for today as well, so the FX snapshot window the endpoint prepares spans both

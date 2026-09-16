@@ -16,6 +16,9 @@ namespace FullWorth.Backend.Tests.Analytics;
 
 public sealed class AnalyticsExportAuthorizationIntegrationTests
 {
+    /// <summary>Der Tag, an dem die Historie gemessen wurde - er muss einen Neuaufbau ueberstehen.</summary>
+    private static readonly DateOnly HistoryDay = new(2026, 8, 19);
+
     [Fact]
     public async Task OverviewAndBudgetStatusExcludeOtherMembersPrivateTransactions()
     {
@@ -106,9 +109,14 @@ public sealed class AnalyticsExportAuthorizationIntegrationTests
         Assert.Contains(scenario.UnlinkedPurchase, purchaseIds);
         Assert.DoesNotContain(scenario.PrivatePurchaseB, purchaseIds);
 
+        // Der Export enthaelt die ganze Tagesreihe, die der Neuaufbau fuehrt. Die Aussage dieses Tests
+        // ist aber die Abgrenzung: an dem gemessenen Tag steht der Wert von UserA (140) und nicht der
+        // von UserB (940) - und in keiner Zeile ein technisches Feld.
         var history = json.RootElement.GetProperty("netWorthHistory").EnumerateArray().ToArray();
-        Assert.Single(history);
-        Assert.Equal(140m, history[0].GetProperty("netWorth").GetDecimal());
+        var measuredPoint = Assert.Single(history.Where(point =>
+            point.GetProperty("date").GetString() == HistoryDay.ToString("yyyy-MM-dd")).ToArray());
+        Assert.Equal(140m, measuredPoint.GetProperty("netWorth").GetDecimal());
+        Assert.DoesNotContain(history, point => point.GetProperty("netWorth").GetDecimal() == 940m);
 
         Assert.DoesNotContain("visible-raw-marker", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private-raw-marker", body, StringComparison.OrdinalIgnoreCase);
@@ -248,9 +256,13 @@ public sealed class AnalyticsExportAuthorizationIntegrationTests
                     Status = "review"
                 });
 
+            // CreatedAt an ihrem eigenen Tag: nur so sind es MESSUNGEN, die der Neuaufbau bewahrt.
+            // Mit dem Vorgabewert "jetzt" behaupten sie eine heute erfundene Vergangenheit - der
+            // Neuaufbau verwirft sie dann und rechnet den Tag neu.
+            var measured = new DateTimeOffset(HistoryDay.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             db.NetWorthSnapshots.AddRange(
-                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.UserA, Date = new DateOnly(2026, 8, 19), Currency = "EUR", Accounts = 100m, Assets = 50m, Liabilities = 10m, NetWorth = 140m },
-                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.UserB, Date = new DateOnly(2026, 8, 19), Currency = "EUR", Accounts = 900m, Assets = 50m, Liabilities = 10m, NetWorth = 940m });
+                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.UserA, Date = HistoryDay, Currency = "EUR", Accounts = 100m, Assets = 50m, Liabilities = 10m, NetWorth = 140m, CreatedAt = measured },
+                new NetWorthSnapshot { FullWorthSpaceId = scenario.SpaceA, UserId = scenario.UserB, Date = HistoryDay, Currency = "EUR", Accounts = 900m, Assets = 50m, Liabilities = 10m, NetWorth = 940m, CreatedAt = measured });
             await db.SaveChangesAsync();
 
             // UserA drives the snapshot export, which requires the export.read capability. This test

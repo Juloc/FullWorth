@@ -86,9 +86,17 @@ internal sealed class BackendWebApplicationFactory : WebApplicationFactory<FullW
             services.RemoveAll<IDbContextOptionsConfiguration<FullWorthDbContext>>();
             services.RemoveAll<DbContextOptions<FullWorthDbContext>>();
             services.RemoveAll<FullWorthDbContext>();
-            services.AddDbContext<FullWorthDbContext>(options =>
+            // Die Interceptors muessen MIT (#138). In der Anwendung haengen sie an dieser Registrierung
+            // (BackendApplication); sie zu ersetzen liess sie stillschweigend weg, und damit lief der
+            // FinancialDataConsistencyCoordinator in KEINEM Test. Was nach einem Commit von selbst
+            // passiert - Vermoegenshistorie nachziehen, Signale anstossen - war voellig ungeprueft, und
+            // genau darin sass #123.
+            services.AddDbContext<FullWorthDbContext>((provider, options) =>
                 options.UseNpgsql(connectionString)
-                    .ReplaceService<IModelCustomizer, CoachModelCustomizer>());
+                    .ReplaceService<IModelCustomizer, CoachModelCustomizer>()
+                    .AddInterceptors(
+                        provider.GetRequiredService<FinancialDataSaveChangesInterceptor>(),
+                        provider.GetRequiredService<FinancialDataTransactionInterceptor>()));
 
             // IntelligenceDbContext shares the "Finance" connection string in production; the app
             // otherwise falls back to the appsettings docker host (fullworth-postgres) which is
