@@ -147,6 +147,14 @@ an imported account with no link → visible, counted, bookings count towards hi
 re-imported → still active; a reconciliation pass → still active. The existing test that asserts the
 archived state at import time still holds, because that state is still correct before anchoring.
 
+**Überholt (2026-09-16).** Der Kern dieses Befundes stimmt, die Lösung ist inzwischen weiter gegangen:
+ein Import legt sein Konto **gar nicht mehr archiviert** an, sondern als vollwertiges. Damit entfällt
+auch die hier beschriebene Einschränkung "Reconciliation und Re-Import archivieren nur noch ein Konto
+ohne eigenen Saldo" — beide fassen es überhaupt nicht mehr an. Der Grund: solange ein Import ein
+stilles Konto erzeugte, blieb ein manueller Nachschritt nötig, und genau den verbietet die Geldregel.
+Siehe `docs/IMPORT.md`, Abschnitt "An import creates a real account", und die Migration
+`20260916120000_PromoteImportAccounts` für den Altbestand.
+
 ### P0-5 `docker compose down -v` could delete the encryption key — `DONE` (docker 87000ff)
 
 The app and cloud stacks both declared `fullworth-platform-secrets` as their own volume. It holds
@@ -487,6 +495,13 @@ account existed, carried its history, and had no reachable path to a balance any
 listed now, marked "Kontostand hinterlegen", and offers the balance action.
 
 The second half is done too, together with O-5 below — it is one mechanism, described there.
+
+**Überholt (2026-09-16).** Der Satz "ein Importkonto wird archiviert angelegt" gilt nicht mehr: es
+entsteht als vollwertiges Konto. Die Begründung im Klammersatz bleibt trotzdem richtig — der
+Finanzguru-Export hat keine Saldospalte, das Konto kann seinen Stand also nicht kennen. Die Antwort
+darauf ist heute eine andere: es zählt sichtbar als **unvollständig**, statt still als 0 zu gelten.
+Auch die Provider-Erlaubnisliste bei `SetManualBalanceAsync` ist weg; die Schranke ist allein die
+Bankverbindung.
 
 ### O-5 A PayPal account cannot be linked, only a Giro account — `DONE`
 

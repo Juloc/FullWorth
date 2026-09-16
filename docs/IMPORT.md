@@ -166,6 +166,11 @@ a new table referencing `Transactions` cannot quietly fall outside it. The respo
 `DuplicateStatus='rolled_back'`. `rollbackAvailable` in the job list is false for a job that predates
 provenance tracking, so the button never promises an undo it cannot perform.
 
+**The account goes too**, when the import created it (`ImportJobs.CreatedAccountId`) and nothing is
+left in it afterwards. Rolling back means undoing the import, and an empty account nobody ordered is
+the opposite of that. The balance the statement file brought belongs to the import and goes with it
+(`Source='import'`); a balance the user typed stays, and keeps the account alive.
+
 **Merging is the other half of the same problem.** Where the rollback *keeps* a row the user has worked
 on, a merge *deletes* one — so everything pointing at it has to move first.
 `TransactionMergeService.MoveDependenciesAsync` moves all sixteen foreign keys, and
@@ -252,10 +257,26 @@ account once it exists.
 
 - `GET /api/import/finanzguru/accounts` lists the import containers, the candidate targets and history
   already attached to a target.
+- `GET /api/import/finanzguru/accounts/{importAccountId}/link-preview?targetAccountId=` says what the
+  link **would** do: which rows collapse into one and how many simply move across. It writes nothing
+  and is fed by the same `Signature` the link itself uses, so the list cannot claim something other
+  than what follows.
 - `POST /api/import/finanzguru/accounts/{importAccountId}/link` moves the rows and records the
-  confirmed link.
+  confirmed link. It takes `preferImport` and `excludedImportTransactionIds`.
 - `POST /api/import/finanzguru/accounts/{targetAccountId}/confirm-history` trusts rows a prior
   automatic reconcile already moved.
+
+**Who wins a duplicate.** `preferImport` chooses whose *content* survives — category, split, note,
+transfer flag. The target account's **row** always survives, and that is not convenience: a bank row
+carries the key the bank recognises it by, so deleting it would simply have it redelivered on the next
+sync, without the work that hung on it. Excluded matches are not merged at all; they move across and
+stay separate bookings.
+
+**Matching runs twice.** First on the exact `Signature` (date, amount, currency, normalised
+counterparty), then over what is left with a **three-day tolerance** on the date — a bank and an export
+often name different days for the same event, one the booking date and the other the value date, and a
+single day's difference used to turn one booking into two. Exact first, window second, so an
+approximate match can never beat a precise one.
 
 Both require the same currency on both sides, set `UseForBalanceHistory=true` on the affected rows,
 deactivate the container, set `IncludeInNetWorth=true` on the target and then rebuild net-worth history
@@ -587,8 +608,10 @@ into an existing portfolio, rollback of an import-created portfolio, refusal to 
 import, reconciliation cash and holdings, type-count summary) and `InvestmentImportNumberFormatTests`.
 
 `tests/FullWorth.Backend.Tests/Import/`: `FinanzguruImportTests`, `FinanzguruLivePreferenceTests`,
-`FinanzguruReconciliationTests`, `FinanzguruImportProvenanceTests`, `StatementImportIntegrationTests`
-(including a statement that creates its own account), `TransactionMergeTests` (what the merge must not
+`FinanzguruReconciliationTests`, `FinanzguruImportProvenanceTests`, `FinanzguruLinkChoiceTests` (the
+preview, whose version wins, excluding a match, and the three-day window including its edges),
+`StatementImportIntegrationTests` (including a statement that creates its own account and a rollback
+that takes it back), `TransactionMergeTests` (what the merge must not
 lose), `ImportAccountDoubleCountTests` and `PromoteImportAccountsMigrationTests` (the four exclusions of
 the promotion migration, and that running it twice changes nothing).
 
