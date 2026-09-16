@@ -2,13 +2,11 @@
    Typography has one application-wide family and one central size scale. Components inherit the family
    and consume size tokens instead of defining an alternative font stack or user-selectable typography.
    The interface remains monochrome and line-driven; colour is used only where it carries meaning. */
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:optional;src:url("/fonts/BarlowCondensed-400.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:optional;src:url("/fonts/BarlowCondensed-500.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:optional;src:url("/fonts/BarlowCondensed-600.woff2") format("woff2")}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:swap;src:url("https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf") format("truetype")}
 :root{
-  /* Typography: the family literal lives only here. Compatibility aliases keep existing components
+  /* Typography: Nunito is the single application font. Compatibility aliases keep existing components
      on the same family while old specialised font roles are phased out. */
-  --font-family-base:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-family-base:'Nunito',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --font:var(--font-family-base);
   --font-sans:var(--font-family-base);
   --font-display:var(--font-family-base);
