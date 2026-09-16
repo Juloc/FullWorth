@@ -58,6 +58,7 @@ const COPY = {
     valueHistory: 'Werthistorie', details: 'Details', updateValue: 'Wert aktualisieren', current: 'Aktuell',
     noValuations: 'Noch keine Bewertungen vorhanden.', fxIncomplete: 'Gesamtsumme unvollständig: Für mindestens eine Währung fehlt ein Wechselkurs.',
     fxIncompleteWhich: 'Unvollständig, weil ein Wechselkurs fehlt',
+    balanceMissingWhich: 'Unvollständig, weil ein Kontostand fehlt',
     fxRatesUsed: 'Umgerechnet mit', fxRateAsOf: 'Kurs vom', fxRateStale: 'Kurs ist älter als ein paar Tage',
     moreDetails: 'Mehr Angaben',
     dataIncomplete: 'Daten unvollständig', composition: 'Zusammensetzung', accounts: 'Konten', manualAssets: 'Weitere Vermögenswerte', investments: 'Investments', debt: 'Schulden',
@@ -111,6 +112,7 @@ const COPY = {
     valueHistory: 'Value history', details: 'Details', updateValue: 'Update value', current: 'Current', noValuations: 'No valuations yet.',
     fxIncomplete: 'Total is incomplete: at least one required FX rate is missing.', dataIncomplete: 'Data incomplete', composition: 'Composition',
     fxIncompleteWhich: 'Incomplete because an FX rate is missing',
+    balanceMissingWhich: 'Incomplete because a balance is missing',
     fxRatesUsed: 'Converted at', fxRateAsOf: 'rate of', fxRateStale: 'this rate is more than a few days old',
     moreDetails: 'More details',
     accounts: 'Accounts', manualAssets: 'Other assets', investments: 'Investments', debt: 'Debt',
@@ -600,7 +602,19 @@ function fxIncompleteText(overview) {
     .map(([key, label]) => [label, (overview[key]?.missingCurrencies || []).join(', ')])
     .filter(([, currencies]) => currencies)
     .map(([label, currencies]) => `${label} (${currencies})`);
-  if (parts.length) return `${ctx.esc(t('fxIncompleteWhich'))}: ${ctx.esc([...new Set(parts)].join(' · '))}`;
+  // Der zweite Grund, unvollstaendig zu sein: ein Konto, das mitzaehlen soll, hat noch keinen
+  // Kontostand. Es ging vorher als 0 in die Summe ein, und die Zeile sprach nur von Wechselkursen -
+  // der Nutzer suchte also nach einem Kurs, wo ein Kontostand fehlte.
+  const withoutBalance = overview.accounts?.accountsWithoutBalance || [];
+  const balanceLine = withoutBalance.length
+    ? `${ctx.esc(t('balanceMissingWhich'))}: ${ctx.esc(withoutBalance.join(' · '))}`
+    : '';
+
+  const fxLine = parts.length
+    ? `${ctx.esc(t('fxIncompleteWhich'))}: ${ctx.esc([...new Set(parts)].join(' · '))}`
+    : '';
+  if (fxLine || balanceLine) return [fxLine, balanceLine].filter(Boolean).join(' — ');
+
   const missing = (overview.missingCurrencies || []).join(', ');
   return `${ctx.esc(t('fxIncomplete'))}${missing ? ` (${ctx.esc(missing)})` : ''}`;
 }

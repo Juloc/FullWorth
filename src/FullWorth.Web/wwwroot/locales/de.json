@@ -605,6 +605,7 @@
     "confirmTitle": "Bist du sicher?",
     "confirm": "Bestätigen",
     "fxIncomplete": "Ohne Beträge in Währungen ohne Umrechnungskurs.",
+    "balanceMissingIncomplete": "Ohne Konten, für die noch kein Kontostand hinterlegt ist.",
     "filter": "Filter"
   },
   "auth": {

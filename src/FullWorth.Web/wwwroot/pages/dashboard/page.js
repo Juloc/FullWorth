@@ -2,7 +2,7 @@
 // user + FullWorth Space via /api/preferences (§22); the desktop uses a responsive grid, mobile a
 // single ordered full-width list (§6.3). Edit mode adds/removes/reorders with an accessible
 // move-up/down fallback (§25). Widgets render real backend data with loading/empty/error states.
-import { money, converted, maskIdentifier } from '../../components/money.js';
+import { money, converted, maskIdentifier, incompleteMarker } from '../../components/money.js';
 import { balanceMeaningLine } from '../../components/balance-meaning.js';
 import { isPrivate } from '../../components/privacy.js';
 import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../../features/ux-kit.js';
@@ -365,17 +365,21 @@ function renderWidget(type, ctx, body, data, cfg) {
     // Same rule as the accounts page: money that could not be converted is left out of the
     // base-currency sum, and the row says so instead of printing a confident number that is short.
     const groupTotal = accts => {
-      let sum = 0, incomplete = false;
+      const reasons = new Set();
+      let sum = 0;
       for (const x of accts) {
         if (x.baseValue != null) { sum += Number(x.baseValue); continue; }
         if (x.latestBalance && x.latestBalance.currency === baseCur) { sum += Number(x.latestBalance.amount); continue; }
-        if (x.latestBalance) incomplete = true;
+        reasons.add(x.latestBalance ? 'fx' : 'noBalance');
       }
-      return { sum, incomplete };
+      return { sum, reasons };
     };
     const groupTotalMarkup = accts => {
       const total = groupTotal(accts);
-      const mark = total.incomplete ? `<span class="amount-incomplete" title="${ctx.esc(ctx.get('common.fxIncomplete'))}">*</span>` : '';
+      const mark = incompleteMarker([
+        total.reasons.has('fx') ? ctx.esc(ctx.get('common.fxIncomplete')) : '',
+        total.reasons.has('noBalance') ? ctx.esc(ctx.get('common.balanceMissingIncomplete')) : ''
+      ]);
       return `${money(total.sum, baseCur)}${mark}`;
     };
     const acctRow = x => `<div class="fw-row is-drillable" role="button" tabindex="0" data-acct="${ctx.esc(x.id)}"><span class="tx-ident-slot">${identityIcon(x.displayName || x.institutionName, {})}</span><div class="fw-row-main"><div class="fw-row-title">${ctx.esc(x.displayName || x.institutionName)}</div><div class="fw-row-sub">${[ctx.esc(x.institutionName || ''), ctx.esc(x.product || x.accountType || ''), maskIdentifier(x.ibanLast4)].filter(Boolean).join(' · ')}</div></div><div class="fw-row-amt">${x.latestBalance ? money(x.latestBalance.amount, x.latestBalance.currency) : '—'}${meaningLine(ctx, x)}${walletLine(x)}</div></div>`;

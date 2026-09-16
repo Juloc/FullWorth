@@ -46,6 +46,66 @@ public sealed class WealthOverviewIntegrationTests
         Assert.NotEqual(3_600m, root.GetProperty("netWorth").GetDecimal());
     }
 
+    /// <summary>
+    /// Ein Konto, das mitzaehlen soll, aber noch keinen Kontostand hat, lieferte schlicht keine
+    /// Balance-Zeile - und ging damit still als 0 in die Summe ein. Das bricht dieselbe Regel wie ein
+    /// fehlender Wechselkurs: kein Wert ist nicht null. Seit ein Import genau solche Konten anlegt,
+    /// ist das kein Randfall mehr, sondern der Normalfall direkt nach dem Import.
+    /// </summary>
+    [Fact]
+    public async Task AccountWithoutBalanceMakesTheTotalIncompleteAndIsNamed()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        var scenario = await SeedScenarioAsync(factory);
+        var importedId = Guid.NewGuid();
+        await factory.SeedAsync(async db =>
+        {
+            db.Accounts.Add(new FinanceAccount
+            {
+                Id = importedId,
+                FullWorthSpaceId = scenario.Space,
+                Provider = "finanzguru-import",
+                IdentificationHash = $"finanzguru|{importedId:N}",
+                ProviderAccountId = $"finanzguru:{importedId:N}",
+                InstitutionName = "Finanzguru Import",
+                DisplayName = "Importiertes Girokonto",
+                Currency = "EUR"
+            });
+            db.AccountOwners.Add(new AccountOwner
+            {
+                AccountId = importedId,
+                UserId = scenario.Owner,
+                OwnershipType = AccountOwnershipTypes.Owner
+            });
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        using var response = await client.SendAsync(UserRequest(
+            $"/api/wealth/overview?fullWorthSpaceId={scenario.Space}&currency=EUR",
+            scenario.Owner));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var accounts = json.RootElement.GetProperty("accounts");
+
+        // Der Betrag bleibt, wie er war - das Konto traegt ja nichts bei.
+        Assert.Equal(1_000m, accounts.GetProperty("amount").GetDecimal());
+        // Aber die Summe sagt jetzt, dass sie etwas auslaesst, und nennt das Konto beim Namen.
+        Assert.False(accounts.GetProperty("isComplete").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("isComplete").GetBoolean());
+        var named = accounts.GetProperty("accountsWithoutBalance").EnumerateArray()
+            .Select(entry => entry.GetString())
+            .ToList();
+        Assert.Contains("Importiertes Girokonto", named);
+        // Ein fehlender Kontostand ist kein fehlender Kurs - sonst stuende ein Kontoname in der
+        // Waehrungsliste und die Oberflaeche schriebe "Konten (EUR, Importiertes Girokonto)".
+        var currencies = accounts.GetProperty("missingCurrencies");
+        Assert.True(
+            currencies.ValueKind == JsonValueKind.Null || currencies.GetArrayLength() == 0,
+            "Ein fehlender Kontostand darf nicht als fehlende Waehrung gemeldet werden.");
+    }
+
     [Fact]
     public async Task OverviewExposesConfiguredEmergencyFundProgressForSelectedGroup()
     {

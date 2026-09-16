@@ -27,7 +27,13 @@ public sealed record WealthComponentView(
     // so a missing IDR rate read as "your wealth is incomplete" with nothing to act on.
     IReadOnlyList<string>? MissingCurrencies = null,
     // What the conversion was actually done with, per currency. Empty when nothing needed converting.
-    IReadOnlyList<WealthRateUsed>? RatesUsed = null);
+    IReadOnlyList<WealthRateUsed>? RatesUsed = null,
+    // Der ZWEITE Grund, unvollstaendig zu sein: Konten, die mitzaehlen sollen, aber noch keinen
+    // Kontostand haben. Bewusst ein eigenes Feld - MissingCurrencies ist eine Liste von
+    // Waehrungscodes, und ein Kontoname darin ergaebe Saetze wie "Konten (IDR, Sparkasse Giro)".
+    // Ohne dieses Feld ging so ein Konto still als 0 in die Summe ein, was gegen dieselbe Regel
+    // verstoesst wie ein fehlender Wechselkurs: kein Wert ist nicht null.
+    IReadOnlyList<string>? AccountsWithoutBalance = null);
 
 public sealed record EmergencyFundView(
     bool Enabled,
@@ -147,7 +153,7 @@ public sealed class WealthOverviewService(
                 account.IncludeInNetWorth &&
                 account.Owners.Any(owner => owner.UserId == userId) &&
                 !excludedInvestmentAccounts.Contains(account.Id))
-            .Select(account => new { account.Id, account.Currency, account.GroupId })
+            .Select(account => new { account.Id, account.Currency, account.GroupId, account.DisplayName })
             .ToListAsync(ct);
         var accountIds = accounts.Select(account => account.Id).ToArray();
         // One balance PER CURRENCY, not per account: a multi-currency wallet (PayPal, Wise, Revolut)
@@ -184,6 +190,21 @@ public sealed class WealthOverviewService(
         var fx = await currencyConverter.PrepareLatestAsync(targetCurrency, today, ct);
         var missingCurrencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var accountsView = ConvertComponent(latestBalances, targetCurrency, today, fx, missingCurrencies);
+        // Ein Konto, das mitzaehlen soll, aber keinen Kontostand hat, liefert schlicht keine
+        // Balance-Zeile - es fiel damit lautlos als 0 in die Summe. Ein Import legt genau solche
+        // Konten an, und "0" ist die eine Antwort, die sicher falsch ist.
+        var balancedAccountIds = currentBalances.Select(balance => balance.AccountId).ToHashSet();
+        var accountsWithoutBalance = accounts
+            .Where(account => !balancedAccountIds.Contains(account.Id))
+            .Select(account => account.DisplayName)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (accountsWithoutBalance.Count > 0)
+            accountsView = accountsView with
+            {
+                IsComplete = false,
+                AccountsWithoutBalance = accountsWithoutBalance
+            };
         var manualAssetsView = ConvertComponent(manualAssets, targetCurrency, today, fx, missingCurrencies);
         // Converted with the same snapshot, so the slice and the total can never disagree. Its missing
         // currencies are already in the set from the line above.

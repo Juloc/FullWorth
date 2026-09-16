@@ -93,15 +93,28 @@ public sealed class CurrencyUiBaselineTests : IClassFixture<FullWorthWebFactory>
         // currency, and otherwise records that it had to leave money out.
         Assert.Contains("if(a.baseValue!=null){sum+=Number(a.baseValue);continue}", accounts);
         Assert.Contains("if(a.latestBalance&&a.latestBalance.currency===baseCur)", accounts);
-        Assert.Contains("if(a.latestBalance)incomplete=true;", accounts);
         Assert.Contains("if (x.baseValue != null) { sum += Number(x.baseValue); continue; }", dashboard);
-        Assert.Contains("if (x.latestBalance) incomplete = true;", dashboard);
 
-        // The marker itself, with an accessible explanation rather than a bare asterisk.
-        Assert.Contains("amount-incomplete", accounts);
+        // Zwei Gruende, nicht mehr einer. Hier stand "if(a.latestBalance)incomplete=true;" - ein
+        // Konto GANZ ohne Kontostand fiel damit still als 0 in die Summe, was dieselbe Regel bricht
+        // wie der fehlende Kurs: kein Wert ist nicht null. Seit ein Import solche Konten anlegt, ist
+        // das kein Randfall mehr.
+        Assert.Contains("reasons.add(a.latestBalance?'fx':'noBalance');", accounts);
+        Assert.Contains("reasons.add(x.latestBalance ? 'fx' : 'noBalance');", dashboard);
+        Assert.Contains("common.balanceMissingIncomplete", accounts);
+        Assert.Contains("common.balanceMissingIncomplete", dashboard);
+
+        // Der Marker steht genau einmal im Code. Er war in beiden Seiten wortgleich dupliziert, im
+        // Dashboard ohne aria-label - ein Screenreader las dort nur "Stern".
+        var money = await GetAsync("/components/money.js");
+        Assert.Contains("export function incompleteMarker", money);
+        Assert.Contains("aria-label=\"${title}\"", money);
+        Assert.Contains("amount-incomplete", money);
+        Assert.Contains("incompleteMarker(", accounts);
+        Assert.Contains("incompleteMarker(", dashboard);
         Assert.Contains("common.fxIncomplete", accounts);
-        Assert.Contains("aria-label=\"${esc(get('common.fxIncomplete'))}\"", accounts);
-        Assert.Contains("amount-incomplete", dashboard);
+        Assert.DoesNotContain("<span class=\"amount-incomplete\"", accounts);
+        Assert.DoesNotContain("<span class=\"amount-incomplete\"", dashboard);
         Assert.Contains(".amount-incomplete{color:var(--warning)", components);
         Assert.Contains(".fx-incomplete{font-size:11px;color:var(--warning)", components);
     }

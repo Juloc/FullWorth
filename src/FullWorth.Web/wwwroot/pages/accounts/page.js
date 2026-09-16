@@ -1,4 +1,4 @@
-import { money, converted, maskIdentifier } from '../../components/money.js';
+import { money, converted, maskIdentifier, incompleteMarker } from '../../components/money.js';
 import { balanceMeaningLine } from '../../components/balance-meaning.js';
 import { state } from '../../core/state.js';
 import { emptyRow } from '../../components/empty.js';
@@ -194,9 +194,12 @@ async function loadAccountsView(){
   // amount for base-currency accounts. An account whose money could NOT be converted is left out -
   // adding a foreign figure into a base-currency total would be arithmetic across units - but leaving
   // it out silently printed a confident number that was missing real money, so the subtotal now says
-  // so. (An account with no balance at all is not incomplete; it simply has no value yet.)
+  // so. Ein Konto ganz OHNE Kontostand galt hier frueher als "hat eben noch keinen Wert" und ging
+  // still als 0 ein. Seit ein Import solche Konten anlegt, ist das die eine Antwort, die sicher
+  // falsch ist - es fehlt ein Wert, und die Summe sagt das jetzt genauso wie beim fehlenden Kurs.
   const total=accts=>{
-    let sum=0,incomplete=false;
+    const reasons=new Set();
+    let sum=0;
     for(const a of accts){
       // An account that is out of net worth - a same-IBAN duplicate, or one the owner linked as the
       // same account - must be out of this subtotal too, or the group header contradicts the totals
@@ -204,13 +207,16 @@ async function loadAccountsView(){
       if(a.includeInNetWorth===false)continue;
       if(a.baseValue!=null){sum+=Number(a.baseValue);continue}
       if(a.latestBalance&&a.latestBalance.currency===baseCur){sum+=Number(a.latestBalance.amount);continue}
-      if(a.latestBalance)incomplete=true;
+      reasons.add(a.latestBalance?'fx':'noBalance');
     }
-    return{sum,incomplete};
+    return{sum,reasons};
   };
   const totalMarkup=accts=>{
     const t=total(accts);
-    const mark=t.incomplete?`<span class="amount-incomplete" title="${esc(get('common.fxIncomplete'))}" aria-label="${esc(get('common.fxIncomplete'))}">*</span>`:'';
+    const mark=incompleteMarker([
+      t.reasons.has('fx')?esc(get('common.fxIncomplete')):'',
+      t.reasons.has('noBalance')?esc(get('common.balanceMissingIncomplete')):''
+    ]);
     return `${money(t.sum,baseCur)}${mark}`;
   };
   const countLabel=n=>esc(get(n===1?'accounts.countOne':'accounts.countMany').replace('{count}',n));

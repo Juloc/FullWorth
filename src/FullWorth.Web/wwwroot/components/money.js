@@ -28,6 +28,16 @@ function currencySymbol(currency) {
   } catch { return currency || '€'; }
 }
 
+// Der Stern hinter einer Summe: sie laesst etwas aus, und der Titel sagt was. Das Markup stand
+// wortgleich in der Kontenliste und im Dashboard - letzteres ohne aria-label, ein Screenreader las
+// dort also nur "Stern". Mit zwei Gruenden (fehlender Kurs, fehlender Kontostand) waere daraus die
+// dritte Kopie geworden.
+// Erwartet bereits maskierte Texte; wer den Marker baut, hat esc() ohnehin zur Hand.
+export function incompleteMarker(reasons) {
+  const title = (reasons || []).filter(Boolean).join(' ');
+  return title ? `<span class="amount-incomplete" title="${title}" aria-label="${title}">*</span>` : '';
+}
+
 export function money(value, currency = 'EUR') {
   if (isPrivate()) return `•••• ${currencySymbol(currency)}`;
   try {

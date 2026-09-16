@@ -605,6 +605,7 @@
     "confirmTitle": "Are you sure?",
     "confirm": "Confirm",
     "fxIncomplete": "Excludes amounts in currencies without a conversion rate.",
+    "balanceMissingIncomplete": "Excludes accounts that do not have a balance yet.",
     "filter": "Filter"
   },
   "auth": {
