@@ -237,13 +237,37 @@ public sealed class IngestionService(
             if (isNew && ibanLookup is not null)
             {
                 var alreadyKnown = await db.Accounts
-                    .AnyAsync(other =>
+                    .Where(other =>
                         other.FullWorthSpaceId == connection.FullWorthSpaceId &&
                         other.IbanLookup == ibanLookup &&
                         other.IsActive &&
                         other.IncludeInNetWorth &&
-                        other.Id != entity.Id, ct);
-                if (alreadyKnown)
+                        other.Id != entity.Id)
+                    .ToListAsync(ct);
+
+                // Welche Seite tritt zurueck? Frueher immer die neue - das stimmte, solange die
+                // Gegenseite nur ein anderes Bankkonto sein konnte. Ein Importkonto zaehlt jetzt
+                // ebenfalls mit, und dann waere es die falsche: die Bank haelt dasselbe Konto
+                // aktuell, der Import ist ein Stand von gestern. Verbindungslose Doppel treten
+                // zurueck, ein zweiter Bankzugang zur selben IBAN nicht.
+                var connectionless = alreadyKnown.Where(other => other.BankConnectionId is null).ToList();
+                if (connectionless.Count > 0 && connectionless.Count == alreadyKnown.Count)
+                {
+                    foreach (var other in connectionless)
+                    {
+                        other.DuplicateOfAccountId = entity.Id;
+                        other.IncludeInNetWorthBeforeLink ??= other.IncludeInNetWorth;
+                        other.IncludeInNetWorth = false;
+                        other.UpdatedAt = DateTimeOffset.UtcNow;
+                        audit.Record(
+                            connection.FullWorthSpaceId,
+                            null,
+                            "account.duplicate_excluded_from_net_worth",
+                            "Account",
+                            other.Id);
+                    }
+                }
+                else if (alreadyKnown.Count > 0)
                 {
                     entity.IncludeInNetWorth = false;
                     audit.Record(

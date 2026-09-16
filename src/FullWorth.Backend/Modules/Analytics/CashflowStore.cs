@@ -188,9 +188,15 @@ ON CONFLICT ("FullWorthSpaceId") DO UPDATE SET "HorizonMode"=EXCLUDED."HorizonMo
             .Select(row => row.BaseCurrency)
             .SingleOrDefaultAsync(ct);
 
+    // DuplicateOfAccountId sagt "dieses Konto ist dasselbe wie jenes, ueber einen anderen Weg". Seine
+    // Buchungen stehen also ein zweites Mal da, und eine Vorausschau, die beide addiert, rechnet mit
+    // dem doppelten Geld. Das Vermoegen filtert dafuer auf IncludeInNetWorth - hier zaehlt IsActive,
+    // denn ein zugeordnetes Konto bleibt sichtbar und bedienbar; es soll nur nicht mitsummieren.
     public Task<List<Guid>> ActiveAccountIdsAsync(IReadOnlySet<Guid> visibleAccountIds, CancellationToken ct) =>
         db.Accounts.AsNoTracking()
-            .Where(account => visibleAccountIds.Contains(account.Id) && account.IsActive)
+            .Where(account => visibleAccountIds.Contains(account.Id)
+                              && account.IsActive
+                              && account.DuplicateOfAccountId == null)
             .Select(account => account.Id)
             .ToListAsync(ct);
 

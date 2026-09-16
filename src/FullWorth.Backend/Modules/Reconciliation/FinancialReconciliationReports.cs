@@ -199,8 +199,12 @@ public sealed class FinancialReconciliationReportService(
         // row, so a wallet account (PayPal, Wise, Revolut reports one balance per currency) contributed
         // a fraction of its money to "available today" while the rest was silently missing - the same
         // defect the cashflow forecast had. One query for the accounts, two for the balances.
+        // Ein als Doppel markiertes Konto steht fuer dasselbe Geld wie sein Gegenstueck - beide zu
+        // addieren zeigte den Betrag zweimal als "heute verfuegbar".
         var activeAccountIds = await db.Accounts.AsNoTracking()
-            .Where(account => visible.Contains(account.Id) && account.IsActive)
+            .Where(account => visible.Contains(account.Id)
+                              && account.IsActive
+                              && account.DuplicateOfAccountId == null)
             .Select(account => account.Id)
             .ToListAsync(ct);
         decimal balances = 0m;
