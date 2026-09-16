@@ -165,6 +165,12 @@
     },
     // Two connections: one healthy, one FinTS parked on a TAN. The second must offer "TAN eingeben",
     // never "Neu verbinden" - reconnecting discards the challenge the bank is waiting for.
+    // Der Verlauf der gescheiterten Verbindung - daraus baut der Fehlerbericht seine letzten Laeufe.
+    'bank-connections/c4/sync-history': [
+      { id: 'h1', startedAt: iso('2026-09-16'), completedAt: iso('2026-09-16'), durationMs: 7900, result: 'error', errorCode: 'FINTS_BANK_ERROR' },
+      { id: 'h2', startedAt: iso('2026-09-15'), completedAt: iso('2026-09-15'), durationMs: 8100, result: 'error', errorCode: 'FINTS_BANK_ERROR' },
+      { id: 'h3', startedAt: iso('2026-09-14'), completedAt: iso('2026-09-14'), durationMs: 5400, result: 'success', errorCode: null }
+    ],
     'bank-connections': [
       {
         id: 'c1', provider: 'enable-banking', institutionName: 'Testbank', country: 'DE',

@@ -880,7 +880,9 @@
     "health_selection_pending": "Auswahl offen",
     "depotValue": "aus Depotbestand",
     "depotValueHint": "Der Kurswert der Wertpapiere in diesem Depot. Im Nettovermögen zählt er als Depot — derselbe Betrag, nicht zweimal.",
-    "retrySync": "Erneut versuchen"
+    "retrySync": "Erneut versuchen",
+    "copyReport": "Für ein Issue kopieren",
+    "reportCopied": "Fehlerbericht kopiert."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

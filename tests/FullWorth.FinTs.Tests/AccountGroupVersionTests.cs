@@ -102,6 +102,23 @@ public sealed class AccountGroupVersionTests
         Assert.Equal("50010517", hksal.GetText(1, 3));
     }
 
+    /// <summary>
+    /// An Stelle 2 steht die Waehrung der Depotaufstellung - also die Bitte, in dieser Waehrung
+    /// auszugeben. Dort stand die Waehrung des Depots, und die ING antwortete:
+    ///
+    /// <code>9210@3 HKWPD Die Angabe einer Ausgabewaehrung ist nicht zulaessig.</code>
+    ///
+    /// Gebraucht wurde sie nie: die Bestaende kommen in MT535 mit ihrer eigenen Waehrung.
+    /// </summary>
+    [Fact]
+    public async Task ADepotRequestAsksForNoOutputCurrency()
+    {
+        var hkwpd = await SentPortfolioAsync(6);
+
+        Assert.Equal(string.Empty, hkwpd.GetText(2, 0));
+        Assert.DoesNotContain("EUR", System.Text.Encoding.UTF8.GetString(FinTsWire.SerializeSegment(hkwpd)));
+    }
+
     private static FinTsAccount Cash => new(
         "DE02500105170137075030", "INGDDEFFXXX", "1234567890", "00", "Owner", "Girokonto", "EUR",
         IsDepot: false, BankCode: "50010517");

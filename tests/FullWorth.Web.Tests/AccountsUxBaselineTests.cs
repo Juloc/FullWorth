@@ -328,6 +328,32 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("data-reconnect", js);
     }
 
+    /// <summary>
+    /// Ein Fehler muss weitergebbar sein. "Fehler beim Abgleich" allein ist nichts, was in ein Issue
+    /// passt - der Code steht jetzt in der Zeile, und der Verlauf gibt den ganzen Bericht heraus.
+    ///
+    /// Und er beschreibt die VERBINDUNG, nicht ihren Inhaber: ein Bericht ueber eine Bankverbindung
+    /// landet in einem oeffentlichen Repository. Deshalb steht hier, was NICHT drin sein darf.
+    /// </summary>
+    [Fact]
+    public async Task AConnectionErrorIsVisibleAndCanBeCopiedForAnIssue()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+
+        Assert.Contains("const errorCode=x.lastError?", js);
+        Assert.Contains("data-copy-report", js);
+        Assert.Contains("function connectionReport", js);
+        Assert.Contains("navigator.clipboard.writeText", js);
+        // Ohne Zwischenablage-Recht bleibt der Bericht erreichbar statt zu verschwinden.
+        Assert.Contains("data-report-text", js);
+
+        // Der Bericht nennt die Verbindung - nie das Konto dahinter.
+        var report = js[js.IndexOf("function connectionReport", StringComparison.Ordinal)..];
+        report = report[..report.IndexOf("async function copyReport", StringComparison.Ordinal)];
+        foreach (var forbidden in new[] { "iban", "Iban", "accountNumber", "displayName", "providerSessionId", "authorizationId" })
+            Assert.DoesNotContain(forbidden, report);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);

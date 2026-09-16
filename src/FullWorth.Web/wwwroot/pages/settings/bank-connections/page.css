@@ -21,3 +21,5 @@
   #view-bank-connections .row-side>.icon-button{flex:0 0 44px}
   #view-bank-connections .row-sub{overflow-wrap:break-word;word-break:normal}
 }
+/* Der Fehlerbericht, wenn die Zwischenablage nicht darf: lesbar, auswählbar, sonst nichts. */
+.report-text{width:100%;font-family:var(--font-mono,monospace);font-size:12px;margin-top:var(--s3)}

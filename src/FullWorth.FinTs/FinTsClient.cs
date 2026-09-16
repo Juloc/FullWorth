@@ -117,7 +117,6 @@ public sealed class FinTsClient(IFinTsTransport transport)
         FinTsCredentials credentials,
         FinTsSessionState session,
         FinTsAccount depot,
-        string? currency = null,
         string? touchdown = null,
         CancellationToken cancellationToken = default)
     {
@@ -125,7 +124,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         // den Versionen 5 und 6. Eine 7 zu schicken heisst, eine Nachricht zu behaupten, die es nicht
         // gibt - die Bank lehnt sie ab, und der Fehler sieht aus, als koenne sie keine Depots.
         var version = AccountVersion(session.Parameters, "HIWPDS", 6, 5, depot);
-        var request = FinTsMessages.Portfolio(depot, version, currency, touchdown);
+        var request = FinTsMessages.Portfolio(depot, version, touchdown);
         IReadOnlyList<FinTsSegment> segments = touchdown is null ? BusinessWithTan(session.Parameters, "HKWPD", request) : [request];
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var next = Advance(session, response);

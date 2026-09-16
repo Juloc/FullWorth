@@ -97,13 +97,23 @@ internal static class FinTsMessages
         return new(groups);
     }
 
-    internal static FinTsSegment Portfolio(FinTsAccount account, int version, string? currency = null, string? touchdown = null)
+    /// <summary>
+    /// HKWPD, die Depotaufstellung. Nach Stellen: 1 Depot, 2 Waehrung der Depotaufstellung,
+    /// 3 Kursqualitaet, 4 maximale Anzahl Eintraege, 5 Aufsetzpunkt. Alles ausser dem Depot ist
+    /// optional, und leer heisst "nicht angegeben".
+    ///
+    /// An Stelle 2 stand die Waehrung des Depots. Sie dort hinzuschreiben ist die Bitte, in dieser
+    /// Waehrung auszugeben - und die ING beantwortet sie mit "9210 Die Angabe einer Ausgabewaehrung
+    /// ist nicht zulaessig". Gebraucht wurde sie nie: die Bestaende kommen in MT535 mit ihrer eigenen
+    /// Waehrung, und genau die wird uebernommen. Deshalb gibt es den Parameter nicht mehr, statt ihn
+    /// nur nicht mehr zu belegen.
+    /// </summary>
+    internal static FinTsSegment Portfolio(FinTsAccount account, int version, string? touchdown = null)
     {
         var groups = new List<FinTsGroup>
         {
             Header("HKWPD", 0, version), AccountGroup(account, version),
-            FinTsGroup.Of(string.IsNullOrWhiteSpace(currency) ? FinTsValue.E() : FinTsValue.T(currency)),
-            FinTsGroup.Of(FinTsValue.E()), FinTsGroup.Of(FinTsValue.E())
+            FinTsGroup.Of(FinTsValue.E()), FinTsGroup.Of(FinTsValue.E()), FinTsGroup.Of(FinTsValue.E())
         };
         if (!string.IsNullOrWhiteSpace(touchdown)) groups.Add(FinTsGroup.Of(FinTsValue.T(touchdown)));
         return new(groups);

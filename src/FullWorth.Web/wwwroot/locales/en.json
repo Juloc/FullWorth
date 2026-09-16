@@ -880,7 +880,9 @@
     "health_selection_pending": "Selection pending",
     "depotValue": "from holdings",
     "depotValueHint": "The market value of the securities in this account. Net worth counts it as a securities account — the same amount, not twice.",
-    "retrySync": "Try again"
+    "retrySync": "Try again",
+    "copyReport": "Copy for an issue",
+    "reportCopied": "Error report copied."
   },
   "a11y": {
     "skipToContent": "Skip to content"

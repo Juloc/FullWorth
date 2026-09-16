@@ -568,7 +568,7 @@ public sealed class IngFinTsService(
         string? touchdown = null;
         for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
-            var result = await finTs.GetPortfolioAsync(bank, credentials, session, depot, depot.Currency, touchdown, ct);
+            var result = await finTs.GetPortfolioAsync(bank, credentials, session, depot, touchdown, ct);
             session = RequireDataOrInteractive(result);
             if (result.Value is not null) holdings.AddRange(result.Value);
             touchdown = result.Touchdown;

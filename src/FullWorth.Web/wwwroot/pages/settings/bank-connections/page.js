@@ -50,8 +50,11 @@ function connectionRow(x){
   const retryable=health==='error'||health==='partial_history';
   const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
   const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
+  // Der Code gehoert sichtbar in die Zeile. "Fehler beim Abgleich" allein ist nichts, was man
+  // weitergeben kann - und weitergeben will man ihn genau in diesem Moment.
+  const errorCode=x.lastError?` · ${x.lastError}`:'';
   const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}${esc(errorCode)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
   row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
   row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-retry-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
@@ -85,10 +88,54 @@ async function openSyncHistory(connection){
     const error=item.errorCode?` · ${esc(item.errorCode)}`:'';
     return `<div class="row"><div class="row-main"><div class="row-title">${esc(get(resultKey))}${error}</div><div class="row-sub">${esc(get('accounts.syncStartedAt'))}: ${esc(dateTime(item.startedAt))} · ${esc(get('accounts.syncFinishedAt'))}: ${esc(dateTime(item.completedAt))}</div></div><div class="row-side"><span class="row-sub">${esc(get('accounts.syncDuration'))}: ${esc(duration)}</span></div></div>`;
   }).join('');
-  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||emptyRow(get('accounts.syncHistoryEmpty'))}</div></div>`);
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||emptyRow(get('accounts.syncHistoryEmpty'))}</div>
+    <textarea class="report-text" data-report-text rows="8" readonly hidden></textarea>
+    <div class="dialog-actions"><button type="button" class="ghost" data-copy-report>${esc(get('accounts.copyReport'))}</button></div></div>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-copy-report]').onclick=ev=>copyReport(connection,history,ev.currentTarget);
   dlg.showModal();
 }
+
+// Was in ein Issue gehoert, in einem Stueck - und ohne alles, was dort nichts zu suchen hat.
+//
+// Bewusst NICHT dabei: IBAN, Kontonummern, Kontonamen, Sitzungskennungen. Ein Fehlerbericht ueber
+// eine Bankverbindung landet in einem oeffentlichen Repository; er darf die Verbindung beschreiben,
+// nicht ihren Inhaber. Die Verbindungs-Id ist eine zufaellige Guid dieser Installation und hilft
+// beim Wiederfinden in den Protokollen.
+function connectionReport(connection,history){
+  const line=(label,value)=>value?label+': '+value:null;
+  const runs=(history||[]).slice(0,5)
+    .filter(item=>item&&(item.startedAt||item.result||item.errorCode))
+    .map(item=>'  '+[item.startedAt,item.result,item.errorCode].filter(Boolean).join('  '));
+  return [
+    line('FullWorth',document.getElementById('app-version')?.textContent?.trim()),
+    line('Institut',connection.institutionName),
+    line('Anbieter',connection.provider),
+    line('Status',connection.status),
+    line('Zustand',connection.healthStatus),
+    line('Fehlercode',connection.lastError),
+    line('Letzter Sync',connection.lastSyncedAt),
+    line('Freigabe bis',connection.validUntil),
+    line('Naechster Sync',connection.nextSyncAllowedAt),
+    line('Verbindung',connection.id),
+    runs.length?'Letzte Laeufe:':null,
+    ...runs
+  ].filter(Boolean).join('\n');
+}
+
+async function copyReport(connection,history,button){
+  const text=connectionReport(connection,history);
+  try{
+    await navigator.clipboard.writeText(text);
+    toast(get('accounts.reportCopied'));
+  }catch{
+    // Ohne Zwischenablage-Recht ist der Bericht nicht verloren: markiert im Feld steht er da, und
+    // Strg+C tut den Rest. Eine Fehlermeldung waere hier die schlechtere Antwort.
+    const box=button.closest('.dialog-card').querySelector('[data-report-text]');
+    box.hidden=false;box.value=text;box.select();
+  }
+}
+
 async function syncConnection(id,button){
   if(button)button.disabled=true;
   try{
