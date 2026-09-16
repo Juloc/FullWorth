@@ -877,7 +877,9 @@
     "notFound": "This account no longer exists.",
     "noConnection": "No bank connection",
     "defaultGroupLocked": "The default group stays.",
-    "health_selection_pending": "Selection pending"
+    "health_selection_pending": "Selection pending",
+    "depotValue": "from holdings",
+    "depotValueHint": "The market value of the securities in this account. Net worth counts it as a securities account — the same amount, not twice."
   },
   "a11y": {
     "skipToContent": "Skip to content"

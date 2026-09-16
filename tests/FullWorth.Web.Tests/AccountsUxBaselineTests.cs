@@ -249,6 +249,32 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         }
     }
 
+    /// <summary>
+    /// Das Depot steht als eigene Zeile in der Kontenliste, und die Zeile erklaert sich.
+    ///
+    /// Sonst fragt man sich, warum die Summe ueber der Liste den Betrag enthaelt und das
+    /// Nettovermoegen ihn als Depot fuehrt - dasselbe Geld, einmal gezaehlt, an zwei Stellen benannt.
+    /// Beide Summen bleiben wie sie sind; erklaert wird der Unterschied, nicht wegdefiniert.
+    /// </summary>
+    [Fact]
+    public async Task ADepotRowSaysWhereItsValueComesFrom()
+    {
+        var js = await GetAsync("/pages/accounts/page.js");
+        var de = ReadAsset("locales", "de.json");
+        var en = ReadAsset("locales", "en.json");
+
+        Assert.Contains("x.accountType==='securities'", js);
+        Assert.Contains("accounts.depotValue", js);
+        Assert.Contains("accounts.depotValueHint", js);
+        // Unter dem Betrag, nicht neben dem Namen - dort steht die Frage.
+        Assert.Contains("${meaningLine}${depotLine}", js);
+        foreach (var locale in new[] { de, en })
+        {
+            Assert.Contains("\"depotValue\"", locale);
+            Assert.Contains("\"depotValueHint\"", locale);
+        }
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);

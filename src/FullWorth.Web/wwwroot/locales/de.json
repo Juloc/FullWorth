@@ -877,7 +877,9 @@
     "notFound": "Dieses Konto gibt es nicht (mehr).",
     "noConnection": "Ohne Bankverbindung",
     "defaultGroupLocked": "Die Standardgruppe bleibt bestehen.",
-    "health_selection_pending": "Auswahl offen"
+    "health_selection_pending": "Auswahl offen",
+    "depotValue": "aus Depotbestand",
+    "depotValueHint": "Der Kurswert der Wertpapiere in diesem Depot. Im Nettovermögen zählt er als Depot — derselbe Betrag, nicht zweimal."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

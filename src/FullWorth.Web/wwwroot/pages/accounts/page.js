@@ -118,6 +118,13 @@ function accountRow(x,groups){
   // under the amount, because that is where the question is asked.
   const meaningLine=balanceMeaningLine(x.latestBalance,get,esc);
   const convertedAmt=x.baseValue!=null?`<div class="amount-converted">${converted(x.baseValue,x.baseCurrency)}</div>`:'';
+  // Ein Depot steht seit #133 als eigene Zeile hier, mit dem Kurswert seiner Bestaende. Das erklaert
+  // auch den Unterschied, den man sonst sucht: die Summe ueber dieser Liste enthaelt den Wert, das
+  // Nettovermoegen zaehlt ihn als Depot - dasselbe Geld, einmal, nur an zwei Stellen benannt.
+  // accountType==='securities' schreibt genau eine Stelle (die FinTS-Depotuebernahme).
+  const depotLine=x.accountType==='securities'
+    ? `<div class="amount-meaning" title="${esc(get('accounts.depotValueHint'))}">${esc(get('accounts.depotValue'))}</div>`
+    : '';
   // A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency. The
   // headline shows one of them, so the others are listed here - they used to be invisible entirely.
   const otherWallets=(x.balances||[]).slice(1);
@@ -155,7 +162,7 @@ function accountRow(x,groups){
     : '';
   const row=document.createElement('div');row.className='row';
   const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${acctId(x.ibanLast4)}<span class="row-sub-wide">${providerName}${kind?` · ${esc(kind)}`:''}${dataAsOf}${balanceSource}</span>${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${walletsLine}${convertedAmt}</div>${moreBtn}</div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${acctId(x.ibanLast4)}<span class="row-sub-wide">${providerName}${kind?` · ${esc(kind)}`:''}${dataAsOf}${balanceSource}</span>${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${depotLine}${walletsLine}${convertedAmt}</div>${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   // Drill-down (UX rework §3): the account row itself opens that account's bookings; management
   // controls keep their own click and are excluded here.

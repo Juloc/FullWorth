@@ -134,6 +134,19 @@
         provider: 'finanzguru-import', product: 'Imported history', accountType: 'checking',
         currency: 'EUR', isActive: false, includeInNetWorth: false, groupId: 'g0', sortOrder: 5,
         latestBalance: null, balances: [], baseValue: null, baseCurrency: null
+      },
+      // Ein FinTS-Depot steht seit #133 als eigene Zeile in der Kontenliste, mit dem Kurswert seiner
+      // Bestaende. accountType 'securities' schreibt genau eine Stelle - die Depotuebernahme - und die
+      // Zeile erklaert darunter, warum derselbe Betrag im Nettovermoegen als Depot auftaucht.
+      {
+        id: 'a9', displayName: 'Direkt-Depot', institutionName: 'ING', providerDisplayName: null,
+        provider: 'fints', bankConnectionId: 'c3', product: 'Direkt-Depot', accountType: 'securities',
+        currency: 'EUR', isActive: true, includeInNetWorth: true, groupId: 'g0', sortOrder: 6,
+        latestBalance: {
+          amount: 18420.5, currency: 'EUR', balanceType: 'marketValue', source: 'provider',
+          referenceDate: iso('2026-09-10')
+        },
+        balances: [], baseValue: null, baseCurrency: null
       }
     ],
     // Seit #125 hat jeder Bereich eine Standardgruppe; Konten ohne eigene Gruppe stehen darin.
