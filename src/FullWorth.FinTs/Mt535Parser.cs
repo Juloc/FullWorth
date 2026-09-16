@@ -34,7 +34,10 @@ public static class Mt535Parser
     private static readonly Regex BlockEnd = new(@"^:16S:(?<name>\w+)\s*$", RegexOptions.Compiled);
     private static readonly Regex FieldStart = new(@"^:(?<tag>\d{2}[A-Z]?):(?<rest>.*)$", RegexOptions.Compiled);
     private static readonly Regex Isin = new(@"\b(?<isin>[A-Z]{2}[A-Z0-9]{9}\d)\b", RegexOptions.Compiled);
-    private static readonly Regex Amount = new(@"(?<currency>[A-Z]{3})?(?<value>-?\d+(?:[.,]\d+)?)\s*$", RegexOptions.Compiled);
+    // Das Dezimalkomma ist in SWIFT PFLICHT, die Stellen dahinter sind es nicht: eine runde Menge
+    // steht als "10," da. Deshalb \d* und nicht \d+ - mit \d+ passte der Ausdruck auf "10," nirgends,
+    // und aus der gemeldeten Menge wurde nichts.
+    private static readonly Regex Amount = new(@"(?<currency>[A-Z]{3})?(?<value>-?\d+(?:[.,]\d*)?)\s*$", RegexOptions.Compiled);
 
     /// <summary>Wahr, wenn der Text wie eine MT535-Aufstellung aussieht.</summary>
     public static bool LooksLikeStatement(string? text) =>
@@ -194,7 +197,8 @@ public static class Mt535Parser
         var match = Amount.Match(tail);
         if (!match.Success) return (null, null);
         // MT535 schreibt Dezimalstellen mit Komma; ein Punkt kommt nicht als Tausendertrenner vor.
-        var text = match.Groups["value"].Value.Replace(',', '.');
+        // "10," wird zu "10." und danach zu "10" - ein Trennzeichen ohne Stellen dahinter trennt nichts.
+        var text = match.Groups["value"].Value.Replace(',', '.').TrimEnd('.');
         if (!decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
             return (null, null);
         var currency = match.Groups["currency"].Success ? match.Groups["currency"].Value : null;
