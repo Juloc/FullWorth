@@ -574,6 +574,11 @@ public sealed class IngFinTsService(
             touchdown = result.Touchdown;
             if (string.IsNullOrWhiteSpace(touchdown)) break;
         }
+        // Null Bestaende ist kein Nichts, sondern eine Frage: hat die Bank nichts geschickt, sieht ihr
+        // Format anders aus, oder kommt der Parser nicht zurecht? Die Form der Antwort sagt es.
+        if (holdings.Count == 0)
+            logger.LogWarning("ING FinTS depot returned no holdings. Response={Shape}", finTs.LastPortfolioShape);
+
         var depotKey = AccountHash(depot);
         var depotName = depot.ProductName ?? "ING Direkt-Depot";
 

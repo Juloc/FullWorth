@@ -271,6 +271,32 @@ internal static class FinTsResponseParser
         return result;
     }
 
+    /// <summary>
+    /// Was in der Antwort auf einen Depotabruf stand - der Bauplan, nicht der Inhalt.
+    ///
+    /// Genau die Unterscheidung, die gefehlt hat: kein HIWPD (die Bank hat nichts geliefert), HIWPD
+    /// ohne erkanntes MT535 (das Format sieht anders aus als erwartet), MT535 erkannt aber nichts
+    /// gelesen (der Parser kommt damit nicht zurecht). Alle drei sahen vorher gleich aus - naemlich
+    /// nach einem leeren Depot.
+    ///
+    /// Protokolliert werden nur Anzahl und Laenge. Namen, Kennungen und Betraege bleiben drin.
+    /// </summary>
+    public static string HoldingsShape(FinTsResponse response, int parsed)
+    {
+        var segments = response.FindAll("HIWPD").ToArray();
+        var kinds = response.Segments.Select(segment => segment.Type).Distinct().ToArray();
+        var parts = new List<string> { "Segments=" + string.Join("+", kinds), "HIWPD=" + segments.Length };
+        foreach (var segment in segments)
+        {
+            var text = Mt535Text(segment);
+            parts.Add(text is null
+                ? $"v{segment.Version}:kein-MT535:{segment.Groups.Count - 1}-Felder"
+                : $"v{segment.Version}:MT535:{text.Length}-Zeichen");
+        }
+        parts.Add($"Bestaende={parsed}");
+        return string.Join(", ", parts);
+    }
+
     /// <summary>Die MT535-Aufstellung des Segments - als Binaerfeld oder, seltener, als Text.</summary>
     private static string? Mt535Text(FinTsSegment segment)
     {

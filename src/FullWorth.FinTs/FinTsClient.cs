@@ -131,6 +131,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         if (response.NeedsTan) return TanResult<IReadOnlyList<FinTsHolding>>(response, next);
         response.ThrowOnError(lastSentShape);
         var holdings = FinTsResponseParser.Holdings(response);
+        LastPortfolioShape = FinTsResponseParser.HoldingsShape(response, holdings.Count);
         return holdings.Count == 0 && response.Touchdown is null
             ? FinTsResult<IReadOnlyList<FinTsHolding>>.Empty(next)
             : FinTsResult<IReadOnlyList<FinTsHolding>>.Success(holdings, next, response.Touchdown);
@@ -193,6 +194,19 @@ public sealed class FinTsClient(IFinTsTransport transport)
     /// Der Bauplan der zuletzt gesendeten Nachricht (#130 §11): Segmentart, Version, Anzahl der
     /// Datenelemente. Keine Werte - die Nachricht selbst traegt im PIN/TAN-Verfahren die PIN.
     /// </summary>
+    /// <summary>
+    /// Wie die Antwort auf den letzten Depotabruf AUSSAH - Segmente, erkanntes MT535, Zahl der
+    /// Bestaende. Keine Namen, keine Kennungen, keine Betraege.
+    ///
+    /// Die gesendete Form (<c>SentShape</c>) hat drei Protokollfehler hintereinander erklaert. Fuer
+    /// die Antwort gab es nichts Vergleichbares, und deshalb war "null Bestaende" nicht von "die
+    /// Bank hat nichts geschickt" zu unterscheiden - bei einem Depot mit vier ETF-Positionen.
+    ///
+    /// FinTS-Antworten werden bewusst nie im Klartext protokolliert; ein Depotauszug ist der Inhalt
+    /// eines Vermoegens. Die FORM zu beschreiben verraet davon nichts.
+    /// </summary>
+    public string LastPortfolioShape { get; private set; } = string.Empty;
+
     private IReadOnlyList<FinTsSegmentShape> lastSentShape = [];
 
     private async Task<FinTsResponse> SendAsync(FinTsBankProfile bank, FinTsCredentials credentials, FinTsSessionState session, IEnumerable<FinTsSegment> segments, string? tan, CancellationToken cancellationToken)

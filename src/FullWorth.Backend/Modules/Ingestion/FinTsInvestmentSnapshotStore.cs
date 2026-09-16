@@ -121,6 +121,18 @@ public sealed class FinTsInvestmentSnapshotStore(
         DbConnection sql, Guid spaceId, Guid portfolioId, Guid accountId,
         FinTsInvestmentSnapshotRequest request, DateTimeOffset now, CancellationToken ct)
     {
+        // Hat die Bank KEINEN Bestand gemeldet, wird kein Wert geschrieben - auch keine Null.
+        //
+        // Gemeldet als "Depot 0 EUR, obwohl es ueber 3000 sein sollten": der Abruf lieferte keine
+        // Positionen, und damit war die Bewertung nicht etwa unvollstaendig, sondern vollstaendig
+        // NULL. Aus "ich habe nichts bekommen" wurde so die Aussage "du hast nichts" - und die stand
+        // dann als Zahl in der Kontenliste.
+        //
+        // Dasselbe Prinzip wie beim fehlenden Umrechnungskurs: was unbekannt ist, wird als unbekannt
+        // gezeigt und nicht als Null. Ein Depot ohne Zeile sagt "noch kein Wert"; eine 0 behauptet
+        // etwas ueber das Geld des Eigentuemers.
+        if (request.Holdings.Count == 0) return;
+
         var portfolio = await valuationStore.FindPortfolioAsync(spaceId, portfolioId, ct);
         if (portfolio is null) return;
 

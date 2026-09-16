@@ -264,6 +264,49 @@ public sealed class FinTsDepotAccountRowTests
         return document.RootElement.Clone();
     }
 
+    /// <summary>
+    /// Gemeldet: "Depot 0 EUR, obwohl es ueber 3000 sein sollten" - bei vier ETF-Positionen.
+    ///
+    /// Der Abruf hatte nichts geliefert, und damit war die Bewertung nicht unvollstaendig, sondern
+    /// vollstaendig NULL: kein Bestand fehlte, weil keiner da war. Aus "ich habe nichts bekommen"
+    /// wurde so die Aussage "du hast nichts", und die stand als Zahl in der Kontenliste.
+    ///
+    /// Dieselbe Regel wie beim fehlenden Umrechnungskurs, nur eine Ebene hoeher: was unbekannt ist,
+    /// bleibt unbekannt. Niemals 1:1, niemals 0.
+    /// </summary>
+    [Fact]
+    public async Task ADepotWithoutAnyHoldingsNeverClaimsAValueOfZero()
+    {
+        await using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var connectionId = Guid.NewGuid();
+
+        await SeedConnectionAsync(factory, owner, connectionId);
+        await IngestDepotAccountAsync(client, connectionId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/internal/banking/fints/investment-snapshot")
+        {
+            Content = JsonContent.Create(new
+            {
+                connectionId,
+                depotKey = DepotKey,
+                name = "ING Direkt-Depot",
+                currency = "EUR",
+                asOf = DateOnly.FromDateTime(DateTime.UtcNow),
+                holdings = Array.Empty<object>()
+            })
+        };
+        request.Headers.Add("X-FullWorth-Ingest-Key", BackendWebApplicationFactory.IngestKey);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(request)).StatusCode);
+
+        var depot = await DepotRowAsync(client, owner);
+
+        Assert.True(
+            !depot.TryGetProperty("latestBalance", out var balance) || balance.ValueKind == JsonValueKind.Null,
+            "Ohne gemeldete Bestaende darf die Zeile keine Null behaupten - sie weiss den Wert nicht.");
+    }
+
     private static async Task<HttpResponseMessage> PostSnapshotAsync(
         HttpClient client, Guid connectionId, DateOnly asOf, object holding)
     {
