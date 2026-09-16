@@ -172,6 +172,7 @@ GET              /api/import-jobs/{id:guid}
 GET              /api/import-jobs/{id:guid}/candidates
 GET              /api/import-mapping/jobs/{jobId:guid}/summary
 GET              /api/import/finanzguru/accounts
+GET              /api/import/finanzguru/accounts/{importAccountId:guid}/link-preview
 GET              /api/income-schedules/
 GET              /api/income-schedules/detection
 GET              /api/insights/

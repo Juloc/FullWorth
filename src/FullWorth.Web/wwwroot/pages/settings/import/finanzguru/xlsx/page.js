@@ -21,7 +21,13 @@ const text={
     linking:'Wird verbunden …',confirming:'Historie wird bestätigt …',linked:'Importhistorie verbunden.',
     confirmed:'Importhistorie bestätigt.',transactions:'Buchungen',period:'Zeitraum',iban:'IBAN-Endung',
     moved:'verschoben',merged:'zusammengeführt',trusted:'für Vermögenshistorie freigegeben',
-    addMissing:'Fehlende Buchung ergänzen',inactive:'inaktiv',currencyMismatch:'Währung passt nicht zum Importkonto.'
+    addMissing:'Fehlende Buchung ergänzen',inactive:'inaktiv',currencyMismatch:'Währung passt nicht zum Importkonto.',
+    matchesTitle:'Doppelte Buchungen',matchesNone:'Keine doppelten Buchungen gefunden.',
+    matchesHint:'{n} Buchungen kommen auf beiden Seiten vor. Sie werden zu je einer zusammengeführt - wähle ab, was getrennt bleiben soll.',
+    movedHint:'{n} weitere Buchungen ziehen unverändert mit um.',
+    winner:'Welche Fassung behalten?',winnerTarget:'Die des Zielkontos',winnerImport:'Die importierte',
+    winnerHint:'Betrifft Kategorie, Aufteilung und Notiz. Die Buchung des Zielkontos bleibt in jedem Fall bestehen - sie trägt den Schlüssel, an dem die Bank sie wiedererkennt.',
+    loadingMatches:'Treffer werden geprüft …'
   },
   en:{
     subtitle:'Import historical transactions from Finanzguru.',back:'Back',heading:'Import all transactions',
@@ -41,7 +47,13 @@ const text={
     linking:'Linking …',confirming:'Confirming history …',linked:'Imported history linked.',
     confirmed:'Imported history confirmed.',transactions:'Transactions',period:'Period',iban:'IBAN suffix',
     moved:'moved',merged:'merged',trusted:'approved for wealth history',
-    addMissing:'Add missing booking',inactive:'inactive',currencyMismatch:'Currency does not match the imported account.'
+    addMissing:'Add missing booking',inactive:'inactive',currencyMismatch:'Currency does not match the imported account.',
+    matchesTitle:'Duplicate bookings',matchesNone:'No duplicate bookings found.',
+    matchesHint:'{n} bookings appear on both sides. Each pair is merged into one — uncheck what should stay separate.',
+    movedHint:'{n} further bookings move across unchanged.',
+    winner:'Which version to keep?',winnerTarget:'The target account’s',winnerImport:'The imported one',
+    winnerHint:'Affects category, split and note. The target account’s booking always survives — it carries the key the bank recognises it by.',
+    loadingMatches:'Checking matches …'
   }
 }[lang];
 
@@ -197,15 +209,75 @@ function buildImportLinkCard(item){
 
   const button=node('button','primary-action',text.link);
   button.type='button';
+
+  // Was das Zuordnen tun wird, BEVOR es etwas tut. Vorher war "Verbinden" ein Knopf, nach dem
+  // Buchungen verschwunden waren, ohne dass jemand vorher sagen konnte, welche.
+  const matches=node('div','import-link-matches');
+  const excluded=new Set();
+  let preferImport=false;
+  const loadMatches=async()=>{
+    const target=currentTarget(select);
+    matches.innerHTML='';excluded.clear();
+    if(!target)return;
+    matches.append(node('div','row-sub',text.loadingMatches));
+    let preview;
+    try{
+      preview=await sharedApi(
+        `api/import/finanzguru/accounts/${encodeURIComponent(item.id)}/link-preview`
+        +`?fullWorthSpaceId=${encodeURIComponent(space.id)}&targetAccountId=${encodeURIComponent(target.id)}`);
+    }catch(error){console.error(error);matches.innerHTML='';return;}
+    matches.innerHTML='';
+    const rows=preview.matches||[];
+    if(!rows.length){
+      matches.append(node('div','row-sub',text.matchesNone));
+      if(preview.movedWithoutMatch)matches.append(
+        node('div','row-sub',text.movedHint.replace('{n}',preview.movedWithoutMatch)));
+      return;
+    }
+    matches.append(node('div','import-link-title',text.matchesTitle));
+    matches.append(node('div','row-sub',text.matchesHint.replace('{n}',rows.length)));
+
+    const choice=node('div','import-link-winner');
+    for(const [value,label] of [['target',text.winnerTarget],['import',text.winnerImport]]){
+      const option=node('label','check');
+      const radio=document.createElement('input');
+      radio.type='radio';radio.name=`winner-${item.id}`;radio.value=value;
+      radio.checked=value==='target';
+      radio.addEventListener('change',()=>{if(radio.checked)preferImport=value==='import';});
+      option.append(radio,node('span','',label));
+      choice.append(option);
+    }
+    matches.append(node('div','row-sub',text.winner),choice,node('div','row-sub',text.winnerHint));
+
+    for(const row of rows){
+      const line=node('label','check import-link-match');
+      const box=document.createElement('input');
+      box.type='checkbox';box.checked=true;
+      box.addEventListener('change',()=>{
+        if(box.checked)excluded.delete(row.importTransactionId);
+        else excluded.add(row.importTransactionId);
+      });
+      const label=[row.date,row.counterparty||row.importDescription||'',`${row.amount} ${row.currency}`]
+        .filter(Boolean).join(' · ');
+      line.append(box,node('span','',label));
+      matches.append(line);
+    }
+    if(preview.movedWithoutMatch)matches.append(
+      node('div','row-sub',text.movedHint.replace('{n}',preview.movedWithoutMatch)));
+  };
+
   const sync=()=>balanceControl(currentTarget(select),balanceField,balance,balanceHint);
-  select.addEventListener('change',sync);sync();
+  select.addEventListener('change',()=>{sync();loadMatches().catch(console.error);});
+  sync();loadMatches().catch(console.error);
 
   button.addEventListener('click',async()=>{
     const target=currentTarget(select);
     if(!target)return;
     if(target.currency!==item.currency){linkStatus.textContent=text.currencyMismatch;return;}
+    // Der Kontostand ist optional, und das war er auch vorher schon - nur sperrte diese Zeile das
+    // Zuordnen, solange keiner dastand. Ohne Stand zaehlt das Konto als unvollstaendig; das sagt die
+    // Vermoegensseite, und es ist jederzeit nachtragbar.
     const raw=balance.value.trim();
-    if(!target.hasCurrentBalance&&raw===''){linkStatus.textContent=text.requiredBalance;balance.focus();return;}
     button.disabled=true;select.disabled=true;balance.disabled=true;linkStatus.textContent=text.linking;
     try{
       const data=await sharedApi(
@@ -213,7 +285,9 @@ function buildImportLinkCard(item){
         jsonBody({
           targetAccountId:target.id,
           currentBalance:raw===''?null:Number(raw),
-          currentBalanceCurrency:target.currency
+          currentBalanceCurrency:target.currency,
+          preferImport,
+          excludedImportTransactionIds:[...excluded]
         })
       );
       actionSummary(data,target.id,text.linked);
@@ -225,7 +299,7 @@ function buildImportLinkCard(item){
   });
 
   controls.append(targetField,balanceField,button);
-  card.append(controls);
+  card.append(controls,matches);
   return card;
 }
 

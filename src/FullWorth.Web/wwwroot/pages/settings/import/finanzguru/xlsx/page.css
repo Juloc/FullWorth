@@ -30,3 +30,8 @@
   .import-link-controls{grid-template-columns:1fr}
   .import-link-controls .primary-action{width:100%}
 }
+/* Die Trefferliste zum Zuordnen: was zusammenfaellt, welche Fassung gewinnt, und was getrennt
+   bleiben soll. Tokens wie ueberall - eigene Farben gibt es hier nicht. */
+.import-link-matches{display:grid;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.import-link-winner{display:flex;flex-wrap:wrap;gap:16px}
+.import-link-match{gap:10px}

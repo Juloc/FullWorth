@@ -130,6 +130,43 @@ public sealed class StatementImportIntegrationTests
         });
     }
 
+    /// <summary>
+    /// Wer den Import zurueckgibt, will ihn ungeschehen machen. Ein Konto, das dieser Import selbst
+    /// angelegt hat und in dem danach nichts mehr steht, hat der Nutzer nie bestellt - es geht mit.
+    /// Ein Konto, das er inzwischen benutzt hat, bleibt.
+    /// </summary>
+    [Fact]
+    public async Task Rolling_back_removes_the_account_the_import_created()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedAsync(factory, owner, account);
+
+        using var upload = await UploadAsync(client, owner, Mt940, "statement.sta");
+        using var uploaded = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var jobId = uploaded.RootElement.GetProperty("jobId").GetGuid();
+
+        using var commit = UserRequest(HttpMethod.Post,
+            $"/api/import-jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        commit.Content = JsonContent.Create(new { newAccountName = "Wegwerfkonto" });
+        using var committed = await client.SendAsync(commit);
+        Assert.Equal(HttpStatusCode.OK, committed.StatusCode);
+
+        Guid createdId = Guid.Empty;
+        await factory.SeedAsync(async db =>
+            createdId = (await db.Accounts.AsNoTracking().SingleAsync(x => x.DisplayName == "Wegwerfkonto")).Id);
+
+        using var rollback = UserRequest(HttpMethod.Post,
+            $"/api/import-jobs/{jobId:D}/rollback?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        using var rolledBack = await client.SendAsync(rollback);
+        Assert.Equal(HttpStatusCode.OK, rolledBack.StatusCode);
+
+        await factory.SeedAsync(async db =>
+            Assert.False(await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == createdId)));
+    }
+
     // A monthly statement overlaps the previous one. Re-importing must not double the history.
     [Fact]
     public async Task Re_importing_the_same_statement_adds_nothing()
