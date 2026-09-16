@@ -166,8 +166,17 @@ function accountRow(x,groups){
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   // Drill-down (UX rework §3): the account row itself opens that account's bookings; management
   // controls keep their own click and are excluded here.
+  //
+  // Ein Depot ist die Ausnahme, und zwar keine willkuerliche: es HAT keine Buchungen. Die Bank
+  // liefert dafuer eine Bestandsaufstellung (HKWPD), keine Umsaetze - Kaeufe und Verkaeufe waeren
+  // ein eigener Geschaeftsvorfall. Wer auf ein Depot klickt, landete deshalb zuverlaessig in einer
+  // leeren Liste, die aussah, als fehle etwas. Gemeint ist die Vermoegensansicht: dort stehen die
+  // Positionen und ihr Verlauf.
   row.dataset.accountId=x.id;row.classList.add('is-drillable');row.setAttribute('role','button');row.tabIndex=0;
-  const drill=e=>{if(e.target.closest('button,a,input,select'))return;ctx.showView('transactions',{query:'accountId='+encodeURIComponent(x.id)})};
+  const target=x.accountType==='securities'
+    ? ()=>ctx.showView('networth')
+    : ()=>ctx.showView('transactions',{query:'accountId='+encodeURIComponent(x.id)});
+  const drill=e=>{if(e.target.closest('button,a,input,select'))return;target()};
   row.addEventListener('click',drill);
   row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();drill(e)}});
   return row;

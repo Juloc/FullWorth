@@ -354,6 +354,25 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
             Assert.DoesNotContain(forbidden, report);
     }
 
+    /// <summary>
+    /// Ein Klick auf ein Depot fuehrt zur Vermoegensansicht, nicht in die Buchungen.
+    ///
+    /// "Wenn ich draufklicke will ich meine ETF und den Verlauf sehen" - stattdessen kam eine leere
+    /// Liste. Kein Zufall und kein Datenfehler: ein Depot HAT keine Buchungen. Die Bank liefert dafuer
+    /// eine Bestandsaufstellung (HKWPD), keine Umsaetze; Kaeufe waeren ein eigener Geschaeftsvorfall.
+    /// Die leere Liste war also technisch korrekt und trotzdem die falsche Antwort auf den Klick.
+    /// </summary>
+    [Fact]
+    public async Task ClickingADepotOpensTheWealthViewInsteadOfAnEmptyBookingList()
+    {
+        var js = await GetAsync("/pages/accounts/page.js");
+
+        Assert.Contains("x.accountType==='securities'", js);
+        Assert.Contains("ctx.showView('networth')", js);
+        // Und jedes andere Konto geht weiterhin in seine Buchungen.
+        Assert.Contains("ctx.showView('transactions',{query:'accountId='", js);
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);
