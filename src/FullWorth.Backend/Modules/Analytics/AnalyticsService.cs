@@ -238,6 +238,15 @@ public sealed class AnalyticsService(
             .Where(row => !investment.ExcludedLinkedAccountIds.Contains(row.AccountId))
             .Select(row => (row.Amount, row.Currency)));
 
+        // Ein Konto, das mitzaehlen soll, aber noch keinen Kontostand hat, liefert gar keine
+        // Balance-Zeile - es fiel hier lautlos als 0 in die Summe. Das ist derselbe Bruch wie ein
+        // fehlender Wechselkurs: kein Wert ist nicht null. Seit ein Import solche Konten anlegt, ist
+        // es der Normalfall direkt nach dem Import und nicht mehr der Randfall.
+        var balancedAccountIds = accountBalances.Select(row => row.AccountId).ToHashSet();
+        if (accountIds.Any(id => !balancedAccountIds.Contains(id)
+                                 && !investment.ExcludedLinkedAccountIds.Contains(id)))
+            incomplete = true;
+
         var assetRows = await db.Assets.AsNoTracking()
             .Where(asset => asset.FullWorthSpaceId == fullWorthSpaceId && asset.IncludeInNetWorth)
             .Select(asset => new { asset.CurrentValue, asset.Currency })

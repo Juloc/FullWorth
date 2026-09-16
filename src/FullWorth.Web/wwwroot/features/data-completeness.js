@@ -115,8 +115,17 @@ export function finanzguruCompletenessNotice(state, options = {}) {
     }
   }
 
+  // Zwei Ziele, nicht eines. "Verbinden" und "Historie bestätigen" sind wirklich Finanzguru-Schritte
+  // und gehoeren auf dessen Seite. Ein fehlender Kontostand ist es nicht: seit jeder Import ein
+  // richtiges Konto anlegt, kann das jedes verbindungslose Konto treffen, und eintragen laesst er
+  // sich in der Kontenliste - dort steht die Zeile "Kontostand hinterlegen". Der Knopf schickte den
+  // Nutzer bisher auf die Finanzguru-Seite, auf der sein Konto gar nicht steht.
+  const href = state.needsBalance
+    ? '/accounts'
+    : '/settings/import/finanzguru/xlsx#import-link-heading';
+
   return `<div class="data-completeness-warning" role="status">
     <div class="data-completeness-copy"><strong>${esc(title)}</strong><span>${esc(body)}</span></div>
-    <a class="ghost data-completeness-action" href="/settings/import/finanzguru/xlsx#import-link-heading">${esc(action)}</a>
+    <a class="ghost data-completeness-action" href="${href}">${esc(action)}</a>
   </div>`;
 }
