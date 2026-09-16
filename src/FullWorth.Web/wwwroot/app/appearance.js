@@ -4,6 +4,14 @@ const STORAGE = Object.freeze({
   tintLogo: 'finance.color.tintLogo'
 });
 
+const LEGACY_TYPOGRAPHY_KEYS = Object.freeze([
+  'finance.font',
+  'finance.typography.baseSize',
+  'finance.typography.weight',
+  'finance.typography.letterSpacing',
+  'finance.typography.lineHeight'
+]);
+
 // Empty means "leave the monochrome tokens alone", which is not the same as a colour that happens to
 // equal the default: it keeps tokens.css in charge, so light and dark each keep their own value.
 const BRAND_DEFAULTS = Object.freeze({ primary: '', secondary: '', tintLogo: false });
@@ -215,9 +223,10 @@ function makeColorControls(copy, appearance) {
     button.dataset.brandPreset = preset.key;
     button.title = copy.presetNames[preset.key] || preset.key;
     button.setAttribute('aria-label', button.title);
-    for (const color of [preset.primary, preset.secondary]) {
+    for (const [colorVar, color] of [['--preset-a', preset.primary], ['--preset-b', preset.secondary]]) {
       const swatch = document.createElement('span');
       swatch.className = 'appearance-swatch';
+      swatch.dataset.presetSlot = colorVar;
       if (color) swatch.style.backgroundColor = color;
       button.appendChild(swatch);
     }
@@ -293,6 +302,7 @@ function scheduleRefresh() {
 }
 
 export function initAppearance() {
+  for (const key of LEGACY_TYPOGRAPHY_KEYS) localStorage.removeItem(key);
   applyAppearance(getAppearance(), { persist: false });
   ensureSettingsControls();
 
