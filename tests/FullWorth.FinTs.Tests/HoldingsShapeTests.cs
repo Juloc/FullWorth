@@ -75,6 +75,47 @@ public sealed class HoldingsShapeTests
         Assert.DoesNotContain("120", shape);
     }
 
+    /// <summary>
+    /// "Ich hab nur 3 von 4 ETF" - eine andere Frage als null Bestaende. Ein Block ist da und faellt
+    /// trotzdem heraus, und zwei Stellen koennen das tun, beide stumm: ohne :35B: wird er verworfen,
+    /// ohne lesbare Menge bei der Uebernahme uebersprungen.
+    ///
+    /// Die Feldkennungen sagen, welcher Fall es ist - ohne den Inhalt zu verraten.
+    /// </summary>
+    [Fact]
+    public void TheShapeNamesTheFieldsOfEveryHolding()
+    {
+        var shape = FinTsResponseParser.HoldingsShape(Response(Acknowledgement(), Portfolio(Statement())), parsed: 1);
+
+        Assert.Contains("19A+35B+90B+93B", shape);
+    }
+
+    /// <summary>
+    [Fact]
+    public void AHoldingWithoutAQuantityIsVisibleInTheFieldShape()
+    {
+        var statement = string.Join("\r\n",
+            ":16R:FIN", ":35B:ISIN DE0007164600", "MIT MENGE", ":93B::AGGR//UNIT/5,", ":16S:FIN",
+            ":16R:FIN", ":35B:ISIN IE00B4L5Y983", "OHNE MENGE", ":90B::MRKT//ACTU/EUR10,", ":16S:FIN");
+
+        var shape = FinTsResponseParser.HoldingsShape(
+            Response(Acknowledgement(), Portfolio(statement)), parsed: 2);
+
+        Assert.Contains("35B+90B", shape);
+        var holdings = Mt535Parser.Parse(statement);
+        Assert.Equal(2, holdings.Count);
+        Assert.Equal(0m, holdings[1].Quantity);
+    }
+
+    /// <summary>Und wenn jeder Bestand seine Menge hat, steht davon nichts da.</summary>
+    [Fact]
+    public void NothingIsSaidWhenEveryHoldingHasAQuantity()
+    {
+        var shape = FinTsResponseParser.HoldingsShape(Response(Acknowledgement(), Portfolio(Statement())), parsed: 1);
+
+        Assert.DoesNotContain("ohne-Menge", shape);
+    }
+
     private static string Statement() => string.Join("\r\n",
         ":16R:GENL",
         ":16S:GENL",

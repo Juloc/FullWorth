@@ -40,41 +40,50 @@ public static class Mt535Parser
     public static bool LooksLikeStatement(string? text) =>
         !string.IsNullOrWhiteSpace(text) && text.Contains(":16R:", StringComparison.Ordinal) && text.Contains(":35B:", StringComparison.Ordinal);
 
-    /// <summary>Die Bestaende der Aufstellung, in der Reihenfolge, in der sie dastehen.</summary>
-    public static IReadOnlyList<FinTsHolding> Parse(string statement)
-    {
-        var holdings = new List<FinTsHolding>();
-        if (string.IsNullOrWhiteSpace(statement)) return holdings;
+    /// <summary>
+    /// Welche Felder in jedem FIN-Block standen - die KENNUNGEN, nicht ihr Inhalt.
+    ///
+    /// "3 von 4 ETF" ist eine andere Frage als "null Bestaende": ein Block ist da und faellt trotzdem
+    /// heraus. Zwei Stellen koennen das tun, und beide taten es stumm - ein Bestand ohne :35B: wird
+    /// verworfen, und einer ohne lesbare Menge wird bei der Uebernahme uebersprungen.
+    ///
+    /// Die Tags sagen, welcher Fall es ist: fehlt dem vierten Block das Mengenfeld, steht seine Menge
+    /// in einem Feld, das hier nicht gelesen wird, oder fehlt die Kennung. Namen, Kennnummern und
+    /// Betraege bleiben drin, wo sie hingehoeren.
+    /// </summary>
+    public static IReadOnlyList<string> FieldShape(string statement) =>
+        Blocks(statement).Select(block => string.Join("+", block.Keys.Order(StringComparer.Ordinal))).ToArray();
 
-        // Ein Feld darf ueber mehrere Zeilen gehen (der Name in :35B: tut es fast immer). Erst werden
-        // die Zeilen deshalb zu Feldern zusammengefasst, und danach die Bloecke gelesen.
-        var lines = statement.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-        // Der Bestand ist der FIN-Block. Nur er.
-        //
-        // Hier wurde vorher ein umschliessendes :16R:SUBSAFE VERLANGT, und ohne das wurde keine
-        // einzige Zeile gelesen. Die ING schickt keines - ihre FIN-Bloecke stehen direkt nach GENL.
-        // Das Ergebnis war ein Depot mit vier ETFs und null Bestaenden, waehrend die Bank 1388
-        // Zeichen MT535 geliefert hatte:
-        //
-        //   HIWPD=1, v6:MT535:1388-Zeichen, Bestaende=0
-        //
-        // SUBSAFE ist eine Klammer, kein Inhalt, und in MT535 nicht garantiert. Was zaehlt, ist FIN:
-        // alles zwischen :16R:FIN und dem zugehoerigen :16S:FIN gehoert zu EINEM Bestand, auch die
-        // Felder seiner Unterbloecke (FINSUB, SUBBAL). Alles ausserhalb - GENL, ADDINFO - ist keiner.
+    /// <summary>Die Bestaende der Aufstellung, in der Reihenfolge, in der sie dastehen.</summary>
+    public static IReadOnlyList<FinTsHolding> Parse(string statement) =>
+        Blocks(statement).Select(Build).OfType<FinTsHolding>().ToArray();
+
+    /// <summary>
+    /// Die FIN-Bloecke der Aufstellung, jeder als seine Felder. Nur die Zerlegung, keine Deutung.
+    ///
+    /// Der Bestand ist der FIN-Block. Nur er.
+    ///
+    /// Hier wurde vorher ein umschliessendes :16R:SUBSAFE VERLANGT, und ohne das wurde keine
+    /// einzige Zeile gelesen. Die ING schickt keines - ihre FIN-Bloecke stehen direkt nach GENL.
+    /// Das Ergebnis war ein Depot mit vier ETFs und null Bestaenden, waehrend die Bank 1388
+    /// Zeichen MT535 geliefert hatte:
+    ///
+    ///   HIWPD=1, v6:MT535:1388-Zeichen, Bestaende=0
+    ///
+    /// SUBSAFE ist eine Klammer, kein Inhalt, und in MT535 nicht garantiert. Was zaehlt, ist FIN:
+    /// alles zwischen :16R:FIN und dem zugehoerigen :16S:FIN gehoert zu EINEM Bestand, auch die
+    /// Felder seiner Unterbloecke (FINSUB, SUBBAL). Alles ausserhalb - GENL, ADDINFO - ist keiner.
+    /// </summary>
+    private static IEnumerable<Dictionary<string, List<string>>> Blocks(string statement)
+    {
+        if (string.IsNullOrWhiteSpace(statement)) yield break;
+
+        // Ein Feld darf ueber mehrere Zeilen gehen (der Name in :35B: tut es fast immer).
         var depth = 0;
         Dictionary<string, List<string>>? current = null;
         string? openTag = null;
 
-        void Flush()
-        {
-            if (current is null) return;
-            var holding = Build(current);
-            if (holding is not null) holdings.Add(holding);
-            current = null;
-            openTag = null;
-        }
-
-        foreach (var raw in lines)
+        foreach (var raw in statement.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
         {
             var line = raw.TrimEnd();
             if (line.Length == 0) continue;
@@ -98,8 +107,10 @@ public static class Mt535Parser
             {
                 openTag = null;
                 if (current is null) continue;
-                depth--;
-                if (depth <= 0) { Flush(); depth = 0; }
+                if (--depth > 0) continue;
+                yield return current;
+                current = null;
+                depth = 0;
                 continue;
             }
 
@@ -119,8 +130,8 @@ public static class Mt535Parser
                 open[^1] = (open[^1] + "\n" + line.Trim()).Trim();
         }
 
-        Flush();
-        return holdings;
+        // Eine Aufstellung, der das letzte :16S:FIN fehlt, ist trotzdem eine Aufstellung.
+        if (current is not null) yield return current;
     }
 
     private static FinTsHolding? Build(Dictionary<string, List<string>> fields)

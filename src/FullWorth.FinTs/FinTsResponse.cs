@@ -291,7 +291,7 @@ internal static class FinTsResponseParser
             var text = Mt535Text(segment);
             parts.Add(text is null
                 ? $"v{segment.Version}:kein-MT535:{segment.Groups.Count - 1}-Felder"
-                : $"v{segment.Version}:MT535:{text.Length}-Zeichen");
+                : $"v{segment.Version}:MT535:{text.Length}-Zeichen:[{string.Join("|", Mt535Parser.FieldShape(text))}]");
         }
         parts.Add($"Bestaende={parsed}");
         return string.Join(", ", parts);
