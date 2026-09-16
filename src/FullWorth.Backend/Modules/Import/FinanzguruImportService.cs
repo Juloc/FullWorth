@@ -40,7 +40,8 @@ public sealed class FinanzguruImportService(
     FullWorthDbContext db,
     FinanzguruWorkbookReader reader,
     AuditService audit,
-    FieldCipher cipher)
+    FieldCipher cipher,
+    AccountStore accounts)
 {
     private const string Provider = "finanzguru-import";
 
@@ -303,46 +304,29 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
             {
                 if (!importedAccount.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner))
                     throw new FinanzguruImportConflictException("A matching Finanzguru import account already exists in this FullWorth Space but is owned by another user.");
-                // Only a bare history container is re-archived. Once the owner has given this account a
-                // balance it is a real account, and a re-import must not take it back out of net worth.
-                var anchored = await db.BalanceSnapshots.AsNoTracking()
-                    .AnyAsync(balance => balance.AccountId == importedAccount.Id, ct);
-                if (!anchored)
-                {
-                    importedAccount.IsActive = false;
-                    importedAccount.IncludeInNetWorth = false;
-                }
+                // Ein zweiter Import derselben Quelle fasst das Konto nicht mehr an. Hier stand die
+                // Gegenprobe "hat es einen Kontostand?" und, wenn nicht, ein Zurueckstufen auf
+                // archiviert und ausserhalb des Vermoegens - was jeden Re-Import zum Ruecknehmer einer
+                // Nutzerentscheidung machte. Ein Importkonto ist jetzt von Anfang an ein richtiges.
                 importedAccount.UpdatedAt = now;
                 bySourceKey[sourceKey] = new(importedAccount, false);
                 matched++;
                 continue;
             }
 
-            var account = new FinanceAccount
-            {
-                FullWorthSpaceId = fullWorthSpaceId,
-                Provider = Provider,
-                IdentificationHash = hash,
-                ProviderAccountId = $"finanzguru:{hash[..24]}",
-                InstitutionName = "Finanzguru Import",
-                DisplayName = string.IsNullOrWhiteSpace(sample.ReferenceAccountName) ? "Finanzguru Konto" : sample.ReferenceAccountName.Trim(),
-                Product = "Imported history",
-                Currency = sample.Currency,
-                IbanLast4 = ibanLast4,
-                // No live connection exists. This is an archived history container, not a current account.
-                IsActive = false,
-                IncludeInNetWorth = false,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            account.Owners.Add(new AccountOwner
-            {
-                Account = account,
-                UserId = userId,
-                OwnershipType = AccountOwnershipTypes.Owner,
-                CreatedAt = now
-            });
-            db.Accounts.Add(account);
+            // Ein vollwertiges Konto, nicht mehr der stille Behaelter von frueher: der Store setzt
+            // Eigentuemer und Standardgruppe und laesst IsActive/IncludeInNetWorth auf ihren
+            // Vorgabewerten - das Konto ist ab dem Import sichtbar und zaehlt mit.
+            var account = await accounts.CreateForImportAsync(userId, new ImportAccountWrite(
+                fullWorthSpaceId,
+                Provider,
+                hash,
+                $"finanzguru:{hash[..24]}",
+                "Finanzguru Import",
+                string.IsNullOrWhiteSpace(sample.ReferenceAccountName) ? "Finanzguru Konto" : sample.ReferenceAccountName.Trim(),
+                "Imported history",
+                sample.Currency,
+                ibanLast4), ct);
             importAccounts[hash] = account;
             bySourceKey[sourceKey] = new(account, false);
             created++;

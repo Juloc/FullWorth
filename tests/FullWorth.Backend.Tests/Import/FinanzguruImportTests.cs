@@ -93,7 +93,7 @@ public sealed class FinanzguruImportTests
     }
 
     [Fact]
-    public async Task ImportCreatesHistoryAccountWithoutNetWorthWhenNoLiveAccountMatches()
+    public async Task ImportCreatesARealAccountWhenNoLiveAccountMatches()
     {
         using var factory = new BackendWebApplicationFactory();
         var scenario = await SeedAsync(factory, addLiveAccount: false);
@@ -109,9 +109,18 @@ public sealed class FinanzguruImportTests
         await factory.SeedAsync(async db =>
         {
             var account = await db.Accounts.SingleAsync(item => item.FullWorthSpaceId == scenario.Space && item.Provider == "finanzguru-import");
-            Assert.False(account.IncludeInNetWorth);
+            // Ein Import legt ein richtiges Konto an, keinen stillen Behaelter: sichtbar, im
+            // Vermoegen, in einer Kontogruppe. Frueher stand hier Assert.False - das Konto war
+            // archiviert und zaehlte nicht mit, und der Nutzer musste es von Hand nachholen.
+            Assert.True(account.IsActive);
+            Assert.True(account.IncludeInNetWorth);
+            Assert.NotNull(account.GroupId);
             Assert.Equal("1426", account.IbanLast4);
             Assert.True(await db.AccountOwners.AnyAsync(owner => owner.AccountId == account.Id && owner.UserId == scenario.User));
+
+            // Ohne Kontostand bewegt das Konto trotzdem kein Geld: jede Summe kommt aus
+            // BalanceSnapshots, und die gibt es hier noch nicht.
+            Assert.False(await db.BalanceSnapshots.AnyAsync(balance => balance.AccountId == account.Id));
         });
     }
 

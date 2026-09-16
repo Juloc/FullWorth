@@ -37,6 +37,20 @@ public sealed record AccountListItem(Guid Id, Guid FullWorthSpaceId, Guid? BankC
 
 public sealed record AccountCreateRequest(Guid FullWorthSpaceId, Guid? BankConnectionId, string DisplayName, string? Currency, bool? IncludeInNetWorth, int? SortOrder, string? InstitutionName = null, decimal? InitialBalance = null);
 
+// Ein Konto, das ein Import anlegt. Anders als AccountCreateRequest bringt es die Herkunft mit
+// (Provider, Kennung, Institut), denn genau daran erkennt ein zweiter Import dasselbe Quellkonto
+// wieder. Es ist keine API-Form - der Import spricht den Store direkt an.
+public sealed record ImportAccountWrite(
+    Guid FullWorthSpaceId,
+    string Provider,
+    string IdentificationHash,
+    string ProviderAccountId,
+    string InstitutionName,
+    string DisplayName,
+    string? Product,
+    string Currency,
+    string? IbanLast4);
+
 public sealed record AccountSettingsRequest(string? DisplayName, bool? IsActive, bool? IncludeInNetWorth, int? SortOrder);
 
 // AsOf defaults to today when omitted, so an existing caller keeps its behaviour. Note is the

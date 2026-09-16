@@ -235,7 +235,7 @@ async function updateBookingAction(accountId) {
   try { account = (await ctx.api('api/accounts')).find(item => String(item.id) === String(accountId)); }
   catch { account = null; }
   const manual = !!account && !account.bankConnectionId
-    && (account.provider === 'manual' || account.provider === 'finanzguru-import');
+    && !account.bankConnectionId;
   button.hidden = !manual;
   button.dataset.accountId = manual ? String(account.id) : '';
 }
@@ -430,7 +430,7 @@ async function openFilterSheet() {
 async function openBookingDialog(preselectedAccountId = '') {
   let accounts, options;
   try {
-    accounts = (await ctx.api('api/accounts')).filter(a => a.provider !== 'finanzguru-import' && a.isActive !== false);
+    accounts = (await ctx.api('api/accounts')).filter(a => a.isActive !== false);
     options = await ctx.categoryOptions();
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   if (!accounts.length) { ctx.toast(ctx.get('common.empty')); return; }

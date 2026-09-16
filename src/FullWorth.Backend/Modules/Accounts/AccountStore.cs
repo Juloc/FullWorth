@@ -245,6 +245,47 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             x.UserId == userId &&
             x.Account.FullWorthSpaceId == fullWorthSpaceId, ct);
 
+    /// <summary>
+    /// Das Konto, das ein Import anlegt - und zwar ein VOLLWERTIGES: sichtbar, in der Standardgruppe,
+    /// im Vermoegen. Frueher baute der Finanzguru-Import sein Konto selbst, mit
+    /// <c>IsActive=false</c>, <c>IncludeInNetWorth=false</c> und ganz ohne Gruppe. Das war als
+    /// "Historien-Behaelter" gedacht, hiess aber in der Praxis: die importierten Buchungen tauchten
+    /// nirgends auf, bis der Nutzer von Hand einen zweiten Schritt machte - genau der manuelle
+    /// Nachschritt, den die Regel "importierte Werte muessen ohne Nacharbeit stimmen" verbietet.
+    ///
+    /// Speichert bewusst NICHT: der Import haelt eine eigene Transaktion, in der das Konto und seine
+    /// Buchungen gemeinsam stehen oder gemeinsam fallen.
+    /// </summary>
+    public async Task<FinanceAccount> CreateForImportAsync(
+        Guid userId, ImportAccountWrite write, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var account = new FinanceAccount
+        {
+            FullWorthSpaceId = write.FullWorthSpaceId,
+            Provider = write.Provider,
+            IdentificationHash = write.IdentificationHash,
+            ProviderAccountId = write.ProviderAccountId,
+            InstitutionName = write.InstitutionName,
+            DisplayName = write.DisplayName,
+            Product = write.Product,
+            Currency = write.Currency,
+            IbanLast4 = write.IbanLast4,
+            GroupId = await DefaultGroupIdAsync(write.FullWorthSpaceId, ct),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        account.Owners.Add(new AccountOwner
+        {
+            Account = account,
+            UserId = userId,
+            OwnershipType = AccountOwnershipTypes.Owner,
+            CreatedAt = now
+        });
+        db.Accounts.Add(account);
+        return account;
+    }
+
     public async Task<AccountListItem?> CreateForMemberAsync(Guid userId, AccountCreateRequest request, CancellationToken ct)
     {
         ValidateCreateRequest(request);
@@ -355,7 +396,6 @@ public sealed class AccountStore(FullWorthDbContext db, AuditService? auditServi
             x.AccountId == accountId && x.UserId == userId && x.OwnershipType == AccountOwnershipTypes.Owner, ct);
         if (!isOwner) return ManualBalanceResult.Forbidden;
         if (account.BankConnectionId is not null) return ManualBalanceResult.NotManual;
-        if (account.Provider is not ("manual" or FinanzguruImportProvider)) return ManualBalanceResult.NotManual;
 
         // A snapshot in a different currency would silently corrupt net worth: the aggregation sums
         // the latest snapshot per account bucketed by the ACCOUNT's currency.

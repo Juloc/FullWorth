@@ -204,25 +204,13 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var transactionsMoved = 0;
         var transactionsMerged = 0;
 
-        var anchoredImportIds = await db.BalanceSnapshots.AsNoTracking()
-            .Where(balance => importAccounts.Select(account => account.Id).Contains(balance.AccountId))
-            .Select(balance => balance.AccountId)
-            .Distinct()
-            .ToListAsync(ct);
-
         foreach (var importedAccount in importAccounts)
         {
-            // An import account with no balance of its own is a bare history container, so it stays
-            // archived and out of net worth. One the owner has anchored with a balance is a real account
-            // and must survive: this used to run on EVERY sync of ANY connection in the space and on
-            // every re-import, so it silently undid that decision again and again.
-            if (!anchoredImportIds.Contains(importedAccount.Id))
-            {
-                importedAccount.IsActive = false;
-                importedAccount.IncludeInNetWorth = false;
-                importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-
+            // Hier wurde jedes Importkonto ohne eigenen Kontostand wieder archiviert und aus dem
+            // Vermoegen genommen - bei JEDEM Sync JEDER Verbindung des Space. Ein Importkonto ist
+            // jetzt von Anfang an ein richtiges Konto, und ob es sichtbar ist, entscheidet der
+            // Nutzer, nicht der naechste Bankabruf. Stillgelegt wird nur noch das Konto, das eine
+            // Zuordnung gerade ausgeraeumt hat - und das steht dort, wo es ausgeraeumt wird.
             if (importedAccount.ImportLinkedAccountId is null && string.IsNullOrWhiteSpace(importedAccount.IbanLast4)) continue;
             var importedOwners = importedAccount.Owners
                 .Where(owner => owner.OwnershipType == AccountOwnershipTypes.Owner)
@@ -248,6 +236,16 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             accountsReconciled++;
             transactionsMoved += result.Moved;
             transactionsMerged += result.Merged;
+
+            // Die enge Fassung der Regel, die frueher jedes Importkonto ohne Kontostand traf: der
+            // Abgleich nimmt JEDE Buchung dieses Kontos mit - zusammengefuehrt oder verschoben -, es
+            // ist danach also leer. Ein leeres Konto in Kontenliste und Vermoegen waere eine Zeile
+            // ueber nichts; es wird stillgelegt und merkt sich, wohin seine Historie ging.
+            importedAccount.IsActive = false;
+            importedAccount.IncludeInNetWorth = false;
+            importedAccount.ImportLinkedAccountId = matches[0].Id;
+            importedAccount.UpdatedAt = DateTimeOffset.UtcNow;
+
             audit.Record(fullWorthSpaceId, null, "finanzguru.account.reconciled", "FinanceAccount", matches[0].Id);
         }
 
@@ -381,11 +379,11 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         string? currentBalanceCurrency,
         CancellationToken ct)
     {
-        var hasCurrentBalance = await db.BalanceSnapshots.AsNoTracking()
-            .AnyAsync(balance => balance.AccountId == targetAccount.Id, ct);
-        if (!hasCurrentBalance && !currentBalance.HasValue)
-            throw new ArgumentException("The target account has no balance. Enter the current balance to anchor the imported history.");
-
+        // Kein Kontostand ist kein Fehler mehr. Hier brach das Zuordnen ab, solange weder das
+        // Zielkonto einen Stand hatte noch einer mitkam - das machte aus dem als optional
+        // beschriebenen Feld eine Pflicht und liess eine saubere Zuordnung an etwas scheitern, das
+        // man jederzeit nachtragen kann. Ohne Stand bleibt das Vermoegen unvollstaendig, und genau
+        // das sagt es dem Nutzer auch, statt ihn hier aufzuhalten.
         if (!currentBalance.HasValue) return false;
         if (Math.Abs(currentBalance.Value) >= 1_000_000_000_000m)
             throw new ArgumentException("Current balance must be less than 1,000,000,000,000.");

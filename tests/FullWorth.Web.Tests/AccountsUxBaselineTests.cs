@@ -166,14 +166,18 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         var js = await GetAsync("/pages/accounts/page.js");
 
         Assert.Contains("const canSetBalance", js);
-        Assert.Contains("'finanzguru-import'", js);
         Assert.Contains("canSetBalance(x)", js);
         Assert.Contains("canSetBalance(account)", js);
         // The row action must not be back on the manual-provider gate.
         Assert.DoesNotContain("const balanceBtn=isManual", js);
-        // An archived import account still has to appear, or there is nothing to click.
-        Assert.Contains("a.isActive!==false||a.provider==='finanzguru-import'", js);
         Assert.Contains("accounts.needsBalance", js);
+
+        // Die Schranke ist die VERBINDUNG, nicht das Provider-Etikett. Hier stand zweimal
+        // 'finanzguru-import': einmal als zusaetzliche Erlaubnis fuer den Kontostand, einmal als
+        // Ausnahme, damit das archivierte Importkonto ueberhaupt in der Liste auftaucht. Beides war
+        // noetig, solange ein Import ein stillgelegtes Konto anlegte - seit er ein richtiges anlegt,
+        // waere jede dieser Ausnahmen eine Sonderregel fuer einen Fall, den es nicht mehr gibt.
+        Assert.DoesNotContain("'finanzguru-import'", js);
     }
 
     /// <summary>

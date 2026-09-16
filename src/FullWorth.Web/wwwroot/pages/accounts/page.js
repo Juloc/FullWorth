@@ -41,7 +41,7 @@ const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 // balance at all, and sat in the list reading "Kontostand nicht verfügbar" and out of net worth,
 // even though the server has accepted one for it since P0-4.
 const canSetBalance = account =>
-  !account.bankConnectionId && (account.provider === 'manual' || account.provider === 'finanzguru-import');
+  !account.bankConnectionId;
 
 
 function openAccountActionsDialog(account, groups) {
@@ -183,7 +183,7 @@ async function loadAccountsView(){
   // was NO path to that balance anywhere in the app: the account existed, carried its history, and
   // was invisible. It is listed now and says what it needs.
   const query=($('#accounts-search')?.value||'').trim().toLowerCase();
-  const allAccounts=(accounts||[]).filter(a=>a.isActive!==false||a.provider==='finanzguru-import');
+  const allAccounts=(accounts||[]).filter(a=>a.isActive!==false);
   const visibleAccounts=query?allAccounts.filter(a=>accountSearchText(a).includes(query)):allAccounts;
   const groupList=(groups||[]).slice().sort((a,b)=>(a.sortOrder-b.sortOrder)||a.name.localeCompare(b.name));
   const baseCur=state.space?.baseCurrency||'EUR';
