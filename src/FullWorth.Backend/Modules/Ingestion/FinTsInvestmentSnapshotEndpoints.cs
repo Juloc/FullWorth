@@ -32,6 +32,7 @@ public static class FinTsInvestmentSnapshotEndpoints
     private static async Task<IResult> IngestAsync(
         FinTsInvestmentSnapshotRequest request,
         FinTsInvestmentSnapshotStore store,
+        ILogger<FinTsInvestmentSnapshotRequest> logger,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.DepotKey) || string.IsNullOrWhiteSpace(request.Name) ||
@@ -42,6 +43,19 @@ public static class FinTsInvestmentSnapshotEndpoints
         if (spaceId is null) return Results.NotFound();
 
         var outcome = await store.ApplyAsync(spaceId.Value, request, ct);
-        return Results.Ok(new { portfolioId = outcome.PortfolioId, positions = outcome.Positions });
+        // Ein weggeworfenes Wertpapier ist eine Meldung wert. Gezaehlt wird, nicht benannt: Namen und
+        // ISINs gehoeren dem Eigentuemer, die Zahl reicht, um den Verlust zu finden.
+        if (outcome.SkippedWithoutQuantity > 0 || outcome.SkippedWithoutIdentity > 0)
+            logger.LogWarning(
+                "FinTS depot snapshot kept {Kept} of {Sent} holdings. WithoutQuantity={NoQuantity}, WithoutIdentity={NoIdentity}",
+                outcome.Positions, request.Holdings.Count,
+                outcome.SkippedWithoutQuantity, outcome.SkippedWithoutIdentity);
+        return Results.Ok(new
+        {
+            portfolioId = outcome.PortfolioId,
+            positions = outcome.Positions,
+            skippedWithoutQuantity = outcome.SkippedWithoutQuantity,
+            skippedWithoutIdentity = outcome.SkippedWithoutIdentity,
+        });
     }
 }

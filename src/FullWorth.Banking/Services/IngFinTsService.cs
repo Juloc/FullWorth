@@ -565,19 +565,28 @@ public sealed class IngFinTsService(
         CancellationToken ct)
     {
         var holdings = new List<FinTsHolding>();
+        var shapes = new List<string>();
         string? touchdown = null;
         for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
             var result = await finTs.GetPortfolioAsync(bank, credentials, session, depot, touchdown, ct);
             session = RequireDataOrInteractive(result);
             if (result.Value is not null) holdings.AddRange(result.Value);
+            // Je Seite eine eigene Form. Sonst ueberschreibt die letzte Seite die Spur der ersten,
+            // und bei einem mehrseitigen Depot stuende genau die Seite nicht im Log, auf der etwas fehlt.
+            shapes.Add(finTs.LastPortfolioShape);
             touchdown = result.Touchdown;
             if (string.IsNullOrWhiteSpace(touchdown)) break;
         }
-        // Null Bestaende ist kein Nichts, sondern eine Frage: hat die Bank nichts geschickt, sieht ihr
-        // Format anders aus, oder kommt der Parser nicht zurecht? Die Form der Antwort sagt es.
-        if (holdings.Count == 0)
-            logger.LogWarning("ING FinTS depot returned no holdings. Response={Shape}", finTs.LastPortfolioShape);
+        // Die Form der Antwort ist die einzige Spur, die ein Depotabruf hinterlassen darf: Namen, ISINs
+        // und Betraege gehoeren nicht ins Log, und die PIN steckt ohnehin in derselben Nachricht.
+        //
+        // Sie stand hier bis 2026-09-17 nur da, wenn GAR NICHTS ankam. Drei von vier Positionen ist
+        // aber dieselbe Frage wie null von vier - und hinterliess keine einzige Zeile. Deshalb steht
+        // die Form jetzt immer im Log, und die Warnung bleibt der Sonderfall.
+        logger.Log(holdings.Count == 0 ? LogLevel.Warning : LogLevel.Information,
+            "ING FinTS depot read {Count} holdings. Response={Shape}",
+            holdings.Count, string.Join(" || ", shapes));
 
         var depotKey = AccountHash(depot);
         var depotName = depot.ProductName ?? "ING Direkt-Depot";

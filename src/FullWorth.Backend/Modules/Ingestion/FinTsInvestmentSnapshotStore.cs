@@ -4,8 +4,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Ingestion;
 
-/// <summary>Was ein eingespielter Depotstand hinterlassen hat.</summary>
-public sealed record FinTsSnapshotOutcome(Guid PortfolioId, int Positions);
+/// <summary>
+/// Was ein eingespielter Depotstand hinterlassen hat - und was nicht.
+///
+/// <c>Positions</c> allein war eine Halbwahrheit: eine Bank kann vier Papiere melden und drei
+/// ankommen lassen, ohne dass irgendwo eine Zahl widerspricht. Die beiden Sprungstellen der
+/// Schleife tragen deshalb einen Zaehler, sonst verschwindet ein Papier lautlos.
+/// </summary>
+public sealed record FinTsSnapshotOutcome(
+    Guid PortfolioId, int Positions, int SkippedWithoutQuantity, int SkippedWithoutIdentity);
 
 /// <summary>
 /// Ein Depotstand aus FinTS wird eingespielt: Depot anlegen oder auffrischen, je Position das
@@ -40,10 +47,12 @@ public sealed class FinTsInvestmentSnapshotStore(
         var portfolioId = await UpsertPortfolioAsync(sql, spaceId, providerName, request, now, ct);
 
         var activeExternalKeys = new HashSet<string>(StringComparer.Ordinal);
+        var withoutQuantity = request.Holdings.Count(holding => holding.Quantity <= 0);
+        var withoutIdentity = 0;
         foreach (var holding in request.Holdings.Where(holding => holding.Quantity > 0))
         {
             var providerKey = holding.ProviderKey.Trim();
-            if (providerKey.Length == 0 || holding.Name.Trim().Length == 0) continue;
+            if (providerKey.Length == 0 || holding.Name.Trim().Length == 0) { withoutIdentity++; continue; }
 
             var securityId = await UpsertSecurityAsync(sql, spaceId, providerKey, holding, request, now, ct);
             await UpsertPriceAsync(sql, securityId, holding, request, now, ct);
@@ -58,7 +67,7 @@ public sealed class FinTsInvestmentSnapshotStore(
         if (accountId is { } account) await WriteDepotBalanceAsync(sql, spaceId, portfolioId, account, request, now, ct);
 
         await transaction.CommitAsync(ct);
-        return new FinTsSnapshotOutcome(portfolioId, activeExternalKeys.Count);
+        return new FinTsSnapshotOutcome(portfolioId, activeExternalKeys.Count, withoutQuantity, withoutIdentity);
     }
 
     /// <summary>
