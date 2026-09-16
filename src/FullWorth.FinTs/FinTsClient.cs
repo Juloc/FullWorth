@@ -247,15 +247,18 @@ public sealed class FinTsClient(IFinTsTransport transport)
     /// <summary>
     /// Die Version eines kontobezogenen Geschaeftsvorfalls - begrenzt auf das, was das Konto hergibt.
     ///
-    /// Ab Version 6 traegt die Nachricht die INTERNATIONALE Kontoverbindung, also IBAN und BIC. Ein
-    /// Depot hat keine IBAN, es wird ueber seine Depotnummer angesprochen. Eine Version 6 mit leerem
-    /// IBAN-Feld ist eine Nachricht ohne Konto; die Bank kann sie nicht zuordnen. Dann wird die
-    /// klassische Kontoverbindung genommen, und die gibt es bis Version 5.
+    /// Erst ab Version 7 traegt die Nachricht die internationale Kontoverbindung, in der IBAN und BIC
+    /// stehen. Ein Depot hat keine IBAN, es wird ueber seine Depotnummer angesprochen - eine Version 7
+    /// waere fuer es eine Nachricht ohne Konto. Bis Version 6 steht dort die klassische
+    /// Kontoverbindung aus Kontonummer und Bankleitzahl, und die hat es.
+    ///
+    /// Die Grenze stand hier bei 5, weil sie in FinTsMessages.AccountGroup auch bei 6 stand. Sie war
+    /// an beiden Stellen um eins zu tief.
     /// </summary>
     private static int AccountVersion(FinTsBankParameters parameters, string parameterSegment, int fallback, int minimum, FinTsAccount account)
     {
         var announced = parameters.VersionFor(parameterSegment, fallback, minimum);
-        return string.IsNullOrWhiteSpace(account.Iban) ? Math.Min(announced, 5) : announced;
+        return string.IsNullOrWhiteSpace(account.Iban) ? Math.Min(announced, 6) : announced;
     }
 
     private static IReadOnlyList<FinTsSegment> BusinessWithTan(FinTsBankParameters parameters, string requestType, FinTsSegment business)

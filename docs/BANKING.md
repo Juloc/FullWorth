@@ -376,6 +376,36 @@ is not established here, and a wrong split is what caused this bug in the first 
 do not survive the wire format either; requiring a full stride drops exactly the method whose optional
 tail the bank left empty.
 
+### The account element is three different groups, and the boundary is version 7
+
+Which account data element group an order carries depends on its **segment version**, and there are
+three of them — not two:
+
+| Version | Group | Fields | Optional? |
+| --- | --- | --- | --- |
+| ≤ 5 | `Kontoverbindung` (Account2) | Kontonummer, Unterkontomerkmal, Länderkennzeichen, Kreditinstitutscode | all **required** |
+| 6 | `Kontoverbindung` (Account3) | the same, with country + bank code grouped into one sub-group — **identical on the wire** | all **required** |
+| ≥ 7 | `Kontoverbindung international` (KTI) | IBAN, BIC, Kontonummer, Unterkontomerkmal, Kreditinstitutskennung | all optional |
+
+The boundary sat at 6 here, so a version-6 order went out with an IBAN where the Kontonummer belongs,
+a BIC where the Unterkontomerkmal belongs, and the two required fields behind them missing entirely.
+
+**It only showed on the depot**, and that is the whole reason it survived: ING announces version 7 for
+`HISALS` and `HIKAZS`, and in a KTI every element is optional — so `IBAN:BIC` and nothing else is a
+valid truncation. Giro and Extra-Konto worked. **`HKWPD` only exists up to version 6**, so a depot
+always landed in the wrong group:
+
+```
+9050 Nachricht teilweise fehlerhaft.; 9160@3 HKWPD Ein erforderliches Datenelement fehlt.
+SentShape=HNHBK#1:v3:4, HNVSK#998:v3:8, HNVSD#999:v1:1, HNSHK#2:v4:11, HKWPD#3:v6:4, …
+```
+
+`9160` names the segment it means. Read with the shape line, it says exactly what happened: a v6
+HKWPD whose account group had four positions of which the last two were empty.
+
+A depot has no IBAN, so `AccountVersion` caps it at 6 — at 7 the message would carry no account at
+all. The cap used to be 5 because the group boundary was wrong here too.
+
 ### Accounts come from HIUPD, and a depot is not a name
 
 `HIUPD` shifts its fields with the segment version, because **#6 inserts the IBAN at position 3**:

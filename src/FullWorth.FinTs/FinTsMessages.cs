@@ -269,8 +269,36 @@ internal static class FinTsMessages
     /// Das letzte Feld ist die BANKLEITZAHL. Hier stand der BIC (#130 §3) - ein anderes Feld mit einer
     /// anderen Laenge, das der Server bei Laenderkennzeichen 280 nicht annimmt.
     /// </summary>
+    /// <summary>
+    /// Die Kontoverbindung eines Auftrags - und welche Datenelementgruppe das ist, haengt an der
+    /// SEGMENTVERSION. Drei Gruppen, nicht zwei:
+    ///
+    /// <list type="bullet">
+    /// <item>bis 5: <c>Kontoverbindung</c> (Account2) - Kontonummer, Unterkontomerkmal,
+    ///   Laenderkennzeichen, Kreditinstitutscode. Alle vier Pflicht.</item>
+    /// <item>6: <c>Kontoverbindung</c> (Account3) - dieselben Angaben, nur sind Laenderkennzeichen
+    ///   und Kreditinstitutscode zu einer Untergruppe zusammengefasst. Auf der Leitung steht
+    ///   dasselbe. Ebenfalls alle Pflicht, und eine IBAN kommt darin nicht vor.</item>
+    /// <item>ab 7: <c>Kontoverbindung international</c> (KTI) - IBAN, BIC, Kontonummer,
+    ///   Unterkontomerkmal, Kreditinstitutskennung. Alle KANN, deshalb genuegt IBAN und BIC.</item>
+    /// </list>
+    ///
+    /// Hier stand die Grenze bei 6 statt bei 7, und damit ging in eine Version-6-Nachricht eine
+    /// IBAN, wo die Kontonummer hingehoert, ein BIC, wo das Unterkontomerkmal hingehoert - und die
+    /// beiden Pflichtangaben dahinter gar nicht. Bei Giro- und Extra-Konten fiel es nicht auf, weil
+    /// die ING fuer HKSAL und HKKAZ Version 7 ankuendigt und dort jedes Element optional ist: eine
+    /// abgeschnittene KTI ist gueltig.
+    ///
+    /// HKWPD gibt es nur bis Version 6. Ein Depot lief also IMMER in die falsche Gruppe, und die ING
+    /// antwortete, wie sie muss:
+    ///
+    /// <code>
+    /// 9050 Nachricht teilweise fehlerhaft.; 9160@3 HKWPD Ein erforderliches Datenelement fehlt.
+    /// SentShape=... HKWPD#3:v6:4 ...
+    /// </code>
+    /// </summary>
     private static FinTsGroup AccountGroup(FinTsAccount account, int version)
-        => version >= 6
+        => version >= 7
             ? FinTsGroup.Of(FinTsValue.T(account.Iban), FinTsValue.T(account.Bic))
             : FinTsGroup.Of(FinTsValue.T(account.AccountNumber ?? account.Iban), FinTsValue.T(account.SubAccount), FinTsValue.T("280"), FinTsValue.T(account.ResolvedBankCode));
 }
