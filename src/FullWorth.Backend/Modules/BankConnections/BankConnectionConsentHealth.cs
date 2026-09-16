@@ -37,6 +37,11 @@ public static class BankConnectionConsentHealthCalculator
         // offer the one action that actually helps - answering the TAN.
         if (string.Equals(lastError, "FINTS_TAN_REQUIRED", StringComparison.Ordinal))
             return new("tan_required", daysUntilExpiry);
+        // Aus demselben Grund: eine Verbindung, die auf die Kontenauswahl wartet, ist nicht kaputt. Als
+        // "error" gemeldet bekaeme sie "Neu verbinden" angeboten - und das wirft eine gute Sitzung weg
+        // und fragt die PIN erneut ab. Die eine Handlung, die hilft, ist die Auswahl.
+        if (string.Equals(lastError, "FINTS_SELECTION_PENDING", StringComparison.Ordinal))
+            return new("selection_pending", daysUntilExpiry);
         if (consecutiveFailures > 0 || lastError is not null)
             return new("error", daysUntilExpiry);
         if (nextSyncAllowedAt is { } cooldownEndsAt && cooldownEndsAt > now)

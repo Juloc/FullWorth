@@ -51,6 +51,8 @@ public static class BankSyncSkipReasons
     public const string Expired = "expired";
     /// <summary>A FinTS connection parked on a TAN. Syncing would not help; the TAN has to be answered.</summary>
     public const string TanRequired = "tan_required";
+    /// <summary>Die Verbindung steht, aber der Eigentuemer hat die Konten noch nicht ausgewaehlt.</summary>
+    public const string SelectionPending = "selection_pending";
 }
 
 public sealed record BankSyncSkip(Guid ConnectionId, string Institution, string Reason, DateTimeOffset? RetryAt);
@@ -723,6 +725,9 @@ public sealed class BankSyncService(
     {
         // Asked first: a parked TAN is not a broken connection, and reconnecting would discard it.
         if (IsWaitingForTan(connection)) return BankSyncSkipReasons.TanRequired;
+        // Ebenso: eine Verbindung, die auf die Auswahl wartet, ist nicht kaputt. Sie hat nur noch
+        // nicht erfahren, welche Konten der Eigentuemer will - abrufen wuerde daran nichts aendern.
+        if (IngFinTsService.IsPendingSelection(connection)) return BankSyncSkipReasons.SelectionPending;
         if (connection.ValidUntil is { } validUntil && validUntil <= now) return BankSyncSkipReasons.Expired;
         if (!string.Equals(connection.Status, "AUTHORIZED", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(connection.ProviderSessionId))

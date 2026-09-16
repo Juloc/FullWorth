@@ -23,12 +23,39 @@ public sealed record ConnectIngFinTsRequest(
 
 public sealed record FinTsTanSubmitRequest(string Tan);
 
+/// <summary>Die Schluessel der Konten, die NICHT angezeigt werden sollen. Alles andere wird uebernommen.</summary>
+public sealed record FinTsImportRequest(IReadOnlyList<string>? Hidden);
+
+/// <summary>
+/// Ein Konto, das die Bank gemeldet hat - vor der Entscheidung, ob es uebernommen wird.
+///
+/// <paramref name="Key"/> ist derselbe Wert wie der <c>IdentificationHash</c> des Kontos und wie der
+/// <c>DepotKey</c> des Depotstands. Ein Schluessel fuer alles.
+///
+/// <paramref name="AccountId"/> ist gesetzt, wenn es das Konto schon gibt; dann sagt
+/// <paramref name="Visible"/>, wie es derzeit steht. Fuer ein neues Konto ist es der Vorschlag.
+///
+/// Voll ausgeschrieben steht hier nichts: <paramref name="IbanLast4"/> sind vier Stellen, keine
+/// Kontonummer.
+/// </summary>
+public sealed record FinTsDiscoveredAccount(
+    string Key,
+    string Kind,
+    string Name,
+    string? IbanLast4,
+    string Currency,
+    Guid? AccountId,
+    bool Visible);
+
+/// <summary>Was die Uebernahme hinterlassen hat - gezaehlt an den Konten, nicht an der Ankuendigung.</summary>
+public sealed record FinTsImportOutcome(int Accounts, int Depots, int Hidden);
+
 public sealed record FinTsConnectionResult(
     Guid ConnectionId,
     string Status,
     FinTsTanChallenge? Challenge,
-    int Accounts,
-    int Depots);
+    IReadOnlyList<FinTsDiscoveredAccount> Discovered,
+    FinTsImportOutcome? Imported = null);
 
 internal sealed record FinTsConnectionSecret(
     string BankId,
@@ -37,7 +64,19 @@ internal sealed record FinTsConnectionSecret(
     string ProductId,
     FinTsBankParameters Parameters,
     FinTsSessionState? Session = null,
-    FinTsTanChallenge? Challenge = null);
+    FinTsTanChallenge? Challenge = null,
+    /// <summary>
+    /// Die Schluessel der Konten, die der Eigentuemer NICHT sehen will.
+    ///
+    /// Sie stehen hier und nicht nur am Konto, weil sie schon gebraucht werden, bevor es das Konto
+    /// gibt: die Uebernahme legt es mit <c>IsActive=false</c> an. Danach ist das Konto die Wahrheit -
+    /// diese Liste sorgt nur dafuer, dass eine wiederholte oder durch eine TAN unterbrochene
+    /// Uebernahme dieselbe Entscheidung trifft.
+    ///
+    /// Ein altes Geheimnis ohne dieses Feld liest sich als "nichts ausgeblendet" - genau das bisherige
+    /// Verhalten, also keine Migration.
+    /// </summary>
+    IReadOnlyList<string>? HiddenAccountKeys = null);
 
 public sealed class IngFinTsService(
     FinTsClient finTs,
@@ -49,6 +88,19 @@ public sealed class IngFinTsService(
     private readonly IOptionsMonitor<FinTsOptions> _options = options;
     private readonly BankingSyncOptions _sync = syncOptions.Value;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Die Verbindung steht, aber der Eigentuemer hat noch nicht gesagt, welche Konten er will.
+    ///
+    /// Ein eigener Zustand und nicht einfach ein Fehler: die Zugangsdaten stimmen, die Sitzung ist
+    /// brauchbar, und die eine Handlung, die weiterhilft, ist die Auswahl - nicht ein erneutes
+    /// Verbinden, das die PIN neu erfraegt. Aus demselben Grund gibt es <c>FINTS_TAN_REQUIRED</c>.
+    /// </summary>
+    public const string SelectionPending = "FINTS_SELECTION_PENDING";
+
+    /// <summary>Ob diese Verbindung noch auf die Auswahl des Eigentuemers wartet.</summary>
+    public static bool IsPendingSelection(BankConnectionDto connection)
+        => string.Equals(connection.LastError, SelectionPending, StringComparison.Ordinal);
 
     public async Task<FinTsConnectionResult> ConnectAsync(
         ConnectIngFinTsRequest request,
@@ -86,7 +138,9 @@ public sealed class IngFinTsService(
             null,
             DateTimeOffset.UtcNow.AddMinutes(Math.Max(360, _sync.MinimumBackgroundSyncIntervalMinutes)),
             0,
-            null,
+            // Die Verbindung wartet auf die Auswahl. Bis dahin holt sie nichts - weder hier noch im
+            // Hintergrund - und die Zeile bietet "Auswahl abschliessen" an statt "Neu verbinden".
+            SelectionPending,
             request.ReconnectConnectionId.HasValue ? null : caller.FullWorthSpaceId,
             caller.UserId,
             null,
@@ -95,14 +149,97 @@ public sealed class IngFinTsService(
             "fints-pin-tan",
             "[]"), ct);
 
-        if (!opened.IsOpen)
-            return new(connection.Id, status, opened.Challenge, opened.Session.Parameters.Accounts.Count(x => !x.IsDepot), opened.Session.Parameters.Accounts.Count(x => x.IsDepot));
+        return new(connection.Id, connection.Status, opened.Challenge,
+            await DescribeAsync(connection, opened.Session.Parameters.Accounts, ct));
+    }
+
+    /// <summary>
+    /// Was die Bank gemeldet hat - ohne sie noch einmal zu fragen.
+    ///
+    /// Die Kontenliste kommt aus HIUPD und liegt seit dem Verbinden verschluesselt an der Verbindung.
+    /// Ein abgebrochener Ablauf ist damit ohne Bankkontakt wieder aufnehmbar.
+    /// </summary>
+    public async Task<FinTsConnectionResult> DiscoveredAsync(Guid connectionId, BankingCaller caller, CancellationToken ct)
+    {
+        var connection = await FindAsync(connectionId, ct) ?? throw new BankAccessException(false);
+        var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, connectionId, null, ct);
+        if (authorized != BankAuthorizeResult.Authorized)
+            throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
+
+        var secret = ReadSecret(connection) ?? throw new InvalidOperationException("FINTS_SECRET_MISSING");
+        return new(connection.Id, connection.Status, secret.Challenge,
+            await DescribeAsync(connection, secret.Parameters.Accounts, ct));
+    }
+
+    /// <summary>
+    /// Die Uebernahme: die Auswahl festhalten und dann erst die Daten holen.
+    ///
+    /// Der lange Teil liegt bewusst HINTER der Auswahl. Vorher steckte er im Verbinden, und damit sahen
+    /// eine falsche PIN und ein Abruf von neunzig Tagen Umsaetzen gleich aus - der Knopf war grau, und
+    /// sonst passierte nichts.
+    ///
+    /// Gelaufen wird ueber <c>RequestManualSyncAsync</c> und nicht direkt: dort sitzt das Gatter, das
+    /// zwei Synchronisationen derselben Verbindung auseinanderhaelt. Das Verbinden lief bisher daran
+    /// vorbei.
+    /// </summary>
+    public async Task<FinTsConnectionResult> ImportAsync(
+        Guid connectionId, IReadOnlyList<string> hidden, BankingCaller caller, CancellationToken ct)
+    {
+        var connection = await FindAsync(connectionId, ct) ?? throw new BankAccessException(false);
+        var authorized = await backend.AuthorizeAsync(caller.UserId, caller.FullWorthSpaceId, connectionId, null, ct);
+        if (authorized != BankAuthorizeResult.Authorized)
+            throw new BankAccessException(authorized == BankAuthorizeResult.Forbidden);
+
+        var secret = ReadSecret(connection) ?? throw new InvalidOperationException("FINTS_SECRET_MISSING");
+        var chosen = hidden.Where(key => !string.IsNullOrWhiteSpace(key)).Select(key => key.Trim()).Distinct(StringComparer.Ordinal).ToArray();
+        connection = await backend.UpsertConnectionAsync(ToWrite(connection,
+            authorizationId: JsonSerializer.Serialize(secret with { HiddenAccountKeys = chosen }, Json),
+            lastError: null), ct);
 
         connection = await SyncConnectionAsync(connection, bypassCadence: true, ct);
         var saved = ReadSecret(connection);
-        return new(connection.Id, connection.Status, saved?.Challenge,
-            saved?.Parameters.Accounts.Count(x => !x.IsDepot) ?? 0,
-            saved?.Parameters.Accounts.Count(x => x.IsDepot) ?? 0);
+        var accounts = saved?.Parameters.Accounts ?? [];
+        var described = await DescribeAsync(connection, accounts, ct);
+
+        // Gezaehlt wird, was ES GIBT - nicht, was die Bank angekuendigt hat. Die alte Antwort konnte
+        // "1 Depot" melden, waehrend gar keines entstanden war.
+        var imported = new FinTsImportOutcome(
+            described.Count(x => x.Kind == "cash" && x.AccountId.HasValue),
+            described.Count(x => x.Kind == "depot" && x.AccountId.HasValue),
+            described.Count(x => x.AccountId.HasValue && !x.Visible));
+        return new(connection.Id, connection.Status, saved?.Challenge, described, imported);
+    }
+
+    /// <summary>
+    /// Die gemeldeten Konten, verbunden mit dem, was FullWorth davon schon kennt.
+    ///
+    /// Die Verbindung stellt der <c>IdentificationHash</c> her - derselbe Wert, den
+    /// <see cref="AccountHash"/> berechnet. Ohne diese Zuordnung koennte die Oberflaeche nicht sagen,
+    /// welches der gefundenen Konten es schon gibt und wie es derzeit steht.
+    /// </summary>
+    private async Task<IReadOnlyList<FinTsDiscoveredAccount>> DescribeAsync(
+        BankConnectionDto connection, IReadOnlyList<FinTsAccount> accounts, CancellationToken ct)
+    {
+        var known = await backend.ListConnectionAccountsAsync(connection.Id, ct);
+        var byHash = known.ToDictionary(x => x.IdentificationHash, StringComparer.Ordinal);
+        var hidden = (ReadSecret(connection)?.HiddenAccountKeys ?? []).ToHashSet(StringComparer.Ordinal);
+
+        return accounts
+            .Where(account => !string.IsNullOrWhiteSpace(account.Iban) || !string.IsNullOrWhiteSpace(account.AccountNumber))
+            .Select(account =>
+            {
+                var key = AccountHash(account);
+                var existing = byHash.GetValueOrDefault(key);
+                return new FinTsDiscoveredAccount(
+                    key,
+                    account.IsDepot ? "depot" : "cash",
+                    account.ProductName ?? (account.IsDepot ? "ING Direkt-Depot" : "ING Konto"),
+                    account.IsDepot ? DepotLast4(account) : Last4(account.Iban),
+                    account.Currency,
+                    existing?.AccountId,
+                    existing?.IsActive ?? !hidden.Contains(key));
+            })
+            .ToArray();
     }
 
     /// <summary>
@@ -130,8 +267,7 @@ public sealed class IngFinTsService(
             connection.Id,
             connection.Status,
             secret.Challenge,
-            secret.Parameters.Accounts.Count(x => !x.IsDepot),
-            secret.Parameters.Accounts.Count(x => x.IsDepot));
+            await DescribeAsync(connection, secret.Parameters.Accounts, ct));
     }
 
     public async Task<FinTsConnectionResult> ContinueTanAsync(
@@ -170,16 +306,20 @@ public sealed class IngFinTsService(
             Session = result.IsOpen ? null : result.Session,
             Challenge = result.IsOpen ? null : result.Challenge
         };
+        // Wartete die Verbindung auf die Auswahl, tut sie es nach der TAN immer noch: die TAN hat den
+        // Dialog geoeffnet, nicht die Frage beantwortet, welche Konten der Eigentuemer will. Eine TAN
+        // MITTEN im Abruf ist der andere Fall - dort steht die Auswahl schon, und der Abruf laeuft
+        // weiter.
+        var stillChoosing = IsPendingSelection(connection);
         connection = await backend.UpsertConnectionAsync(ToWrite(connection,
             authorizationId: JsonSerializer.Serialize(secret, Json),
             status: result.IsOpen ? "AUTHORIZED" : "TAN_REQUIRED",
-            lastError: null), ct);
+            lastError: stillChoosing ? SelectionPending : null), ct);
 
-        if (result.IsOpen) connection = await SyncConnectionAsync(connection, bypassCadence: true, ct);
+        if (result.IsOpen && !stillChoosing) connection = await SyncConnectionAsync(connection, bypassCadence: true, ct);
         var after = ReadSecret(connection);
         return new(connection.Id, connection.Status, after?.Challenge,
-            after?.Parameters.Accounts.Count(x => !x.IsDepot) ?? 0,
-            after?.Parameters.Accounts.Count(x => x.IsDepot) ?? 0);
+            await DescribeAsync(connection, after?.Parameters.Accounts ?? [], ct));
     }
 
     public async Task<BankConnectionDto> SyncConnectionAsync(BankConnectionDto connection, bool bypassCadence, CancellationToken ct)
@@ -219,6 +359,9 @@ public sealed class IngFinTsService(
             var session = opened.Session;
             var cashAccounts = 0;
             var depots = 0;
+            // Die Auswahl des Eigentuemers. Sie wirkt nur bei der ANLAGE: ein vorhandenes Konto
+            // aendert nur er selbst, und die Ingestion ruehrt IsActive danach nicht mehr an.
+            var hidden = (secret.HiddenAccountKeys ?? []).ToHashSet(StringComparer.Ordinal);
             foreach (var source in session.Parameters.Accounts)
             {
                 // Ein Depot hat KEINE IBAN - es wird ueber seine Depotnummer angesprochen. Hier stand
@@ -226,14 +369,15 @@ public sealed class IngFinTsService(
                 // Protokoll stand "0 depots", als haette die Bank keines.
                 if (string.IsNullOrWhiteSpace(source.Iban) && string.IsNullOrWhiteSpace(source.AccountNumber)) continue;
                 var account = string.IsNullOrWhiteSpace(source.Bic) ? source with { Bic = bank.Bic } : source;
+                var visible = !hidden.Contains(AccountHash(account));
                 if (account.IsDepot)
                 {
-                    session = await SyncDepotAsync(connection, bank, credentials, session, account, ct);
+                    session = await SyncDepotAsync(connection, bank, credentials, session, account, visible, ct);
                     depots++;
                 }
                 else
                 {
-                    session = await SyncCashAccountAsync(connection, bank, credentials, session, account, ct);
+                    session = await SyncCashAccountAsync(connection, bank, credentials, session, account, visible, ct);
                     cashAccounts++;
                 }
             }
@@ -318,6 +462,7 @@ public sealed class IngFinTsService(
         FinTsCredentials credentials,
         FinTsSessionState session,
         FinTsAccount account,
+        bool visible,
         CancellationToken ct)
     {
         var balanceResult = await finTs.GetBalanceAsync(bank, credentials, session, account, ct);
@@ -360,7 +505,7 @@ public sealed class IngFinTsService(
         await backend.IngestAsync(new FinanceIngestBatch(
             new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, DateTimeOffset.UtcNow, null),
             [new AccountBatchItem(hash, providerAccountId, "ING", product ?? "ING Konto", product, type,
-                account.Currency, Last4(account.Iban), true, true, [hash], "private", "enabled")],
+                account.Currency, Last4(account.Iban), visible, true, [hash], "private", "enabled")],
             balances,
             transactions), ct);
         return session;
@@ -372,6 +517,7 @@ public sealed class IngFinTsService(
         FinTsCredentials credentials,
         FinTsSessionState session,
         FinTsAccount depot,
+        bool visible,
         CancellationToken ct)
     {
         var holdings = new List<FinTsHolding>();
@@ -397,7 +543,7 @@ public sealed class IngFinTsService(
         await backend.IngestAsync(new FinanceIngestBatch(
             new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, DateTimeOffset.UtcNow, null),
             [new AccountBatchItem(depotKey, "fints:" + depotKey, "ING", depotName, depot.ProductName, "securities",
-                depot.Currency, DepotLast4(depot), true, true, [depotKey], "private", "enabled")],
+                depot.Currency, DepotLast4(depot), visible, true, [depotKey], "private", "enabled")],
             [],
             []), ct);
 

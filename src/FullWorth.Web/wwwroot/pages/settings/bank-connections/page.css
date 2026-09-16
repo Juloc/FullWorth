@@ -2,3 +2,10 @@
    ist der Zustand einer Verbindung, der rechts neben dem Namen steht und auf schmalen Geräten sonst
    mit den Knöpfen in eine Zeile rutscht. */
 #view-bank-connections .row-side{flex-wrap:wrap;justify-content:flex-end;gap:var(--s2)}
+/* Die Kontenauswahl beim Verbinden, unpräfixiert: createDialog hängt die Karte an document.body,
+   ein #view-Präfix träfe sie nie. Zeile, Titel, Unterzeile, Häkchen und Werkzeugleiste sind geteilte
+   Bausteine (.row, .row-main, .row-sub, label.check) — die Liste braucht nur eine Höhenbegrenzung,
+   damit acht Konten den Dialog nicht über den Bildschirmrand schieben. */
+.ing-select-list{max-height:min(60dvh,26rem);overflow-y:auto}
+/* Die Beschriftung IST das Ziel zum Antippen und wäre sonst 23 Pixel hoch — gemessen, nicht geschätzt. */
+.ing-select-row{min-height:44px}

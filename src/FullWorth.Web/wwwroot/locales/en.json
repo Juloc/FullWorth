@@ -606,7 +606,8 @@
     "confirm": "Confirm",
     "fxIncomplete": "Excludes amounts in currencies without a conversion rate.",
     "balanceMissingIncomplete": "Excludes accounts that do not have a balance yet.",
-    "filter": "Filter"
+    "filter": "Filter",
+    "and": "and"
   },
   "auth": {
     "appDescription": "Private access to FullWorth",
@@ -875,7 +876,8 @@
     "backToList": "Accounts",
     "notFound": "This account no longer exists.",
     "noConnection": "No bank connection",
-    "defaultGroupLocked": "The default group stays."
+    "defaultGroupLocked": "The default group stays.",
+    "health_selection_pending": "Selection pending"
   },
   "a11y": {
     "skipToContent": "Skip to content"
@@ -1148,8 +1150,25 @@
     "ingTanHint": "Confirm the sign-in using the method requested by ING.",
     "ingDecoupledHint": "Approve the request in the ING app, then check the approval.",
     "ingPoll": "Check approval",
-    "ingConnected": "ING connected",
-    "addConnection": "Connect a bank"
+    "addConnection": "Connect a bank",
+    "ingConnecting": "Signing in to ING …",
+    "ingSelectTitle": "Which accounts do you want?",
+    "ingSelectHint": "Unselected accounts are still created and kept in sync, but not shown and not counted. You can reveal them at any time.",
+    "ingSelectAll": "Select all",
+    "ingSelectedCount": "{n} of {total} selected",
+    "ingSelectEmpty": "The bank reported no account.",
+    "ingKindCash": "Account",
+    "ingKindDepot": "Securities account",
+    "ingImport": "Import",
+    "ingImporting": "Importing …",
+    "ingImportingHint": "Bookings and depot holdings are being fetched. This usually takes 20 to 60 seconds.",
+    "ingDone": "Done",
+    "ingImported": "Imported {what}.",
+    "ingFinishSelection": "Finish selection",
+    "ingDepotOne": "1 securities account",
+    "ingDepotMany": "{count} securities accounts",
+    "ingImportedHidden": "Imported {what}, {hidden} of them hidden.",
+    "ingImportedNone": "Nothing was imported."
   },
   "aiAccess": {
     "title": "AI access",

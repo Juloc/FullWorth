@@ -606,7 +606,8 @@
     "confirm": "Bestätigen",
     "fxIncomplete": "Ohne Beträge in Währungen ohne Umrechnungskurs.",
     "balanceMissingIncomplete": "Ohne Konten, für die noch kein Kontostand hinterlegt ist.",
-    "filter": "Filter"
+    "filter": "Filter",
+    "and": "und"
   },
   "auth": {
     "appDescription": "Privater Zugang zu FullWorth",
@@ -875,7 +876,8 @@
     "backToList": "Konten",
     "notFound": "Dieses Konto gibt es nicht (mehr).",
     "noConnection": "Ohne Bankverbindung",
-    "defaultGroupLocked": "Die Standardgruppe bleibt bestehen."
+    "defaultGroupLocked": "Die Standardgruppe bleibt bestehen.",
+    "health_selection_pending": "Auswahl offen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
@@ -1148,8 +1150,25 @@
     "ingTanHint": "Bestätige die Anmeldung mit dem von ING verlangten Verfahren.",
     "ingDecoupledHint": "Freigabe in der ING-App bestätigen und anschließend prüfen.",
     "ingPoll": "Freigabe prüfen",
-    "ingConnected": "ING verbunden",
-    "addConnection": "Bank verbinden"
+    "addConnection": "Bank verbinden",
+    "ingConnecting": "Anmeldung bei ING läuft …",
+    "ingSelectTitle": "Welche Konten möchtest du?",
+    "ingSelectHint": "Nicht ausgewählte Konten werden angelegt und weiter synchronisiert, aber nicht angezeigt und nicht mitgezählt. Du kannst sie später jederzeit einblenden.",
+    "ingSelectAll": "Alle auswählen",
+    "ingSelectedCount": "{n} von {total} ausgewählt",
+    "ingSelectEmpty": "Die Bank hat kein Konto gemeldet.",
+    "ingKindCash": "Konto",
+    "ingKindDepot": "Depot",
+    "ingImport": "Übernehmen",
+    "ingImporting": "Wird übernommen …",
+    "ingImportingHint": "Umsätze und Depotbestände werden geholt. Das dauert meist 20 bis 60 Sekunden.",
+    "ingDone": "Fertig",
+    "ingImported": "{what} übernommen.",
+    "ingFinishSelection": "Auswahl abschließen",
+    "ingDepotOne": "1 Depot",
+    "ingDepotMany": "{count} Depots",
+    "ingImportedHidden": "{what} übernommen, {hidden} davon ausgeblendet.",
+    "ingImportedNone": "Es wurde nichts übernommen."
   },
   "aiAccess": {
     "title": "KI-Zugang",

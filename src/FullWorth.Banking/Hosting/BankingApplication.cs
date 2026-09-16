@@ -355,6 +355,50 @@ public static class BankingApplication
             }
         });
         
+        // Die Auswahl: was die Bank gemeldet hat, ohne sie erneut zu fragen.
+        endpoints.MapGet("/api/banking/fints/connections/{id:guid}/accounts", async (
+            HttpContext http,
+            Guid id,
+            IngFinTsService service,
+            CancellationToken ct) =>
+        {
+            if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+            try { return Results.Ok(await service.DiscoveredAsync(id, caller, ct)); }
+            catch (BankAccessException exception)
+            {
+                return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = "fints_secret_missing", message = ex.Message });
+            }
+        });
+
+        // Die Uebernahme: erst die Auswahl festhalten, dann holen. Der lange Teil liegt hier, nicht im
+        // Verbinden - deshalb weiss der Benutzer beim Warten, worauf er wartet.
+        endpoints.MapPost("/api/banking/fints/connections/{id:guid}/import", async (
+            HttpContext http,
+            Guid id,
+            FinTsImportRequest request,
+            IngFinTsService service,
+            CancellationToken ct) =>
+        {
+            if (!TryGetCaller(http, out var caller)) return Results.BadRequest(new { error = "missing_user_context" });
+            try { return Results.Ok(await service.ImportAsync(id, request.Hidden ?? [], caller, ct)); }
+            catch (BankAccessException exception)
+            {
+                return exception.Forbidden ? Results.StatusCode(StatusCodes.Status403Forbidden) : Results.NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = "fints_secret_missing", message = ex.Message });
+            }
+            catch (FinTsException ex)
+            {
+                return Results.BadRequest(new { error = ex.Code ?? "fints_error", message = "ING FinTS rejected the request." });
+            }
+        });
+
         endpoints.MapPost("/api/banking/fints/connections/{id:guid}/tan", async (
             HttpContext http,
             Guid id,

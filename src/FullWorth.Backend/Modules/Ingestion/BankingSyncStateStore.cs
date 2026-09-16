@@ -6,6 +6,9 @@ namespace FullWorth.Backend.Modules.Ingestion;
 /// <summary>Wie weit ist dieses Konto synchronisiert?</summary>
 public sealed record AccountSyncState(Guid Id, string? IdentificationHash, DateOnly? LatestBookingDate, DateTimeOffset? LatestTransactionUpdatedAt);
 
+/// <summary>Ein Konto dieser Verbindung, so weit die Kontenauswahl es braucht.</summary>
+public sealed record ConnectionAccountState(string IdentificationHash, Guid AccountId, string DisplayName, bool IsActive);
+
 /// <summary>Wo beim Anbieter eine Buchung herkommt.</summary>
 public sealed record ProviderPointer(Guid ConnectionId, string? ProviderAccountId, string? ProviderTransactionId);
 
@@ -30,6 +33,21 @@ public sealed class BankingSyncStateStore(FullWorthDbContext db)
                            && account.IdentificationHash == identificationHash)
             .Select(account => account.Id)
             .Distinct()
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// Was FullWorth von den Konten dieser Verbindung schon kennt.
+    ///
+    /// Die Kontenauswahl beim Verbinden braucht die Zuordnung "gemeldetes Konto -> vorhandenes Konto",
+    /// und die kann nur hier entstehen: AccountListItem traegt keinen IdentificationHash, die
+    /// Oberflaeche koennte also gar nicht verbinden, was zusammengehoert.
+    /// </summary>
+    public async Task<IReadOnlyList<ConnectionAccountState>> ListForConnectionAsync(
+        Guid connectionId, CancellationToken ct) =>
+        await db.Accounts.AsNoTracking()
+            .Where(account => account.BankConnectionId == connectionId)
+            .Select(account => new ConnectionAccountState(
+                account.IdentificationHash, account.Id, account.DisplayName, account.IsActive))
             .ToListAsync(ct);
 
     public async Task<AccountSyncState?> ReadSyncStateAsync(Guid accountId, CancellationToken ct)

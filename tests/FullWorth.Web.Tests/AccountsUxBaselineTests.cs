@@ -196,6 +196,59 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("if(!banks.length)box.innerHTML", js);
     }
 
+    /// <summary>
+    /// Drei Beschwerden, ein Ablauf. "Verbinden" tat nichts sichtbar (der Knopf hatte gar keinen
+    /// Handler, und danach lief die Anmeldung wortlos), es gab keine Frage, welche Konten gewuenscht
+    /// sind, und die Konten standen anschliessend einfach da.
+    ///
+    /// Geprueft wird deshalb der Faden, nicht die Optik: der Knopf ist verdrahtet, die Anmeldung sagt
+    /// waehrenddessen etwas, und sie endet in der Auswahl - nicht in einem Neuladen.
+    /// </summary>
+    [Fact]
+    public async Task ConnectingABank_SaysSomething_AndAsksWhichAccountsAreWanted()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+
+        // Der Knopf war tot: die Seite hat ihn gesucht und nie etwas an ihn gehaengt.
+        Assert.Contains("addButton.onclick", js);
+        // Waehrend der Anmeldung steht etwas da, und die Zeile ist fuer Vorleseprogramme angemeldet.
+        Assert.Contains("data-connect-status", js);
+        Assert.Contains("aria-live=\"polite\"", js);
+        Assert.Contains("bankingSetup.ingConnecting", js);
+        // Der Abschluss ist die Auswahl - weder ein stilles Neuladen noch ein blosser Hinweis.
+        Assert.Contains("else openIngSelection(result);", js);
+        Assert.Contains("function openIngSelection", js);
+        Assert.DoesNotContain("toast(get('bankingSetup.ingConnected'));await ctx.reload()", js);
+        // Uebernommen wird erst auf Zuruf, mit den abgewaehlten Schluesseln im Rumpf.
+        Assert.Contains("/import'", js);
+        Assert.Contains("jsonBody({hidden:[...hidden]})", js);
+        // Eine abgebrochene Auswahl bleibt erreichbar, ohne die Bank erneut zu fragen.
+        Assert.Contains("data-finish-selection", js);
+        Assert.Contains("health==='selection_pending'", js);
+    }
+
+    /// <summary>
+    /// Die Zahlen im Abschluss brauchen ihr eigenes Wort: "1 Depots" stand dort, bis Einzahl und
+    /// Mehrzahl getrennte Schluessel bekamen - so, wie die Kontenliste es seit jeher macht.
+    /// </summary>
+    [Fact]
+    public void TheImportSummaryCountsInWholeWords()
+    {
+        var js = ReadAsset("pages", "settings", "bank-connections", "page.js");
+        var de = ReadAsset("locales", "de.json");
+        var en = ReadAsset("locales", "en.json");
+
+        Assert.Contains("countLabel=(one,many,n)", js);
+        Assert.Contains("accounts.countOne", js);
+        Assert.Contains("bankingSetup.ingDepotOne", js);
+        foreach (var locale in new[] { de, en })
+        {
+            Assert.Contains("\"ingDepotOne\"", locale);
+            Assert.Contains("\"ingDepotMany\"", locale);
+            Assert.Contains("\"ingImportedNone\"", locale);
+        }
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);

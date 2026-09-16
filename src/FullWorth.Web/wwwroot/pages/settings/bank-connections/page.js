@@ -37,14 +37,18 @@ function connectionRow(x){
   // A parked TAN is not a broken connection: Reconnect would start a fresh authorization and throw
   // the pending challenge away. The only action that helps is answering the TAN.
   const needsTan=health==='tan_required';
+  // Und aus demselben Grund: eine Verbindung, die auf die Kontenauswahl wartet, ist ebenfalls nicht
+  // kaputt. "Neu verbinden" wuerde die Sitzung wegwerfen und die PIN erneut erfragen.
+  const needsSelection=health==='selection_pending';
   const expiry=Number.isFinite(x.daysUntilExpiry)&&x.daysUntilExpiry>=0&&health!=='expired'?` · ${get('accounts.expiresIn').replace('{days}',x.daysUntilExpiry)}`:'';
   const nextSync=x.nextSyncAllowedAt?` · ${get('accounts.nextSyncAllowed')}: ${dateTime(x.nextSyncAllowedAt)}`:'';
   const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
   row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
   row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
   row.querySelector('[data-enter-tan]')?.addEventListener('click',ev=>openPendingTanDialog(x,ev.currentTarget));
+  row.querySelector('[data-finish-selection]')?.addEventListener('click',ev=>resumeSelection(x,ev.currentTarget));
   row.querySelector('[data-disconnect]').addEventListener('click',ev=>disconnectConnection(x,ev.currentTarget));
   return row;
 }
@@ -530,7 +534,7 @@ async function openIngConnectionOptions(reconnectConnection=null){
     <label>${esc(get('bankingSetup.ingFinTsMode'))}<select name="mode"><option value="fints" selected>${esc(get('bankingSetup.ingFinTsFull'))}</option><option value="enable">${esc(get('bankingSetup.ingEnableBankingOnly'))}</option></select></label>
     <p class="row-sub" data-mode-hint></p>
     <div data-fints-fields><label>${esc(get('bankingSetup.ingUserId'))}<input name="userId" autocomplete="username" required></label><label>${esc(get('bankingSetup.ingPin'))}<input name="pin" type="password" autocomplete="current-password" required></label></div>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
+    <p class="row-sub" data-connect-status aria-live="polite"></p><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
   const form=dlg.querySelector('form'),mode=form.elements.mode,fields=dlg.querySelector('[data-fints-fields]'),hint=dlg.querySelector('[data-mode-hint]');
   const draw=()=>{
     const useFinTs=mode.value==='fints';
@@ -544,6 +548,7 @@ async function openIngConnectionOptions(reconnectConnection=null){
   form.onsubmit=async e=>{
     e.preventDefault();
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    const status=form.querySelector('[data-connect-status]');
     try{
       if(mode.value==='enable'){
         const status=await bankApi('api/banking/status');
@@ -560,15 +565,21 @@ async function openIngConnectionOptions(reconnectConnection=null){
         return;
       }
       const fd=new FormData(form);
+      // Die Anmeldung ist kurz (zwei bis vier Sekunden). Trotzdem sagt die Zeile, was laeuft -
+      // vorher war ein ausgegrauter Knopf die gesamte Rueckmeldung, und eine falsche PIN sah aus
+      // wie ein haengender Aufruf.
+      status.textContent=get('bankingSetup.ingConnecting');
       const result=await bankApi('api/banking/fints/ing/connect',jsonBody({
         userId:String(fd.get('userId')||'').trim(),
         pin:String(fd.get('pin')||''),
         reconnectConnectionId:reconnectConnection?.id||null
       }));
       dlg.close();
+      // Nichts ist uebernommen, bis der Eigentuemer die Konten gewaehlt hat. Der lange Teil kommt
+      // danach - und dann weiss er, worauf er wartet.
       if(result.status==='TAN_REQUIRED')openIngTanDialog(result);
-      else{toast(get('bankingSetup.ingConnected'));await ctx.reload()}
-    }catch(err){toast(err.message||get('common.error'));submit.disabled=false}
+      else openIngSelection(result);
+    }catch(err){status.textContent='';toast(err.message||get('common.error'));submit.disabled=false}
   };
   dlg.showModal();
 }
@@ -590,6 +601,119 @@ async function openPendingTanDialog(connection,button){
   finally{if(button)button.disabled=false}
 }
 
+// Eine abgebrochene Auswahl ist keine Sackgasse: die Kontenliste liegt seit dem Verbinden
+// verschluesselt an der Verbindung und wird ohne Bankkontakt wieder gelesen - der Dialog geht
+// genau dort weiter, wo er geschlossen wurde.
+async function resumeSelection(connection,button){
+  if(button)button.disabled=true;
+  try{
+    openIngSelection(await bankApi('api/banking/fints/connections/'+encodeURIComponent(connection.id)+'/accounts'));
+  }catch(err){toast(err.message||get('common.error'));}
+  finally{if(button)button.disabled=false;}
+}
+
+// Die Kontenauswahl: was die Bank gemeldet hat, mit Haekchen, und danach erst der lange Teil.
+//
+// Frueher machte das Verbinden alles in einem Aufruf - Anmeldung, neunzig Tage Umsaetze, bis zu
+// fuenfzig Depotseiten - und die einzige Rueckmeldung war ein ausgegrauter Knopf. Eine falsche PIN
+// und ein langer Abruf sahen gleich aus. Jetzt ist die Anmeldung kurz, die Auswahl kommt sofort, und
+// gewartet wird auf etwas, das der Benutzer selbst ausgeloest hat.
+//
+// Abgewaehlt heisst NICHT "nicht geholt": das Konto entsteht und wird weiter synchronisiert, es wird
+// nur nicht angezeigt und nicht mitgezaehlt. Spaeter einschalten zeigt sofort die volle Historie.
+function openIngSelection(initial){
+  let current=initial;
+  // Der Kopf gehoert in die Karte, nicht in den Schritt: createDialog stellt das Schliessen-Kreuz,
+  // und ein Schritt, der seinen eigenen Kopf mitbraechte, bekaeme ein zweites daneben.
+  const dlg=dialog('<div class="dialog-card"><div class="panel-head"><h2 data-title></h2></div><div data-step></div></div>');
+  const step=dlg.querySelector('[data-step]');
+  const title=dlg.querySelector('[data-title]');
+  const hidden=new Set((current.discovered||[]).filter(a=>a.visible===false).map(a=>a.key));
+
+  const count=()=>{
+    const all=current.discovered||[];
+    const chosen=all.filter(a=>!hidden.has(a.key)).length;
+    const master=step.querySelector('[data-select-all]');
+    if(master){master.checked=chosen===all.length&&all.length>0;master.indeterminate=chosen>0&&chosen<all.length;}
+    const label=step.querySelector('[data-selected-count]');
+    if(label)label.textContent=get('bankingSetup.ingSelectedCount').replace('{n}',String(chosen)).replace('{total}',String(all.length));
+  };
+
+  const rowHtml=a=>'<div class="row"><label class="check ing-select-row">'
+    +'<input type="checkbox" data-account="'+esc(a.key)+'"'+(hidden.has(a.key)?'':' checked')+'>'
+    +'<div class="row-main"><div class="row-title">'+esc(a.name)+'</div>'
+    +'<div class="row-sub">'+esc(get(a.kind==='depot'?'bankingSetup.ingKindDepot':'bankingSetup.ingKindCash'))
+    +(a.ibanLast4?' · •••• '+esc(a.ibanLast4):'')
+    +(a.currency?' · '+esc(a.currency):'')+'</div></div></label></div>';
+
+  const showSelection=()=>{
+    const all=current.discovered||[];
+    title.textContent=get('bankingSetup.ingSelectTitle');
+    step.innerHTML='<p class="row-sub">'+esc(get('bankingSetup.ingSelectHint'))+'</p>'
+      +'<div class="row"><label class="check"><input type="checkbox" data-select-all>'
+      +'<span>'+esc(get('bankingSetup.ingSelectAll'))+'</span></label>'
+      +'<span class="row-sub" data-selected-count></span></div>'
+      +'<div class="rows ing-select-list">'+all.map(rowHtml).join('')+'</div>'
+      +(all.length?'':'<p class="row-sub">'+esc(get('bankingSetup.ingSelectEmpty'))+'</p>')
+      +'<div class="dialog-actions"><button type="button" class="ghost" data-cancel>'+esc(get('common.cancel'))+'</button>'
+      +'<button type="button" data-import>'+esc(get('bankingSetup.ingImport'))+'</button></div>';
+    step.querySelector('[data-cancel]').onclick=()=>dlg.close();
+    for(const box of step.querySelectorAll('[data-account]'))
+      box.onchange=()=>{if(box.checked)hidden.delete(box.dataset.account);else hidden.add(box.dataset.account);count();};
+    const master=step.querySelector('[data-select-all]');
+    if(master)master.onchange=()=>{
+      for(const box of step.querySelectorAll('[data-account]')){
+        box.checked=master.checked;
+        if(master.checked)hidden.delete(box.dataset.account);else hidden.add(box.dataset.account);
+      }
+      count();
+    };
+    step.querySelector('[data-import]').onclick=()=>{void runImport();};
+    count();
+  };
+
+  const showImporting=()=>{
+    const chosen=(current.discovered||[]).filter(a=>!hidden.has(a.key)).length;
+    title.textContent=get('bankingSetup.ingImporting');
+    step.innerHTML='<p class="row-sub">'+esc(get('bankingSetup.ingImportingHint'))+'</p><div class="rows" data-busy></div>';
+    ctx.skeleton(step.querySelector('[data-busy]'),Math.max(1,chosen));
+  };
+
+  // "1 Depots" stand hier, bis die Zahlen ihr eigenes Wort bekamen: die App zaehlt mit einem
+  // Schluesselpaar (accounts.countOne/countMany), und was null ist, wird gar nicht erst genannt.
+  const countLabel=(one,many,n)=>get(n===1?one:many).replace('{count}',String(n));
+
+  const showDone=result=>{
+    const imported=result.imported||{accounts:0,depots:0,hidden:0};
+    const parts=[];
+    if(imported.accounts)parts.push(countLabel('accounts.countOne','accounts.countMany',imported.accounts));
+    if(imported.depots)parts.push(countLabel('bankingSetup.ingDepotOne','bankingSetup.ingDepotMany',imported.depots));
+    const text=parts.length
+      ? get(imported.hidden?'bankingSetup.ingImportedHidden':'bankingSetup.ingImported')
+          .replace('{what}',parts.join(' '+get('common.and')+' '))
+          .replace('{hidden}',String(imported.hidden))
+      : get('bankingSetup.ingImportedNone');
+    title.textContent=get('bankingSetup.ingDone');
+    step.innerHTML='<p>'+esc(text)+'</p>'
+      +'<div class="dialog-actions"><button type="button" data-finish>'+esc(get('common.close'))+'</button></div>';
+    step.querySelector('[data-finish]').onclick=async()=>{dlg.close();await ctx.reload();};
+  };
+
+  const runImport=async()=>{
+    showImporting();
+    try{
+      const result=await bankApi('api/banking/fints/connections/'+encodeURIComponent(current.connectionId)+'/import',
+        jsonBody({hidden:[...hidden]}));
+      current=result;
+      // Mitten im Abruf kann die Bank doch noch eine TAN verlangen.
+      if(result.status==='TAN_REQUIRED'){dlg.close();openIngTanDialog(result);return;}
+      showDone(result);
+    }catch(err){toast(err.message||get('common.error'));showSelection();}
+  };
+
+  showSelection();dlg.showModal();
+}
+
 function openIngTanDialog(initial){
   let current=initial;
   const dlg=dialog('<div class="dialog-card"><div data-tan-content></div></div>');
@@ -597,7 +721,8 @@ function openIngTanDialog(initial){
   const complete=async result=>{
     current=result;
     if(result.status!=='TAN_REQUIRED'){
-      dlg.close();toast(get('bankingSetup.ingConnected'));await ctx.reload();return;
+      // Die TAN hat den Dialog geoeffnet, nicht die Frage beantwortet, welche Konten gewuenscht sind.
+      dlg.close();openIngSelection(result);return;
     }
     render();
   };
@@ -821,7 +946,13 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
 
 export async function renderBankConnections(context) {
   use(context);
-  $('#add-bank-connection')?.addEventListener('click', () => { void openBankDialog(); }, { once: true });
+  // Eigenschaftszuweisung statt addEventListener: renderBankConnections laeuft bei jedem ctx.reload()
+  // erneut, ein addEventListener wuerde Zuhoerer stapeln. {once:true} loeste das Stapeln und schuf
+  // einen toten Knopf - nach einem abgebrochenen Dialog passierte beim naechsten Klick nichts mehr,
+  // bis man die Seite verliess. Eine Zuweisung ist idempotent und die Form, die diese Datei sonst
+  // ueberall benutzt.
+  const addButton = $('#add-bank-connection');
+  if (addButton) addButton.onclick = () => { void openBankDialog(); };
   return loadConnections();
 }
 

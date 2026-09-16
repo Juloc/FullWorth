@@ -18,6 +18,14 @@ public static class BankingSyncStateEndpoints
             return Results.Ok(await store.ReadSyncStateAsync(matching[0], ct));
         }).WithTags("Internal banking");
 
+        // Die Kontenauswahl beim Verbinden fragt hier, was es schon gibt - die Zuordnung ueber den
+        // IdentificationHash kann nur serverseitig entstehen.
+        app.MapGet("/internal/banking/connections/{connectionId:guid}/accounts", async (
+            Guid connectionId,
+            BankingSyncStateStore store,
+            CancellationToken ct) => Results.Ok(await store.ListForConnectionAsync(connectionId, ct)))
+            .WithTags("Internal banking");
+
         app.MapGet("/internal/banking/transactions/{transactionId:guid}/provider-pointer", async (
             HttpContext http,
             Guid transactionId,

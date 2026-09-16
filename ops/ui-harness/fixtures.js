@@ -138,6 +138,18 @@
     ],
     // Seit #125 hat jeder Bereich eine Standardgruppe; Konten ohne eigene Gruppe stehen darin.
     'account-groups': [{ id: 'g0', name: 'Allgemein', sortOrder: 0, isDefault: true }, { id: 'g1', name: 'Alltag', sortOrder: 1, isDefault: false }],
+    // Was die Bank beim Verbinden gemeldet hat - die Liste, aus der ausgewaehlt wird. Absichtlich
+    // unbequem: ein Name, der die Zeile sprengt, ein Depot ohne IBAN, eine Fremdwaehrung und ein
+    // Konto, das schon einmal abgewaehlt wurde (visible:false) und das Haekchen leer zeigen muss.
+    'banking/fints/connections/c3/accounts': {
+      connectionId: 'c3', status: 'AUTHORIZED', challenge: null,
+      discovered: [
+        { key: 'k1', kind: 'cash', name: 'Girokonto', ibanLast4: '4321', currency: 'EUR', accountId: null, visible: true },
+        { key: 'k2', kind: 'cash', name: 'Extra-Konto mit einem ausgesprochen langen Namen', ibanLast4: '8765', currency: 'EUR', accountId: null, visible: true },
+        { key: 'k3', kind: 'cash', name: 'Währungskonto', ibanLast4: '1111', currency: 'USD', accountId: null, visible: false },
+        { key: 'k4', kind: 'depot', name: 'Direkt-Depot', ibanLast4: null, currency: 'EUR', accountId: null, visible: true }
+      ]
+    },
     // Two connections: one healthy, one FinTS parked on a TAN. The second must offer "TAN eingeben",
     // never "Neu verbinden" - reconnecting discards the challenge the bank is waiting for.
     'bank-connections': [
@@ -151,6 +163,12 @@
         status: 'TAN_REQUIRED', healthStatus: 'tan_required', validUntil: iso('2026-12-31'),
         lastSyncedAt: iso('2026-09-08'), daysUntilExpiry: 112, nextSyncAllowedAt: null,
         lastError: 'FINTS_TAN_REQUIRED'
+      },
+      {
+        id: 'c3', provider: 'fints', institutionName: 'ING', country: 'DE',
+        status: 'AUTHORIZED', healthStatus: 'selection_pending', validUntil: iso('2026-12-31'),
+        lastSyncedAt: null, daysUntilExpiry: 112, nextSyncAllowedAt: null,
+        lastError: 'FINTS_SELECTION_PENDING'
       }
     ],
     'transactions': {
@@ -874,6 +892,28 @@
         ? { status: 200, body: pensionComparison(body) }
         : { status: 200, body: pensionProjection(body) };
     }
+    // Der FinTS-Ablauf ist seit #133 zweigeteilt: anmelden und melden, was da ist - danach erst
+    // uebernehmen. Beide Antworten haben dieselbe Form, die Uebernahme fuellt zusaetzlich 'imported'.
+    if (after.startsWith('banking/fints/')) {
+      const discovered = FIXTURES['banking/fints/connections/c3/accounts'].discovered;
+      if (after.endsWith('/import')) {
+        let body = init?.body;
+        if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+        const hidden = Array.isArray(body?.hidden) ? body.hidden : [];
+        return { status: 200, body: {
+          connectionId: 'c3', status: 'AUTHORIZED', challenge: null,
+          discovered: discovered.map(a => ({ ...a, visible: !hidden.includes(a.key) })),
+          imported: {
+            accounts: discovered.filter(a => a.kind !== 'depot').length,
+            depots: discovered.filter(a => a.kind === 'depot').length,
+            hidden: hidden.length
+          }
+        } };
+      }
+      if (after.endsWith('ing/connect'))
+        return { status: 200, body: FIXTURES['banking/fints/connections/c3/accounts'] };
+      return undefined;
+    }
     if (!after.startsWith('pension/documents')) return undefined;
     if (/\/commit(\?|$)/.test(after)) return { status: 200, body: PENSION_COMMIT };
     if (method === 'POST' && /^pension\/documents(\?|$)/.test(after)) {
@@ -912,6 +952,10 @@
         .map(([key, value]) => [key, value instanceof File ? `File(${value.name}, ${value.size})` : value]));
       window.__harnessWrites.push({ method, path: url.pathname, body: payload });
     }
+    // Eine Antwort, die sofort da ist, macht jeden Wartezustand unsichtbar. Die FinTS-Uebernahme
+    // dauert echt 20 bis 60 Sekunden, und genau ihr Zwischenschritt (Titel, Hinweis, Skelettzeilen)
+    // laesst sich sonst nicht ansehen - eine Dreiviertelsekunde reicht, um ihn zu pruefen.
+    if (url.pathname.endsWith('/import')) await new Promise(done => setTimeout(done, 750));
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   };
 

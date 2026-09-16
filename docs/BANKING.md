@@ -319,6 +319,36 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
    Segmentfolge der Dialoginitialisierung grundlegend ein HKTAN-Segment ab #6 einstellen."* A bank that
    announces only an older `HITANS` does not offer this flow — ING answers such a segment with
    `9010 Der gewünschte Geschäftsvorfall wird nicht unterstützt`, and it is right to.
+4. **Connect stops here.** It does not fetch a single booking. The announced accounts are described
+   from `HIUPD` and returned as `discovered`; the connection is parked with
+   `LastError = FINTS_SELECTION_PENDING`, which is a health state of its own
+   (`selection_pending`), not an error. What made this necessary: connect used to log in, read ninety
+   days of bookings and up to fifty depot pages in the same call, and the only thing the user saw was
+   a disabled button — a wrong PIN and a long retrieval looked identical, and afterwards the accounts
+   were simply there.
+
+The answer is `{ connectionId, status, challenge?, discovered[], imported? }`. A discovered account is
+`{ key, kind, name, ibanLast4, currency, accountId, visible }`: `key` is the account's
+`IdentificationHash` and the depot snapshot's `DepotKey` at once, `accountId` is set once the account
+exists, and `ibanLast4` is four digits — never a full number.
+
+### Choosing the accounts (`GET`/`POST .../connections/{id}/accounts`, `.../import`)
+
+- `GET /api/banking/fints/connections/{id}/accounts` re-reads the stored list **without contacting the
+  bank**, so an abandoned selection is resumable from the connection row.
+- `POST /api/banking/fints/connections/{id}/import` with `{ hidden: [key, …] }` stores those keys in the
+  connection secret, clears `FINTS_SELECTION_PENDING` and runs the full sync once, cadence bypassed.
+
+**Deselected does not mean not fetched.** Every announced account is created and stays in sync; a
+deselected one is created with `IsActive = false`, which is the app-wide "exists but is not shown and
+not counted" state — the accounts list, the dashboard, net worth, budgets and the cashflow all honour
+it, so switching it on later shows the full history immediately rather than starting from that day.
+The one place it does **not** reach is the transactions list: its bookings stay visible there, because
+account visibility there is access control (`SpaceAccess.VisibleAccountIdsAsync`) and must not be
+repurposed as a display preference.
+
+`imported` counts what **exists** — `{ accounts, depots, hidden }` over the accounts that actually have
+an id, not over what the bank announced.
 
 ### HITANS is one parameter block, not one group per method
 
@@ -456,12 +486,17 @@ current status, sets `FINTS_<code>` and schedules the next attempt after the coo
 
 ### FinTS sync
 
-One dialog per sync, then per account from `HIUPD` (accounts without an IBAN are skipped):
+One dialog per sync, then per account from `HIUPD` (an account with neither an IBAN nor an account
+number is skipped — the depot has no IBAN and is kept by its number):
 
 - Cash account: `HKSAL` balance, then `HKKAZ` from `today − FinTs:HistoryDays` to today, following the
   `3040` touchdown up to `FinTs:MaxPages` pages. FinTS sync ignores the stored latest booking date and
   `Sync:OverlapDays` — it re-reads the same 90-day window every time.
-- Depot (`HIUPD` product name contains "Depot"): `HKWPD` holdings, same touchdown paging.
+- Depot (Kontoart 30–39 or 60–69, product name only as a fallback): `HKWPD` holdings, same touchdown
+  paging. The depot is ingested as an **account** (`AccountType = "securities"`) before its snapshot, so
+  it has a row in the accounts list with its market value instead of existing only inside Investments.
+- Each account is ingested with `IsActive` = "not in the connection's `HiddenAccountKeys`", and a sync
+  never switches a hidden account back on: `IsActive` is written on creation only.
 - `HKEND` closes the dialog, the refreshed parameters are written back, status `AUTHORIZED`,
   `LastSyncedAt` set, failures reset.
 

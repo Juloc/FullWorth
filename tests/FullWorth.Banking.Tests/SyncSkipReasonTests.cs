@@ -73,6 +73,23 @@ public sealed class SyncSkipReasonTests
         Assert.Equal(BankSyncSkipReasons.TanRequired, Assert.Single(result.Skips!).Reason);
     }
 
+    // Und ebenso eine, die auf die Kontenauswahl wartet: sie ist angemeldet und gueltig, also haette
+    // der Zeitplan sie abgerufen - und damit genau das getan, was der Eigentuemer noch nicht
+    // entschieden hat. Ein Abruf waere nicht falsch, sondern verfrueht.
+    [Fact]
+    public async Task A_connection_waiting_for_the_account_choice_is_reported_and_not_synced()
+    {
+        var result = await RunAsync(Connection(
+            lastAttemptAt: DateTimeOffset.UtcNow.AddDays(-1),
+            provider: "fints",
+            lastError: "FINTS_SELECTION_PENDING"));
+
+        Assert.Equal(BankSyncSkipReasons.SelectionPending, Assert.Single(result.Skips!).Reason);
+        // RunAsync laesst jeden ausgehenden Aufruf scheitern - 0 synchronisiert ist hier die Aussage.
+        Assert.Equal(0, result.Synced);
+        Assert.Equal(1, result.Skipped);
+    }
+
     [Fact]
     public async Task Every_connection_appears_in_exactly_one_bucket()
     {

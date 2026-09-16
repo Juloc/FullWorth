@@ -315,6 +315,7 @@ GET              /api/wealth/overview
 GET              /api/wealth/preview-basis
 GET              /health
 GET              /internal/banking/connections/
+GET              /internal/banking/connections/{connectionId:guid}/accounts
 GET              /internal/banking/connections/{connectionId:guid}/accounts/sync-state
 GET              /internal/banking/profiles/users/{userId:guid}
 GET              /internal/banking/profiles/{id:guid}

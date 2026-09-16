@@ -56,6 +56,28 @@ public sealed class BankConnectionConsentHealthTests
         Assert.Equal("tan_required", result.HealthStatus);
     }
 
+    // Dasselbe Argument, anderer Anlass: eine Verbindung, die auf die Kontenauswahl wartet, ist
+    // angemeldet und gueltig. Als "error" gemeldet - und das war sie, weil LastError gesetzt ist -
+    // bot die Zeile "Neu verbinden" an, was die Sitzung wegwirft und die PIN erneut verlangt.
+    [Fact]
+    public void APendingAccountChoiceIsItsOwnHealthState()
+    {
+        var result = BankConnectionConsentHealthCalculator.Calculate(
+            "AUTHORIZED", "session", Now.AddDays(30), 0, "FINTS_SELECTION_PENDING", null, Now);
+
+        Assert.Equal("selection_pending", result.HealthStatus);
+    }
+
+    // Und sie darf nicht alles verschlucken: ein echter Fehler bleibt ein Fehler.
+    [Fact]
+    public void AnOrdinaryErrorIsStillAnError()
+    {
+        var result = BankConnectionConsentHealthCalculator.Calculate(
+            "AUTHORIZED", "session", Now.AddDays(30), 0, "FINTS_SELECTION_PENDING_SOMETHING", null, Now);
+
+        Assert.Equal("error", result.HealthStatus);
+    }
+
     [Fact]
     public void CalculateReturnsNoExpiryDaysWhenConsentHasNoExpiry()
     {

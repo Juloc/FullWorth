@@ -67,6 +67,9 @@ public sealed record FinanceIngestBatch(IngestConnectionDto Connection, IReadOnl
 public sealed record FinTsHoldingSnapshotDto(string ProviderKey, string Name, string? Isin, string? Wkn, string Currency, decimal Quantity, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, string? Exchange);
 public sealed record FinTsInvestmentSnapshotDto(Guid ConnectionId, string DepotKey, string Name, string Currency, DateOnly AsOf, IReadOnlyList<FinTsHoldingSnapshotDto> Holdings);
 public sealed record AccountSyncState(DateOnly? LatestBookingDate);
+
+/// <summary>Ein Konto dieser Verbindung, so weit die Kontenauswahl es braucht.</summary>
+public sealed record ConnectionAccountState(string IdentificationHash, Guid AccountId, string DisplayName, bool IsActive);
 public sealed record ConsumeStateBody(string State);
 public sealed record AuthorizeBody(Guid FullWorthSpaceId, Guid? ConnectionId, Guid? EnableBankingProfileId = null);
 public sealed record DeleteConnectionBody(Guid FullWorthSpaceId);
@@ -188,6 +191,15 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/sync-history", body);
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Was FullWorth von den Konten dieser Verbindung schon kennt.</summary>
+    public async Task<IReadOnlyList<ConnectionAccountState>> ListConnectionAccountsAsync(Guid connectionId, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Get, $"/internal/banking/connections/{connectionId}/accounts");
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<ConnectionAccountState>>(cancellationToken: ct) ?? [];
     }
 
     public async Task<AccountSyncState?> GetAccountSyncStateAsync(Guid connectionId, string identificationHash, CancellationToken ct)
