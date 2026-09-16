@@ -437,18 +437,26 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
 
         var moved = 0;
         var merged = 0;
+        // Die Zeilen, die EF hier verfolgt. Das Umhaengen laeuft in rohem SQL, und ein Verweis, den
+        // eine dieser Zeilen noch auf die Verliererzeile haelt, waere danach veraltet - sie werden
+        // darum in derselben Bewegung mitgezogen.
+        var tracked = imported.Concat(live).ToList();
         foreach (var historical in imported)
         {
-            if (liveBySignature.TryGetValue(Signature(historical), out var matches) && matches.Count > 0)
+            if (liveBySignature.TryGetValue(Signature(historical), out var matches) && matches.Count > 0
+                && await TransactionMergeService.CanMergeAsync(db, historical.Id, matches.Peek().Id, ct))
             {
                 var providerTransaction = matches.Dequeue();
-                await MergeIntoLiveTransactionAsync(historical, providerTransaction, ct);
+                await MergeIntoLiveTransactionAsync(historical, providerTransaction, tracked, ct);
                 merged++;
             }
             else
             {
-                // Provider may not expose the full historical range. Keep the Finanzguru row, but attach
-                // it to the real account. A later broader bank sync can still merge it automatically.
+                // Zwei Gruende, beide enden gleich: entweder liefert die Bank diesen Zeitraum gar
+                // nicht, oder beide Seiten tragen eine eigene Aufteilung - die liesse sich nicht
+                // zusammenlegen, ohne dass der Gewinner doppelt so viel aufgeteilt haette, wie er
+                // wert ist. Die Importzeile bleibt also stehen und wandert nur auf das echte Konto;
+                // ein spaeterer, breiterer Banksync kann sie immer noch zusammenfuehren.
                 historical.AccountId = liveAccount.Id;
                 historical.UseForBalanceHistory = trustMovedHistory;
                 historical.UpdatedAt = DateTimeOffset.UtcNow;
@@ -459,33 +467,30 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         return (moved, merged);
     }
 
-    private async Task MergeIntoLiveTransactionAsync(FinanceTransaction historical, FinanceTransaction live, CancellationToken ct)
+    /// <summary>
+    /// Fuehrt die importierte Zeile in die Bankzeile zusammen: erst gewinnt der Inhalt nach der Regel
+    /// unten, dann wandert JEDE Beziehung mit, dann faellt die Importzeile.
+    ///
+    /// Hier standen vier Schleifen fuer vier Beziehungen. Sechzehn Fremdschluessel zeigen auf eine
+    /// Buchung, und die uebrigen zwoelf verhielten sich nach ihrer eigenen Regel: Schlagworte,
+    /// Pruefzustaende, Vertragszuordnung und Ausgaben-Reviews fielen per CASCADE weg, ein Asset-
+    /// Cashflow oder ein Beleg-Zahlungslink liess die Zusammenfuehrung mit einer
+    /// Fremdschluesselverletzung platzen. <see cref="TransactionMergeService"/> haelt die Liste jetzt
+    /// an einer Stelle, und <c>TransactionMergeGuardTests</c> haelt sie gegen das Schema.
+    /// </summary>
+    /// <param name="tracked">
+    /// Buchungen, die EF in diesem Durchlauf verfolgt. Das Umhaengen laeuft in rohem SQL, ihre
+    /// Verweise auf die Verliererzeile muessen also im Speicher mitgezogen werden, sonst schreibt der
+    /// naechste SaveChanges den alten Stand zurueck.
+    /// </param>
+    private async Task MergeIntoLiveTransactionAsync(
+        FinanceTransaction historical,
+        FinanceTransaction live,
+        IReadOnlyCollection<FinanceTransaction> tracked,
+        CancellationToken ct)
     {
-        var historicalAllocations = await db.TransactionAllocations
-            .Where(allocation => allocation.TransactionId == historical.Id)
-            .ToListAsync(ct);
-        var liveHasAllocations = await db.TransactionAllocations.AsNoTracking()
-            .AnyAsync(allocation => allocation.TransactionId == live.Id, ct);
-        if (!liveHasAllocations)
-        {
-            foreach (var allocation in historicalAllocations)
-            {
-                allocation.TransactionId = live.Id;
-                allocation.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-        }
-        else
-        {
-            db.TransactionAllocations.RemoveRange(historicalAllocations);
-        }
-
-        // Preserve anything the user attached to the historical row before connecting the bank.
-        foreach (var purchase in await db.Purchases.Where(purchase => purchase.TransactionId == historical.Id).ToListAsync(ct))
-            purchase.TransactionId = live.Id;
-        foreach (var refund in await db.Transactions.Where(transaction => transaction.RefundOfTransactionId == historical.Id).ToListAsync(ct))
-            refund.RefundOfTransactionId = live.Id;
-        foreach (var suggestion in await db.PriceChangeSuggestions.Where(suggestion => suggestion.EvidenceTransactionId == historical.Id).ToListAsync(ct))
-            suggestion.EvidenceTransactionId = live.Id;
+        var historicalHasAllocations = await db.TransactionAllocations.AsNoTracking()
+            .AnyAsync(allocation => allocation.TransactionId == historical.Id, ct);
 
         // Manual user edits always win. Otherwise retain the imported Finanzguru category/split when the
         // bank row has only automatic/no categorization.
@@ -501,7 +506,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         else if (live.CategorizationSource != "manual")
         {
             if (historical.CategoryId.HasValue) live.CategoryId = historical.CategoryId;
-            if (historical.CategorizationSource == "finanzguru" && (historical.CategoryId.HasValue || historicalAllocations.Count > 0))
+            if (historical.CategorizationSource == "finanzguru" && (historical.CategoryId.HasValue || historicalHasAllocations))
                 live.CategorizationSource = "finanzguru";
             if (historical.IsTransfer) live.IsTransfer = true;
             if (string.IsNullOrWhiteSpace(live.UserNote) && !string.IsNullOrWhiteSpace(historical.UserNote))
@@ -510,7 +515,20 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
 
         live.UseForBalanceHistory = true;
         live.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Verweise der verfolgten Zeilen mitziehen, BEVOR das rohe SQL laeuft - danach stimmen
+        // Speicher und Datenbank ueberein und das UPDATE unten findet dort nichts mehr zu tun.
+        foreach (var other in tracked)
+            if (other.RefundOfTransactionId == historical.Id && other.Id != live.Id)
+                other.RefundOfTransactionId = live.Id;
+
+        // Den bisherigen Stand festschreiben, damit das rohe Umhaengen nicht an verfolgten, noch
+        // nicht geschriebenen Aenderungen vorbeilaeuft.
+        await db.SaveChangesAsync(ct);
+        await TransactionMergeService.MoveDependenciesAsync(db, historical.Id, live.Id, ct);
+
         db.Transactions.Remove(historical);
+        await db.SaveChangesAsync(ct);
     }
 
     private static TransactionSignature Signature(FinanceTransaction transaction) => new(

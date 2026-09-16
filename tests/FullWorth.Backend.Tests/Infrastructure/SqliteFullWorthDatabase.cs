@@ -27,6 +27,7 @@ internal sealed class SqliteFullWorthDatabase : IAsyncDisposable
         await using var db = database.CreateContext();
         await db.Database.EnsureCreatedAsync();
         await CreateParityInvestmentTablesAsync(db);
+        await CreateRawTransactionTablesAsync(db);
         return database;
     }
 
@@ -101,6 +102,104 @@ CREATE TABLE IF NOT EXISTS "InvestmentImportSecurityLinks" (
   "ImportJobId" uuid NOT NULL,
   "SecurityId" uuid NOT NULL,
   PRIMARY KEY ("ImportJobId","SecurityId")
+);
+""");
+
+    // Aus demselben Grund wie oben, nur fuer die andere Haelfte: diese sieben Tabellen zeigen per
+    // Fremdschluessel auf "Transactions", stehen aber nicht im EF-Modell - sie entstehen in rohen
+    // SQL-Migrationen. EnsureCreated baut das Schema aus dem Modell und legt sie darum nie an.
+    //
+    // Das faellt auf, seit das Zusammenfuehren zweier Buchungen JEDE Beziehung umhaengt statt vier
+    // (TransactionMergeService): auf PostgreSQL sind alle da, auf diesem SQLite waren sie es nicht,
+    // und eine Zusammenfuehrung waere hier mit "no such table" gescheitert - an einer Luecke der
+    // Testkulisse, nicht an einem Fehler im Produkt. Die Spalten sind die des echten Schemas.
+    private static Task CreateRawTransactionTablesAsync(FullWorthDbContext db) =>
+        db.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS "AssetCashflowEntries" (
+  "Id" uuid PRIMARY KEY,
+  "FullWorthSpaceId" uuid NOT NULL,
+  "AssetId" uuid NOT NULL,
+  "TransactionId" uuid NULL,
+  "Date" text NOT NULL,
+  "Type" varchar(32) NOT NULL,
+  "Amount" numeric NOT NULL,
+  "Direction" varchar(16) NOT NULL,
+  "Currency" varchar(3) NOT NULL,
+  "IsPlanned" integer NOT NULL DEFAULT 0,
+  "Notes" varchar(500) NULL,
+  "CreatedAt" text NOT NULL,
+  "UpdatedAt" text NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "ContractTransactionLinks" (
+  "Id" uuid PRIMARY KEY,
+  "FullWorthSpaceId" uuid NOT NULL,
+  "ContractId" uuid NOT NULL,
+  "TransactionId" uuid NOT NULL,
+  "Amount" numeric NOT NULL,
+  "LinkSource" varchar(32) NOT NULL,
+  "Confidence" numeric NULL,
+  "CreatedAt" text NOT NULL,
+  UNIQUE ("ContractId","TransactionId")
+);
+CREATE TABLE IF NOT EXISTS "PurchaseRefunds" (
+  "Id" uuid PRIMARY KEY,
+  "PurchaseId" uuid NOT NULL,
+  "ExternalRefundId" varchar(120) NOT NULL,
+  "RefundDate" text NULL,
+  "Amount" numeric NOT NULL,
+  "Currency" varchar(3) NOT NULL,
+  "Status" varchar(32) NOT NULL,
+  "Description" varchar(500) NULL,
+  "TransactionId" uuid NULL,
+  "MatchConfidence" numeric NULL,
+  "CreatedAt" text NOT NULL,
+  "UpdatedAt" text NOT NULL,
+  UNIQUE ("TransactionId")
+);
+CREATE TABLE IF NOT EXISTS "ReceivablePayments" (
+  "Id" uuid PRIMARY KEY,
+  "FullWorthSpaceId" uuid NOT NULL,
+  "AssetId" uuid NOT NULL,
+  "TransactionId" uuid NULL,
+  "Date" text NOT NULL,
+  "PrincipalAmount" numeric NOT NULL,
+  "InterestAmount" numeric NOT NULL,
+  "Currency" varchar(3) NOT NULL,
+  "Notes" varchar(500) NULL,
+  "CreatedByUserId" uuid NULL,
+  "CreatedAt" text NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "TransactionReviewStates" (
+  "TransactionId" uuid PRIMARY KEY,
+  "FullWorthSpaceId" uuid NOT NULL,
+  "IsReviewed" integer NOT NULL DEFAULT 0,
+  "UpdatedAt" text NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "TransactionTags" (
+  "TransactionId" uuid NOT NULL,
+  "TagId" uuid NOT NULL,
+  "CreatedAt" text NOT NULL,
+  PRIMARY KEY ("TransactionId","TagId")
+);
+CREATE TABLE IF NOT EXISTS "RefundSuggestionDismissals" (
+  "FullWorthSpaceId" uuid NOT NULL,
+  "RefundTransactionId" uuid NOT NULL,
+  "OriginalTransactionId" uuid NOT NULL,
+  "DismissedAt" text NOT NULL,
+  PRIMARY KEY ("RefundTransactionId","OriginalTransactionId")
+);
+CREATE TABLE IF NOT EXISTS "SpendingReviews" (
+  "Id" uuid PRIMARY KEY,
+  "FullWorthSpaceId" uuid NOT NULL,
+  "UserId" uuid NOT NULL,
+  "TransactionId" uuid NOT NULL,
+  "PurchaseId" uuid NULL,
+  "Sentiment" varchar(32) NOT NULL,
+  "ReasonsJson" text NOT NULL,
+  "Note" varchar(500) NULL,
+  "CreatedAt" text NOT NULL,
+  "UpdatedAt" text NOT NULL,
+  UNIQUE ("FullWorthSpaceId","UserId","TransactionId")
 );
 """);
 
