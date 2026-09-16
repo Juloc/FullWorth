@@ -33,6 +33,9 @@ public sealed record ImportApplyResult(
     int Imported, int Duplicates, Guid PortfolioId, bool PortfolioCreated, string PortfolioName,
     string PortfolioCurrency, IReadOnlyList<ImportLedgerTrade> Trades);
 
+/// <summary>Duplikatstatus einer Importzeile vor dem eigentlichen Einspielen.</summary>
+public sealed record InvestmentImportDuplicatePreview(Guid Id, string Status, string? Reason);
+
 /// <summary>Was ein Ruecknehmen entfernt hat.</summary>
 public sealed record ImportRollbackResult(
     int RemovedTrades, int RemovedSecurities, int KeptSecurities, bool PortfolioRemoved);
@@ -53,6 +56,11 @@ public sealed record ImportRollbackResult(
 /// </summary>
 public sealed class InvestmentImportStore(FullWorthDbContext db, AuditService audit)
 {
+    private readonly record struct DuplicateClassification(string StableKey, string? Reason)
+    {
+        public bool IsDuplicate => Reason is not null;
+    }
+
     public Task<bool> CanManageAsync(Guid userId, Guid space, CancellationToken ct) =>
         SpaceCapabilities.HasCapabilityAsync(db, userId, space, "investments.manage", ct);
 
@@ -193,6 +201,20 @@ FROM "InvestmentImportCandidates" WHERE "ImportJobId"=@job ORDER BY "RowNumber"
                 RawSql.NullableString(reader, "ExternalKey"), RawSql.String(reader, "RowFingerprint"),
                 RawSql.String(reader, "ValidationStatus"), RawSql.NullableString(reader, "ValidationError"),
                 RawSql.String(reader, "DuplicateStatus")));
+        return rows;
+    }
+
+    public async Task<List<InvestmentImportDuplicatePreview>> DuplicatePreviewAsync(
+        Guid? portfolioId, IReadOnlyList<ImportCandidate> candidates, CancellationToken ct)
+    {
+        var seenStableKeys = new HashSet<string>(StringComparer.Ordinal);
+        var rows = new List<InvestmentImportDuplicatePreview>(candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            var duplicate = await ClassifyDuplicateAsync(portfolioId, candidate, seenStableKeys, ct);
+            rows.Add(new InvestmentImportDuplicatePreview(
+                candidate.Id, duplicate.IsDuplicate ? "duplicate" : "new", duplicate.Reason));
+        }
         return rows;
     }
 
@@ -358,9 +380,8 @@ ON CONFLICT DO NOTHING
 
             foreach (var candidate in candidates)
             {
-                var stableKey = InvestmentImportCandidates.StableExternalKey(candidate);
-                // Zweimal derselbe Handel - in dieser Datei oder aus einem frueheren Lauf.
-                if (!seenStableKeys.Add(stableKey) || await TradeExistsAsync(portfolioId, stableKey, ct))
+                var duplicate = await ClassifyDuplicateAsync(portfolioId, candidate, seenStableKeys, ct);
+                if (duplicate.IsDuplicate)
                 {
                     duplicates++;
                     await MarkCandidateAsync(candidate.Id, "duplicate", ct);
@@ -387,7 +408,7 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
                     ("@price", candidate.Price), ("@gross", candidate.GrossAmount),
                     ("@amount", candidate.Amount), ("@currency", candidate.Currency),
                     ("@fees", candidate.Fees), ("@taxes", candidate.Taxes),
-                    ("@withholding", candidate.WithholdingTax), ("@external", stableKey),
+                    ("@withholding", candidate.WithholdingTax), ("@external", duplicate.StableKey),
                     ("@notes", $"Imported row {candidate.RowNumber}"), ("@now", now)))
                     await insert.ExecuteNonQueryAsync(ct);
 
@@ -553,6 +574,18 @@ ORDER BY t."TradeDate",t."CreatedAt",t."Id"
                 RawSql.String(reader, "Currency"), RawSql.Decimal(reader, "Fees"),
                 RawSql.Decimal(reader, "Taxes"), RawSql.Decimal(reader, "WithholdingTax")));
         return rows;
+    }
+
+    private async Task<DuplicateClassification> ClassifyDuplicateAsync(
+        Guid? portfolioId, ImportCandidate candidate, HashSet<string> seenStableKeys, CancellationToken ct)
+    {
+        var stableKey = InvestmentImportCandidates.StableExternalKey(candidate);
+        if (!seenStableKeys.Add(stableKey))
+            return new DuplicateClassification(stableKey, "in_file");
+        if (portfolioId.HasValue && await TradeExistsAsync(portfolioId.Value, stableKey, ct))
+            return new DuplicateClassification(stableKey,
+                string.IsNullOrWhiteSpace(candidate.ExternalKey) ? "existing" : "external_key");
+        return new DuplicateClassification(stableKey, null);
     }
 
     private async Task<bool> TradeExistsAsync(Guid portfolioId, string externalKey, CancellationToken ct)

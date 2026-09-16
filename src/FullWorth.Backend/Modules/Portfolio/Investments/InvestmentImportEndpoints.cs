@@ -35,6 +35,10 @@ public sealed record InvestmentImportCommitWrite(
     IReadOnlyList<Guid>? CandidateIds = null,
     InvestmentImportPortfolioCreate? CreatePortfolio = null);
 
+public sealed record InvestmentImportDuplicatePreviewWrite(
+    Guid? PortfolioId,
+    IReadOnlyList<Guid>? CandidateIds = null);
+
 public static class InvestmentImportEndpoints
 {
     private const long MaxUploadBytes = 25L * 1024 * 1024;
@@ -46,6 +50,7 @@ public static class InvestmentImportEndpoints
         group.MapPost("/upload", Upload);
         group.MapGet("/jobs/{jobId:guid}", GetJob);
         group.MapGet("/jobs/{jobId:guid}/summary", Summary);
+        group.MapPost("/jobs/{jobId:guid}/duplicate-preview", DuplicatePreview);
         group.MapGet("/history", History);
         group.MapGet("/portfolios/{portfolioId:guid}/reconciliation", Reconciliation);
         group.MapPost("/jobs/{jobId:guid}/commit", Commit);
@@ -252,6 +257,44 @@ public static class InvestmentImportEndpoints
             ready = candidates.Count(candidate => candidate.Status == "ready"),
             errors = candidates.Count(candidate => candidate.Status == "error"),
             preview
+        });
+    }
+
+    private static async Task<IResult> DuplicatePreview(
+        Guid jobId, Guid fullWorthSpaceId, InvestmentImportDuplicatePreviewWrite request,
+        CurrentUserContext currentUser, InvestmentImportStore store, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await store.OwnsJobAsync(jobId, fullWorthSpaceId, userId, includeCompleted: false, ct))
+            return Results.NotFound();
+        if (!await store.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (request.PortfolioId.HasValue
+            && !await store.CanWritePortfolioAsync(userId, fullWorthSpaceId, request.PortfolioId.Value, ct))
+            return Results.BadRequest(new { error = "Target portfolio is inaccessible or not writable." });
+
+        var selectedIds = request.CandidateIds?.ToHashSet();
+        var candidates = (await store.CandidatesAsync(jobId, ct))
+            .Where(candidate => candidate.Status == "ready"
+                && (selectedIds is null || selectedIds.Contains(candidate.Id)))
+            .OrderBy(candidate => candidate.TradeDate)
+            .ThenBy(candidate => InvestmentImportCandidates.TradeOrderPriority(candidate.TradeType))
+            .ThenBy(candidate => candidate.RowNumber)
+            .ToList();
+        if (candidates.Count == 0)
+            return Results.Ok(new { total = 0, duplicates = 0, candidates = Array.Empty<object>() });
+
+        var preview = await store.DuplicatePreviewAsync(request.PortfolioId, candidates, ct);
+        return Results.Ok(new
+        {
+            total = preview.Count,
+            duplicates = preview.Count(candidate => candidate.Status == "duplicate"),
+            candidates = preview.Select(candidate => new
+            {
+                candidate.Id,
+                candidate.Status,
+                candidate.Reason
+            })
         });
     }
 
