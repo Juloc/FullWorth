@@ -2,7 +2,7 @@
    Typography has one application-wide family and one central size scale. Components inherit the family
    and consume size tokens instead of defining an alternative font stack or user-selectable typography.
    The interface remains monochrome and line-driven; colour is used only where it carries meaning. */
-@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:swap;src:url("https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf") format("truetype")}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:swap;src:url("https://cdn.jsdelivr.net/fontsource/fonts/nunito:vf@5.3.0/latin-wght-normal.woff2") format("woff2-variations")}
 :root{
   /* Typography: Nunito is the single application font. Compatibility aliases keep existing components
      on the same family while old specialised font roles are phased out. */
