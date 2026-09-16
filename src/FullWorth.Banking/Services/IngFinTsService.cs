@@ -47,8 +47,15 @@ public sealed record FinTsDiscoveredAccount(
     Guid? AccountId,
     bool Visible);
 
-/// <summary>Was die Uebernahme hinterlassen hat - gezaehlt an den Konten, nicht an der Ankuendigung.</summary>
-public sealed record FinTsImportOutcome(int Accounts, int Depots, int Hidden);
+/// <summary>
+/// Was die Uebernahme hinterlassen hat - gezaehlt an den Konten, nicht an der Ankuendigung.
+///
+/// <paramref name="Missing"/> und <paramref name="Error"/> sind der Grund, warum dieser Datensatz
+/// nicht nur zaehlt: der Abruf kann mittendrin scheitern. Dann stehen die bis dahin angelegten
+/// Konten da, das Depot fehlt - und die Antwort meldete trotzdem eine glatte Zahl. "4 Konten
+/// uebernommen" war wahr und trotzdem die falsche Auskunft, weil fuenf gemeldet worden waren.
+/// </summary>
+public sealed record FinTsImportOutcome(int Accounts, int Depots, int Hidden, int Missing, string? Error);
 
 public sealed record FinTsConnectionResult(
     Guid ConnectionId,
@@ -202,13 +209,32 @@ public sealed class IngFinTsService(
         var accounts = saved?.Parameters.Accounts ?? [];
         var described = await DescribeAsync(connection, accounts, ct);
 
-        // Gezaehlt wird, was ES GIBT - nicht, was die Bank angekuendigt hat. Die alte Antwort konnte
-        // "1 Depot" melden, waehrend gar keines entstanden war.
-        var imported = new FinTsImportOutcome(
-            described.Count(x => x.Kind == "cash" && x.AccountId.HasValue),
-            described.Count(x => x.Kind == "depot" && x.AccountId.HasValue),
-            described.Count(x => x.AccountId.HasValue && !x.Visible));
-        return new(connection.Id, connection.Status, saved?.Challenge, described, imported);
+        return new(connection.Id, connection.Status, saved?.Challenge, described,
+            Outcome(described, connection.LastError));
+    }
+
+    /// <summary>
+    /// Was die Uebernahme hinterlassen hat, gelesen an den Konten - nicht an der Ankuendigung.
+    ///
+    /// Eine Id hat nur, was es wirklich gibt. Daran haengt alles: die Zaehlung, und die Erkenntnis,
+    /// dass etwas fehlt. Die alte Fassung zaehlte nur und verschwieg zweierlei - dass die Bank mehr
+    /// gemeldet hatte, und dass der Abruf mittendrin abgebrochen war. "4 Konten uebernommen" war
+    /// wahr und trotzdem die falsche Auskunft: fuenf waren gemeldet, das Depot fehlte, und im Dialog
+    /// stand nichts davon.
+    ///
+    /// Eigene Funktion, weil sie genau das ist, was schiefging - und ohne Bank und ohne Datenbank
+    /// pruefbar sein muss.
+    /// </summary>
+    public static FinTsImportOutcome Outcome(IReadOnlyList<FinTsDiscoveredAccount> described, string? lastError)
+    {
+        var cash = described.Count(x => x.Kind == "cash" && x.AccountId.HasValue);
+        var depots = described.Count(x => x.Kind == "depot" && x.AccountId.HasValue);
+        return new(
+            cash,
+            depots,
+            described.Count(x => x.AccountId.HasValue && !x.Visible),
+            described.Count - cash - depots,
+            lastError);
     }
 
     /// <summary>

@@ -913,14 +913,32 @@
         let body = init?.body;
         if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
         const hidden = Array.isArray(body?.hidden) ? body.hidden : [];
+        // Ein Abruf, der mittendrin abbricht, ist kein Randfall: genau der ist gemeldet worden - vier
+        // Konten angelegt, das Depot nicht, und die Antwort meldete trotzdem eine glatte Zahl. Das
+        // Depot abzuwaehlen loest ihn hier aus, damit die unvollstaendige Antwort ansehbar bleibt.
+        const broke = hidden.includes('k4');
         return { status: 200, body: {
           connectionId: 'c3', status: 'AUTHORIZED', challenge: null,
-          discovered: discovered.map(a => ({ ...a, visible: !hidden.includes(a.key) })),
-          imported: {
-            accounts: discovered.filter(a => a.kind !== 'depot').length,
-            depots: discovered.filter(a => a.kind === 'depot').length,
-            hidden: hidden.length
-          }
+          discovered: discovered.map(a => ({
+            ...a,
+            visible: !hidden.includes(a.key),
+            accountId: broke && a.kind === 'depot' ? null : 'acc-' + a.key
+          })),
+          imported: broke
+            ? {
+                accounts: discovered.filter(a => a.kind !== 'depot').length,
+                depots: 0,
+                hidden: hidden.length,
+                missing: discovered.filter(a => a.kind === 'depot').length,
+                error: 'FINTS_BANK_ERROR'
+              }
+            : {
+                accounts: discovered.filter(a => a.kind !== 'depot').length,
+                depots: discovered.filter(a => a.kind === 'depot').length,
+                hidden: hidden.length,
+                missing: 0,
+                error: null
+              }
         } };
       }
       if (after.endsWith('ing/connect'))

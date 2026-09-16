@@ -684,7 +684,7 @@ function openIngSelection(initial){
   const countLabel=(one,many,n)=>get(n===1?one:many).replace('{count}',String(n));
 
   const showDone=result=>{
-    const imported=result.imported||{accounts:0,depots:0,hidden:0};
+    const imported=result.imported||{accounts:0,depots:0,hidden:0,missing:0,error:null};
     const parts=[];
     if(imported.accounts)parts.push(countLabel('accounts.countOne','accounts.countMany',imported.accounts));
     if(imported.depots)parts.push(countLabel('bankingSetup.ingDepotOne','bankingSetup.ingDepotMany',imported.depots));
@@ -693,9 +693,25 @@ function openIngSelection(initial){
           .replace('{what}',parts.join(' '+get('common.and')+' '))
           .replace('{hidden}',String(imported.hidden))
       : get('bankingSetup.ingImportedNone');
-    title.textContent=get('bankingSetup.ingDone');
-    step.innerHTML='<p>'+esc(text)+'</p>'
-      +'<div class="dialog-actions"><button type="button" data-finish>'+esc(get('common.close'))+'</button></div>';
+    // Der Abruf kann mittendrin abbrechen. Dann sind die bis dahin angelegten Konten echt - und die
+    // Zahl allein ist trotzdem die falsche Auskunft, weil die Bank mehr gemeldet hatte.
+    //
+    // Benannt statt gezaehlt: "1 fehlt" beantwortet die Frage nicht, die man dann stellt, naemlich
+    // WELCHES. Die Antwort traegt zu jedem gemeldeten Konto, ob es eine Id hat - genau daran haengt
+    // es. Der Knopf heisst hier "Erneut versuchen", nicht "Schliessen".
+    const absent=(current.discovered||[]).filter(a=>!a.accountId).map(a=>a.name);
+    const incomplete=absent.length>0||!!imported.error;
+    const trouble=incomplete
+      ?'<p class="row-sub">'
+        +(absent.length?esc(get('bankingSetup.ingImportMissing').replace('{names}',absent.join(', ')))+' ':'')
+        +(imported.error?esc(get('bankingSetup.ingImportError').replace('{code}',imported.error)):'')+'</p>'
+      :'';
+    title.textContent=get(incomplete?'bankingSetup.ingDonePartly':'bankingSetup.ingDone');
+    step.innerHTML='<p>'+esc(text)+'</p>'+trouble
+      +'<div class="dialog-actions">'
+      +(incomplete?'<button type="button" class="ghost" data-retry>'+esc(get('bankingSetup.ingRetry'))+'</button>':'')
+      +'<button type="button" data-finish>'+esc(get('common.close'))+'</button></div>';
+    step.querySelector('[data-retry]')?.addEventListener('click',()=>{void runImport();});
     step.querySelector('[data-finish]').onclick=async()=>{dlg.close();await ctx.reload();};
   };
 

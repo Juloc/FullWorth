@@ -1170,7 +1170,11 @@
     "ingDepotOne": "1 Depot",
     "ingDepotMany": "{count} Depots",
     "ingImportedHidden": "{what} übernommen, {hidden} davon ausgeblendet.",
-    "ingImportedNone": "Es wurde nichts übernommen."
+    "ingImportedNone": "Es wurde nichts übernommen.",
+    "ingDonePartly": "Nicht vollständig",
+    "ingImportError": "Die Bank oder der Abruf meldete: {code}.",
+    "ingRetry": "Erneut versuchen",
+    "ingImportMissing": "Nicht entstanden: {names}."
   },
   "aiAccess": {
     "title": "KI-Zugang",

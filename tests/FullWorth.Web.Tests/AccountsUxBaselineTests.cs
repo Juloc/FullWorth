@@ -275,6 +275,37 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         }
     }
 
+    /// <summary>
+    /// "Ich habe alle vier gesehen - und danach stand da '4 Konten importiert'. Wo ist mein Depot?"
+    ///
+    /// Der Abruf war abgebrochen, vier Konten standen schon, das Depot nicht - und der Dialog meldete
+    /// eine glatte Zahl unter der Ueberschrift "Fertig". Er muss das Gegenteil tun: benennen, was
+    /// nicht entstanden ist, den Grund zeigen und einen zweiten Versuch anbieten.
+    /// </summary>
+    [Fact]
+    public async Task AnAbortedImportIsNeverPresentedAsFinished()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+        var de = ReadAsset("locales", "de.json");
+        var en = ReadAsset("locales", "en.json");
+
+        // Was fehlt, erkennt der Dialog an der fehlenden Konto-Id - und nennt es beim Namen.
+        Assert.Contains("filter(a=>!a.accountId)", js);
+        Assert.Contains("bankingSetup.ingImportMissing", js);
+        Assert.Contains("bankingSetup.ingImportError", js);
+        // Andere Ueberschrift, anderer Knopf: "Fertig" und "Schliessen" waeren beide unwahr.
+        Assert.Contains("bankingSetup.ingDonePartly", js);
+        Assert.Contains("data-retry", js);
+        // Und die Ueberschrift darf nicht mehr unbedingt "Fertig" sein.
+        Assert.DoesNotContain("title.textContent=get('bankingSetup.ingDone');", js);
+        foreach (var locale in new[] { de, en })
+        {
+            Assert.Contains("\"ingImportMissing\"", locale);
+            Assert.Contains("\"ingDonePartly\"", locale);
+            Assert.Contains("\"ingRetry\"", locale);
+        }
+    }
+
     private async Task<string> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);

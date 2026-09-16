@@ -1170,7 +1170,11 @@
     "ingDepotOne": "1 securities account",
     "ingDepotMany": "{count} securities accounts",
     "ingImportedHidden": "Imported {what}, {hidden} of them hidden.",
-    "ingImportedNone": "Nothing was imported."
+    "ingImportedNone": "Nothing was imported.",
+    "ingDonePartly": "Not complete",
+    "ingImportError": "The bank or the retrieval reported: {code}.",
+    "ingRetry": "Try again",
+    "ingImportMissing": "Not created: {names}."
   },
   "aiAccess": {
     "title": "AI access",
