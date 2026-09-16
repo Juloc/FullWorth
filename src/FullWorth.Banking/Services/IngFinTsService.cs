@@ -83,6 +83,7 @@ public sealed class IngFinTsService(
     FullWorthBackendClient backend,
     IOptionsMonitor<FinTsOptions> options,
     IOptions<BankingSyncOptions> syncOptions,
+    BankSyncConcurrencyGate syncGate,
     ILogger<IngFinTsService> logger)
 {
     private readonly IOptionsMonitor<FinTsOptions> _options = options;
@@ -196,7 +197,7 @@ public sealed class IngFinTsService(
             authorizationId: JsonSerializer.Serialize(secret with { HiddenAccountKeys = chosen }, Json),
             lastError: null), ct);
 
-        connection = await SyncConnectionAsync(connection, bypassCadence: true, ct);
+        connection = await SyncGatedAsync(connection, ct);
         var saved = ReadSecret(connection);
         var accounts = saved?.Parameters.Accounts ?? [];
         var described = await DescribeAsync(connection, accounts, ct);
@@ -316,10 +317,27 @@ public sealed class IngFinTsService(
             status: result.IsOpen ? "AUTHORIZED" : "TAN_REQUIRED",
             lastError: stillChoosing ? SelectionPending : null), ct);
 
-        if (result.IsOpen && !stillChoosing) connection = await SyncConnectionAsync(connection, bypassCadence: true, ct);
+        if (result.IsOpen && !stillChoosing) connection = await SyncGatedAsync(connection, ct);
         var after = ReadSecret(connection);
         return new(connection.Id, connection.Status, after?.Challenge,
             await DescribeAsync(connection, after?.Parameters.Accounts ?? [], ct));
+    }
+
+    /// <summary>
+    /// Ein Abruf, den der Eigentuemer ausgeloest hat - im selben Gatter wie jeder andere.
+    ///
+    /// Ohne das lief er neben dem Hintergrundlauf her: zwei FinTS-Dialoge mit denselben Zugangsdaten
+    /// gleichzeitig, und die Bank bricht den zweiten ab. <see cref="BankSyncConcurrencyGate.EnterAsync"/>
+    /// und nicht <c>TryEnterAsync</c>, weil hier jemand vor dem Dialog wartet: abzubrechen, weil im
+    /// Hintergrund gerade etwas laeuft, waere eine Sackgasse mitten in der Einrichtung.
+    ///
+    /// Nicht in <see cref="SyncConnectionAsync"/> selbst: der Hintergrundlauf haelt das Gatter dann
+    /// schon, und ein <see cref="SemaphoreSlim"/> ist nicht wiedereintrittsfaehig.
+    /// </summary>
+    private async Task<BankConnectionDto> SyncGatedAsync(BankConnectionDto connection, CancellationToken ct)
+    {
+        using var lease = await syncGate.EnterAsync(ct);
+        return await SyncConnectionAsync(connection, bypassCadence: true, ct);
     }
 
     public async Task<BankConnectionDto> SyncConnectionAsync(BankConnectionDto connection, bool bypassCadence, CancellationToken ct)
