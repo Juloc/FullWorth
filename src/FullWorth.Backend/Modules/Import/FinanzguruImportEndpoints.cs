@@ -31,6 +31,21 @@ public static class FinanzguruImportEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapFinanzguruImportEndpoints(this IEndpointRouteBuilder app)
     {
+        // Was das Zuordnen tun WUERDE, bevor es etwas tut. Ohne diese Liste war es ein Knopf, nach dem
+        // Buchungen verschwunden waren, ohne dass jemand vorher sagen konnte, welche.
+        app.MapGet("/api/import/finanzguru/accounts/{importAccountId:guid}/link-preview", async (
+            Guid importAccountId,
+            Guid fullWorthSpaceId,
+            Guid targetAccountId,
+            CurrentUserContext currentUser,
+            FinanzguruAccountReconciliationService reconciliation,
+            CancellationToken ct) =>
+        {
+            var preview = await reconciliation.PreviewLinkAsync(
+                currentUser.RequireUserId(), fullWorthSpaceId, importAccountId, targetAccountId, ct);
+            return preview is null ? Results.NotFound() : Results.Ok(preview);
+        }).WithTags("Import");
+
         app.MapGet("/api/import/finanzguru/accounts", async (
             Guid fullWorthSpaceId,
             CurrentUserContext currentUser,
@@ -91,7 +106,9 @@ public static class FinanzguruImportEndpoints
                     request.TargetAccountId,
                     request.CurrentBalance,
                     request.CurrentBalanceCurrency,
-                    ct);
+                    ct,
+                    request.PreferImport,
+                    request.ExcludedImportTransactionIds?.ToHashSet());
                 if (result is null) return Results.NotFound();
 
                 await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);

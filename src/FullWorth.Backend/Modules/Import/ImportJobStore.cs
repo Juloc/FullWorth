@@ -241,11 +241,22 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         // Die Waehrung kommt aus der Datei selbst - sie ist das Einzige, was ueber das neue Konto
         // wirklich bekannt ist. Enthaelt sie keine, gilt die Basiswaehrung des Bereichs.
-        account ??= await CreateTargetAsync(
-            userId, fullWorthSpaceId, newAccountName!,
-            candidates.Select(row => row.Currency).FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency))
-                ?? await BaseCurrencyAsync(fullWorthSpaceId, ct),
-            ct);
+        if (account is null)
+        {
+            account = await CreateTargetAsync(
+                userId, fullWorthSpaceId, newAccountName!,
+                candidates.Select(row => row.Currency).FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency))
+                    ?? await BaseCurrencyAsync(fullWorthSpaceId, ct),
+                ct);
+            await db.SaveChangesAsync(ct);
+            // Der Auftrag merkt sich, dass ER dieses Konto angelegt hat - sonst bliebe es nach einer
+            // Ruecknahme leer stehen, obwohl der Nutzer genau das ungeschehen machen wollte.
+            var markConnection = await RawSql.OpenAsync(db, ct);
+            await using var mark = RawSql.Command(markConnection,
+                "UPDATE \"ImportJobs\" SET \"CreatedAccountId\"=@account WHERE \"Id\"=@job",
+                ("@account", (object?)account.Id), ("@job", (object?)jobId));
+            await mark.ExecuteNonQueryAsync(ct);
+        }
 
         foreach (var candidate in candidates)
         {
@@ -345,6 +356,28 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         await using (var delete = RawSql.Command(connection,
             ImportTransactionProvenance.DeleteImportedTransactionsSql, ("@job", jobId), ("@space", fullWorthSpaceId)))
             removed = await delete.ExecuteNonQueryAsync(ct);
+
+        // Hat der Import sein Zielkonto selbst angelegt und steht danach nichts mehr darin, geht es
+        // mit: der Nutzer nimmt den Import zurueck, um ihn ungeschehen zu machen, und ein leeres
+        // Konto, das er nie bestellt hat, waere das Gegenteil davon. Ein Konto mit Buchungen oder
+        // einem Kontostand bleibt - dann hat er es inzwischen selbst benutzt.
+        // Der Kontostand aus der Auszugsdatei gehoert dem Import und geht mit. Ein von Hand
+        // erfasster bleibt - er ist die Arbeit des Nutzers und haelt das Konto am Leben.
+        await using (var importedBalances = RawSql.Command(connection, """
+DELETE FROM "BalanceSnapshots" b
+USING "ImportJobs" j
+WHERE j."Id"=@job AND j."CreatedAccountId"=b."AccountId" AND b."Source"='import'
+""", ("@job", jobId)))
+            await importedBalances.ExecuteNonQueryAsync(ct);
+
+        await using (var emptyAccount = RawSql.Command(connection, """
+DELETE FROM "Accounts" a
+USING "ImportJobs" j
+WHERE j."Id"=@job AND j."CreatedAccountId"=a."Id"
+  AND NOT EXISTS (SELECT 1 FROM "Transactions" t WHERE t."AccountId"=a."Id")
+  AND NOT EXISTS (SELECT 1 FROM "BalanceSnapshots" b WHERE b."AccountId"=a."Id")
+""", ("@job", jobId)))
+            await emptyAccount.ExecuteNonQueryAsync(ct);
 
         await using (var candidates = RawSql.Command(connection,
             "UPDATE \"ImportCandidates\" SET \"DuplicateStatus\"='rolled_back' WHERE \"ImportJobId\"=@job AND \"DuplicateStatus\"='imported'",

@@ -48,6 +48,28 @@ public sealed record FinanzguruAttachedHistoryView(
     DateOnly? LastBookingDate,
     bool HasCurrentBalance);
 
+/// <summary>Ein Paar, das dasselbe meint: eine importierte Zeile und eine des Zielkontos.</summary>
+public sealed record FinanzguruDuplicateMatchView(
+    Guid ImportTransactionId,
+    Guid TargetTransactionId,
+    DateOnly? Date,
+    decimal Amount,
+    string Currency,
+    string? Counterparty,
+    string? ImportDescription,
+    string? TargetDescription,
+    string? ImportCategoryName,
+    string? TargetCategoryName);
+
+/// <summary>
+/// Was das Zuordnen tun WUERDE, bevor es etwas tut: welche Zeilen zusammenfallen und welche als eigene
+/// Buchungen umziehen. Ohne diese Liste war das Zuordnen ein Knopf, nach dem Buchungen verschwunden
+/// waren, ohne dass jemand vorher sagen konnte, welche.
+/// </summary>
+public sealed record FinanzguruLinkPreviewView(
+    IReadOnlyList<FinanzguruDuplicateMatchView> Matches,
+    int MovedWithoutMatch);
+
 public sealed record FinanzguruLinkOptionsView(
     IReadOnlyList<FinanzguruImportAccountLinkView> ImportAccounts,
     IReadOnlyList<FinanzguruTargetAccountLinkView> TargetAccounts,
@@ -173,6 +195,63 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         return new FinanzguruLinkOptionsView(importViews, targetViews, attached);
     }
 
+    /// <summary>
+    /// Dieselbe Paarung wie das Zuordnen selbst, nur ohne zu schreiben - und aus derselben Methode
+    /// gespeist (<see cref="Signature"/>), damit die Liste nicht etwas anderes behauptet, als danach
+    /// passiert.
+    /// </summary>
+    public async Task<FinanzguruLinkPreviewView?> PreviewLinkAsync(
+        Guid userId,
+        Guid fullWorthSpaceId,
+        Guid importAccountId,
+        Guid targetAccountId,
+        CancellationToken ct)
+    {
+        if (importAccountId == targetAccountId) return null;
+        var owns = await db.Accounts.AsNoTracking()
+            .CountAsync(account =>
+                (account.Id == importAccountId || account.Id == targetAccountId) &&
+                account.FullWorthSpaceId == fullWorthSpaceId &&
+                account.Owners.Any(owner => owner.UserId == userId && owner.OwnershipType == AccountOwnershipTypes.Owner), ct);
+        if (owns != 2) return null;
+
+        var imported = await db.Transactions.AsNoTracking()
+            .Where(transaction => transaction.AccountId == importAccountId)
+            .OrderBy(transaction => transaction.BookingDate).ThenBy(transaction => transaction.Id)
+            .ToListAsync(ct);
+        var live = await db.Transactions.AsNoTracking()
+            .Where(transaction => transaction.AccountId == targetAccountId
+                                  && transaction.Status != "PDNG"
+                                  && !transaction.ExternalKey.StartsWith("finanzguru:"))
+            .OrderBy(transaction => transaction.BookingDate).ThenBy(transaction => transaction.Id)
+            .ToListAsync(ct);
+
+        var categories = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .ToDictionaryAsync(category => category.Id, category => category.Name, ct);
+        string? Name(Guid? id) => id.HasValue && categories.TryGetValue(id.Value, out var name) ? name : null;
+
+        var bySignature = live.GroupBy(Signature)
+            .ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group));
+
+        var matches = new List<FinanzguruDuplicateMatchView>();
+        var moved = 0;
+        foreach (var row in imported)
+        {
+            if (bySignature.TryGetValue(Signature(row), out var candidates) && candidates.Count > 0)
+            {
+                var counterpart = candidates.Dequeue();
+                matches.Add(new FinanzguruDuplicateMatchView(
+                    row.Id, counterpart.Id, row.BookingDate ?? row.ValueDate, row.Amount, row.Currency,
+                    row.Counterparty, row.Description, counterpart.Description,
+                    Name(row.CategoryId), Name(counterpart.CategoryId)));
+            }
+            else moved++;
+        }
+
+        return new FinanzguruLinkPreviewView(matches, moved);
+    }
+
     public async Task<FinanzguruReconciliationResult> ReconcileAsync(
         Guid fullWorthSpaceId,
         IEnumerable<FinanceAccount> candidateLiveAccounts,
@@ -260,7 +339,9 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         Guid targetAccountId,
         decimal? currentBalance,
         string? currentBalanceCurrency,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool preferImport = false,
+        IReadOnlySet<Guid>? excludedImportTransactionIds = null)
     {
         if (importAccountId == targetAccountId) return null;
 
@@ -291,7 +372,9 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var balanceAdded = await EnsureCurrentBalanceAsync(
             targetAccount, currentBalance, currentBalanceCurrency, ct);
 
-        var result = await ReconcileAccountAsync(importedAccount, targetAccount, trustMovedHistory: true, ct);
+        var result = await ReconcileAccountAsync(
+            importedAccount, targetAccount, trustMovedHistory: true, ct,
+            preferImport, excludedImportTransactionIds);
 
         // Automatic reconciliation may already have moved imported rows onto this target account. Explicit
         // user confirmation upgrades every remaining Finanzguru row on the target to a trusted history source.
@@ -409,11 +492,26 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         return true;
     }
 
+    /// <param name="preferImport">
+    /// Wessen Fassung gewinnt, wenn zwei Zeilen dasselbe meinen: die importierte oder die des
+    /// Zielkontos. Gemeint ist der INHALT - Kategorie, Aufteilung, Notiz, Umbuchungs-Kennzeichen.
+    ///
+    /// Die IDENTITAET bleibt immer bei der Zeile des Zielkontos, und das ist keine Bequemlichkeit:
+    /// eine Bankzeile traegt den Schluessel, an dem die Bank sie wiedererkennt. Wer sie loeschte,
+    /// bekaeme sie beim naechsten Abruf neu geliefert - das Doppel waere zurueck, nur ohne die Arbeit,
+    /// die daran hing.
+    /// </param>
+    /// <param name="excludedImportTransactionIds">
+    /// Zeilen, die der Nutzer von der Zusammenfuehrung ausgenommen hat. Sie wandern mit auf das
+    /// Zielkonto, bleiben dort aber eigene Buchungen.
+    /// </param>
     private async Task<(int Moved, int Merged)> ReconcileAccountAsync(
         FinanceAccount importedAccount,
         FinanceAccount liveAccount,
         bool trustMovedHistory,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool preferImport = false,
+        IReadOnlySet<Guid>? excludedImportTransactionIds = null)
     {
         var imported = await db.Transactions
             .Where(transaction => transaction.AccountId == importedAccount.Id)
@@ -433,6 +531,29 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             .GroupBy(Signature)
             .ToDictionary(group => group.Key, group => new Queue<FinanceTransaction>(group));
 
+        // Der zweite Durchgang: dieselbe Buchung, nur ein paar Tage daneben. Bank und Export nennen
+        // oft verschiedene Tage fuer denselben Vorgang, und ohne dieses Fenster wurde daraus zweimal
+        // dasselbe Geld. Exakt zuerst, Fenster danach - so gewinnt nie eine ungefaehre Uebereinstimmung
+        // gegen eine genaue.
+        var liveByLoose = live
+            .GroupBy(row => Loose(Signature(row)))
+            .ToDictionary(group => group.Key, group => group.ToList());
+        var consumed = new HashSet<Guid>();
+
+        FinanceTransaction? NearMatch(TransactionSignature signature)
+        {
+            if (signature.Date is null) return null;
+            if (!liveByLoose.TryGetValue(Loose(signature), out var candidates)) return null;
+            return candidates
+                .Where(row => !consumed.Contains(row.Id))
+                .Select(row => (Row: row, Date: row.BookingDate ?? row.ValueDate))
+                .Where(entry => entry.Date.HasValue
+                                && Math.Abs(entry.Date!.Value.DayNumber - signature.Date.Value.DayNumber) <= MatchToleranceDays)
+                .OrderBy(entry => Math.Abs(entry.Date!.Value.DayNumber - signature.Date.Value.DayNumber))
+                .Select(entry => entry.Row)
+                .FirstOrDefault();
+        }
+
         var moved = 0;
         var merged = 0;
         // Die Zeilen, die EF hier verfolgt. Das Umhaengen laeuft in rohem SQL, und ein Verweis, den
@@ -441,11 +562,24 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         var tracked = imported.Concat(live).ToList();
         foreach (var historical in imported)
         {
-            if (liveBySignature.TryGetValue(Signature(historical), out var matches) && matches.Count > 0
-                && await TransactionMergeService.CanMergeAsync(db, historical.Id, matches.Peek().Id, ct))
+            var signature = Signature(historical);
+            FinanceTransaction? counterpart = null;
+            if (excludedImportTransactionIds?.Contains(historical.Id) != true)
             {
-                var providerTransaction = matches.Dequeue();
-                await MergeIntoLiveTransactionAsync(historical, providerTransaction, tracked, ct);
+                if (liveBySignature.TryGetValue(signature, out var exact))
+                    while (exact.Count > 0 && counterpart is null)
+                    {
+                        var candidate = exact.Dequeue();
+                        if (!consumed.Contains(candidate.Id)) counterpart = candidate;
+                    }
+                counterpart ??= NearMatch(signature);
+            }
+
+            if (counterpart is not null
+                && await TransactionMergeService.CanMergeAsync(db, historical.Id, counterpart.Id, ct))
+            {
+                consumed.Add(counterpart.Id);
+                await MergeIntoLiveTransactionAsync(historical, counterpart, tracked, preferImport, ct);
                 merged++;
             }
             else
@@ -485,6 +619,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         FinanceTransaction historical,
         FinanceTransaction live,
         IReadOnlyCollection<FinanceTransaction> tracked,
+        bool preferImport,
         CancellationToken ct)
     {
         var historicalHasAllocations = await db.TransactionAllocations.AsNoTracking()
@@ -492,14 +627,23 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
 
         // Manual user edits always win. Otherwise retain the imported Finanzguru category/split when the
         // bank row has only automatic/no categorization.
-        if (historical.CategorizationSource == "manual")
+        //
+        // Hat der Nutzer beim Zuordnen ausdruecklich die importierte Fassung gewaehlt, gilt sie
+        // vollstaendig - dieselbe Uebernahme wie bei einer manuellen Bearbeitung, nur weil er es so
+        // gesagt hat und nicht, weil die Zeile es von sich aus behauptet.
+        if (preferImport || historical.CategorizationSource == "manual")
         {
             live.CategoryId = historical.CategoryId;
             live.IsIgnored = historical.IsIgnored;
             live.IsTransfer = historical.IsTransfer;
             live.TransferPurpose = historical.TransferPurpose;
             live.UserNote = historical.UserNote;
-            live.CategorizationSource = "manual";
+            // Die Herkunft der Kategorie bleibt ehrlich: "manual" nur, wenn sie wirklich von Hand
+            // kam. Hat der Nutzer bloss die importierte Fassung gewaehlt, ist sie weiterhin die des
+            // Imports.
+            live.CategorizationSource = historical.CategorizationSource == "manual"
+                ? "manual"
+                : historical.CategorizationSource;
         }
         else if (live.CategorizationSource != "manual")
         {
@@ -550,4 +694,18 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
     }
 
     private sealed record TransactionSignature(DateOnly? Date, decimal Amount, string Currency, string? Party);
+
+    /// <summary>Dieselbe Signatur ohne das Datum - fuer den zweiten Durchgang mit Toleranzfenster.</summary>
+    private sealed record LooseSignature(decimal Amount, string Currency, string? Party);
+
+    private static LooseSignature Loose(TransactionSignature signature) =>
+        new(signature.Amount, signature.Currency, signature.Party);
+
+    /// <summary>
+    /// Wie weit zwei Buchungen auseinanderliegen duerfen und trotzdem dieselbe sind. Bank und Export
+    /// nennen oft verschiedene Tage fuer denselben Vorgang - die eine das Buchungs-, die andere das
+    /// Wertstellungsdatum -, und ein Tag Unterschied machte aus einer Buchung zwei.
+    /// Drei Tage decken das Wochenende mit ab; darueber hinaus faengt man an zu raten.
+    /// </summary>
+    private const int MatchToleranceDays = 3;
 }

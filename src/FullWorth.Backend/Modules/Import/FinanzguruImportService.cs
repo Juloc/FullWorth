@@ -30,7 +30,13 @@ public sealed class FinanzguruImportConflictException(string message) : Exceptio
 public sealed record FinanzguruExplicitLinkRequest(
     Guid TargetAccountId,
     decimal? CurrentBalance,
-    string? CurrentBalanceCurrency);
+    string? CurrentBalanceCurrency,
+    // Wessen Fassung gewinnt, wo zwei Zeilen dasselbe meinen - der Inhalt, nicht die Zeile selbst.
+    // Die Bankzeile bleibt immer bestehen: sie traegt den Schluessel, an dem die Bank sie
+    // wiedererkennt, und geloescht kaeme sie beim naechsten Abruf einfach zurueck.
+    bool PreferImport = false,
+    // Treffer, die der Nutzer in der Vorschau abgewaehlt hat. Sie ziehen als eigene Buchungen um.
+    IReadOnlyList<Guid>? ExcludedImportTransactionIds = null);
 
 public sealed record FinanzguruConfirmHistoryRequest(
     decimal? CurrentBalance,
