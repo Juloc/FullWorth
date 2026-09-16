@@ -6,6 +6,29 @@ public static class FinanzguruImportEndpoints
 {
     private const long MaxUploadBytes = 25L * 1024 * 1024;
 
+    /// <summary>
+    /// Die Vermoegenshistorie wird hier NICHT angestossen.
+    ///
+    /// Zwei Handler riefen nach dem Verknuepfen <c>RebuildHistoryForUserAsync</c> auf, und das war
+    /// doppelt und gefaehrlich zugleich.
+    ///
+    /// Doppelt, weil das Verknuepfen vermoegenswirksame Daten committet und der SaveChanges-Interceptor
+    /// den <c>FinancialDataConsistencyCoordinator</c> schon ueber den ganzen Space hat laufen lassen,
+    /// bevor die Zeile ueberhaupt drankam.
+    ///
+    /// Gefaehrlich, weil dieser Koordinator ein Singleton mit einem Semaphor ist und seine Laeufe
+    /// serialisiert - der Aufruf von hier lief daran vorbei. Der Neuaufbau liest die vorhandenen
+    /// Snapshots, ergaenzt die fehlenden und speichert; zwei solche Laeufe nebeneinander sehen beide
+    /// "heute fehlt" und legen beide an:
+    ///
+    /// <code>
+    /// duplicate key value violates unique constraint
+    ///   "IX_NetWorthSnapshots_FullWorthSpaceId_UserId_Date_Currency"
+    /// </code>
+    ///
+    /// Der Koordinator ist damit der einzige Weg zur Historie. Wer hier einen zweiten aufmacht, macht
+    /// denselben Fehler.
+    /// </summary>
     public static IEndpointRouteBuilder MapFinanzguruImportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/import/finanzguru/accounts", async (
