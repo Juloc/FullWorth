@@ -63,7 +63,6 @@ public static class FinanzguruImportEndpoints
             FinanzguruConfirmHistoryRequest request,
             CurrentUserContext currentUser,
             FinanzguruAccountReconciliationService reconciliation,
-            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
             CancellationToken ct) =>
         {
             try
@@ -78,7 +77,6 @@ public static class FinanzguruImportEndpoints
                     ct);
                 if (result is null) return Results.NotFound();
 
-                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
                 return Results.Ok(result);
             }
             catch (ArgumentException exception)
@@ -93,7 +91,6 @@ public static class FinanzguruImportEndpoints
             FinanzguruExplicitLinkRequest request,
             CurrentUserContext currentUser,
             FinanzguruAccountReconciliationService reconciliation,
-            FullWorth.Backend.Modules.Portfolio.NetWorthSnapshotService snapshots,
             CancellationToken ct) =>
         {
             try
@@ -111,7 +108,6 @@ public static class FinanzguruImportEndpoints
                     request.ExcludedImportTransactionIds?.ToHashSet());
                 if (result is null) return Results.NotFound();
 
-                await snapshots.RebuildHistoryForUserAsync(fullWorthSpaceId, userId, null, ct);
                 return Results.Ok(result);
             }
             catch (ArgumentException exception)
