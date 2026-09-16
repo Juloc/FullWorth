@@ -17,7 +17,10 @@ public sealed record FinTsSnapshotOutcome(Guid PortfolioId, int Positions);
 /// einen Namen, und die Transaktion umschliesst sie weiterhin alle. Bricht einer ab, ist kein halb
 /// eingespielter Depotstand entstanden.
 /// </summary>
-public sealed class FinTsInvestmentSnapshotStore(FullWorthDbContext db)
+public sealed class FinTsInvestmentSnapshotStore(
+    FullWorthDbContext db,
+    FullWorth.Backend.Modules.Portfolio.PortfolioValuationStore valuationStore,
+    FullWorth.Backend.Modules.Portfolio.PortfolioValuationService valuation)
 {
     /// <summary>Der Space hinter der Bankverbindung - oder nichts, wenn es keine FinTS-Verbindung ist.</summary>
     public Task<Guid?> FindSpaceOfConnectionAsync(Guid connectionId, CancellationToken ct) =>
@@ -51,9 +54,89 @@ public sealed class FinTsInvestmentSnapshotStore(FullWorthDbContext db)
         }
 
         await RemoveStalePositionsAsync(sql, portfolioId, activeExternalKeys, ct);
+        var accountId = await LinkDepotAccountAsync(sql, spaceId, portfolioId, request.DepotKey, now, ct);
+        if (accountId is { } account) await WriteDepotBalanceAsync(sql, spaceId, portfolioId, account, request, now, ct);
 
         await transaction.CommitAsync(ct);
         return new FinTsSnapshotOutcome(portfolioId, activeExternalKeys.Count);
+    }
+
+    /// <summary>
+    /// Das Depot und sein Konto sind dasselbe - also sagt das Depot es auch.
+    ///
+    /// Ohne diese Verknuepfung blieb <c>AccountId</c> leer, und damit lief der Schutz gegen
+    /// Doppelzaehlung in <c>InvestmentNetWorthService</c> fuer FinTS-Depots nie an: er ist genau fuer
+    /// ein verknuepftes Konto geschrieben, hatte aber keinen Erzeuger.
+    ///
+    /// Der Schluessel ist auf beiden Seiten derselbe: <c>AccountHash(depot)</c> der Banking-Seite ist
+    /// der <c>IdentificationHash</c> des Kontos und zugleich der <c>DepotKey</c> hier.
+    ///
+    /// <c>AND "AccountId" IS NULL</c> ist Idempotenz UND Respekt: ein erneuter Abruf aendert nichts,
+    /// und eine vom Eigentuemer von Hand gesetzte Verknuepfung wird nie ueberschrieben.
+    /// </summary>
+    private static async Task<Guid?> LinkDepotAccountAsync(
+        DbConnection sql, Guid spaceId, Guid portfolioId, string depotKey, DateTimeOffset now, CancellationToken ct)
+    {
+        var key = depotKey.Trim();
+        if (key.Length == 0) return null;
+
+        Guid accountId;
+        await using (var find = RawSql.Command(sql,
+            """
+            SELECT "Id" FROM "Accounts"
+            WHERE "FullWorthSpaceId"=@space AND "Provider"='fints' AND "IdentificationHash"=@key
+            LIMIT 1
+            """, ("@space", spaceId), ("@key", key)))
+        await using (var reader = await find.ExecuteReaderAsync(ct))
+            accountId = await reader.ReadAsync(ct) ? RawSql.Guid(reader, "Id") : Guid.Empty;
+
+        if (accountId == Guid.Empty) return null;
+
+        await using var link = RawSql.Command(sql,
+            """
+            UPDATE "InvestmentPortfolios" SET "AccountId"=@account,"UpdatedAt"=@now
+            WHERE "Id"=@portfolio AND "AccountId" IS NULL
+            """, ("@account", accountId), ("@now", now), ("@portfolio", portfolioId));
+        await link.ExecuteNonQueryAsync(ct);
+        return accountId;
+    }
+
+    /// <summary>
+    /// Der Wert des Depots als Saldo seines Kontos.
+    ///
+    /// Die Bank nennt fuer ein Depot keinen Saldo - sein Wert ist die Bewertung der Positionen.
+    /// Gerechnet wird sie von <c>PortfolioValuationService</c> und nicht hier aus der Summe der
+    /// gemeldeten Kurswerte: beide duerfen legitim auseinandergehen, weil ein gemeldeter Stueckpreis
+    /// vor dem abgeleiteten gewinnt. Zwei Zahlen fuer dasselbe Depot waeren schlimmer als eine.
+    ///
+    /// <c>BalanceType</c> ist bewusst keiner aus <c>CurrentBalances.Preference</c>: unbekannte Typen
+    /// ranken zuletzt und bedeuten "aufgezeichnet", wofuer die Oberflaeche KEIN Etikett druckt. Ein
+    /// Depotwert darf nicht "gebucht" oder "verfuegbar" heissen.
+    ///
+    /// Ist die Bewertung unvollstaendig - ein Kurs fehlt, ein Umrechnungskurs fehlt - wird NICHTS
+    /// geschrieben. Die Zeile zeigt dann ihren letzten bekannten Wert mit dessen Datenstand, nie eine
+    /// selbstbewusste Null.
+    /// </summary>
+    private async Task WriteDepotBalanceAsync(
+        DbConnection sql, Guid spaceId, Guid portfolioId, Guid accountId,
+        FinTsInvestmentSnapshotRequest request, DateTimeOffset now, CancellationToken ct)
+    {
+        var portfolio = await valuationStore.FindPortfolioAsync(spaceId, portfolioId, ct);
+        if (portfolio is null) return;
+
+        var calculation = await valuation.CalculateAsync(portfolio, request.AsOf, ct);
+        if (calculation.Incomplete) return;
+
+        await using var insert = RawSql.Command(sql,
+            """
+            INSERT INTO "BalanceSnapshots"
+            ("Id","AccountId","Amount","Currency","BalanceType","ReferenceDate","Source","Note","CapturedAt")
+            VALUES (@id,@account,@amount,@currency,'marketValue',@date,'provider',@note,@now)
+            """,
+            ("@id", Guid.NewGuid()), ("@account", accountId), ("@amount", calculation.TotalValue),
+            ("@currency", portfolio.Currency), ("@date", request.AsOf), ("@note", "Depotwert aus Bestandsabruf"),
+            ("@now", now));
+        await insert.ExecuteNonQueryAsync(ct);
     }
 
     private static async Task<Guid> UpsertPortfolioAsync(

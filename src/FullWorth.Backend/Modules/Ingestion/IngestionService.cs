@@ -20,6 +20,11 @@ public sealed record BankConnectionBatch(Guid? ConnectionId, string Provider, st
 // HasDetails=false marks metadata as placeholder-quality (the provider's session payload carried no
 // account details and the details resource was unavailable): it may seed a NEW account but must not
 // overwrite previously stored real names/currency on existing ones.
+//
+// IsActive ist der Zustand bei der ANLAGE, nicht bei jeder Synchronisation. Sobald das Konto
+// existiert, gehoeren IsActive und IncludeInNetWorth dem Eigentuemer - geaendert wird beides nur
+// ueber PATCH /api/accounts/{id}. Ein Einspieler, der ein ausgeblendetes Konto wieder einschaltet,
+// nimmt dem Eigentuemer seine Entscheidung weg.
 public sealed record AccountBatchItem(string IdentificationHash, string ProviderAccountId, string InstitutionName, string DisplayName, string? Product, string? AccountType, string Currency, string? IbanLast4, bool IsActive, bool HasDetails = true, IReadOnlyList<string>? IdentificationHashes = null, string? Usage = null, string? PsuStatus = null, decimal? CreditLimitAmount = null, string? CreditLimitCurrency = null, string? Iban = null);
 public sealed record BalanceBatchItem(string IdentificationHash, decimal Amount, string Currency, string BalanceType, DateOnly? ReferenceDate, DateTimeOffset CapturedAt);
 public sealed record TransactionBatchItem(string IdentificationHash, string ExternalKey, string? ProviderTransactionId, string Status, DateOnly? BookingDate, DateOnly? ValueDate, decimal Amount, string Currency, string? Counterparty, string? Description, string? MerchantCategoryCode, string? EntryReference, string RawJson, string? CounterpartyAccountIdentifier = null);
@@ -278,7 +283,18 @@ public sealed class IngestionService(
                         entity.Id);
                 }
             }
-            entity.IsActive = item.IsActive; entity.UpdatedAt = DateTimeOffset.UtcNow;
+            // Auch `IsActive` gehoert dem Eigentuemer, sobald das Konto existiert.
+            //
+            // Hier stand die Zuweisung ohne `isNew` - und damit widersprach die Zeile dem Absatz
+            // darueber, der genau das verspricht ("no sync can overrule the owner"). Jeder Einspieler
+            // schickt `IsActive: true` (FinTS wie Enable Banking), also hat jede Synchronisation ein
+            // vom Eigentuemer ausgeblendetes Konto wieder eingeschaltet.
+            //
+            // Die Zusicherung lautet jetzt fuer BEIDE Kennzeichen gleich: `AccountBatchItem.IsActive`
+            // ist der Zustand bei der ANLAGE. Danach aendert sie nur der Eigentuemer, ueber
+            // PATCH /api/accounts/{id} -> AccountStore.UpdateSettingsAsync.
+            if (isNew) entity.IsActive = item.IsActive;
+            entity.UpdatedAt = DateTimeOffset.UtcNow;
             result[item.IdentificationHash] = entity;
         }
         await db.SaveChangesAsync(ct);

@@ -53,6 +53,9 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
     public TransactionProviderPointer? ProviderPointer { get; set; }
     public List<BankConnectionWrite> Upserts { get; } = [];
     public List<FinanceIngestBatch> Ingests { get; } = [];
+    public List<FinTsInvestmentSnapshotDto> DepotSnapshots { get; } = [];
+    /// <summary>Die Pfade in der Reihenfolge, in der sie kamen - fuer Aussagen ueber die Abfolge.</summary>
+    public List<string> Calls { get; } = [];
     public int ListConnectionCalls { get; private set; }
     public int AuthorizeCalls { get; private set; }
     public HttpStatusCode AuthorizeResponse { get; set; } = HttpStatusCode.NoContent;
@@ -61,6 +64,7 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var path = request.RequestUri!.AbsolutePath;
+        Calls.Add(path);
 
         if (request.Method == HttpMethod.Get && path == "/internal/banking/connections/")
         {
@@ -162,6 +166,14 @@ internal sealed class FakeBackendHandler : HttpMessageHandler
             path.StartsWith("/internal/banking/transactions/", StringComparison.Ordinal) &&
             path.EndsWith("/provider-pointer", StringComparison.Ordinal))
             return ProviderPointer is null ? new(HttpStatusCode.NotFound) : Json(ProviderPointer);
+
+        if (request.Method == HttpMethod.Post && path == "/internal/banking/fints/investment-snapshot")
+        {
+            var snapshot = await request.Content!.ReadFromJsonAsync<FinTsInvestmentSnapshotDto>(_json, cancellationToken)
+                ?? throw new InvalidOperationException("Missing depot snapshot payload.");
+            DepotSnapshots.Add(snapshot);
+            return new(HttpStatusCode.OK);
+        }
 
         if (request.Method == HttpMethod.Post && path == "/internal/banking/ingest")
         {

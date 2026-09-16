@@ -239,7 +239,12 @@ public sealed class IngFinTsService(
             }
             await finTs.EndAsync(bank, credentials, session, ct);
             secret = secret with { Parameters = session.Parameters, Session = null, Challenge = null };
-            logger.LogInformation("FinTS sync finished for ING: {CashAccounts} cash accounts, {Depots} depots.", cashAccounts, depots);
+            // Der Kontenbauplan gehoert AUCH hierhin, nicht nur ans Verbinden: eine Synchronisation im
+            // Hintergrund, die ein Depot verliert, war sonst unsichtbar - die Zahlen darueber zaehlen
+            // Versuche, nicht Ergebnisse.
+            logger.LogInformation(
+                "FinTS sync finished for ING: {CashAccounts} cash accounts, {Depots} depots. Accounts={Accounts}",
+                cashAccounts, depots, Shape(session.Parameters.Accounts));
             var completed = await backend.UpsertConnectionAsync(ToWrite(connection,
                 authorizationId: JsonSerializer.Serialize(secret, Json), status: "AUTHORIZED",
                 lastSyncedAt: DateTimeOffset.UtcNow, nextSyncAllowedAt: nextAllowed, consecutiveFailures: 0, lastError: null), ct);
@@ -380,10 +385,26 @@ public sealed class IngFinTsService(
             if (string.IsNullOrWhiteSpace(touchdown)) break;
         }
         var depotKey = AccountHash(depot);
+        var depotName = depot.ProductName ?? "ING Direkt-Depot";
+
+        // Das Depot wird ein KONTO, ueber denselben Weg wie das Girokonto. Vorher endete dieser Zweig
+        // allein im Depotstand, und damit stand das Depot nirgends bei den Konten - nur unter
+        // Vermoegen. Reihenfolge ist tragend: das Konto muss da sein, bevor der Depotstand kommt,
+        // sonst findet dessen Verknuepfung nichts.
+        //
+        // Salden schickt dieser Aufruf keine. Die Bank nennt fuer ein Depot keinen Saldo; sein Wert
+        // ist die Bewertung der Positionen und wird dort geschrieben, wo sie entsteht.
+        await backend.IngestAsync(new FinanceIngestBatch(
+            new(connection.Id, "fints", "ING", "DE", connection.ProviderSessionId, "AUTHORIZED", null, DateTimeOffset.UtcNow, null),
+            [new AccountBatchItem(depotKey, "fints:" + depotKey, "ING", depotName, depot.ProductName, "securities",
+                depot.Currency, DepotLast4(depot), true, true, [depotKey], "private", "enabled")],
+            [],
+            []), ct);
+
         await backend.IngestFinTsInvestmentSnapshotAsync(new(
             connection.Id,
             depotKey,
-            depot.ProductName ?? "ING Direkt-Depot",
+            depotName,
             depot.Currency,
             DateOnly.FromDateTime(DateTime.UtcNow),
             holdings.Select(h => new FinTsHoldingSnapshotDto(
@@ -513,6 +534,18 @@ public sealed class IngFinTsService(
         var normalized = value.Replace(" ", string.Empty);
         return normalized.Length >= 4 ? normalized[^4..] : null;
     }
+
+    /// <summary>
+    /// Die letzten vier Stellen, an denen der Eigentuemer sein DEPOT wiedererkennt.
+    ///
+    /// Ein Depot hat keine IBAN, es wird ueber seine Depotnummer angesprochen - <see cref="Last4"/>
+    /// damit zu fuettern waere eine NullReferenceException mitten im Sync. Ohne die vier Stellen
+    /// faellt die Anzeige auf eine technische Kennung zurueck, die in keinem Bankauszug steht.
+    /// </summary>
+    private static string? DepotLast4(FinTsAccount depot)
+        => !string.IsNullOrWhiteSpace(depot.AccountNumber) ? Last4(depot.AccountNumber)
+            : !string.IsNullOrWhiteSpace(depot.Iban) ? Last4(depot.Iban)
+            : null;
 
     private static FinTsConnectionSecret? ReadSecret(BankConnectionDto connection)
     {

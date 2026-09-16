@@ -192,13 +192,28 @@ ON CONFLICT ("FullWorthSpaceId") DO UPDATE SET "HorizonMode"=EXCLUDED."HorizonMo
     // Buchungen stehen also ein zweites Mal da, und eine Vorausschau, die beide addiert, rechnet mit
     // dem doppelten Geld. Das Vermoegen filtert dafuer auf IncludeInNetWorth - hier zaehlt IsActive,
     // denn ein zugeordnetes Konto bleibt sichtbar und bedienbar; es soll nur nicht mitsummieren.
-    public Task<List<Guid>> ActiveAccountIdsAsync(IReadOnlySet<Guid> visibleAccountIds, CancellationToken ct) =>
-        db.Accounts.AsNoTracking()
+    /// <summary>
+    /// Die Konten, aus deren Salden die Vorausschau startet.
+    ///
+    /// Ein DEPOT gehoert nicht dazu. Sein Saldo ist der Wert seiner Wertpapiere, und der ist kein Geld,
+    /// das diesen Monat eine Rechnung bezahlt - er stuende in der Vorausschau als verfuegbar da und
+    /// haette sie um den ganzen Depotwert zu hoch angesetzt. Erkennbar ist es daran, dass ein Depot auf
+    /// das Konto zeigt: genau diese Verknuepfung sagt "dieses Konto IST das Depot".
+    /// </summary>
+    public async Task<List<Guid>> ActiveAccountIdsAsync(IReadOnlySet<Guid> visibleAccountIds, CancellationToken ct)
+    {
+        var depotAccounts = (await db.Database
+            .SqlQuery<Guid>($"""SELECT "AccountId" AS "Value" FROM "InvestmentPortfolios" WHERE "AccountId" IS NOT NULL AND "IsArchived"=false""")
+            .ToListAsync(ct)).ToHashSet();
+
+        return await db.Accounts.AsNoTracking()
             .Where(account => visibleAccountIds.Contains(account.Id)
                               && account.IsActive
-                              && account.DuplicateOfAccountId == null)
+                              && account.DuplicateOfAccountId == null
+                              && !depotAccounts.Contains(account.Id))
             .Select(account => account.Id)
             .ToListAsync(ct);
+    }
 
     /// <summary>
     /// Dieselbe Regel wie Kontoliste und Vermoegen (Accounts.CurrentBalances): der neueste Stand je

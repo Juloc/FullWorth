@@ -317,6 +317,41 @@ public sealed class IngestionBaselineTests
         Assert.Equal("Test Bank", seeded.DisplayName);
     }
 
+    /// <summary>
+    /// Ein ausgeblendetes Konto bleibt ausgeblendet - auch nach der naechsten Synchronisation (#123).
+    ///
+    /// Die Zuweisung lief ohne isNew und widersprach damit dem Absatz darueber, der genau das
+    /// verspricht. Jeder Einspieler schickt IsActive: true, also hat JEDE Synchronisation ein vom
+    /// Eigentuemer abgewaehltes Konto wieder eingeschaltet. Ohne diese Zusicherung gaebe es keine
+    /// Kontenauswahl beim Verbinden - die Abwahl haette einen Sync lang gehalten.
+    /// </summary>
+    [Fact]
+    public async Task ASyncNeverSwitchesAHiddenAccountBackOn()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var service = new IngestionService(db);
+
+        await service.IngestAsync(
+            CreateAccountOnlyBatch("fints", "session-hide", "hash-hide", "provider-hide", "Extra-Konto"),
+            CancellationToken.None);
+
+        var account = await db.Accounts.SingleAsync(x => x.IdentificationHash == "hash-hide");
+        Assert.True(account.IsActive);
+        account.IsActive = false;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        // Dieselbe Charge noch einmal - so wie jede Synchronisation sie schickt: IsActive: true.
+        await service.IngestAsync(
+            CreateAccountOnlyBatch("fints", "session-hide", "hash-hide", "provider-hide", "Extra-Konto"),
+            CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var after = await db.Accounts.AsNoTracking().SingleAsync(x => x.IdentificationHash == "hash-hide");
+        Assert.False(after.IsActive);
+    }
+
     private static FinanceIngestBatch CreateAccountOnlyBatch(
         string provider,
         string sessionId,
