@@ -109,7 +109,10 @@ public sealed class NetWorthSnapshotService(
         // preferred balance is usually interimAvailable, which already includes pending authorisations -
         // anchoring there shifted every past day by the pending amount. Today keeps the preferred figure
         // (that is what the user sees now); only the walk continues from the settled one.
-        var bookedBalances = Accounts.CurrentBalances.PickBooked(balanceRows)
+        // Dieselbe Regel haelt jetzt CurrentBalances.PickForBackCast, damit der Kontoverlauf sie nicht
+        // ein zweites Mal beantworten muss - dort fehlte der Rueckfall, und ein handverankertes Konto
+        // hatte darum ueberhaupt keine Kurve.
+        var bookedBalances = Accounts.CurrentBalances.PickForBackCast(balanceRows)
             .ToDictionary(balance => (balance.AccountId, balance.Currency.ToUpperInvariant()));
         var anchoredAccountIds = latestBalances.Select(balance => balance.AccountId).Distinct().ToArray();
 

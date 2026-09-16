@@ -75,7 +75,12 @@ public sealed class AccountBalanceHistoryStore(FullWorthDbContext db, CurrencyCo
         // Der Anker: der gebuchte Kontostand, wie er heute dasteht - je Konto UND Waehrung, denn eine
         // Geldboerse (PayPal, Wise) haelt mehrere.
         var balanceRows = await CurrentBalances.LoadRowsAsync(db, [.. accounts], ct);
-        var anchors = CurrentBalances.PickBooked(balanceRows)
+        // Gebucht hat Vorrang - die Rueckrechnung laeuft ueber gebuchte Buchungen, ein Stand mit
+        // Vormerkungen darin verschoebe jeden Tag davor um deren Betrag. Gibt es aber gar keinen
+        // gebuchten Stand, war die Kurve bisher LEER: ein von Hand verankertes Konto (BalanceType
+        // "manual") gilt als "erfasst", nicht als "gebucht", und fiel damit komplett heraus. Ein
+        // Importkonto ist genau so eines - es haette nie eine Kurve gesehen.
+        var anchors = CurrentBalances.PickForBackCast(balanceRows)
             .Select(balance => new Anchor(balance.AccountId, balance.Currency.ToUpperInvariant(), balance.Amount))
             .ToList();
         if (anchors.Count == 0) return [];

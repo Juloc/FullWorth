@@ -112,8 +112,32 @@ public sealed class DailyBalanceHistoryTests
     private static decimal Amount(IReadOnlyList<DailyBalancePoint> days, DateOnly date) =>
         days.Single(day => day.Date == date).Amount;
 
+    /// <summary>
+    /// Ein Konto, dessen Stand der Nutzer selbst eingetragen hat, hatte GAR KEINE Kurve: der Anker
+    /// wurde nur unter den "gebuchten" Staenden gesucht, und ein manueller gilt als "erfasst". Die
+    /// Abfrage gab dann eine leere Reihe zurueck - das Konto verschwand aus seinem eigenen Verlauf,
+    /// ohne dass irgendwo stand, warum. Ein Importkonto ist genau so eines.
+    /// </summary>
+    [Fact]
+    public async Task EinHandverankertesKontoHatEinenVerlauf()
+    {
+        await using var database = await SqliteFullWorthDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var account = await SeedAsync(db, balance: 500m, currency: "EUR", balanceType: "manual");
+        AddTransaction(db, account, today, -100m, "EUR");
+        await db.SaveChangesAsync();
+
+        var days = await StoreFor(db).DailyAsync(User, Space, today.AddDays(-1), today, null, null, CancellationToken.None);
+
+        Assert.Equal(2, days.Count);
+        Assert.Equal(500m, Amount(days, today));
+        Assert.Equal(600m, Amount(days, today.AddDays(-1)));
+    }
+
     private static async Task<Guid> SeedAsync(
-        FullWorthDbContext db, decimal balance, string currency, bool seedSpace = true)
+        FullWorthDbContext db, decimal balance, string currency, bool seedSpace = true,
+        string balanceType = "closingBooked")
     {
         if (seedSpace)
         {
@@ -151,7 +175,7 @@ public sealed class DailyBalanceHistoryTests
             AccountId = account.Id,
             Amount = balance,
             Currency = currency,
-            BalanceType = "closingBooked",
+            BalanceType = balanceType,
             CapturedAt = DateTimeOffset.UtcNow,
             Source = BalanceSources.Provider
         });

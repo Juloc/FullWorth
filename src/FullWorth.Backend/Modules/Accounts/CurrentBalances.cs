@@ -163,6 +163,28 @@ public static class CurrentBalances
     /// anchoring it on a balance that already includes pending authorisations shifts every past day by
     /// the pending amount.
     /// </summary>
+    /// <summary>
+    /// Der Startwert fuer eine Rueckrechnung: der gebuchte Stand, und wo es keinen gibt, der
+    /// bevorzugte. Die Rueckrechnung laeuft ueber gebuchte Buchungen, also ist "gebucht" die richtige
+    /// Wahl, wo sie zu haben ist - aber "gar keine Kurve" ist die falsche Antwort, wenn der Nutzer
+    /// den Stand selbst eingetragen hat. Ein handverankertes Konto gilt als "erfasst", nicht als
+    /// "gebucht", und fiel darum aus jeder Kurve.
+    ///
+    /// Dieselbe Regel stand als Einzeiler im Nettovermoegen (booked ?? bevorzugt) und fehlte im
+    /// Kontoverlauf - zwei Antworten auf dieselbe Frage.
+    /// </summary>
+    public static List<AccountBalance> PickForBackCast(IEnumerable<AccountBalance> rows)
+    {
+        var all = rows as ICollection<AccountBalance> ?? [.. rows];
+        var booked = PickBooked(all)
+            .ToDictionary(balance => (balance.AccountId, Normalize(balance.Currency)));
+        return Pick(all)
+            .Select(balance => booked.TryGetValue((balance.AccountId, Normalize(balance.Currency)), out var settled)
+                ? settled
+                : balance)
+            .ToList();
+    }
+
     public static List<AccountBalance> PickBooked(IEnumerable<AccountBalance> rows) =>
         Pick(rows.Where(balance => IsBooked(balance.BalanceType)));
 
