@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FullWorth.FinTs;
 
 public sealed class FinTsClient(IFinTsTransport transport)
@@ -14,7 +16,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         var response = await SendAsync(bank, credentials, session,
             [FinTsMessages.Identify(bank, credentials.UserId, "0"), FinTsMessages.ProcessPrep(parameters, credentials.ProductId), FinTsMessages.Sync()],
             null, cancellationToken);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         var merged = FinTsResponseParser.MergeParameters(parameters, response);
         var dialogId = FinTsResponseParser.DialogId(response);
         var syncedSession = new FinTsSessionState(dialogId, 2, merged);
@@ -85,7 +87,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var next = Advance(session, response);
         if (response.NeedsTan) return TanResult<FinTsBalance>(response, next);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         return FinTsResponseParser.Balance(response) is { } balance ? FinTsResult<FinTsBalance>.Success(balance, next) : FinTsResult<FinTsBalance>.Empty(next);
     }
 
@@ -106,7 +108,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var next = Advance(session, response);
         if (response.NeedsTan) return TanResult<IReadOnlyList<FinTsTransaction>>(response, next);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         return FinTsResult<IReadOnlyList<FinTsTransaction>>.Success(FinTsResponseParser.Transactions(response), next, response.Touchdown);
     }
 
@@ -128,7 +130,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var next = Advance(session, response);
         if (response.NeedsTan) return TanResult<IReadOnlyList<FinTsHolding>>(response, next);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         var holdings = FinTsResponseParser.Holdings(response);
         return holdings.Count == 0 && response.Touchdown is null
             ? FinTsResult<IReadOnlyList<FinTsHolding>>.Empty(next)
@@ -162,7 +164,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
             return new FinTsOpenResult(FinTsResultKind.TanPending, next, FinTsResponseParser.Challenge(response, next.Parameters) ?? challenge);
         if (response.NeedsTan)
             return new FinTsOpenResult(FinTsResultKind.TanRequired, next, FinTsResponseParser.Challenge(response, next.Parameters) ?? challenge);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         return new FinTsOpenResult(FinTsResultKind.Success, next);
     }
 
@@ -183,7 +185,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         var response = await SendAsync(bank, credentials, session, [segment], poll ? string.Empty : tan, cancellationToken);
         var next = Advance(session, response);
         if (response.DecoupledPending || response.NeedsTan) return TanResult<T>(response, next, challenge);
-        response.ThrowOnError();
+        response.ThrowOnError(lastSentShape);
         var value = parser(response);
         return value is null ? empty(response, next) : FinTsResult<T>.Success(value, next, response.Touchdown);
     }
@@ -208,15 +210,23 @@ public sealed class FinTsClient(IFinTsTransport transport)
         return FinTsResponseParser.Parse(bytes);
     }
 
-    /// <summary>Art, Version und Zahl der Datenelemente eines Segments - alles aus dem Kopf, kein Inhalt.</summary>
+    /// <summary>
+    /// Art, Nummer, Version und Zahl der Datenelemente eines Segments - alles aus dem Kopf, kein Inhalt.
+    ///
+    /// Die Nummer ist der Schluessel zur Fehlermeldung: die Bank bezieht sich in HIRMS auf genau sie.
+    /// </summary>
     private static FinTsSegmentShape Shape(FinTsSegment segment)
     {
         var header = segment.Groups.Count > 0 ? segment.Groups[0] : null;
-        var type = header?.Values.Count > 0 && header.Values[0] is FinTsValue.Text name ? name.Value : "?";
-        var version = header?.Values.Count > 2 && header.Values[2] is FinTsValue.Text raw
-            && int.TryParse(raw.Value, out var parsed) ? parsed : 0;
-        return new FinTsSegmentShape(type, version, segment.Groups.Count - 1);
+        var type = HeaderText(header, 0) ?? "?";
+        return new FinTsSegmentShape(type, HeaderNumber(header, 2), segment.Groups.Count - 1, HeaderNumber(header, 1));
     }
+
+    private static string? HeaderText(FinTsGroup? header, int index)
+        => header is not null && header.Values.Count > index && header.Values[index] is FinTsValue.Text value ? value.Value : null;
+
+    private static int HeaderNumber(FinTsGroup? header, int index)
+        => int.TryParse(HeaderText(header, index), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
 
     private static FinTsSessionState Advance(FinTsSessionState session, FinTsResponse response)
     {

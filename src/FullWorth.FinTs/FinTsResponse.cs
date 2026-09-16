@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace FullWorth.FinTs;
 
-internal sealed record FinTsResponseCode(string Code, string? Reference, string Text, IReadOnlyList<string> Parameters)
+internal sealed record FinTsResponseCode(string Code, string? Reference, string Text, IReadOnlyList<string> Parameters, int? SegmentNumber = null)
 {
     public bool IsError => Code.Length == 4 && Code[0] == '9';
     public bool TanRequired => Code is "0030" or "3955";
@@ -51,12 +51,37 @@ internal sealed class FinTsResponse
         var kind = classified.Count > 0 ? classified[0].Kind : "bank_error";
 
         var message = string.IsNullOrWhiteSpace(leading.Text) ? $"FinTS bank error {leading.Code}." : leading.Text;
+        // Denselben Vorrang wie bei der Einordnung: die Sammelmeldung steht vorn, aber der Bezug steht
+        // bei dem Code, der wirklich auf ein Segment zeigt. "9050 Teilweise fehlerhaft" nennt keines -
+        // das tut die Meldung dahinter.
+        var segment = errors.Select(x => Reference(x, sentShape)).FirstOrDefault(x => x is not null);
         throw new FinTsException(message, kind,
             bankCode: leading.Code,
-            segmentReference: string.IsNullOrWhiteSpace(leading.Reference) ? null : leading.Reference,
+            segmentReference: segment,
             bankMessage: string.IsNullOrWhiteSpace(leading.Text) ? null : leading.Text,
-            bankCodes: [.. errors.Select(x => new FinTsBankCode(x.Code, string.IsNullOrWhiteSpace(x.Reference) ? null : x.Reference, x.Text))],
+            bankCodes: [.. errors.Select(x => new FinTsBankCode(x.Code, Reference(x, sentShape), x.Text))],
             sentShape: sentShape);
+    }
+
+    /// <summary>
+    /// Worauf sich eine Rueckmeldung bezieht - aufgeloest zu dem Segment, das wir geschickt haben.
+    ///
+    /// "9050 Teilweise fehlerhaft" heisst laut Spezifikation: in der Nachricht ist mindestens ein
+    /// fehlerhafter AUFTRAG enthalten. Welcher, sagt das Bezugssegment im Kopf von HIRMS - eine blosse
+    /// Nummer. Die Nummer gegen den Bauplan der gesendeten Nachricht zu halten ist der ganze Trick:
+    /// aus "5" wird "5 HKTAN", und damit steht im Protokoll, welches Segment die Bank ablehnt, statt
+    /// dass jemand es raten muss.
+    /// </summary>
+    private static string? Reference(FinTsResponseCode code, IReadOnlyList<FinTsSegmentShape>? sentShape)
+    {
+        if (code.SegmentNumber is not { } number)
+            // "-" ist der Platzhalter der Banken fuer "kein Bezug" und war als Bezug im Protokoll
+            // genauso wenig wert wie nichts - nur sah es aus wie eine Angabe.
+            return string.IsNullOrWhiteSpace(code.Reference) || code.Reference == "-" ? null : code.Reference;
+        var sent = sentShape?.FirstOrDefault(x => x.Number == number);
+        return sent is null
+            ? number.ToString(CultureInfo.InvariantCulture)
+            : $"{number} {sent.Type}";
     }
 
     /// <summary>
@@ -266,15 +291,21 @@ internal static class FinTsResponseParser
         var result = new List<FinTsResponseCode>();
         foreach (var segment in segments.Where(x => x.Type is "HIRMG" or "HIRMS"))
         {
+            // Das Bezugssegment steht im SEGMENTKOPF an Stelle 4, nicht bei der Rueckmeldung selbst -
+            // und nur in der Kreditinstitutsnachricht. Genau darueber ordnet die Bank zu, welcher
+            // Auftrag falsch war: HIRMG gilt fuer die ganze Nachricht, HIRMS fuer ein Segment.
+            var reference = int.TryParse(segment.GetText(0, 3), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) && number > 0
+                ? number
+                : (int?)null;
             for (var i = 1; i < segment.Groups.Count; i++)
             {
                 var group = segment.Groups[i];
                 var code = Text(group, 0);
                 if (code.Length != 4 || !code.All(char.IsDigit)) continue;
-                var reference = Text(group, 1);
+                var element = Text(group, 1);
                 var text = Text(group, Math.Min(2, group.Values.Count - 1));
                 var parameters = group.Values.Skip(3).OfType<FinTsValue.Text>().Select(x => x.Value).ToArray();
-                result.Add(new FinTsResponseCode(code, reference, text, parameters));
+                result.Add(new FinTsResponseCode(code, element, text, parameters, reference));
             }
         }
         return result;

@@ -65,6 +65,7 @@ public sealed class IngFinTsService(
         var bank = KnownBanks.Ing;
         var credentials = new FinTsCredentials(request.UserId.Trim(), request.Pin, productId);
         var parameters = await LogFinTsAsync("synchronize", () => finTs.SynchronizeAsync(bank, credentials, ct));
+        LogAnnouncedCapabilities(parameters);
         if (!string.IsNullOrWhiteSpace(request.TanMedium)) parameters = parameters with { TanMedium = request.TanMedium.Trim() };
         var opened = await LogFinTsAsync("open", () => finTs.OpenAsync(bank, credentials, parameters, ct));
         var secret = new FinTsConnectionSecret(bank.Id, credentials.UserId, credentials.Pin, credentials.ProductId,
@@ -408,6 +409,24 @@ public sealed class IngFinTsService(
             throw;
         }
     }
+
+    /// <summary>
+    /// Was die Bank in der Synchronisation ueber sich ankuendigt.
+    ///
+    /// Nach ihr wird die Anmeldenachricht gebaut: die Sicherheitsfunktion landet im Signaturkopf, die
+    /// Segmentversion des TAN-Verfahrens im Kopf von HKTAN. Lehnt die Bank danach einen Auftrag mit
+    /// "nicht unterstuetzt" ab, ist die erste Frage, ob wir richtig gelesen haben, was sie anbietet -
+    /// und ohne diese Zeile ist das nicht zu beantworten.
+    ///
+    /// Es sind Faehigkeiten der Bank, keine Zugangsdaten: kein Benutzername, keine PIN, keine Konten.
+    /// </summary>
+    private void LogAnnouncedCapabilities(FinTsBankParameters parameters)
+        => logger.LogInformation(
+            "ING FinTS announced. SecurityFunction={SecurityFunction}, TanMethods={TanMethods}, SegmentVersions={SegmentVersions}",
+            parameters.SecurityFunction,
+            string.Join("; ", parameters.TanMethods.Select(x =>
+                $"{x.SecurityFunction}:v{x.SegmentVersion}:{x.Name}{(x.IsDecoupled ? ":decoupled" : string.Empty)}{(x.NeedsTanMedium ? ":medium" : string.Empty)}")),
+            string.Join("; ", parameters.SegmentVersions.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}")));
 
     private void LogFinTsFailure(string operation, FinTsException ex)
     {

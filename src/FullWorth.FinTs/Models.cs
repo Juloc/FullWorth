@@ -165,9 +165,14 @@ public sealed record FinTsResult<T>(
 /// selbst zu protokollieren. Die traegt in PIN/TAN-Verfahren die PIN im Signaturblock, und die gehoert
 /// in kein Protokoll - auch nicht in ein Fehlerprotokoll.
 /// </summary>
-public sealed record FinTsSegmentShape(string Type, int Version, int Elements)
+/// <remarks>
+/// <paramref name="Number"/> ist die Segmentnummer aus dem Segmentkopf. Sie steht hier, weil die Bank
+/// ihre Rueckmeldungen ueber genau diese Nummer zuordnet: das Bezugssegment im Kopf von HIRMS. Ohne
+/// sie sagt "9050 Teilweise fehlerhaft" zwar, dass EIN Auftrag falsch war, aber nicht welcher.
+/// </remarks>
+public sealed record FinTsSegmentShape(string Type, int Version, int Elements, int Number = 0)
 {
-    public override string ToString() => $"{Type}:v{Version}:{Elements}";
+    public override string ToString() => Number > 0 ? $"{Type}#{Number}:v{Version}:{Elements}" : $"{Type}:v{Version}:{Elements}";
 }
 
 /// <summary>Ein Rueckmeldecode der Bank, so wie er kam.</summary>

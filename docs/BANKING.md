@@ -323,6 +323,32 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
    of one and the same message, so they must say the same thing. Fixing only `HNSHK` left the message
    contradicting itself and `9010` stayed. `FinTsMessages.ProfileVersion` is the single place both
    read it from.
+
+   Verified against FinTS 3.0 *Security – Sicherheitsverfahren PIN/TAN* (Rel. 2020-07-10): the `HKTAN`
+   field order is identical in #6 and #7 — TAN-Prozess, Segmentkennung, Kontoverbindung,
+   Auftrags-Hashwert, Auftragsreferenz, weitere TAN folgt, Auftrag stornieren, SMS-Abbuchungskonto,
+   Challenge-Klasse, Parameter Challenge-Klasse, Bezeichnung des TAN-Mediums, Antwort HHD_UC.
+   Segmentkennung is `HKIDN` by default at dialog init. #7 additionally allows TAN-Prozess `S`, which
+   is why polling is only ever reached for a decoupled method (announced from #7 on).
+
+### Reading a bank's rejection
+
+`9050 Teilweise fehlerhaft` means, per the FinTS response-code catalogue, that **one order in the
+message was wrong** — not the message as a whole. Which one is in the **Bezugssegment: position 4 of
+the `HIRMS` segment header**, populated only in bank messages. It is a bare segment number, so
+`FinTsResponse.Reference` resolves it against the shape of the message we sent and the log prints
+`SegmentReference=5 HKTAN`.
+
+Two traps, both already hit once:
+
+- The umbrella code comes **first** and names nothing. `9800` / `9050` carry neither the classification
+  nor the segment reference; the code behind them does. Both are taken from the first code that
+  actually has one.
+- `-` is the banks' placeholder for "no reference". Logged verbatim it looks like an answer.
+
+`ING FinTS announced.` is written once per connect and records what the bank offers — security
+function, TAN methods with their segment versions, and the announced segment versions. The login
+message is built from exactly those values, so a "not supported" answer is only readable next to them.
 4. The whole state — bank id, login, PIN, product id, discovered `FinTsBankParameters`, the open
    session and any pending challenge — is serialised to JSON into `BankConnection.AuthorizationId`,
    which the backend stores encrypted (`FieldCipher`). `ProviderSessionId` is a synthetic
