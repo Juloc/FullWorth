@@ -118,7 +118,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
 
             var matchingTargets = targets
                 .Where(target =>
-                    string.Equals(target.Currency, account.Currency, StringComparison.OrdinalIgnoreCase) &&
+                    !ImportCurrency.Conflict(target.Currency, account.Currency) &&
                     !string.IsNullOrWhiteSpace(account.IbanLast4) &&
                     string.Equals(target.IbanLast4, account.IbanLast4, StringComparison.OrdinalIgnoreCase))
                 .Select(target => target.Id)
@@ -238,7 +238,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
                     .ToList()
                 : liveAccounts.Where(live =>
                         string.Equals(live.IbanLast4, importedAccount.IbanLast4, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(live.Currency, importedAccount.Currency, StringComparison.OrdinalIgnoreCase)
+                        && !ImportCurrency.Conflict(live.Currency, importedAccount.Currency)
                         && liveOwners.TryGetValue(live.Id, out var owners)
                         && owners.Overlaps(importedOwners))
                     .ToList();
@@ -282,8 +282,13 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             .SingleOrDefaultAsync(ct);
         if (importedAccount is null || targetAccount is null) return null;
 
-        if (!string.Equals(importedAccount.Currency, targetAccount.Currency, StringComparison.OrdinalIgnoreCase))
+        if (ImportCurrency.Conflict(importedAccount.Currency, targetAccount.Currency))
             throw new ArgumentException("Import and target account must use the same currency.");
+
+        // Ein Konto ohne erklaerte Waehrung bekommt sie hier - aus dem Import, der eine hat. Sonst
+        // bliebe "XXX" stehen und der naechste Vergleich scheiterte wieder an derselben Stelle.
+        if (!ImportCurrency.IsDeclared(targetAccount.Currency) && ImportCurrency.IsDeclared(importedAccount.Currency))
+            targetAccount.Currency = NormalizeCurrency(importedAccount.Currency);
 
         var balanceAdded = await EnsureCurrentBalanceAsync(
             targetAccount, currentBalance, currentBalanceCurrency, ct);
@@ -386,8 +391,10 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
             throw new ArgumentException("Current balance must be less than 1,000,000,000,000.");
 
         var currency = NormalizeCurrency(currentBalanceCurrency ?? targetAccount.Currency);
-        if (!string.Equals(currency, targetAccount.Currency, StringComparison.OrdinalIgnoreCase))
+        if (ImportCurrency.Conflict(currency, targetAccount.Currency))
             throw new ArgumentException("Current balance currency must match the target account currency.");
+        // Der eingetippte Saldo erklaert die Waehrung, wenn das Konto selbst keine hat.
+        if (!ImportCurrency.IsDeclared(targetAccount.Currency)) targetAccount.Currency = currency;
 
         var now = DateTimeOffset.UtcNow;
         db.BalanceSnapshots.Add(new BalanceSnapshot

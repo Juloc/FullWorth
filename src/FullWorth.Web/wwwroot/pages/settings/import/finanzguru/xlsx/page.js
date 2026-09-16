@@ -81,10 +81,24 @@ function formatPeriod(first,last){
   if(first===last)return formatDate(first);
   return `${formatDate(first)} – ${formatDate(last)}`;
 }
+// "XXX" ist der ISO-4217-Code fuer "keine Waehrung" - PayPal-Wallets melden ihn, weil sie mehrere
+// zugleich halten. Er sagt „hier steht keine", nicht „hier steht eine andere" (#112).
+function declaredCurrency(value){
+  const code=(value||'').trim().toUpperCase();
+  return code.length===3&&code!=='XXX'?code:null;
+}
+// Widersprechen sich zwei Angaben? Nur wenn BEIDE eine Waehrung nennen und die sich unterscheidet.
+// Ein Gleichheitsvergleich machte aus der fehlenden Angabe einen Widerspruch und sperrte das Konto.
+function currenciesConflict(left,right){
+  const a=declaredCurrency(left),b=declaredCurrency(right);
+  return !!a&&!!b&&a!==b;
+}
+
 function targetLabel(target){
   const parts=[target.institutionName,target.displayName].filter(Boolean);
   let label=[...new Set(parts)].join(' · ')||target.id;
-  label+=` · ${target.currency}`;
+  // Ohne erklaerte Waehrung steht keine da. „PayPal · XXX" las sich wie eine Waehrung namens XXX.
+  if(declaredCurrency(target.currency))label+=` · ${target.currency}`;
   if(target.ibanLast4)label+=` · •••• ${target.ibanLast4}`;
   if(target.isActive===false)label+=` · ${text.inactive}`;
   return label;
@@ -161,7 +175,7 @@ function buildImportLinkCard(item){
     const option=document.createElement('option');
     option.value=target.id;
     option.textContent=targetLabel(target);
-    option.disabled=target.currency!==item.currency;
+    option.disabled=currenciesConflict(target.currency,item.currency);
     // Ein ausgegrauter Eintrag ohne Begruendung ist eine Sackgasse: „PayPal · XXX" stand da und sagte
     // nicht, warum es nicht geht. Der Grund steht jetzt im Eintrag selbst (#112).
     if(option.disabled){option.textContent+=` — ${text.currencyMismatch}`;option.title=text.currencyMismatch;}
@@ -169,7 +183,7 @@ function buildImportLinkCard(item){
     select.append(option);
   }
   if(!select.value){
-    const compatible=linkOptions.targetAccounts.find(target=>target.currency===item.currency);
+    const compatible=linkOptions.targetAccounts.find(target=>!currenciesConflict(target.currency,item.currency));
     if(compatible)select.value=compatible.id;
   }
   targetField.append(select);

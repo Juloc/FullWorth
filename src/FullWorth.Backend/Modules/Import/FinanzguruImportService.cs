@@ -278,13 +278,16 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
             FinanceAccount? liveMatch = importedAccount?.ImportLinkedAccountId is { } linkedId
                 ? ownedAccounts.SingleOrDefault(account =>
                     account.Id == linkedId &&
-                    string.Equals(account.Currency, sample.Currency, StringComparison.OrdinalIgnoreCase))
+                    // Eine bestaetigte Verknuepfung ist massgeblich - der Kommentar darueber sagt es,
+                    // und ein Gleichheitsvergleich nahm sie ihr wieder weg, sobald das Konto keine
+                    // Waehrung erklaert (#112).
+                    !ImportCurrency.Conflict(account.Currency, sample.Currency))
                 : null;
             if (liveMatch is null && ibanLast4 is not null)
             {
                 var candidates = ownedAccounts
                     .Where(account => string.Equals(account.IbanLast4, ibanLast4, StringComparison.OrdinalIgnoreCase)
-                                      && string.Equals(account.Currency, sample.Currency, StringComparison.OrdinalIgnoreCase))
+                                      && !ImportCurrency.Conflict(account.Currency, sample.Currency))
                     .ToList();
                 if (candidates.Count == 1) liveMatch = candidates[0];
             }
