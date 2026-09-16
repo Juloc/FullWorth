@@ -24,6 +24,13 @@ COPY src/FullWorth.FinTs/ src/FullWorth.FinTs/
 COPY src/Shared/ src/Shared/
 RUN dotnet publish src/FullWorth.Web/FullWorth.Web.csproj -c Release -p:Version="$FULLWORTH_VERSION" -o /app --no-restore /p:UseAppHost=false
 
+# The same build version that is compiled into the assemblies is also visible in the existing
+# sidebar badge. Keep the source shell generic ("Alpha") and stamp only the published artifact so
+# there is still one version source: FULLWORTH_VERSION -> MSBuild + visible badge.
+RUN version_label="v${FULLWORTH_VERSION}" \
+ && sed -i "s|<span class=\"brand-beta\">Alpha</span>|<span class=\"brand-beta\">${version_label}</span>|" /app/wwwroot/index.html \
+ && grep -Fq "<span class=\"brand-beta\">${version_label}</span>" /app/wwwroot/index.html
+
 # Codex and the Node runtime it needs. Built here rather than relied upon in the base image:
 # mcr.microsoft.com/playwright/dotnet makes no promise about shipping Node, and it has changed which
 # tools it carries between minors before.
