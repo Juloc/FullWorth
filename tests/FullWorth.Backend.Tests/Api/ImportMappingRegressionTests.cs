@@ -120,6 +120,68 @@ public sealed class ImportMappingRegressionTests
         Assert.Equal(2, second.GetProperty("duplicates").GetInt32());
     }
 
+    /// <summary>
+    /// Ein Quellkonto aus der Datei, das es in FullWorth noch nicht gibt, war bisher eine Sackgasse:
+    /// ohne Zuordnung galt die Zeile als "unmapped" und wurde stillschweigend uebersprungen - die
+    /// Datei importierte lautlos nichts. Jetzt darf der Import das Konto anlegen.
+    ///
+    /// Es entsteht als richtiges Konto, mit Eigentuemer und Gruppe, und in derselben Transaktion wie
+    /// die Buchungen: bricht der Commit ab, bleibt kein leeres Konto zurueck.
+    /// </summary>
+    [Fact]
+    public async Task CommitCanCreateTheAccountAQuellkontoNeeds()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        await SeedOwner(factory, owner);
+        const string csv = "Datum;Betrag;Empfänger;Text;Konto\r\n29.08.2026;-12,34;REWE;Lebensmittel;Giro\r\n";
+
+        using var upload = await Upload(client, owner, csv, new
+        {
+            date = "Datum",
+            amount = "Betrag",
+            currency = (string?)null,
+            counterparty = "Empfänger",
+            description = "Text",
+            account = "Konto",
+            category = (string?)null,
+            externalKey = (string?)null
+        });
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var jobId = ReadGuid(await upload.Content.ReadAsStringAsync(), "jobId");
+
+        using var commit = UserRequest(HttpMethod.Post,
+            $"/api/import-mapping/jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}", owner);
+        commit.Content = JsonContent.Create(new
+        {
+            sourceAccountMappings = new Dictionary<string, Guid?>(),
+            newAccountNames = new Dictionary<string, string> { ["Giro"] = "Girokonto aus Datei" },
+            defaultAccountId = (Guid?)null,
+            categoryMappings = new Dictionary<string, Guid?>(),
+            createMissingCategories = false,
+            runFullWorthCategorization = false,
+            candidateIds = (Guid[]?)null
+        });
+        using var response = await client.SendAsync(commit);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, result.RootElement.GetProperty("imported").GetInt32());
+        Assert.Equal(0, result.RootElement.GetProperty("skipped").GetInt32());
+
+        await factory.SeedAsync(async db =>
+        {
+            var created = await db.Accounts.AsNoTracking()
+                .SingleAsync(account => account.DisplayName == "Girokonto aus Datei");
+            Assert.True(created.IsActive);
+            Assert.True(created.IncludeInNetWorth);
+            Assert.NotNull(created.GroupId);
+            Assert.True(await db.AccountOwners.AsNoTracking()
+                .AnyAsync(entry => entry.AccountId == created.Id && entry.UserId == owner));
+            Assert.Equal(1, await db.Transactions.AsNoTracking().CountAsync(row => row.AccountId == created.Id));
+        });
+    }
+
     // The review list can only be honest if the preview and the commit use the same detection. This
     // asserts the numbers against each other instead of against hand-written expectations, so the two
     // cannot drift apart without failing here.

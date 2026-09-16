@@ -20,15 +20,36 @@ amount into a native account balance. No import writes a converted amount into a
 missing FX rate is never assumed to be 1:1 — the affected line is skipped and the result flagged
 `incomplete`.
 
-Three places do not honour the rule yet; the fixes belong in the improvement plan:
+### An import creates a real account
 
-- No transaction importer writes a `BalanceSnapshot`. `NetWorthSnapshotService` anchors today on the
-  newest snapshot and walks backwards subtracting daily transaction deltas, so importing a year of
-  bookings into an account whose balance is manual leaves *today* at the pre-import number and pushes
-  the imported sum into the past instead.
-- The Finanzguru importer creates its history container with `IsActive=false` and
-  `IncludeInNetWorth=false` and no balance at all. A correct balance requires the separate account-link
-  step in which the user types the current balance by hand.
+Every booking importer produces a **fully-fledged account**: visible in the account list, in a group,
+counted in net worth. Mapping it onto an existing account is optional and can be done at any time
+afterwards.
+
+That was not always so, and the old behaviour is worth knowing because it explains several comments
+still scattered around the code. The Finanzguru importer used to build its account by hand with
+`IsActive=false`, `IncludeInNetWorth=false` and no group at all — an "archived history container".
+The imported bookings then appeared nowhere until the user performed a separate linking step, which is
+exactly the manual post-import step the rule above forbids. Three places pushed the account back into
+that state (every bank sync, every re-import, every link); all three are gone, and
+`20260916120000_PromoteImportAccounts` lifts the accounts that already exist.
+
+Account creation lives in `AccountStore.CreateForImportAsync` — the same place that owns manual
+accounts, so an imported account gets its owner row and its default group like any other. Both
+`/api/import-jobs` and `/api/import-mapping` can name a new account instead of choosing one, and it is
+created **inside the commit transaction**: a failed commit leaves no empty account behind.
+
+An account without a balance contributes exactly 0 to every total, whatever its flags say — all money
+comes from `BalanceSnapshots`. It is therefore reported as **incomplete** rather than silently counted
+as zero: `WealthComponentView.AccountsWithoutBalance` names it, the wealth page says so in its own
+sentence, and the account list and dashboard mark the affected subtotal.
+
+Two places still do not honour the money rule; the fixes belong in the improvement plan:
+
+- No transaction importer writes a `BalanceSnapshot` except the statement import, which has one in the
+  file. `NetWorthSnapshotService` anchors on the newest snapshot and walks backwards subtracting daily
+  transaction deltas, so importing a year of bookings into an account whose balance is manual leaves
+  *today* at the pre-import number and pushes the imported sum into the past instead.
 - The depot importer writes no `SecurityPrices`, although every buy/sell row carries a price. Imported
   positions are therefore valued only once a price arrives from market data, a FinTS depot snapshot or
   manual entry; until then `InvestmentNetWorthService` skips the holding and sets `incomplete`.
@@ -37,30 +58,34 @@ Three places do not honour the rule yet; the fixes belong in the improvement pla
 
 | Page | Route | Sources offered |
 | --- | --- | --- |
-| Import center | `/settings/import` (`/settings/import/finanzguru` redirects here) | CSV/XLSX bookings, depot CSV/XLSX, links to the two provider pages |
+| Import center | `/settings/import` | CSV/XLSX bookings, depot CSV/XLSX, MT940/CAMT statements, links to the two provider pages |
 | Finanzguru XLSX | `/settings/import/finanzguru/xlsx` | Finanzguru "Alle Buchungen" workbook, account linking |
 | Broker PDF | `/settings/import/broker-pdf` | Broker confirmations, text or scanned |
 | Purchases → *Belege importieren* | dialog inside `/purchases` | Bulk receipt upload, Paperless-ngx, watched folder |
 | Purchases → *Amazon verbinden* | dialog inside `/purchases` | Amazon.de order history |
 | OS share sheet | `POST /share/receipt` (PWA share target) | Receipt images/PDFs shared into FullWorth |
 
-Page HTML for the three import pages lives in C# raw string literals under
-`src/FullWorth.Web/Modules/Import/`; their behaviour is in
-`src/FullWorth.Web/wwwroot/pages/settings/import/` — `page.js`, `finanzguru/xlsx/page.js` and
-`broker-pdf/page.js`. Their markup used to live in C# raw string literals; it is ordinary
-`page.html` now.
+All three import pages live entirely under `src/FullWorth.Web/wwwroot/pages/settings/import/` —
+`page.html`/`page.js` plus `finanzguru/xlsx/` and `broker-pdf/`. Their markup used to sit in C# raw
+string literals under `src/FullWorth.Web/Modules/Import/`; that folder is gone.
 
 ## Transaction import (CSV / XLSX)
 
 Two API surfaces exist over the same staging tables.
 
-`/api/import-mapping` (`ImportMappingParityModule.cs`) is what the UI uses: `POST /detect` →
+`/api/import-mapping` (`ImportMappingEndpoints.cs`) is what the UI uses: `POST /detect` →
 `POST /upload` → `GET /jobs/{id}/summary` → `POST /jobs/{id}/duplicate-preview` →
-`POST /jobs/{id}/commit`. `/api/import-jobs` (`ImportParityModule.cs`) additionally offers a
+`POST /jobs/{id}/commit`. `/api/import-jobs` (`ImportJobEndpoints.cs`) additionally offers a
 mapping-free `POST /upload` + `POST /{id}/commit` against one fixed target account, and owns the
 shared endpoints `GET /`, `GET /{id}`, `GET /{id}/candidates`, `POST /{id}/cancel` and
-`POST /{id}/rollback`. The UI calls the mapping module for the wizard and the job module for the
-candidate list, the history list and rollback.
+`POST /{id}/rollback`. The UI calls the mapping module for the CSV/XLSX wizard and the job module for
+the candidate list, the history list, the rollback **and the whole statement flow** — MT940/CAMT files
+have no column mapping to confirm, so they go straight through `/api/import-jobs`.
+
+Both commits accept either an existing `accountId` or a `newAccountName` (per source account in the
+mapping case, via `newAccountNames`). A brand-new account has nothing to be a duplicate of, so the
+classifier runs against a placeholder id and the commit swaps it for the real one after creating the
+account inside its own transaction.
 
 **Accepted format.** `multipart/form-data`, field `file`, `.csv` or `.xlsx`, max 25 MB. CSV is decoded
 as UTF-8 with an optional BOM; the delimiter is guessed from `;`, `,` and tab by frequency in the
@@ -74,12 +99,19 @@ description/verwendungszweck, account/konto, category/kategorie, id/booking id. 
 that for the `outbank` and `finanzfluss` presets before showing the mapping grid. `mapping.date` and
 `mapping.amount` are required; a mapping that names a column not present in the file is rejected.
 
-**Parsing per row.** Dates accept an Excel serial number (20 000–100 000, epoch 1899-12-30) and the
-formats `yyyy-MM-dd`, `dd.MM.yyyy`, `d.M.yyyy`, `dd/MM/yyyy`, `MM/dd/yyyy`, `yyyy/MM/dd`, then the
-current culture. Amounts strip `€`, spaces and apostrophes and are parsed as `de-DE` first, invariant
-second — so `1.234,56` and `1234.56` both work. Currency must be three letters or it falls back to
-`EUR`. A row that fails to parse is kept as a candidate with `ValidationStatus='error'` and its
-message; it is never silently dropped and never committed.
+**Parsing per row.** Dates go through `Validation/ImportDate`: a fixed format list read with
+`InvariantCulture`, day-first for slash dates, plus an Excel serial number (20 000–100 000, epoch
+1899-12-30) where the caller allows it. There is deliberately no culture fallback and no "today".
+
+Amounts go through `Validation/ImportNumber`, which decides from the **separators in the text**, never
+from a culture — `1.234,56` and `1,234.56` are both 1234.56. The one ambiguous case is a single
+separator with exactly three trailing digits; the caller picks: bookings group (`1.234` = 1234),
+depot and statement rows do not (`1.234` = 1.234).
+
+Currency must be three letters; otherwise the **space's own base currency** applies, not a hardcoded
+`EUR` — that used to mislabel every row for a space that is not in euro. A row that fails to parse is
+kept as a candidate with `ValidationStatus='error'` and its message; it is never silently dropped and
+never committed.
 
 **Persisted staging.** One `ImportJobs` row (file name, SHA-256 of the bytes, adapter key
 `mapped_csv`/`mapped_xlsx` or `generic_csv`/`generic_xlsx`, counts) and one `ImportCandidates` row per
@@ -134,9 +166,46 @@ a new table referencing `Transactions` cannot quietly fall outside it. The respo
 `DuplicateStatus='rolled_back'`. `rollbackAvailable` in the job list is false for a job that predates
 provenance tracking, so the button never promises an undo it cannot perform.
 
+**Merging is the other half of the same problem.** Where the rollback *keeps* a row the user has worked
+on, a merge *deletes* one — so everything pointing at it has to move first.
+`TransactionMergeService.MoveDependenciesAsync` moves all sixteen foreign keys, and
+`TransactionMergeGuardTests` holds that list against the live schema in both directions. It used to move
+four: tags, review states, contract links, spending reviews and refund dismissals were silently cascaded
+away (the user's own work, during an automatic bank sync), while asset cashflows and purchase payment
+links are `RESTRICT` and made the merge fail outright.
+
+`CanMergeAsync` refuses when **both** rows carry their own split — the allocations would add up and the
+winner would be split for twice its value. The imported row then stays as a separate booking instead.
+
+The provenance link deliberately does *not* move: it says "this import created this booking", and on a
+bank row a later rollback would delete a genuine bank transaction.
+
+## Statement import (MT940 / CAMT)
+
+The fifth tile in the import centre, for banks FullWorth cannot connect to (Ikano, PayPal). It shares
+`/api/import-jobs` with the generic table import — the same job, review and commit — and only the
+reading differs: `BankStatementFile` parses SWIFT MT940 and ISO 20022 CAMT.053/.052 itself, with no
+FinTS code and no Codex involved. The **file extension** picks the statement branch
+(`.sta .mt940 .940 .txt .xml .camt`); the content then decides MT940 versus CAMT.
+
+It is the only booking importer that brings a **balance**: a statement states its closing balance with
+the date it is valid for, and `StatementBalanceAnchor.Decide` says whether it may become the account's
+anchor. It compares *as-of dates*, not capture times, and refuses in three named cases the UI repeats
+in German — the bank already reported that day or later, a manual balance already covers it, or the
+currency differs. The four `ImportJobs.Statement*` columns carry the figure from upload to commit.
+
+There is no column mapping and no category step, so a statement row commits with
+`CategorizationSource='none'`. Duplicates are found at commit against the target account only:
+semantically (date, amount, currency, normalised counterparty) plus an external key that carries the
+job id — so re-uploading the same file is caught by the semantic check, not the key.
+
+A statement may create its target account (`newAccountName`); a balance-only file with no bookings is
+a legitimate import that merely anchors the account. Such a file creates no provenance links, so it
+cannot be rolled back — there is nothing to remove.
+
 ## Finanzguru workbook import
 
-`POST /api/import/finanzguru` (`FinanzguruImportModule.cs`), `.xlsx` only, max 25 MB.
+`POST /api/import/finanzguru` (`FinanzguruImportEndpoints.cs`), `.xlsx` only, max 25 MB.
 
 `FinanzguruWorkbookReader` validates by header name, not column position, so reordering columns cannot
 corrupt money data. Required headers: `Buchungstag`, `Betrag`, `Waehrung`, `Buchungs-ID`,
@@ -157,10 +226,11 @@ category. A parent with children gets no own `CategoryId`.
 (`Accounts.ImportLinkedAccountId`) wins and survives re-imports even when the source has no usable
 IBAN. Otherwise, if the reference looks like an IBAN, its last four characters plus a matching currency
 must identify exactly one owned account. With no match the importer reuses or creates a
-`Provider='finanzguru-import'` container account: `InstitutionName='Finanzguru Import'`,
-`Product='Imported history'`, currency from the file, `IsActive=false`, `IncludeInNetWorth=false`,
-`IdentificationHash=sha256("finanzguru|<sourceKey>")`. A container owned by a different user is a
-`409`.
+`Provider='finanzguru-import'` account through `AccountStore.CreateForImportAsync`:
+`InstitutionName='Finanzguru Import'`, `Product='Imported history'`, currency from the file,
+`IdentificationHash=sha256("finanzguru|<sourceKey>")` — and, since the import-as-real-account change,
+active, counted and in the default group. A re-import no longer touches it. An account owned by a
+different user is a `409`.
 
 **Duplicate detection.** `ExternalKey = "finanzguru:<Buchungs-ID>"` is unique per account, so a
 re-import is idempotent (`AlreadyImported`). When the rows land on a live bank account the importer
@@ -189,9 +259,10 @@ account once it exists.
 
 Both require the same currency on both sides, set `UseForBalanceHistory=true` on the affected rows,
 deactivate the container, set `IncludeInNetWorth=true` on the target and then rebuild net-worth history
-for the user. `EnsureCurrentBalanceAsync` demands a balance: if the target has no `BalanceSnapshots`
-row and the request carries no `currentBalance`, it fails with "The target account has no balance. Enter
-the current balance to anchor the imported history." A supplied balance is written as one
+for the user. The current balance is **optional**: `EnsureCurrentBalanceAsync` used to refuse the whole
+link when neither the target nor the request had one, which turned a field described as optional into a
+requirement. Without a balance the account simply counts as incomplete — it contributes 0 either way,
+since all money comes from `BalanceSnapshots`. A supplied balance is written as one
 `BalanceSnapshot` — `Amount` = the value as given (`numeric(20,8)`, rejected at ≥ 1 000 000 000 000),
 `Currency` = the request currency normalised to three upper-case letters and required to equal the
 account currency, `BalanceType='manualCurrent'`, `ReferenceDate` = today (UTC), `CapturedAt` = now. The
@@ -204,7 +275,7 @@ risking a cross-account merge.
 
 ## Depot import (CSV / XLSX)
 
-`/api/investment-import` (`InvestmentImportParityModule.cs`), capability `investments.manage`:
+`/api/investment-import` (`InvestmentImportEndpoints.cs`), capability `investments.manage`:
 `POST /detect` → `POST /upload` → `GET /jobs/{id}/summary` → `POST /jobs/{id}/commit`, plus
 `GET /jobs/{id}`, `GET /history`, `GET /portfolios/{id}/reconciliation` and `POST /jobs/{id}/rollback`.
 Same file rules as the transaction import: `.csv`/`.xlsx`, 25 MB, same CSV/XLSX readers.
@@ -277,8 +348,8 @@ that case is caught and returned as a clean `409` with nothing removed.
 
 ## Broker PDF import
 
-`POST /api/investment-import/pdf/detect` (`InvestmentPdfImportParityModule.cs`) and
-`POST /api/investment-import/pdf/ocr-detect` (`InvestmentPdfOcrImportParityModule.cs`), capability
+`POST /api/investment-import/pdf/detect` (`InvestmentPdfImportEndpoints.cs`) and
+`POST /api/investment-import/pdf/ocr-detect` (`InvestmentPdfOcrImportEndpoints.cs`), capability
 `investments.manage`. Both accept a single `.pdf` up to 25 MB and verify the `%PDF-` magic bytes.
 
 Neither endpoint writes anything. They return normalised rows plus a fixed suggested mapping; the
@@ -496,23 +567,30 @@ imports nothing. There is no restore endpoint; restoring is a database-level ope
   `20260901203000_AssetValuationHistory`. Assets contribute to net worth from `Assets.CurrentValue` in
   the asset's own `Currency`.
 - No importer writes a `SecurityPrices` row. Prices come from the market-data refresh
-  (`MarketDataParityModule`), a FinTS depot snapshot (`FinTsInvestmentSnapshotEndpoints`) or manual
+  (`MarketDataEndpoints`), a FinTS depot snapshot (`FinTsInvestmentSnapshotEndpoints`) or manual
   entry.
-- No importer writes a `BalanceSnapshot` except the Finanzguru account-link step, and there the value is
-  typed by the user. Provider balances come from `IngestionService.InsertBalancesAsync` on the bank-sync
-  path, in the currency the provider reported.
+- Only two importers write a `BalanceSnapshot`: the statement import, which reads the closing balance
+  out of the MT940/CAMT file (`BalanceType='closingBooked'`), and the Finanzguru account-link step,
+  where the user types it (`manualCurrent`). Provider balances come from
+  `IngestionService.InsertBalancesAsync` on the bank-sync path, in the currency the provider reported.
+  Note that neither manual type counts as *booked*, so `CurrentBalances.PickForBackCast` falls back to
+  the preferred balance — without that fallback a hand-anchored account had no daily curve at all.
 
 ## Test coverage
 
 `tests/FullWorth.Backend.Tests/Api/`: `ImportMappingRegressionTests`, `ImportAtomicityRegressionTests`,
 `ImportStableIdentityRegressionTests`, `ImportRollbackRegressionTests`,
 `ImportTransactionProvenanceGuardTests` (schema guard for the rollback exclusion list),
+`TransactionMergeGuardTests` (the same guard for the merge, in both directions),
 `InvestmentImportRegressionTests` (Trade Republic buy cancellation, trade/security provenance, rollback
 into an existing portfolio, rollback of an import-created portfolio, refusal to roll back an untracked
 import, reconciliation cash and holdings, type-count summary) and `InvestmentImportNumberFormatTests`.
 
 `tests/FullWorth.Backend.Tests/Import/`: `FinanzguruImportTests`, `FinanzguruLivePreferenceTests`,
-`FinanzguruReconciliationTests`.
+`FinanzguruReconciliationTests`, `FinanzguruImportProvenanceTests`, `StatementImportIntegrationTests`
+(including a statement that creates its own account), `TransactionMergeTests` (what the merge must not
+lose), `ImportAccountDoubleCountTests` and `PromoteImportAccountsMigrationTests` (the four exclusions of
+the promotion migration, and that running it twice changes nothing).
 
 `tests/FullWorth.Backend.Tests/Purchases/`: `AmazonIntegrationTests`, `AmazonDiscountParserTests`,
 `PurchaseDiscountImportIdempotencyTests`, and `ReceiptImports/` with `ReceiptImportIntegrationTests`,
@@ -520,7 +598,8 @@ import, reconciliation cash and holdings, type-count summary) and `InvestmentImp
 `PaperlessReceiptClientTests` and `ReceiptScanCompatibilityIntegrationTests`.
 
 `tests/FullWorth.Web.Tests/`: `ImportCenterUiBaselineTests`, `ReceiptImportUiBaselineTests`,
-`AmazonPurchasesUiBaselineTests` and `Frontend/ImportPageStylesheetGuardTests` (the import pages must
-load the full CSS layer chain — loading only `app.css` left every design token undefined).
+`AmazonPurchasesUiBaselineTests`, `StatementImportUiBaselineTests`, `AccountsUxBaselineTests` and
+`CurrencyUiBaselineTests` (a subtotal has to say when it leaves money out — for a missing FX rate *and*
+for an account with no balance yet).
 
 There is no automated browser or end-to-end test for any import flow.

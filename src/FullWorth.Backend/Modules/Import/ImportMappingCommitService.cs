@@ -23,14 +23,25 @@ public sealed record ImportCommitOutcome(int Imported, int Duplicates, int Skipp
 /// - und damit keine Moeglichkeit, ihn rueckgaengig zu machen.
 /// </summary>
 public sealed class ImportMappingCommitService(
-    FullWorthDbContext db, ImportMappingStore store, FieldCipher cipher, AuditService audit)
+    FullWorthDbContext db, ImportMappingStore store, FieldCipher cipher, AuditService audit,
+    Accounts.AccountStore accounts)
 {
+    /// <param name="newAccounts">
+    /// Konten, die dieser Import erst anlegt: Platzhalter-Kennung aus der Zuordnung auf Name und
+    /// Waehrung. Die Klassifizierung lief schon gegen die Platzhalter - gegen ein Konto, das es noch
+    /// nicht gibt, kann es auch keine Dublette geben -, und hier werden sie zu echten Konten.
+    ///
+    /// Sie entstehen INNERHALB der Transaktion unten. Davor angelegt bliebe bei einem Abbruch ein
+    /// leeres Konto zurueck, das niemand bestellt hat.
+    /// </param>
     public async Task<ImportCommitOutcome> CommitAsync(
         Guid userId, Guid fullWorthSpaceId, Guid jobId,
         IReadOnlyList<MappedCandidate> candidates,
         IReadOnlyDictionary<Guid, CandidateClassification> classifications,
         IReadOnlyDictionary<string, Guid?> categoryMap,
-        bool createMissingCategories, bool runCategorization, CancellationToken ct)
+        bool createMissingCategories, bool runCategorization,
+        IReadOnlyDictionary<Guid, (string Name, string Currency)> newAccounts,
+        CancellationToken ct)
     {
         var existingCategories = await store.ListCategoriesAsync(fullWorthSpaceId, ct);
         var rules = runCategorization ? await store.ActiveTransactionRulesAsync(fullWorthSpaceId, ct) : [];
@@ -43,9 +54,24 @@ public sealed class ImportMappingCommitService(
         var created = new List<FinanceTransaction>();
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Erst die neuen Konten, dann die Buchungen - beides in derselben Transaktion.
+        var resolved = new Dictionary<Guid, Guid>();
+        foreach (var (placeholder, target) in newAccounts)
+        {
+            var key = Guid.NewGuid().ToString("N");
+            var account = await accounts.CreateForImportAsync(userId, new Accounts.ImportAccountWrite(
+                fullWorthSpaceId, "import", $"import:{key}", $"import:{key}",
+                "Import", target.Name, null, target.Currency, null), ct);
+            resolved[placeholder] = account.Id;
+        }
+        if (resolved.Count > 0) await db.SaveChangesAsync(ct);
+
         foreach (var candidate in candidates)
         {
             var classification = classifications[candidate.Id];
+            if (classification.AccountId is { } mappedId && resolved.TryGetValue(mappedId, out var realId))
+                classification = classification with { AccountId = realId };
             if (classification.Status == "unmapped") { skipped++; continue; }
             if (classification.Status == "duplicate")
             {

@@ -79,14 +79,14 @@ function metric(label,value,tone){const article=document.createElement('article'
 function renderMetrics(id,values){const root=$(id);root.innerHTML='';for(const [label,value,tone] of values)root.appendChild(metric(label,value,tone))}
 function accountLabel(a){const suffix=a.ibanLast4?` · ${a.ibanLast4}`:'';return `${a.displayName||a.institutionName||'Konto'}${suffix}`}
 function guessAccount(source){if(!source)return state.accounts.find(a=>a.isActive)||state.accounts[0]||null;const norm=source.toLowerCase();const exact=state.accounts.filter(a=>a.ibanLast4&&norm.includes(String(a.ibanLast4).toLowerCase()));if(exact.length===1)return exact[0];const byName=state.accounts.filter(a=>norm.includes(String(a.displayName||'').toLowerCase())||String(a.displayName||'').toLowerCase().includes(norm));return byName.length===1?byName[0]:(state.accounts.find(a=>a.isActive)||state.accounts[0]||null)}
-function accountSelect(source){const select=document.createElement('select');select.className='account-map-select';const empty=document.createElement('option');empty.value='';empty.textContent=t.none;select.appendChild(empty);const guess=guessAccount(source);for(const account of state.accounts){const option=document.createElement('option');option.value=account.id;option.textContent=accountLabel(account);if(guess?.id===account.id)option.selected=true;select.appendChild(option)}return select}
+function accountSelect(source){const select=document.createElement('select');select.className='account-map-select';const empty=document.createElement('option');empty.value='';empty.textContent=t.none;select.appendChild(empty);const fresh=document.createElement('option');fresh.value=NEW_ACCOUNT;fresh.textContent=t.newAccount;select.appendChild(fresh);const guess=guessAccount(source);for(const account of state.accounts){const option=document.createElement('option');option.value=account.id;option.textContent=accountLabel(account);if(guess?.id===account.id)option.selected=true;select.appendChild(option)}return select}
 
 const txFields=[{key:'date',label:lang==='de'?'Datum':'Date',required:true},{key:'amount',label:lang==='de'?'Betrag':'Amount',required:true},{key:'currency',label:lang==='de'?'Währung':'Currency'},{key:'counterparty',label:lang==='de'?'Empfänger / Händler':'Counterparty'},{key:'description',label:lang==='de'?'Verwendungszweck':'Description'},{key:'account',label:lang==='de'?'Quellkonto':'Source account'},{key:'category',label:lang==='de'?'Kategorie':'Category'},{key:'externalKey',label:'ID'}];
 const invFields=[{key:'tradeDate',label:lang==='de'?'Handelsdatum':'Trade date',required:true},{key:'tradeType',label:lang==='de'?'Transaktionsart':'Transaction type',required:true},{key:'settlementDate',label:lang==='de'?'Valuta':'Settlement date'},{key:'securityName',label:lang==='de'?'Wertpapier':'Security'},{key:'isin',label:'ISIN'},{key:'wkn',label:'WKN'},{key:'ticker',label:'Ticker'},{key:'quantity',label:lang==='de'?'Stückzahl':'Quantity'},{key:'price',label:lang==='de'?'Kurs':'Price'},{key:'grossAmount',label:lang==='de'?'Brutto':'Gross amount'},{key:'amount',label:lang==='de'?'Betrag':'Amount'},{key:'currency',label:lang==='de'?'Währung':'Currency'},{key:'fees',label:lang==='de'?'Gebühren':'Fees'},{key:'taxes',label:lang==='de'?'Steuern':'Taxes'},{key:'withholdingTax',label:lang==='de'?'Quellensteuer':'Withholding tax'},{key:'assetClass',label:lang==='de'?'Anlageklasse':'Asset class'},{key:'externalKey',label:'ID'}];
 
 async function detectTransactions(){const file=currentFile('tx');if(!file){status('tx',t.needFile);return}state.tx.file=file;status('tx',t.working);$('tx-review-section').hidden=true;$('tx-result').hidden=true;try{state.tx.detect=await api(`api/import-mapping/detect?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body:await formWithFile(file)});renderMapping('tx',txFields);status('tx',`${state.tx.detect.rowCount} ${t.rows}.`)}catch(err){error('tx',err)}}
 async function stageTransactions(){try{const mapping=collectMapping('tx',txFields);status('tx',t.working);const body=await formWithFile(state.tx.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/import-mapping/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.tx.jobId=staged.jobId;const [summary,candidates]=await Promise.all([api(`api/import-mapping/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`),api(`api/import-jobs/${staged.jobId}/candidates?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`)]);state.tx.summary=summary;state.tx.candidates=candidates;state.tx.duplicates=new Map();renderTransactionTargets(summary,staged);renderTransactionCategories(summary);renderTransactionCandidates();$('tx-review-section').hidden=false;status('tx','');await refreshDuplicatePreview()}catch(err){error('tx',err)}}
-function renderTransactionTargets(summary,staged){const root=$('tx-account-mapping');root.innerHTML='';const sources=summary.sourceAccounts?.length?summary.sourceAccounts:[{source:'',count:staged.ready||0}];for(const item of sources){const row=document.createElement('div');row.className='row ic-map-row';row.dataset.source=item.source??'';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=item.source||(lang==='de'?'Ohne Kontoangabe':'No source account');const sub=document.createElement('div');sub.className='row-sub';sub.textContent=`${item.count} ${t.rows}`;main.append(title,sub);row.append(main,accountSelect(item.source||''));root.appendChild(row)}if(!state.accounts.length){const note=document.createElement('p');note.className='row-sub ic-empty';note.textContent=t.noAccounts;root.appendChild(note)}renderMetrics('tx-review-summary',[[t.rows,staged.sourceRows],[t.ready,staged.ready,'pos'],[t.errors,staged.errors,'neg']])}
+function renderTransactionTargets(summary,staged){const root=$('tx-account-mapping');root.innerHTML='';const sources=summary.sourceAccounts?.length?summary.sourceAccounts:[{source:'',count:staged.ready||0}];for(const item of sources){const row=document.createElement('div');row.className='row ic-map-row';row.dataset.source=item.source??'';const main=document.createElement('div');main.className='row-main';const title=document.createElement('div');title.className='row-title';title.textContent=item.source||(lang==='de'?'Ohne Kontoangabe':'No source account');const sub=document.createElement('div');sub.className='row-sub';sub.textContent=`${item.count} ${t.rows}`;main.append(title,sub);const select=accountSelect(item.source||'');const name=document.createElement('input');name.type='text';name.maxLength=120;name.className='account-map-name';name.dataset.newAccountName='';name.placeholder=t.newAccountName;name.value=item.source||t.newAccountDefault;name.hidden=select.value!==NEW_ACCOUNT;select.addEventListener('change',()=>{name.hidden=select.value!==NEW_ACCOUNT});row.append(main,select,name);root.appendChild(row)}if(!state.accounts.length){const note=document.createElement('p');note.className='row-sub ic-empty';note.textContent=t.noAccounts;root.appendChild(note)}renderMetrics('tx-review-summary',[[t.rows,staged.sourceRows],[t.ready,staged.ready,'pos'],[t.errors,staged.errors,'neg']])}
 
 // --- Review step: the actual bookings ---------------------------------------------------------
 // The candidate rows were already being fetched and then discarded, so the confirmation showed three
@@ -222,17 +222,31 @@ function renderTransactionCandidates() {
   }
   updateSelectedCount();
 }
+// Zwei Antworten je Quellkonto: ein bestehendes Konto, oder ein neues samt Namen. Frueher gab es nur
+// die erste, und eine Datei zu einem Konto, das es hier noch nicht gab, liess sich gar nicht
+// importieren.
 function collectAccountMappings({ required = true } = {}) {
   const mappings = {};
+  const newNames = {};
   for (const row of $('tx-account-mapping').querySelectorAll('.row')) {
     const value = row.querySelector('select')?.value;
+    const source = row.dataset.source || '';
+    if (value === NEW_ACCOUNT) {
+      const name = (row.querySelector('input[data-new-account-name]')?.value || '').trim();
+      if (!name) {
+        if (required) throw new Error(t.needAccountName);
+        return null;
+      }
+      newNames[source] = name;
+      continue;
+    }
     if (!value) {
       if (required) throw new Error(t.needAccount);
       return null;
     }
-    mappings[row.dataset.source || ''] = value;
+    mappings[source] = value;
   }
-  return mappings;
+  return { mappings, newNames };
 }
 
 // The duplicate check compares against the transactions of the TARGET account, so it cannot run at
@@ -248,7 +262,7 @@ async function refreshDuplicatePreview() {
   try {
     status('tx', t.dupChecking);
     const preview = await api(`api/import-mapping/jobs/${state.tx.jobId}/duplicate-preview?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceAccountMappings: mappings, defaultAccountId: null }) });
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceAccountMappings: mappings.mappings, defaultAccountId: null }) });
     state.tx.duplicates = new Map((preview.candidates || []).filter(item => item.status === 'duplicate').map(item => [item.id, item.reason]));
     status('tx', '');
   } catch (err) {
@@ -260,7 +274,7 @@ async function refreshDuplicatePreview() {
   renderTransactionCandidates();
 }
 
-async function commitTransactions(){try{if(!state.tx.selected.size)throw new Error(t.noneSelected);const mappings=collectAccountMappings();status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings,defaultAccountId:null,categoryMappings:collectCategoryMappings(),createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:[...state.tx.selected]})});renderResult('tx',result);await loadTransactionHistory();status('tx',t.done)}catch(err){error('tx',err)}}
+async function commitTransactions(){try{if(!state.tx.selected.size)throw new Error(t.noneSelected);const mappings=collectAccountMappings();status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings.mappings,newAccountNames:mappings.newNames,defaultAccountId:null,categoryMappings:collectCategoryMappings(),createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:[...state.tx.selected]})});renderResult('tx',result);await loadTransactionHistory();status('tx',t.done)}catch(err){error('tx',err)}}
 
 async function detectInvestments(){const file=currentFile('inv');if(!file){status('inv',t.needFile);return}state.inv.file=file;status('inv',t.working);$('inv-review-section').hidden=true;$('inv-result').hidden=true;try{state.inv.detect=await api(`api/investment-import/detect?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body:await formWithFile(file)});if(isTradeRepublicExport(state.inv.detect)){$('inv-preset').value='traderepublic';$('inv-new-portfolio-name').value='Trade Republic';$('inv-new-portfolio-currency').value=detectedCurrency(state.inv.detect);const matches=state.portfolios.filter(p=>!p.isArchived&&String(p.name||'').toLowerCase().includes('trade republic'));$('inv-portfolio').value=matches.length===1?matches[0].id:'__new__';syncPortfolioTarget()}renderMapping('inv',invFields);status('inv',`${state.inv.detect.rowCount} ${t.rows}.`)}catch(err){error('inv',err)}}
 async function stageInvestments(){try{const mapping=collectMapping('inv',invFields);if($('inv-preset')?.value==='traderepublic')mapping.sourceProvider='trade_republic';status('inv',t.working);const body=await formWithFile(state.inv.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/investment-import/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.inv.jobId=staged.jobId;state.inv.summary=await api(`api/investment-import/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`);renderInvestmentReview(state.inv.summary,staged);$('inv-review-section').hidden=false;status('inv','')}catch(err){error('inv',err)}}

@@ -20,7 +20,11 @@ public sealed record ImportMappedCommitWrite(
     IReadOnlyDictionary<string, Guid?>? CategoryMappings,
     bool CreateMissingCategories = false,
     bool RunFullWorthCategorization = true,
-    IReadOnlyList<Guid>? CandidateIds = null);
+    IReadOnlyList<Guid>? CandidateIds = null,
+    // Quellkonto aus der Datei -> Name eines Kontos, das dieser Import erst anlegen soll. Vorher gab
+    // es nur "auf welches bestehende Konto?", und eine Zeile ohne Antwort darauf wurde stillschweigend
+    // uebersprungen - eine Datei mit einem noch unbekannten Konto importierte also lautlos nichts.
+    IReadOnlyDictionary<string, string>? NewAccountNames = null);
 // The duplicate check is per target account, so it can only run once the account mapping is known -
 // i.e. not at upload time. This is the same input the commit takes, minus everything that writes.
 public sealed record ImportDuplicatePreviewWrite(
@@ -160,10 +164,27 @@ public static class ImportMappingEndpoints
         if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "transactions.write", ct))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var writable = await space.WritableAccountIdsAsync(userId, fullWorthSpaceId, ct);
-        var accountMap = request.SourceAccountMappings ?? new Dictionary<string, Guid?>();
+        var accountMap = new Dictionary<string, Guid?>(
+            request.SourceAccountMappings ?? new Dictionary<string, Guid?>());
         var allMappedIds = accountMap.Values.Where(value => value.HasValue).Select(value => value!.Value)
             .Concat(request.DefaultAccountId.HasValue ? [request.DefaultAccountId.Value] : []).Distinct().ToArray();
         if (allMappedIds.Any(id => !writable.Contains(id))) return Results.BadRequest(new { error = "An account mapping is inaccessible." });
+
+        // Ein Quellkonto, fuer das ein neues Konto entstehen soll, bekommt eine Platzhalter-Kennung:
+        // die Klassifizierung unten braucht eine, und gegen ein Konto, das es noch nicht gibt, kann es
+        // ohnehin keine Dublette geben. Der Commit tauscht sie gegen die echte.
+        var newAccounts = new Dictionary<Guid, (string Name, string Currency)>();
+        var spaceCurrency = await store.BaseCurrencyAsync(fullWorthSpaceId, ct);
+        foreach (var (source, rawName) in request.NewAccountNames ?? new Dictionary<string, string>())
+        {
+            var name = rawName?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return Results.BadRequest(new { error = "A new account needs a name." });
+            if (accountMap.TryGetValue(source, out var already) && already.HasValue) continue;
+            var placeholder = Guid.NewGuid();
+            accountMap[source] = placeholder;
+            newAccounts[placeholder] = (name, spaceCurrency);
+        }
+
         var categoryMap = request.CategoryMappings ?? new Dictionary<string, Guid?>();
         var mappedCategories = categoryMap.Values.Where(value => value.HasValue).Select(value => value!.Value).Distinct().ToArray();
         if (mappedCategories.Length > 0 && await store.CountCategoriesAsync(fullWorthSpaceId, mappedCategories, ct) != mappedCategories.Length)
@@ -182,7 +203,7 @@ public static class ImportMappingEndpoints
 
         var outcome = await commit.CommitAsync(
             userId, fullWorthSpaceId, jobId, candidates, classifications, categoryMap,
-            request.CreateMissingCategories, request.RunFullWorthCategorization, ct);
+            request.CreateMissingCategories, request.RunFullWorthCategorization, newAccounts, ct);
 
         return Results.Ok(new
         {
