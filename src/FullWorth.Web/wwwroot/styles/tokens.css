@@ -1,35 +1,38 @@
 /* Finance/FullWorth app shell + component styles (UI_UX_SPEC §4 tokens, §3 shell, §5 privacy, §24 states).
-   Tokens follow the canonical "FullWorth Design System": Barlow Condensed by default with Fredoka as an optional preview font,
-   monochrome and line-driven (no accent hue), a single dark-grey CTA colour, and colour ONLY where it
-   carries meaning — green income, amber "getting close", red overage. Persistent navigation shows its
-   active state as a plain grey fill (never the CTA colour) so colour stays reserved for money statements.
-   Components consume semantic tokens only, so themes restyle without touching markup/logic. */
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:optional;src:url("/fonts/BarlowCondensed-400.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:optional;src:url("/fonts/BarlowCondensed-500.woff2") format("woff2")}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:optional;src:url("/fonts/BarlowCondensed-600.woff2") format("woff2")}
-@font-face{font-family:'Fredoka';font-style:normal;font-weight:300 700;font-stretch:75% 125%;font-display:swap;src:url("/fonts/Fredoka-Variable.ttf") format("truetype")}
+   Typography has one application-wide family and one central size scale. Components inherit the family
+   and consume size tokens instead of defining an alternative font stack or user-selectable typography.
+   The interface remains monochrome and line-driven; colour is used only where it carries meaning. */
+@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:swap;src:url("https://cdn.jsdelivr.net/fontsource/fonts/nunito:vf@5.3.0/latin-wght-normal.woff2") format("woff2-variations")}
 :root{
-  --font-default:'Barlow Condensed',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --font-arial-narrow:'Arial Narrow','Aptos Narrow','Roboto Condensed',ui-sans-serif,system-ui,sans-serif;
-  --font-system:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --font-segoe:'Segoe UI',system-ui,sans-serif;
-  --font-aptos:'Aptos','Segoe UI',system-ui,sans-serif;
-  --font-helvetica:'Helvetica Neue',Helvetica,Arial,sans-serif;
-  --font-arial:Arial,Helvetica,sans-serif;
-  --font-verdana:Verdana,Geneva,sans-serif;
-  --font-tahoma:Tahoma,Verdana,sans-serif;
-  --font-trebuchet:'Trebuchet MS',Arial,sans-serif;
-  --font-century-gothic:'Century Gothic','Avenir Next',Avenir,ui-sans-serif,sans-serif;
-  --font-fredoka:'Fredoka',ui-rounded,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --font-comic:'Comic Sans MS','Comic Sans',cursive;
-  --font-georgia:Georgia,'Times New Roman',serif;
-  --font-times:'Times New Roman',Times,serif;
-  --font-mono:'Courier New',Courier,ui-monospace,SFMono-Regular,Consolas,monospace;
-  --font:var(--font-default);
-  --font-size-base:13px;
+  /* Typography: Nunito is the single application font. Compatibility aliases keep existing components
+     on the same family while old specialised font roles are phased out. */
+  --font-family-base:'Nunito',ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font:var(--font-family-base);
+  --font-sans:var(--font-family-base);
+  --font-display:var(--font-family-base);
+  --font-ui:var(--font-family-base);
+  --font-num:var(--font-family-base);
+  --font-mono:var(--font-family-base);
+
+  /* Central type scale. 16px is the application default. */
+  --font-size-xs:12px;
+  --font-size-sm:14px;
+  --font-size-base:16px;
+  --font-size-md:16px;
+  --font-size-lg:18px;
+  --font-size-xl:20px;
+  --font-size-2xl:24px;
+  --font-size-3xl:30px;
+  --font-size-4xl:36px;
+  --font-size-5xl:48px;
   --font-weight-base:400;
-  --letter-spacing-base:0em;
-  --line-height-base:1.5;
+  --letter-spacing-base:0;
+  --line-height-base:normal;
+  --line-height-tight:normal;
+  --line-height-snug:normal;
+  --line-height-normal:normal;
+  --line-height-relaxed:normal;
+
   color-scheme:light;
   /* spacing scale (§4.1) */
   --topbar-h:64px;
@@ -48,10 +51,7 @@
      fallback resolved to currentColor (a dark border on light surfaces), the 42 with one each used
      whatever hex its author wrote, so the same divider had three appearances. Alias, not a new colour. */
   --border:var(--line);
-  /* Nine more of the same: names feature stylesheets invented for tokens that already existed, each
-     used with a hex fallback and therefore rendering that fallback - ignoring both the theme and the
-     picked brand colour. Aliases rather than edits in 13 files, and the fallbacks in those files are
-     now unreachable instead of authoritative. */
+  /* Names feature stylesheets invented for tokens that already existed. Aliases keep one authority. */
   --danger:var(--negative);
   --success:var(--positive);
   --warning-border:var(--warning);
@@ -59,7 +59,12 @@
   --text-muted:var(--muted);
   --surface-1:var(--surface);
   --surf2:var(--surface-2);
-  --surface-subtle:var(--surface-2);/* A constant white plate behind third-party artwork. NOT a surface: bank and merchant logos are drawn for white, so a themed background makes a dark glyph vanish in dark mode. Identical in both themes on purpose. */--logo-plate:#ffffff;/* Two series of the salary-history chart. Its other two lines are --accent (gross) and --positive (net); these had no token and sat in the feature stylesheet. Values unchanged. */--chart-inflation:#a3681d;--chart-total:#7c5ac7;
+  --surface-subtle:var(--surface-2);
+  /* A constant white plate behind third-party artwork. NOT a surface: bank and merchant logos are
+     drawn for white, so a themed background makes a dark glyph vanish in dark mode. */
+  --logo-plate:#ffffff;
+  /* Two series of the salary-history chart. */
+  --chart-inflation:#a3681d;--chart-total:#7c5ac7;
   --border-strong:var(--tint-line-2);
   /* a five-step neutral scale for finer gray needs (chart axes, category-share ranking) beyond the core surfaces */
   --k1:#3d3d3d;--k2:#616161;--k3:#858585;--k4:#a9a9a9;--k5:#cdcdcd;
@@ -73,21 +78,6 @@
   /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
   --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
 }
-html[data-font="arial-narrow"]{--font:var(--font-arial-narrow)}
-html[data-font="system"]{--font:var(--font-system)}
-html[data-font="segoe"]{--font:var(--font-segoe)}
-html[data-font="aptos"]{--font:var(--font-aptos)}
-html[data-font="helvetica"]{--font:var(--font-helvetica)}
-html[data-font="arial"]{--font:var(--font-arial)}
-html[data-font="verdana"]{--font:var(--font-verdana)}
-html[data-font="tahoma"]{--font:var(--font-tahoma)}
-html[data-font="trebuchet"]{--font:var(--font-trebuchet)}
-html[data-font="century-gothic"]{--font:var(--font-century-gothic)}
-html[data-font="fredoka"]{--font:var(--font-fredoka)}
-html[data-font="comic"]{--font:var(--font-comic)}
-html[data-font="georgia"]{--font:var(--font-georgia)}
-html[data-font="times"]{--font:var(--font-times)}
-html[data-font="mono"]{--font:var(--font-mono)}
 html[data-theme="dark"]{
   color-scheme:dark;
   /* Neutral dark surfaces use visible elevation instead of near-black-on-near-black. */
