@@ -34,7 +34,6 @@ public sealed class ReceiptImportOptions
     public const string SectionName = "ReceiptImports";
     public int MaxBatchItems { get; set; } = 500;
     public long MaxUploadBytes { get; set; } = 512L * 1024 * 1024;
-    public int MaxParallelImports { get; set; } = 2;
 
     /// <summary>
     /// Wie viele Anfragen gleichzeitig an EINE Paperless-Instanz gehen duerfen (#127). Zwei, weil die
@@ -57,11 +56,8 @@ public sealed class ReceiptImportOptions
     public string? InboxPath { get; set; }
     public bool FolderEnabled { get; set; }
     public bool FolderRecursive { get; set; } = true;
-    public int FolderScanIntervalSeconds { get; set; } = 60;
     public int FolderStableAgeSeconds { get; set; } = 10;
     public bool AutoStart { get; set; } = true;
-    public Guid? FolderFullWorthSpaceId { get; set; }
-    public Guid? FolderUserId { get; set; }
     public string DefaultCurrency { get; set; } = "EUR";
 }
 
