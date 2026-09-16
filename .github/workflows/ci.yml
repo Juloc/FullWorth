@@ -4,10 +4,19 @@ name: CI
 # Do not add push, pull_request, schedule, merge_group, or other automatic triggers.
 #
 # The backend integration suite (~210 classes, each starting its own WebApplicationFactory host +
-# cloned Postgres DB) is the whole cost. It is sharded across parallel jobs by test namespace so the
-# wall-clock stays under ~5 min. Juloc/FullWorth is public, so parallel jobs cost no Actions minutes.
-# The "rest" shard is the COMPLEMENT of the other four (a NOT-filter), so any namespace not explicitly
-# assigned still runs there — new test areas can never silently fall out of CI.
+# cloned Postgres DB) is the whole cost. It is sharded across parallel jobs by test namespace.
+# Juloc/FullWorth is public, so parallel jobs cost no Actions minutes.
+#
+# The "rest" shard is the COMPLEMENT of every other one (a NOT-filter), so any namespace not explicitly
+# assigned still runs there — new test areas can never silently fall out of CI. Keep it that way when
+# adding a shard: name the namespaces in the new shard AND add them to the NOT-chain.
+#
+# Two measurements shaped the current layout (run 35149960672, 9 min 21 s wall clock):
+#   - "rest" alone was 642 tests in 7 m 46 s while every other shard sat between 1 and 3 minutes.
+#     Three of its namespace groups are their own shards now (accounts, platform).
+#   - Each shard spends ~68 s restoring and building before the first test runs. That is NOT worth
+#     replacing with a build-once-and-share artifact: the shards would then have to WAIT for that
+#     build instead of running beside it, and 72 s + upload + download is more than the 68 s saved.
 on:
   workflow_dispatch:
 
@@ -53,8 +62,12 @@ jobs:
             filter: "FullyQualifiedName~.Portfolio.|FullyQualifiedName~.Transactions."
           - name: analytics
             filter: "FullyQualifiedName~.Analytics.|FullyQualifiedName~.Categories.|FullyQualifiedName~.BankConnections."
+          - name: accounts
+            filter: "FullyQualifiedName~.Accounts.|FullyQualifiedName~.Compensation.|FullyQualifiedName~.Pension."
+          - name: platform
+            filter: "FullyQualifiedName~.Migrations.|FullyQualifiedName~.Ingestion.|FullyQualifiedName~.Infrastructure.|FullyQualifiedName~.Coach.|FullyQualifiedName~.Architecture."
           - name: rest
-            filter: "FullyQualifiedName!~.Purchases.&FullyQualifiedName!~.Parity.&FullyQualifiedName!~.Performance.&FullyQualifiedName!~.Preferences.&FullyQualifiedName!~.Api.&FullyQualifiedName!~.Contracts.&FullyQualifiedName!~.Loans.&FullyQualifiedName!~.Import.&FullyQualifiedName!~.Intelligence.&FullyQualifiedName!~.Security.&FullyQualifiedName!~.Tax.&FullyQualifiedName!~.Budgets.&FullyQualifiedName!~.Portfolio.&FullyQualifiedName!~.Transactions.&FullyQualifiedName!~.Analytics.&FullyQualifiedName!~.Categories.&FullyQualifiedName!~.BankConnections."
+            filter: "FullyQualifiedName!~.Purchases.&FullyQualifiedName!~.Parity.&FullyQualifiedName!~.Performance.&FullyQualifiedName!~.Preferences.&FullyQualifiedName!~.Api.&FullyQualifiedName!~.Contracts.&FullyQualifiedName!~.Loans.&FullyQualifiedName!~.Import.&FullyQualifiedName!~.Intelligence.&FullyQualifiedName!~.Security.&FullyQualifiedName!~.Tax.&FullyQualifiedName!~.Budgets.&FullyQualifiedName!~.Portfolio.&FullyQualifiedName!~.Transactions.&FullyQualifiedName!~.Analytics.&FullyQualifiedName!~.Categories.&FullyQualifiedName!~.BankConnections.&FullyQualifiedName!~.Accounts.&FullyQualifiedName!~.Compensation.&FullyQualifiedName!~.Pension.&FullyQualifiedName!~.Migrations.&FullyQualifiedName!~.Ingestion.&FullyQualifiedName!~.Infrastructure.&FullyQualifiedName!~.Coach.&FullyQualifiedName!~.Architecture."
     steps:
       - uses: actions/checkout@v6
 
@@ -80,8 +93,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # xunit.runner.json sagt zwei Threads, der Runner hat vier Kerne - gemessen lief jeder Shard
+      # damit auf halber Maschine. Hier und nicht in der Datei, weil dieselbe Datei lokal gilt und
+      # Docker Desktop dort ohnehin schon unter der Last leidet.
       - name: Test (${{ matrix.name }})
-        run: dotnet test tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj --configuration Release --filter "${{ matrix.filter }}"
+        run: dotnet test tests/FullWorth.Backend.Tests/FullWorth.Backend.Tests.csproj --configuration Release --filter "${{ matrix.filter }}" -- xUnit.MaxParallelThreads=4
 
   other-tests:
     name: Web + Banking + FinTs
