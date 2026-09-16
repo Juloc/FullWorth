@@ -82,7 +82,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         FinTsAccount account,
         CancellationToken cancellationToken = default)
     {
-        var version = session.Parameters.VersionFor("HISALS", 7, 5);
+        var version = AccountVersion(session.Parameters, "HISALS", 7, 5, account);
         var segments = BusinessWithTan(session.Parameters, "HKSAL", FinTsMessages.Balance(account, version));
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var next = Advance(session, response);
@@ -102,7 +102,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         CancellationToken cancellationToken = default)
     {
         if (to < from) throw new ArgumentException("FinTS transaction end date must be >= start date.");
-        var version = session.Parameters.VersionFor("HIKAZS", 7, 5);
+        var version = AccountVersion(session.Parameters, "HIKAZS", 7, 5, account);
         var request = FinTsMessages.Transactions(account, version, from, to, touchdown);
         IReadOnlyList<FinTsSegment> segments = touchdown is null ? BusinessWithTan(session.Parameters, "HKKAZ", request) : [request];
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
@@ -124,7 +124,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         // Nennt die Bank keine Version, wird 6 angenommen und nicht 7 (#130 §4): HKWPD gibt es in
         // den Versionen 5 und 6. Eine 7 zu schicken heisst, eine Nachricht zu behaupten, die es nicht
         // gibt - die Bank lehnt sie ab, und der Fehler sieht aus, als koenne sie keine Depots.
-        var version = session.Parameters.VersionFor("HIWPDS", 6, 5);
+        var version = AccountVersion(session.Parameters, "HIWPDS", 6, 5, depot);
         var request = FinTsMessages.Portfolio(depot, version, currency, touchdown);
         IReadOnlyList<FinTsSegment> segments = touchdown is null ? BusinessWithTan(session.Parameters, "HKWPD", request) : [request];
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
@@ -244,6 +244,20 @@ public sealed class FinTsClient(IFinTsTransport transport)
     /// nicht kennt, macht aus einem Auftrag, der vielleicht durchgegangen waere, sicher einen
     /// abgelehnten.
     /// </summary>
+    /// <summary>
+    /// Die Version eines kontobezogenen Geschaeftsvorfalls - begrenzt auf das, was das Konto hergibt.
+    ///
+    /// Ab Version 6 traegt die Nachricht die INTERNATIONALE Kontoverbindung, also IBAN und BIC. Ein
+    /// Depot hat keine IBAN, es wird ueber seine Depotnummer angesprochen. Eine Version 6 mit leerem
+    /// IBAN-Feld ist eine Nachricht ohne Konto; die Bank kann sie nicht zuordnen. Dann wird die
+    /// klassische Kontoverbindung genommen, und die gibt es bis Version 5.
+    /// </summary>
+    private static int AccountVersion(FinTsBankParameters parameters, string parameterSegment, int fallback, int minimum, FinTsAccount account)
+    {
+        var announced = parameters.VersionFor(parameterSegment, fallback, minimum);
+        return string.IsNullOrWhiteSpace(account.Iban) ? Math.Min(announced, 5) : announced;
+    }
+
     private static IReadOnlyList<FinTsSegment> BusinessWithTan(FinTsBankParameters parameters, string requestType, FinTsSegment business)
         => parameters.RequiresTan(requestType) && TanVersion(parameters) is { } version
             ? [business, FinTsMessages.TanProcess4(requestType, version, parameters.TanMedium)]

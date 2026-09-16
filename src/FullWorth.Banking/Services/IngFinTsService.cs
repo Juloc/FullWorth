@@ -221,7 +221,10 @@ public sealed class IngFinTsService(
             var depots = 0;
             foreach (var source in session.Parameters.Accounts)
             {
-                if (string.IsNullOrWhiteSpace(source.Iban)) continue;
+                // Ein Depot hat KEINE IBAN - es wird ueber seine Depotnummer angesprochen. Hier stand
+                // "ohne IBAN ueberspringen", und damit fiel jedes Depot stillschweigend heraus: im
+                // Protokoll stand "0 depots", als haette die Bank keines.
+                if (string.IsNullOrWhiteSpace(source.Iban) && string.IsNullOrWhiteSpace(source.AccountNumber)) continue;
                 var account = string.IsNullOrWhiteSpace(source.Bic) ? source with { Bic = bank.Bic } : source;
                 if (account.IsDepot)
                 {
@@ -422,11 +425,27 @@ public sealed class IngFinTsService(
     /// </summary>
     private void LogAnnouncedCapabilities(FinTsBankParameters parameters)
         => logger.LogInformation(
-            "ING FinTS announced. SecurityFunction={SecurityFunction}, TanMethods={TanMethods}, SegmentVersions={SegmentVersions}",
+            "ING FinTS announced. SecurityFunction={SecurityFunction}, TanMethods={TanMethods}, SegmentVersions={SegmentVersions}, Accounts={Accounts}",
             parameters.SecurityFunction,
             string.Join("; ", parameters.TanMethods.Select(x =>
                 $"{x.SecurityFunction}:v{x.SegmentVersion}:{x.Name}{(x.IsDecoupled ? ":decoupled" : string.Empty)}{(x.NeedsTanMedium ? ":medium" : string.Empty)}")),
-            string.Join("; ", parameters.SegmentVersions.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}")));
+            string.Join("; ", parameters.SegmentVersions.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}")),
+            Shape(parameters.Accounts));
+
+    /// <summary>
+    /// Was die Bank an Konten meldet - in Form, nicht im Inhalt.
+    ///
+    /// Ein Depot fehlte in der Oberflaeche, und ohne diese Zeile ist nicht zu unterscheiden, ob die
+    /// Bank keines meldet, ob es als Girokonto eingeordnet wurde oder ob es unterwegs herausfiel.
+    /// Genau diese drei Faelle sehen im Protokoll sonst gleich aus.
+    ///
+    /// Keine IBAN, keine Kontonummer, kein Name: nur Art, Waehrung und ob eine Kennung da ist.
+    /// </summary>
+    private static string Shape(IReadOnlyList<FinTsAccount> accounts)
+        => accounts.Count == 0
+            ? "keine"
+            : string.Join("; ", accounts.Select(x =>
+                $"{(x.IsDepot ? "depot" : "konto")}:{x.Currency}:{(string.IsNullOrWhiteSpace(x.Iban) ? "ohne-iban" : "mit-iban")}:{(string.IsNullOrWhiteSpace(x.AccountNumber) ? "ohne-nummer" : "mit-nummer")}"));
 
     private void LogFinTsFailure(string operation, FinTsException ex)
     {

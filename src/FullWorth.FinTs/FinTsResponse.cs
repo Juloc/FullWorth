@@ -315,26 +315,68 @@ internal static class FinTsResponseParser
         return result;
     }
 
+    /// <summary>
+    /// Ein Konto aus HIUPD (FinTS 3.0 Formals, E "Kontoinformation").
+    ///
+    /// Die Stellen verschieben sich mit der Segmentversion, weil #6 die IBAN an Stelle 3 EINSCHIEBT:
+    ///
+    /// <code>
+    ///           bis #5                      ab #6
+    /// 2  Kontoverbindung             2  Kontoverbindung
+    /// 3  Kunden-ID                   3  IBAN
+    /// 4  Kontoart                    4  Kunden-ID
+    /// 5  Kontowaehrung               5  Kontoart
+    /// 6  Name Kontoinhaber 1         6  Kontowaehrung
+    /// 7  Name Kontoinhaber 2         7  Name Kontoinhaber 1
+    /// 8  Kontoproduktbezeichnung     8  Name Kontoinhaber 2
+    ///                                9  Kontoproduktbezeichnung
+    /// </code>
+    ///
+    /// Gelesen wurden bisher fest die Stellen von #6. Bei einer Bank, die #5 schickt - ING tut es -
+    /// stand damit der zweite Kontoinhaber im Feld des ersten und das Kontolimit in der
+    /// Produktbezeichnung.
+    /// </summary>
     private static FinTsAccount? ParseAccount(FinTsSegment segment)
     {
         if (segment.Groups.Count < 2) return null;
         var accountGroup = segment.Groups[1];
         var all = segment.Groups.SelectMany(x => x.Values).OfType<FinTsValue.Text>().Select(x => x.Value).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        var shift = segment.Version >= 6 ? 1 : 0;
+
         var iban = all.FirstOrDefault(x => IbanRegex.IsMatch(x)) ?? string.Empty;
         var bic = all.FirstOrDefault(x => BicRegex.IsMatch(x)) ?? string.Empty;
         var accountNumber = Text(accountGroup, 0);
         var sub = Text(accountGroup, 1);
-        var currency = all.FirstOrDefault(IsCurrency) ?? "EUR";
-        var owner = FirstUseful(segment, 6, 7);
-        var product = FirstUseful(segment, 8, 9);
-        var depot = (product ?? string.Empty).Contains("Depot", StringComparison.OrdinalIgnoreCase);
+        var currency = FirstUseful(segment, 4 + shift) is { } declared && IsCurrency(declared)
+            ? declared
+            : all.FirstOrDefault(IsCurrency) ?? "EUR";
+        var owner = FirstUseful(segment, 5 + shift, 6 + shift);
+        var product = FirstUseful(segment, 7 + shift);
+        var kind = FirstUseful(segment, 3 + shift);
+
         // Stelle 4 der klassischen Kontoverbindung ist der Kreditinstitutscode. Nennt die Bank ihn,
         // wird er uebernommen; sonst steht er in der IBAN (#130 §3).
         var bankCode = Text(accountGroup, 3);
         if (string.IsNullOrWhiteSpace(iban) && string.IsNullOrWhiteSpace(accountNumber)) return null;
-        return new FinTsAccount(iban, bic, accountNumber, sub, owner, product, currency, depot,
+        return new FinTsAccount(iban, bic, accountNumber, sub, owner, product, currency, IsDepot(kind, product),
             string.IsNullOrWhiteSpace(bankCode) ? null : bankCode);
     }
+
+    /// <summary>
+    /// Ob ein Konto ein Depot ist - an der Kontoart, nicht am Namen.
+    ///
+    /// FinTS 3.0 Formals, Data Dictionary "Kontoart": 30-39 Wertpapierdepot, 60-69 Fonds-Depot bei
+    /// einer Kapitalanlagegesellschaft.
+    ///
+    /// Bisher galt als Depot, was "Depot" in der Produktbezeichnung stehen hatte. Das ist geraten und
+    /// nicht gelesen: ein Depot, das die Bank anders nennt, war einfach ein Girokonto - und der
+    /// Bestand wurde nie abgerufen. Die Kontoart ist optional, deshalb bleibt der Name als Rueckfall -
+    /// aber nur, wenn die Bank die Kontoart gar nicht nennt.
+    /// </summary>
+    private static bool IsDepot(string? accountKind, string? product)
+        => int.TryParse(accountKind, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kind)
+            ? kind is (>= 30 and <= 39) or (>= 60 and <= 69)
+            : (product ?? string.Empty).Contains("Depot", StringComparison.OrdinalIgnoreCase);
 
     private static Dictionary<string, bool> ParsePinTanRules(FinTsSegment segment)
     {

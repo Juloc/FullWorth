@@ -346,6 +346,43 @@ is not established here, and a wrong split is what caused this bug in the first 
 do not survive the wire format either; requiring a full stride drops exactly the method whose optional
 tail the bank left empty.
 
+### Accounts come from HIUPD, and a depot is not a name
+
+`HIUPD` shifts its fields with the segment version, because **#6 inserts the IBAN at position 3**:
+
+```
+          up to #5                    from #6
+2  Kontoverbindung             2  Kontoverbindung
+3  Kunden-ID                   3  IBAN
+4  Kontoart                    4  Kunden-ID
+5  Kontowährung                5  Kontoart
+6  Name Kontoinhaber 1         6  Kontowährung
+7  Name Kontoinhaber 2         7  Name Kontoinhaber 1
+8  Kontoproduktbezeichnung     8  Name Kontoinhaber 2
+                               9  Kontoproduktbezeichnung
+```
+
+ING sends #5. Reading the #6 positions unconditionally put the second account holder in the first
+one's field and the account limit in the product name.
+
+**Whether an account is a depot is `Kontoart`, not a substring of the product name.** FinTS 3.0
+Formals, Data Dictionary: 1–9 Kontokorrent/Giro, 10–19 Sparkonto, 20–29 Festgeld, **30–39
+Wertpapierdepot**, 40–49 Kredit, 50–59 Kreditkarte, **60–69 Fonds-Depot**, 70–79 Bausparvertrag,
+80–89 Versicherung, 90–99 sonstige. The field is optional, so the product name stays as a fallback —
+but only when the bank names no Kontoart at all.
+
+Two consequences that each hid the depot on their own:
+
+- **A depot has no IBAN.** It is addressed by its Depotnummer. The sync loop skipped every account
+  without an IBAN, so the depot fell out silently and the log said `0 depots`.
+- **From version 6 an account-bearing request carries the *international* account identification** —
+  IBAN and BIC. With no IBAN that is a message without an account, so `AccountVersion` caps such a
+  request at 5, where the classic Kontoverbindung applies.
+
+`ING FinTS announced.` reports the accounts as shapes — `depot:EUR:ohne-iban:mit-nummer` — so "the bank
+sends no depot", "it was classified as a giro account" and "it fell out on the way" stop looking
+identical. No IBAN, no account number, no name goes into that line.
+
    The signature header `HNSHK` carries a **Sicherheitsprofil** whose second part is the version of
    the procedure: `1` for one-step, `2` for two-step. It has to agree with the security function next
    to it. The sync dialog runs with `999` — genuinely one-step — which is why a hardcoded `1` survived
