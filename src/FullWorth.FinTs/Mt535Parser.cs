@@ -49,7 +49,18 @@ public static class Mt535Parser
         // Ein Feld darf ueber mehrere Zeilen gehen (der Name in :35B: tut es fast immer). Erst werden
         // die Zeilen deshalb zu Feldern zusammengefasst, und danach die Bloecke gelesen.
         var lines = statement.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-        var inSafe = false;
+        // Der Bestand ist der FIN-Block. Nur er.
+        //
+        // Hier wurde vorher ein umschliessendes :16R:SUBSAFE VERLANGT, und ohne das wurde keine
+        // einzige Zeile gelesen. Die ING schickt keines - ihre FIN-Bloecke stehen direkt nach GENL.
+        // Das Ergebnis war ein Depot mit vier ETFs und null Bestaenden, waehrend die Bank 1388
+        // Zeichen MT535 geliefert hatte:
+        //
+        //   HIWPD=1, v6:MT535:1388-Zeichen, Bestaende=0
+        //
+        // SUBSAFE ist eine Klammer, kein Inhalt, und in MT535 nicht garantiert. Was zaehlt, ist FIN:
+        // alles zwischen :16R:FIN und dem zugehoerigen :16S:FIN gehoert zu EINEM Bestand, auch die
+        // Felder seiner Unterbloecke (FINSUB, SUBBAL). Alles ausserhalb - GENL, ADDINFO - ist keiner.
         var depth = 0;
         Dictionary<string, List<string>>? current = null;
         string? openTag = null;
@@ -71,29 +82,28 @@ public static class Mt535Parser
             var start = BlockStart.Match(line);
             if (start.Success)
             {
-                var name = start.Groups["name"].Value;
-                if (name == "SUBSAFE") { inSafe = true; depth = 0; continue; }
-                if (!inSafe) continue;
-                depth++;
-                // Der aeussere FIN-Block ist der Bestand; die inneren (PRIC, ADDINFO) gehoeren dazu.
-                if (depth == 1) { Flush(); current = []; }
                 openTag = null;
+                if (current is null)
+                {
+                    // Ausserhalb eines Bestands zaehlt nur der Anfang eines neuen.
+                    if (start.Groups["name"].Value == "FIN") { current = []; depth = 1; }
+                    continue;
+                }
+                depth++;
                 continue;
             }
 
             var end = BlockEnd.Match(line);
             if (end.Success)
             {
-                var name = end.Groups["name"].Value;
-                if (name == "SUBSAFE") { Flush(); inSafe = false; continue; }
-                if (!inSafe) continue;
+                openTag = null;
+                if (current is null) continue;
                 depth--;
                 if (depth <= 0) { Flush(); depth = 0; }
-                openTag = null;
                 continue;
             }
 
-            if (!inSafe || current is null) continue;
+            if (current is null) continue;
 
             var field = FieldStart.Match(line);
             if (field.Success)
