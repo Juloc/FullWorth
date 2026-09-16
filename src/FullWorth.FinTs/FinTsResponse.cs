@@ -157,6 +157,10 @@ internal static class FinTsResponseParser
                     foreach (var pair in ParsePinTanRules(segment)) tanRequired[pair.Key] = pair.Value;
                     break;
                 case "HITANS":
+                    // Die Version wird MITGEFUEHRT, auch wenn kein Verfahren daraus lesbar ist: nach
+                    // ihr entscheidet sich, ob HKTAN ueberhaupt in die Anmeldung gehoert.
+                    if (segment.Version > 0)
+                        versions["HITANS"] = Math.Max(versions.GetValueOrDefault("HITANS"), segment.Version);
                     // Eine Bank kuendigt dasselbe Verfahren in MEHREREN Segmentversionen an - ING
                     // schickt HITANS:4 und HITANS:6 nebeneinander. Vorher gewann das zuerst gesehene,
                     // und das ist regelmaessig das aelteste: fuer Sicherheitsfunktion 942 blieb
@@ -347,23 +351,93 @@ internal static class FinTsResponseParser
         return result;
     }
 
+    /// <summary>
+    /// Zahl der Datenelemente EINES Verfahrens, nach Elementversion - FinTS 3.0, Security -
+    /// Sicherheitsverfahren PIN/TAN, Data-Dictionary "Verfahrensparameter Zwei-Schritt-Verfahren".
+    ///
+    /// Aeltere Versionen als 4 stehen hier nicht. Nicht weil es sie nicht gibt, sondern weil ich ihre
+    /// Feldfolge nicht belegt habe - und eine falsche Aufteilung erzeugt genau den Müll, der diesen
+    /// Umbau ausgeloest hat. Gebraucht werden sie auch nicht: die starke Authentifizierung bei der
+    /// Dialoginitialisierung gibt es laut Spezifikation erst ab #6.
+    /// </summary>
+    private static int MethodStride(int version) => version switch
+    {
+        4 or 5 => 22,
+        6 => 21,
+        7 => 26,
+        _ => 0
+    };
+
+    /// <summary>
+    /// Die TAN-Verfahren aus HITANS (#130 §8).
+    ///
+    /// Stelle 5 von HITANS ist EIN Parameterblock, keine Gruppe je Verfahren:
+    ///
+    /// <code>
+    /// 1 Einschritt-Verfahren erlaubt (J/N)
+    /// 2 Mehr als ein TAN-pflichtiger Auftrag pro Nachricht erlaubt (J/N)
+    /// 3 Auftrags-Hashwertverfahren
+    /// 4 Verfahrensparameter Zwei-Schritt-Verfahren - 1..98 WIEDERHOLUNGEN
+    /// </code>
+    ///
+    /// Vorher galt jede Gruppe ab Nummer 4 als ein Verfahren und ihr erstes Feld als
+    /// Sicherheitsfunktion. Damit wurde das Ja/Nein-Kennzeichen "Einschritt-Verfahren erlaubt" zur
+    /// Sicherheitsfunktion: im Protokoll stand bei ING <c>TanMethods=J:v1:0</c>. Eine
+    /// Sicherheitsfunktion ist dreistellig und liegt zwischen 900 und 997 - "J" ist keine, und alle
+    /// echten Verfahren waren verloren.
+    ///
+    /// Gelesen wird nur, was belegt ist: Sicherheitsfunktion und TAN-Prozess stehen in jeder Version
+    /// an derselben Stelle, der Name ab #5, alles Weitere ab #6.
+    /// </summary>
     private static IEnumerable<FinTsTanMethod> ParseTanMethods(FinTsSegment segment)
     {
-        for (var i = 4; i < segment.Groups.Count; i++)
+        var stride = MethodStride(segment.Version);
+        if (stride == 0 || segment.Groups.Count <= 4) yield break;
+
+        var values = segment.Groups[4].Values
+            .Select(x => x is FinTsValue.Text text ? text.Value : string.Empty)
+            .ToArray();
+
+        // Die ersten drei Stellen gehoeren dem Parameterblock selbst, nicht dem ersten Verfahren.
+        for (var start = 3; start < values.Length; start += stride)
         {
-            var g = segment.Groups[i];
-            var security = Text(g, 0);
-            if (string.IsNullOrWhiteSpace(security)) continue;
-            var process = Text(g, 1);
-            var name = segment.Version >= 6 ? Text(g, 3) : Text(g, 2);
-            var needsMedium = segment.Version >= 6 && g.Values.Count > 13 && Text(g, 13) is "1" or "2";
-            var isDecoupled = segment.Version >= 7 && g.Values.Count > 21 && Text(g, 21) == "J";
-            var maxPolls = ParseInt(g, 22, -1);
-            var waitFirst = ParseInt(g, 23, 0);
-            var waitNext = ParseInt(g, 24, 0);
-            yield return new FinTsTanMethod(security, string.IsNullOrWhiteSpace(name) ? $"TAN-{security}" : name, process, needsMedium, isDecoupled, maxPolls, waitFirst, waitNext, segment.Version);
+            // Das LETZTE Verfahren darf kuerzer sein als die Feldzahl: leere Felder am Ende duerfen
+            // weggelassen werden, und die Draht-Darstellung traegt sie ohnehin nicht. Wer hier eine
+            // volle Feldzahl verlangt, verliert genau das Verfahren, dessen optionale Endfelder die
+            // Bank nicht belegt hat.
+            var available = Math.Min(stride, values.Length - start);
+            string Field(int index) => index < available ? values[start + index] : string.Empty;
+
+            // Was nicht wie eine Sicherheitsfunktion aussieht, ist keine - sie ist dreistellig und
+            // liegt zwischen 900 und 997. Lieber ein Verfahren weniger als eines, das die
+            // Anmeldenachricht falsch macht.
+            var security = Field(0);
+            if (security.Length != 3 || !security.All(char.IsDigit)) continue;
+
+            var name = segment.Version >= 5 ? Field(5) : string.Empty;
+            var isDecoupled = segment.Version >= 7
+                && Field(3).Contains("Decoupled", StringComparison.OrdinalIgnoreCase);
+            // HKTAN Stelle 12: das TAN-Medium ist zu benennen, wenn die Bank es verlangt UND mehr als
+            // ein aktives Medium kennt.
+            var needsMedium = segment.Version >= 6
+                && Field(18) == "2"
+                && Number(Field(20), 0) > 1;
+
+            yield return new FinTsTanMethod(
+                security,
+                string.IsNullOrWhiteSpace(name) ? $"TAN-{security}" : name,
+                Field(1),
+                needsMedium,
+                isDecoupled,
+                isDecoupled ? Number(Field(21), -1) : -1,
+                isDecoupled ? Number(Field(22), 0) : 0,
+                isDecoupled ? Number(Field(23), 0) : 0,
+                segment.Version);
         }
     }
+
+    private static int Number(string value, int fallback)
+        => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
 
     private static IReadOnlyList<FinTsTransaction> ParseMt940(byte[] data, bool pending)
     {

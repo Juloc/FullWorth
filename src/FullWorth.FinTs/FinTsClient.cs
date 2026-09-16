@@ -42,8 +42,8 @@ public sealed class FinTsClient(IFinTsTransport transport)
             FinTsMessages.Identify(bank, credentials.UserId, parameters.SystemId),
             FinTsMessages.ProcessPrep(parameters, credentials.ProductId)
         };
-        if (parameters.TanMethods.Count > 0 || parameters.SecurityFunction != FinTsMessages.OneStepSecurityFunction)
-            segments.Add(FinTsMessages.TanProcess4("HKIDN", TanVersion(parameters), parameters.TanMedium));
+        if (TanVersion(parameters) is { } tanVersion)
+            segments.Add(FinTsMessages.TanProcess4("HKIDN", tanVersion, parameters.TanMedium));
 
         var response = await SendAsync(bank, credentials, session, segments, null, cancellationToken);
         var merged = FinTsResponseParser.MergeParameters(parameters, response);
@@ -156,8 +156,8 @@ public sealed class FinTsClient(IFinTsTransport transport)
     private async Task<FinTsOpenResult> ContinueDialogAsync(FinTsBankProfile bank, FinTsCredentials credentials, FinTsSessionState session, FinTsTanChallenge challenge, string tan, bool poll, CancellationToken cancellationToken)
     {
         var segment = poll
-            ? FinTsMessages.TanPoll(challenge.TaskReference, TanVersion(session.Parameters), session.Parameters.TanMedium)
-            : FinTsMessages.TanProcess2(challenge.TaskReference, TanVersion(session.Parameters), session.Parameters.TanMedium);
+            ? FinTsMessages.TanPoll(challenge.TaskReference, TanVersion(session.Parameters) ?? LowestTanVersion, session.Parameters.TanMedium)
+            : FinTsMessages.TanProcess2(challenge.TaskReference, TanVersion(session.Parameters) ?? LowestTanVersion, session.Parameters.TanMedium);
         var response = await SendAsync(bank, credentials, session, [segment], poll ? string.Empty : tan, cancellationToken);
         var next = Advance(session, response);
         if (response.DecoupledPending)
@@ -180,8 +180,8 @@ public sealed class FinTsClient(IFinTsTransport transport)
         CancellationToken cancellationToken)
     {
         var segment = poll
-            ? FinTsMessages.TanPoll(challenge.TaskReference, TanVersion(session.Parameters), session.Parameters.TanMedium)
-            : FinTsMessages.TanProcess2(challenge.TaskReference, TanVersion(session.Parameters), session.Parameters.TanMedium);
+            ? FinTsMessages.TanPoll(challenge.TaskReference, TanVersion(session.Parameters) ?? LowestTanVersion, session.Parameters.TanMedium)
+            : FinTsMessages.TanProcess2(challenge.TaskReference, TanVersion(session.Parameters) ?? LowestTanVersion, session.Parameters.TanMedium);
         var response = await SendAsync(bank, credentials, session, [segment], poll ? string.Empty : tan, cancellationToken);
         var next = Advance(session, response);
         if (response.DecoupledPending || response.NeedsTan) return TanResult<T>(response, next, challenge);
@@ -236,9 +236,17 @@ public sealed class FinTsClient(IFinTsTransport transport)
         return new FinTsSessionState(dialog, session.MessageNumber + 1, parameters);
     }
 
+    /// <summary>
+    /// Der Auftrag, und daneben die TAN-Ankuendigung - wenn HIPINS eine verlangt UND die Bank ein
+    /// HKTAN ankuendigt, das dieser Code schreiben kann.
+    ///
+    /// Kann er es nicht, geht der Auftrag allein hinaus. Ein HKTAN in einer Version, die die Bank
+    /// nicht kennt, macht aus einem Auftrag, der vielleicht durchgegangen waere, sicher einen
+    /// abgelehnten.
+    /// </summary>
     private static IReadOnlyList<FinTsSegment> BusinessWithTan(FinTsBankParameters parameters, string requestType, FinTsSegment business)
-        => parameters.RequiresTan(requestType)
-            ? [business, FinTsMessages.TanProcess4(requestType, TanVersion(parameters), parameters.TanMedium)]
+        => parameters.RequiresTan(requestType) && TanVersion(parameters) is { } version
+            ? [business, FinTsMessages.TanProcess4(requestType, version, parameters.TanMedium)]
             : [business];
 
     private static FinTsResult<T> TanResult<T>(FinTsResponse response, FinTsSessionState session, FinTsTanChallenge? fallback = null)
@@ -249,31 +257,42 @@ public sealed class FinTsClient(IFinTsTransport transport)
     }
 
     /// <summary>
-    /// Die aelteste Segmentversion, in der dieser Code HKTAN ueberhaupt schreiben kann.
+    /// Die aelteste Segmentversion, in der es die starke Kundenauthentifizierung bei der
+    /// Dialoginitialisierung ueberhaupt gibt.
     ///
-    /// <see cref="FinTsMessages.TanProcess4"/> und die Fortsetzungen bauen den Aufbau ab Version 6:
-    /// Segmentkennung an Stelle 2, Auftragsreferenz an Stelle 5, TAN-Medium an Stelle 11. Den gibt es
-    /// darunter nicht - vor Version 5 steht an Stelle 2 der Auftrags-Hashwert, und TAN-Prozess 4
-    /// ("Auftrag ankuendigen") existiert dort gar nicht.
+    /// FinTS 3.0, Security - Sicherheitsverfahren PIN/TAN, B.4.2: "Unterstuetzt ein Kreditinstitut die
+    /// starke Kundenauthentifizierung mithilfe von HKTAN ab #6, so sollte ein Kundenprodukt in die
+    /// Segmentfolge der Dialoginitialisierung grundlegend ein HKTAN-Segment ab #6 einstellen."
+    ///
+    /// Die Bedingung steht im ersten Halbsatz und wurde bisher ueberlesen: kuendigt die Bank HITANS
+    /// nur in einer aelteren Version an, gibt es diesen Ablauf bei ihr nicht. Und dieselbe Grenze gilt
+    /// technisch: <see cref="FinTsMessages.TanProcess4"/> baut den Aufbau ab Version 6 - Segmentkennung
+    /// an Stelle 2, TAN-Medium an Stelle 11. Darunter steht an Stelle 2 der Auftrags-Hashwert.
     /// </summary>
     private const int LowestTanVersion = 6;
 
     /// <summary>
-    /// Die Segmentversion, in der HKTAN gebaut wird: was die Bank fuer das gewaehlte Verfahren
-    /// ankuendigt, sonst die hoechste ueberhaupt angekuendigte.
+    /// Die Segmentversion, in der HKTAN zu bauen ist - oder <c>null</c>, wenn es nicht mitgeschickt
+    /// werden darf.
     ///
-    /// Hier stand eine Untergrenze von 4. Zusammen mit dem HITANS-Zusammenfuehren, das die zuerst
-    /// gesehene statt der hoechsten Version behielt, kam bei ING eine 4 heraus - und damit eine
-    /// Nachricht mit Versionskopf 4 und dem Aufbau von Version 6 dahinter. Genau die weist die Bank
-    /// mit "9110 Unbekannter Aufbau der Kundennachricht" zurueck; sichtbar war davon nur die
-    /// Sammelmeldung "9800 Der Dialog wurde abgebrochen".
+    /// Genommen wird, was die Bank in HITANS ankuendigt: die Version des gewaehlten Verfahrens, sonst
+    /// die hoechste angekuendigte HITANS-Version ueberhaupt.
+    ///
+    /// Hier stand eine feste Untergrenze, die aus JEDER Ankuendigung eine 6 machte. ING kuendigt eine
+    /// aeltere Version an und kennt HKTAN #6 nicht; die Bank antwortete entsprechend
+    /// "9050 Nachricht teilweise fehlerhaft" mit "9010@5 HKTAN Der gewuenschte Geschaeftsvorfall wird
+    /// nicht unterstuetzt" - und sie hatte recht. Wer keine starke Authentifizierung bei der
+    /// Anmeldung anbietet, bekommt auch kein HKTAN.
     /// </summary>
-    private static int TanVersion(FinTsBankParameters parameters)
-        => Math.Max(LowestTanVersion, parameters.TanMethods
+    private static int? TanVersion(FinTsBankParameters parameters)
+    {
+        var announced = parameters.TanMethods
             .Where(x => x.SecurityFunction == parameters.SecurityFunction)
             .Select(x => x.SegmentVersion)
-            .DefaultIfEmpty(parameters.TanMethods.Select(x => x.SegmentVersion).DefaultIfEmpty(0).Max())
-            .Max());
+            .DefaultIfEmpty(parameters.SegmentVersions.TryGetValue("HITANS", out var value) ? value : 0)
+            .Max();
+        return announced >= LowestTanVersion ? announced : null;
+    }
 
     private static FinTsBankParameters EmptyParameters()
         => new(0, 0, "0", FinTsMessages.OneStepSecurityFunction, null,

@@ -35,7 +35,7 @@ public sealed class HkTanVersionTests
     [Fact]
     public void TheHighestAnnouncedVersionWinsNotTheFirstSeen()
     {
-        var merged = Merge(Hitans(4, "942", "pushTAN"), Hitans(6, "942", "pushTAN"));
+        var merged = HitansFixture.Merge(Hitans(4, "942"), Hitans(6, "942"));
 
         var method = Assert.Single(merged.TanMethods);
         Assert.Equal("942", method.SecurityFunction);
@@ -45,7 +45,7 @@ public sealed class HkTanVersionTests
     [Fact]
     public void AndTheOrderInTheAnswerDoesNotDecideIt()
     {
-        var merged = Merge(Hitans(7, "942", "pushTAN"), Hitans(4, "942", "pushTAN"));
+        var merged = HitansFixture.Merge(Hitans(7, "942"), Hitans(4, "942"));
 
         Assert.Equal(7, Assert.Single(merged.TanMethods).SegmentVersion);
     }
@@ -53,7 +53,7 @@ public sealed class HkTanVersionTests
     [Fact]
     public void DifferentSecurityFunctionsStayApart()
     {
-        var merged = Merge(Hitans(6, "942", "pushTAN"), Hitans(6, "944", "photoTAN"));
+        var merged = HitansFixture.Merge(Hitans(6, "942"), Hitans(6, "944"));
 
         Assert.Equal(2, merged.TanMethods.Count);
     }
@@ -70,19 +70,20 @@ public sealed class HkTanVersionTests
     }
 
     /// <summary>
-    /// Eine Version, deren Aufbau dieser Code gar nicht schreiben kann, wird nicht behauptet. Vorher
-    /// stand hier eine Untergrenze von 4 - genau die 4 aus dem Protokoll.
+    /// Eine Version, deren Aufbau dieser Code nicht schreiben kann, wird nicht behauptet - und auch
+    /// nicht auf 6 hochgebogen.
+    ///
+    /// Genau das tat die alte Untergrenze: aus jeder Ankuendigung wurde eine 6. ING kuendigt eine
+    /// aeltere Version an und kennt HKTAN #6 nicht; die Antwort war "9010@5 HKTAN Der gewuenschte
+    /// Geschaeftsvorfall wird nicht unterstuetzt". Wer keine starke Authentifizierung bei der
+    /// Anmeldung anbietet, bekommt auch kein HKTAN.
     /// </summary>
     [Theory]
     [InlineData(0)]
     [InlineData(4)]
     [InlineData(5)]
     public async Task AVersionWhoseLayoutThisCodeCannotWriteIsNeverSent(int announced)
-    {
-        var hktan = await SentHkTanAsync(announced);
-
-        Assert.Equal(6, hktan.Version);
-    }
+        => Assert.Null(await SentHkTanOrNullAsync(announced));
 
     /// <summary>
     /// Der Aufbau ab Version 6, nach Stellen: 1 TAN-Prozess, 2 Segmentkennung, 5 Auftragsreferenz,
@@ -109,11 +110,8 @@ public sealed class HkTanVersionTests
         Assert.Equal(7, hktan.Groups.Count - 1);
     }
 
-    private static FinTsBankParameters Merge(params FinTsSegment[] segments)
-        => FinTsResponseParser.MergeParameters(Empty, FinTsResponseParser.Parse(FinTsWire.Serialize(segments)));
-
     /// <summary>Das HKTAN, das bei <c>OpenAsync</c> tatsaechlich auf die Leitung geht.</summary>
-    private static async Task<FinTsSegment> SentHkTanAsync(int announcedVersion, string? medium = null)
+    private static async Task<FinTsSegment?> SentHkTanOrNullAsync(int announcedVersion, string? medium = null)
     {
         var transport = new CapturingTransport();
         var parameters = Empty with
@@ -127,7 +125,13 @@ public sealed class HkTanVersionTests
         await new FinTsClient(transport).OpenAsync(Bank, Credentials, parameters);
 
         Assert.Single(transport.Messages);
-        var hktan = transport.Sent().Find("HKTAN");
+        return transport.Sent().Find("HKTAN");
+    }
+
+    /// <summary>Wie oben, aber es MUSS eines geben.</summary>
+    private static async Task<FinTsSegment> SentHkTanAsync(int announcedVersion, string? medium = null)
+    {
+        var hktan = await SentHkTanOrNullAsync(announcedVersion, medium);
         Assert.NotNull(hktan);
         return hktan!;
     }
@@ -137,25 +141,7 @@ public sealed class HkTanVersionTests
         new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
         [], []);
 
-    /// <summary>Ein HITANS-Segment mit genau einem Verfahren, so wie eine Bank es ankuendigt.</summary>
-    private static FinTsSegment Hitans(int version, string securityFunction, string name)
-    {
-        var method = new List<FinTsValue>();
-        for (var i = 0; i < 25; i++) method.Add(FinTsValue.E());
-        method[0] = FinTsValue.T(securityFunction);
-        method[1] = FinTsValue.T("2");
-        method[version >= 6 ? 3 : 2] = FinTsValue.T(name);
 
-        return new FinTsSegment([
-            FinTsGroup.Of(
-                FinTsValue.T("HITANS"),
-                FinTsValue.T("5"),
-                FinTsValue.T(version.ToString(CultureInfo.InvariantCulture)),
-                FinTsValue.T("4")),
-            FinTsGroup.Of(FinTsValue.T("1")),
-            FinTsGroup.Of(FinTsValue.T("1")),
-            FinTsGroup.Of(FinTsValue.T("0")),
-            new FinTsGroup(method)
-        ]);
-    }
+    private static FinTsSegment Hitans(int version, string securityFunction)
+        => HitansFixture.Segment(version, HitansFixture.Method(Math.Max(version, 6), securityFunction, "pushTAN"));
 }

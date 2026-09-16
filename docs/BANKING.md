@@ -308,11 +308,43 @@ Body: `{ userId, pin, tanMedium?, reconnectConnectionId? }` — the UI never sen
    preferring a decoupled method.
 
    The `HKTAN` segment version is the **highest** one the bank announced for that security function,
-   never below 6. Banks announce the same method in several `HITANS` versions at once, oldest first,
-   and process 4 with a Segmentkennung in element 2 only exists from version 6 — below that, element 2
-   is the order hash. Sending a version-4 header with a version-6 body is what ING answered with
-   `9110 Unbekannter Aufbau der Kundennachricht`, hidden behind the umbrella code
-   `9800 Der Dialog wurde abgebrochen`.
+   and **an `HKTAN` is only sent at all when that version is 6 or above**. Banks announce the same
+   method in several `HITANS` versions at once, oldest first, and process 4 with a Segmentkennung in
+   element 2 only exists from version 6 — below that, element 2 is the order hash. Sending a version-4
+   header with a version-6 body is what ING answered with `9110 Unbekannter Aufbau der
+   Kundennachricht`, hidden behind the umbrella code `9800 Der Dialog wurde abgebrochen`.
+
+   The spec's rule carries a condition that is easy to read past: *"**Unterstützt ein Kreditinstitut
+   die starke Kundenauthentifizierung mithilfe von HKTAN ab #6**, so sollte ein Kundenprodukt in die
+   Segmentfolge der Dialoginitialisierung grundlegend ein HKTAN-Segment ab #6 einstellen."* A bank that
+   announces only an older `HITANS` does not offer this flow — ING answers such a segment with
+   `9010 Der gewünschte Geschäftsvorfall wird nicht unterstützt`, and it is right to.
+
+### HITANS is one parameter block, not one group per method
+
+Element 5 of `HITANS` is a **single** DEG:
+
+```
+1 Einschritt-Verfahren erlaubt (J/N)
+2 Mehr als ein TAN-pflichtiger Auftrag pro Nachricht erlaubt (J/N)
+3 Auftrags-Hashwertverfahren
+4 Verfahrensparameter Zwei-Schritt-Verfahren — 1..98 REPETITIONS
+```
+
+Every announced method sits inside element 4, one after another. Reading each *group* as a method made
+the `J` from element 1 the security function — the log showed `TanMethods=J:v1:0`, and every real
+method was lost. A security function is three digits, 900–997; anything else is rejected rather than
+guessed.
+
+Fields per method, from the Data-Dictionary: **#4/#5 → 22, #6 → 21, #7 → 26**. Within a method,
+1 = Sicherheitsfunktion, 2 = TAN-Prozess, 4 = DK TAN-Verfahren (`Decoupled` lives here — it is not a
+J/N flag), 6 = Name, 19 = Bezeichnung des TAN-Mediums erforderlich, 21 = Anzahl aktiver TAN-Medien,
+22–24 = the decoupled polling times. Versions below #4 are deliberately not laid out: the field order
+is not established here, and a wrong split is what caused this bug in the first place.
+
+**The last method may be shorter than its field count.** Trailing optional elements may be omitted and
+do not survive the wire format either; requiring a full stride drops exactly the method whose optional
+tail the bank left empty.
 
    The signature header `HNSHK` carries a **Sicherheitsprofil** whose second part is the version of
    the procedure: `1` for one-step, `2` for two-step. It has to agree with the security function next
