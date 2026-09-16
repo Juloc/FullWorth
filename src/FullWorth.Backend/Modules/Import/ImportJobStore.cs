@@ -28,7 +28,7 @@ public sealed record ImportJobCommitOutcome(int Imported, int Duplicates, bool B
 /// bliebe kein Nachweis, WELCHE Buchungen dieser Import erzeugt hat, und genau das machte das
 /// Zuruecknehmen frueher unmoeglich.
 /// </summary>
-public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, FieldCipher cipher)
+public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, FieldCipher cipher, AccountStore accounts)
 {
     private const string JobColumns =
         "\"Id\",\"FileName\",\"AdapterKey\",\"Status\",\"SourceRowCount\",\"ReadyCount\",\"DuplicateCount\",\"ImportedCount\",\"ErrorCount\",\"CreatedAt\",\"CompletedAt\",\"RolledBackAt\",(SELECT count(*) FROM \"ImportTransactionLinks\" l WHERE l.\"ImportJobId\"=j.\"Id\")::int AS \"LinkCount\"";
@@ -190,11 +190,34 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
     /// Buchung aus einer ANDEREN Quelle erkennt. Beide Mengen werden einmal geladen statt je Zeile
     /// abgefragt.
     /// </summary>
+    /// <summary>
+    /// Legt das Zielkonto an, auf das dieser Import schreiben soll. Bewusst hier und nicht im
+    /// Endpunkt: es entsteht in derselben Transaktion wie die Buchungen, bricht der Commit also ab,
+    /// bleibt kein leeres Konto zurueck.
+    /// </summary>
+    private Task<FinanceAccount> CreateTargetAsync(
+        Guid userId, Guid fullWorthSpaceId, string name, string currency, CancellationToken ct)
+    {
+        var key = Guid.NewGuid().ToString("N");
+        return accounts.CreateForImportAsync(userId, new ImportAccountWrite(
+            fullWorthSpaceId,
+            "import",
+            $"import:{key}",
+            $"import:{key}",
+            "Import",
+            name,
+            null,
+            currency,
+            null), ct);
+    }
+
     public async Task<ImportJobCommitOutcome> CommitAsync(
-        Guid userId, Guid fullWorthSpaceId, Guid jobId, FinanceAccount account,
+        Guid userId, Guid fullWorthSpaceId, Guid jobId, FinanceAccount? account, string? newAccountName,
         IReadOnlyList<Candidate> candidates, CancellationToken ct)
     {
-        var existing = await db.Transactions.AsNoTracking()
+        // Ein neues Konto hat noch nichts, wogegen sich vergleichen liesse - die Doppelpruefung unten
+        // laeuft dann gegen leere Mengen.
+        var existing = account is null ? [] : await db.Transactions.AsNoTracking()
             .Where(transaction => transaction.AccountId == account.Id)
             .Select(transaction => new
             {
@@ -216,6 +239,14 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         var created = new List<FinanceTransaction>();
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Die Waehrung kommt aus der Datei selbst - sie ist das Einzige, was ueber das neue Konto
+        // wirklich bekannt ist. Enthaelt sie keine, gilt die Basiswaehrung des Bereichs.
+        account ??= await CreateTargetAsync(
+            userId, fullWorthSpaceId, newAccountName!,
+            candidates.Select(row => row.Currency).FirstOrDefault(currency => !string.IsNullOrWhiteSpace(currency))
+                ?? await BaseCurrencyAsync(fullWorthSpaceId, ct),
+            ct);
+
         foreach (var candidate in candidates)
         {
             var normalized = MerchantNormalization.Normalize(candidate.Counterparty);

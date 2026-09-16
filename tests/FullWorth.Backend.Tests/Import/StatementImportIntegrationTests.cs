@@ -83,6 +83,53 @@ public sealed class StatementImportIntegrationTests
                 .CountAsync(x => x.FullWorthSpaceId == FullWorthSpaceDefaults.LegacyId && x.Id == account)));
     }
 
+    /// <summary>
+    /// Und die Kehrseite: ein Auszug zu einem Konto, das es hier noch nicht gibt, darf sich eins
+    /// anlegen. Vorher musste man es von Hand vorbereiten - ein Zwischenschritt, der nichts
+    /// entscheidet, und die Oberflaeche sagte sogar ausdruecklich "Es wird kein neues Konto angelegt."
+    ///
+    /// Es entsteht als richtiges Konto, mit Eigentuemer und Gruppe, und traegt den Kontostand aus der
+    /// Datei - der Auszug ist der eine Importweg, der einen mitbringt.
+    /// </summary>
+    [Fact]
+    public async Task A_statement_import_can_create_the_account_it_needs()
+    {
+        using var factory = new BackendWebApplicationFactory();
+        using var client = factory.CreateClient();
+        var owner = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        await SeedAsync(factory, owner, account);
+
+        using var upload = await UploadAsync(client, owner, Mt940, "statement.sta");
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        using var uploaded = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var jobId = uploaded.RootElement.GetProperty("jobId").GetGuid();
+
+        using var commit = UserRequest(
+            HttpMethod.Post,
+            $"/api/import-jobs/{jobId:D}/commit?fullWorthSpaceId={FullWorthSpaceDefaults.LegacyId:D}",
+            owner);
+        commit.Content = JsonContent.Create(new { newAccountName = "Ikano Tagesgeld" });
+        using var response = await client.SendAsync(commit);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(2, result.RootElement.GetProperty("imported").GetInt32());
+
+        await factory.SeedAsync(async db =>
+        {
+            var created = await db.Accounts.AsNoTracking()
+                .SingleAsync(x => x.DisplayName == "Ikano Tagesgeld");
+            Assert.True(created.IsActive);
+            Assert.True(created.IncludeInNetWorth);
+            Assert.NotNull(created.GroupId);
+            Assert.True(await db.AccountOwners.AsNoTracking()
+                .AnyAsync(x => x.AccountId == created.Id && x.UserId == owner));
+            Assert.Equal(2, await db.Transactions.AsNoTracking().CountAsync(x => x.AccountId == created.Id));
+            // Der Auszug bringt einen Schlussstand mit - das neue Konto ist damit sofort vollstaendig.
+            Assert.True(await db.BalanceSnapshots.AsNoTracking().AnyAsync(x => x.AccountId == created.Id));
+        });
+    }
+
     // A monthly statement overlaps the previous one. Re-importing must not double the history.
     [Fact]
     public async Task Re_importing_the_same_statement_adds_nothing()

@@ -4,12 +4,25 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
+using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Import;
 
-public sealed record ImportCommitWrite(Guid AccountId,IReadOnlyList<Guid>? CandidateIds=null);
+/// <summary>
+/// Wohin der Import schreibt. Entweder auf ein bestehendes Konto (<paramref name="AccountId"/>) oder
+/// auf ein neues, das der Import selbst anlegt (<paramref name="NewAccountName"/>).
+///
+/// Ein Zielkonto war bisher Pflicht, und der Kontoauszug sagte das in der Oberflaeche sogar
+/// ausdruecklich ("Es wird kein neues Konto angelegt."). Wer eine Datei zu einem Konto hatte, das es
+/// in FullWorth noch nicht gab, musste es vorher von Hand anlegen - ein Zwischenschritt, der nichts
+/// entscheidet.
+/// </summary>
+public sealed record ImportCommitWrite(
+    Guid? AccountId = null,
+    string? NewAccountName = null,
+    IReadOnlyList<Guid>? CandidateIds = null);
 
 public static class ImportJobEndpoints
 {
@@ -136,16 +149,33 @@ public static class ImportJobEndpoints
         var uid = currentUser.RequireUserId();
         if (!await store.OwnsJobAsync(id, fullWorthSpaceId, uid, ct)) return Results.NotFound();
 
-        var writable = await space.WritableAccountIdsAsync(uid, fullWorthSpaceId, ct);
-        if (!writable.Contains(request.AccountId)) return Results.StatusCode(403);
+        // Zwei Wege, zwei Schranken. Auf ein BESTEHENDES Konto darf nur schreiben, wer es beschreiben
+        // darf. Ein NEUES gehoert niemandem vorher, dort ist die Frage eine andere: darf dieser
+        // Benutzer in diesem Bereich ueberhaupt Buchungen anlegen?
+        FinanceAccount? account = null;
+        var newAccountName = request.NewAccountName?.Trim();
+        if (request.AccountId is { } targetId)
+        {
+            var writable = await space.WritableAccountIdsAsync(uid, fullWorthSpaceId, ct);
+            if (!writable.Contains(targetId)) return Results.StatusCode(403);
+            account = await store.AccountAsync(targetId, ct);
+        }
+        else if (!string.IsNullOrWhiteSpace(newAccountName))
+        {
+            if (!await space.HasCapabilityAsync(uid, fullWorthSpaceId, "transactions.write", ct))
+                return Results.StatusCode(403);
+        }
+        else
+        {
+            return Results.BadRequest(new { error = "Choose an account or name a new one." });
+        }
 
-        var account = await store.AccountAsync(request.AccountId, ct);
         var selected = request.CandidateIds?.ToHashSet();
         var candidates = await store.ReadCandidatesAsync(id, ct);
         if (selected is not null) candidates = candidates.Where(row => selected.Contains(row.Id)).ToList();
         candidates = candidates.Where(row => row.Status == "ready" && row.Date.HasValue).ToList();
 
-        var outcome = await store.CommitAsync(uid, fullWorthSpaceId, id, account, candidates, ct);
+        var outcome = await store.CommitAsync(uid, fullWorthSpaceId, id, account, newAccountName, candidates, ct);
         return Results.Ok(new
         {
             imported = outcome.Imported,
