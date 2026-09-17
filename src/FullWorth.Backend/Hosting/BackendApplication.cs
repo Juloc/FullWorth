@@ -344,6 +344,7 @@ public static class BackendApplication
         builder.Services.AddScoped<FinancialReconciliationService>();
         builder.Services.AddScoped<FinancialReconciliationReportService>();
         builder.Services.AddScoped<BudgetReconciliationService>();
+        builder.Services.AddScoped<SecuritiesBookingStore>();
         builder.Services.AddHttpClient<FullWorth.Backend.Modules.Fx.FxRateProvider>((sp, client) =>
         {
             var options = sp.GetRequiredService<IOptions<FullWorth.Backend.Modules.Fx.FxRateOptions>>().Value;
@@ -554,6 +555,7 @@ public static class BackendApplication
         endpoints.MapImportMappingEndpoints();
         endpoints.MapInvestmentEndpoints();
         endpoints.MapInvestmentPortfolioEndpoints();
+        endpoints.MapSecuritiesBookingEndpoints();
         endpoints.MapInvestmentTradeEndpoints();
         endpoints.MapInvestmentPriceEndpoints();
         endpoints.MapInvestmentPerformanceEndpoints();

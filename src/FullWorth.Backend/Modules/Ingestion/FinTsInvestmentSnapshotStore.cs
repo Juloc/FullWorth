@@ -1,5 +1,6 @@
 using System.Data.Common;
 using FullWorth.Backend.Data;
+using FullWorth.Backend.Modules.Reconciliation;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Ingestion;
@@ -10,9 +11,16 @@ namespace FullWorth.Backend.Modules.Ingestion;
 /// <c>Positions</c> allein war eine Halbwahrheit: eine Bank kann vier Papiere melden und drei
 /// ankommen lassen, ohne dass irgendwo eine Zahl widerspricht. Die beiden Sprungstellen der
 /// Schleife tragen deshalb einen Zaehler, sonst verschwindet ein Papier lautlos.
+///
+/// <c>PositionsExplained</c>/<c>PositionsOverExplained</c> kommen von <see cref="SnapshotRestRule"/>:
+/// erklaeren aus Buchungen erkannte Kaeufe den von der Bank gemeldeten Bestand vollstaendig, entfaellt
+/// die Snapshot-Zeile (siehe <see cref="FinTsInvestmentSnapshotStore.UpsertPositionAsync"/>) - das ist
+/// kein Fehler, aber der Aufrufer soll es sehen koennen. Ueber-erklaert (mehr Kauf erkannt als die Bank
+/// heute haelt) ist dagegen ein Hinweis auf einen nicht erkannten Verkauf und wird separat gezaehlt.
 /// </summary>
 public sealed record FinTsSnapshotOutcome(
-    Guid PortfolioId, int Positions, int SkippedWithoutQuantity, int SkippedWithoutIdentity);
+    Guid PortfolioId, int Positions, int SkippedWithoutQuantity, int SkippedWithoutIdentity,
+    int PositionsExplained, int PositionsOverExplained);
 
 /// <summary>
 /// Ein Depotstand aus FinTS wird eingespielt: Depot anlegen oder auffrischen, je Position das
@@ -49,6 +57,8 @@ public sealed class FinTsInvestmentSnapshotStore(
         var activeExternalKeys = new HashSet<string>(StringComparer.Ordinal);
         var withoutQuantity = request.Holdings.Count(holding => holding.Quantity <= 0);
         var withoutIdentity = 0;
+        var explained = 0;
+        var overExplained = 0;
         foreach (var holding in request.Holdings.Where(holding => holding.Quantity > 0))
         {
             var providerKey = holding.ProviderKey.Trim();
@@ -59,7 +69,10 @@ public sealed class FinTsInvestmentSnapshotStore(
 
             var externalKey = $"fints-position:{providerKey}";
             activeExternalKeys.Add(externalKey);
-            await UpsertPositionAsync(sql, spaceId, portfolioId, securityId, externalKey, holding, request, now, ct);
+            var positionOutcome = await UpsertPositionAsync(
+                sql, spaceId, portfolioId, securityId, externalKey, holding, request, now, ct);
+            if (positionOutcome.Explained) explained++;
+            if (positionOutcome.Overexplained) overExplained++;
         }
 
         await RemoveStalePositionsAsync(sql, portfolioId, activeExternalKeys, ct);
@@ -67,7 +80,8 @@ public sealed class FinTsInvestmentSnapshotStore(
         if (accountId is { } account) await WriteDepotBalanceAsync(sql, spaceId, portfolioId, account, request, now, ct);
 
         await transaction.CommitAsync(ct);
-        return new FinTsSnapshotOutcome(portfolioId, activeExternalKeys.Count, withoutQuantity, withoutIdentity);
+        return new FinTsSnapshotOutcome(
+            portfolioId, activeExternalKeys.Count, withoutQuantity, withoutIdentity, explained, overExplained);
     }
 
     /// <summary>
@@ -259,7 +273,10 @@ ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."
         await price.ExecuteNonQueryAsync(ct);
     }
 
-    private static async Task UpsertPositionAsync(
+    /// <summary>Ob die Snapshot-Zeile dieser Position durch Buchungen (teilweise) erklaert wurde.</summary>
+    private readonly record struct SnapshotPositionOutcome(bool Explained, bool Overexplained);
+
+    private static async Task<SnapshotPositionOutcome> UpsertPositionAsync(
         DbConnection sql, Guid spaceId, Guid portfolioId, Guid securityId, string externalKey,
         FinTsHoldingSnapshotItem holding, FinTsInvestmentSnapshotRequest request, DateTimeOffset now,
         CancellationToken ct)
@@ -271,7 +288,32 @@ ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."
         await using (var reader = await findPosition.ExecuteReaderAsync(ct))
             existingTradeId = await reader.ReadAsync(ct) ? RawSql.Guid(reader, "Id") : Guid.Empty;
 
+        // Aus Buchungen erkannte Kaeufe erklaeren denselben Bestand mit, den dieser Schnappschuss gerade
+        // meldet - ohne den Rest wuerden beide gezaehlt und der Bestand waere doppelt so gross wie
+        // tatsaechlich gehalten. SnapshotRestRule ist dieselbe Funktion, die auch SecuritiesBookingStore
+        // beim Uebernehmen einer Buchung anwendet; nur EINE Stelle kennt die Regel.
+        decimal otherQuantity;
+        await using (var sum = RawSql.Command(sql, """
+SELECT COALESCE(SUM("Quantity"),0) FROM "InvestmentTrades"
+WHERE "PortfolioId"=@portfolio AND "SecurityId"=@security AND "Source"<>'fints_snapshot'
+  AND "TradeType" IN ('buy','security_transfer_in')
+""", ("@portfolio", portfolioId), ("@security", securityId)))
+            otherQuantity = Convert.ToDecimal(await sum.ExecuteScalarAsync(ct));
+
+        var rest = SnapshotRestRule.Evaluate(holding.Quantity, otherQuantity);
+        if (rest.Action == SnapshotRestAction.Delete)
+        {
+            if (existingTradeId != Guid.Empty)
+            {
+                await using var delete = RawSql.Command(sql,
+                    "DELETE FROM \"InvestmentTrades\" WHERE \"Id\"=@id", ("@id", existingTradeId));
+                await delete.ExecuteNonQueryAsync(ct);
+            }
+            return new SnapshotPositionOutcome(Explained: true, rest.Overexplained);
+        }
+
         var currency = NormalizeCurrency(holding.Currency, request.Currency);
+        var quantity = rest.Remainder;
         if (existingTradeId == Guid.Empty)
         {
             await using var position = RawSql.Command(sql, """
@@ -279,20 +321,21 @@ INSERT INTO "InvestmentTrades"
 ("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CostPrice","CreatedAt","UpdatedAt")
 VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quantity,@price,@gross,0,@currency,0,0,0,'fints_snapshot',@external,NULL,@cost,@now,@now)
 """, ("@id", Guid.NewGuid()), ("@space", spaceId), ("@portfolio", portfolioId), ("@security", securityId),
-                ("@date", request.AsOf), ("@quantity", holding.Quantity), ("@price", holding.Price),
+                ("@date", request.AsOf), ("@quantity", quantity), ("@price", holding.Price),
                 ("@gross", holding.MarketValue), ("@currency", currency), ("@cost", holding.CostPrice),
                 ("@external", externalKey), ("@now", now));
             await position.ExecuteNonQueryAsync(ct);
-            return;
+            return new SnapshotPositionOutcome(Explained: false, Overexplained: false);
         }
 
         await using var updatePosition = RawSql.Command(sql, """
 UPDATE "InvestmentTrades" SET "SecurityId"=@security,"TradeDate"=@date,"Quantity"=@quantity,"Price"=@price,
  "GrossAmount"=@gross,"Currency"=@currency,"CostPrice"=@cost,"UpdatedAt"=@now
 WHERE "Id"=@id
-""", ("@security", securityId), ("@date", request.AsOf), ("@quantity", holding.Quantity), ("@price", holding.Price),
+""", ("@security", securityId), ("@date", request.AsOf), ("@quantity", quantity), ("@price", holding.Price),
             ("@gross", holding.MarketValue), ("@currency", currency), ("@cost", holding.CostPrice), ("@now", now), ("@id", existingTradeId));
         await updatePosition.ExecuteNonQueryAsync(ct);
+        return new SnapshotPositionOutcome(Explained: false, Overexplained: false);
     }
 
     /// <summary>Was die Bank nicht mehr meldet, gibt es im Depot nicht mehr.</summary>
