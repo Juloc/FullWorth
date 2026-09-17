@@ -56,7 +56,8 @@
 
 .detected-side{gap:var(--s2)}
 
-.contracts-more-suggestions{display:flex;margin:var(--s2) auto 0;font-size:12px}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2). */
+.contracts-more-suggestions{display:flex;margin:var(--s2) auto 0;font-size:var(--text-caption-size)}
 
 .contract-detail .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3);margin:var(--s3) 0}
 
@@ -72,23 +73,11 @@
    the rules cannot collide. FullWorth stays monochrome + --cat accents only.
    ============================================================================ */
 
-/* --- Verträge (contracts): hero summary + grouped sections + sort sheet --- */
-.contracts-summary .fw-card-head{margin-bottom:var(--s2)}
-
-.contracts-hero{display:flex;flex-direction:column;gap:6px}
-
-.contracts-hero-fig{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-
-.contracts-hero-value{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05;letter-spacing:-.01em}
-
-.contracts-hero-unit{color:var(--muted);font-size:15px;font-weight:600}
-
-.contracts-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:12px}
-
-.contracts-hero-annual{font-weight:600;color:var(--text)}
-
-.contracts-hero-dot{color:var(--line)}
-
+/* --- Verträge (contracts): hero summary + grouped sections + sort sheet ---
+   .contracts-hero* und die Regel fuer .fw-card-head standen hier noch aus einer fruehen Fassung der
+   Zusammenfassungskarte; das jetzige Markup (contracts-summary-*) hat weder ein .fw-card-head noch
+   eines der .contracts-hero-Elemente. Tote Selektoren treffen nichts - entfernt statt mitgeschleppt
+   (Scheibe 11 Teil 2, "Nothing unnecessary"). */
 .contracts-sortbar:hover{background:var(--surface-2);color:var(--text)}
 
 .contracts-sortbar strong{color:inherit;font-weight:700}
@@ -101,17 +90,21 @@
 
 .contracts-group-id{display:flex;align-items:baseline;gap:6px;min-width:0}
 
-.contracts-group-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* War 14px - exakt --text-metadata (Scheibe 11 Teil 2), das eigene font-weight:700 bleibt roh wie
+   bei .nw-delta: die Rolle liefert nur die Groesse, nicht jedes Gewicht passt in eines der vier. */
+.contracts-group-name{font-weight:700;font-size:var(--text-metadata-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.contracts-group-count{color:var(--muted);font-size:12px;font-weight:600;flex:0 0 auto}
+.contracts-group-count{color:var(--muted);font-size:var(--text-caption-size);font-weight:600;flex:0 0 auto}
 
-.contracts-group-sum{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;white-space:nowrap;flex:0 0 auto}
+.contracts-group-sum{font-variant-numeric:tabular-nums;font-weight:700;font-size:var(--text-metadata-size);white-space:nowrap;flex:0 0 auto}
 
-.contracts-group-sum small{color:var(--muted);font-weight:600;font-size:11px;margin-left:4px}
+.contracts-group-sum small{color:var(--muted);font-weight:600;font-size:var(--text-caption-size);margin-left:4px}
 
 .contracts-sortsheet{border-radius:16px 16px 0 0;padding:var(--s5) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom,0px));max-height:86dvh;overflow:auto;gap:var(--s2)}
 
-.contracts-sortsheet .panel-head h2{font-size:18px}
+/* War 18px - exakt --text-section-title (die Basisregel in components.css setzt hier schon
+   font-weight:600, das passt zur selben Rolle). */
+.contracts-sortsheet .panel-head h2{font-size:var(--text-section-title-size)}
 
 .contracts-sortsheet.dialog-card [data-close]:not(.icon-button){background:var(--surface-3);color:var(--muted)}
 
@@ -160,7 +153,9 @@
 
 .contracts-summary-label{font-size:13px;font-weight:600;color:var(--muted)}
 
-.contracts-summary-value small{font-size:14px;font-weight:600;color:var(--muted)}
+/* War 14px - exakt --text-metadata, dieselbe Begruendung wie bei .nw-delta: die Einheit neben der
+   grossen Kennzahl ist kleiner als ein normaler Betrag, aber eine eigene Stufe. */
+.contracts-summary-value small{font-size:var(--text-metadata-size);font-weight:600;color:var(--muted)}
 
 .contracts-summary-link{display:flex;align-items:center;gap:7px;color:var(--cta);font-weight:700;white-space:nowrap}
 
@@ -188,7 +183,9 @@
 
 .contract-row-chevron{font-size:22px;color:var(--muted);line-height:1}
 
-.contract-row-alert{margin-top:5px;font-size:11px;color:var(--negative);font-weight:650}
+/* War 11px - keine bewusste Stufe, sondern Drift wie bei .nw-window-label; --text-caption ist die
+   naechste Rolle und die einzig moegliche (Scheibe 11 Teil 2). */
+.contract-row-alert{margin-top:5px;font-size:var(--text-caption-size);color:var(--negative);font-weight:650}
 
 .contract-overdue .fw-row-amt small{color:var(--negative)}
 
@@ -208,21 +205,33 @@
 
 .contract-detail-name{display:flex;align-items:center;gap:8px;margin-top:10px}
 
-.contract-detail-name h2{margin:0;font-size:23px}
+/* War 23px, Gewicht kam ungesetzt vom h2-Standard des Browsers (700). Ein Pixel daneben, keine
+   bewusste Stufe - --text-page-title (24px/700) ist der einzige Name dieser Groesse/dieses
+   Gewichts, der Vertragsname ist die einzige Ueberschrift dieses Dialogs (Scheibe 11 Teil 2). */
+.contract-detail-name h2{margin:0;font-size:var(--text-page-title-size);font-weight:var(--text-page-title-weight)}
 
 .contract-detail-name button{width:28px;min-width:28px;height:28px;font-size:12px}
 
-.contract-detail-provider{margin-top:3px;font-size:12px;color:var(--muted)}
+/* War 12px - exakt --text-caption: die Anbieterzeile ist die Metadaten-Zeile unter dem Vertragsnamen. */
+.contract-detail-provider{margin-top:3px;font-size:var(--text-caption-size);color:var(--muted)}
 
+/* Die groesste Kennzahl des Dialogs - wie die 34px-Vermoegenszahl und der 27px-Betrag hier bleibt
+   sie bewusst roh: 27px liegt genau in der Mitte zwischen --text-amount-lg (24px) und keiner
+   groesseren Rolle, keine vorhandene Stufe trifft sie (Scheibe 11 Teil 2, gleiche Begruendung wie
+   Dashboard/Vermoegensseite). */
 .contract-detail-price{margin-top:14px;font-size:27px;font-weight:750;font-variant-numeric:tabular-nums}
 
 .contract-detail-price small{font-size:13px;color:var(--muted);font-weight:650}
 
-.contract-detail-due{margin-top:5px;font-size:12px;color:var(--muted)}
+/* War 12px - exakt --text-caption. Das ist die Zeile mit der naechsten Zahlung: genau die
+   "Faelligkeit/Deadline"-Rolle, die Scheibe 11 Teil 2 fuer Typografie-Rollen benennt. */
+.contract-detail-due{margin-top:5px;font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-detail-card{margin:0 12px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
 
-.contract-section-label{margin:18px 18px 7px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+/* War 11px - dieselbe Drift wie .contract-row-alert oben, --text-caption ist die Fussnoten-Rolle
+   fuer eine Abschnitts-Ueberschrift in Grossbuchstaben. */
+.contract-section-label{margin:18px 18px 7px;color:var(--muted);font-size:var(--text-caption-size);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 
 .contract-field-row,.contract-actions-card>button,.contract-card-link,.contract-insight-row{width:100%;min-height:48px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:11px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);text-align:left}
 
@@ -232,7 +241,11 @@
 
 .contract-field-row>span:first-child{color:var(--muted);font-size:13px}
 
-.contract-field-row strong{font-size:13px;font-weight:650;text-align:right}
+/* font-variant-numeric ergaenzt: diese Zeile zeigt u.a. den Betrag (data-quick-edit="amount"), der
+   war bisher rechtsbuendig aber nicht tabellarisch - anders als jeder andere Betrag im Haus
+   (Scheibe 11 Teil 2, Amounts-Punkt der Vorgabe). Betrifft auch Turnus/Kategorie/Konto/Faelligkeit
+   in derselben Zeile, dort ist die Eigenschaft wirkungslos, weil dort keine Ziffern stehen. */
+.contract-field-row strong{font-size:13px;font-weight:650;text-align:right;font-variant-numeric:tabular-nums}
 
 .contract-field-edit{color:var(--cta);font-size:12px}
 
@@ -242,7 +255,8 @@
 
 .contract-payment-row>div{display:grid;gap:2px}
 
-.contract-payment-row span{font-size:11px;color:var(--muted)}
+/* War 11px - dieselbe Drift wie .contract-row-alert. */
+.contract-payment-row span{font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-payment-row>strong{font-variant-numeric:tabular-nums}
 
@@ -256,7 +270,8 @@
 
 .contract-note{padding:12px 14px;border-bottom:1px solid var(--line)}
 
-.contract-note>span{font-size:11px;color:var(--muted)}
+/* War 11px - dieselbe Drift wie .contract-row-alert. */
+.contract-note>span{font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-note p{margin:4px 0 0;white-space:pre-wrap}
 
@@ -272,7 +287,8 @@
 
 .contract-source-row>div{display:grid;gap:2px}
 
-.contract-source-row span{font-size:11px;color:var(--muted)}
+/* War 11px - dieselbe Drift wie .contract-row-alert. */
+.contract-source-row span{font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-source-row button{border:0;background:transparent;color:var(--cta);cursor:pointer}
 
@@ -282,9 +298,11 @@
 
 .contract-data-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px}
 
-.contract-data-row span{color:var(--muted);font-size:12px}
+/* War 12px - exakt --text-caption; diese Zeilen zeigen u.a. "Kosten pro Jahr" (annualisierter
+   Betrag), daher zusaetzlich tabellarisch wie jeder andere Betrag im Haus (Scheibe 11 Teil 2). */
+.contract-data-row span{color:var(--muted);font-size:var(--text-caption-size)}
 
-.contract-data-row strong{font-size:12px;text-align:right}
+.contract-data-row strong{font-size:var(--text-caption-size);text-align:right;font-variant-numeric:tabular-nums}
 
 .contract-insight-row{border-bottom:0}
 
@@ -304,9 +322,10 @@
 
 .contract-analysis-card h3{margin:0;font-size:15px}
 
-.contract-analysis-card p{margin:0;color:var(--muted);font-size:12px}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2). */
+.contract-analysis-card p{margin:0;color:var(--muted);font-size:var(--text-caption-size)}
 
-.contract-analysis-summary>span{font-size:12px;color:var(--muted)}
+.contract-analysis-summary>span{font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-analysis-summary>strong{font-size:30px;font-variant-numeric:tabular-nums}
 
@@ -316,7 +335,8 @@
 
 .contract-analysis-category{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center}
 
-.contract-analysis-category strong,.contract-analysis-category span{font-size:12px}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2). */
+.contract-analysis-category strong,.contract-analysis-category span{font-size:var(--text-caption-size)}
 
 .contract-analysis-category progress{grid-column:1/-1;width:100%;height:7px;appearance:none;border:0;border-radius:4px;overflow:hidden;background:var(--surface-3)}
 
@@ -334,7 +354,8 @@
 
 .contract-analysis-axis{fill:var(--muted);font-size:10px}
 
-.contract-analysis-tip{display:grid;gap:4px;padding:12px;border-radius:10px;background:var(--surface-2);font-size:12px}
+/* font-size war 12px - exakt --text-caption (Scheibe 11 Teil 2). */
+.contract-analysis-tip{display:grid;gap:4px;padding:12px;border-radius:10px;background:var(--surface-2);font-size:var(--text-caption-size)}
 
 .contract-analysis-tip strong{font-size:13px}
 
@@ -358,6 +379,10 @@
 .contract-analysis-balance>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
 
 .contract-analysis-balance>div span{color:var(--muted)}
+
+/* Einnahmen/Vertragskosten/Verfuegbar - hatte keine eigene Regel und lief tabellarisch nur zufaellig
+   nicht mit, anders als jeder andere Betrag im Haus (Scheibe 11 Teil 2, Amounts-Punkt). */
+.contract-analysis-balance>div strong{font-variant-numeric:tabular-nums}
 
 .contract-analysis-balance>div span small{margin-left:5px;padding:2px 5px;border-radius:5px;background:var(--surface-3);font-size:10px}
 
@@ -397,9 +422,12 @@
 
 .contract-analysis-donut-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center;pointer-events:none}
 
-.contract-analysis-donut-center strong{font-size:20px}
+/* Zeigt den monatlichen Gesamtbetrag im Ring - tabellarisch wie jeder andere Betrag im Haus. 20px
+   passt in keine vorhandene Rolle (zwischen --text-amount und --text-amount-lg), bleibt daher roh. */
+.contract-analysis-donut-center strong{font-size:20px;font-variant-numeric:tabular-nums}
 
-.contract-analysis-donut-center span{font-size:11px;color:var(--muted)}
+/* War 11px - dieselbe Drift wie .contract-row-alert. */
+.contract-analysis-donut-center span{font-size:var(--text-caption-size);color:var(--muted)}
 
 .contract-analysis-category{grid-template-columns:10px minmax(0,1fr) auto}
 

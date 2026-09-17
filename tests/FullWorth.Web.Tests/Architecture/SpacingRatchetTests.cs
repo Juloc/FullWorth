@@ -35,7 +35,7 @@ public sealed class SpacingRatchetTests
         ["pages/coach/page.css"] = 61,
         ["pages/collections/page.css"] = 2,
         ["pages/compensation/page.css"] = 238,
-        ["pages/contracts/page.css"] = 106,
+        ["pages/contracts/page.css"] = 103,
         ["pages/dashboard/page.css"] = 8,
         ["pages/insights/page.css"] = 47,
         ["pages/networth/page.css"] = 182,

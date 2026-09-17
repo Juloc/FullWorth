@@ -1115,6 +1115,16 @@ async function openDetail(id) {
   cancellation ||= {};
   contract.cancellation = cancellation;
   const lifecycle = lifecycleStatus(contract);
+  // Dieselbe Fristen-Hervorhebung wie in der Listenzeile (rowFor), nur hier fuer die Detailansicht:
+  // die Liste zeigte "Kuendigungsfrist"/"Faelligkeit ueberschritten" schon prominent an, der Dialog
+  // aber erst nach einem Tap auf "Laufzeit & Kuendigung" oder im eingeklappten "Weitere
+  // Vertragsdaten" - genau die vergrabene Frist, die Scheibe 11 Teil 2 hier beheben soll.
+  const dueBucketInfo = dueBucket(contract);
+  const detailAlert = dueBucketInfo.key === 'overdue' && contract.isActive
+    ? `<div class="contract-row-alert">${esc(t('Fälligkeit überschritten', 'Past due'))}</div>`
+    : lifecycle === 'planned' && cancellation.cancellationDeadline
+      ? `<div class="contract-row-alert">${esc(t('Kündigungsfrist', 'Cancellation deadline'))}: ${ctx.esc(ctx.date(cancellation.cancellationDeadline))}</div>`
+      : '';
   const payments = activity?.payments || [];
   const previewPayments = payments.slice(0, 4);
   const cycle = ctx.get('contracts.cycle_' + (contract.billingCycle || 'monthly'));
@@ -1182,6 +1192,7 @@ async function openDetail(id) {
       ${contract.providerName && contract.providerName !== contract.name ? `<div class="contract-detail-provider">${ctx.esc(contract.providerName)}</div>` : ''}
       <div class="contract-detail-price">${ctx.money(activity?.expectedAmount ?? contract.amount, contract.currency)} <small>/ ${ctx.esc(cycle)}</small></div>
       <div class="contract-detail-due">${next ? `${ctx.esc(t('Nächste Zahlung', 'Next payment'))} ${ctx.esc(ctx.date(next))}` : ctx.esc(t('Keine Fälligkeit hinterlegt', 'No due date set'))}</div>
+      ${detailAlert}
     </div>
 
     <section class="contract-detail-card contract-main-fields">
