@@ -226,6 +226,18 @@ public static class BackendApplication
         builder.Services.AddSingleton<NullSecurityMarketDataProvider>();
         builder.Services.AddSingleton<ISecurityMetadataProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
         builder.Services.AddSingleton<ISecurityPriceProvider>(services => services.GetRequiredService<NullSecurityMarketDataProvider>());
+        builder.Services.Configure<MarketDataOptions>(builder.Configuration.GetSection(MarketDataOptions.SectionName));
+        builder.Services.AddHttpClient<ConfigurableSecurityMarketDataProvider>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FullWorth/1.0");
+        });
+        // AddHttpClient<T> registriert den typisierten Client transient. Ihn selbst als Singleton zu
+        // registrieren wuerde den HttpClient beim ersten Aufloesen einfrieren; stattdessen wird er hier
+        // bei jeder Anfrage frisch ueber den ServiceProvider aufgeloest und NEBEN dem Null-Provider
+        // registriert (kein Replace), damit "kein Anbieter konfiguriert" weiterhin der Ausgangszustand ist.
+        builder.Services.AddTransient<ISecurityMetadataProvider>(services => services.GetRequiredService<ConfigurableSecurityMarketDataProvider>());
+        builder.Services.AddTransient<ISecurityPriceProvider>(services => services.GetRequiredService<ConfigurableSecurityMarketDataProvider>());
         builder.Services.AddScoped<SecurityMarketDataService>();
         builder.Services.AddScoped<InvestmentPerformanceStore>();
         builder.Services.AddScoped<InvestmentStore>();
