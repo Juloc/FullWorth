@@ -62,7 +62,7 @@
 
 .contract-trend{margin:var(--s2) 0}
 
-.contract-trend svg{width:100%;height:90px;color:var(--accent,currentColor)}
+.contract-trend svg{width:100%;height:90px;color:var(--accent)}
 
 .contract-trend.private{color:var(--muted)}
 

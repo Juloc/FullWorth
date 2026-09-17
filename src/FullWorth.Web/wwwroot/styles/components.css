@@ -34,14 +34,30 @@
 .money-debt{color:var(--negative)}
 .money-muted{color:var(--muted)}
 button,input,select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-input);padding:9px 11px}
-/* Shared action button variants. Feature code should use only these three visual roles. */
+/* Shared action button variants (components/buttons.js: ButtonRole). Feature code should use only
+   these five visual roles - no hand-rolled button styling. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 14px;border-radius:var(--radius-pill);font-weight:600;line-height:1.1;white-space:nowrap;cursor:pointer}
 .btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
 .btn-primary:hover{opacity:.9}
 .btn-secondary{background:var(--surface);color:var(--text);border-color:var(--line)}
 .btn-secondary:hover{background:var(--surface-2)}
+/* Bleibt bewusst eine randlose Textaktion (nicht die "danger-soft/-border/-solid/-hover/on-danger"
+   Vollflaeche aus Issue #149 §6): .btn-danger ist heute an >30 Stellen quer durch die App verbaut, weit
+   mehr als die 5 Module, die buttons.js importieren - jede davon würde ein sattes Rot bekommen, ohne
+   dass die eigentliche Rollen-Migration (Scheibe 4c) je einen einzelnen Aufruf angefasst hätte. Das ist
+   diese Scheibe hier nicht wert. Der Hover-Hintergrund nutzt jetzt --danger-soft statt des generischen
+   --surface-2, damit die Zerstören-Bedeutung wenigstens beim Hover sichtbar ist (identisch zu dem Rot-
+   Ton, den .fw-trend-bad/.admin-chip-danger schon nutzen) - das ist die einzige optische Änderung. */
 .btn-danger{background:transparent;color:var(--negative);border-color:transparent}
-.btn-danger:hover{background:var(--surface-2)}
+.btn-danger:hover{background:var(--danger-soft)}
+/* Randlose Textaktion (Issue #149 §6) - gleiche Box wie .btn, nur ohne Fläche/Rand. */
+.btn-quiet{background:transparent;color:var(--text);border-color:transparent}
+.btn-quiet:hover{background:var(--surface-2)}
+/* 36x36 rundes Icon-only-Control - identische Box wie das bestehende .icon-button (shell.css), damit
+   die spätere Migration (Scheibe 4c) eine reine Umbenennung ist, keine optische Änderung. */
+.btn-icon{display:grid;place-items:center;padding:0;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:50%;color:var(--text)}
+.btn-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn-icon:hover{border-color:var(--cta)}
 /* Field focus thickens/recolours the border to the CTA — no glow, no shape change (Design System §07). */
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--cta)}
 input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--negative)}

@@ -227,7 +227,7 @@ body.locked{overflow:hidden}
    dialog past the right edge of a 375 px screen. */
 .rule-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s3)}
 
-.rule-preview{margin-top:var(--s2);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2,var(--surface))}
+.rule-preview{margin-top:var(--s2);padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2)}
 
 .preview-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:4px 0;font-size:13px}
 .preview-row .preview-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
@@ -239,7 +239,7 @@ button.danger:hover{background:var(--surface-2)}
 .contract-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 
 .row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}
-.detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2,var(--surface))}
+.detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2)}
 .detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 
 .detected-actions{display:flex;align-items:center;gap:6px}
@@ -296,7 +296,7 @@ button.danger:hover{background:var(--surface-2)}
 .an-cat{padding:8px 0;border-bottom:1px solid var(--line)}
 
 /* Purchases reconcile (§16) */
-.reconcile{margin:var(--s3) 0;padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2,var(--surface))}
+.reconcile{margin:var(--s3) 0;padding:var(--s3);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface-2)}
 .reconcile-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3)}
 .reconcile-link{margin-top:var(--s3)}
 

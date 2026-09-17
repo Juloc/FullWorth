@@ -84,13 +84,17 @@
   .metric-grid{grid-template-columns:1fr 1fr;gap:var(--s3)}
   .metric strong{font-size:20px}
   select,input,textarea{min-height:44px;font-size:16px}
-  .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
+  /* .btn-icon steht neben .icon-button, weil buttonClass()/applyButtonRole() dieselbe 36x36-Box
+     versprechen wie .icon-button (components.css) - ohne diese Zeile bekäme .btn-icon hier nur den
+     generischen .btn-Floor unten (nur min-height, keine Breite) und würde am Telefon 36×44 statt 44×44,
+     während .icon-button quadratisch bleibt. Eine Box, zwei Klassennamen. */
+  .icon-button,.btn-icon{width:44px;height:44px;min-width:44px;min-height:44px}
   .primary-action,.toolbar>button,.dialog-actions>button,.panel-head-actions>button,.btn{min-height:44px}
   /* The touch floor, in one place. Roles that were missing from it shipped 28-40px targets across
      twelve views: .ghost (dashboard, analytics, tax, notifications), .secondary and .fw-card-action
      (Vermögen, 28px), and the unclassed buttons in the segmented filter rows (38px). */
   .ghost,.secondary,.fw-card-action,.ux-icon-text-button,main button{min-height:44px}
-  .ux-icon-text-button,.icon-button{min-width:44px}
+  .ux-icon-text-button,.icon-button,.btn-icon{min-width:44px}
   /* These three shrink a shared role from a higher-specificity selector, so the floor above cannot
      reach them - a media query adds no specificity. Matched here rather than fought with !important;
      responsive.css is loaded after app.css and components.css, so equal specificity wins. */

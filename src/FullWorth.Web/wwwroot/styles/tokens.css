@@ -85,8 +85,8 @@
      whatever hex its author wrote, so the same divider had three appearances. Alias, not a new colour. */
   --border:var(--line);
   /* Names feature stylesheets invented for tokens that already existed. Aliases keep one authority. */
-  --danger:var(--negative);
-  --success:var(--positive);
+  --danger:var(--danger-solid);
+  --success:var(--success-solid);
   --warning-border:var(--warning);
   --muted-fg:var(--muted);
   --text-muted:var(--muted);
@@ -108,6 +108,19 @@
   --cta:#272727;--cta-text:#ffffff;--accent:#272727;--accent-soft:#f7f7f7;
   /* semantic tokens (§4.3) with matching soft backgrounds */
   --positive:#17b45c;--positive-soft:#e6f8ec;--negative:#e03131;--negative-soft:#fdeaea;--warning:#f9891f;--warning-soft:#fdf1e3;
+  /* Vollständige Rollenfamilien (Issue #149 §6): soft/border/solid/hover/on-* pro Bedeutung - dieselbe
+     Form wie die Akzent-Skala der Theme-Engine, aber FEST je Theme statt vom Seed abgeleitet, weil
+     Gefahr/Warnung/Erfolg/Info ihre Bedeutung behalten müssen, egal welchen Akzent die Person wählt
+     (ThemeEngineMathTests hält das nach: theme.js darf keinen dieser Namen je schreiben). -soft/-solid
+     zeigen bewusst auf die schon vorhandenen Flachwerte oben, damit keine heutige Nutzstelle (grep
+     "var(--danger|--negative|--warning|--success|--positive)") ihr Aussehen ändert - nur -border/-hover/
+     -on-* sind neu. Hell-Hover verdunkelt die Vollfarbe, Dunkel-Hover hellt sie auf; -on-* ist die
+     Textfarbe FÜR die -solid-Fläche, nicht für -soft. Info ist komplett neu: Blau kollidiert weder mit
+     dem (dunkelgrauen) Standard-Akzent noch mit den drei anderen Rollen. */
+  --danger-soft:var(--negative-soft);--danger-border:#f1b4b4;--danger-solid:var(--negative);--danger-hover:#c92a2a;--on-danger:#ffffff;
+  --warning-solid:var(--warning);--warning-hover:#dd7712;--on-warning:#2b1400;
+  --success-soft:var(--positive-soft);--success-border:#a8e6c1;--success-solid:var(--positive);--success-hover:#129449;--on-success:#ffffff;
+  --info:var(--info-solid);--info-soft:#e8f2fd;--info-border:#a9d0f5;--info-solid:#1f7ae0;--info-hover:#1662b8;--on-info:#ffffff;
   /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
   --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
   /* Elevation-Stufen benennen bestehende Schatten nach Zweck statt Herkunft - keine neue Schatten-Rezeptur.
@@ -124,5 +137,14 @@ html[data-theme="dark"]{
   --k1:#f3f4f5;--k2:#d2d5d9;--k3:#aeb3ba;--k4:#7e858d;--k5:#50565e;
   --cta:#dfe2e5;--cta-text:#151719;--accent:#dfe2e5;--accent-soft:#25282d;
   --positive:#55df8e;--positive-soft:#163523;--negative:#ff756a;--negative-soft:#351d1d;--warning:#ffb866;--warning-soft:#372716;
+  /* -soft/-solid/-border brauchen hier keine eigene Zeile: sie zeigen im :root-Block auf --negative/
+     --positive/--warning, und var() löst diese Verweise anhand des Werts auf, den das Element gerade
+     kaskadiert bekommt (wie --border:var(--line) es heute schon vormacht) - die drei Zeilen oben reichen,
+     damit auch -soft/-solid/-border automatisch die Dunkel-Werte tragen. Nur die neuen, wörtlichen
+     -hover/-on-*-Werte und die komplett neue Info-Rolle brauchen hier eine eigene Definition. */
+  --danger-border:#7a3b38;--danger-hover:#ff8f86;--on-danger:#2a0f0d;
+  --warning-hover:#ffc785;--on-warning:#2b1400;
+  --success-border:#2f5940;--success-hover:#7ce9ab;--on-success:#06210f;
+  --info-soft:#132b40;--info-border:#2c5170;--info-solid:#5aa9ec;--info-hover:#7cbdf2;--on-info:#06131f;
   --shadow:none;
 }

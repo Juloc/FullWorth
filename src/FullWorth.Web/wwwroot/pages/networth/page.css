@@ -309,7 +309,7 @@
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
 }
 
 .wealth-composition-item span,
@@ -345,7 +345,7 @@
 }
 
 .wealth-investment-total {
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
   border-radius: 10px;
 }
 
@@ -385,7 +385,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--muted);
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
   font-size: .9rem;
 }
 
@@ -397,7 +397,7 @@
 }
 
 .wealth-valuation.is-current {
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
 }
 
 .wealth-value-form {
@@ -410,7 +410,7 @@
 
 .fx-incomplete {
   margin-top: 5px;
-  color: var(--warning, #f9891f);
+  color: var(--warning);
   font-size: .8rem;
   font-weight: 500;
 }
@@ -462,7 +462,7 @@
 }
 
 .ip-security-row:hover {
-  background: var(--surface-2,var(--surf2,#f7f7f7))
+  background: var(--surface-2)
 }
 
 .wealth-investment-allocation {
@@ -507,12 +507,12 @@
   gap: 12px;
   margin-top: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--border,var(--line,#e5e5e5));
+  border: 1px solid var(--border);
   border-radius: 12px
 }
 
 .wealth-security-dialog .wealth-security-freshness.is-warning {
-  border-color: var(--warning,#f9891f)
+  border-color: var(--warning)
 }
 
 .wealth-security-dialog .wealth-security-freshness span {
@@ -573,7 +573,7 @@
 }
 
 .property-tabs button[aria-selected="true"] {
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
   border-color: var(--line);
   color: var(--text);
 }
@@ -594,7 +594,7 @@
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
 }
 
 .property-metric span,
@@ -654,14 +654,14 @@
   margin-top: 8px;
   padding: 10px;
   border-radius: 8px;
-  background: var(--surface-2, var(--surf2, #f7f7f7));
+  background: var(--surface-2);
   color: var(--muted);
   font-size: .88rem;
 }
 
 .property-fx-warning {
   margin-top: 10px;
-  color: var(--warning, #f9891f);
+  color: var(--warning);
   font-size: .86rem;
 }
 
@@ -713,7 +713,7 @@
 .property-estimate-card {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2,#f7f7f7);
+  background: var(--surface-2);
   padding: 12px
 }
 
@@ -751,7 +751,7 @@
 }
 
 .button-link:hover {
-  background: var(--surface-2,#f7f7f7)
+  background: var(--surface-2)
 }
 
 @media(max-width:760px) {
@@ -803,7 +803,7 @@
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2, #f7f7f7);
+  background: var(--surface-2);
   color: var(--muted);
   font-size: .92rem;
   line-height: 1.35;
@@ -826,7 +826,7 @@
 .property-operation-card {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2, #f7f7f7);
+  background: var(--surface-2);
 }
 
 .property-operation-row {
@@ -953,7 +953,7 @@
 }
 
 .specialized-asset-tabs button[aria-selected="true"] {
-  background: var(--surface-2,#f7f7f7);
+  background: var(--surface-2);
   border-color: var(--text)
 }
 
@@ -979,7 +979,7 @@
 .specialized-asset-section {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface-2,#f7f7f7);
+  background: var(--surface-2);
   padding: 12px;
   margin: 0 0 12px
 }
@@ -1116,7 +1116,7 @@
   z-index: 3;
   background: var(--surface,Canvas);
   padding: 8px 0 12px;
-  border-bottom: 1px solid var(--border,#d8d8d8)
+  border-bottom: 1px solid var(--border)
 }
 
 .ip-tabs button,
@@ -1147,7 +1147,7 @@
 }
 
 .ip-error {
-  border: 1px solid var(--danger,#b42318)
+  border: 1px solid var(--danger)
 }
 
 .ip-metrics {
@@ -1158,7 +1158,7 @@
 
 .ip-metric {
   padding: 14px;
-  border: 1px solid var(--border,#d8d8d8);
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-2)
 }
@@ -1177,7 +1177,7 @@
 
 .ip-section {
   margin-top: 16px;
-  border: 1px solid var(--border,#d8d8d8);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 14px;
   background: var(--surface-2)
@@ -1268,7 +1268,7 @@
 }
 
 .ip-line-main {
-  stroke: var(--accent,#4f46e5)
+  stroke: var(--accent)
 }
 
 .ip-line-benchmark {
@@ -1301,7 +1301,7 @@
 }
 
 .ip-chart-legend i.main {
-  background: var(--accent,#4f46e5)
+  background: var(--accent)
 }
 
 .ip-chart-legend i.benchmark {
@@ -1332,7 +1332,7 @@
   display: block;
   height: 100%;
   border-radius: 99px;
-  background: var(--accent,#4f46e5)
+  background: var(--accent)
 }
 
 .ip-bar-row strong {
@@ -1349,7 +1349,7 @@
 .ip-empty-cta {
   margin-top: 12px;
   padding: 14px;
-  border: 1px dashed var(--border,#d8d8d8);
+  border: 1px dashed var(--border);
   border-radius: 12px;
   display: grid;
   gap: 10px;

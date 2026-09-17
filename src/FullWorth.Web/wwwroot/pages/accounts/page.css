@@ -158,7 +158,7 @@ button:hover,
   object-fit: contain;
   border-radius: 5px;
   background: var(--logo-plate);
-  border: 1px solid var(--border, rgba(127, 127, 127, .22));
+  border: 1px solid var(--border);
   box-shadow: 0 1px 4px rgba(0,0,0,.12);
 }
 
@@ -187,7 +187,7 @@ button:hover,
   height: 7px;
   min-width: 7px;
   border-radius: 50%;
-  background: var(--accent, #2d6fff);
+  background: var(--accent);
   box-shadow: 0 0 0 2px var(--surface, #fff);
 }
 
@@ -219,25 +219,25 @@ button:hover,
   border-radius: 999px;
   font-size: .82rem;
   font-variant-numeric: tabular-nums;
-  background: var(--surface-2, rgba(127, 127, 127, .1));
+  background: var(--surface-2);
 }
 
 .account-performance.positive {
-  color: var(--success, #16803b);
+  color: var(--success);
 }
 
 .account-performance.negative {
-  color: var(--danger, #c83838);
+  color: var(--danger);
 }
 
 .add-account-group-row {
   width: 100%;
   min-height: 46px;
   margin-top: 8px;
-  border: 1px dashed var(--border, rgba(127, 127, 127, .25));
+  border: 1px dashed var(--border);
   border-radius: 12px;
   background: transparent;
-  color: var(--muted, #64748b);
+  color: var(--muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -245,8 +245,8 @@ button:hover,
 }
 
 .add-account-group-row:hover {
-  border-color: var(--accent, #2d6fff);
-  color: var(--accent, #2d6fff);
+  border-color: var(--accent);
+  color: var(--accent);
   background: var(--accent-soft, rgba(45, 111, 255, .06));
 }
 
@@ -291,7 +291,7 @@ button:hover,
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
-  border-bottom: 1px solid var(--border, rgba(127, 127, 127, .18));
+  border-bottom: 1px solid var(--border);
 }
 
 .account-ux-dialog-head h3 {
@@ -320,7 +320,7 @@ button:hover,
 .account-color-fields label > span {
   font-size: .82rem;
   font-weight: 600;
-  color: var(--muted, #64748b);
+  color: var(--muted);
 }
 
 .account-visual-field input[type="text"] {
@@ -339,7 +339,7 @@ button:hover,
   display: grid;
   place-items: center;
   border-radius: 12px;
-  background: var(--surface-2, rgba(127, 127, 127, .08));
+  background: var(--surface-2);
   border: 1px solid transparent;
 }
 
@@ -349,7 +349,7 @@ button:hover,
 }
 
 .account-icon-choice.selected {
-  border-color: var(--accent, #2d6fff);
+  border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft, rgba(45, 111, 255, .12));
 }
 
@@ -382,7 +382,7 @@ button:hover,
 }
 
 .account-group-edit-block {
-  border: 1px solid var(--border, rgba(127, 127, 127, .2));
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface, #fff);
   overflow: hidden;
@@ -401,8 +401,8 @@ button:hover,
   gap: 9px;
   min-height: 54px;
   padding: 8px 10px;
-  background: var(--surface-2, rgba(127, 127, 127, .06));
-  border-bottom: 1px solid var(--border, rgba(127, 127, 127, .16));
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
 }
 
 .account-group-edit-head strong {
@@ -434,7 +434,7 @@ button:hover,
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: var(--muted, #64748b);
+  color: var(--muted);
   cursor: grab;
   touch-action: none;
 }
@@ -454,7 +454,7 @@ button:hover,
   gap: 9px;
   min-height: 58px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border, rgba(127, 127, 127, .12));
+  border-bottom: 1px solid var(--border);
   background: var(--surface, #fff);
 }
 
@@ -477,7 +477,7 @@ button:hover,
 
 .account-edit-main span {
   font-size: .82rem;
-  color: var(--muted, #64748b);
+  color: var(--muted);
 }
 
 .account-edit-balance {
@@ -491,7 +491,7 @@ button:hover,
   z-index: 30;
   margin-top: 14px;
   padding: 12px;
-  border: 1px solid var(--border, rgba(127, 127, 127, .2));
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
   backdrop-filter: blur(16px);
@@ -503,7 +503,7 @@ button:hover,
 }
 
 .account-group-save-hint {
-  color: var(--muted, #64748b);
+  color: var(--muted);
   font-size: .85rem;
 }
 
@@ -572,7 +572,7 @@ button:hover,
     bottom: 0;
     padding: var(--s3) 0;
     background: var(--surface, #fff);
-    border-top: 1px solid var(--border, rgba(127, 127, 127, .18));
+    border-top: 1px solid var(--border);
   }
 
   .account-group-savebar {
@@ -606,7 +606,7 @@ button:hover,
   .account-edit-balance {
     grid-column: 3;
     font-size: .82rem;
-    color: var(--muted, #64748b);
+    color: var(--muted);
   }
 
   .account-icon-picker {
@@ -661,7 +661,7 @@ button:hover,
   padding-inline: 8px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: var(--surface-2, transparent);
+  background: var(--surface-2);
 }
 
 .accounts-search-icon {

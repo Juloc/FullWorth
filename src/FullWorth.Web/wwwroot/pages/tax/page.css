@@ -83,7 +83,7 @@
   display: flex;
   gap: 4px;
   padding: 4px;
-  background: var(--surface-2,#eef1f4);
+  background: var(--surface-2);
   border-radius: 12px
 }
 
@@ -103,7 +103,7 @@
   display: grid;
   gap: 5px;
   font-size: .82rem;
-  color: var(--muted,#68717d)
+  color: var(--muted)
 }
 
 .tax-year select {
@@ -128,7 +128,7 @@
   grid-template-columns: minmax(0,1fr) auto;
   gap: 16px;
   padding: 16px 0;
-  border-top: 1px solid var(--border,#e4e7eb)
+  border-top: 1px solid var(--border)
 }
 
 .tax-case:first-child {
@@ -162,17 +162,17 @@
   font-size: .76rem;
   padding: 4px 7px;
   border-radius: 999px;
-  background: var(--surface-2,#eef1f4);
-  color: var(--muted,#68717d)
+  background: var(--surface-2);
+  color: var(--muted)
 }
 
 .tax-badges .tax-doc-ok {
-  color: var(--positive,#18794e)
+  color: var(--positive)
 }
 
 .tax-case p {
   margin: 7px 0 0;
-  color: var(--muted,#68717d);
+  color: var(--muted);
   line-height: 1.45
 }
 
@@ -185,7 +185,7 @@
 
 .tax-disclaimer {
   font-size: .78rem;
-  color: var(--muted,#68717d);
+  color: var(--muted);
   margin: 12px 2px 0
 }
 
@@ -196,7 +196,7 @@
 
 .tax-setting-copy {
   font-size: .84rem;
-  color: var(--muted,#68717d);
+  color: var(--muted);
   line-height: 1.45
 }
 
@@ -294,7 +294,7 @@
   gap: 10px;
   align-items: start;
   padding: 10px 12px;
-  border: 1px solid var(--border,var(--line,#dedede));
+  border: 1px solid var(--border);
   border-radius: 10px
 }
 
@@ -317,7 +317,7 @@
   gap: 12px;
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--border,var(--line,#dedede))
+  border-top: 1px solid var(--border)
 }
 
 .tax-advanced-settings h3 {
