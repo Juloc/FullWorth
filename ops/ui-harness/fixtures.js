@@ -197,6 +197,14 @@
         status: 'AUTHORIZED', healthStatus: 'error', validUntil: iso('2026-12-31'),
         lastSyncedAt: null, daysUntilExpiry: 112, nextSyncAllowedAt: iso('2026-09-17'),
         lastError: 'FINTS_BANK_ERROR'
+      },
+      // Eine gesunde FinTS-Verbindung - der Fall, der lange keinen Weg hatte. Wer bei seiner Bank
+      // ein Konto dazunimmt, muss die Kontenliste neu holen koennen; die entsteht beim Verbinden.
+      // Sichtbar bleibt hier nur der Abgleich, alles Weitere liegt hinter dem Auslassungszeichen.
+      {
+        id: 'c5', provider: 'fints', institutionName: 'ING', country: 'DE',
+        status: 'AUTHORIZED', healthStatus: 'authorized', validUntil: iso('2026-12-31'),
+        lastSyncedAt: iso('2026-09-16'), daysUntilExpiry: 112, nextSyncAllowedAt: null
       }
     ],
     'transactions': {

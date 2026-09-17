@@ -379,4 +379,31 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
     }
+
+    /// <summary>
+    /// Eine gesunde Verbindung darf keine Sackgasse sein.
+    ///
+    /// Gemeldet als "brauche vielleicht einen Knopf, falls man neue Konten syncen will, die man
+    /// angelegt hat". Die Kontenliste entsteht beim Verbinden; wer bei seiner Bank ein Konto
+    /// dazunimmt, musste sie also neu holen koennen. Der Ablauf dafuer war fertig - bei FinTS IST
+    /// "Neu verbinden" der Auswahl-Wizard -, nur wurde er ausschliesslich bei Stoerungen angeboten.
+    /// Wessen Verbindung lief, kam nicht hin.
+    ///
+    /// Deshalb KEIN zweiter Knopf mit demselben Ablauf unter neuem Namen, sondern ein Weg zu dem
+    /// einen: hinter dem Auslassungszeichen, und bei FinTS unter dem Namen, der sagt, wozu man ihn
+    /// hier braucht.
+    /// </summary>
+    [Fact]
+    public async Task AHealthyConnectionStillOffersAWayToReadItsAccountsAgain()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+
+        Assert.Contains("data-connection-more", js);
+        Assert.Contains("function openConnectionActionsDialog", js);
+        // Der Eintrag traegt bei FinTS den Namen der Absicht, fuehrt aber auf denselben Ablauf.
+        Assert.Contains("accounts.rediscoverAccounts", js);
+        Assert.Contains("if(action==='reconnect')reconnectConnection(connection)", js);
+        // Ein Blatt, das niemand oeffnet, ist keine Handlung.
+        Assert.Contains("dlg.showModal()", js);
+    }
 }

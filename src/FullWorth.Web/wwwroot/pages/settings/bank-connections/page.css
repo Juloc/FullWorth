@@ -23,3 +23,13 @@
 }
 /* Der Fehlerbericht, wenn die Zwischenablage nicht darf: lesbar, auswählbar, sonst nichts. */
 .report-text{width:100%;font-family:var(--font-mono,monospace);font-size:12px;margin-top:var(--s3)}
+
+/* Eine Handlung darf einen Hinweis tragen: "Konten neu einlesen" kostet die PIN, und das gehoert
+   daneben, nicht in ein Erschrecken danach.
+
+   Ohne Praefix, und das ist kein Versehen: createDialog haengt den Dialog an document.body. Eine
+   Regel, die mit #view-bank-connections beginnt, trifft ihn nie - genau daran ist die Kontenauswahl
+   schon einmal gescheitert. Der Marker .connection-actions-sheet haelt sie trotzdem bei dieser
+   Seite und laesst die Kontenzeile in Ruhe. */
+.connection-actions-sheet .more-list button>span{display:grid;gap:2px}
+.connection-actions-sheet .more-list button .row-sub{font-size:13px;white-space:normal}

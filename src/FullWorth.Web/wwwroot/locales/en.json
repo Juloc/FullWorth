@@ -882,7 +882,9 @@
     "depotValueHint": "The market value of the securities in this account. Net worth counts it as a securities account — the same amount, not twice.",
     "retrySync": "Try again",
     "copyReport": "Copy for an issue",
-    "reportCopied": "Error report copied."
+    "reportCopied": "Error report copied.",
+    "rediscoverAccounts": "Re-read accounts",
+    "rediscoverAccountsHint": "Asks the bank for all accounts again, including new ones. This needs your PIN."
   },
   "a11y": {
     "skipToContent": "Skip to content"

@@ -882,7 +882,9 @@
     "depotValueHint": "Der Kurswert der Wertpapiere in diesem Depot. Im Nettovermögen zählt er als Depot — derselbe Betrag, nicht zweimal.",
     "retrySync": "Erneut versuchen",
     "copyReport": "Für ein Issue kopieren",
-    "reportCopied": "Fehlerbericht kopiert."
+    "reportCopied": "Fehlerbericht kopiert.",
+    "rediscoverAccounts": "Konten neu einlesen",
+    "rediscoverAccountsHint": "Fragt die Bank erneut nach allen Konten – auch nach neuen. Dafür brauchst du deine PIN."
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

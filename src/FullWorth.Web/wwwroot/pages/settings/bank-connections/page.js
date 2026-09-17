@@ -28,6 +28,36 @@ const jsonBody = (...args) => ctx.jsonBody(...args);
 const dialog = (html, options = {}) => ctx.dialog(html, options);
 const empty = (el, message) => ctx.empty(el, message);
 
+// Die Nebenhandlungen einer Verbindung, gesammelt hinter dem Auslassungszeichen - so wie die
+// Kontenzeile es seit #125 macht. In der Zeile blieb damit genau eine sichtbare Handlung: die,
+// die der Zustand gerade verlangt.
+//
+// Der Anlass war ein fehlender Weg, nicht ein fehlender Ablauf. Wer bei seiner Bank ein KONTO
+// dazunimmt, hatte keine Moeglichkeit, es zu holen: die Kontenliste entsteht beim Verbinden, und
+// den Auswahl-Wizard erreichte man nur ueber "Neu verbinden" - das aber nur bei Stoerungen
+// angeboten wurde. Eine gesunde Verbindung war eine Sackgasse.
+//
+// Bei FinTS IST "Neu verbinden" dieser Wizard (siehe reconnectConnection). Ein zweiter Knopf
+// daneben waere derselbe Ablauf unter zwei Namen; stattdessen traegt der eine Eintrag den Namen,
+// der sagt, wozu man ihn hier braucht.
+function openConnectionActionsDialog(connection){
+  const isFinTs=String(connection?.provider||'').toLowerCase()==='fints';
+  const actions=[
+    ['reconnect',get(isFinTs?'accounts.rediscoverAccounts':'accounts.reconnect'),false,isFinTs?get('accounts.rediscoverAccountsHint'):''],
+    ['history',get('accounts.syncHistory'),false],
+    ['disconnect',get('accounts.disconnect'),true],
+  ];
+  const dlg=dialog(`<div class="dialog-card more-sheet connection-actions-sheet"><div class="panel-head"><div><h2>${esc(connection.institutionName)}</h2><div class="row-sub">${esc(get('accounts.health_'+(connection.healthStatus||'authorized')))}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="more-list">${actions.map(([key,label,danger,hint])=>`<button type="button" data-connection-action="${key}" class="${danger?'danger':''}"><span>${esc(label)}${hint?`<span class="row-sub">${esc(hint)}</span>`:''}</span></button>`).join('')}</div></div>`,{mobileMode:'sheet'});
+  dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
+  for(const button of dlg.querySelectorAll('[data-connection-action]'))button.addEventListener('click',()=>{
+    const action=button.dataset.connectionAction;
+    dlg.close();
+    if(action==='reconnect')reconnectConnection(connection);
+    else if(action==='history')openSyncHistory(connection);
+    else if(action==='disconnect')disconnectConnection(connection);
+  });
+  dlg.showModal();
+}
 // Die Zeile einer Verbindung. Sie stand frueher in loadAccountsView und wurde dort zwischen den
 // Konten gezeichnet.
 function connectionRow(x){
@@ -54,14 +84,13 @@ function connectionRow(x){
   // weitergeben kann - und weitergeben will man ihn genau in diesem Moment.
   const errorCode=x.lastError?` · ${x.lastError}`:'';
   const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}${esc(errorCode)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div><button type="button" class="ghost" data-sync-history>${esc(get('accounts.syncHistory'))}</button>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="ghost danger" data-disconnect>${esc(get('accounts.disconnect'))}</button></div>`;
-  row.querySelector('[data-sync-history]')?.addEventListener('click',()=>openSyncHistory(x));
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}${esc(errorCode)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="icon-button" data-connection-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button></div>`;
+  row.querySelector('[data-connection-more]')?.addEventListener('click',()=>openConnectionActionsDialog(x));
   row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-retry-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-reconnect]')?.addEventListener('click',ev=>reconnectConnection(x,ev.currentTarget));
   row.querySelector('[data-enter-tan]')?.addEventListener('click',ev=>openPendingTanDialog(x,ev.currentTarget));
   row.querySelector('[data-finish-selection]')?.addEventListener('click',ev=>resumeSelection(x,ev.currentTarget));
-  row.querySelector('[data-disconnect]').addEventListener('click',ev=>disconnectConnection(x,ev.currentTarget));
   return row;
 }
 
