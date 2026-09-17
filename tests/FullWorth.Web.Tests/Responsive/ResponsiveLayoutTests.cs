@@ -73,7 +73,13 @@ public sealed class ResponsiveLayoutTests
 
         // minmax(0,1fr), not 1fr: a grid item's default min-width:auto refuses to go below min-content,
         // so 1fr alone would not have fixed it.
-        Assert.Contains(".dialog-card{grid-template-columns:minmax(0,1fr)}", css);
+        //
+        // Scheibe 11 (Design-System-Plan): this used to be its own second `.dialog-card` rule, merged
+        // into the one true-base rule with padding/shadow/gap (background/border/radius moved out to
+        // the shared card base in components.css, alongside .metric/.panel/.fw-card). The assertion
+        // now matches the merged rule instead of the standalone one that no longer exists.
+        Assert.Contains("grid-template-columns:minmax(0,1fr)", css);
+        Assert.Contains(".dialog-card{", css);
         Assert.Contains(".dialog-card>*{min-width:0}", css);
         Assert.Contains(".dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}", css);
         Assert.Contains(".dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}", css);

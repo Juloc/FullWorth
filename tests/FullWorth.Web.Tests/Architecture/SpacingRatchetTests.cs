@@ -53,7 +53,7 @@ public sealed class SpacingRatchetTests
         ["styles/app.css"] = 100,
         ["styles/components.css"] = 20,
         ["styles/design-depth.css"] = 8,
-        ["styles/dialogs.css"] = 32,
+        ["styles/dialogs.css"] = 30,
         ["styles/mobile-polish.css"] = 9,
         ["styles/responsive.css"] = 45,
         ["styles/shell.css"] = 16

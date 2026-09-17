@@ -1,11 +1,25 @@
 /* Metrics + panels */
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4);margin-bottom:var(--s4)}
-.metric,.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);box-shadow:var(--shadow)}
-.metric{padding:var(--s5) var(--s6)}
+/* Scheibe 11 (Design-System-Plan): gemeinsame Karten-Basis. .metric/.panel hier, .fw-card (app.css)
+   und .dialog-card (dialogs.css) wiederholten alle vier woertlich dieselben drei Zeilen Flaeche/
+   Rand/Rundung - jetzt an einer Stelle, ueber Datei-Grenzen hinweg wie schon vorher bei .metric,
+   .panel. Der Innenabstand bleibt je Karte verschieden (das war er nie identisch), aber jetzt als
+   kanonisches --space-*-Token statt der --s4/--s5/--s6-Aliase bzw. eines rohen 18px bei .dialog-card.
+   Der Schatten ist bewusst NICHT Teil dieser gemeinsamen Zeile - siehe die Regel direkt darunter und
+   ihren Kommentar: eine einzelne Elevation-Stufe fuer alle vier waere hier ein stiller Fehlgriff. */
+.metric,.panel,.fw-card,.dialog-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card)}
+/* --shadow ist HEUTE keine statische Elevation-Stufe: design-depth.css ueberschreibt genau diese
+   Custom Property pro Theme (hell ein weicher echter Kartenschatten, dunkel "none") und genau darauf
+   sind .metric/.panel/.fw-card angewiesen. --elevation-0/-1 aus tokens.css sind statisch - ein
+   Wechsel dorthin wuerde die Hell/Dunkel-Tiefe stumm kappen. .dialog-card liest dagegen unten in
+   dialogs.css schon immer --shadow-menu (nirgends themespezifisch ueberschrieben) - das IST bereits
+   --elevation-2, wortwoertlich derselbe Wert, dort also ein reiner Namenswechsel ohne Wirkung. */
+.metric,.panel,.fw-card{box-shadow:var(--shadow)}
+.metric{padding:var(--space-4) var(--space-5)}
 .metric span{display:block;color:var(--muted);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .metric strong{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
 .content-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
-.panel{padding:var(--s5)}
+.panel{padding:var(--space-4)}
 .span-2{grid-column:span 2}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
 .panel h2,.panel-head h2,.panel-head h3{font-size:15px;font-weight:600;margin:0}
@@ -13,6 +27,18 @@
    one implicit `auto` column, which resolves to MAX-CONTENT. Measured on the contracts duplicate-review
    card at 375px: the column came out 344px inside a 309px container, so every row overflowed by 35px.
    Seven feature modules render class="rows", so this was the same defect in seven places. */
+/* Scheibe 11: .row und .fw-row (app.css) NICHT zusammengelegt - geprueft, nicht angenommen. .row ist
+   ein striktes Zweispalten-Grid (Inhalt | ein rechter Slot) und wird an ueber einem Dutzend Stellen
+   (Buchungen, Budgets, Kategorien, Vertraege, Einkaeufe, Haendler, globale Suche, Admin, Combobox,
+   Konten, Depot) so verwendet; wo eine Seite ein drittes Element (ein Icon) davorsetzt, patcht sie
+   grid-template-columns selbst nach (siehe #accounts-view-list in pages/accounts/page.css, mit
+   eigenem Kommentar zu genau diesem Bug) - das ist eine seiten-eigene Erweiterung, kein Beleg dafuer,
+   dass beide Primitive dasselbe waeren. .fw-row ist Flexbox mit gap und traegt bewusst IMMER
+   Icon+Haupttext+Betrag als Geschwister (ux-kit.js SectionCard/AnalysisCard: Vertraege, Haendler,
+   Dashboard-Widgets) - Flexbox reicht dafuer ohne festen Spalten-Vertrag, ein Grid mit fester
+   Spaltenzahl wuerde hier gerade den Vorteil verlieren. Ein Merge haette entweder jeder .row-Stelle
+   eine dritte Spalte aufgezwungen oder jeder .fw-row-Stelle einen festen Grid-Vertrag - beides eine
+   echte Layout-Aenderung, die diese Scheibe ausdruecklich nicht machen soll. Bleiben zwei Primitive. */
 .rows{display:grid;grid-template-columns:minmax(0,1fr)}
 .rows>*{min-width:0}
 .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}

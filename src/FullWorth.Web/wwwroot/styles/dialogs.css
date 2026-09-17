@@ -1,4 +1,4 @@
-dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min(92vw,560px);width:100%}dialog::backdrop{background:rgba(11,15,20,.42)}.dialog-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-menu);display:grid;gap:12px}.dialog-card h2{margin:0;font-size:18px}.bank-options{display:grid;gap:5px;max-height:420px;overflow:auto;padding-right:3px}.bank-options button{text-align:left;background:var(--surface);padding:10px 12px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.dialog-actions button{border:1px solid transparent;border-radius:var(--radius-pill);height:38px;padding:0 16px;font-weight:600;background:var(--surface-2);color:var(--text)}.dialog-actions button:hover{background:var(--surface-3)}.dialog-actions button[type=submit],.dialog-actions button[data-save],.dialog-actions button[data-confirm],.dialog-actions button[data-apply]{background:var(--cta);color:var(--cta-text)}.dialog-actions button[type=submit]:hover,.dialog-actions button[data-save]:hover,.dialog-actions button[data-confirm]:hover,.dialog-actions button[data-apply]:hover{background:var(--cta);opacity:.9}.dialog-actions .btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
+dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:min(92vw,560px);width:100%}dialog::backdrop{background:rgba(11,15,20,.42)}.dialog-card{padding:var(--space-4);box-shadow:var(--elevation-2);display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-3)}.dialog-card h2{margin:0;font-size:18px}.bank-options{display:grid;gap:5px;max-height:420px;overflow:auto;padding-right:3px}.bank-options button{text-align:left;background:var(--surface);padding:10px 12px}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.dialog-actions button{border:1px solid transparent;border-radius:var(--radius-pill);height:38px;padding:0 16px;font-weight:600;background:var(--surface-2);color:var(--text)}.dialog-actions button:hover{background:var(--surface-3)}.dialog-actions button[type=submit],.dialog-actions button[data-save],.dialog-actions button[data-confirm],.dialog-actions button[data-apply]{background:var(--cta);color:var(--cta-text)}.dialog-actions button[type=submit]:hover,.dialog-actions button[data-save]:hover,.dialog-actions button[data-confirm]:hover,.dialog-actions button[data-apply]:hover{background:var(--cta);opacity:.9}.dialog-actions .btn-primary{background:var(--cta);color:var(--cta-text);border-color:var(--cta)}
 .dialog-actions .btn-primary:hover{background:var(--cta);color:var(--cta-text);opacity:.9}
 .dialog-actions .btn-secondary{background:var(--surface);color:var(--text);border-color:var(--line)}
 .dialog-actions .btn-secondary:hover{background:var(--surface-2);color:var(--text)}
@@ -113,8 +113,12 @@ dialog.fw-dialog .dialog-actions{min-width:0}
 
    The grid rule is the same as everywhere else in this codebase: a column that must be allowed to
    shrink is minmax(0,1fr), and its items need min-width:0, because a grid item's default
-   min-width:auto refuses to go below min-content. */
-.dialog-card{grid-template-columns:minmax(0,1fr)}
+   min-width:auto refuses to go below min-content.
+
+   Scheibe 11: die grid-template-columns-Zeile stand hier lange als eigene, zweite .dialog-card-Regel,
+   getrennt von der ersten oben im File - kein Kaskaden-Grund dafuer (keine andere Regel dazwischen
+   setzt grid-template-columns fuer .dialog-card), nur eine Nachtrags-Reparatur, die nie zurueck in
+   die Basisregel wanderte. Jetzt ein einziger Block ganz oben; hier bleibt nur noch das WARUM. */
 .dialog-card>*{min-width:0}
 .dialog-card label{grid-template-columns:minmax(0,1fr);min-width:0}
 .dialog-card input,.dialog-card select,.dialog-card textarea{min-width:0;max-width:100%}

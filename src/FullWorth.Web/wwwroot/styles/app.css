@@ -57,8 +57,9 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 .fw-ident-stack>*{grid-area:1/1;width:100%;height:100%;display:grid;place-items:center}
 .fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:18px}
 .fw-ident-cat svg{width:20px;height:20px}
-/* SectionCard */
-.fw-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s4);box-shadow:var(--shadow)}
+/* SectionCard. Flaeche/Rand/Rundung/Schatten stehen seit Scheibe 11 gemeinsam mit .metric/.panel/
+   .dialog-card in styles/components.css - hier bleibt nur, was an dieser Karte wirklich eigen ist. */
+.fw-card{padding:var(--space-4)}
 .fw-card+.fw-card{margin-top:var(--s4)}
 .fw-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
 .fw-card-title{font-size:15px;font-weight:600}
