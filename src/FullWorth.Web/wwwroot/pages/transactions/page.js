@@ -10,6 +10,8 @@ import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { createWizard } from '../../components/wizard.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
+import { registerRowSelection } from '../../components/mobile-interactions.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -17,7 +19,10 @@ function transactionMoneyVariant(item) {
   if (item?.isTransfer || item?.refundOfTransactionId) return MoneyVariant.Neutral;
   return Number(item?.amount || 0) > 0 ? MoneyVariant.Income : MoneyVariant.Neutral;
 }
-const selectedForCoach = new Map();
+// Nur Ids, kein Map<id,item> mehr: welche Buchung zu einer ausgewaehlten Id gehoert, weiss schon
+// currentItemsById (wird bei jedem Laden ohnehin neu gefuellt) - der Auswahlzustand selbst braucht das
+// Objekt nicht doppelt vorzuhalten.
+const coachSelection = createSelectionList();
 
 function coachContextForTransaction(t, label) {
   return {
@@ -43,21 +48,21 @@ function updateCoachSelectionBar() {
   // Mobile renders a selection mode for this view. It is part of the selection state and belongs
   // here, where that state changes - a MutationObserver on the list used to rediscover it from the
   // rendered checkboxes instead, which is the repair layer the architecture guard forbids.
-  view.classList.toggle('tx-mobile-selection-mode', selectedForCoach.size > 0);
-  if (!selectedForCoach.size) { bar?.remove(); return; }
+  view.classList.toggle('tx-mobile-selection-mode', coachSelection.count > 0);
+  if (!coachSelection.count) { bar?.remove(); return; }
   if (!bar) {
     bar = document.createElement('div'); bar.id = 'tx-coach-selection'; bar.className = 'tx-coach-selection';
     view.querySelector('.table-panel')?.before(bar);
   }
-  const items = [...selectedForCoach.values()];
+  const items = coachSelection.getSelectedIds().map(id => currentItemsById.get(id)).filter(Boolean);
   const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
   const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
-  bar.innerHTML = `<span><strong>${selectedForCoach.size}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.innerHTML = `<span><strong>${coachSelection.count}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
   bar.querySelector('[data-selection-clear]').onclick = () => {
-    selectedForCoach.clear();
-    document.querySelectorAll('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
-    // Setting .checked in code fires no change event, so the rows kept their selected styling until
-    // something else came along and removed it. Clear them here, next to the state they follow.
+    coachSelection.selectAll(false);
+    // selectAll() setzt .checked auf jeder gebundenen Checkbox direkt (siehe selection-list.js), feuert
+    // aber bewusst kein change je Zeile - die Zeilenfarbe ist reine Seiten-Optik und folgt hier
+    // weiterhin explizit, statt dass der Baustein wüsste, welche Klasse eine "ausgewählte" Zeile traegt.
     document.querySelectorAll('#transactions-body .tx-row.tx-selected').forEach(row => {
       row.classList.remove('tx-selected');
       row.setAttribute('aria-selected', 'false');
@@ -67,8 +72,8 @@ function updateCoachSelectionBar() {
   bar.querySelector('[data-selection-coach]').onclick = () => {
     openCoachWith({
       entityType: 'transactions',
-      entityLabel: `${selectedForCoach.size} ${deLabel('Buchungen','transactions')}`,
-      selectedIds: [...selectedForCoach.keys()],
+      entityLabel: `${coachSelection.count} ${deLabel('Buchungen','transactions')}`,
+      selectedIds: coachSelection.getSelectedIds(),
       selectedItems: items.slice(0, 20).map(item => ({
         id: item.id,
         label: item.merchantDisplayName || item.counterparty || deLabel('Buchung','Transaction'),
@@ -81,13 +86,18 @@ function updateCoachSelectionBar() {
           account: item.account || ''
         }
       })),
-      details: { count: String(selectedForCoach.size), amount: total == null ? '' : String(total), currency }
+      details: { count: String(coachSelection.count), amount: total == null ? '' : String(total), currency }
     });
   };
 }
 
 export function bindTransactions(context) {
   ctx = context;
+  // Diese Seite meldet ihre eigene Auswahl bei mobile-interactions.js an, statt dass der Baustein
+  // fest wüsste, wo "#transactions-body" oder "[data-tx-select]" herkommen (siehe die Begruendung in
+  // mobile-interactions.js selbst). Einmal beim Binden reicht - die Ids kommen ueber getId() jedes Mal
+  // frisch vom angefassten Zeilenelement.
+  registerRowSelection({ rowSelector: '#transactions-body .tx-row', getId: row => row.dataset.txId, list: coachSelection });
   // Kein Anwenden-Knopf mehr (#126): die Suche wirkt von selbst, kurz nach dem Tippen. Enter loest sie
   // sofort aus, weil das jeder erwartet, der ihn drueckt.
   ctx.$('#tx-query').addEventListener('input', scheduleSearch);
@@ -539,7 +549,9 @@ export async function renderTransactions(context) {
   const items = data.items || [];
 
   currentItemsById = new Map(items.map(item => [String(item.id), item]));
-  selectedForCoach.clear();
+  // Voller Neuaufbau der Tabelle (siehe body.innerHTML='' zwei Zeilen weiter unten): reset() nimmt
+  // Bestand, Auswahl UND die Bindungen an die alten (gleich verworfenen) Checkboxen mit.
+  coachSelection.reset();
   updateCoachSelectionBar();
   body.innerHTML = '';
   let lastDate = null;
@@ -584,9 +596,13 @@ export async function renderTransactions(context) {
     // The category chip is an inline control: clicking it edits the category in place, without also
     // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
     tr.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
-    tr.querySelector('[data-tx-select]')?.addEventListener('click', e => e.stopPropagation());
-    tr.querySelector('[data-tx-select]')?.addEventListener('change', e => {
-      if (e.target.checked) selectedForCoach.set(String(x.id), x); else selectedForCoach.delete(String(x.id));
+    const selectBox = tr.querySelector('[data-tx-select]');
+    selectBox?.addEventListener('click', e => e.stopPropagation());
+    // bindRow() traegt diese eine Checkbox in den gemeinsamen Auswahlzustand ein (siehe
+    // selection-list.js) - alles, was danach noch passieren soll (Zeilenfarbe, die Auswahlleiste), ist
+    // Sache dieser Seite und haengt an einem zweiten, eigenen change-Listener auf demselben Element.
+    if (selectBox) coachSelection.bindRow(selectBox, String(x.id));
+    selectBox?.addEventListener('change', e => {
       tr.classList.toggle('tx-selected', e.target.checked);
       tr.setAttribute('aria-selected', String(e.target.checked));
       updateCoachSelectionBar();
@@ -742,17 +758,23 @@ async function detectTransfers() {
   catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   if (!pairs || !pairs.length) { ctx.toast(ctx.get('transactions.detectNone')); return; }
 
-  const rows = pairs.map((p, i) => `<label class="check candidate-row"><input type="checkbox" checked data-pair="${i}"><span class="row-main"><span class="row-title">${ctx.esc(p.first.account)} ⇄ ${ctx.esc(p.second.account)}</span><span class="row-sub">${ctx.esc(ctx.date(p.first.bookingDate))} · ${ctx.money(Math.abs(p.first.amount), p.first.currency)}${p.first.counterparty ? ' · ' + ctx.esc(p.first.counterparty) : ''}</span></span></label>`).join('');
+  const items = pairs.map((p, i) => ({
+    id: String(i),
+    selected: true,
+    html: `<span class="row-main"><span class="row-title">${ctx.esc(p.first.account)} ⇄ ${ctx.esc(p.second.account)}</span><span class="row-sub">${ctx.esc(ctx.date(p.first.bookingDate))} · ${ctx.money(Math.abs(p.first.amount), p.first.currency)}${p.first.counterparty ? ' · ' + ctx.esc(p.first.counterparty) : ''}</span></span>`
+  }));
+  const list = createSelectionList();
   const dlg = ctx.dialog(`<div class="dialog-card drawer">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.detectTitle'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <p class="row-sub">${ctx.esc(ctx.get('transactions.detectHint'))}</p>
-    <div class="refund-candidates">${rows}</div>
+    ${selectionListHtml(items, { rowClass: 'check candidate-row', rowsClass: 'refund-candidates' })}
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-confirm>${ctx.esc(ctx.get('transactions.detectConfirm'))}</button></div>
   </div>`);
+  list.mount(dlg);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('[data-confirm]').addEventListener('click', async () => {
-    const checked = [...dlg.querySelectorAll('[data-pair]:checked')].map(el => pairs[Number(el.dataset.pair)]);
+    const checked = list.getSelectedIds().map(id => pairs[Number(id)]);
     dlg.close();
     let linked = 0;
     for (const pair of checked) {

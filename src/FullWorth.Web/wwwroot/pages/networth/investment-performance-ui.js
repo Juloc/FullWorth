@@ -6,6 +6,7 @@ import { createDialog } from '../../components/dialog.js';
 import { showToast } from '../../components/toast.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -242,6 +243,13 @@ async function renderIncome(state,container){
 // das entscheidet immer ein Klick auf "Übernehmen", auch wenn confident=true ist.
 async function loadBookingSuggestions(state){return api(`api/reconciliation/securities-bookings?portfolioId=${encodeURIComponent(state.portfolio.id)}`)}
 
+// Eine Karte je Wertpapier, jede mit ihrer eigenen Auswahl - "Uebernehmen" auf Karte A darf niemals
+// lesen, was auf Karte B angehakt ist. Ueber das Karten-ELEMENT selbst indiziert (nicht die
+// Wertpapier-Id als String), damit ein esc() auf dem Weg durchs Markup nie zu einem Schluessel fuehren
+// kann, der nicht mehr zum data-Attribut passt. Neu gefuellt bei jedem renderBookings() (voller
+// Neuaufbau des Containers, siehe container.innerHTML unten), nie nur ergaenzt.
+const bookingSelections=new WeakMap();
+
 async function renderBookings(state,container){
   const data=await loadBookingSuggestions(state);
   const summaries=data.summaries||[];
@@ -253,6 +261,11 @@ async function renderBookings(state,container){
   const bySecurity=new Map(summaries.map(summary=>[summary.securityId,matches.filter(match=>match.securityId===summary.securityId)]));
   container.innerHTML=`<div class="ip-empty-cta"><p>${esc(text('Vorschläge aus Kontobuchungen. Sichere Treffer sind vorausgewählt - übernommen wird erst mit einem Klick auf "Übernehmen".','Suggestions from account bookings. Confident matches are pre-selected - nothing is applied until you click "Apply".'))}</p></div>
   ${summaries.map(summary=>bookingSummaryCard(summary,bySecurity.get(summary.securityId)||[],state.portfolio.currency)).join('')}`;
+  for(const summary of summaries){
+    const card=container.querySelector(`[data-ip-booking-security="${CSS.escape(String(summary.securityId))}"]`);
+    if(!card)continue;
+    bookingSelections.set(card,createSelectionList().mount(card));
+  }
   bindBookingActions(state,container);
 }
 
@@ -269,7 +282,7 @@ function bookingSummaryCard(summary,matches,portfolioCurrency){
       ${metric(text('Gefunden: Betrag','Found: amount'),amount(summary.sumGross,currency))}
       ${metric(text('Buchungen','Bookings'),String(summary.matches||0))}
     </div>
-    <div class="ip-list">${matches.map(match=>bookingMatchRow(match)).join('')}</div>
+    ${selectionListHtml(matches.map(match=>bookingMatchItem(match)),{rowClass:'ip-row ip-booking-row',rowsClass:'ip-list'})}
     <div class="ip-actions">
       <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-ip-booking-apply>${esc(text('Übernehmen','Apply'))}</button>
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-ip-booking-dismiss>${esc(text('Ablehnen','Dismiss'))}</button>
@@ -277,24 +290,26 @@ function bookingSummaryCard(summary,matches,portfolioCurrency){
   </section>`;
 }
 
-function bookingMatchRow(match){
+function bookingMatchItem(match){
   // Eine Buchung ohne Stueckzahl entstand aus einem Betrag ohne erkennbaren Kurs - der Bestand stimmt
   // trotzdem nur, wenn jemand die Stueckzahl von Hand ergaenzt. Das steht hier, statt eine Zahl zu
   // erfinden.
   const quantityText=match.quantity==null
     ?text('Stückzahl fehlt – manuell nachtragen','Quantity missing – add manually')
     :`${String(match.quantity)}${match.quantityEstimated?` (${esc(text('geschätzt','estimated'))})`:''}`;
-  return `<label class="ip-row ip-booking-row">
-    <input type="checkbox" data-ip-booking-check value="${esc(match.transactionId)}" ${match.confident?'checked':''}>
-    <div class="row-main"><strong>${esc(dateText(match.date))}</strong><div class="fp-muted">${esc(quantityText)}</div></div>
-    <div class="ip-row-value"><strong>${amount(match.gross,match.currency)}</strong>${match.confident?`<span class="ip-badge">${esc(text('sicher','confident'))}</span>`:''}</div>
-  </label>`;
+  return {
+    id:esc(match.transactionId),
+    selected:!!match.confident,
+    html:`<div class="row-main"><strong>${esc(dateText(match.date))}</strong><div class="fp-muted">${esc(quantityText)}</div></div>
+    <div class="ip-row-value"><strong>${amount(match.gross,match.currency)}</strong>${match.confident?`<span class="ip-badge">${esc(text('sicher','confident'))}</span>`:''}</div>`
+  };
 }
 
 function bindBookingActions(state,container){
   const run=(button,path,confirmMessageText)=>async()=>{
     const card=button.closest('[data-ip-booking-security]');
-    const ids=$$('[data-ip-booking-check]:checked',card).map(input=>input.value);
+    const list=card?bookingSelections.get(card):null;
+    const ids=list?list.getSelectedIds():[];
     if(!ids.length){toast(text('Bitte mindestens eine Buchung auswählen.','Select at least one booking.'));return}
     button.disabled=true;
     try{

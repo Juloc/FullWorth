@@ -3,11 +3,16 @@ import { createDialog } from '../../components/dialog.js';
 import { showToast } from '../../components/toast.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 // Bulk receipt archive importer. It deliberately stays separate from the multi-photo scan-set UI:
 // one bulk-selected physical file is one receipt, while the normal scan flow may combine several
 // photos into one logical receipt.
 
 let dialog = null;
+// Eine Instanz fuers ganze Modul, nicht je Vorschau neu erzeugt: renderPaperlessPreview() ruft
+// list.mount() bei jeder neuen Vorschau erneut auf, das setzt Bestand und Auswahl vollstaendig
+// zurueck (siehe selection-list.js) - eine neue Instanz waere hier nur ueberfluessige Wiederholung.
+const paperlessSelection = createSelectionList();
 let pollTimer = 0;
 let paperlessConnected = false;
 let paperlessOptions = { tags: [], documentTypes: [], correspondents: [], storagePaths: [], customFields: [] };
@@ -688,18 +693,25 @@ function renderPaperlessPreview(preview) {
   }
 
   const newDocs = docs.filter(doc => !doc.imported);
+  const items = docs.map(doc => ({
+    id: String(doc.id),
+    selected: !doc.imported,
+    disabled: doc.imported,
+    rowClass: doc.imported ? 'imported' : '',
+    html: `<span><strong>${esc(doc.title || `#${doc.id}`)}</strong><small>${esc(paperlessDocumentMeta(doc))}</small></span>
+      ${doc.imported ? `<em>${esc(t('bereits importiert', 'already imported'))}</em>` : ''}`
+  }));
+  // Der eigene Kopf (Label + Fund-Zeile in einer flex-Reihe, ".receipt-import-preview-head") bleibt
+  // handgeschrieben, weil er anders aussieht als der generische Kopf von selectionListHtml() (der
+  // Zaehler stuende dort neben der Beschriftung, nicht neben "X neu · Y gefunden"). Nur das
+  // data-select-all-Attribut macht die Checkbox fuer list.mount() sichtbar - die Bindung (checked,
+  // indeterminate, Klick auf alle nicht-deaktivierten Zeilen) kommt trotzdem vollstaendig vom Baustein.
   el.innerHTML = `<div class="receipt-import-preview-head">
-      <label class="check inline"><input type="checkbox" data-paperless-all ${newDocs.length ? 'checked' : 'disabled'}> ${esc(t('Alle neuen auswählen', 'Select all new'))}</label>
+      <label class="check inline"><input type="checkbox" data-select-all${newDocs.length ? '' : ' disabled'}> ${esc(t('Alle neuen auswählen', 'Select all new'))}</label>
       <span>${newDocs.length} ${esc(t('neu', 'new'))} · ${preview.count} ${esc(t('gefunden', 'found'))}${preview.truncated ? ` · ${esc(t('Vorschau begrenzt', 'preview limited'))}` : ''}</span>
     </div>
-    <div class="receipt-import-docs">${docs.map(doc => `<label class="receipt-import-doc ${doc.imported ? 'imported' : ''}">
-      <input type="checkbox" data-paperless-doc value="${doc.id}" ${doc.imported ? 'disabled' : 'checked'}>
-      <span><strong>${esc(doc.title || `#${doc.id}`)}</strong><small>${esc(paperlessDocumentMeta(doc))}</small></span>
-      ${doc.imported ? `<em>${esc(t('bereits importiert', 'already imported'))}</em>` : ''}
-    </label>`).join('')}</div>`;
-
-  const all = el.querySelector('[data-paperless-all]');
-  if (all) all.onchange = event => el.querySelectorAll('[data-paperless-doc]:not(:disabled)').forEach(box => { box.checked = event.target.checked; });
+    ${selectionListHtml(items, { rowClass: 'receipt-import-doc', rowsClass: 'receipt-import-docs' })}`;
+  paperlessSelection.mount(el);
 }
 
 function paperlessDocumentMeta(doc) {
@@ -713,7 +725,7 @@ function paperlessDocumentMeta(doc) {
 }
 
 async function importPaperless() {
-  const selected = [...dialog.querySelectorAll('[data-paperless-doc]:checked')].map(x => Number(x.value)).filter(Number.isFinite);
+  const selected = paperlessSelection.getSelectedIds().map(Number).filter(Number.isFinite);
   if (!selected.length) return setBox('[data-paperless-preview-result]', t('Zuerst Dokumente über die Vorschau auswählen.', 'Preview and select documents first.'), 'error');
   setBusy('[data-paperless-import]', true);
   try {

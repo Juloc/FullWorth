@@ -1485,6 +1485,8 @@
     "byCategory": "By category",
     "addTransactions": "Add transactions",
     "candidateHint": "{count} transactions might belong here. Each one says why.",
+    "candidateSelectAll": "Select all",
+    "candidateSelectedCount": "{n} of {total} selected",
     "noCandidates": "No matching transactions found.",
     "reason_merchant": "Merchant matches",
     "reason_category": "Category matches",

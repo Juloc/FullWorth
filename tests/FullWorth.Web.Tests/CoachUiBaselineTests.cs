@@ -123,7 +123,9 @@ public sealed class CoachUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("fullworth:view-change", app);
         Assert.Contains("onAppEvent('budget:open'", app);
         Assert.Contains("emitAppEvent('budget:open'", coach);
-        Assert.Contains("selectedForCoach", transactions);
+        // Der Auswahlzustand lebt seit der gemeinsamen Auswahl-Komponente in einer
+        // components/selection-list.js-Instanz statt in einer seiteneigenen Map (siehe #160).
+        Assert.Contains("coachSelection", transactions);
         Assert.Contains("selectedItems", transactions);
         Assert.Contains("data-tx-select", transactions);
         Assert.Contains("fullworth:coach-open", transactions);

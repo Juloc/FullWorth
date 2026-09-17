@@ -9,6 +9,7 @@ import { identityIcon, sectionCard, esc, ensureOfficialBrandCatalog } from '../.
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { onAppEvent } from '../../core/event-bus.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 
 let ctx = null;
 const CYCLES = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -1334,10 +1335,15 @@ async function openMergeDialog(contract, preselectedIds = []) {
   }
 
   let survivorId = contract.id;
-  const rows = candidates.map(candidate => `<label class="check contract-merge-option">
-      <input type="checkbox" name="sourceContractId" value="${candidate.id}"${preselected.has(candidate.id) ? ' checked' : ''}>
-      <span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${mergeOptionMeta(candidate, mergeCurrency(contract))}</span></span>
-    </label>`).join('');
+  // Kein "Alle auswaehlen", kein Zaehler: eine Zusammenfuehrung mit allen Vertraegen auf einmal ist
+  // nicht der Normalfall, den dieser Dialog nahelegen soll - der Baustein liefert hier nur die
+  // Zeilen samt Auswahlzustand, denselben, den auch die anderen sechs Stellen benutzen.
+  const items = candidates.map(candidate => ({
+    id: candidate.id,
+    selected: preselected.has(candidate.id),
+    html: `<span><strong>${ctx.esc(candidate.name)}</strong><span class="row-sub">${mergeOptionMeta(candidate, mergeCurrency(contract))}</span></span>`
+  }));
+  const list = createSelectionList();
 
   const rejectedNote = rejected.length
     ? `<div class="row-sub contract-merge-note">${ctx.esc(t(
@@ -1348,7 +1354,7 @@ async function openMergeDialog(contract, preselectedIds = []) {
   const dlg = ctx.dialog(`<form class="dialog-card contract-dialog contract-merge-dialog">
     <div class="panel-head"><div><h2>${ctx.esc(ctx.get('contracts.mergeTitle'))}</h2><div class="row-sub">${ctx.esc(contract.name)}</div></div><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <div class="row-sub">${ctx.esc(ctx.get('contracts.mergeHint'))}</div>
-    <div class="contract-merge-options">${rows}</div>
+    ${selectionListHtml(items, { rowClass: 'check contract-merge-option', rowsClass: 'contract-merge-options' })}
     ${rejectedNote}
     <div class="contract-merge-survivor" data-survivor hidden>
       <div class="contract-merge-survivor-head">${ctx.esc(t('Welcher Vertrag bleibt bestehen?', 'Which contract stays?'))}</div>
@@ -1363,8 +1369,8 @@ async function openMergeDialog(contract, preselectedIds = []) {
   const submit = dlg.querySelector('[data-merge-submit]');
   const survivorBox = dlg.querySelector('[data-survivor]');
   const survivorList = dlg.querySelector('[data-survivor-list]');
-  const checkedIds = () => [...dlg.querySelectorAll('input[name="sourceContractId"]:checked')].map(input => input.value);
-  const checkedContracts = () => checkedIds().map(id => contractsById.get(id)).filter(Boolean);
+  list.mount(dlg);
+  const checkedContracts = () => list.getSelectedIds().map(id => contractsById.get(id)).filter(Boolean);
 
   function renderSurvivor() {
     const pool = [contract, ...checkedContracts()];
@@ -1380,13 +1386,13 @@ async function openMergeDialog(contract, preselectedIds = []) {
     submit.disabled = pool.length < 2;
   }
 
-  dlg.querySelectorAll('input[name="sourceContractId"]').forEach(input => input.addEventListener('change', renderSurvivor));
+  list.onChange(renderSurvivor);
   renderSurvivor();
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
-    const sourceContractIds = checkedIds();
+    const sourceContractIds = list.getSelectedIds();
     if (!sourceContractIds.length) return;
     const conflict = mergeCurrencyConflict([contract, ...checkedContracts()]);
     if (conflict) {

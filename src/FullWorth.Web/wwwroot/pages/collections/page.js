@@ -12,6 +12,7 @@ import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../co
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { keepListPosition } from '../../components/list-position.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { selectionListHtml, createSelectionList } from '../../components/selection-list.js';
 
 const STATUSES = ['active', 'completed', 'archived'];
 
@@ -229,31 +230,37 @@ async function openCandidates(row) {
 
   if (!candidates.length) { ctx.toast(t('noCandidates')); return; }
 
-  const rows = candidates.map(candidate => `<label class="row check-row">
-      <input type="checkbox" value="${ctx.esc(candidate.transactionId)}">
-      <div class="row-main">
+  // Vorher gab es hier weder "Alle auswaehlen" noch einen Zaehler - bei mehr als ein paar Kandidaten
+  // musste man jede Zeile einzeln pruefen, um zu sehen, wie viele schon angehakt sind. Derselbe
+  // Baustein wie bei der ING-Kontoauswahl schliesst diese Luecke, statt sie eigens nachzubauen.
+  const items = candidates.map(candidate => ({
+    id: ctx.esc(candidate.transactionId),
+    selected: true,
+    html: `<div class="row-main">
         <div class="row-title">${ctx.esc(candidate.counterparty || ctx.get('common.empty'))}</div>
         <div class="row-sub">${candidate.date ? ctx.date(candidate.date) : ''}${candidate.categoryName ? ` · ${ctx.esc(candidate.categoryName)}` : ''}${candidate.accountName ? ` · ${ctx.esc(candidate.accountName)}` : ''}</div>
         <div class="col-candidate-reasons">${candidate.reasons.map(reason => `<span class="col-reason">${ctx.esc(t('reason_' + reason))}</span>`).join('')}</div>
       </div>
-      <span class="amount">${ctx.money(candidate.amount, candidate.currency)}</span>
-    </label>`).join('');
+      <span class="amount">${ctx.money(candidate.amount, candidate.currency)}</span>`
+  }));
+  const list = createSelectionList();
 
   const dialog = ctx.dialog(`<div class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(t('addTransactions'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <p class="row-sub">${ctx.esc(t('candidateHint').replace('{count}', String(candidates.length)))}</p>
-    <div class="rows">${rows}</div>
+    ${selectionListHtml(items, { rowClass: 'row check-row', selectAllLabel: ctx.esc(t('candidateSelectAll')) })}
     <div class="dialog-actions">
       <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
       <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
     </div>
   </div>`);
+  list.mount(dialog, { counterFormat: (n, total) => t('candidateSelectedCount').replace('{n}', String(n)).replace('{total}', String(total)) });
 
   const close = () => dialog.close();
   dialog.querySelector('[data-close]').onclick = close;
   dialog.querySelector('[data-cancel]').onclick = close;
   dialog.querySelector('[data-apply]').onclick = async event => {
-    const chosen = [...dialog.querySelectorAll('input:checked')].map(input => input.value);
+    const chosen = list.getSelectedIds();
     if (!chosen.length) { close(); return; }
     event.currentTarget.disabled = true;
     try {

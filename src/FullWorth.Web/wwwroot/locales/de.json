@@ -1485,6 +1485,8 @@
     "byCategory": "Nach Kategorie",
     "addTransactions": "Buchungen hinzufügen",
     "candidateHint": "{count} Buchungen könnten dazugehören. Der Grund steht bei jeder.",
+    "candidateSelectAll": "Alle auswählen",
+    "candidateSelectedCount": "{n} von {total} ausgewählt",
     "noCandidates": "Keine passenden Buchungen gefunden.",
     "reason_merchant": "Händler passt",
     "reason_category": "Kategorie passt",

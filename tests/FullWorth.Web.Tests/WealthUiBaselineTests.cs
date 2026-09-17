@@ -234,15 +234,17 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("canManage?tabButton('bookings'", js);
         Assert.Contains("if(state.tab==='bookings')return await renderBookings(state,container);", js);
 
-        // Checkboxen tragen die transactionId, und beide Aktionsknoepfe lesen nur die ANGEHAKTEN -
-        // kein automatisches Schreiben, auch nicht fuer confident:true.
-        Assert.Contains("data-ip-booking-check", js);
-        Assert.Contains("[data-ip-booking-check]:checked", js);
+        // Checkboxen tragen die transactionId und leben seit der gemeinsamen Auswahl-Komponente
+        // (components/selection-list.js) im generischen data-select-item-Attribut; beide
+        // Aktionsknoepfe lesen die Auswahl ueber deren getSelectedIds() - kein automatisches
+        // Schreiben, auch nicht fuer confident:true.
+        Assert.Contains("selectionListHtml", js);
+        Assert.Contains("bookingSelections.get(card)", js);
         Assert.Contains("data-ip-booking-apply", js);
         Assert.Contains("data-ip-booking-dismiss", js);
-        // Vorausgewaehlt (checked), aber nur der spaetere Klick auf den Knopf loest apply/dismiss aus -
-        // renderBookings selbst ruft die Endpunkte nirgends direkt auf.
-        Assert.Contains("match.confident?'checked':''", js);
+        // Vorausgewaehlt (selected:true), aber nur der spaetere Klick auf den Knopf loest apply/dismiss
+        // aus - renderBookings selbst ruft die Endpunkte nirgends direkt auf.
+        Assert.Contains("selected:!!match.confident", js);
         Assert.Contains("button.onclick=run(button,'apply'", js);
         Assert.Contains("button.onclick=run(button,'dismiss'", js);
         Assert.Contains("ip-confident", js);

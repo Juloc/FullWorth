@@ -19,29 +19,42 @@ function isInlineControl(target) {
   return Boolean(target.closest('button,a,input,label,select,textarea,[contenteditable="true"],[data-cat-edit]'));
 }
 
-function transactionCheckbox(row) {
-  return row?.querySelector('[data-tx-select]') || null;
+// Vorher stand hier fest verdrahtet "#transactions-body [data-tx-select]" - ein Baustein unter
+// components/, der eine ganz bestimmte Seite und ihre Attribute kennt. Das ist genau das, was
+// components/ laut CLAUDE.md nicht darf ("kennt weder eine Seite noch den Server"), und es haette
+// jede weitere Seite mit Long-Press-Mehrfachauswahl gezwungen, entweder denselben Seiten-Namen zu
+// verwenden oder diesen Baustein selbst zu aendern. Jetzt meldet sich die Seite selbst an
+// (registerRowSelection) und bringt drei Dinge mit: woran eine Zeile zu erkennen ist, wie man aus
+// einer Zeile ihre Id liest, und wo der Auswahlzustand lebt (eine selection-list.js-Instanz) - dieser
+// Baustein fuehrt danach nur noch Zeit (wie lange gehalten, wie weit bewegt) und ruft die
+// Seiten-eigene Logik auf, ohne je "Buchung" oder "tx-select" zu lesen.
+let rowSelection = null;
+
+/**
+ * @param {{rowSelector: string, getId: (row: Element) => string|null, list: {isSelected, setSelected, toggle, count}}} config
+ */
+export function registerRowSelection(config) {
+  rowSelection = config;
 }
 
-function transactionSelectionCount() {
-  return document.querySelectorAll('#transactions-body [data-tx-select]:checked').length;
+function selectableRow(target) {
+  if (!rowSelection) return null;
+  return target.closest(rowSelection.rowSelector);
 }
 
-// Checking the box IS the selection: the transactions feature listens for the change event and owns
-// everything that follows - the row styling, the selection bar and the mobile selection mode. This
-// layer used to re-apply all three from a MutationObserver on the list, which is the kind of
-// after-the-fact repair the frontend architecture guard forbids.
-function setTransactionSelected(row, selected) {
-  const input = transactionCheckbox(row);
-  if (!input || input.checked === selected) return;
-  input.checked = selected;
-  input.dispatchEvent(new Event('change', { bubbles: true }));
+// Das Setzen selbst (state.setSelected in selection-list.js) uebernimmt auch das dispatch'te
+// change-Event auf der gebundenen Checkbox - dieselbe Regie, die vorher direkt hier stand
+// (input.checked=...; dispatchEvent(...)), jetzt an einer Stelle fuer jede Seite, die sie braucht.
+function setRowSelected(row, selected) {
+  const id = rowSelection?.getId(row);
+  if (id == null) return;
+  rowSelection.list.setSelected(id, selected);
 }
 
-function toggleTransactionSelected(row) {
-  const input = transactionCheckbox(row);
-  if (!input) return;
-  setTransactionSelected(row, !input.checked);
+function toggleRowSelected(row) {
+  const id = rowSelection?.getId(row);
+  if (id == null) return;
+  rowSelection.list.toggle(id);
 }
 
 function dashboardEditing() {
@@ -80,9 +93,9 @@ function enterDashboardEdit(widgetId) {
 function beginHold(event) {
   if (!isMobile() || event.pointerType === 'mouse' || !event.isPrimary) return;
 
-  const txRow = event.target.closest('#transactions-body .tx-row');
+  const selRow = selectableRow(event.target);
   const widget = event.target.closest('#view-dashboard #dashboard-grid .widget');
-  if (!txRow && !widget) return;
+  if (!selRow && !widget) return;
   if (isInlineControl(event.target) && !widget) return;
   if (widget && event.target.closest('.widget-controls')) return;
 
@@ -91,11 +104,11 @@ function beginHold(event) {
     pointerId: event.pointerId,
     x: event.clientX,
     y: event.clientY,
-    txRow,
+    selRow,
     widgetId: widget?.dataset.id || null,
     timer: window.setTimeout(() => {
       suppressClickUntil = Date.now() + 700;
-      if (txRow) setTransactionSelected(txRow, true);
+      if (selRow) setRowSelected(selRow, true);
       else if (widget) {
         if (dashboardEditing()) toggleDashboardWidget(widget);
         else enterDashboardEdit(widget.dataset.id);
@@ -119,17 +132,17 @@ function endHold(event) {
 function captureMobileClick(event) {
   if (!isMobile()) return;
 
-  const txRow = event.target.closest('#transactions-body .tx-row');
-  if (txRow && !isInlineControl(event.target)) {
+  const selRow = selectableRow(event.target);
+  if (selRow && !isInlineControl(event.target)) {
     if (Date.now() < suppressClickUntil) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
-    if (transactionSelectionCount() > 0) {
+    if (rowSelection.list.count > 0) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      toggleTransactionSelected(txRow);
+      toggleRowSelected(selRow);
       return;
     }
   }
@@ -151,7 +164,7 @@ export function initMobileInteractions() {
   document.addEventListener('click', captureMobileClick, true);
   document.addEventListener('contextmenu', event => {
     if (!isMobile()) return;
-    if (event.target.closest('#transactions-body .tx-row,#view-dashboard #dashboard-grid .widget'))
+    if (selectableRow(event.target) || event.target.closest('#view-dashboard #dashboard-grid .widget'))
       event.preventDefault();
   }, true);
 }

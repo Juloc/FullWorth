@@ -10,6 +10,7 @@ import { state } from '../../../core/state.js';
 import { emptyRow } from '../../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 import { createWizard } from '../../../components/wizard.js';
+import { selectionListHtml, createSelectionList } from '../../../components/selection-list.js';
 
 let ctx = null;
 
@@ -769,52 +770,31 @@ function openIngSelection(initial){
   const dlg=dialog('<div class="dialog-card"><div class="panel-head"><h2 data-title></h2></div></div>');
   const step=createWizard(dlg).body;
   const title=dlg.querySelector('[data-title]');
-  const hidden=new Set((current.discovered||[]).filter(a=>a.visible===false).map(a=>a.key));
+  // selection-list.js zaehlt "ausgewaehlt" = sichtbar; "hidden", was die Import-API erwartet, ist die
+  // Umkehrung davon und entsteht erst in runImport() aus list.getSelectedIds(), statt selbst als
+  // zweiter Zustand nebenher mitgefuehrt zu werden.
+  const list=createSelectionList();
 
-  const count=()=>{
-    const all=current.discovered||[];
-    const chosen=all.filter(a=>!hidden.has(a.key)).length;
-    const master=step.querySelector('[data-select-all]');
-    if(master){master.checked=chosen===all.length&&all.length>0;master.indeterminate=chosen>0&&chosen<all.length;}
-    const label=step.querySelector('[data-selected-count]');
-    if(label)label.textContent=get('bankingSetup.ingSelectedCount').replace('{n}',String(chosen)).replace('{total}',String(all.length));
-  };
-
-  const rowHtml=a=>'<div class="row"><label class="check ing-select-row">'
-    +'<input type="checkbox" data-account="'+esc(a.key)+'"'+(hidden.has(a.key)?'':' checked')+'>'
-    +'<div class="row-main"><div class="row-title">'+esc(a.name)+'</div>'
+  const rowHtml=a=>'<div class="row-main"><div class="row-title">'+esc(a.name)+'</div>'
     +'<div class="row-sub">'+esc(get(a.kind==='depot'?'bankingSetup.ingKindDepot':'bankingSetup.ingKindCash'))
     +(a.ibanLast4?' · •••• '+esc(a.ibanLast4):'')
-    +(a.currency?' · '+esc(a.currency):'')+'</div></div></label></div>';
+    +(a.currency?' · '+esc(a.currency):'')+'</div></div>';
 
   const showSelection=()=>{
     const all=current.discovered||[];
     title.textContent=get('bankingSetup.ingSelectTitle');
+    const items=all.map(a=>({id:esc(a.key),html:rowHtml(a),selected:a.visible!==false}));
     step.innerHTML='<p class="row-sub">'+esc(get('bankingSetup.ingSelectHint'))+'</p>'
-      +'<div class="row"><label class="check"><input type="checkbox" data-select-all>'
-      +'<span>'+esc(get('bankingSetup.ingSelectAll'))+'</span></label>'
-      +'<span class="row-sub" data-selected-count></span></div>'
-      +'<div class="rows ing-select-list">'+all.map(rowHtml).join('')+'</div>'
-      +(all.length?'':'<p class="row-sub">'+esc(get('bankingSetup.ingSelectEmpty'))+'</p>')
+      +selectionListHtml(items,{rowClass:'check ing-select-row',rowWrapClass:'row',rowsClass:'rows ing-select-list',selectAllLabel:esc(get('bankingSetup.ingSelectAll')),emptyHtml:'<p class="row-sub">'+esc(get('bankingSetup.ingSelectEmpty'))+'</p>'})
       +'<div class="dialog-actions"><button type="button" class="'+buttonClass(ButtonRole.Secondary)+'" data-cancel>'+esc(get('common.cancel'))+'</button>'
       +'<button type="button" class="'+buttonClass(ButtonRole.Primary)+'" data-import>'+esc(get('bankingSetup.ingImport'))+'</button></div>';
     step.querySelector('[data-cancel]').onclick=()=>dlg.close();
-    for(const box of step.querySelectorAll('[data-account]'))
-      box.onchange=()=>{if(box.checked)hidden.delete(box.dataset.account);else hidden.add(box.dataset.account);count();};
-    const master=step.querySelector('[data-select-all]');
-    if(master)master.onchange=()=>{
-      for(const box of step.querySelectorAll('[data-account]')){
-        box.checked=master.checked;
-        if(master.checked)hidden.delete(box.dataset.account);else hidden.add(box.dataset.account);
-      }
-      count();
-    };
+    list.mount(step,{counterFormat:(n,total)=>get('bankingSetup.ingSelectedCount').replace('{n}',String(n)).replace('{total}',String(total))});
     step.querySelector('[data-import]').onclick=()=>{void runImport();};
-    count();
   };
 
   const showImporting=()=>{
-    const chosen=(current.discovered||[]).filter(a=>!hidden.has(a.key)).length;
+    const chosen=list.count;
     title.textContent=get('bankingSetup.ingImporting');
     step.innerHTML='<p class="row-sub">'+esc(get('bankingSetup.ingImportingHint'))+'</p><div class="rows" data-busy></div>';
     ctx.skeleton(step.querySelector('[data-busy]'),Math.max(1,chosen));
@@ -859,8 +839,9 @@ function openIngSelection(initial){
   const runImport=async()=>{
     showImporting();
     try{
+      const hidden=(current.discovered||[]).filter(a=>!list.isSelected(a.key)).map(a=>a.key);
       const result=await bankApi('api/banking/fints/connections/'+encodeURIComponent(current.connectionId)+'/import',
-        jsonBody({hidden:[...hidden]}));
+        jsonBody({hidden}));
       current=result;
       // Mitten im Abruf kann die Bank doch noch eine TAN verlangen.
       if(result.status==='TAN_REQUIRED'){dlg.close();openIngTanDialog(result);return;}
