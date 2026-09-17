@@ -104,8 +104,11 @@ Beyond those:
   later in the cascade, past `responsive`, `design-depth` and `dialogs`. Two checks, both cheap:
   compare the rules the browser parses (`document.styleSheets` walked recursively) before and after —
   the multiset must be identical — and compare `getComputedStyle` for every element of every view.
-  Use a full reload for the second one: swapping `<link>` elements re-declares `@font-face`, and with
-  `font-display: optional` the font then falls back, which shows up as text-width noise everywhere.
+  Use a full reload for the second one: swapping `<link>` elements re-declares `@font-face`. The app
+  font is self-hosted (`styles/tokens.css`, `wwwroot/fonts/nunito-variable.woff2`) with
+  `font-display: optional`, so a cached font paints immediately and an uncached one falls back for that
+  load without ever swapping mid-paint — but which of the two happens still depends on the browser's
+  font cache, so only a full reload gives you the same starting state on both sides of the comparison.
 - `components/` knows neither a page nor the server. `features/` may. `core/` is the system layer and
   knows nothing visual.
 - The CSP allows `style-src-attr 'unsafe-inline'`, so a style *attribute* works — but prefer tokens and

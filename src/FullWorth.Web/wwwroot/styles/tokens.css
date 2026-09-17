@@ -2,7 +2,10 @@
    Typography has one application-wide family and one central size scale. Components inherit the family
    and consume size tokens instead of defining an alternative font stack or user-selectable typography.
    The interface remains monochrome and line-driven; colour is used only where it carries meaning. */
-@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:swap;src:url("https://cdn.jsdelivr.net/fontsource/fonts/nunito:vf@5.3.0/latin-wght-normal.woff2") format("woff2-variations")}
+/* Selbst gehostet, nicht von einem CDN: font-src 'self' (SecurityHeadersPolicy) blockiert jede
+   Fremd-URL hier ohnehin, und mit font-display:optional gibt es kein Nachtausch-Reflow - die Schrift
+   steht beim ersten Zeichnen fest oder wird für dieses Laden gar nicht verwendet, nie dazwischen. */
+@font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:optional;src:url("/fonts/nunito-variable.woff2") format("woff2-variations")}
 :root{
   /* Typography: Nunito is the single application font. Compatibility aliases keep existing components
      on the same family while old specialised font roles are phased out. */

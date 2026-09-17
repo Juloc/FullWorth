@@ -4,7 +4,7 @@
 // flows — is ALWAYS fetched from the network and NEVER cached, so no financial data lives in the offline cache.
 // Bump VERSION to ship a new shell; old caches are purged on activate.
 
-const VERSION = 'v135';
+const VERSION = 'v136';
 const SHELL_CACHE = `fullworth-shell-${VERSION}`;
 
 // Static, non-sensitive assets safe to precache. No API/BFF/auth paths appear here.
@@ -167,9 +167,10 @@ const APP_SHELL = [
   '/pwa/icon-192.png',
   '/pwa/icon-512.png',
   '/pwa/apple-touch-icon-180.png',
-  '/fonts/BarlowCondensed-400.woff2',
-  '/fonts/BarlowCondensed-500.woff2',
-  '/fonts/BarlowCondensed-600.woff2',
+  // Die einzige Anwendungsschrift, selbst gehostet (styles/tokens.css). Ohne diesen Eintrag hätte ein
+  // Kaltstart offline keine Schrift zum Nachladen - font-display:optional verhindert nur den
+  // Nachtausch, nicht das Fehlen der Datei.
+  '/fonts/nunito-variable.woff2',
   '/locales/de.json',
   '/locales/en.json',
 ];
