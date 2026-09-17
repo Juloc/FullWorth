@@ -47,6 +47,7 @@ const COPY = {
     chooseTypeHint: 'Wähle den Typ. Weitere Details können später ergänzt werden.',
     investmentHint: 'Aktien, ETFs und andere Wertpapiere werden über ein Depot verwaltet und nicht als manueller Wert angelegt.',
     investmentTotal: 'Investments gesamt', portfolio: 'Depot', active: 'Aktiv',
+    gain: 'Gewinn', gainUnknown: 'Einstand fehlt', gainPartial: '(unvollständig)',
     realEstate: 'Immobilien', vehicles: 'Fahrzeuge', otherValues: 'Weitere Werte',
     deleteAsset: 'Vermögenswert löschen',
     deleteAssetConfirm: 'Diesen Vermögenswert wirklich löschen? Bewertungen, Belege und Detailangaben verschwinden mit. Buchungen und Verträge bleiben.',
@@ -101,6 +102,7 @@ const COPY = {
     addValue: 'Add asset', chooseType: 'Asset type', chooseTypeHint: 'Choose a type. Additional details can be completed later.',
     investmentHint: 'Stocks, ETFs and other securities are managed through an investment portfolio, not as manual assets.',
     investmentTotal: 'Investments total', portfolio: 'Portfolio', active: 'Active',
+    gain: 'Gain', gainUnknown: 'No cost basis', gainPartial: '(partial)',
     realEstate: 'Real estate', vehicles: 'Vehicles', otherValues: 'Other assets',
     deleteAsset: 'Delete asset',
     deleteAssetConfirm: 'Delete this asset? Its valuations, documents and details go with it. Transactions and contracts stay.',
@@ -1400,14 +1402,22 @@ function renderLiabilities(liabilities) {
   el.appendChild(frag);
 }
 
+// Ein Depot stand hier mit seinem NAMEN und sonst nichts: kein Wert, kein Gewinn, keine
+// Prozentzahl. Genau danach wird auf einer Vermoegensseite aber gefragt.
+//
+// Gerechnet wird nichts davon hier. Die Depotliste bringt Einstand und unrealisiertes Ergebnis
+// roh mit; die Prozentzahl entsteht daraus, und ein fehlender Einstand wird benannt statt als 0 %
+// ausgegeben.
 function renderInvestments(portfolios, overview) {
   const panel = ctx.$('#nw-investments'); const list = ctx.$('#nw-investments-list'); if (!panel || !list) return;
   const active = (portfolios || []).filter(item => item.isArchived !== true); const total = Number(overview.investments?.amount || 0);
   if (!active.length && total === 0) { panel.hidden = true; list.innerHTML = ''; return; }
-  panel.hidden = false; list.innerHTML = `<div class="row wealth-investment-total"><div class="row-main"><div class="row-title">${ctx.esc(t('investmentTotal'))}</div><div class="row-sub">${ctx.esc(overview.investmentDataIncomplete ? t('dataIncomplete') : t('active'))}</div></div><div class="amount">${ctx.money(total, overview.currency)}</div></div>`;
+  const sum = investmentGain(active);
+  panel.hidden = false; list.innerHTML = `<div class="row wealth-investment-total"><div class="row-main"><div class="row-title">${ctx.esc(t('investmentTotal'))}</div><div class="row-sub">${ctx.esc(overview.investmentDataIncomplete ? t('dataIncomplete') : t('active'))}</div></div><div class="amount-stack"><div class="amount">${ctx.money(total, overview.currency)}</div>${gainLine(sum, overview.currency)}</div></div>`;
   for (const portfolio of active) {
     const row = document.createElement('div'); row.className = 'row';
-    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(portfolio.name)}</div><div class="row-sub">${ctx.esc(t('portfolio'))} · ${ctx.esc(portfolio.currency || overview.currency)}</div></div>`;
+    const value = portfolio.totalValue == null ? '' : `<div class="amount">${ctx.money(Number(portfolio.totalValue), portfolio.currency || overview.currency)}</div>`;
+    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(portfolio.name)}</div><div class="row-sub">${ctx.esc(t('portfolio'))} · ${ctx.esc(portfolio.currency || overview.currency)}</div></div><div class="amount-stack">${value}${gainLine(portfolio, portfolio.currency || overview.currency)}</div>`;
     row.appendChild(wealthCoachButton(() => window.dispatchEvent(new CustomEvent('fullworth:coach-open', { detail: {
       entityType:'portfolio', entityId:portfolio.id, entityLabel:portfolio.name,
       details:{currency:portfolio.currency||overview.currency||''}
@@ -1415,6 +1425,37 @@ function renderInvestments(portfolios, overview) {
     list.appendChild(row);
   }
 }
+
+// Der Gewinn ueber alle Depots. Addiert wird nur, was einen Einstand HAT - und dass eines fehlt,
+// faerbt die Summe als unvollstaendig, statt sie stillschweigend zu klein zu machen.
+function investmentGain(portfolios) {
+  const known = portfolios.filter(item => item.costBasis != null && item.unrealizedResult != null);
+  const incomplete = known.length !== portfolios.length || portfolios.some(item => item.gainIncomplete);
+  if (!known.length) return { costBasis: null, unrealizedResult: null, gainIncomplete: incomplete };
+  return {
+    costBasis: known.reduce((sum, item) => sum + Number(item.costBasis), 0),
+    unrealizedResult: known.reduce((sum, item) => sum + Number(item.unrealizedResult), 0),
+    gainIncomplete: incomplete
+  };
+}
+
+// Betrag und Prozent - oder die Auskunft, dass der Einstand fehlt. Nie eine 0 %, die niemand
+// gemessen hat.
+function gainLine(gain, currency) {
+  if (!gain) return '';
+  if (gain.costBasis == null || gain.unrealizedResult == null)
+    return `<div class="amount-meaning">${ctx.esc(t('gainUnknown'))}</div>`;
+
+  const result = Number(gain.unrealizedResult);
+  const cost = Number(gain.costBasis);
+  const sign = result > 0 ? '+' : '';
+  const tone = result > 0 ? ' positive' : result < 0 ? ' negative' : '';
+  const percent = cost > 0 ? ` · ${sign}${nwNumber((result / cost) * 100)} %` : '';
+  const partial = gain.gainIncomplete ? ` ${ctx.esc(t('gainPartial'))}` : '';
+  return `<div class="amount-meaning${tone}">${ctx.esc(t('gain'))}: ${sign}${ctx.esc(ctx.money(result, currency))}${ctx.esc(percent)}${partial}</div>`;
+}
+
+const nwNumber = value => new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-US', { maximumFractionDigits: 2 }).format(Number(value) || 0);
 
 /* ---- Add / edit / delete dialogs (unchanged) ------------------------------------------------- */
 

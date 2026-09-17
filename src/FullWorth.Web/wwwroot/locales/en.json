@@ -905,7 +905,8 @@
     "tradeFees": "Fees",
     "tradeTotal": "Total cost",
     "tradeSaved": "Purchase saved",
-    "depotGainUnknown": "No cost basis"
+    "depotGainUnknown": "No cost basis",
+    "depotGainPartial": "(partial)"
   },
   "a11y": {
     "skipToContent": "Skip to content"

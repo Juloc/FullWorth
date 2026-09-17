@@ -276,11 +276,11 @@ ON CONFLICT ("SecurityId","PriceDate","Source") DO UPDATE SET "Price"=EXCLUDED."
         {
             await using var position = RawSql.Command(sql, """
 INSERT INTO "InvestmentTrades"
-("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CreatedAt","UpdatedAt")
-VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quantity,@price,@gross,0,@currency,0,0,0,'fints_snapshot',@external,NULL,@now,@now)
+("Id","FullWorthSpaceId","PortfolioId","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount","Currency","Fees","Taxes","WithholdingTax","Source","ExternalKey","Notes","CostPrice","CreatedAt","UpdatedAt")
+VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quantity,@price,@gross,0,@currency,0,0,0,'fints_snapshot',@external,NULL,@cost,@now,@now)
 """, ("@id", Guid.NewGuid()), ("@space", spaceId), ("@portfolio", portfolioId), ("@security", securityId),
                 ("@date", request.AsOf), ("@quantity", holding.Quantity), ("@price", holding.Price),
-                ("@gross", holding.MarketValue), ("@currency", currency),
+                ("@gross", holding.MarketValue), ("@currency", currency), ("@cost", holding.CostPrice),
                 ("@external", externalKey), ("@now", now));
             await position.ExecuteNonQueryAsync(ct);
             return;
@@ -288,10 +288,10 @@ VALUES (@id,@space,@portfolio,@security,'security_transfer_in',@date,NULL,@quant
 
         await using var updatePosition = RawSql.Command(sql, """
 UPDATE "InvestmentTrades" SET "SecurityId"=@security,"TradeDate"=@date,"Quantity"=@quantity,"Price"=@price,
- "GrossAmount"=@gross,"Currency"=@currency,"UpdatedAt"=@now
+ "GrossAmount"=@gross,"Currency"=@currency,"CostPrice"=@cost,"UpdatedAt"=@now
 WHERE "Id"=@id
 """, ("@security", securityId), ("@date", request.AsOf), ("@quantity", holding.Quantity), ("@price", holding.Price),
-            ("@gross", holding.MarketValue), ("@currency", currency), ("@now", now), ("@id", existingTradeId));
+            ("@gross", holding.MarketValue), ("@currency", currency), ("@cost", holding.CostPrice), ("@now", now), ("@id", existingTradeId));
         await updatePosition.ExecuteNonQueryAsync(ct);
     }
 

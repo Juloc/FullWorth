@@ -82,7 +82,10 @@ public sealed record FinTsHolding(
     DateOnly? PriceDate,
     decimal? MarketValue,
     string? MarketValueCurrency,
-    string? Exchange);
+    string? Exchange,
+    /// <summary>Der Einstandskurs JE STUECK, wenn die Bank ihn nennt - nicht der Einstandswert.</summary>
+    decimal? CostPrice = null,
+    string? CostCurrency = null);
 
 public sealed record FinTsTanMethod(
     string SecurityFunction,

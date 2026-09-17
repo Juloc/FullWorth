@@ -64,7 +64,7 @@ public sealed record TransactionBatchItem(string IdentificationHash, string Exte
 /// <summary>Mirrors the backend record of the same name - see IngestionModule.</summary>
 public sealed record PendingReconciliation(string IdentificationHash, IReadOnlyList<string> SeenExternalKeys, DateOnly? WindowFrom);
 public sealed record FinanceIngestBatch(IngestConnectionDto Connection, IReadOnlyList<AccountBatchItem> Accounts, IReadOnlyList<BalanceBatchItem> Balances, IReadOnlyList<TransactionBatchItem> Transactions, IReadOnlyList<PendingReconciliation>? PendingReconciliations = null);
-public sealed record FinTsHoldingSnapshotDto(string ProviderKey, string Name, string? Isin, string? Wkn, string Currency, decimal Quantity, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, string? Exchange);
+public sealed record FinTsHoldingSnapshotDto(string ProviderKey, string Name, string? Isin, string? Wkn, string Currency, decimal Quantity, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, string? Exchange, decimal? CostPrice = null);
 public sealed record FinTsInvestmentSnapshotDto(Guid ConnectionId, string DepotKey, string Name, string Currency, DateOnly AsOf, IReadOnlyList<FinTsHoldingSnapshotDto> Holdings);
 public sealed record AccountSyncState(DateOnly? LatestBookingDate);
 

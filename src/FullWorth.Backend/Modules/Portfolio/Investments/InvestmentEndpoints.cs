@@ -21,15 +21,36 @@ public static class InvestmentEndpoints
         return app;
     }
 
+    /// <summary>
+    /// Die Depots - mit ihrem Wert und ihrem Gewinn.
+    ///
+    /// Die Liste nannte bisher nur Namen und Waehrung. Beide Seiten, die Depots zeigen - die
+    /// Kontenliste und die Vermoegensseite -, holen genau sie; jede haette sonst je Depot einen
+    /// eigenen Aufruf gebraucht, um eine Prozentzahl anzuzeigen.
+    ///
+    /// Die Bewertung laeuft je Depot. Das ist eine Handvoll, keine Liste ohne Ende: ein Depot
+    /// entsteht pro Bankdepot oder von Hand.
+    ///
+    /// <c>costBasis</c> und <c>unrealizedResult</c> sind NULL, wenn kein Einstand bekannt ist, und
+    /// nicht 0. Die Prozentzahl bildet die Anzeige daraus - nur sie weiss, ob sie eine zeigen will.
+    /// </summary>
     private static async Task<IResult> ListPortfolios(
         Guid fullWorthSpaceId, CurrentUserContext currentUser, SpaceAccess space, InvestmentStore store,
-        CancellationToken ct)
+        PortfolioValuationStore valuationStore, PortfolioValuationService valuation, CancellationToken ct)
     {
         var uid = currentUser.RequireUserId();
         if (!await space.IsMemberAsync(uid, fullWorthSpaceId, ct)) return Results.NotFound();
 
-        var rows = (await store.ListPortfoliosAsync(fullWorthSpaceId, ct))
-            .Select(row => new
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var rows = new List<object>();
+        foreach (var row in await store.ListPortfoliosAsync(fullWorthSpaceId, ct))
+        {
+            var settings = await valuationStore.FindPortfolioAsync(fullWorthSpaceId, row.Id, ct);
+            var calculation = settings is null ? null : await valuation.CalculateAsync(settings, today, ct);
+            var gain = calculation is null
+                ? new PortfolioGainView(null, null, false)
+                : PortfolioValuationService.Gain(calculation.Positions);
+            rows.Add(new
             {
                 id = row.Id,
                 name = row.Name,
@@ -38,8 +59,16 @@ public static class InvestmentEndpoints
                 benchmarkSecurityId = row.BenchmarkSecurityId,
                 isArchived = row.IsArchived,
                 createdAt = row.CreatedAt,
-                updatedAt = row.UpdatedAt
+                updatedAt = row.UpdatedAt,
+                totalValue = calculation?.TotalValue,
+                marketValue = calculation?.SecurityValue,
+                positions = calculation?.Positions.Count ?? 0,
+                costBasis = gain.CostBasis,
+                unrealizedResult = gain.UnrealizedResult,
+                gainIncomplete = gain.Incomplete,
+                incomplete = calculation?.Incomplete ?? false
             });
+        }
         return Results.Ok(rows);
     }
 

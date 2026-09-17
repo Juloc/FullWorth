@@ -37,6 +37,8 @@ public static class Mt535Parser
     // Das Dezimalkomma ist in SWIFT PFLICHT, die Stellen dahinter sind es nicht: eine runde Menge
     // steht als "10," da. Deshalb \d* und nicht \d+ - mit \d+ passte der Ausdruck auf "10," nirgends,
     // und aus der gemeldeten Menge wurde nichts.
+    // "257,128493+EUR" - Betrag, Vorzeichen, Waehrung, in dieser Reihenfolge.
+    private static readonly Regex CostAmount = new(@"^(?<value>\d+(?:[.,]\d*)?)(?<sign>[+-])(?<currency>[A-Z]{3})$", RegexOptions.Compiled);
     private static readonly Regex Amount = new(@"(?<currency>[A-Z]{3})?(?<value>-?\d+(?:[.,]\d*)?)\s*$", RegexOptions.Compiled);
 
     /// <summary>Wahr, wenn der Text wie eine MT535-Aufstellung aussieht.</summary>
@@ -193,6 +195,7 @@ public static class Mt535Parser
         var (market, marketCurrency) = ReadAmount(First(fields, "19A"));
         var priceDate = ReadDate(First(fields, "98A") ?? First(fields, "98C"));
         var exchange = ReadExchange(First(fields, "94B"));
+        var (costPrice, costCurrency) = ReadCostPrice(First(fields, "70E"));
 
         return new FinTsHolding(
             isin,
@@ -204,7 +207,49 @@ public static class Mt535Parser
             priceDate,
             market,
             marketCurrency ?? priceCurrency,
-            exchange);
+            exchange,
+            costPrice,
+            costCurrency);
+    }
+
+    /// <summary>
+    /// Der Einstandskurs JE STUECK aus dem Fliesstext - der einzige Weg, ohne eingetippte Kaeufe
+    /// einen Gewinn zu rechnen.
+    ///
+    /// Die ING schickt ihn in jedem Block:
+    ///
+    /// <code>
+    /// :70E::HOLD//1STK
+    /// 257,128493+EUR
+    /// </code>
+    ///
+    /// <c>1STK</c> nennt die Bezugsgroesse - je 1 Stueck -, danach folgt der Betrag mit Vorzeichen
+    /// und Waehrung. Dass es der Kurs je Stueck ist und nicht der Einstandswert, sagen die Daten
+    /// selbst: ein Wert waere ein Geldbetrag mit zwei Nachkommastellen. Drei der vier Positionen
+    /// tragen SECHS, und ausgerechnet die mit glatt 10 Stueck traegt zwei - das ist eine Division
+    /// durch die Stueckzahl, keine Summe.
+    ///
+    /// Der Einstandswert ist deshalb <c>Stueckzahl * Einstandskurs</c> und wird hier NICHT gebildet:
+    /// die Stueckzahl steht in einem anderen Feld, und zwei Felder zu verrechnen ist Auslegung, nicht
+    /// Lesen. Nennt die Bank keinen Kurs, bleibt es leer - kein Ersatzwert.
+    /// </summary>
+    private static (decimal? Price, string? Currency) ReadCostPrice(string? field)
+    {
+        if (string.IsNullOrWhiteSpace(field)) return (null, null);
+
+        // Erste Zeile ist die Bezugsgroesse, der Betrag steht darunter.
+        var lines = field.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length < 2) return (null, null);
+
+        var match = CostAmount.Match(lines[^1].Trim());
+        if (!match.Success) return (null, null);
+
+        var text = match.Groups["value"].Value.Replace(',', '.').TrimEnd('.');
+        if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var value))
+            return (null, null);
+
+        var sign = match.Groups["sign"].Value == "-" ? -1m : 1m;
+        return (sign * value, match.Groups["currency"].Value);
     }
 
     private static string? First(Dictionary<string, List<string>> fields, string tag) =>

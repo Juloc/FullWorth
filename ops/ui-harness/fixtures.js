@@ -517,7 +517,9 @@
     // die vierte nicht: so sieht ein Depot aus, in das die Bank Bestaende liefert und der
     // Eigentuemer seine Kaeufe noch nicht eingetragen hat.
     'investments/portfolios': [
-      { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9', isArchived: false, isManual: false }
+      { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9', isArchived: false, isManual: false,
+        totalValue: 3218.42, marketValue: 3218.42, positions: 4, costBasis: 2319.58, unrealizedResult: 174.39,
+        gainIncomplete: true, incomplete: false }
     ],
     'investments/portfolios/p1/overview': {
       portfolio: { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9' },

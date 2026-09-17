@@ -10,7 +10,9 @@ public sealed record FinTsHoldingSnapshotItem(
     decimal? Price,
     DateOnly? PriceDate,
     decimal? MarketValue,
-    string? Exchange);
+    string? Exchange,
+    /// <summary>Einstandskurs JE STUECK, wenn die Bank ihn nennt (MT535 :70E:). Nie der Wert.</summary>
+    decimal? CostPrice = null);
 
 public sealed record FinTsInvestmentSnapshotRequest(
     Guid ConnectionId,

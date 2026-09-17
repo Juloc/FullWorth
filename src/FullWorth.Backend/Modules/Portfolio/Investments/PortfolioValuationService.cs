@@ -8,6 +8,12 @@ public sealed record PortfolioPositionView(
     string? PriceCurrency, DateOnly? PriceDate, string PriceState, decimal? MarketValue, decimal? UnrealizedResult,
     bool CostBasisIncomplete);
 
+/// <summary>
+/// Der Gewinn eines ganzen Depots: Einstand, unrealisiertes Ergebnis - und ob beides vollstaendig
+/// ist. Prozent rechnet die Anzeige daraus, denn nur sie weiss, ob sie welche zeigen will.
+/// </summary>
+public sealed record PortfolioGainView(decimal? CostBasis, decimal? UnrealizedResult, bool Incomplete);
+
 /// <summary>Was ein Depot zu einem Stichtag wert ist und wie es dorthin kam.</summary>
 public sealed record PortfolioCalculation(
     decimal SecurityValue, decimal Cash, decimal TotalValue, decimal RealizedResult, decimal Dividends,
@@ -23,15 +29,42 @@ public sealed record PortfolioCalculation(
 /// Beitrag mit 0 gerechnet UND das Ergebnis als unvollstaendig gekennzeichnet. Ein fehlender Kurs
 /// darf nie stillschweigend als 1:1 oder als 0 durchgehen.
 ///
-/// Ein Einbuchen von aussen (<c>security_transfer_in</c>) bringt Stuecke ohne Einstandspreis mit.
-/// Die Position merkt sich das (<c>CostBasisIncomplete</c>) und meldet danach weder Einstand noch
-/// unrealisiertes Ergebnis, statt eine Zahl zu erfinden.
+/// Ein Einbuchen von aussen (<c>security_transfer_in</c>) bringt Stuecke meist ohne Einstandspreis
+/// mit. Die Position merkt sich das (<c>CostBasisIncomplete</c>) und meldet danach weder Einstand
+/// noch unrealisiertes Ergebnis, statt eine Zahl zu erfinden.
+///
+/// Nennt die Quelle den Einstandskurs doch - die ING tut es in MT535 :70E:, als Kurs JE STUECK -,
+/// steht er in <c>CostPrice</c> und zaehlt ganz normal. Nur diese eine Spalte gilt dafuer: Price und
+/// GrossAmount tragen an einer FinTS-Bestandszeile den Kurswert, nicht den Einstand.
 ///
 /// Die Reihenfolge der Handel ist die des Stores (Datum, Anlagezeit, Id). Wer hier selbst sortiert,
 /// bekommt bei Splits andere Stueckzahlen heraus.
 /// </summary>
 public sealed class PortfolioValuationService(PortfolioValuationStore store, CurrencyConverter fx)
 {
+    /// <summary>
+    /// Der Gewinn ueber alle Positionen - und was daran noch fehlt.
+    ///
+    /// Addiert wird ausschliesslich, was einen Einstand HAT. Ein Bestand aus einem FinTS-Abruf
+    /// bringt keinen mit: HKWPD sagt, was heute im Depot liegt, nicht was es gekostet hat. Wuerde
+    /// seine fehlende Zahl als 0 mitaddiert, stuende im Depot ein Gewinn in voller Hoehe des
+    /// Kurswerts - aus nichts.
+    ///
+    /// Hat KEINE Position einen Einstand, ist das Ergebnis <c>null</c> und nicht 0: unbekannt ist
+    /// nicht dasselbe wie null. Fehlt er nur bei einigen, steht die Summe der uebrigen da und
+    /// <c>Incomplete</c> sagt, dass sie nicht das ganze Depot beschreibt.
+    /// </summary>
+    public static PortfolioGainView Gain(IReadOnlyList<PortfolioPositionView> positions)
+    {
+        var known = positions.Where(position => position.CostBasis is > 0 && position.UnrealizedResult is not null).ToArray();
+        var missing = positions.Any(position => position.Quantity > 0 && (position.CostBasis is not > 0 || position.CostBasisIncomplete));
+        return known.Length == 0
+            ? new(null, null, missing)
+            : new(known.Sum(position => position.CostBasis!.Value),
+                  known.Sum(position => position.UnrealizedResult!.Value),
+                  missing);
+    }
+
     public async Task<PortfolioCalculation> CalculateAsync(
         PortfolioSettingsRow portfolio, DateOnly day, CancellationToken ct)
     {
@@ -94,9 +127,22 @@ public sealed class PortfolioValuationService(PortfolioValuationStore store, Cur
                     break;
                 }
                 case "security_transfer_in":
-                    state.Quantity += trade.Quantity ?? 0;
-                    state.CostBasisIncomplete = true;
+                {
+                    // Ein Einbuchen von aussen bringt normalerweise keinen Einstand mit. Nennt die
+                    // Bank ihn aber - die ING tut es, als Kurs je Stueck in :70E: -, dann ist er da
+                    // und muss nicht eingetippt werden.
+                    //
+                    // Gelesen wird ausschliesslich CostPrice. Price und GrossAmount tragen an diesen
+                    // Zeilen den KURSWERT; sie umzudeuten hiesse, aus einem Kurswert einen Einstand
+                    // zu machen und damit einen Gewinn von null zu behaupten.
+                    var incoming = trade.Quantity ?? 0;
+                    state.Quantity += incoming;
+                    if (trade.CostPrice is { } costPrice && incoming > 0)
+                        state.CostBasis += costPrice * incoming;
+                    else
+                        state.CostBasisIncomplete = true;
                     break;
+                }
                 case "security_transfer_out":
                 {
                     var quantity = trade.Quantity ?? 0;

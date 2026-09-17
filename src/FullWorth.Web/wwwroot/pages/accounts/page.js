@@ -35,6 +35,9 @@ const dialog = (html, options = {}) => ctx.dialog(html, options);
 const empty = (el, message) => ctx.empty(el, message);
 const acctId = last4 => last4 ? ` · ${maskIdentifier(last4)}` : '';
 
+// Welches Depot zu welchem Konto gehoert - gefuellt beim Laden der Liste.
+let depotByAccount=new Map();
+
 // Mirrors the server's gate on PUT api/accounts/{id}/balance: an account without a bank connection
 // keeps its balance by hand. The UI used to ask for provider === 'manual' alone, so an imported
 // account - the one kind that has no connection AND no way to be synced - had no way to be given a
@@ -122,8 +125,11 @@ function accountRow(x,groups){
   // auch den Unterschied, den man sonst sucht: die Summe ueber dieser Liste enthaelt den Wert, das
   // Nettovermoegen zaehlt ihn als Depot - dasselbe Geld, einmal, nur an zwei Stellen benannt.
   // accountType==='securities' schreibt genau eine Stelle (die FinTS-Depotuebernahme).
+  // Unter dem Kurswert steht, was er wert GEWORDEN ist. Ohne Einstand wird das gesagt, nicht
+  // verschwiegen und schon gar nicht als 0 % behauptet.
   const depotLine=x.accountType==='securities'
     ? `<div class="amount-meaning" title="${esc(get('accounts.depotValueHint'))}">${esc(get('accounts.depotValue'))}</div>`
+      +portfolioGainLine(depotByAccount.get(x.id),x.currency)
     : '';
   // A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency. The
   // headline shows one of them, so the others are listed here - they used to be invisible entirely.
@@ -229,6 +235,28 @@ async function openDepotDialog(account){
   await show();dlg.showModal();
 }
 
+// Der Gewinn eines ganzen Depots, wie er in einer Kontozeile Platz hat.
+//
+// Drei Faelle, drei Antworten: kein Depot (nichts), kein Einstand (gesagt), Einstand da (Betrag und
+// Prozent). Die Prozentzahl entsteht erst hier - der Server liefert Einstand und Ergebnis roh, weil
+// nur die Anzeige weiss, ob sie eine zeigen will.
+export function portfolioGainLine(portfolio,fallbackCurrency){
+  if(!portfolio)return '';
+  const currency=portfolio.currency||fallbackCurrency||'EUR';
+  if(portfolio.costBasis==null||portfolio.unrealizedResult==null)
+    return `<div class="amount-meaning">${esc(get('accounts.depotGainUnknown'))}</div>`;
+
+  const result=Number(portfolio.unrealizedResult);
+  const cost=Number(portfolio.costBasis);
+  const sign=result>0?'+':'';
+  const tone=result>0?' positive':result<0?' negative':'';
+  // Unvollstaendig heisst: die Zahl stimmt fuer das, was sie kennt - und sagt, dass sie nicht alles
+  // kennt. Sie zu verschweigen waere so falsch wie sie fuer vollstaendig auszugeben.
+  const partial=portfolio.gainIncomplete?' '+esc(get('accounts.depotGainPartial')):'';
+  const percent=cost>0?` · ${sign}${nf((result/cost)*100)} %`:'';
+  return `<div class="amount-meaning${tone}">${sign}${esc(money(result,currency))}${esc(percent)}${partial}</div>`;
+}
+
 // Gewinn UND Prozent - die Prozentzahl ist die, nach der eigentlich gefragt wird.
 function gainLine(result,cost,currency){
   const sign=result>0?'+':'';
@@ -295,7 +323,14 @@ const accountSearchText=a=>[a.displayName,a.providerDisplayName,a.institutionNam
   .filter(Boolean).join(' ').toLowerCase();
 
 async function loadAccountsView(){
-  const [accounts,groups]=await Promise.all([api('api/accounts'),api('api/account-groups').catch(()=>[])]);
+  // Die Depots kommen mit: ihr Gewinn gehoert in die Zeile, und die Liste liefert ihn fuer alle auf
+  // einmal. Faellt der Aufruf aus, fehlt die Prozentzahl - die Kontenliste steht trotzdem.
+  const [accounts,groups,portfolios]=await Promise.all([
+    api('api/accounts'),
+    api('api/account-groups').catch(()=>[]),
+    api('api/investments/portfolios').catch(()=>[])
+  ]);
+  depotByAccount=new Map((portfolios||[]).filter(item=>item.accountId).map(item=>[item.accountId,item]));
   // Die Liste entsteht außerhalb des Dokuments und wird erst eingesetzt, wenn sie fertig ist -
   // samt Symbolen und Knöpfen. Vorher wurden die Zeilen gezeichnet und danach geschmückt, und jede
   // wuchs dabei von 73 auf 125 Pixel; die Seite sprang um 0,32.

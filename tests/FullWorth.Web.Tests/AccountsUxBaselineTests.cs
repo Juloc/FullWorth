@@ -493,4 +493,53 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("tradeType:'buy'", js);
         Assert.Contains("/trades", js);
     }
+
+    /// <summary>
+    /// Gewinn und Prozent stehen dort, wo das Depot steht - auf beiden Seiten.
+    ///
+    /// "Wo ist meine Prozentzahl fuer Gesamtgewinn und -verlust? Auf Konto- und Vermoegensseite will
+    /// ich es sehen." Bis dahin trug die Kontozeile nur den Kurswert und die Vermoegensseite den
+    /// blossen NAMEN des Depots.
+    ///
+    /// Beide holen dieselbe Depotliste, und die bringt Einstand und unrealisiertes Ergebnis roh mit.
+    /// Die Prozentzahl entsteht in der Anzeige, weil nur sie weiss, ob sie eine zeigen will.
+    /// </summary>
+    [Fact]
+    public async Task BothTheAccountListAndTheWealthPageShowTheDepotGainWithItsPercentage()
+    {
+        var accounts = await GetAsync("/pages/accounts/page.js");
+        var wealth = await GetAsync("/pages/networth/page.js");
+
+        // Die Kontenliste holt die Depots mit - ein Aufruf, nicht einer je Depot.
+        Assert.Contains("api('api/investments/portfolios')", accounts);
+        Assert.Contains("function portfolioGainLine", accounts);
+        Assert.Contains("(result/cost)*100", accounts);
+
+        // Und die Vermoegensseite zeigt ihn je Depot UND in der Summe darueber.
+        Assert.Contains("function investmentGain", wealth);
+        Assert.Contains("function gainLine", wealth);
+        Assert.Contains("(result / cost) * 100", wealth);
+    }
+
+    /// <summary>
+    /// Ein Depot ohne Einstand behauptet keine 0 % - auf keiner der beiden Seiten.
+    ///
+    /// Dieselbe Regel wie beim Depotstand ohne Bestaende und bei der Position ohne Einstand: ein
+    /// fehlender Wert ist unvollstaendig, nie null. Und eine Summe, der ein Depot fehlt, sagt das,
+    /// statt sich stillschweigend zu klein zu machen.
+    /// </summary>
+    [Fact]
+    public async Task AMissingCostBasisIsNamedOnBothPagesAndNeverShownAsZeroPercent()
+    {
+        var accounts = await GetAsync("/pages/accounts/page.js");
+        var wealth = await GetAsync("/pages/networth/page.js");
+
+        Assert.Contains("portfolio.costBasis==null||portfolio.unrealizedResult==null", accounts);
+        Assert.Contains("accounts.depotGainUnknown", accounts);
+        Assert.Contains("accounts.depotGainPartial", accounts);
+
+        Assert.Contains("gain.costBasis == null || gain.unrealizedResult == null", wealth);
+        Assert.Contains("gainUnknown", wealth);
+        Assert.Contains("gainPartial", wealth);
+    }
 }

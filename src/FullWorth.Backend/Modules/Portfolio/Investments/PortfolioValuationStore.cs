@@ -12,7 +12,7 @@ public sealed record PortfolioSettingsRow(
 public sealed record PortfolioTradeRow(
     Guid Id, Guid? SecurityId, string TradeType, DateOnly TradeDate, DateOnly? SettlementDate, decimal? Quantity,
     decimal? Price, decimal? GrossAmount, decimal Amount, string Currency, decimal Fees, decimal Taxes,
-    decimal WithholdingTax, string Source, DateTimeOffset CreatedAt);
+    decimal WithholdingTax, string Source, DateTimeOffset CreatedAt, decimal? CostPrice = null);
 
 /// <summary>Ein Wertpapier, so weit die Bewertung es benennt.</summary>
 public sealed record PortfolioSecurityRow(Guid Id, string Name, string AssetType, string Currency);
@@ -122,7 +122,7 @@ VALUES (@id,@space,@portfolio,@security,@type,@tradeDate,@settlement,@quantity,@
         var connection = await RawSql.OpenAsync(db, ct);
         var sql = """
 SELECT "Id","SecurityId","TradeType","TradeDate","SettlementDate","Quantity","Price","GrossAmount","Amount",
-       "Currency","Fees","Taxes","WithholdingTax","Source","CreatedAt"
+       "Currency","Fees","Taxes","WithholdingTax","Source","CreatedAt","CostPrice"
 FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@to
 """
             + (securityId.HasValue ? " AND \"SecurityId\"=@security" : string.Empty)
@@ -143,7 +143,7 @@ FROM "InvestmentTrades" WHERE "PortfolioId"=@portfolio AND "TradeDate"<=@to
                 RawSql.Decimal(reader, "Amount"), RawSql.String(reader, "Currency"),
                 RawSql.Decimal(reader, "Fees"), RawSql.Decimal(reader, "Taxes"),
                 RawSql.Decimal(reader, "WithholdingTax"), RawSql.String(reader, "Source"),
-                RawSql.Timestamp(reader, "CreatedAt")));
+                RawSql.Timestamp(reader, "CreatedAt"), RawSql.NullableDecimal(reader, "CostPrice")));
         return rows;
     }
 

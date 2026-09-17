@@ -634,7 +634,7 @@ public sealed class IngFinTsService(
             holdings.Select(h => new FinTsHoldingSnapshotDto(
                 HoldingKey(h), h.Name, h.Isin, h.Wkn,
                 h.PriceCurrency ?? h.MarketValueCurrency ?? depot.Currency,
-                h.Quantity, h.Price, h.PriceDate, h.MarketValue, h.Exchange)).ToArray()), ct);
+                h.Quantity, h.Price, h.PriceDate, h.MarketValue, h.Exchange, h.CostPrice)).ToArray()), ct);
         return session;
     }
 

@@ -905,7 +905,8 @@
     "tradeFees": "Gebühren",
     "tradeTotal": "Kaufpreis",
     "tradeSaved": "Kauf gespeichert",
-    "depotGainUnknown": "Einstand fehlt"
+    "depotGainUnknown": "Einstand fehlt",
+    "depotGainPartial": "(unvollständig)"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
