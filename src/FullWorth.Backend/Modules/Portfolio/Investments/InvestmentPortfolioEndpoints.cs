@@ -1,4 +1,5 @@
 using FullWorth.Backend.Security;
+using Microsoft.Extensions.Options;
 
 namespace FullWorth.Backend.Modules.Portfolio;
 
@@ -25,6 +26,7 @@ public static class InvestmentPortfolioEndpoints
         var group = app.MapGroup("/api/investments").WithTags("Investments");
         group.MapPut("/portfolios/{portfolioId:guid}/settings", PutPortfolioSettings);
         group.MapPost("/portfolios/{portfolioId:guid}/trades", CreateTrade);
+        group.MapPost("/portfolios/{portfolioId:guid}/backfill-prices", BackfillPrices);
         group.MapGet("/portfolios/{portfolioId:guid}/overview", PortfolioOverview);
         group.MapGet("/benchmarks", ListBenchmarks);
         group.MapPost("/benchmarks", CreateBenchmark);
@@ -111,6 +113,59 @@ public static class InvestmentPortfolioEndpoints
             // Dieselbe Regel steht als Auslöser in der Datenbank - sie faengt auch den gleichzeitigen Fall.
             return Results.Conflict(new { error = exception.Message });
         }
+    }
+
+    /// <summary>
+    /// Holt fuer jedes Wertpapier mit aktuellem Bestand im Depot Kurse der letzten
+    /// <see cref="MarketDataOptions.BackfillDays"/> Tage nach. Wer im Depot steckt, ist bereits an
+    /// einer Stelle berechnet - in der Bewertung ueber <see cref="PortfolioValuationService.CalculateAsync"/>
+    /// - deshalb keine zweite Bestandsermittlung parallel dazu pflegen.
+    ///
+    /// Ein einzelnes Wertpapier darf den Nachtrag der uebrigen nicht abbrechen: jeder Aufruf steht in
+    /// seinem eigenen try/catch, und das Ergebnis nennt fuer jedes Wertpapier einen Zustand statt nur
+    /// Erfolg oder Misserfolg des ganzen Depots.
+    /// </summary>
+    private static async Task<IResult> BackfillPrices(
+        Guid portfolioId, Guid fullWorthSpaceId, CurrentUserContext currentUser, InvestmentStore investments,
+        PortfolioValuationStore store, PortfolioValuationService valuation, SecurityMarketDataService marketData,
+        IOptionsMonitor<MarketDataOptions> marketDataOptions, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        if (!await investments.CanManageAsync(userId, fullWorthSpaceId, ct))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var portfolio = await store.FindPortfolioAsync(fullWorthSpaceId, portfolioId, ct);
+        if (portfolio is null) return Results.NotFound();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = today.AddDays(-Math.Max(0, marketDataOptions.CurrentValue.BackfillDays));
+
+        var calculation = await valuation.CalculateAsync(portfolio, today, ct);
+        var results = new List<object>();
+        foreach (var position in calculation.Positions)
+        {
+            try
+            {
+                var refreshed = await marketData.RefreshAsync(fullWorthSpaceId, position.SecurityId, from, today, ct);
+                // RefreshAsync unterscheidet nicht selbst zwischen "kein Symbol ermittelbar" und
+                // "Anbieter lieferte keine brauchbaren Kurse" - beides landet bei Stored=0, obwohl ein
+                // passender Anbieter konfiguriert war (ProviderAvailable=true). CanHandle hat vorher
+                // schon Wertpapiere ohne Ticker/ISIN aussortiert (die zaehlen als provider_unavailable),
+                // also bleibt fuer diesen Fall nur die Symbolaufloesung selbst als ehrlichste Deutung.
+                var state = !refreshed.ProviderAvailable ? "provider_unavailable"
+                    : refreshed.Stored > 0 ? "ok"
+                    : "no_symbol";
+                results.Add(new { securityId = position.SecurityId, name = position.Name, stored = refreshed.Stored, state });
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                results.Add(new { securityId = position.SecurityId, name = position.Name, stored = 0, state = "error" });
+            }
+        }
+        return Results.Ok(results);
     }
 
     private static async Task<IResult> PortfolioOverview(
