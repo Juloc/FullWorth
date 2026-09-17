@@ -101,11 +101,20 @@
 
   // Ersetzt readableTextOn (app/appearance.js) und die zweite Kopie in app/boot.js. Die
   // WCAG-Relativluminanz war in beiden schon richtig - hier nur an einer Stelle statt an zweien.
+  //
+  // Die Schwelle war es nicht: 0,42 war der unveraendert uebernommene alte Wert, und der
+  // Gleichstand zwischen Kontrast-gegen-Schwarz ((Y+0,05)/0,05) und Kontrast-gegen-Weiss
+  // (1,05/(Y+0,05)) liegt rechnerisch bei Y≈0,179, nicht bei 0,42 - (Y+0,05)^2 = 1,05*0,05, beide
+  // Kontraste dort exakt 4,58:1. Scheibe 14s Abnahme-Stichprobe hat das gefunden: der dunkle Akzent
+  // eines mittelgruenen Sitzes (Ziel-L 0,72) landet bei Y≈0,395, bekam mit der alten Schwelle Weiss
+  // und lieferte 2,36:1 Kontrast - unter dem 3:1-Minimum fuer fetten Buttontext. Schwarz waere dort
+  // 8,9:1 gewesen. Mit 0,179 waehlt jede Flaeche zwischen 0,179 und 0,42 jetzt die tatsaechlich
+  // kontrastreichere Farbe statt der zufaellig noch ausreichenden.
   function onColor(hex) {
     const [r, g, b] = hexToRgb01(hex);
     const channel = value => value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
     const luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-    return luminance > 0.42 ? '#151719' : '#ffffff';
+    return luminance > 0.179 ? '#151719' : '#ffffff';
   }
 
   // ---------------------------------------------------------------------------------------------

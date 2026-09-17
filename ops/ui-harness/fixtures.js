@@ -49,6 +49,41 @@
       { id: 'c3', name: 'Gehalt', kind: 'income', parentId: null, isArchived: false, icon: 'salary' },
       { id: 'c4', name: 'Supermarkt mit sehr langem Namen zum Umbruchtest', kind: 'expense', parentId: 'c1', isArchived: false, icon: 'groceries' }
     ],
+    // Merchant registry (#157/Scheibe 14 gap - the page rendered only its empty state here before).
+    // One merchant with two aliases (the everyday case) and one with none, so both the chip row and
+    // the bare "+ Alias" affordance are on screen at once.
+    'merchants': [
+      { id: 'm1', name: 'REWE', logoAssetPath: null, aliases: [
+        { id: 'ma1', normalizedAlias: 'rewe markt gmbh' }, { id: 'ma2', normalizedAlias: 'rewe sagt danke' }
+      ] },
+      { id: 'm2', name: 'Spotify', logoAssetPath: null, aliases: [
+        { id: 'ma3', normalizedAlias: 'paypal *spotify' }
+      ] },
+      { id: 'm3', name: 'Deutsche Bahn', logoAssetPath: null, aliases: [] }
+    ],
+    // Categorization rules (#157/Scheibe 14 gap). One enabled rule with a pattern and an amount window,
+    // one disabled rule (so the dimmed "rule-off" row is visible), one that both marks a transfer AND
+    // stops further processing - the two badges together are the case the summary line has to render.
+    'categorization-rules': [
+      { id: 'r1', name: 'Supermärkte', isEnabled: true, priority: 100, matchField: 'counterparty', matchMode: 'contains',
+        pattern: 'REWE', direction: 'expense', minAmount: null, maxAmount: null, merchantCategoryCode: null,
+        categoryId: 'c1', markAsTransfer: false, stopProcessing: false },
+      { id: 'r2', name: 'Kleinbeträge Bar', isEnabled: false, priority: 200, matchField: 'any', matchMode: 'contains',
+        pattern: '', direction: 'expense', minAmount: 0, maxAmount: 15, merchantCategoryCode: null,
+        categoryId: 'c2', markAsTransfer: false, stopProcessing: false },
+      { id: 'r3', name: 'Eigene Konten', isEnabled: true, priority: 10, matchField: 'counterparty', matchMode: 'equals',
+        pattern: 'Tagesgeld mit langem Namen', direction: 'any', minAmount: null, maxAmount: null,
+        merchantCategoryCode: null, categoryId: 'c3', markAsTransfer: true, stopProcessing: true }
+    ],
+    // Audit log (#157/Scheibe 14 gap). Newest first, one system-triggered row (no actorUserId) and one
+    // with an entity id, so both branches of the row/meta formatting are on screen.
+    'audit': [
+      { id: 'ev5', actorUserId: 'u1111111-1111-1111-1111-111111111111', action: 'category.rule.created', entityType: 'CategorizationRule', entityId: 'r3', occurredAt: '2026-09-17T18:20:00Z' },
+      { id: 'ev4', actorUserId: 'u1111111-1111-1111-1111-111111111111', action: 'budget.updated', entityType: 'Budget', entityId: 'b2', occurredAt: '2026-09-17T09:05:00Z' },
+      { id: 'ev3', actorUserId: null, action: 'bank_connection.synced', entityType: 'BankConnection', entityId: 'c5', occurredAt: '2026-09-16T06:00:00Z' },
+      { id: 'ev2', actorUserId: 'u1111111-1111-1111-1111-111111111111', action: 'contract.created', entityType: 'RecurringContract', entityId: 'k5', occurredAt: '2026-09-14T08:12:00Z' },
+      { id: 'ev1', actorUserId: 'u1111111-1111-1111-1111-111111111111', action: 'space.created', entityType: 'FullWorthSpace', entityId: SPACE, occurredAt: '2025-01-04T09:00:00Z' }
+    ],
     // Tagesendstaende fuer die Buchungsseite (#126). Der laengere Schluessel steht vor 'accounts',
     // weil die Fixtures per Teilzeichenkette in Einfuegereihenfolge getroffen werden.
     'accounts/daily-balances': [{"date":"2026-09-02","amount":19385.45,"currency":"EUR","incomplete":true},{"date":"2026-09-03","amount":19522.85,"currency":"EUR","incomplete":false},{"date":"2026-09-04","amount":19660.25,"currency":"EUR","incomplete":false},{"date":"2026-09-05","amount":19797.65,"currency":"EUR","incomplete":false},{"date":"2026-09-06","amount":19935.05,"currency":"EUR","incomplete":false},{"date":"2026-09-07","amount":20072.45,"currency":"EUR","incomplete":false},{"date":"2026-09-08","amount":20209.85,"currency":"EUR","incomplete":false},{"date":"2026-09-09","amount":20347.25,"currency":"EUR","incomplete":false},{"date":"2026-09-10","amount":20484.65,"currency":"EUR","incomplete":false},{"date":"2026-09-11","amount":20622.05,"currency":"EUR","incomplete":false},{"date":"2026-09-12","amount":20759.45,"currency":"EUR","incomplete":false},{"date":"2026-09-13","amount":20896.85,"currency":"EUR","incomplete":false},{"date":"2026-09-14","amount":21034.25,"currency":"EUR","incomplete":false},{"date":"2026-09-15","amount":21171.65,"currency":"EUR","incomplete":false}],
@@ -439,6 +474,28 @@
         cycle: 'yearly', nextExpectedDate: '2027-03-31', confidence: 0.72, occurrences: 3 }
     ],
     'notifications': [],
+    // Overview widgets (#157/Scheibe 14 gap): DashboardResult (AnalyticsService.cs) drives net-worth,
+    // available, income/expense and upcoming - without this key all four rendered their empty state.
+    // Numbers agree with the other wealth/* fixtures above so the page does not contradict itself.
+    'analytics/dashboard': {
+      currency: 'EUR', accounts: 21250.30, assets: 12000, liabilities: 5000, netWorth: 48250.30,
+      income: 3200, expenses: 1852.30, incomplete: true,
+      upcoming: [
+        { name: 'Stromvertrag', providerName: 'Stadtwerke', nextDueDate: '2026-10-01', amount: 78.5, currency: 'EUR' },
+        { name: 'Mobilfunk', providerName: 'Telekom', nextDueDate: '2026-09-20', amount: 29.99, currency: 'EUR' },
+        { name: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG', providerName: 'WEG AM KOENIGSTRAESSLE 1 5 VERTR D PPG', nextDueDate: '2026-10-01', amount: 182, currency: 'EUR' }
+      ]
+    },
+    // Income/expense-by-period widget (only reached when a widget is configured with a period) and the
+    // /analytics page itself. One incomplete month, so the fx-incomplete marker is reachable too.
+    'analytics/overview': {
+      currency: 'EUR', income: 3200, expenses: 1852.30, incomplete: false,
+      byMonth: [
+        { month: '2026-04', income: 3100, expenses: 1790 }, { month: '2026-05', income: 3100, expenses: 1705 },
+        { month: '2026-06', income: 3200, expenses: 1988 }, { month: '2026-07', income: 3200, expenses: 1640 },
+        { month: '2026-08', income: 3200, expenses: 1902 }, { month: '2026-09', income: 3200, expenses: 1852.30 }
+      ]
+    },
     // One EUR house and one huge IDR asset: the old ratio-of-native-values split put nearly all of
     // manualAssets into 'other', because 5.000.000 IDR dwarfs 9.000 EUR as a bare number.
     'assets': [
@@ -575,6 +632,75 @@
       ]
     },
     'insights': [],
+
+    // ---- Steuerassistent (#157/Scheibe 14 gap: the page never got past its own gate here) ----
+    // Both toggles on, so the gate opens straight into the populated overview/review tabs.
+    'tax/settings': {
+      enabled: true, countryCode: 'DE', defaultTaxYear: 2026, automaticAnalysisEnabled: true,
+      aiAnalysisEnabled: false, analyzeTransactions: true, analyzePurchases: true, analyzeDocuments: true,
+      showTaxNotifications: true
+    },
+    'tax/profile/settings': { assistantEnabled: true },
+    // Fixed year 2026 (today in this fixture set): the frontend keys year-scoped calls by segment, so
+    // an arbitrary year would need its own key - see settings.defaultTaxYear above, which is why the
+    // page lands on exactly this year on first render.
+    'tax/years/2026/summary': { suggestedAmount: 842.30, confirmedAmount: 318.50, needsReviewCount: 2, needsDocumentCount: 1 },
+    'tax/years/2026/review': {
+      ready: false,
+      checks: [
+        { severity: 'warn', count: 2, message: 'Zwei Hinweise warten noch auf eine Entscheidung.' },
+        { severity: 'warn', count: 1, message: 'Ein bestätigter Hinweis hat noch keinen Beleg.' },
+        { severity: 'ok', count: 1, message: 'Ein Hinweis ist bestätigt und vollständig.' }
+      ]
+    },
+    // Four candidates covering the states the row and the badges branch on: confirmed with a document,
+    // needing review, needing a document (and therefore eligible for the upload button), and one with
+    // a reduced eligible share so the "82 % · X → Y" line renders too.
+    'tax/candidates': [
+      { id: 'tc1', sourceType: 'purchase', sourceTitle: 'Handwerkerrechnung Heizung', sourceDate: '2026-03-14',
+        grossAmount: 420, eligiblePercentage: 100, eligibleAmount: 420, currency: 'EUR',
+        taxCategoryName: 'Handwerkerleistungen', taxCategoryCode: 'craft', confidence: 0.91,
+        status: 'confirmed', hasDocument: true, explanation: 'Lohnanteil einer Rechnung für Wartungsarbeiten an der Heizung.' },
+      { id: 'tc2', sourceType: 'transaction', sourceTitle: 'Spende Kinderhilfswerk', sourceDate: '2026-05-02',
+        grossAmount: 100, eligiblePercentage: 100, eligibleAmount: 100, currency: 'EUR',
+        taxCategoryName: 'Spenden', taxCategoryCode: 'donation', confidence: 0.62,
+        status: 'needs_review', hasDocument: false, explanation: 'Überweisung an eine als gemeinnützig bekannte Organisation.' },
+      { id: 'tc3', sourceType: 'purchase_item', sourceTitle: 'Fachliteratur Steuerrecht', sourceDate: '2026-06-20',
+        grossAmount: 64.90, eligiblePercentage: 100, eligibleAmount: 64.90, currency: 'EUR',
+        taxCategoryName: 'Fortbildung', taxCategoryCode: 'training', confidence: 0.58,
+        status: 'needs_document', hasDocument: false, explanation: 'Fachbuch, thematisch der beruflichen Fortbildung zuordenbar.' },
+      { id: 'tc4', sourceType: 'purchase', sourceTitle: 'Home-Office Schreibtischstuhl', sourceDate: '2026-02-11',
+        grossAmount: 249, eligiblePercentage: 82, eligibleAmount: 204.18, currency: 'EUR',
+        taxCategoryName: 'Arbeitsmittel', taxCategoryCode: 'equipment', confidence: 0.77,
+        status: 'confirmed', hasDocument: true, explanation: 'Überwiegend beruflich genutzt, privater Anteil abgezogen.' }
+    ],
+
+    // ---- Coach (spending review dock + chat; #157/Scheibe 14 gap for the review/summary panel) ----
+    // One conversation with one finished exchange, so the thread is not empty on first paint.
+    'coach/conversations': [
+      { id: 'conv1', title: 'Sparpotenzial im September', createdAt: '2026-09-15T08:00:00Z', updatedAt: '2026-09-17T09:00:00Z' }
+    ],
+    'coach/conversations/conv1': {
+      id: 'conv1',
+      messages: [
+        { role: 'User', text: 'Wie sieht mein Sparpotenzial diesen Monat aus?', facts: [] },
+        { role: 'Assistant', mode: 'Local',
+          text: 'Du hast diesen Monat bisher 480 € für variable Ausgaben verwendet, rund 140 € weniger als im Schnitt der letzten sechs Monate.',
+          facts: [{ label: 'Variable Ausgaben', value: '480 €' }, { label: 'Ø letzte 6 Monate', value: '620 €' }] }
+      ]
+    },
+    'coach/models': {
+      configured: true, provider: 'openai', defaultModel: 'gpt-5-mini',
+      models: [{ id: 'gpt-5-mini', label: 'GPT-5 mini' }, { id: 'gpt-5', label: 'GPT-5' }]
+    },
+    'spending-reviews/summary': {
+      reviewCoverage: 0.42, worthItScore: 0.68, positiveAmount: 620.50, negativeAmount: 184.20, currency: 'EUR',
+      highSpendPositive: [{ label: 'Konzerttickets' }], negativeOpportunities: [{ label: 'Abo, kaum genutzt' }]
+    },
+    'spending-reviews/recent': [
+      { transactionId: 't1', sentiment: 'Positive', reasons: ['good_value'], note: null },
+      { transactionId: 't3', sentiment: 'Negative', reasons: ['impulse'], note: 'Spontankauf am Bahnhof' }
+    ],
 
     // ---- Altersvorsorge (bAV) ----
     'pension/overview': {

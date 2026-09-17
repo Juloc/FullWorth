@@ -67,7 +67,28 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         ("/transactions",    0.0,    0.0), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
         ("/contracts",       0.0,    0.0), // 0.000 / 0.000   nichts
         ("/settings",        0.0,    0.0), // 0.000 / 0.003   Überschrift bricht am Telefon um
-        ("/coach",           0.0,    0.0)  // 0.000 / 0.003   derselbe Kopf wie oben
+        // Scheibe 14 gab /coach zum ersten Mal eine echte Fixture (Konversation, Ausgaben-Review) statt
+        // ihres Leerzustands - der alte 0,000-Eintrag maß also nie die echte Seite. Über 13 Läufe lag
+        // der Sprung zwischen 0,000 (er passt oft in ein Bild) und 0,020 / 0,028 (Chat-Antwort und
+        // Review-Karte kommen manchmal erst im nächsten Bild) - dieselbe Kopfleiste wie oben trägt
+        // ihren Teil bei, der Rest ist die neu sichtbare Chat-/Review-Fläche.
+        ("/coach",           0.03,   0.04), // 0.000-0.020 / 0.000-0.028   Chat-Antwort + Review-Karte
+        // Ab hier neu in Scheibe 14: erst mit echten Fixtures (ops/ui-harness/fixtures.js) gemessen,
+        // vorher zeigte die Harness hier nur den Leerzustand und ein Sprung dort hätte nichts bedeutet.
+        // admin: über 13 Läufe stabil bimodal - entweder 0,000 oder genau der Wert unten, nie dazwischen
+        // und nie darüber (die fünf parallelen Aufrufe von refresh() landen mal im selben, mal im
+        // nächsten Bild).
+        ("/admin",           0.102,  0.095), // 0.000/0.102 · immer 0.095   Nutzerliste + Instanzeinstellungen laden parallel
+        ("/audit",           0.0,    0.0),   // 0.000 / 0.000   nichts
+        ("/merchants",       0.0,    0.0),   // 0.000 / 0.000   nichts
+        ("/rules",           0.0,    0.0),   // 0.000 / 0.000   nichts
+        // tax: die unruhigste Messung hier. Übersicht, Jahresprüfung und Kandidatenliste laden parallel;
+        // über 13 Läufen lag der Sprung zwischen 0,000, ~0,057 (ein Bild verzögert) und einmal 0,420 /
+        // zweimal ~0,380 (mehrere der parallelen Anzeigen fielen in ein späteres Bild). Das ist kein
+        // Ergebnis dieser Fixtures, sondern eine bestehende Eigenschaft der Seite - Budget bewusst mit
+        // Reserve über dem schlechtesten gemessenen Wert eingefroren statt die Ursache hier zu jagen
+        // (das wäre Scheibe 11-13-Arbeit); siehe Abnahmebericht für den Befund.
+        ("/tax",             0.46,   0.42)
     ];
 
     public static TheoryData<string, bool> Pages()

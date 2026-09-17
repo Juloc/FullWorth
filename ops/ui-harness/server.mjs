@@ -61,6 +61,15 @@ async function serveFile(res, path, injectInto) {
   res.end(body);
 }
 
+// Same reasoning as instanceSettings below: the providers form writes, so the fixture has to
+// remember what it wrote back, or a save would look silently reverted on the next load. One provider
+// already configured (Google), one untouched (Apple) - the two shapes the form has to render.
+const externalProviders = {
+  googleClientId: '123456789-abcdefghijklmnop.apps.googleusercontent.com',
+  googleClientSecretStored: true,
+  appleServiceId: '', appleTeamId: '', applePrivateKeyId: '', applePrivateKeyStored: false
+};
+
 // The settings panel writes, so its fixture has to remember. Module scope, not per request.
 const instanceSettings = [
   { key: 'EnableBanking:ApplicationName', section: 'enableBanking', label: 'Anwendungsname', hint: 'So heißt diese Installation gegenüber Enable Banking und den Banken.', kind: 'text', value: 'FullWorth', stored: false, source: 'default', readOnly: false },
@@ -187,9 +196,24 @@ createServer(async (req, res) => {
       ];
       res.writeHead(200, { 'content-type': 'application/json' });
 
-      // The two panels that are driven entirely by their server response. Without stubs they would
+      // The three panels that are driven entirely by their server response. Without stubs they would
       // fall through to the user list below and render as an empty box, which is exactly the kind of
       // "looks fine, is broken" this harness exists to catch.
+      if (path === '/auth/admin/external-providers') {
+        if (req.method === 'PUT') {
+          const body = JSON.parse(writeBody || '{}');
+          externalProviders.googleClientId = body.googleClientId || '';
+          if (body.googleClientSecret !== null && body.googleClientSecret !== undefined)
+            externalProviders.googleClientSecretStored = Boolean(body.googleClientSecret);
+          externalProviders.appleServiceId = body.appleServiceId || '';
+          externalProviders.appleTeamId = body.appleTeamId || '';
+          externalProviders.applePrivateKeyId = body.applePrivateKeyId || '';
+          if (body.applePrivateKey !== null && body.applePrivateKey !== undefined)
+            externalProviders.applePrivateKeyStored = Boolean(body.applePrivateKey);
+        }
+        return res.end(JSON.stringify(externalProviders));
+      }
+
       if (path.startsWith('/auth/admin/instance-settings')) {
         if (req.method === 'PUT') {
           // Stored, not echoed. A stub that always answered with the same fixture would show an empty
