@@ -1,5 +1,6 @@
 import { money, converted, maskIdentifier, incompleteMarker } from '../../components/money.js';
 import { balanceMeaningLine } from '../../components/balance-meaning.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { state } from '../../core/state.js';
 import { emptyRow } from '../../components/empty.js';
 import {
@@ -172,7 +173,7 @@ function accountRow(x,groups){
     ? ` · ${esc(x.providerDisplayName)}`
     : '';
   const row=document.createElement('div');row.className='row';
-  const moreBtn=`<button type="button" class="icon-button account-more" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
+  const moreBtn=`<button type="button" class="${buttonClass(ButtonRole.Icon,'account-more')}" data-account-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button>`;
   row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.displayName||x.institutionName)}</div><div class="row-sub">${esc(x.institutionName)}${acctId(x.ibanLast4)}<span class="row-sub-wide">${providerName}${kind?` · ${esc(kind)}`:''}${dataAsOf}${balanceSource}</span>${needsBalance}${duplicateNote}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${nativeAmt}</div>${meaningLine}${depotLine}${walletsLine}${convertedAmt}</div>${moreBtn}</div>`;
   row.querySelector('[data-account-more]')?.addEventListener('click',()=>openAccountActionsDialog(x,groups));
   // Drill-down (UX rework §3): the account row itself opens that account's bookings; management
@@ -235,7 +236,7 @@ async function openDepotDialog(account){
     // data-portfolio traegt keinen eigenen Klick-Handler: der globale Lauscher in
     // investment-performance-ui.js faengt ihn ab, schliesst diesen Dialog (er ist der naechste
     // <dialog>-Vorfahr) und oeffnet an seiner Stelle den reichen Depot-Dialog mit Performance-Tab.
-    body.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(get('accounts.depotTotal'))}</div><div class="row-sub">${esc(get('accounts.depotPositions'))}: ${positions.length}</div></div><div class="amount">${money(Number(overview.totalValue||0),currency)}</div></div><div class="rows">${rows||emptyRow(get('accounts.depotEmpty'))}</div>${anyCost?'':`<p class="row-sub">${esc(get('accounts.depotNoCostBasis'))}</p>`}<div class="dialog-actions"><button type="button" class="ghost" data-portfolio="${esc(portfolio.id)}">${esc(get('accounts.depotHistory'))}</button><button type="button" data-add-trade${positions.length?'':' disabled'}>${esc(get('accounts.depotAddTrade'))}</button></div>`;
+    body.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(get('accounts.depotTotal'))}</div><div class="row-sub">${esc(get('accounts.depotPositions'))}: ${positions.length}</div></div><div class="amount">${money(Number(overview.totalValue||0),currency)}</div></div><div class="rows">${rows||emptyRow(get('accounts.depotEmpty'))}</div>${anyCost?'':`<p class="row-sub">${esc(get('accounts.depotNoCostBasis'))}</p>`}<div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-portfolio="${esc(portfolio.id)}">${esc(get('accounts.depotHistory'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-add-trade${positions.length?'':' disabled'}>${esc(get('accounts.depotAddTrade'))}</button></div>`;
 
     body.querySelector('[data-add-trade]').onclick=()=>openTradeDialog(portfolio,positions,currency,show);
   };
@@ -286,7 +287,7 @@ const nf=value=>new Intl.NumberFormat(state.lang==='de'?'de-DE':'en-US',{maximum
 // was drinliegt, und damit steht die Wertpapierkennung von vornherein richtig.
 function openTradeDialog(portfolio,positions,currency,done){
   const today=new Date().toISOString().slice(0,10);
-  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.depotAddTrade'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label><span>${esc(get('accounts.tradeSecurity'))}</span><select name="security" required>${positions.map(item=>`<option value="${esc(item.securityId)}">${esc(item.name)}</option>`).join('')}</select></label><label><span>${esc(get('accounts.tradeDate'))}</span><input type="date" name="date" value="${today}" max="${today}" required></label><label><span>${esc(get('accounts.tradeQuantity'))}</span><input type="number" name="quantity" step="0.00001" min="0.00001" required></label><label><span>${esc(get('accounts.tradePrice'))}</span><input type="number" name="price" step="0.0001" min="0" required></label><label><span>${esc(get('accounts.tradeFees'))}</span><input type="number" name="fees" step="0.01" min="0" value="0"></label><p class="row-sub" data-trade-total></p><div class="dialog-actions"><button type="button" class="ghost" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.depotAddTrade'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label><span>${esc(get('accounts.tradeSecurity'))}</span><select name="security" required>${positions.map(item=>`<option value="${esc(item.securityId)}">${esc(item.name)}</option>`).join('')}</select></label><label><span>${esc(get('accounts.tradeDate'))}</span><input type="date" name="date" value="${today}" max="${today}" required></label><label><span>${esc(get('accounts.tradeQuantity'))}</span><input type="number" name="quantity" step="0.00001" min="0.00001" required></label><label><span>${esc(get('accounts.tradePrice'))}</span><input type="number" name="price" step="0.0001" min="0" required></label><label><span>${esc(get('accounts.tradeFees'))}</span><input type="number" name="fees" step="0.01" min="0" value="0"></label><p class="row-sub" data-trade-total></p><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.save'))}</button></div></form>`);
 
   const form=dlg.querySelector('form');
   const total=dlg.querySelector('[data-trade-total]');
@@ -429,7 +430,7 @@ async function loadAccountsView(){
   await enhanceAccountsPresentation();
 }
 function openAccountNameDialog(account){
-  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('common.edit'))}: ${esc(get('accounts.name'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" value="${esc(account.displayName||account.institutionName||'')}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('common.edit'))}: ${esc(get('accounts.name'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" value="${esc(account.displayName||account.institutionName||'')}"></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
@@ -473,7 +474,7 @@ async function openAccountLinkDialog(account){
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.linkSame'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div>
     <p class="row-sub">${esc(get('accounts.linkSameHint'))}</p>
     <label>${esc(get('accounts.linkTarget'))}<select name="target">${opts}</select></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
@@ -499,7 +500,7 @@ async function unlinkAccount(account){
 }
 // Create or rename an account group (§8.1).
 async function openGroupDialog(existing){
-  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get(existing?'accounts.renameGroup':'accounts.newGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groupName'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get(existing?'accounts.renameGroup':'accounts.newGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groupName'))}<input name="name" required maxlength="120" value="${esc(existing?.name||'')}"></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get(existing?'common.save':'common.create'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
@@ -520,7 +521,7 @@ async function deleteGroup(g){
 // Move an account into a group (or "Ungrouped" = clear). Owner-gated server-side.
 function openMoveToGroupDialog(account,groups){
   const opts=[`<option value="">${esc(get('accounts.ungrouped'))}</option>`].concat((groups||[]).map(g=>`<option value="${g.id}"${account.groupId===g.id?' selected':''}>${esc(g.name)}</option>`)).join('');
-  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.moveToGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groups'))}<select name="group">${opts}</select></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.moveToGroup'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label>${esc(get('accounts.groups'))}<select name="group">${opts}</select></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
@@ -539,7 +540,7 @@ function openAddAccountDialog(){
 }
 function openManualAccountDialog(){
   const currency=state.space?.baseCurrency||'EUR';
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.addManual'))}</h2><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" placeholder="${esc(get('accounts.namePlaceholder'))}"></label><label>${esc(get('accounts.institution'))}<input name="institution" maxlength="120" placeholder="${esc(get('accounts.institutionPlaceholder'))}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('accounts.startBalance'))}<input name="balance" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.create'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.addManual'))}</h2><label>${esc(get('accounts.name'))}<input name="name" required maxlength="120" placeholder="${esc(get('accounts.namePlaceholder'))}"></label><label>${esc(get('accounts.institution'))}<input name="institution" maxlength="120" placeholder="${esc(get('accounts.institutionPlaceholder'))}"></label><label>${esc(get('purchases.currency'))}<input name="currency" value="${esc(currency)}" maxlength="3" required></label><label>${esc(get('accounts.startBalance'))}<input name="balance" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.create'))}</button></div></form>`);
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
     e.preventDefault();const fd=new FormData(e.currentTarget);
@@ -562,7 +563,7 @@ function openBalanceDialog(account){
   const todayIso=today.toISOString().slice(0,10);
   const asOf=account.latestBalance?.referenceDate?String(account.latestBalance.referenceDate).slice(0,10):todayIso;
   const note=account.latestBalance?.note||'';
-  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.updateBalance'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div><label>${esc(get('accounts.newBalance'))} (${esc(account.currency)})<input name="amount" type="number" step="0.01" inputmode="decimal" value="${current}" required></label><label>${esc(get('accounts.balanceAsOf'))}<input name="asOf" type="date" value="${esc(asOf)}" max="${esc(todayIso)}" required></label><label>${esc(get('accounts.balanceNote'))}<input name="note" type="text" maxlength="200" value="${esc(note)}" placeholder="${esc(get('accounts.balanceNoteHint'))}"></label><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.apply'))}</button></div></form>`);
+  const dlg=dialog(`<form class="dialog-card"><h2>${esc(get('accounts.updateBalance'))}</h2><div class="row-sub">${esc(account.displayName||account.institutionName)}</div><label>${esc(get('accounts.newBalance'))} (${esc(account.currency)})<input name="amount" type="number" step="0.01" inputmode="decimal" value="${current}" required></label><label>${esc(get('accounts.balanceAsOf'))}<input name="asOf" type="date" value="${esc(asOf)}" max="${esc(todayIso)}" required></label><label>${esc(get('accounts.balanceNote'))}<input name="note" type="text" maxlength="200" value="${esc(note)}" placeholder="${esc(get('accounts.balanceNoteHint'))}"></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('common.apply'))}</button></div></form>`);
   dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   dlg.querySelector('form').onsubmit=async e=>{
     e.preventDefault();const fd=new FormData(e.currentTarget);

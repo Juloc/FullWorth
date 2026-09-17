@@ -1,4 +1,5 @@
 import { secureFetch } from '../../security/secure-fetch.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 export function createAccessSetup(ctx, openBankingWizard) {
   const { api, bankApi, get, esc, toast, dialog, confirm: confirmAction, jsonBody } = ctx;
@@ -151,7 +152,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '<button type="button" class="setup-choice" data-mode="api"><strong>' + esc(get('aiAccess.apiKeyTitle')) + '</strong><span>' + esc(get('aiAccess.apiKeyHint')) + '</span></button>' +
           '<button type="button" class="setup-choice" data-mode="custom"><strong>' + esc(get('aiAccess.customTitle')) + '</strong><span>' + esc(get('aiAccess.customHint')) + '</span></button>' +
         '</div>' +
-        '<div class="dialog-actions"><button type="button" data-cancel>' + esc(get('common.cancel')) + '</button></div>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-cancel>' + esc(get('common.cancel')) + '</button></div>';
 
       step.querySelector('[data-cancel]').onclick = () => status?.configured ? showCurrent() : dlg.close();
       step.querySelector('[data-mode="codex"]').onclick = showCodex;
@@ -182,7 +183,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         ? '<div class="ai-codex-model">' +
             '<label>Modell<select data-codex-model><option value="">Automatisch</option></select></label>' +
             '<label>Anderes Modell<input data-codex-model-custom placeholder="z. B. 5.6 luna"></label>' +
-            '<button type="button" data-codex-model-save>Modell speichern</button>' +
+            '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-codex-model-save>Modell speichern</button>' +
             '<span class="row-sub" data-codex-model-status></span>' +
           '</div>'
         : '';
@@ -193,10 +194,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<p class="row-sub">' + esc(get('aiAccess.secretHidden')) + '</p>' +
         codexModelBlock +
         '<div class="dialog-actions">' +
-          '<button type="button" class="ghost danger" data-remove>' + esc(get('aiAccess.remove')) + '</button>' +
-          '<button type="button" data-test>' + esc(get('aiAccess.test')) + '</button>' +
-          '<button type="button" data-change>' + esc(get('aiAccess.change')) + '</button>' +
-          '<button type="button" data-done>' + esc(get('common.close')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Danger) + '" data-remove>' + esc(get('aiAccess.remove')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-test>' + esc(get('aiAccess.test')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-change>' + esc(get('aiAccess.change')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-done>' + esc(get('common.close')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-done]').onclick = () => dlg.close();
@@ -240,7 +241,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<label>' + esc(get('aiAccess.apiKey')) + '<input name="apiKey" type="password" autocomplete="off" required maxlength="8192"></label>' +
         '<label>' + esc(get('aiAccess.textModel')) + '<input name="textModel" value="' + esc(status?.textModel || '') + '" placeholder="gpt-5.6"></label>' +
         '<label>' + esc(get('aiAccess.visionModel')) + '<input name="visionModel" value="' + esc(status?.visionModel || '') + '" placeholder="gpt-5.6"></label>' +
-        '<div class="dialog-actions"><button type="button" data-back>' + esc(get('common.cancel')) + '</button><button type="submit">' + esc(get('aiAccess.saveAndTest')) + '</button></div></form>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('common.cancel')) + '</button><button type="submit" class="' + buttonClass(ButtonRole.Primary) + '">' + esc(get('aiAccess.saveAndTest')) + '</button></div></form>';
 
       const form = step.querySelector('form');
       step.querySelector('[data-back]').onclick = showChoices;
@@ -275,7 +276,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<label data-secret>' + esc(get('aiAccess.secret')) + '<input name="secret" type="password" autocomplete="off" maxlength="8192"></label>' +
         '<label>' + esc(get('aiAccess.textModel')) + '<input name="textModel" value="' + esc(status?.textModel || '') + '" placeholder="gpt-5.6"></label>' +
         '<label>' + esc(get('aiAccess.visionModel')) + '<input name="visionModel" value="' + esc(status?.visionModel || '') + '" placeholder="gpt-5.6"></label>' +
-        '<div class="dialog-actions"><button type="button" data-back>' + esc(get('common.cancel')) + '</button><button type="submit">' + esc(get('aiAccess.saveAndTest')) + '</button></div></form>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('common.cancel')) + '</button><button type="submit" class="' + buttonClass(ButtonRole.Primary) + '">' + esc(get('aiAccess.saveAndTest')) + '</button></div></form>';
 
       const form = step.querySelector('form');
       const auth = form.elements.authType;
@@ -322,7 +323,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<p class="row-sub">' + esc(get('aiAccess.codexExplain')) + '</p>' +
         '<div data-codex-status class="row-sub">' + esc(get('aiAccess.startingLogin')) + '</div>' +
         '<div data-codex-action class="codex-login-action"></div>' +
-        '<div class="dialog-actions"><button type="button" data-back>' + esc(get('common.cancel')) + '</button></div>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('common.cancel')) + '</button></div>';
 
       step.querySelector('[data-back]').onclick = () => {
         if (activeAiPoll) {
@@ -459,8 +460,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
           esc(get('cloudIntelligence.useCloud')) + '</label>' +
         '<p class="row-sub">' + esc(get('cloudIntelligence.localWins')) + '</p>' +
         '<p class="row-sub"><a href="/settings/intelligence" data-view-jump="intelligence">' + esc(get('cloudIntelligence.diagnostics')) + ' \u2197</a></p>' +
-        '<div class="dialog-actions"><button type="button" data-cancel>' + esc(get('common.cancel')) + '</button>' +
-        '<button type="button" data-save>' + esc(get('common.save')) + '</button></div>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-cancel>' + esc(get('common.cancel')) + '</button>' +
+        '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-save>' + esc(get('common.save')) + '</button></div>';
 
       step.querySelector('[data-cancel]').onclick = () => dlg.close();
       step.querySelector('[data-save]').onclick = async event => {
@@ -510,7 +511,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<h3>' + esc(get('onboarding.welcome')) + '</h3>' +
         '<p>' + esc(get('onboarding.intro')) + '</p>' +
         '<p class="row-sub">' + esc(get('onboarding.optional')) + '</p>' +
-        '<div class="dialog-actions"><button type="button" data-start>' + esc(get('onboarding.start')) + '</button></div>';
+        '<div class="dialog-actions"><button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-start>' + esc(get('onboarding.start')) + '</button></div>';
       step.querySelector('[data-start]').onclick = categoryStep;
     };
 
@@ -536,7 +537,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         choice('de') + choice('en') +
         (state?.canChange ? '' : '<p class="row-sub">' + esc(get('onboarding.categoriesLocked')) + '</p>') +
         '<div class="dialog-actions">' +
-          '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-next]').onclick = async event => {
@@ -564,10 +565,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
             : get('onboarding.notConfigured')) +
         '</div>' +
         '<div class="dialog-actions">' +
-          '<button type="button" class="ghost" data-setup>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-setup>' +
             esc(ai?.configured ? get('aiAccess.change') : get('onboarding.configure')) +
           '</button>' +
-          '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-setup]').onclick =
@@ -593,11 +594,11 @@ export function createAccessSetup(ctx, openBankingWizard) {
             : get('onboarding.notConfigured')) +
         '</div>' +
         '<div class="dialog-actions">' +
-          '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
-          '<button type="button" class="ghost" data-setup>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-setup>' +
             esc(configured ? get('bankingSetup.manage') : get('onboarding.configure')) +
           '</button>' +
-          '<button type="button" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-back]').onclick = aiStep;
@@ -635,8 +636,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
         option('yahoo', 'onboarding.marketDataYahoo', 'onboarding.marketDataYahooHint') +
         option('custom', 'onboarding.marketDataCustom', 'onboarding.marketDataCustomHint') +
         '<div class="dialog-actions">' +
-          '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
-          '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-back]').onclick = bankStep;
@@ -674,8 +675,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
           esc(get('cloudIntelligence.useCloud')) + '</label>' +
         '<p class="row-sub">' + esc(get('cloudIntelligence.shared')) + '</p>' +
         '<div class="dialog-actions">' +
-          '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
-          '<button type="button" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
+          '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
         '</div>';
 
       step.querySelector('[data-back]').onclick = marketDataStep;

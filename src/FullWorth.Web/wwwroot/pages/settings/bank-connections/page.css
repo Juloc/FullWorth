@@ -17,8 +17,8 @@
   #view-bank-connections .row{grid-template-columns:minmax(0,1fr);align-items:stretch}
   #view-bank-connections .row-side{width:100%;justify-content:flex-start}
   #view-bank-connections .row-side>.amount{flex:1 0 100%}
-  #view-bank-connections .row-side>.ghost{flex:1 1 10rem;min-width:0;max-width:100%;white-space:normal}
-  #view-bank-connections .row-side>.icon-button{flex:0 0 44px}
+  #view-bank-connections .row-side>.btn-secondary{flex:1 1 10rem;min-width:0;max-width:100%;white-space:normal}
+  #view-bank-connections .row-side>.btn-icon{flex:0 0 44px}
   #view-bank-connections .row-sub{overflow-wrap:break-word;word-break:normal}
 }
 /* Der Fehlerbericht, wenn die Zwischenablage nicht darf: lesbar, auswählbar, sonst nichts. */

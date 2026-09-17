@@ -8,6 +8,7 @@
 
 import { state } from '../../../core/state.js';
 import { emptyRow } from '../../../components/empty.js';
+import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 
 let ctx = null;
 
@@ -59,7 +60,7 @@ async function openRawResponses(connection){
     try{
       detail=await api('api/bank-connections/'+encodeURIComponent(connection.id)+'/raw-responses/'+encodeURIComponent(id));
     }catch(err){toast(err.message||get('common.error'));return}
-    body.innerHTML=`<p class="row-sub">${esc(detail.label||detail.kind)} · ${esc(dateTime(detail.capturedAt))}</p><textarea class="report-text" data-raw-text rows="16" readonly></textarea><div class="dialog-actions"><button type="button" class="ghost" data-raw-back>${esc(get('accounts.rawResponseBack'))}</button><button type="button" data-raw-copy>${esc(get('accounts.rawResponseCopy'))}</button></div>`;
+    body.innerHTML=`<p class="row-sub">${esc(detail.label||detail.kind)} · ${esc(dateTime(detail.capturedAt))}</p><textarea class="report-text" data-raw-text rows="16" readonly></textarea><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-raw-back>${esc(get('accounts.rawResponseBack'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-raw-copy>${esc(get('accounts.rawResponseCopy'))}</button></div>`;
     // Ueber value, nicht ueber das Markup: der Wortlaut der Bank darf nirgends als HTML landen.
     body.querySelector('[data-raw-text]').value=detail.payload||'';
     body.querySelector('[data-raw-back]').onclick=()=>showList();
@@ -126,7 +127,7 @@ function connectionRow(x){
   // weitergeben kann - und weitergeben will man ihn genau in diesem Moment.
   const errorCode=x.lastError?` · ${x.lastError}`:'';
   const row=document.createElement('div');row.className='row';row.dataset.connectionId=x.id;
-  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}${esc(errorCode)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${needsTan?`<button type="button" class="ghost" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="ghost" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="ghost" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="ghost" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="icon-button" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="icon-button" data-connection-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button></div>`;
+  row.innerHTML=`<div class="row-main"><div class="row-title">${esc(x.institutionName)}</div><div class="row-sub">${esc(get('accounts.validUntil'))}: ${dateTime(x.validUntil)} · ${esc(get('accounts.lastSync'))}: ${dateTime(x.lastSyncedAt)}${esc(expiry)}${esc(nextSync)}${esc(errorCode)}</div></div><div class="row-side"><div class="amount${warn?' negative':''}">${esc(label)}</div>${needsTan?`<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-enter-tan>${esc(get('accounts.enterTan'))}</button>`:needsSelection?`<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-finish-selection>${esc(get('bankingSetup.ingFinishSelection'))}</button>`:retryable?`<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-retry-sync>${esc(get('accounts.retrySync'))}</button>`:warn?`<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-reconnect>${esc(get('accounts.reconnect'))}</button>`:`<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-sync title="${esc(get('accounts.syncNow'))}" aria-label="${esc(get('accounts.syncNow'))}">⟳</button>`}<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-connection-more title="${esc(get('accounts.moreActions'))}" aria-label="${esc(get('accounts.moreActions'))}">⋯</button></div>`;
   row.querySelector('[data-connection-more]')?.addEventListener('click',()=>openConnectionActionsDialog(x));
   row.querySelector('[data-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
   row.querySelector('[data-retry-sync]')?.addEventListener('click',ev=>syncConnection(x.id,ev.currentTarget));
@@ -161,7 +162,7 @@ async function openSyncHistory(connection){
   }).join('');
   const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.syncHistory'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="rows">${rows||emptyRow(get('accounts.syncHistoryEmpty'))}</div>
     <textarea class="report-text" data-report-text rows="8" readonly hidden></textarea>
-    <div class="dialog-actions"><button type="button" class="ghost" data-copy-report>${esc(get('accounts.copyReport'))}</button></div></div>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-copy-report>${esc(get('accounts.copyReport'))}</button></div></div>`);
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.querySelector('[data-copy-report]').onclick=ev=>copyReport(connection,history,ev.currentTarget);
   dlg.showModal();
@@ -238,7 +239,7 @@ async function disconnectConnection(connection,button){
     <p class="row-sub">${esc(get('accounts.disconnectProviderHint'))}</p>
     <label class="check"><input type="radio" name="policy" value="keep" checked> <span>${esc(get('accounts.disconnectKeep'))}</span></label>
     <label class="check"><input type="radio" name="policy" value="delete"> <span>${esc(get('accounts.disconnectDelete'))}</span></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="danger">${esc(get('accounts.disconnect'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Danger)}">${esc(get('accounts.disconnect'))}</button></div></form>`);
   const form=dlg.querySelector('form');
   dlg.querySelector('[data-close]').onclick=()=>dlg.close();dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
   form.onsubmit=async e=>{
@@ -332,7 +333,7 @@ function openEnableBankingWizard(initialStatus,options={}){
     step.innerHTML=`<p>${esc(get('bankingSetup.privateIntro'))}</p>
       <p class="row-sub">${esc(get('bankingSetup.privateBoundary'))}</p>
       <label class="check"><input type="checkbox" data-ack> ${esc(get('bankingSetup.ack'))}</label>
-      <div class="dialog-actions"><button type="button" data-next disabled>${esc(get('auth.continue'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-next disabled>${esc(get('auth.continue'))}</button></div>`;
     const ack=step.querySelector('[data-ack]'),next=step.querySelector('[data-next]');
     ack.onchange=()=>next.disabled=!ack.checked;
     next.onclick=showSetupChoice;
@@ -345,7 +346,7 @@ function openEnableBankingWizard(initialStatus,options={}){
         <button type="button" class="setup-choice" data-auto><strong>${esc(get('bankingSetup.automaticTitle'))}</strong><span>${esc(get('bankingSetup.automaticHint'))}</span></button>
         <button type="button" class="setup-choice" data-manual><strong>${esc(get('bankingSetup.manualTitle'))}</strong><span>${esc(get('bankingSetup.manualHint'))}</span></button>
       </div>
-      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-back>${esc(get('onboarding.back'))}</button></div>`;
     step.querySelector('[data-auto]').onclick=showAutomatic;
     step.querySelector('[data-manual]').onclick=showCredentials;
     step.querySelector('[data-back]').onclick=showIntro;
@@ -360,7 +361,7 @@ function openEnableBankingWizard(initialStatus,options={}){
       <label>${esc(get('bankingSetup.environment'))}<select name="environment"><option value="PRODUCTION">${esc(get('bankingSetup.environmentProduction'))}</option><option value="SANDBOX">${esc(get('bankingSetup.environmentSandbox'))}</option></select></label>
       <label>${esc(get('bankingSetup.callback'))}<input readonly value="${esc(callback)}"></label>
       <p class="row-sub">${esc(get('bankingSetup.automaticSecurity'))}</p>
-      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button><button type="submit">${esc(get('bankingSetup.sendLogin'))}</button></div>
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-back>${esc(get('onboarding.back'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('bankingSetup.sendLogin'))}</button></div>
     </form>`;
     const form=step.querySelector('form');
     step.querySelector('[data-back]').onclick=showSetupChoice;
@@ -393,10 +394,10 @@ function openEnableBankingWizard(initialStatus,options={}){
   const showAutomaticFailure=registration=>{
     stopAutoPoll();
     const retry=registration?.canRetryVerification
-      ? `<button type="button" data-retry>${esc(get('bankingSetup.retryVerification'))}</button>`
-      : `<button type="button" data-again>${esc(get('bankingSetup.tryAgain'))}</button>`;
+      ? `<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-retry>${esc(get('bankingSetup.retryVerification'))}</button>`
+      : `<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-again>${esc(get('bankingSetup.tryAgain'))}</button>`;
     step.innerHTML=`<p>${esc(registration?.status==='expired'?get('bankingSetup.autoExpired'):get('bankingSetup.autoFailed'))}</p>
-      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
     step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     step.querySelector('[data-again]')?.addEventListener('click',()=>{cancelAutoRegistration();showAutomatic()});
     step.querySelector('[data-retry]')?.addEventListener('click',async e=>{
@@ -449,7 +450,7 @@ function openEnableBankingWizard(initialStatus,options={}){
         <div><span>${esc(get('bankingSetup.privacyUrl'))}</span><a href="${esc(started.privacyUrl||'https://fullworth.de/privacy/')}" target="_blank" rel="noopener">${esc(started.privacyUrl||'https://fullworth.de/privacy/')} ↗</a></div>
         <div><span>${esc(get('bankingSetup.termsUrl'))}</span><a href="${esc(started.termsUrl||'https://fullworth.de/terms/')}" target="_blank" rel="noopener">${esc(started.termsUrl||'https://fullworth.de/terms/')} ↗</a></div>
       </div>
-      <div class="dialog-actions"><button type="button" class="ghost" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-manual>${esc(get('bankingSetup.useManual'))}</button></div>`;
     step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     autoPoll=setTimeout(()=>pollAutomatic(started.id),800);
   };
@@ -463,7 +464,7 @@ function openEnableBankingWizard(initialStatus,options={}){
       <label>${esc(get('bankingSetup.applicationId'))}<input data-app-id required autocomplete="off"></label>
       <label>${esc(get('bankingSetup.privateKey'))}<input data-key type="file" accept=".pem,text/plain" required></label>
       <p class="row-sub">${esc(get('bankingSetup.keyHint'))}</p>
-      <div class="dialog-actions"><button type="button" data-back>${esc(get('onboarding.back'))}</button><button type="button" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-back>${esc(get('onboarding.back'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
     step.querySelector('[data-back]').onclick=showSetupChoice;
     step.querySelector('[data-verify]').onclick=async e=>{
       const button=e.currentTarget,appId=step.querySelector('[data-app-id]').value.trim(),file=step.querySelector('[data-key]').files?.[0];
@@ -489,7 +490,7 @@ function openEnableBankingWizard(initialStatus,options={}){
       <div class="row-sub">${esc(p.environment)} · ${ready?esc(get('bankingSetup.active')):esc(get('bankingSetup.inactive'))}</div></div></div>
       <p class="row-sub">${esc(ready?get('bankingSetup.complete'):get('bankingSetup.activateRestricted'))}</p>
       ${!ready&&p.environment==='PRODUCTION'?`<p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.activateAccounts'))} ↗</a> · <a href="${ENABLE_BANKING_LINKED}" target="_blank" rel="noopener">${esc(get('bankingSetup.instructions'))} ↗</a></p>`:''}
-      <div class="dialog-actions"><button type="button" class="ghost danger" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" data-done>${esc(get('common.close'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-done>${esc(get('common.close'))}</button></div>`;
     step.querySelector('[data-done]').onclick=()=>dlg.close();
     step.querySelector('[data-recheck]').onclick=async e=>{
       e.currentTarget.disabled=true;
@@ -600,7 +601,7 @@ function openProviderStatusConnection(country,onConnected){
   const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('bankingSetup.statusConnect'))}</h2><button type="button" data-close>×</button></div>
     <p class="row-sub">${esc(get('bankingSetup.statusConnectHint'))}</p>
     <label>${esc(get('bankingSetup.email'))}<input name="email" type="email" autocomplete="email" required maxlength="254"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.sendLogin'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('bankingSetup.sendLogin'))}</button></div></form>`);
   const form=dlg.querySelector('form');let pollTimer=null,closed=false;
   const stop=()=>{closed=true;if(pollTimer)clearTimeout(pollTimer)};
   dlg.addEventListener('close',stop);
@@ -632,7 +633,7 @@ function openProviderStatusConnection(country,onConnected){
         <p>${esc(get(manual?'bankingSetup.statusEmailSentManual':'bankingSetup.statusEmailSent'))}</p>
         ${manual?`<label>${esc(get('bankingSetup.statusLoginLink'))}<input name="loginLink" type="text" autocomplete="off" required placeholder="http://localhost:8888/?oobCode=…"></label>
           <p class="row-sub">${esc(get('bankingSetup.statusManualHint'))}</p>`:`<p class="row-sub">${esc(get('bankingSetup.waitingForEmail'))}</p>`}
-        <div class="dialog-actions"><button type="button" data-close-bottom>${esc(get('common.close'))}</button>${manual?`<button type="button" data-complete>${esc(get('bankingSetup.statusCompleteLogin'))}</button>`:''}</div>`;
+        <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-close-bottom>${esc(get('common.close'))}</button>${manual?`<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-complete>${esc(get('bankingSetup.statusCompleteLogin'))}</button>`:''}</div>`;
       form.querySelector('[data-close]').onclick=()=>dlg.close();
       form.querySelector('[data-close-bottom]').onclick=()=>dlg.close();
       if(manual){
@@ -673,7 +674,7 @@ async function openIngConnectionOptions(reconnectConnection=null){
     <label>${esc(get('bankingSetup.ingFinTsMode'))}<select name="mode"><option value="fints" selected>${esc(get('bankingSetup.ingFinTsFull'))}</option><option value="enable">${esc(get('bankingSetup.ingEnableBankingOnly'))}</option></select></label>
     <p class="row-sub" data-mode-hint></p>
     <div data-fints-fields><label>${esc(get('bankingSetup.ingUserId'))}<input name="userId" autocomplete="username" required></label><label>${esc(get('bankingSetup.ingPin'))}<input name="pin" type="password" autocomplete="current-password" required></label></div>
-    <p class="row-sub" data-connect-status aria-live="polite"></p><div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
+    <p class="row-sub" data-connect-status aria-live="polite"></p><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('bankingSetup.connect'))}</button></div></form>`);
   const form=dlg.querySelector('form'),mode=form.elements.mode,fields=dlg.querySelector('[data-fints-fields]'),hint=dlg.querySelector('[data-mode-hint]');
   const draw=()=>{
     const useFinTs=mode.value==='fints';
@@ -794,8 +795,8 @@ function openIngSelection(initial){
       +'<span class="row-sub" data-selected-count></span></div>'
       +'<div class="rows ing-select-list">'+all.map(rowHtml).join('')+'</div>'
       +(all.length?'':'<p class="row-sub">'+esc(get('bankingSetup.ingSelectEmpty'))+'</p>')
-      +'<div class="dialog-actions"><button type="button" class="ghost" data-cancel>'+esc(get('common.cancel'))+'</button>'
-      +'<button type="button" data-import>'+esc(get('bankingSetup.ingImport'))+'</button></div>';
+      +'<div class="dialog-actions"><button type="button" class="'+buttonClass(ButtonRole.Secondary)+'" data-cancel>'+esc(get('common.cancel'))+'</button>'
+      +'<button type="button" class="'+buttonClass(ButtonRole.Primary)+'" data-import>'+esc(get('bankingSetup.ingImport'))+'</button></div>';
     step.querySelector('[data-cancel]').onclick=()=>dlg.close();
     for(const box of step.querySelectorAll('[data-account]'))
       box.onchange=()=>{if(box.checked)hidden.delete(box.dataset.account);else hidden.add(box.dataset.account);count();};
@@ -848,8 +849,8 @@ function openIngSelection(initial){
     title.textContent=get(incomplete?'bankingSetup.ingDonePartly':'bankingSetup.ingDone');
     step.innerHTML='<p>'+esc(text)+'</p>'+trouble
       +'<div class="dialog-actions">'
-      +(incomplete?'<button type="button" class="ghost" data-retry>'+esc(get('accounts.retrySync'))+'</button>':'')
-      +'<button type="button" data-finish>'+esc(get('common.close'))+'</button></div>';
+      +(incomplete?'<button type="button" class="'+buttonClass(ButtonRole.Secondary)+'" data-retry>'+esc(get('accounts.retrySync'))+'</button>':'')
+      +'<button type="button" class="'+buttonClass(ButtonRole.Primary)+'" data-finish>'+esc(get('common.close'))+'</button></div>';
     step.querySelector('[data-retry]')?.addEventListener('click',()=>{void runImport();});
     step.querySelector('[data-finish]').onclick=async()=>{dlg.close();await ctx.reload();};
   };
@@ -887,7 +888,7 @@ function openIngTanDialog(initial){
     root.innerHTML=`<div class="panel-head"><h2>${esc(get('bankingSetup.ingTan'))}</h2><button type="button" data-close>&times;</button></div>
       ${challenge.challenge?`<p>${esc(challenge.challenge)}</p>`:''}<p class="row-sub">${esc(get(decoupled?'bankingSetup.ingDecoupledHint':'bankingSetup.ingTanHint'))}</p>
       ${decoupled?'':`<label>${esc(get('bankingSetup.ingTan'))}<input name="tan" inputmode="numeric" autocomplete="one-time-code" required></label>`}
-      <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="button" data-submit>${esc(get(decoupled?'bankingSetup.ingPoll':'bankingSetup.connect'))}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-submit>${esc(get(decoupled?'bankingSetup.ingPoll':'bankingSetup.connect'))}</button></div>`;
     root.querySelector('[data-close]').onclick=()=>dlg.close();root.querySelector('[data-cancel]').onclick=()=>dlg.close();
     root.querySelector('[data-submit]').onclick=async e=>{
       const button=e.currentTarget;button.disabled=true;
@@ -921,7 +922,7 @@ function openBankConnectionOptions(bank,reconnectConnectionId=null,profileId=nul
     <label data-account-access hidden>${esc(get('bankingSetup.accountIdentifiers'))}<textarea name="accountAccess" rows="3" autocomplete="off" placeholder="DE89370400440532013000&#10;BBAN|123456|Optional issuer"></textarea><span class="row-sub">${esc(get('bankingSetup.accountIdentifiersHint'))}</span></label>
     <div data-auth-method></div>
     <div data-credentials></div>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('bankingSetup.connect'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(get('bankingSetup.connect'))}</button></div></form>`);
   const form=dlg.querySelector('form'),methodRoot=dlg.querySelector('[data-auth-method]'),credentialRoot=dlg.querySelector('[data-credentials]'),businessNotice=dlg.querySelector('[data-business-notice]');
   const limitAccounts=dlg.querySelector('[data-limit-accounts]'),accountAccess=dlg.querySelector('[data-account-access]');
   limitAccounts.onchange=()=>{accountAccess.hidden=!limitAccounts.checked;if(limitAccounts.checked)form.elements.accountAccess.focus()};
@@ -1012,7 +1013,7 @@ async function openBankDialog(reconnectConnection=null,initialCountry='DE'){
   const dlg=dialog(`<form method="dialog" class="dialog-card"><div class="panel-head"><h2>${esc(reconnectConnection?get('accounts.reconnect'):get('accounts.addBank'))}</h2><button value="cancel">×</button></div>
     <label>${esc(get('bankingSetup.country'))}<input id="bank-country" value="${esc(String(initialCountry||'DE').toUpperCase())}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" autocapitalize="characters"></label>
     <input id="bank-search" type="search" placeholder="Bank">
-    <div id="bank-status-tools" class="bank-status-tools"><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a><span data-status-state></span><button type="button" data-status-connect hidden>${esc(get('bankingSetup.statusConnect'))}</button></div>
+    <div id="bank-status-tools" class="bank-status-tools"><a href="${ENABLE_BANKING_STATUS}" target="_blank" rel="noopener">${esc(get('bankingSetup.statusPage'))} ↗</a><span data-status-state></span><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-status-connect hidden>${esc(get('bankingSetup.statusConnect'))}</button></div>
     <div id="bank-options" class="bank-options"></div></form>`);
   const box=dlg.querySelector('#bank-options'),search=dlg.querySelector('#bank-search'),countryInput=dlg.querySelector('#bank-country');
   const statusTools=dlg.querySelector('#bank-status-tools'),statusState=statusTools.querySelector('[data-status-state]'),statusConnect=statusTools.querySelector('[data-status-connect]');

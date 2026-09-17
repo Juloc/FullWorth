@@ -27,7 +27,7 @@ public sealed class BankConnectionsResponsiveUiTests : IClassFixture<FullWorthWe
         Assert.Contains("#view-bank-connections .row{grid-template-columns:minmax(0,1fr);align-items:stretch}", css);
         Assert.Contains("#view-bank-connections .row-side{width:100%;justify-content:flex-start}", css);
         Assert.Contains("#view-bank-connections .row-side>.amount{flex:1 0 100%}", css);
-        Assert.Contains("#view-bank-connections .row-side>.ghost{flex:1 1 10rem", css);
+        Assert.Contains("#view-bank-connections .row-side>.btn-secondary{flex:1 1 10rem", css);
         Assert.Contains("#view-bank-connections .row-sub{overflow-wrap:break-word;word-break:normal}", css);
     }
 }
