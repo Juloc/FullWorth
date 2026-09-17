@@ -542,4 +542,28 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("gainUnknown", wealth);
         Assert.Contains("gainPartial", wealth);
     }
+
+    /// <summary>
+    /// Das reiche Depot-Dialog-Modul (Performance mit TWR/XIRR/Benchmark, ein Chart, erkannte Kaeufe)
+    /// stand seit PR #107/#133/#136 fertig im Baum - <c>investment-performance-ui.js</c> - und lag
+    /// trotzdem tot da: <c>index.html</c> trug nur ein <c>modulepreload</c>, das die Datei abruft, aber
+    /// nie ausfuehrt, und weder diese Seite noch die Vermoegensseite importierten sie. Die
+    /// Vermoegensseite haengt seit laengerem indirekt daran (real-estate.js -> investment-consolidation.js
+    /// -> investment-performance-ui.js, siehe WealthUiBaselineTests) - nur die Kontenseite fehlte.
+    /// Der Seiteneffekt-Import registriert den globalen <c>[data-portfolio]</c>-Klick-Lauscher; der neue
+    /// Knopf im Depot-Dialog liefert die Depotkennung, mit der der Lauscher den reichen Dialog oeffnet.
+    /// </summary>
+    [Fact]
+    public async Task DepotDialogOpensTheRichPerformanceDialogInsteadOfLeavingItUnreachable()
+    {
+        var js = await GetAsync("/pages/accounts/page.js");
+        var sw = await GetAsync("/sw.js");
+
+        Assert.Contains("import '../networth/investment-performance-ui.js';", js);
+        Assert.Contains("data-portfolio=\"${esc(portfolio.id)}\"", js);
+        Assert.Contains("get('accounts.depotHistory')", js);
+        // Bereits gecacht, weil die Vermoegensseite dieselbe Datei laedt (WealthUiBaselineTests);
+        // die Kontenseite braucht keinen zweiten Eintrag.
+        Assert.Contains("'/pages/networth/investment-performance-ui.js'", sw);
+    }
 }

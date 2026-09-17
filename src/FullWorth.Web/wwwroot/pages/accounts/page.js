@@ -11,6 +11,11 @@ import {
   editAccountVisualById,
   decorateAccountIdentity
 } from './presentation.js';
+// Nur fuer den Nebeneffekt: registriert den globalen [data-portfolio]-Klick-Lauscher der
+// Vermoegensseite. Das reiche Depot-Dialog-Modul (Performance, TWR/XIRR, erkannte Kaeufe) lag
+// bisher tot da, weil es nur ueber ein modulepreload geladen, aber nie ausgefuehrt wurde - hier
+// ist der eigentliche Fehler: dieses Modul importierte niemand.
+import '../networth/investment-performance-ui.js';
 
 let ctx = null;
 let bound = false;
@@ -227,7 +232,10 @@ async function openDepotDialog(account){
       return `<div class="row"><div class="row-main"><div class="row-title">${esc(item.name)}</div><div class="row-sub">${esc(unit)}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${value}</div>${gain}</div></div></div>`;
     }).join('');
 
-    body.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(get('accounts.depotTotal'))}</div><div class="row-sub">${esc(get('accounts.depotPositions'))}: ${positions.length}</div></div><div class="amount">${money(Number(overview.totalValue||0),currency)}</div></div><div class="rows">${rows||emptyRow(get('accounts.depotEmpty'))}</div>${anyCost?'':`<p class="row-sub">${esc(get('accounts.depotNoCostBasis'))}</p>`}<div class="dialog-actions"><button type="button" data-add-trade${positions.length?'':' disabled'}>${esc(get('accounts.depotAddTrade'))}</button></div>`;
+    // data-portfolio traegt keinen eigenen Klick-Handler: der globale Lauscher in
+    // investment-performance-ui.js faengt ihn ab, schliesst diesen Dialog (er ist der naechste
+    // <dialog>-Vorfahr) und oeffnet an seiner Stelle den reichen Depot-Dialog mit Performance-Tab.
+    body.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(get('accounts.depotTotal'))}</div><div class="row-sub">${esc(get('accounts.depotPositions'))}: ${positions.length}</div></div><div class="amount">${money(Number(overview.totalValue||0),currency)}</div></div><div class="rows">${rows||emptyRow(get('accounts.depotEmpty'))}</div>${anyCost?'':`<p class="row-sub">${esc(get('accounts.depotNoCostBasis'))}</p>`}<div class="dialog-actions"><button type="button" class="ghost" data-portfolio="${esc(portfolio.id)}">${esc(get('accounts.depotHistory'))}</button><button type="button" data-add-trade${positions.length?'':' disabled'}>${esc(get('accounts.depotAddTrade'))}</button></div>`;
 
     body.querySelector('[data-add-trade]').onclick=()=>openTradeDialog(portfolio,positions,currency,show);
   };
