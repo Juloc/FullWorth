@@ -11,8 +11,10 @@
   background:var(--surface-2);color:var(--muted)}
 .col-row-icon svg{width:18px;height:18px}
 
-/* Der Status steht als Wort, nicht als Farbe allein: eine Farbe sagt nur dem, der die Legende kennt. */
-.col-status{font-size:.75rem;padding:.1rem .45rem;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
+/* Der Status steht als Wort, nicht als Farbe allein: eine Farbe sagt nur dem, der die Legende kennt.
+   War 12px - exakt --text-caption, dieselbe Fussnoten-Rolle wie bei den Chips anderer schon
+   migrierter Seiten (Scheibe 11, Batch 2). */
+.col-status{font-size:var(--text-caption-size);padding:.1rem .45rem;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
 .col-status.is-completed{background:var(--positive-soft);color:var(--positive)}
 .col-status.is-archived{opacity:.7}
 
@@ -25,15 +27,23 @@
 
 .col-metrics{display:flex;flex-wrap:wrap;gap:1.25rem;margin:.5rem 0 1rem}
 .col-metric{display:grid;gap:.1rem}
-.col-metric-label{font-size:.75rem;color:var(--muted)}
-.col-metric-value{font-weight:700}
+/* War 12px - exakt --text-caption, dieselbe Fussnoten-Rolle wie bei KPI-Beschriftungen anderer
+   schon migrierter Seiten (an-kpi .l, Scheibe 11 Teil 1). */
+.col-metric-label{font-size:var(--text-caption-size);color:var(--muted)}
+/* Drei der vier Kennzahlen sind Geldbeträge (Ausgaben/Einnahmen/Netto) - Ziffern sollen wie überall
+   sonst im Geld-Kontext gleich breit stehen, nicht je nach Ziffer wandern. Grösse/Gewicht bleiben
+   roh: kein --text-amount-Wert trifft 16px+700 zugleich, derselbe unentschiedene Fall wie an-kpi .k. */
+.col-metric-value{font-weight:700;font-variant-numeric:tabular-nums}
 
-/* Ein unvollständiger Betrag sagt es, statt eine exakte Summe vorzutäuschen. */
-.col-incomplete{color:var(--warning);font-size:.75rem}
+/* Ein unvollständiger Betrag sagt es, statt eine exakte Summe vorzutäuschen.
+   War 12px - exakt --text-caption. */
+.col-incomplete{color:var(--warning);font-size:var(--text-caption-size)}
 
 /* Kandidaten: jeder mit seinem Grund, damit die Auswahl beurteilbar ist statt glaubwürdig. */
 .col-candidate-reasons{display:flex;gap:.35rem;flex-wrap:wrap}
-.col-reason{font-size:.7rem;padding:.05rem .4rem;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
+/* War 11.2px - Drift wie die 11-12px-Reste anderer Seiten (rule-then-tag, an-donut-center .l);
+   --text-caption ist die Fussnoten-Rolle für ein Pillen-Etikett wie dieses. */
+.col-reason{font-size:var(--text-caption-size);padding:.05rem .4rem;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted)}
 
 @media(max-width:620px){
   .col-metrics{gap:.9rem}

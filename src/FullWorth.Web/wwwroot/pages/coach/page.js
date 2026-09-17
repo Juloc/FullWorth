@@ -922,7 +922,7 @@ function renderReviewCandidates(items) {
   items.forEach(tx => {
     const review = reviews.get(tx.id);
     const row = document.createElement('div'); row.className = 'coach-review-row'; row.dataset.transactionId = tx.id;
-    row.innerHTML = `<div class="coach-review-head"><div><strong>${esc(tx.counterparty || tx.description || tr('Ausgabe', 'Expense'))}</strong><span>${esc(tx.bookingDate || '')}</span></div><strong>${esc(formatMoney(Math.abs(tx.amount), tx.currency || 'EUR'))}</strong></div>
+    row.innerHTML = `<div class="coach-review-head"><div><strong>${esc(tx.counterparty || tx.description || tr('Ausgabe', 'Expense'))}</strong><span>${esc(tx.bookingDate || '')}</span></div><strong class="amount">${esc(formatMoney(Math.abs(tx.amount), tx.currency || 'EUR'))}</strong></div>
       <div class="coach-sentiments" role="group" aria-label="${esc(tr('Ausgabe bewerten', 'Review spending'))}">
         ${sentimentButton('Positive', tr('Gut', 'Good'), review)}${sentimentButton('Neutral', tr('Neutral', 'Neutral'), review)}${sentimentButton('Negative', tr('Schlecht', 'Bad'), review)}
         <button type="button" class="coach-details" ${review ? '' : 'disabled'}>${esc(tr('Details', 'Details'))}</button>

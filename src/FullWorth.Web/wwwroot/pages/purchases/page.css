@@ -14,6 +14,22 @@
 
 .purchase-detail{width:min(760px,94vw)}
 
+/* .reconcile gehoert ausschliesslich dieser Seite (grep bestaetigt: nur page.js referenziert die Klasse),
+   lebt aber noch als eigene Karte (Rand/Verlauf/Schatten aus design-depth.css) in app.css - direkt im
+   ohnehin schon gerahmten .dialog-card sitzend, derselbe Kaesteli-in-Kaesteli-Fehler wie bei
+   .purchase-advanced-panel weiter unten (Scheibe 11 Teil 2). .purchase-items/.detail-item daneben, im
+   selben Dialog, tragen absichtlich keine eigene Box - .reconcile war die einzige Ausnahme. Kein
+   #view-purchases-Vorsatz moeglich: components/dialog.js haengt jeden Dialog an document.body, ausserhalb
+   der Section - form.purchase-detail (das Dialog-eigene Wurzelelement) matcht stattdessen exakt genug
+   Spezifitaet (Typ+2 Klassen), um mit design-depth.css's html[data-theme=...] .reconcile gleichzuziehen;
+   page.css laedt danach und gewinnt damit den Gleichstand, ohne .reconcile selbst (gemeinsame Datei,
+   nicht Teil dieser Slice) oder eine andere Nutzstelle zu treffen. */
+form.purchase-detail .reconcile {
+  background: none;
+  border-color: transparent;
+  box-shadow: none
+}
+
 .purchase-items{display:grid;gap:var(--s2)}
 
 .purchase-item input,.purchase-item select{min-width:0}
@@ -25,7 +41,9 @@
 
 .purchase-stat{display:flex;flex-direction:column;gap:6px;min-width:0}
 
-.purchase-stat-k{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+/* War 11px - Drift wie die 11px-Reste bei Dashboard/Vermoegens-/Vertrags-/Budgetseite; --text-caption
+   ist die Fussnoten-Rolle fuer eine Grossbuchstaben-Beschriftung wie diese (Scheibe 11 Teil 2). */
+.purchase-stat-k{color:var(--muted);font-size:var(--text-caption-size);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 
 .purchase-stat--review .purchase-stat-v{color:var(--warning)}
 
@@ -37,7 +55,9 @@
 
 .purchase-row .amount{align-self:center;text-align:right}
 
-.purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:11px;font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+/* War 11px - dieselbe Drift wie .purchase-stat-k oben und .tx-marker (Transaktionen); ein Wortlabel-
+   Pill traegt dieselbe Fussnoten-Rolle (Scheibe 11 Teil 2). */
+.purchase-tag{flex:0 0 auto;display:inline-flex;align-items:center;font-size:var(--text-caption-size);font-weight:600;line-height:1;padding:3px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);white-space:nowrap}
 
 .purchase-tag--review{background:var(--warning-soft);color:var(--warning)}
 
@@ -63,6 +83,9 @@
 
 /* Aus styles/features/purchase-advanced-insights.css — ein Modul dieser Seite hatte sein eigenes Stylesheet
    und damit seinen eigenen <link>. */
+/* 1.35rem (21.6px) passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg,
+   24px) - dieselbe Lage wie beim Donut-Zentrum der Analyse-/Vertragsseite, bleibt daher roh (Scheibe 11
+   Teil 2). */
 .pa-advanced-insight .pa-insight-kpi{font-size:1.35rem;font-weight:700}
 .pa-advanced-insight .pa-insight-note{font-size:.78rem;color:var(--text-muted);margin-top:5px}
 .pa-advanced-insight .pa-analytics-row strong.positive{color:var(--success)}
@@ -103,6 +126,26 @@
 
 .purchase-advanced-panel {
   min-height: 280px
+}
+
+/* Der Reiterinhalt (Artikel/Produkte/Analysen) besteht durchgehend aus eigenen .pa-card-/.pa-metrics-/
+   .pa-purchase-row-Kacheln mit eigenem Rand und eigener Flaeche. Die geteilte .panel-Kartenoptik
+   (Rand/Verlauf/Schatten/Hover-Heben aus components.css + design-depth.css) darum herum zeichnete
+   denselben Rahmen ein zweites Mal um lauter schon gerahmte Kacheln - der gleiche Kaesteli-in-Kaesteli-
+   Fehler wie beim Dashboard-Nettovermoegen (Scheibe 11 Teil 2), nur um eine ganze Kachel-Ebene statt um
+   eine einzelne Kennzahl. #view-purchases-Selektor + ID-Spezifitaet, damit .panel selbst unveraendert
+   bleibt und kein anderes Panel im Haus mitgeaendert wird (gleiches Vorgehen wie
+   #dashboard-grid .panel-head h2). */
+#view-purchases .purchase-advanced-panel,
+#view-purchases .purchase-advanced-panel:hover {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none
+}
+
+#view-purchases .purchase-advanced-panel::after {
+  content: none
 }
 
 .pa-loading,
@@ -412,9 +455,12 @@
   font-size: .78rem
 }
 
+/* Geldbetraege (Summe/Artikelsumme/Zahlungssumme/Differenzen) - fehlte hier, obwohl jeder andere
+   Betrag im Haus (.amount, .tx-amt, ...) tabular-nums traegt. */
 .pa-reconcile-grid strong {
   color: var(--text);
-  font-size: .94rem
+  font-size: .94rem;
+  font-variant-numeric: tabular-nums
 }
 
 .warn-text {
@@ -424,7 +470,8 @@
 .pa-payment-row,
 .pa-document-row,
 .pa-history-row,
-.pa-analytics-row {
+.pa-analytics-row,
+.pa-discount-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -436,13 +483,43 @@
 .pa-payment-row:last-child,
 .pa-document-row:last-child,
 .pa-history-row:last-child,
-.pa-analytics-row:last-child {
+.pa-analytics-row:last-child,
+.pa-discount-row:last-child {
   border-bottom: 0
 }
 
 .pa-confirm-card {
   display: grid;
   gap: 8px
+}
+
+/* discount-actions.js (Rabatt-Karte) hatte fuer diese drei Klassen noch nie eine Regel - unformatiertes
+   Markup, kein Verschachtelungs-/Typografiefehler. .pa-discount-row selbst haengt sich oben an die
+   geteilte .pa-payment-row-/.pa-document-row-/.pa-history-row-/.pa-analytics-row-Trennlinie (Regel 6,
+   "nichts Unnoetiges") - nur die Summenzeile und die Aktionsgruppe brauchen eigene Regeln. */
+.pa-discount-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s3);
+  margin: var(--s2) 0 var(--s3);
+  color: var(--text-muted)
+}
+
+.pa-discount-total strong {
+  color: var(--success);
+  font-variant-numeric: tabular-nums
+}
+
+.pa-discount-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: 0 0 auto
+}
+
+.pa-discount-row-actions strong {
+  font-variant-numeric: tabular-nums
 }
 
 .pa-metrics {
@@ -466,8 +543,12 @@
   color: var(--text-muted)
 }
 
+/* 1.12rem (17.92px) passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg,
+   24px) - dieselbe Lage wie bei .pa-insight-kpi oben und dem Donut-Zentrum der Analyse-/Vertragsseite,
+   bleibt daher roh (Scheibe 11 Teil 2). */
 .pa-metrics strong {
-  font-size: 1.12rem
+  font-size: 1.12rem;
+  font-variant-numeric: tabular-nums
 }
 
 .pa-metrics .warn {

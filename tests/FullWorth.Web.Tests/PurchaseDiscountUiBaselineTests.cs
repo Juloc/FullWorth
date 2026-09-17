@@ -57,6 +57,23 @@ public sealed class PurchaseDiscountUiBaselineTests : IClassFixture<FullWorthWeb
     }
 
     [Fact]
+    public void Discount_card_markup_has_matching_css()
+    {
+        // discount-actions.js rendered .pa-discount-total/.pa-discount-row/.pa-discount-row-actions
+        // since the card's introduction, but page.css never defined them - the markup rendered
+        // unstyled (no divider, no right-aligned/tabular-nums amount). Guards the fix (Scheibe 11).
+        var js = Read("pages", "purchases", "discount-actions.js");
+        var css = Read("pages", "purchases", "page.css");
+
+        Assert.Contains("class=\"pa-discount-total\"", js);
+        Assert.Contains("class=\"pa-discount-row\"", js);
+        Assert.Contains("class=\"pa-discount-row-actions\"", js);
+        Assert.Contains(".pa-discount-total", css);
+        Assert.Contains(".pa-discount-row", css);
+        Assert.Contains(".pa-discount-row-actions", css);
+    }
+
+    [Fact]
     public void Service_worker_precaches_discount_editor()
     {
         var sw = Read("sw.js");

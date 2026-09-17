@@ -8,14 +8,13 @@
    Blatt noch einmal überschreibt, sind absichtlich in app.css geblieben: hierher verschoben würden
    sie gewinnen, wo sie vorher verloren haben. */
 
-.notif-intro{margin:0 0 var(--s2)}
+.notif-h{font-size:var(--text-metadata-size);margin:var(--s3) 0 var(--s2)}
 
-.notif-foot{margin-top:var(--s3)}
-
-.notif-h{font-size:14px;margin:var(--s3) 0 var(--s2)}
-
-/* --- Benachrichtigungen (notifications.js): master card + status dot + switch rows --- */
-.notif-intro{margin-bottom:var(--s4)}
+/* --- Benachrichtigungen (notifications.js): master card + status dot + switch rows ---
+   .notif-intro/.notif-foot standen doppelt da (App.css-Fassung + Seiten-Fassung derselben Klasse);
+   die App.css-Werte wurden vom margin-bottom bzw. margin-top hier unten vollstaendig ueberschrieben
+   und griffen nirgends mehr. Zu je einer Regel zusammengefuehrt, berechneter Stil unveraendert. */
+.notif-intro{margin:0 0 var(--s4)}
 
 .notif-push .row-title{margin-bottom:2px}
 
