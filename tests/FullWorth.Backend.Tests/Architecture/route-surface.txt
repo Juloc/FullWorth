@@ -112,6 +112,8 @@ GET              /api/audit
 GET              /api/bank-capabilities
 GET              /api/bank-connections/
 GET              /api/bank-connections/{id:guid}
+GET              /api/bank-connections/{id:guid}/raw-responses
+GET              /api/bank-connections/{id:guid}/raw-responses/{rawId:guid}
 GET              /api/bank-connections/{id:guid}/sync-history
 GET              /api/budget-groups/
 GET              /api/budget-scopes/{budgetId:guid}
@@ -436,12 +438,14 @@ POST             /api/intelligence/admin/suggestions/{id:guid}/accept
 POST             /api/intelligence/admin/suggestions/{id:guid}/reject
 POST             /api/investment-import/detect
 POST             /api/investment-import/jobs/{jobId:guid}/commit
+POST             /api/investment-import/jobs/{jobId:guid}/duplicate-preview
 POST             /api/investment-import/jobs/{jobId:guid}/rollback
 POST             /api/investment-import/pdf/detect
 POST             /api/investment-import/pdf/ocr-detect
 POST             /api/investment-import/upload
 POST             /api/investments/benchmarks
 POST             /api/investments/portfolios
+POST             /api/investments/portfolios/{portfolioId:guid}/backfill-prices
 POST             /api/investments/portfolios/{portfolioId:guid}/trades
 POST             /api/investments/securities
 POST             /api/investments/watchlists
@@ -535,6 +539,7 @@ POST             /internal/banking/connections/authorize
 POST             /internal/banking/connections/consume-state
 POST             /internal/banking/connections/{id:guid}/close-retain
 POST             /internal/banking/connections/{id:guid}/delete
+POST             /internal/banking/connections/{id:guid}/raw-responses
 POST             /internal/banking/connections/{id:guid}/sync-history
 POST             /internal/banking/fints/investment-snapshot
 POST             /internal/banking/ingest
