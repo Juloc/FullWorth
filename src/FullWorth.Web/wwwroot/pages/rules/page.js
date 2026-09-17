@@ -140,12 +140,14 @@ async function openRuleDialog(existing) {
     // .rule-dialog is what styles the live preview below the fields.
     className: 'rule-dialog',
     create: html => ctx.dialog(html),
+    // Die Kategorie ist derselbe lange Baum wie ueberall sonst (#157) - searchable macht das Select suchbar.
+    comboboxCtx: ctx,
     fields: [
       { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 160 },
       { name: 'field', kind: FieldKind.Select, label: ctx.get('rules.field'), group: 'match', options: choice(FIELDS, 'rules.field_') },
       { name: 'mode', kind: FieldKind.Select, label: ctx.get('rules.mode'), group: 'match', options: choice(MODES, 'rules.mode_') },
       { name: 'pattern', kind: FieldKind.Text, label: ctx.get('rules.pattern'), maxLength: 200 },
-      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), required: true, rawOptions: options },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), required: true, rawOptions: options, searchable: true },
       { name: 'priority', kind: FieldKind.Number, label: ctx.get('rules.priority'), required: true },
       { name: 'isEnabled', kind: FieldKind.Check, label: ctx.get('rules.enabled') },
       // emptyValue: 'any' means "no restriction", so an untouched direction does not count towards

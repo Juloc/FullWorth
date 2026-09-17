@@ -282,12 +282,14 @@ async function openBudgetDialog(existing) {
     fallbackError: ctx.get('common.error'),
     className: 'budget-wizard',
     create: html => ctx.dialog(html),
+    // Derselbe lange Kategoriebaum wie ueberall sonst (#157) - searchable macht das Select suchbar.
+    comboboxCtx: ctx,
     fields: [
       { name: 'name', kind: FieldKind.Text, label: ctx.get('common.name'), required: true, maxLength: 120 },
       { name: 'amount', kind: FieldKind.Money, label: ctx.get('transactions.amount'), required: true, min: '0.01', group: 'sum' },
       { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'sum' },
       { name: 'period', kind: FieldKind.Select, label: ctx.get('budgets.period'), rawOptions: periods },
-      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'),
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), searchable: true,
         rawOptions: `<option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}` },
       { name: 'startDate', kind: FieldKind.Date, label: ctx.get('budgets.anchorDate'), advanced: true, group: 'cycle',
         hint: ctx.get('budgets.anchorHint_week') },

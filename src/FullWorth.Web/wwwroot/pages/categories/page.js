@@ -1,6 +1,9 @@
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { emptyRow } from '../../components/empty.js';
 import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
+// Der "Übergeordnet"-Select trägt hier denselben Baum wie überall sonst (#157) - ohne Suche musste man
+// ihn beim Anlegen/Verschieben einer Unterkategorie in einem tief verschachtelten Baum durchscrollen.
+import { attachCombobox } from '../../components/combobox.js';
 // Category tree (UI_UX_SPEC §10). Hierarchical view with expand/collapse; each node can be renamed,
 // re-iconed and MOVED to another parent (accessible explicit Move via the edit dialog, §10.2), or
 // archived (§10.4). Archived categories stay on history and are hidden unless "Show archived" is on.
@@ -40,6 +43,7 @@ export async function newCategory(context) {
 
   const iconPicker = categoryIconPicker(null, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
+  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), { title: ctx.get('categories.parent') });
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
@@ -155,6 +159,7 @@ function openEdit(node, all) {
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   const iconPicker = categoryIconPicker(node.icon, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
+  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), { title: ctx.get('categories.parent') });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

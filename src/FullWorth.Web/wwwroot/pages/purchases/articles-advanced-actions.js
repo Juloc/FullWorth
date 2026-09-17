@@ -3,10 +3,29 @@
 // primary receipt review screen stays readable and every destructive/long-running action remains explicit.
 
 import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
+import { attachCombobox } from '../../components/combobox.js';
+import { createToast } from '../../components/toast.js';
 
 const lang = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
 const text = (de, en) => lang() === 'de' ? de : en;
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// components/combobox.js erwartet ein ctx mit .esc/.get/.dialog/.toast - dieses Modul hat bewusst kein
+// eigenes ctx (siehe Kopfkommentar in articles-advanced.js: eigenes esc/api/makeDialog statt App-ctx).
+// Die vier Schluessel sind genau die, die combobox.js selbst zieht, wenn Titel/Platzhalter fehlen; der
+// Toast nutzt denselben Singleton-Controller wie app.js (createToast ist pro Element idempotent).
+function comboboxCtx({ esc, makeDialog }) {
+  const strings = {
+    'combobox.pick': text('Auswählen', 'Choose'), 'combobox.search': text('Suchen…', 'Search…'),
+    'common.close': text('Schließen', 'Close'), 'common.empty': text('Keine Treffer', 'No matches')
+  };
+  return {
+    esc,
+    dialog: makeDialog,
+    get: key => strings[key] || key,
+    toast: message => createToast(document.getElementById('toast')).show(message)
+  };
+}
 
 function promptText({ makeDialog, esc, title, label }) {
   return new Promise(resolve => {
@@ -266,6 +285,7 @@ export async function mountProductAdvancedActions({ dlg, product, api, esc, make
   card.className = 'pa-card pa-product-admin';
   card.innerHTML = `<div class="pa-card-head"><h3>${esc(text('Produkt bearbeiten', 'Edit product'))}</h3></div><div class="pa-form-grid"><label>${esc(text('Name', 'Name'))}<input data-pf="name" value="${esc(product.canonicalName)}"></label><label>${esc(text('Marke', 'Brand'))}<input data-pf="brand" value="${esc(product.brand || '')}"></label><label>${esc(text('Kategorie', 'Category'))}<select data-pf="category">${categoryOptions}</select></label><label>${esc(text('Standardeinheit', 'Default unit'))}<input data-pf="unit" value="${esc(product.defaultQuantityUnit || '')}" placeholder="piece / kg / l"></label><label>${esc(text('Packungsmenge', 'Package quantity'))}<input data-pf="packageQuantity" type="number" step="0.001" value="${esc(product.defaultPackageQuantity ?? '')}"></label><label>${esc(text('Packungseinheit', 'Package unit'))}<input data-pf="packageUnit" value="${esc(product.defaultPackageUnit || '')}" placeholder="g / ml / piece"></label></div><label>${esc(text('Notizen', 'Notes'))}<textarea data-pf="notes">${esc(product.notes || '')}</textarea></label><div class="pa-inline-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-product-save>${esc(text('Speichern', 'Save'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-merge>${esc(text('Zusammenführen', 'Merge'))}</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-product-archive>${esc(product.isArchived ? text('Wiederherstellen', 'Restore') : text('Archivieren', 'Archive'))}</button></div>`;
   root.appendChild(card);
+  attachCombobox(comboboxCtx({ esc, makeDialog }), card.querySelector('[data-pf="category"]'), { title: text('Kategorie wählen', 'Choose category') });
 
   const aliases = document.createElement('div');
   aliases.className = 'pa-card';

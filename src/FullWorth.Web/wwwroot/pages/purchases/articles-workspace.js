@@ -2,6 +2,8 @@ import { api as sharedApi, apiClient, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { attachCombobox } from '../../components/combobox.js';
+import { createToast } from '../../components/toast.js';
 // Advanced purchases/articles UI. It is loaded as a side effect by gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
 // Receipts remains the default, while Articles, Products and Analytics use the new API families.
@@ -81,6 +83,20 @@ function fmtDate(value) {
   if (!value) return '—';
   try { return new Intl.DateTimeFormat(document.documentElement.lang || 'de').format(new Date(`${String(value).slice(0, 10)}T12:00:00`)); }
   catch { return value; }
+}
+
+// components/combobox.js erwartet ein ctx mit .esc/.get/.dialog/.toast; dieses Modul hat bewusst kein
+// eigenes ctx (eigenes esc/t()/makeDialog statt App-ctx, siehe Dateikopf). Der Toast nutzt denselben
+// Singleton-Controller wie app.js (createToast ist pro Element idempotent). Die vier Schluessel sind
+// genau die, die combobox.js selbst zieht, wenn Titel/Platzhalter nicht mitgegeben werden.
+function comboboxCtx() {
+  const strings = { 'combobox.pick': t('chooseProduct'), 'combobox.search': t('search'), 'common.close': t('close'), 'common.empty': t('noData') };
+  return {
+    esc,
+    dialog: makeDialog,
+    get: key => strings[key] || key,
+    toast: message => createToast(document.getElementById('toast')).show(message)
+  };
 }
 
 export function ensurePurchaseArticlesWorkspace() {
@@ -299,6 +315,9 @@ function bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable) {
     const category = row.querySelector('[data-f="categoryId"]');
     if (category) category.value = item.categoryId || '';
     if (!writable) return;
+    // Derselbe lange Kategoriebaum wie ueberall sonst (#157) - nur suchbar, wenn das Feld auch
+    // bearbeitbar ist; ein deaktiviertes Select braucht keinen Sucheinstieg, der nirgendwo speichert.
+    if (category) attachCombobox(comboboxCtx(), category, { title: t('category') });
     row.querySelector('[data-save-item]').onclick = async () => {
       try { await api(`api/purchases/${purchase.id}/items/${item.id}`, json('PATCH', itemPayload(row, item, purchase.currency))); await refreshWorkspace(dlg, purchase.id); }
       catch (error) { showDialogError(dlg, error.message); }
@@ -495,6 +514,7 @@ async function renderProducts() {
 async function openProductCreate(onSaved) {
   const categories = await api('api/categories').catch(() => []);
   const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(t('newProduct'))}</h2><button type="button" data-close>×</button></div><label>${esc(t('name'))}<input name="name" required></label><label>${esc(t('brand'))}<input name="brand"></label><label>${esc(t('category'))}<select name="category"><option value="">—</option>${categoryOptionsHtml(categories)}</select></label><div class="pa-form-grid"><label>${esc(t('unit'))}<input name="unit" placeholder="piece / kg / l"></label><label>Packungsmenge<input name="packageQuantity" type="number" step="0.001"></label><label>Packungseinheit<input name="packageUnit" placeholder="g / ml / piece"></label></div><label>${esc(t('notes'))}<textarea name="notes"></textarea></label><div class="dialog-actions"><button type="button" data-close>${esc(t('close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('create'))}</button></div></form>`);
+  attachCombobox(comboboxCtx(), dlg.querySelector('select[name="category"]'), { title: t('category') });
   dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);

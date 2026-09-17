@@ -2,6 +2,8 @@ import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+// Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
+import { attachCombobox } from '../../components/combobox.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank
@@ -181,6 +183,7 @@ async function openDetail(id) {
     <div class="dialog-actions"><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   (purchase.items || []).forEach((i, index) => { const s = dlg.querySelector(`.purchase-item[data-index="${index}"] .item-category`); if (s && i.categoryId) s.value = i.categoryId; });
+  dlg.querySelectorAll('.item-category').forEach(select => attachCombobox(ctx, select, { title: ctx.get('transactions.category') }));
 
   renderReconcile(dlg.querySelector('[data-reconcile]'), purchase, reconciliation, dlg);
   if (amazon) bindAmazonDetails(dlg, purchase, amazon);

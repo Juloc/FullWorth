@@ -71,6 +71,44 @@ public sealed class ComboboxUiBaselineTests
         }
     }
 
+    /// <summary>
+    /// Scheibe 9 of #157: the remaining long category selects (dozens of options, hierarchical
+    /// "A › B › C" labels) that still had a bare &lt;select&gt; get the same treatment, one way or the
+    /// other - a dialog built with components/form-dialog.js only needs `searchable: true` on the
+    /// field plus a `comboboxCtx`, a hand-built dialog wires `attachCombobox` directly.
+    /// </summary>
+    [Fact]
+    public void The_remaining_long_category_selects_are_searchable()
+    {
+        foreach (var file in new[] { Path.Combine("pages", "rules", "page.js"), Path.Combine("pages", "budgets", "page.js") })
+        {
+            var source = ReadSource(file);
+            Assert.Contains("comboboxCtx: ctx", source, StringComparison.Ordinal);
+            Assert.Contains("searchable: true", source, StringComparison.Ordinal);
+        }
+
+        // The booking filter's category field is one of six fields on the visible row, not behind
+        // "Mehr Filter" - the worst offender in the original census (docs/UI_AUDIT.md) is also searchable now.
+        var transactions = ReadSource(Path.Combine("pages", "transactions", "page.js"));
+        Assert.Contains("comboboxCtx: ctx", transactions, StringComparison.Ordinal);
+
+        // Hand-built dialogs (no components/form-dialog.js involved) wire attachCombobox directly on
+        // their own category <select>, the same way the account pickers above do it via anchored mode.
+        foreach (var file in new[] { Path.Combine("pages", "categories", "page.js"), Path.Combine("pages", "purchases", "page.js") })
+        {
+            Assert.Contains("attachCombobox", ReadSource(file), StringComparison.Ordinal);
+        }
+
+        // These two modules deliberately have no app `ctx` (own esc/api/makeDialog, see their own file
+        // header comments) - each carries its own minimal adapter rather than reaching for the app ctx.
+        foreach (var file in new[] { Path.Combine("pages", "purchases", "articles-advanced-actions.js"), Path.Combine("pages", "purchases", "articles-workspace.js") })
+        {
+            var source = ReadSource(file);
+            Assert.Contains("function comboboxCtx(", source, StringComparison.Ordinal);
+            Assert.Contains("attachCombobox(comboboxCtx(", source, StringComparison.Ordinal);
+        }
+    }
+
     private static string ReadSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -341,6 +341,9 @@ async function openFilterSheet() {
     advancedLabel: deLabel('Mehr Filter', 'More filters'),
     // A right-side drawer, as before: the filter belongs beside the list it narrows.
     create: html => ctx.dialog(html, { className: 'drawer' }),
+    // Die Kategorie war der klarste Fall aus dem #157-Fund: ein langer Baum ohne Suche, sichtbar statt
+    // hinter "Mehr Filter".
+    comboboxCtx: ctx,
     fields: [
       { name: 'account', kind: FieldKind.Select, label: ctx.get('transactions.account'), emptyValue: '',
         options: [{ value: '', label: all }, ...(accounts || []).filter(x => x.isActive !== false)
@@ -353,7 +356,7 @@ async function openFilterSheet() {
           { value: 'expense', label: ctx.get('transactions.expenses') }] },
       { name: 'from', kind: FieldKind.Date, label: deLabel('Von', 'From'), group: 'range' },
       { name: 'to', kind: FieldKind.Date, label: deLabel('Bis', 'To'), group: 'range' },
-      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), emptyValue: '',
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), emptyValue: '', searchable: true,
         rawOptions: '<option value="">' + ctx.esc(all) + '</option>' + catOptions },
 
       { name: 'status', kind: FieldKind.Select, label: deLabel('Status', 'Status'), advanced: true, emptyValue: '',
