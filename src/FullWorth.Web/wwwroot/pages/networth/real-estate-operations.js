@@ -1,3 +1,5 @@
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
+
 const COPY = {
   de: {
     rental: 'Miete', costs: 'Kosten', renovations: 'Renovierungen',
@@ -150,7 +152,7 @@ function mainUnitFormHtml(ctx, detail, asset) {
     <input type="hidden" name="rooms" value="${detail?.rooms ?? ''}">
     <input type="hidden" name="ownershipSharePercent" value="${detail?.ownershipSharePercent ?? 100}">
     <input type="hidden" name="isOwnerOccupied" value="${ownerOccupied ? 'true' : 'false'}">
-    <button type="submit">${ctx.esc(tr('addMainUnit'))}</button>
+    <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addMainUnit'))}</button>
   </form>`;
 }
 
@@ -161,7 +163,7 @@ function leaseListHtml(ctx, leases) {
       <div class="row-sub">${ctx.esc(tr(lease.status === 'active' ? 'activeLease' : lease.status === 'planned' ? 'plannedLease' : 'endedLease'))} · ${ctx.esc(String(lease.startDate))}${lease.endDate ? ` – ${ctx.esc(String(lease.endDate))}` : ''}</div>
       <div class="row-sub">${ctx.esc(tr('coldRent'))}: ${ctx.money(lease.coldRent, lease.currency)} · ${ctx.esc(tr('warmRent'))}: ${ctx.money(lease.warmRent, lease.currency)}</div>
     </div>
-    ${lease.status !== 'ended' ? `<button type="button" data-end-lease="${lease.id}">${ctx.esc(tr('endLease'))}</button>` : ''}
+    ${lease.status !== 'ended' ? `<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-end-lease="${lease.id}">${ctx.esc(tr('endLease'))}</button>` : ''}
   </div>`).join('')}</div>`;
 }
 
@@ -179,7 +181,7 @@ function leaseFormHtml(ctx, units, currency) {
     <label>${ctx.esc(tr('cycle'))}<select name="paymentCycle"><option value="monthly">${ctx.esc(tr('monthly'))}</option><option value="quarterly">${ctx.esc(tr('quarterly'))}</option><option value="yearly">${ctx.esc(tr('yearly'))}</option><option value="weekly">${ctx.esc(tr('weekly'))}</option></select></label>
     <label>${ctx.esc(tr('deposit'))}<input name="depositAmount" type="number" min="0" step="0.01"></label>
     <label class="check"><input name="depositHeld" type="checkbox"> ${ctx.esc(tr('depositHeld'))}</label>
-    <div class="dialog-actions wide"><button type="submit">${ctx.esc(tr('addLease'))}</button></div>
+    <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addLease'))}</button></div>
   </form>`;
 }
 
@@ -200,7 +202,7 @@ function cashflowListHtml(ctx, cashflows) {
   if (!cashflows.length) return `<div class="row-sub">${ctx.esc(tr('noCashflows'))}</div>`;
   return `<div class="property-operation-list">${cashflows.map(item => `<div class="property-operation-row">
     <div><strong>${ctx.esc(cashflowTypeLabel(item.type))}</strong><div class="row-sub">${ctx.esc(String(item.date))} · ${ctx.esc(item.transactionId ? tr('bankLinked') : tr('manual'))}${item.isPlanned ? ` · ${ctx.esc(tr('planned'))}` : ''}${item.transactionCounterparty && !ctx.isPrivate() ? ` · ${ctx.esc(item.transactionCounterparty)}` : ''}</div></div>
-    <div class="property-operation-actions"><span class="amount ${item.direction === 'income' ? 'positive' : 'negative'}">${item.direction === 'income' ? '+' : '−'}${ctx.money(item.amount, item.currency)}</span><button type="button" data-delete-cashflow="${item.id}">${ctx.esc(tr('remove'))}</button></div>
+    <div class="property-operation-actions"><span class="amount ${item.direction === 'income' ? 'positive' : 'negative'}">${item.direction === 'income' ? '+' : '−'}${ctx.money(item.amount, item.currency)}</span><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-cashflow="${item.id}">${ctx.esc(tr('remove'))}</button></div>
   </div>`).join('')}</div>`;
 }
 
@@ -214,7 +216,7 @@ function cashflowFormHtml(ctx, transactions, currency) {
     <label>${ctx.esc(tr('transaction'))}<select name="transactionId"><option value="">${ctx.esc(tr('manual'))}</option>${transactions.map(tx => `<option value="${tx.id}">${ctx.esc(String(tx.bookingDate || tx.valueDate || ''))} · ${ctx.esc(ctx.isPrivate() ? '••••••' : (tx.counterparty || tx.description || ''))} · ${ctx.money(tx.amount, tx.currency)}</option>`).join('')}</select></label>
     <label class="check"><input name="isPlanned" type="checkbox"> ${ctx.esc(tr('planned'))}</label>
     <div class="property-operation-note wide">${ctx.esc(tr('bankHint'))}</div>
-    <div class="dialog-actions wide"><button type="submit">${ctx.esc(tr('addCashflow'))}</button></div>
+    <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addCashflow'))}</button></div>
   </form>`;
 }
 
@@ -222,7 +224,7 @@ function contractListHtml(ctx, links) {
   if (!links.length) return `<div class="row-sub">${ctx.esc(tr('noContracts'))}</div>`;
   return `<div class="property-operation-list">${links.map(link => `<div class="property-operation-row">
     <div><strong>${ctx.esc(link.contractName)}</strong><div class="row-sub">${ctx.esc(contractRoleLabel(link.role))} · ${ctx.esc(link.billingCycle)}${link.nextDueDate ? ` · ${ctx.esc(String(link.nextDueDate))}` : ''}</div></div>
-    <div class="property-operation-actions"><span class="amount">${ctx.money(link.amount, link.currency)}</span><button type="button" data-delete-contract="${link.recurringContractId}">${ctx.esc(tr('remove'))}</button></div>
+    <div class="property-operation-actions"><span class="amount">${ctx.money(link.amount, link.currency)}</span><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-contract="${link.recurringContractId}">${ctx.esc(tr('remove'))}</button></div>
   </div>`).join('')}</div>`;
 }
 
@@ -230,7 +232,7 @@ function contractFormHtml(ctx, contracts) {
   return `<form data-contract-form class="property-operation-form property-form-grid two">
     <label>Vertrag<select name="recurringContractId" required>${contracts.map(contract => `<option value="${contract.id}">${ctx.esc(contract.name)} · ${ctx.money(contract.amount, contract.currency)}</option>`).join('')}</select></label>
     <label>${ctx.esc(tr('role'))}<select name="role">${CONTRACT_ROLES.map(role => `<option value="${role}">${ctx.esc(contractRoleLabel(role))}</option>`).join('')}</select></label>
-    <div class="dialog-actions wide"><button type="submit">${ctx.esc(tr('addContract'))}</button></div>
+    <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addContract'))}</button></div>
   </form>`;
 }
 
@@ -246,10 +248,10 @@ function improvementListHtml(ctx, improvements, cashflows) {
     const linked = new Set(item.cashflowEntryIds || []);
     const available = expenseCashflows.filter(flow => !linked.has(flow.id));
     return `<div class="property-operation-card">
-      <div class="property-operation-row"><div><strong>${ctx.esc(item.title)}</strong><div class="row-sub">${ctx.esc(tr(item.category))}${item.startDate ? ` · ${ctx.esc(String(item.startDate))}` : ''}${item.completedDate ? ` – ${ctx.esc(String(item.completedDate))}` : ''}</div></div><button type="button" data-delete-improvement="${item.id}">${ctx.esc(tr('remove'))}</button></div>
+      <div class="property-operation-row"><div><strong>${ctx.esc(item.title)}</strong><div class="row-sub">${ctx.esc(tr(item.category))}${item.startDate ? ` · ${ctx.esc(String(item.startDate))}` : ''}${item.completedDate ? ` – ${ctx.esc(String(item.completedDate))}` : ''}</div></div><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-improvement="${item.id}">${ctx.esc(tr('remove'))}</button></div>
       <div class="property-operation-facts">${item.cost != null ? `<span>${ctx.esc(tr('cost'))}: <strong>${ctx.money(item.cost, item.currency || 'EUR')}</strong></span>` : ''}${item.estimatedValueAdded != null ? `<span>${ctx.esc(tr('estimatedAdded'))}: <strong>${ctx.money(item.estimatedValueAdded, item.currency || 'EUR')}</strong></span>` : ''}<span>${ctx.esc(tr('linkedCashflows'))}: <strong>${(item.cashflowEntryIds || []).length}</strong></span></div>
       ${item.description ? `<div class="row-sub">${ctx.esc(item.description)}</div>` : ''}
-      ${available.length ? `<form data-improvement-link-form="${item.id}" class="property-operation-inline"><select name="cashflowEntryId">${available.map(flow => `<option value="${flow.id}">${ctx.esc(String(flow.date))} · ${ctx.esc(cashflowTypeLabel(flow.type))} · ${ctx.money(flow.amount, flow.currency)}</option>`).join('')}</select><button type="submit">${ctx.esc(tr('linkCashflow'))}</button></form>` : ''}
+      ${available.length ? `<form data-improvement-link-form="${item.id}" class="property-operation-inline"><select name="cashflowEntryId">${available.map(flow => `<option value="${flow.id}">${ctx.esc(String(flow.date))} · ${ctx.esc(cashflowTypeLabel(flow.type))} · ${ctx.money(flow.amount, flow.currency)}</option>`).join('')}</select><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('linkCashflow'))}</button></form>` : ''}
     </div>`;
   }).join('')}</div>`;
 }
@@ -264,7 +266,7 @@ function improvementFormHtml(ctx, currency) {
     <label>${ctx.esc(tr('currency'))}<input name="currency" maxlength="3" value="${ctx.esc(currency || 'EUR')}"></label>
     <label>${ctx.esc(tr('estimatedAdded'))}<input name="estimatedValueAdded" type="number" min="0" step="0.01"></label>
     <label class="wide">${ctx.esc(tr('description'))}<textarea name="description" maxlength="4000" rows="3"></textarea></label>
-    <div class="dialog-actions wide"><button type="submit">${ctx.esc(tr('addImprovement'))}</button></div>
+    <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addImprovement'))}</button></div>
   </form>`;
 }
 

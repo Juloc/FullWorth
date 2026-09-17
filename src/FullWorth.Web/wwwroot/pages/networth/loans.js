@@ -5,6 +5,7 @@
 // instead of a misleading number. Loans render as a panel inside the net-worth screen.
 
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 const FREQ = ['monthly', 'quarterly', 'yearly', 'weekly'];
@@ -67,7 +68,7 @@ async function openAmortization(loan) {
   const dlg = ctx.dialog(`<div class="dialog-card loan-detail">
     <div class="panel-head"><h2>${ctx.esc(loan.name)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     ${body}
-    <div class="dialog-actions"><button type="button" data-edit>${ctx.esc(ctx.get('loans.edit'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-edit>${ctx.esc(ctx.get('loans.edit'))}</button></div>
   </div>`);
   dlg.querySelectorAll('.loan-split-bar > span[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();

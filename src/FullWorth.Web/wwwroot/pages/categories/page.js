@@ -117,10 +117,10 @@ function renderNode(node, byParent, parent, depth, all, catIndex) {
       <span class="cat-dot" data-cat="${catIndex}" aria-hidden="true"></span>
       <span class="cat-icon" aria-hidden="true">${categoryIconInner(node.icon) || ''}</span><span class="cat-name">${ctx.esc(node.name)}${node.isArchived ? ` <span class="tx-marker">${ctx.esc(ctx.get('categories.archived'))}</span>` : ''}</span>
       <span class="cat-actions">
-        <button class="icon-button" data-edit aria-label="${ctx.esc(ctx.get('categories.edit'))}" title="${ctx.esc(ctx.get('categories.edit'))}">✎</button>
+        <button class="${buttonClass(ButtonRole.Icon)}" data-edit aria-label="${ctx.esc(ctx.get('categories.edit'))}" title="${ctx.esc(ctx.get('categories.edit'))}">✎</button>
         ${node.isArchived
-          ? `<button class="icon-button" data-restore aria-label="${ctx.esc(ctx.get('categories.restore'))}" title="${ctx.esc(ctx.get('categories.restore'))}">↩</button>`
-          : `<button class="icon-button" data-archive aria-label="${ctx.esc(ctx.get('categories.archive'))}" title="${ctx.esc(ctx.get('categories.archive'))}">🗄</button>`}
+          ? `<button class="${buttonClass(ButtonRole.Icon)}" data-restore aria-label="${ctx.esc(ctx.get('categories.restore'))}" title="${ctx.esc(ctx.get('categories.restore'))}">↩</button>`
+          : `<button class="${buttonClass(ButtonRole.Icon)}" data-archive aria-label="${ctx.esc(ctx.get('categories.archive'))}" title="${ctx.esc(ctx.get('categories.archive'))}">🗄</button>`}
       </span>
     </div>`;
   row.querySelector('.cat-twist').addEventListener('click', () => {

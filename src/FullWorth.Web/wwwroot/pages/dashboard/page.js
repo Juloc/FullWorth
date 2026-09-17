@@ -8,6 +8,7 @@ import { isPrivate } from '../../components/privacy.js';
 import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 // Catalog: id -> { titleKey, width (default desktop cols 4/6/8/12) }. Kept small and mapped to
 // endpoints that already exist. Per-widget title + width are user-configurable (§7); scope/period/
@@ -128,7 +129,7 @@ export async function renderDashboard(ctx) {
 
   grid.innerHTML = '';
   if (!layout.length) {
-    grid.innerHTML = `<div class="panel widget span-6"><div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get('dashboard.emptyLayout'))}</div><button id="dash-add-empty">${ctx.esc(ctx.get('dashboard.addWidget'))}</button></div></div>`;
+    grid.innerHTML = `<div class="panel widget span-6"><div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get('dashboard.emptyLayout'))}</div><button id="dash-add-empty" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('dashboard.addWidget'))}</button></div></div>`;
     grid.querySelector('#dash-add-empty')?.addEventListener('click', () => openCatalog(ctx));
     return;
   }
@@ -145,7 +146,7 @@ export async function renderDashboard(ctx) {
     card.className = `panel widget span-${width}`;
     card.dataset.id = inst.id;
     const controls = editing
-      ? `<div class="widget-controls"><button data-config aria-label="${ctx.esc(ctx.get('dashboard.configure'))}" title="${ctx.esc(ctx.get('dashboard.configure'))}">⚙</button><button data-move="up" ${index === 0 ? 'disabled' : ''} aria-label="${ctx.esc(ctx.get('dashboard.moveUp'))}">↑</button><button data-move="down" ${index === layout.length - 1 ? 'disabled' : ''} aria-label="${ctx.esc(ctx.get('dashboard.moveDown'))}">↓</button><button data-remove aria-label="${ctx.esc(ctx.get('dashboard.remove'))}">×</button></div>`
+      ? `<div class="widget-controls"><button data-config class="${buttonClass(ButtonRole.Icon)}" aria-label="${ctx.esc(ctx.get('dashboard.configure'))}" title="${ctx.esc(ctx.get('dashboard.configure'))}">⚙</button><button data-move="up" class="${buttonClass(ButtonRole.Icon)}" ${index === 0 ? 'disabled' : ''} aria-label="${ctx.esc(ctx.get('dashboard.moveUp'))}">↑</button><button data-move="down" class="${buttonClass(ButtonRole.Icon)}" ${index === layout.length - 1 ? 'disabled' : ''} aria-label="${ctx.esc(ctx.get('dashboard.moveDown'))}">↓</button><button data-remove class="${buttonClass(ButtonRole.Icon)}" aria-label="${ctx.esc(ctx.get('dashboard.remove'))}">×</button></div>`
       : '';
     card.innerHTML = `<div class="panel-head"><h2>${ctx.esc(title)}</h2>${controls}</div><div class="widget-body"></div>`;
     grid.appendChild(card);
@@ -222,7 +223,7 @@ function openWidgetConfig(ctx, inst, meta) {
     <label>${ctx.esc(ctx.get('dashboard.widgetTitle'))}<input name="title" maxlength="60" placeholder="${ctx.esc(widgetTitle(ctx, meta))}" value="${ctx.esc(inst.title || '')}"></label>
     <label>${ctx.esc(ctx.get('dashboard.width'))}<select name="width">${widthOpts}</select></label>
     ${extra}
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

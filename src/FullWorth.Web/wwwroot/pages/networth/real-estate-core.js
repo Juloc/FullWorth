@@ -1,4 +1,5 @@
 import { emptyRow } from '../../components/empty.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 const COPY = {
   de: {
     overview: 'Übersicht', property: 'Immobilie', financing: 'Finanzierung', history: 'Historie',
@@ -194,7 +195,7 @@ function propertyHtml(ctx, d) {
       <label>${ctx.esc(tr('equityAtPurchase'))}<input name="equityAtPurchase" type="number" min="0" step="0.01" value="${p.equityAtPurchase ?? ''}"></label>
       <label class="wide">${ctx.esc(tr('notes'))}<textarea name="notes" maxlength="4000" rows="3">${ctx.esc(p.notes || '')}</textarea></label>
     </div></div>
-    <div class="dialog-actions"><button type="submit">${ctx.esc(tr('save'))}</button></div>
+    <div class="dialog-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('save'))}</button></div>
   </form>
   <div class="property-section"><h3>${ctx.esc(tr('acquisitionBreakdown'))}</h3>${costsHtml(ctx, d.costs, d.property.currency)}${costFormHtml(ctx, d.property.currency)}</div>`;
 }
@@ -205,7 +206,7 @@ function check(name, label, value) {
 
 function costsHtml(ctx, costs, fallbackCurrency) {
   if (!costs?.length) return `<div class="row-sub">${ctx.esc(tr('noCosts'))}</div>`;
-  return `<div>${costs.map(cost => `<div class="property-cost-row"><div><strong>${ctx.esc(tr(`cost_${cost.type}`))}</strong><div class="property-debt-meta">${ctx.esc(cost.date || '')}</div></div><div class="property-actions"><span class="amount">${ctx.money(cost.amount, cost.currency || fallbackCurrency)}</span><button type="button" data-delete-cost="${cost.id}">${ctx.esc(tr('remove'))}</button></div></div>`).join('')}</div>`;
+  return `<div>${costs.map(cost => `<div class="property-cost-row"><div><strong>${ctx.esc(tr(`cost_${cost.type}`))}</strong><div class="property-debt-meta">${ctx.esc(cost.date || '')}</div></div><div class="property-actions"><span class="amount">${ctx.money(cost.amount, cost.currency || fallbackCurrency)}</span><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-cost="${cost.id}">${ctx.esc(tr('remove'))}</button></div></div>`).join('')}</div>`;
 }
 
 function costFormHtml(ctx, currency) {
@@ -214,7 +215,7 @@ function costFormHtml(ctx, currency) {
     <label>Betrag<input name="amount" type="number" min="0" step="0.01" required></label>
     <label>Währung<input name="currency" minlength="3" maxlength="3" value="${ctx.esc(currency)}" required></label>
     <label>Datum<input name="date" type="date"></label>
-    <div class="dialog-actions wide"><button type="submit">${ctx.esc(tr('addCost'))}</button></div>
+    <div class="dialog-actions wide"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('addCost'))}</button></div>
   </form>`;
 }
 
@@ -233,7 +234,7 @@ function financingHtml(ctx, d) {
         <label>${ctx.esc(tr('relation'))}<select name="relationType"><option value="mortgage">${ctx.esc(tr('mortgage'))}</option><option value="secured_loan">${ctx.esc(tr('secured_loan'))}</option><option value="other">${ctx.esc(tr('other'))}</option></select></label>
         <label>${ctx.esc(tr('allocation'))} %<input name="allocationPercent" type="number" min="0.01" max="100" step="0.01" value="100" required></label>
       </div>
-      <div class="dialog-actions"><button type="submit"${choices.length ? '' : ' disabled'}>${ctx.esc(tr('addDebt'))}</button></div>
+      <div class="dialog-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}"${choices.length ? '' : ' disabled'}>${ctx.esc(tr('addDebt'))}</button></div>
     </form>`;
 }
 
@@ -246,7 +247,7 @@ function debtCardsHtml(ctx, debts) {
   if (!debts?.length) return emptyRow(tr('noDebt'));
   return debts.map(debt => `<div class="property-debt-card" data-debt-card="${debt.id}">
     <div class="property-debt-main"><strong>${ctx.esc(debt.name)}</strong><div class="property-debt-meta">${ctx.esc(tr('currentBalance'))}: ${ctx.money(debt.currentBalance, debt.currency)} · ${ctx.esc(tr('allocation'))}: ${Number(debt.allocationPercent).toFixed(2)} %${debt.interestRate != null ? ` · ${ctx.esc(tr('rate'))}: ${Number(debt.interestRate).toFixed(2)} %` : ''}${debt.regularPayment != null ? ` · ${ctx.esc(tr('payment'))}: ${ctx.money(debt.regularPayment, debt.currency)}` : ''}</div><div class="property-amortization" data-amortization hidden></div></div>
-    <div class="property-actions">${debt.loanId ? `<button type="button" data-amortization-button="${debt.loanId}">${ctx.esc(tr('amortization'))}</button>` : ''}<button type="button" data-delete-debt="${debt.id}">${ctx.esc(tr('remove'))}</button></div>
+    <div class="property-actions">${debt.loanId ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-amortization-button="${debt.loanId}">${ctx.esc(tr('amortization'))}</button>` : ''}<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-debt="${debt.id}">${ctx.esc(tr('remove'))}</button></div>
   </div>`).join('');
 }
 
@@ -261,7 +262,7 @@ function valuationDate(ctx, value) {
 
 function historyHtml(ctx, d) {
   const rows = d.valuations?.length ? d.valuations.map(value => `<div class="property-valuation-row"><div><strong>${ctx.money(value.amount, value.currency)}</strong><div class="property-debt-meta">${ctx.esc(valuationDate(ctx, value))} · ${ctx.esc(tr(`method_${value.method}`))}${value.providerDisplayName ? ` · ${ctx.esc(value.providerDisplayName)}` : ''}</div></div>${value.isCurrent ? '<span class="tx-marker">Aktuell</span>' : ''}</div>`).join('') : `<div class="row-sub">${ctx.esc(tr('noHistory'))}</div>`;
-  return `${rows}<form data-value-form class="property-section"><h3>${ctx.esc(tr('updateValue'))}</h3><div class="property-grid two"><label>Wert<input name="amount" type="number" min="0" step="0.01" value="${d.property.currentValue}" required></label><label>Währung<input name="currency" minlength="3" maxlength="3" value="${ctx.esc(d.property.currency)}" required></label><label>${ctx.esc(tr('dateOptional'))}<input name="valuedAt" type="date"></label></div><div class="dialog-actions"><button type="submit">${ctx.esc(tr('updateValue'))}</button></div></form>`;
+  return `${rows}<form data-value-form class="property-section"><h3>${ctx.esc(tr('updateValue'))}</h3><div class="property-grid two"><label>Wert<input name="amount" type="number" min="0" step="0.01" value="${d.property.currentValue}" required></label><label>Währung<input name="currency" minlength="3" maxlength="3" value="${ctx.esc(d.property.currency)}" required></label><label>${ctx.esc(tr('dateOptional'))}<input name="valuedAt" type="date"></label></div><div class="dialog-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(tr('updateValue'))}</button></div></form>`;
 }
 
 function wirePropertyForm(ctx, dlg, id, current, changed) {

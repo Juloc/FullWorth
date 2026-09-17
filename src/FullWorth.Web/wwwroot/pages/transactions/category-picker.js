@@ -11,6 +11,7 @@
 
 import { attachCombobox, openCombobox } from '../../components/combobox.js';
 import { categoryIconInner } from '../../components/icons.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 export function attachCategoryPicker(ctx, selectEl) {
   return attachCombobox(ctx, selectEl, {
@@ -73,8 +74,8 @@ function createSlot(ctx) {
   return {
     html: `<form data-extra-form hidden><label>${ctx.esc(ctx.get('categories.new'))}`
       + `<input name="name" maxlength="120"></label>`
-      + `<div class="dialog-actions"><button type="submit">${ctx.esc(ctx.get('common.create'))}</button></div></form>`
-      + `<button type="button" class="ghost" data-extra-toggle>${ctx.esc(ctx.get('categories.new'))}</button>`,
+      + `<div class="dialog-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.create'))}</button></div></form>`
+      + `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-extra-toggle>${ctx.esc(ctx.get('categories.new'))}</button>`,
     onSubmit: async ({ form, selectEl, choose }) => {
       const name = String(new FormData(form).get('name') || '').trim();
       if (!name) return;

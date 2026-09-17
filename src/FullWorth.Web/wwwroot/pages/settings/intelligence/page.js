@@ -1,5 +1,6 @@
 import { api as sharedApi } from '../../../core/services.js';
 import { confirmMessage } from '../../../components/confirm.js';
+import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 
 // Die drei Nachbarn gehören zu dieser Seite. Statisch importiert, damit beim ersten Besuch nichts
 // nachgeladen wird; sie verdrahten sich beim Laden selbst und laden ihre eigenen Daten.
@@ -110,12 +111,12 @@ function renderCredentials() {
     actions.className = 'intel-row-actions';
     const test = document.createElement('button');
     test.type = 'button';
-    test.className = 'ghost';
+    test.className = buttonClass(ButtonRole.Secondary);
     test.textContent = 'Testen';
     test.addEventListener('click', () => testCredential(credential.id));
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'ghost';
+    remove.className = buttonClass(ButtonRole.Danger);
     remove.textContent = 'Löschen';
     remove.addEventListener('click', () => deleteCredential(credential.id));
     actions.append(test, remove);
@@ -198,12 +199,12 @@ function renderSuggestions(suggestions) {
     actions.className = 'intel-row-actions';
     const accept = document.createElement('button');
     accept.type = 'button';
-    accept.className = 'primary-action';
+    accept.className = buttonClass(ButtonRole.Primary);
     accept.textContent = 'Annehmen';
     accept.addEventListener('click', () => reviewSuggestion(suggestion.id, 'accept', accept, reject));
     const reject = document.createElement('button');
     reject.type = 'button';
-    reject.className = 'ghost';
+    reject.className = buttonClass(ButtonRole.Secondary);
     reject.textContent = 'Ablehnen';
     reject.addEventListener('click', () => reviewSuggestion(suggestion.id, 'reject', accept, reject));
     actions.append(accept, reject);

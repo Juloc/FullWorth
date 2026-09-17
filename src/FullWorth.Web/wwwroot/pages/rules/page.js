@@ -6,6 +6,7 @@
 // /preview (dry-run of a draft), /reapply (apply the whole set to existing transactions).
 
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 
@@ -49,8 +50,8 @@ export async function renderRules(context) {
       </div>
       <div class="row-side rule-actions">
         <span class="rule-prio" title="${ctx.esc(ctx.get('rules.priority'))}">${ctx.esc(ctx.get('rules.priority'))} ${ctx.esc(r.priority)}</span>
-        <button class="icon-button" data-toggle aria-label="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}" title="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}">${r.isEnabled ? '⏸' : '▶'}</button>
-        <button class="icon-button" data-edit aria-label="${ctx.esc(ctx.get('rules.edit'))}" title="${ctx.esc(ctx.get('rules.edit'))}">✎</button>
+        <button class="${buttonClass(ButtonRole.Icon)}" data-toggle aria-label="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}" title="${ctx.esc(ctx.get(r.isEnabled ? 'rules.disable' : 'rules.enable'))}">${r.isEnabled ? '⏸' : '▶'}</button>
+        <button class="${buttonClass(ButtonRole.Icon)}" data-edit aria-label="${ctx.esc(ctx.get('rules.edit'))}" title="${ctx.esc(ctx.get('rules.edit'))}">✎</button>
       </div>`;
     row.querySelector('[data-edit]').addEventListener('click', () => openRuleDialog(r));
     row.querySelector('[data-toggle]').addEventListener('click', () => toggle(r));

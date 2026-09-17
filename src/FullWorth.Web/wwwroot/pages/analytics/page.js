@@ -9,6 +9,7 @@ import { cycleWindow, CYCLES, sectionCard, trendBadge, identityIcon, categoryIco
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
 import { emptyRow } from '../../components/empty.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 // Kept for backwards compatibility with the builder period presets (and the required export).
@@ -153,9 +154,9 @@ function shellHtml(win) {
   const cyclebar = `<div class="fw-cyclebar">
     <div class="fw-cycle" role="tablist" aria-label="${esc(t('Zeitraum', 'Cycle'))}">${cycleBtns}</div>
     <div class="fw-window">
-      <button type="button" data-nav="prev" aria-label="${esc(t('Vorheriger Zeitraum', 'Previous window'))}">‹</button>
+      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-nav="prev" aria-label="${esc(t('Vorheriger Zeitraum', 'Previous window'))}">‹</button>
       <span class="fw-window-label" aria-live="polite">${esc(win.activeLabel || win.label)}</span>
-      <button type="button" data-nav="next"${nextDisabled} aria-label="${esc(t('Nächster Zeitraum', 'Next window'))}">›</button>
+      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-nav="next"${nextDisabled} aria-label="${esc(t('Nächster Zeitraum', 'Next window'))}">›</button>
     </div>
   </div>`;
 
@@ -188,7 +189,7 @@ function advancedHtml() {
     <summary>${esc(t('Erweitert / Eigene Analyse', 'Advanced / Custom analysis'))}</summary>
     <p class="fw-card-sub">${esc(ctx.get('analytics.builder.title'))}</p>
     ${controls}
-    <div class="an-builder-actions"><button type="button" id="an-save" class="ghost">${esc(ctx.get('analytics.builder.save'))}</button><button type="button" id="an-run">${esc(ctx.get('analytics.builder.run'))}</button></div>
+    <div class="an-builder-actions"><button type="button" id="an-save" class="${buttonClass(ButtonRole.Secondary)}">${esc(ctx.get('analytics.builder.save'))}</button><button type="button" id="an-run" class="${buttonClass(ButtonRole.Primary)}">${esc(ctx.get('analytics.builder.run'))}</button></div>
     <div id="an-builder-chart" class="chart-empty"></div>
     <div id="an-saved" class="rows"></div>
   </details>`;
@@ -873,7 +874,7 @@ async function loadSavedAnalyses(context) {
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = `<button type="button" class="ghost saved-open" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="ghost danger" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
+    row.innerHTML = `<button type="button" class="${buttonClass(ButtonRole.Secondary, 'saved-open')}" data-id="${esc(it.id)}">${esc(it.name)}</button><div class="row-side"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-del="${esc(it.id)}">${esc(ctx.get('common.delete'))}</button></div>`;
     row.querySelector('.saved-open').addEventListener('click', () => { applyBuilderConfig(it.config || {}); runBuilder(ctx); });
     row.querySelector('[data-del]').addEventListener('click', () => deleteSaved(it.id));
     el.appendChild(row);
@@ -896,7 +897,7 @@ function saveAnalysis(context) {
   if (context) ctx = context;
   const dlg = ctx.dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(ctx.get('analytics.builder.save'))}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
     <label>${esc(ctx.get('analytics.builder.saveName'))}<input name="name" required maxlength="80" autocomplete="off"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit">${esc(ctx.get('common.save'))}</button></div></form>`);
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(ctx.get('common.save'))}</button></div></form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

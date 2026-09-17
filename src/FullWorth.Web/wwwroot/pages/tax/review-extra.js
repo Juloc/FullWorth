@@ -7,6 +7,7 @@
 // (for its blob body), so it uses apiClient.backendResponse — the same shared client wealth-portability.js
 // uses for its backup download — never a hand-rolled fetch/BFF URL.
 import { apiClient } from '../../core/services.js';
+import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
 
 function lang() { return (document.documentElement.lang || '').startsWith('en') ? 'en' : 'de'; }
 const copy = {
@@ -55,8 +56,8 @@ export async function renderTaxYearPanel(ctx, host, year) {
     <div class="panel-head tax-review-head">
       <div><h2>${ctx.esc(t('title'))}</h2><span class="tax-year-review-state ${review?.ready ? 'is-ready' : 'is-open'}">${ctx.esc(review?.ready ? t('ready') : t('check'))}</span></div>
       <div class="tax-export-actions">
-        <button type="button" class="ghost" data-tax-export="csv">${ctx.esc(t('exportCsv'))}</button>
-        <button type="button" class="ghost" data-tax-export="json">${ctx.esc(t('exportJson'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-tax-export="csv">${ctx.esc(t('exportCsv'))}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-tax-export="json">${ctx.esc(t('exportJson'))}</button>
       </div>
     </div>
     <div class="tax-year-review-list">${checks.map(check => `<div class="tax-year-review-check tax-review-${ctx.esc(check.severity)}"><strong>${ctx.esc(check.count || '')}</strong><span>${ctx.esc(check.message)}</span></div>`).join('')}</div>`;
@@ -97,7 +98,7 @@ export function wireDocumentUploads(ctx, host, visibleCandidates, { onUploaded }
     if (!actions || actions.querySelector('[data-tax-upload-document]')) return;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    applyButtonRole(button, ButtonRole.Secondary);
     button.dataset.taxUploadDocument = '1';
     button.textContent = t('upload');
     button.addEventListener('click', () => uploadDocument(ctx, candidate, button, onUploaded));
@@ -157,7 +158,7 @@ export function renderAdvancedSettings(ctx, container, settings, { onSaved } = {
       ${toggleHtml(ctx, 'aiAnalysisEnabled', t('ai'), settings.aiAnalysisEnabled)}
       ${toggleHtml(ctx, 'showTaxNotifications', t('notifications'), settings.showTaxNotifications)}
     </div>
-    <div class="tax-advanced-footer"><span>${ctx.esc(t('ownerHint'))}</span><button type="button" class="ghost tax-delete-data">${ctx.esc(t('deleteData'))}</button></div>`;
+    <div class="tax-advanced-footer"><span>${ctx.esc(t('ownerHint'))}</span><button type="button" class="${buttonClass(ButtonRole.Secondary, 'tax-delete-data')}">${ctx.esc(t('deleteData'))}</button></div>`;
   container.appendChild(section);
 
   let current = settings;

@@ -2,6 +2,7 @@ import { api as sharedApi, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
 import { emitAppEvent } from '../../core/event-bus.js';
 import { showToast } from '../../components/toast.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 const SUPPORTED = new Set(['vehicle', 'precious_metal']);
 let enhancing = false;
 
@@ -86,7 +87,7 @@ async function enhanceRows() {
       if (!side) return;
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'icon-button specialized-detail-button';
+      button.className = buttonClass(ButtonRole.Icon, 'specialized-detail-button');
       button.dataset.specializedDetail = '1';
       button.title = t('details');
       button.setAttribute('aria-label', t('details'));
@@ -172,7 +173,7 @@ function vehicleForm(d) {
     <label>${esc(t('currency'))}<input name="purchaseCurrency" maxlength="3" value="${esc(d?.purchaseCurrency || 'EUR')}"></label>
     <label>${esc(t('annualMileage'))}<input type="number" min="0" name="annualMileageEstimate" value="${esc(d?.annualMileageEstimate ?? '')}"></label>
     <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="2000">${esc(d?.notes || '')}</textarea></label>
-  </div><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+  </div><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 }
 
 function metalForm(d) {
@@ -189,7 +190,7 @@ function metalForm(d) {
     <label>${esc(t('purchasePrice'))}<input type="number" min="0" step="0.01" name="purchasePrice" value="${esc(d?.purchasePrice ?? '')}"></label>
     <label>${esc(t('currency'))}<input name="purchaseCurrency" maxlength="3" value="${esc(d?.purchaseCurrency || 'EUR')}"></label>
     <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="2000">${esc(d?.notes || '')}</textarea></label>
-  </div><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+  </div><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 }
 
 function valuationPanel(asset, detail) {
@@ -199,24 +200,24 @@ function valuationPanel(asset, detail) {
         <label>${esc(t('mileageAdj'))}<input type="number" name="mileageAdjustmentPercent" min="-50" max="50" step="0.1" value="0"></label>
         <label>${esc(t('conditionAdj'))}<input type="number" name="conditionAdjustmentPercent" min="-50" max="50" step="0.1" value="0"></label>
         <label>${esc(t('range'))}<input type="number" name="rangePercent" min="0" max="50" step="0.1" value="10"></label>
-        <div class="span-2 specialized-form-actions"><button type="submit">${esc(t('calculate'))}</button></div></form>`
+        <div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('calculate'))}</button></div></form>`
     : `<p class="row-sub">${esc(t('estimateHintMetal'))}</p><div class="row-sub">${esc(t('fineWeight'))}: ${esc(detail?.fineWeightGrams != null ? `${detail.fineWeightGrams} g` : '—')}</div><form data-estimate-form class="specialized-asset-grid">
         <label>${esc(t('referencePrice'))}<input type="number" name="referencePricePerFineGram" min="0.00000001" step="0.00000001" required></label>
         <label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label>
         <label>${esc(t('premiumAdj'))}<input type="number" name="premiumAdjustmentPercent" min="-50" max="100" step="0.1" value="0"></label>
         <label>${esc(t('range'))}<input type="number" name="rangePercent" min="0" max="50" step="0.1" value="5"></label>
-        <div class="span-2 specialized-form-actions"><button type="submit">${esc(t('calculate'))}</button></div></form>`;
+        <div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('calculate'))}</button></div></form>`;
 
   return `<div class="specialized-asset-section"><h3>${esc(t('manualValue'))}</h3><form data-manual-form class="specialized-asset-grid">
       <label>${esc(t('amount'))}<input type="number" name="amount" min="0" step="0.01" value="${esc(asset.currentValue ?? '')}" required></label>
       <label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label>
       <label>${esc(t('dateOptional'))}<input type="date" name="valuedAt"></label>
-      <div class="span-2 specialized-form-actions"><button type="submit">${esc(t('accept'))}</button></div></form></div>
+      <div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('accept'))}</button></div></form></div>
     <div class="specialized-asset-section"><h3>${esc(t('internalEstimate'))}</h3>${internal}<div data-estimate-result></div></div>`;
 }
 
 function financingPanel(asset, debts, loans, liabilities) {
-  const rows = (debts || []).map(d => `<div class="specialized-debt-row"><div class="specialized-debt-main"><div class="specialized-debt-title">${esc(d.name)}</div><div class="specialized-debt-sub">${esc(d.relationType)} · ${esc(d.allocationPercent)}% · ${money(d.currentBalance, d.currency)}</div></div><button type="button" data-remove-debt="${esc(d.id)}">${esc(t('remove'))}</button></div>`).join('') || `<div class="specialized-empty">${esc(t('debtEmpty'))}</div>`;
+  const rows = (debts || []).map(d => `<div class="specialized-debt-row"><div class="specialized-debt-main"><div class="specialized-debt-title">${esc(d.name)}</div><div class="specialized-debt-sub">${esc(d.relationType)} · ${esc(d.allocationPercent)}% · ${money(d.currentBalance, d.currency)}</div></div><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-remove-debt="${esc(d.id)}">${esc(t('remove'))}</button></div>`).join('') || `<div class="specialized-empty">${esc(t('debtEmpty'))}</div>`;
   const choices = [
     ...(loans || []).map(x => ({ value: `loan:${x.id}`, name: x.name || x.lender || 'Loan' })),
     ...(liabilities || []).map(x => ({ value: `liability:${x.id}`, name: x.name || 'Liability' }))
@@ -226,7 +227,7 @@ function financingPanel(asset, debts, loans, liabilities) {
       <label>${esc(t('debtSource'))}<select name="source" required><option value=""></option>${choices.map(x => `<option value="${esc(x.value)}">${esc(x.name)}</option>`).join('')}</select></label>
       <label>${esc(t('allocation'))}<input type="number" name="allocationPercent" min="0.01" max="100" step="0.01" value="100" required></label>
       <label>${esc(t('relation'))}<select name="relationType">${options(['vehicle_finance','secured_loan','other'], asset.kind === 'vehicle' ? 'vehicle_finance' : 'secured_loan')}</select></label>
-      <div class="span-2 specialized-form-actions"><button type="submit">${esc(t('add'))}</button></div></form></div>`;
+      <div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('add'))}</button></div></form></div>`;
 }
 
 function historyPanel(valuations) {
@@ -280,7 +281,7 @@ function bindValuation(dlg, asset, endpoint) {
     try {
       const estimate = await api(`${endpoint}/estimate`, json('POST', body));
       const result = dlg.querySelector('[data-estimate-result]');
-      result.innerHTML = `<div class="specialized-estimate"><div><span>${esc(t('amount'))}</span><strong>${money(estimate.amount, estimate.currency)}</strong></div><div><span>Low</span><strong>${money(estimate.lowEstimate, estimate.currency)}</strong></div><div><span>High</span><strong>${money(estimate.highEstimate, estimate.currency)}</strong></div></div><div class="specialized-form-actions"><button type="button" data-accept-estimate>${esc(t('accept'))}</button></div>`;
+      result.innerHTML = `<div class="specialized-estimate"><div><span>${esc(t('amount'))}</span><strong>${money(estimate.amount, estimate.currency)}</strong></div><div><span>Low</span><strong>${money(estimate.lowEstimate, estimate.currency)}</strong></div><div><span>High</span><strong>${money(estimate.highEstimate, estimate.currency)}</strong></div></div><div class="specialized-form-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-accept-estimate>${esc(t('accept'))}</button></div>`;
       result.querySelector('[data-accept-estimate]').addEventListener('click', async () => {
         try {
           await api(`api/assets/${asset.id}/valuations`, json('POST', { amount: estimate.amount, currency: estimate.currency, valuedAt: estimate.valuedAt, method: 'internal_estimate', lowEstimate: estimate.lowEstimate, highEstimate: estimate.highEstimate, isAccepted: true }));

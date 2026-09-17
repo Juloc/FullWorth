@@ -1,5 +1,6 @@
 import { emitAppEvent } from '../../core/event-bus.js';
 import { confirmDialog } from '../../components/confirm.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 const VIEW_API = { current: 'active', completed: 'resolved', hidden: 'hidden' };
 let dashboardRenderVersion = 0;
@@ -126,7 +127,7 @@ export async function renderDashboardInsights(ctx) {
   const body = signals.length
     ? signals.map(signal => row(ctx, signal, true)).join('')
     : '<div class="insights-empty"><strong>' + ctx.esc(tr(ctx, 'insights.emptyTitle', 'Nothing needs your attention')) + '</strong><span>' + ctx.esc(tr(ctx, 'insights.emptyCurrent', 'New relevant changes will appear here.')) + '</span></div>';
-  root.innerHTML = '<article class="panel insights-panel insights-dashboard"><div class="insights-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.important', 'Important for you')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.dashboardHint', 'Changes and open items FullWorth noticed.')) + '</span></div><button type="button" class="ghost insights-all" data-insights-all>' + ctx.esc(tr(ctx, 'insights.showAll', 'Show all')) + '</button></div><div class="insight-list">' + body + '</div></article>';
+  root.innerHTML = '<article class="panel insights-panel insights-dashboard"><div class="insights-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.important', 'Important for you')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.dashboardHint', 'Changes and open items FullWorth noticed.')) + '</span></div><button type="button" class="' + buttonClass(ButtonRole.Secondary, 'insights-all') + '" data-insights-all>' + ctx.esc(tr(ctx, 'insights.showAll', 'Show all')) + '</button></div><div class="insight-list">' + body + '</div></article>';
 
   root.onclick = event => {
     if (event.target.closest('[data-insights-all]')) { ctx.showView('insights'); return; }
@@ -154,7 +155,7 @@ export async function mountInsights(ctx) {
       root.innerHTML = surface(ctx, view, signals, false);
     } catch (error) {
       if (controller.signal.aborted || version !== renderVersion) return;
-      root.innerHTML = '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div>' + unavailable(ctx, error?.status !== 404) + '</div>';
+      root.innerHTML = '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div>' + unavailable(ctx, error?.status !== 404) + '</div>';
     }
   };
 
@@ -183,7 +184,7 @@ function surface(ctx, selected, signals, loading) {
     const key = selected === 'current' ? 'insights.emptyCurrent' : selected === 'completed' ? 'insights.emptyCompleted' : 'insights.emptyHidden';
     body = '<div class="insights-empty"><strong>' + ctx.esc(tr(ctx, 'insights.emptyTitle', 'Nothing here')) + '</strong><span>' + ctx.esc(tr(ctx, key, 'No insights in this view.')) + '</span></div>';
   }
-  return '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="ghost" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div><article class="panel insights-panel"><div class="insights-head insights-view-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.title', 'Insights')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.subtitle', 'Insights directly from your FullWorth data.')) + '</span></div></div><div class="insights-tabs" role="group" aria-label="' + ctx.esc(tr(ctx, 'insights.filterLabel', 'Insight status')) + '">' + tabs + '</div><div class="insight-list">' + body + '</div></article></div>';
+  return '<div class="insights-view-wrap"><div class="insights-back-row"><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-insights-back>← ' + ctx.esc(tr(ctx, 'common.back', 'Back')) + '</button></div><article class="panel insights-panel"><div class="insights-head insights-view-head"><div><h2>' + ctx.esc(tr(ctx, 'insights.title', 'Insights')) + '</h2><span>' + ctx.esc(tr(ctx, 'insights.subtitle', 'Insights directly from your FullWorth data.')) + '</span></div></div><div class="insights-tabs" role="group" aria-label="' + ctx.esc(tr(ctx, 'insights.filterLabel', 'Insight status')) + '">' + tabs + '</div><div class="insight-list">' + body + '</div></article></div>';
 }
 
 function contractPairIds(signal) {
@@ -276,7 +277,7 @@ async function loadMergePreview(ctx, signal, target, detailDialog, refresh) {
           target.innerHTML = '<div class="insight-merge-stale"><strong>' +
             ctx.esc(tr(ctx, 'insights.mergePreview.staleTitle', 'Preview is outdated')) +
             '</strong><span>' + ctx.esc(tr(ctx, 'insights.mergePreview.stale', 'Contract data changed. Open a fresh preview before merging.')) +
-            '</span><button type="button" class="ghost" data-merge-reload>' +
+            '</span><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-merge-reload>' +
             ctx.esc(tr(ctx, 'insights.mergePreview.reload', 'Refresh preview')) + '</button></div>';
           target.querySelector('[data-merge-reload]')?.addEventListener('click', () =>
             loadMergePreview(ctx, signal, target, detailDialog, refresh));
@@ -306,13 +307,13 @@ function openDetail(ctx, initialSignal, refresh) {
   const manage = signal.resolvedAt ? '' :
     '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.manage', 'Manage')) + '</span><div class="insight-detail-actions">' +
     (hidden
-      ? '<button type="button" class="ghost" data-action="read">' + ctx.esc(tr(ctx, 'insights.restore', 'Show again')) + '</button>'
+      ? '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-action="read">' + ctx.esc(tr(ctx, 'insights.restore', 'Show again')) + '</button>'
       : signal.state !== 'read'
-        ? '<button type="button" class="ghost" data-action="read">' + ctx.esc(tr(ctx, 'insights.markRead', 'Mark as read')) + '</button>'
+        ? '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-action="read">' + ctx.esc(tr(ctx, 'insights.markRead', 'Mark as read')) + '</button>'
         : '') +
-    (!hidden ? '<button type="button" class="ghost" data-action="dismiss">' + ctx.esc(tr(ctx, 'insights.dismiss', 'Hide')) + '</button>' : '') +
+    (!hidden ? '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-action="dismiss">' + ctx.esc(tr(ctx, 'insights.dismiss', 'Hide')) + '</button>' : '') +
     '</div>' +
-    (!hidden ? '<div class="insight-snooze"><select data-snooze-days aria-label="' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '"><option value="1">' + ctx.esc(tr(ctx, 'insights.snooze1', '1 day')) + '</option><option value="7" selected>' + ctx.esc(tr(ctx, 'insights.snooze7', '7 days')) + '</option><option value="30">' + ctx.esc(tr(ctx, 'insights.snooze30', '30 days')) + '</option></select><button type="button" class="ghost" data-action="snooze">' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '</button></div>' : '') +
+    (!hidden ? '<div class="insight-snooze"><select data-snooze-days aria-label="' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '"><option value="1">' + ctx.esc(tr(ctx, 'insights.snooze1', '1 day')) + '</option><option value="7" selected>' + ctx.esc(tr(ctx, 'insights.snooze7', '7 days')) + '</option><option value="30">' + ctx.esc(tr(ctx, 'insights.snooze30', '30 days')) + '</option></select><button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-action="snooze">' + ctx.esc(tr(ctx, 'insights.snooze', 'Snooze')) + '</button></div>' : '') +
     '</div>';
   const html = '<form method="dialog" class="dialog-card insight-detail"><div class="panel-head"><div><h2>' + ctx.esc(title(ctx, signal)) + '</h2><div class="row-sub">' + ctx.esc(stateLabel(ctx, signal)) + '</div></div><button value="cancel" data-close aria-label="' + ctx.esc(tr(ctx, 'common.close', 'Close')) + '">×</button></div>' +
     (s ? '<p class="insight-detail-summary">' + ctx.esc(s) + '</p>' : '') +
@@ -321,7 +322,7 @@ function openDetail(ctx, initialSignal, refresh) {
     (signal.subjectType === 'contract-pair'
       ? '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.mergePreview.section', 'Merge preview')) + '</span><div data-merge-preview></div></div>'
       : '') +
-    '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.feedback', 'Was this useful?')) + '</span><div class="insight-feedback"><button type="button" class="ghost ' + (signal.feedback === 'useful' ? 'active' : '') + '" data-feedback="useful" aria-pressed="' + (signal.feedback === 'useful') + '">' + ctx.esc(tr(ctx, 'insights.useful', 'Useful')) + '</button><button type="button" class="ghost ' + (signal.feedback === 'irrelevant' ? 'active' : '') + '" data-feedback="irrelevant" aria-pressed="' + (signal.feedback === 'irrelevant') + '">' + ctx.esc(tr(ctx, 'insights.irrelevant', 'Not relevant')) + '</button></div></div>' +
+    '<div class="insight-detail-section"><span class="insight-section-label">' + ctx.esc(tr(ctx, 'insights.feedback', 'Was this useful?')) + '</span><div class="insight-feedback"><button type="button" class="' + buttonClass(ButtonRole.Secondary, signal.feedback === 'useful' ? 'active' : '') + '" data-feedback="useful" aria-pressed="' + (signal.feedback === 'useful') + '">' + ctx.esc(tr(ctx, 'insights.useful', 'Useful')) + '</button><button type="button" class="' + buttonClass(ButtonRole.Secondary, signal.feedback === 'irrelevant' ? 'active' : '') + '" data-feedback="irrelevant" aria-pressed="' + (signal.feedback === 'irrelevant') + '">' + ctx.esc(tr(ctx, 'insights.irrelevant', 'Not relevant')) + '</button></div></div>' +
     '<button type="button" class="insight-open-target" data-open-target>' + ctx.esc(tr(ctx, 'insights.openAffected', 'Open affected area')) + '<span aria-hidden="true">›</span></button></form>';
   const dlg = ctx.dialog(html, { mobileMode: 'sheet' });
   let busy = false;

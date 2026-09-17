@@ -2,6 +2,8 @@
 // /discounts so basket promotions are never forced onto an arbitrary product and manual corrections
 // remain distinguishable from OCR/Amazon/Codex imports.
 
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
+
 const text = (de, en) => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? de : en;
 
 const TYPES = [
@@ -40,12 +42,12 @@ export async function mountPurchaseDiscountActions({ dlg, purchase, writable, ap
   const render = () => {
     const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const itemById = new Map((purchase.items || []).map(item => [String(item.id), item]));
-    card.innerHTML = `<div class="pa-card-head"><div><h3>${esc(text('Rabatte', 'Discounts'))}</h3><div class="row-sub">${esc(text('Kanonische Rabattzeilen; der Summenwert oben im Kauf ist nur ein Spiegel.', 'Canonical discount rows; the purchase summary value is only a mirror.'))}</div></div>${writable ? `<button type="button" class="ghost" data-discount-add>${esc(text('Rabatt hinzufügen', 'Add discount'))}</button>` : ''}</div>
+    card.innerHTML = `<div class="pa-card-head"><div><h3>${esc(text('Rabatte', 'Discounts'))}</h3><div class="row-sub">${esc(text('Kanonische Rabattzeilen; der Summenwert oben im Kauf ist nur ein Spiegel.', 'Canonical discount rows; the purchase summary value is only a mirror.'))}</div></div>${writable ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-discount-add>${esc(text('Rabatt hinzufügen', 'Add discount'))}</button>` : ''}</div>
       <div class="pa-discount-total"><span>${esc(text('Erkannte Ersparnis', 'Recognized savings'))}</span><strong>${esc(money(total, purchase.currency || 'EUR'))}</strong></div>
       <div class="pa-discount-list">${rows.length ? rows.map(row => {
         const item = row.purchaseItemId ? itemById.get(String(row.purchaseItemId)) : null;
         const confidence = row.confidence == null ? '' : ` · ${Math.round(Number(row.confidence) * 100)}%`;
-        return `<div class="pa-discount-row" data-discount-id="${esc(row.id)}"><div><strong>${esc(row.label || typeLabel(row.type))}</strong><span>${esc(typeLabel(row.type))} · ${esc(item ? item.name : text('Warenkorb', 'Basket'))}</span><small>${esc(sourceLabel(row.source))}${esc(confidence)}</small></div><div class="pa-discount-row-actions"><strong>−${esc(money(row.amount, purchase.currency || 'EUR'))}</strong>${writable ? `<button type="button" class="ghost" data-discount-edit="${esc(row.id)}">${esc(text('Bearbeiten', 'Edit'))}</button><button type="button" class="ghost danger" data-discount-delete="${esc(row.id)}">${esc(text('Löschen', 'Delete'))}</button>` : ''}</div></div>`;
+        return `<div class="pa-discount-row" data-discount-id="${esc(row.id)}"><div><strong>${esc(row.label || typeLabel(row.type))}</strong><span>${esc(typeLabel(row.type))} · ${esc(item ? item.name : text('Warenkorb', 'Basket'))}</span><small>${esc(sourceLabel(row.source))}${esc(confidence)}</small></div><div class="pa-discount-row-actions"><strong>−${esc(money(row.amount, purchase.currency || 'EUR'))}</strong>${writable ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-discount-edit="${esc(row.id)}">${esc(text('Bearbeiten', 'Edit'))}</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-discount-delete="${esc(row.id)}">${esc(text('Löschen', 'Delete'))}</button>` : ''}</div></div>`;
       }).join('') : `<div class="state-empty">${esc(text('Keine strukturierten Rabatte gespeichert.', 'No structured discounts stored.'))}</div>`}</div>`;
 
     card.querySelector('[data-discount-add]')?.addEventListener('click', () => openEditor(null));
@@ -68,7 +70,7 @@ export async function mountPurchaseDiscountActions({ dlg, purchase, writable, ap
       <label>${esc(text('Bezeichnung', 'Label'))}<input name="label" maxlength="250" value="${esc(row?.label || '')}" placeholder="${esc(text('z. B. App-Coupon 2 €', 'e.g. App coupon €2'))}"></label>
       <div class="pa-form-grid"><label>${esc(text('Coupon-Code (optional)', 'Coupon code (optional)'))}<input name="couponCode" maxlength="120" value="${esc(row?.couponCode || '')}"></label><label>${esc(text('Quelltext (optional)', 'Raw source text (optional)'))}<input name="rawText" maxlength="1000" value="${esc(row?.rawText || '')}"></label></div>
       ${row ? `<div class="row-sub">${esc(text('Beim Speichern wird eine automatisch erkannte/importierte Zeile bewusst zu einer manuellen Korrektur; ihre AI-Confidence wird entfernt.', 'Saving intentionally promotes an extracted/imported row to a manual correction and clears its AI confidence.'))}</div>` : ''}
-      <div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit">${esc(text('Speichern', 'Save'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
+      <div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Speichern', 'Save'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
     editor.querySelectorAll('[data-close]').forEach(button => button.onclick = () => editor.close());
     editor.querySelector('form').onsubmit = async event => {
       event.preventDefault();

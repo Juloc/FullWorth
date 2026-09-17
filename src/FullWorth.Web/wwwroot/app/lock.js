@@ -1,5 +1,6 @@
 import { assertPasskey, isPasskeySupported, passkeyErrorKey } from '../passkeys/passkeys.js';
 import { secureFetch } from '../security/secure-fetch.js';
+import { ButtonRole, buttonClass } from '../components/buttons.js';
 
 // Inactivity lock (§ security): after LOCK_AFTER of no interaction the app covers itself with an
 // opaque lock screen. Unlocking is primarily a passkey (WebAuthn) and falls back to a PIN. The
@@ -74,9 +75,9 @@ function buildOverlay() {
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'lock-title');
   const passkeyBtn = capability.hasPasskey
-    ? `<button type="button" class="primary-action" data-lock="passkey">${ctx.esc(ctx.get('lock.unlockPasskey'))}</button>` : '';
+    ? `<button type="button" class="${buttonClass(ButtonRole.Primary)}" data-lock="passkey">${ctx.esc(ctx.get('lock.unlockPasskey'))}</button>` : '';
   const pinToggle = capability.hasPin
-    ? `<button type="button" class="ghost" data-lock="pin-toggle">${ctx.esc(ctx.get('lock.usePin'))}</button>` : '';
+    ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-lock="pin-toggle">${ctx.esc(ctx.get('lock.usePin'))}</button>` : '';
   overlay.innerHTML = `<div class="lock-card">
     <span class="lock-mark" aria-hidden="true">F</span>
     <h2 id="lock-title">${ctx.esc(ctx.get('lock.title'))}</h2>
@@ -85,10 +86,10 @@ function buildOverlay() {
     <form class="lock-pin" ${capability.hasPasskey ? 'hidden' : ''}>
       <input type="password" inputmode="numeric" autocomplete="off" name="pin" maxlength="12"
         placeholder="${ctx.esc(ctx.get('lock.pinPlaceholder'))}" aria-label="${ctx.esc(ctx.get('lock.pin'))}">
-      <button type="submit" class="primary-action">${ctx.esc(ctx.get('lock.unlock'))}</button>
+      <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('lock.unlock'))}</button>
     </form>
     <p class="lock-error" role="alert" hidden></p>
-    <button type="button" class="ghost danger" data-lock="logout">${ctx.esc(ctx.get('lock.logout'))}</button>
+    <button type="button" class="${buttonClass(ButtonRole.Danger)}" data-lock="logout">${ctx.esc(ctx.get('lock.logout'))}</button>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -184,9 +185,9 @@ export function openPinDialog(context) {
       <label>${ctx.esc(ctx.get('lock.newPin'))}<input name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="${ctx.esc(ctx.get('lock.pinPlaceholder'))}"></label>
       <p class="lock-error" role="alert" hidden></p>
       <div class="dialog-actions">
-        ${isSet ? `<button type="button" class="ghost danger" data-pin="remove">${ctx.esc(ctx.get('lock.removePin'))}</button>` : ''}
-        <button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
-        <button type="submit">${ctx.esc(ctx.get('common.save'))}</button>
+        ${isSet ? `<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-pin="remove">${ctx.esc(ctx.get('lock.removePin'))}</button>` : ''}
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+        <button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.save'))}</button>
       </div>
     </form>`);
     const err = dlg.querySelector('.lock-error');

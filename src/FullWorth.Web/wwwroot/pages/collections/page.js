@@ -11,6 +11,7 @@ import { emptyRow } from '../../components/empty.js';
 import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../components/icons.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { keepListPosition } from '../../components/list-position.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 const STATUSES = ['active', 'completed', 'archived'];
 
@@ -243,8 +244,8 @@ async function openCandidates(row) {
     <p class="row-sub">${ctx.esc(t('candidateHint').replace('{count}', String(candidates.length)))}</p>
     <div class="rows">${rows}</div>
     <div class="dialog-actions">
-      <button type="button" class="ghost" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
-      <button type="button" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-apply>${ctx.esc(ctx.get('common.apply'))}</button>
     </div>
   </div>`);
 

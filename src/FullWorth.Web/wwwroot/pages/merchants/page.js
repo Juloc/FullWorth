@@ -5,6 +5,7 @@
 // add/remove. All writes require the space Owner role.
 
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 const trashIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"/></svg>';
@@ -61,7 +62,7 @@ function rowFor(m, all) {
   const row = document.createElement('div');
   row.className = 'row merchant-row';
   const chips = (m.aliases || []).map(a =>
-    `<span class="chip">${ctx.esc(a.normalizedAlias)}<button type="button" data-remove-alias="${a.id}" aria-label="${ctx.esc(ctx.get('merchants.removeAlias'))}" title="${ctx.esc(ctx.get('merchants.removeAlias'))}">×</button></span>`).join('');
+    `<span class="chip">${ctx.esc(a.normalizedAlias)}<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-remove-alias="${a.id}" aria-label="${ctx.esc(ctx.get('merchants.removeAlias'))}" title="${ctx.esc(ctx.get('merchants.removeAlias'))}">×</button></span>`).join('');
   const canMerge = (all || []).length > 1;
   row.innerHTML = `
     ${identityIcon(m.name, { logoAssetPath: m.logoAssetPath })}
@@ -70,9 +71,9 @@ function rowFor(m, all) {
       <div class="chips">${chips}<button type="button" class="chip add" data-add-alias>+ ${ctx.esc(ctx.get('merchants.addAlias'))}</button></div>
     </div>
     <div class="row-side">
-      <button type="button" class="icon-button" data-rename aria-label="${ctx.esc(ctx.get('merchants.rename'))}" title="${ctx.esc(ctx.get('merchants.rename'))}">${editIcon}</button>
-      ${canMerge ? `<button type="button" class="icon-button" data-merge aria-label="${ctx.esc(ctx.get('merchants.mergeInto'))}" title="${ctx.esc(ctx.get('merchants.mergeInto'))}">${mergeIcon}</button>` : ''}
-      <button type="button" class="icon-button" data-delete aria-label="${ctx.esc(ctx.get('common.delete'))}" title="${ctx.esc(ctx.get('common.delete'))}">${trashIcon}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-rename aria-label="${ctx.esc(ctx.get('merchants.rename'))}" title="${ctx.esc(ctx.get('merchants.rename'))}">${editIcon}</button>
+      ${canMerge ? `<button type="button" class="${buttonClass(ButtonRole.Icon)}" data-merge aria-label="${ctx.esc(ctx.get('merchants.mergeInto'))}" title="${ctx.esc(ctx.get('merchants.mergeInto'))}">${mergeIcon}</button>` : ''}
+      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-delete aria-label="${ctx.esc(ctx.get('common.delete'))}" title="${ctx.esc(ctx.get('common.delete'))}">${trashIcon}</button>
     </div>`;
   row.querySelector('[data-add-alias]').addEventListener('click', () => addAlias(m));
   row.querySelectorAll('[data-remove-alias]').forEach(b => b.addEventListener('click', () => removeAlias(m, b.dataset.removeAlias)));
@@ -86,7 +87,7 @@ function openMerchantDialog() {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('merchants.new'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="200" autocomplete="off"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.create'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.create'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -105,7 +106,7 @@ function openRenameDialog(m) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('merchants.renameTitle'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <label>${ctx.esc(ctx.get('common.name'))}<input name="name" required maxlength="200" autocomplete="off" value="${ctx.esc(m.name)}"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.save'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.save'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -129,7 +130,7 @@ function openMergeDialog(m, all) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('merchants.mergeTitle').replace('{name}', () => m.name))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <label>${ctx.esc(ctx.get('merchants.mergeTarget'))}<select name="target">${options}</select></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="danger">${ctx.esc(ctx.get('merchants.merge'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Danger)}">${ctx.esc(ctx.get('merchants.merge'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -150,7 +151,7 @@ function addAlias(m) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${ctx.esc(ctx.get('merchants.addAliasFor').replace('{name}', () => m.name))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <label>${ctx.esc(ctx.get('merchants.alias'))}<input name="alias" required maxlength="200" autocomplete="off"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.add'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.add'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();

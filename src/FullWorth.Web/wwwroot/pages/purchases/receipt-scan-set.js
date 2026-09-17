@@ -1,4 +1,5 @@
 import { createDialog } from '../../components/dialog.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 // FullWorth receipt scan-set builder.
 //
 // One logical receipt may contain several independently captured photos or one/more PDFs. Files are
@@ -75,9 +76,9 @@ function renderDraft(draft) {
       <div class="receipt-set-thumb">${image}</div>
       <div class="receipt-set-source-main"><strong>${esc(file.name || t('Foto', 'Photo'))}</strong><small>${humanBytes(file.size)}${isPdf(file) ? ` · ${t('alle PDF-Seiten', 'all PDF pages')}` : ''}</small></div>
       <div class="receipt-set-source-actions">
-        <button type="button" class="ghost" data-up="${index}" ${index === 0 ? 'disabled' : ''} aria-label="${t('Nach oben', 'Move up')}">↑</button>
-        <button type="button" class="ghost" data-down="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="${t('Nach unten', 'Move down')}">↓</button>
-        <button type="button" class="ghost" data-remove="${index}" aria-label="${t('Entfernen', 'Remove')}">×</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-up="${index}" ${index === 0 ? 'disabled' : ''} aria-label="${t('Nach oben', 'Move up')}">↑</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-down="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="${t('Nach unten', 'Move down')}">↓</button>
+        <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-remove="${index}" aria-label="${t('Entfernen', 'Remove')}">×</button>
       </div>
     </li>`;
   }).join('');
@@ -110,16 +111,16 @@ function renderDraft(draft) {
     : t(`${files.length} Dateien als einen Beleg analysieren`, `Analyze ${files.length} files as one receipt`);
 
   dialog.innerHTML = `<div class="dialog-card receipt-set-card">
-    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${heading}</h2></div><button type="button" class="ghost" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
+    <div class="panel-head"><div><span class="row-sub">FullWorth Scan-Set</span><h2>${heading}</h2></div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel aria-label="${t('Abbrechen', 'Cancel')}">×</button></div>
     ${lead}
     ${sources}
     <div class="receipt-set-add-row">
-      <button type="button" class="ghost" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-add>${t('+ Weitere Seite / Foto', '+ Add page / photo')}</button>
       ${counter}
     </div>
     <div class="dialog-actions receipt-set-actions">
-      <button type="button" class="ghost" data-cancel>${t('Abbrechen', 'Cancel')}</button>
-      <button type="button" data-start ${files.length ? '' : 'disabled'}>${startLabel}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${t('Abbrechen', 'Cancel')}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-start ${files.length ? '' : 'disabled'}>${startLabel}</button>
     </div>
   </div>`;
 
@@ -267,8 +268,8 @@ function renderProgress(draft) {
     // einmal versuchen, ohne neu zu fotografieren.
     ? `<div class="receipt-set-progress is-error"><strong data-status class="is-error">${esc(draft.error?.message || String(draft.error || ''))}</strong></div>
        <div class="dialog-actions receipt-set-actions">
-         <button type="button" class="ghost" data-give-up>${t('Abbrechen', 'Cancel')}</button>
-         <button type="button" data-retry>${t('Erneut versuchen', 'Try again')}</button>
+         <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-give-up>${t('Abbrechen', 'Cancel')}</button>
+         <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-retry>${t('Erneut versuchen', 'Try again')}</button>
        </div>`
     : `<div class="receipt-set-progress"><span class="receipt-set-spinner" aria-hidden="true"></span><strong data-status>${t('Vorbereitung …', 'Preparing …')}</strong></div>`;
 
@@ -277,7 +278,7 @@ function renderProgress(draft) {
       ? t('Verarbeitung fehlgeschlagen', 'Processing failed')
       : t('Ein Beleg wird verarbeitet', 'Processing one receipt')}</h2></div>${failed
       ? ''
-      : `<button type="button" class="ghost" data-background>${t('Im Hintergrund', 'Background')}</button>`}</div>
+      : `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-background>${t('Im Hintergrund', 'Background')}</button>`}</div>
     <p data-meta>${t(`${draft.files.length} Dateien werden gemeinsam verarbeitet.`, `${draft.files.length} files are processed together.`)}</p>
     ${sources}
     <div data-engine class="row-sub receipt-set-engine">${engineLine(draft)}</div>

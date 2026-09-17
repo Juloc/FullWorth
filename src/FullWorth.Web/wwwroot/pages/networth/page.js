@@ -1,4 +1,5 @@
 import { TRASH_ICON } from '../../components/icons.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
 import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
@@ -1218,7 +1219,7 @@ async function openEmergencyFundDialog() {
     <label>${ctx.esc(t('emergencyTarget'))}<input type="number" min="0" step="0.01" inputmode="decimal" name="target" value="${ctx.esc(pref.targetAmount || '')}" placeholder="0,00"></label>
     <label>${ctx.esc(t('emergencyScope'))}<select name="scope"><option value="">${ctx.esc(t('emergencyAll'))}</option><optgroup label="${ctx.esc(t('accounts'))}">${accountOptions}</optgroup><optgroup label="${ctx.esc(isDe() ? 'Kontogruppen' : 'Account groups')}">${groupOptions}</optgroup></select></label>
     <div class="row-sub" data-error hidden></div>
-    <div class="dialog-actions"><button type="button" class="ghost" data-close2>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.save'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-close2>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-save>${ctx.esc(ctx.get('common.save'))}</button></div>
   </form>`);
   const scope = dlg.querySelector('[name="scope"]'); if (scope) scope.value = scopeValue;
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
@@ -1360,7 +1361,7 @@ async function removeWealthRow(resource, id, title, message) {
 
 function wealthCoachButton(onclick) {
   const button = document.createElement('button');
-  button.type = 'button'; button.className = 'ghost nw-coach'; button.textContent = 'Coach';
+  button.type = 'button'; button.className = buttonClass(ButtonRole.Secondary, 'nw-coach'); button.textContent = 'Coach';
   button.onclick = onclick; return button;
 }
 
@@ -1368,9 +1369,9 @@ function assetRow(asset) {
   const row = document.createElement('div');
   row.className = `row nw-item${asset.includeInNetWorth ? '' : ' nw-excluded'}`;
   const detailAction = asset.kind === 'real_estate'
-    ? `<button class="icon-button" data-detail title="${ctx.esc(t('details'))}" aria-label="${ctx.esc(t('details'))}">›</button>`
-    : `<button class="icon-button" data-history title="${ctx.esc(t('valueHistory'))}" aria-label="${ctx.esc(t('valueHistory'))}">↗</button>`;
-  row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(asset.name)}${asset.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(t(asset.kind || 'other'))}${asset.valuedAt ? ` · ${ctx.esc(dateValue(asset.valuedAt))}` : ''}</div></div><div class="row-side"><span class="amount">${ctx.money(asset.currentValue, asset.currency)}</span>${detailAction}<button class="icon-button" data-toggle title="${ctx.esc(ctx.get(asset.includeInNetWorth ? 'networth.exclude' : 'networth.include'))}">${asset.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button><button class="icon-button" data-delete title="${ctx.esc(t('deleteAsset'))}" aria-label="${ctx.esc(t('deleteAsset'))}">${TRASH_ICON}</button></div>`;
+    ? `<button class="${buttonClass(ButtonRole.Icon)}" data-detail title="${ctx.esc(t('details'))}" aria-label="${ctx.esc(t('details'))}">›</button>`
+    : `<button class="${buttonClass(ButtonRole.Icon)}" data-history title="${ctx.esc(t('valueHistory'))}" aria-label="${ctx.esc(t('valueHistory'))}">↗</button>`;
+  row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(asset.name)}${asset.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(t(asset.kind || 'other'))}${asset.valuedAt ? ` · ${ctx.esc(dateValue(asset.valuedAt))}` : ''}</div></div><div class="row-side"><span class="amount">${ctx.money(asset.currentValue, asset.currency)}</span>${detailAction}<button class="${buttonClass(ButtonRole.Icon)}" data-toggle title="${ctx.esc(ctx.get(asset.includeInNetWorth ? 'networth.exclude' : 'networth.include'))}">${asset.includeInNetWorth ? '◉' : '○'}</button><button class="${buttonClass(ButtonRole.Icon)}" data-edit title="${ctx.esc(ctx.get('common.edit'))}">✎</button><button class="${buttonClass(ButtonRole.Icon)}" data-delete title="${ctx.esc(t('deleteAsset'))}" aria-label="${ctx.esc(t('deleteAsset'))}">${TRASH_ICON}</button></div>`;
   row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('asset', asset, asset.name, asset.currentValue)));
   row.querySelector('[data-edit]').onclick = () => openAssetForm(asset.kind || 'other', asset);
   row.querySelector('[data-delete]').onclick = () => removeWealthRow('assets', asset.id, t('deleteAsset'), t('deleteAssetConfirm'));
@@ -1389,7 +1390,7 @@ function renderLiabilities(liabilities) {
   const frag = document.createDocumentFragment();
   for (const item of liabilities) {
     const row = document.createElement('div'); row.className = `row nw-item${item.includeInNetWorth ? '' : ' nw-excluded'}`;
-    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name)}${item.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(ctx.get(`networth.liabilityKind_${item.kind || 'other'}`))}</div></div><div class="row-side"><span class="amount">${ctx.money(item.currentBalance, item.currency)}</span><button class="icon-button" data-toggle>${item.includeInNetWorth ? '◉' : '○'}</button><button class="icon-button" data-edit>✎</button><button class="icon-button" data-delete title="${ctx.esc(t('deleteLiability'))}" aria-label="${ctx.esc(t('deleteLiability'))}">${TRASH_ICON}</button></div>`;
+    row.innerHTML = `<div class="row-main"><div class="row-title">${ctx.esc(item.name)}${item.includeInNetWorth ? '' : ` <span class="tx-marker">${ctx.esc(ctx.get('networth.excluded'))}</span>`}</div><div class="row-sub">${ctx.esc(ctx.get(`networth.liabilityKind_${item.kind || 'other'}`))}</div></div><div class="row-side"><span class="amount">${ctx.money(item.currentBalance, item.currency)}</span><button class="${buttonClass(ButtonRole.Icon)}" data-toggle>${item.includeInNetWorth ? '◉' : '○'}</button><button class="${buttonClass(ButtonRole.Icon)}" data-edit>✎</button><button class="${buttonClass(ButtonRole.Icon)}" data-delete title="${ctx.esc(t('deleteLiability'))}" aria-label="${ctx.esc(t('deleteLiability'))}">${TRASH_ICON}</button></div>`;
     row.querySelector('.row-side')?.prepend(wealthCoachButton(() => askCoachAboutWealth('liability', item, item.name, item.currentBalance)));
     row.querySelector('[data-edit]').onclick = () => openLiabilityDialog(item);
     row.querySelector('[data-delete]').onclick = () => removeWealthRow('liabilities', item.id, t('deleteLiability'), t('deleteLiabilityConfirm'));
@@ -1536,7 +1537,7 @@ function openAssetForm(kind, existing) {
 async function openValuationHistory(asset) {
   let values;
   try { values = await ctx.api(`api/assets/${asset.id}/valuations`); } catch (error) { ctx.toast(error.message || ctx.get('common.error')); return; }
-  const dlg = ctx.dialog(`<div class="dialog-card wealth-history-dialog"><div class="panel-head"><div><h2>${ctx.esc(asset.name)}</h2><div class="row-sub">${ctx.esc(t('valueHistory'))}</div></div><button type="button" data-close>×</button></div><div class="wealth-valuations">${values?.length ? values.map(value => `<div class="row wealth-valuation${value.isCurrent ? ' is-current' : ''}"><div class="row-main"><div class="row-title">${ctx.money(value.amount, value.currency)}${value.isCurrent ? ` <span class="tx-marker">${ctx.esc(t('current'))}</span>` : ''}</div><div class="row-sub">${ctx.esc(dateValue(value.valuedAt))} · ${ctx.esc(t(value.method || 'manual'))}</div></div></div>`).join('') : `<div class="row-sub">${ctx.esc(t('noValuations'))}</div>`}</div><form class="wealth-value-form"><h3>${ctx.esc(t('updateValue'))}</h3><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.value'))}<input name="amount" type="number" min="0" step="0.01" value="${asset.currentValue}" required></label><label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(asset.currency)}" minlength="3" maxlength="3" required></label></div><label>${ctx.esc(ctx.get('networth.valuedAt'))}<input name="valuedAt" type="date" value="${localDate(new Date())}"></label><div class="dialog-actions"><button type="submit">${ctx.esc(ctx.get('common.apply'))}</button></div></form></div>`);
+  const dlg = ctx.dialog(`<div class="dialog-card wealth-history-dialog"><div class="panel-head"><div><h2>${ctx.esc(asset.name)}</h2><div class="row-sub">${ctx.esc(t('valueHistory'))}</div></div><button type="button" data-close>×</button></div><div class="wealth-valuations">${values?.length ? values.map(value => `<div class="row wealth-valuation${value.isCurrent ? ' is-current' : ''}"><div class="row-main"><div class="row-title">${ctx.money(value.amount, value.currency)}${value.isCurrent ? ` <span class="tx-marker">${ctx.esc(t('current'))}</span>` : ''}</div><div class="row-sub">${ctx.esc(dateValue(value.valuedAt))} · ${ctx.esc(t(value.method || 'manual'))}</div></div></div>`).join('') : `<div class="row-sub">${ctx.esc(t('noValuations'))}</div>`}</div><form class="wealth-value-form"><h3>${ctx.esc(t('updateValue'))}</h3><div class="rule-grid"><label>${ctx.esc(ctx.get('networth.value'))}<input name="amount" type="number" min="0" step="0.01" value="${asset.currentValue}" required></label><label>${ctx.esc(ctx.get('purchases.currency'))}<input name="currency" value="${ctx.esc(asset.currency)}" minlength="3" maxlength="3" required></label></div><label>${ctx.esc(ctx.get('networth.valuedAt'))}<input name="valuedAt" type="date" value="${localDate(new Date())}"></label><div class="dialog-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form></div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);

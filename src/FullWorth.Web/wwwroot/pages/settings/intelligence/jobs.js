@@ -1,4 +1,5 @@
 import { api as sharedApi, jsonBody } from '../../../core/services.js';
+import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 const list = document.getElementById('job-list');
 const refresh = document.getElementById('refresh-jobs');
 
@@ -79,7 +80,7 @@ function installManualControls() {
   for (const [type, label] of definitions) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className = buttonClass(ButtonRole.Secondary);
     button.dataset.intelEnqueue = type;
     button.textContent = label;
     button.addEventListener('click', () => enqueue(type, button));

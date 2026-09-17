@@ -2,6 +2,7 @@ import { api as sharedApi } from '../../core/services.js';
 import { state } from '../../core/state.js';
 import { navigate } from '../../core/navigation.js';
 import { emitAppEvent, onAppEvent } from '../../core/event-bus.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 const $ = selector => document.querySelector(selector);
 const all = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -721,7 +722,7 @@ function renderMessages(messages) {
 function messageTool(label, handler, title = label) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'ghost';
+  button.className = buttonClass(ButtonRole.Secondary);
   button.textContent = label;
   button.title = title;
   button.addEventListener('click', handler);
@@ -848,7 +849,7 @@ function renderContextActions(){
   messageRoots().forEach(root=>{
     const article=[...root.querySelectorAll('.coach-message.assistant')].at(-1);if(!article||article.querySelector('.coach-response-actions'))return;
     const bar=document.createElement('div');bar.className='coach-response-actions';
-    actions.forEach(action=>{const b=document.createElement('button');b.type='button';b.className='ghost';b.textContent=action.label;b.addEventListener('click',action.run);bar.appendChild(b)});
+    actions.forEach(action=>{const b=document.createElement('button');b.type='button';b.className=buttonClass(ButtonRole.Secondary);b.textContent=action.label;b.addEventListener('click',action.run);bar.appendChild(b)});
     article.appendChild(bar);
   });
 }
@@ -958,7 +959,7 @@ function toggleReviewDetails(tx, row) {
   const allowed = reasonsBySentiment[review.sentiment] || [];
   panel.innerHTML = `<div class="coach-reasons">${allowed.map(reason => `<button type="button" data-reason="${reason}" class="${review.reasons?.includes(reason) ? 'active' : ''}">${esc(reasonLabels[reason]?.[lang() === 'de' ? 0 : 1] || reason)}</button>`).join('')}</div>
     <textarea maxlength="500" rows="2" placeholder="${esc(tr('Optionale Notiz', 'Optional note'))}">${esc(review.note || '')}</textarea>
-    <div class="coach-detail-actions"><button type="button" data-clear class="ghost">${esc(tr('Bewertung löschen', 'Clear review'))}</button><button type="button" data-save>${esc(tr('Speichern', 'Save'))}</button></div>`;
+    <div class="coach-detail-actions"><button type="button" data-clear class="${buttonClass(ButtonRole.Secondary)}">${esc(tr('Bewertung löschen', 'Clear review'))}</button><button type="button" data-save class="${buttonClass(ButtonRole.Primary)}">${esc(tr('Speichern', 'Save'))}</button></div>`;
   panel.querySelectorAll('[data-reason]').forEach(button => button.addEventListener('click', () => button.classList.toggle('active')));
   panel.querySelector('[data-save]').addEventListener('click', () => saveReviewDetails(tx, row, panel));
   panel.querySelector('[data-clear]').addEventListener('click', () => clearReview(tx, row));

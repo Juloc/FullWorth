@@ -1,5 +1,6 @@
 import { api as sharedApi } from '../../../core/services.js';
 import { confirmMessage } from '../../../components/confirm.js';
+import { ButtonRole, buttonClass } from '../../../components/buttons.js';
 const $ = id => document.getElementById(id);
 
 async function api(path = '', init = {}) {
@@ -52,7 +53,7 @@ function render(packs) {
         <input type="checkbox" data-pack-enabled ${pack.enabled ? 'checked' : ''}>
         <span class="fw-toggle-track"></span>
       </label>
-      <button type="button" class="ghost" data-pack-delete>Löschen</button>
+      <button type="button" class="${buttonClass(ButtonRole.Danger)}" data-pack-delete>Löschen</button>
     </div>`).join('');
 
   list.querySelectorAll('[data-pack-id]').forEach(row => {

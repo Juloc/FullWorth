@@ -100,7 +100,7 @@ async function renderOverview(state,container){
   </div>
   ${overview.incomplete?`<div class="ip-warning">${esc(text('Mindestens ein Kurs oder Wechselkurs fehlt bzw. ist veraltet. Werte werden nicht still 1:1 geschätzt.','At least one price or FX rate is missing or stale. Values are never silently assumed 1:1.'))}</div>`:''}
   <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Größte Positionen','Top positions'))}</h3></div>${positionRows((overview.positions||[]).slice(0,8),state.portfolio.currency)}</section>
-  ${canManage?`<div class="ip-actions"><button type="button" data-ip-add>${esc(text('Transaktion hinzufügen','Add transaction'))}</button><button type="button" class="ghost" data-ip-price>${esc(text('Kurs erfassen','Add price'))}</button><button type="button" class="ghost" data-ip-settings>${esc(text('Depot-Einstellungen','Portfolio settings'))}</button></div>`:''}`;
+  ${canManage?`<div class="ip-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-ip-add>${esc(text('Transaktion hinzufügen','Add transaction'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-ip-price>${esc(text('Kurs erfassen','Add price'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-ip-settings>${esc(text('Depot-Einstellungen','Portfolio settings'))}</button></div>`:''}`;
   if(canManage){
     $('[data-ip-add]',container).onclick=()=>openTradeDialog(state);
     $('[data-ip-price]',container).onclick=()=>openPriceDialog(state);
@@ -121,7 +121,7 @@ async function renderPositions(state,container){
 async function renderTransactions(state,container){
   const rows=await api(`api/investments/portfolios/${state.portfolio.id}/trades`);
   const canManage=!!state.access?.capabilities?.['investments.manage'];
-  container.innerHTML=`${canManage?`<div class="ip-actions"><button type="button" data-ip-add>${esc(text('Transaktion hinzufügen','Add transaction'))}</button></div>`:''}<section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Transaktionen','Transactions'))}</h3><span>${rows.length}</span></div><div class="ip-list">${rows.map(row=>`<div class="ip-row"><div><strong>${esc(tradeLabel(row.tradeType))}</strong><div class="fp-muted">${esc(dateText(row.tradeDate))}${row.quantity!=null?` · ${esc(String(row.quantity))}`:''}</div></div><div class="ip-row-value"><strong>${amount(row.amount,row.currency)}</strong>${canManage?`<button type="button" class="ghost ip-icon" data-ip-delete="${row.id}" aria-label="${esc(text('Löschen','Delete'))}">×</button>`:''}</div></div>`).join('')||`<div class="fp-muted">${esc(text('Noch keine Investment-Transaktionen.','No investment transactions yet.'))}</div>`}</div></section>`;
+  container.innerHTML=`${canManage?`<div class="ip-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-ip-add>${esc(text('Transaktion hinzufügen','Add transaction'))}</button></div>`:''}<section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Transaktionen','Transactions'))}</h3><span>${rows.length}</span></div><div class="ip-list">${rows.map(row=>`<div class="ip-row"><div><strong>${esc(tradeLabel(row.tradeType))}</strong><div class="fp-muted">${esc(dateText(row.tradeDate))}${row.quantity!=null?` · ${esc(String(row.quantity))}`:''}</div></div><div class="ip-row-value"><strong>${amount(row.amount,row.currency)}</strong>${canManage?`<button type="button" class="${buttonClass(ButtonRole.Icon,'ip-icon')}" data-ip-delete="${row.id}" aria-label="${esc(text('Löschen','Delete'))}">×</button>`:''}</div></div>`).join('')||`<div class="fp-muted">${esc(text('Noch keine Investment-Transaktionen.','No investment transactions yet.'))}</div>`}</div></section>`;
   if(canManage){
     $('[data-ip-add]',container)?.addEventListener('click',()=>openTradeDialog(state));
     $$('[data-ip-delete]',container).forEach(button=>button.onclick=async()=>{
@@ -167,7 +167,7 @@ async function renderPerformance(state,container){
   </div>
   ${perf.incomplete?`<div class="ip-warning"><strong>${esc(text('Unvollständige Bewertungsdaten','Incomplete valuation data'))}</strong><div>${esc((perf.reasons||[]).join(', '))}</div></div>`:''}
   <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Performance-Verlauf','Performance history'))}</h3><span>${esc(dateText(perf.effectiveFrom))} – ${esc(dateText(perf.to))}</span></div>${performanceChart(points)}
-  ${!chartHasData&&canManage?`<div class="ip-empty-cta"><p>${esc(text('Noch keine Historie? FullWorth findet Käufe oft direkt in den Kontobuchungen.','No history yet? FullWorth can often find purchases directly in your account bookings.'))}</p><button type="button" data-ip-goto-bookings>${esc(text('Käufe aus Buchungen suchen','Search purchases from bookings'))}</button></div>`:''}
+  ${!chartHasData&&canManage?`<div class="ip-empty-cta"><p>${esc(text('Noch keine Historie? FullWorth findet Käufe oft direkt in den Kontobuchungen.','No history yet? FullWorth can often find purchases directly in your account bookings.'))}</p><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-ip-goto-bookings>${esc(text('Käufe aus Buchungen suchen','Search purchases from bookings'))}</button></div>`:''}
   </section>`;
   bindPerformanceScrubber(container,points);
   // War $() (querySelector, EIN Element) statt $$(): .forEach existiert darauf nicht, der Wurf lief
@@ -271,8 +271,8 @@ function bookingSummaryCard(summary,matches,portfolioCurrency){
     </div>
     <div class="ip-list">${matches.map(match=>bookingMatchRow(match)).join('')}</div>
     <div class="ip-actions">
-      <button type="button" data-ip-booking-apply>${esc(text('Übernehmen','Apply'))}</button>
-      <button type="button" class="ghost" data-ip-booking-dismiss>${esc(text('Ablehnen','Dismiss'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-ip-booking-apply>${esc(text('Übernehmen','Apply'))}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-ip-booking-dismiss>${esc(text('Ablehnen','Dismiss'))}</button>
     </div>
   </section>`;
 }

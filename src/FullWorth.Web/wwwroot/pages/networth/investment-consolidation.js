@@ -3,6 +3,7 @@ import { isPrivate, onPrivacyChange } from '../../components/privacy.js';
 import { api as sharedApi } from '../../core/services.js';
 import { state } from '../../core/state.js';
 import { createDialog } from '../../components/dialog.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 // Statisch: die Ladereihenfolge trägt nichts mehr, seit der Dialog seine Depotkennung selbst trägt.
 import './investment-performance-ui.js';
 
@@ -165,7 +166,7 @@ async function openSecurityDetail(portfolioId, securityId) {
         </div>
         <div class="wealth-security-freshness ${effectivePrice?.state === 'stale' || effectivePrice?.state === 'missing' ? 'is-warning' : ''}"><strong>${esc(priceStateText(effectivePrice))}</strong><span>${effectivePrice?.priceDate ? esc(dateText(effectivePrice.priceDate)) : ''}</span></div>
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Kursverlauf','Price history'))}</h3><span>1Y</span></div>${priceChart(history)}</section>
-        <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Depot','Portfolio'))}</h3></div><div class="ip-row"><div><strong>${esc(overview.portfolio.name)}</strong><div class="fp-muted">${esc(overview.portfolio.currency)}</div></div><button type="button" class="ghost" data-open-performance>${esc(text('Performance öffnen','Open performance'))}</button></div></section>
+        <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Depot','Portfolio'))}</h3></div><div class="ip-row"><div><strong>${esc(overview.portfolio.name)}</strong><div class="fp-muted">${esc(overview.portfolio.currency)}</div></div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-open-performance>${esc(text('Performance öffnen','Open performance'))}</button></div></section>
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Transaktionen','Transactions'))}</h3><span>${securityTrades.length}</span></div>${tradeRows(securityTrades, overview.portfolio.currency)}</section>
         <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Dividenden / Ausschüttungen','Dividends / distributions'))}</h3><span>${dividends.length}</span></div>${tradeRows(dividends, overview.portfolio.currency)}</section>
       </div></div>`,{className:'fp-dialog ip-dialog wealth-security-dialog',closeLabel:text('Schließen','Close')});

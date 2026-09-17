@@ -2,6 +2,7 @@ import { api as sharedApi, jsonBody } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
 import { emitAppEvent } from '../../core/event-bus.js';
 import { showToast } from '../../components/toast.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 const SUPPORTED = new Set(['collectible', 'receivable', 'business_interest', 'insurance_pension']);
 let enhancing = false;
 
@@ -72,7 +73,7 @@ async function enhanceRows() {
       if (!asset || !SUPPORTED.has(asset.kind) || row.querySelector('[data-extra-specialized-detail]')) return;
       const side = row.querySelector('.row-side'); if (!side) return;
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'icon-button specialized-detail-button'; button.dataset.extraSpecializedDetail = '1';
+      button.type = 'button'; button.className = buttonClass(ButtonRole.Icon, 'specialized-detail-button'); button.dataset.extraSpecializedDetail = '1';
       button.title = t('details'); button.setAttribute('aria-label', t('details')); button.textContent = '›';
       const history = side.querySelector('[data-history]'); if (history) history.replaceWith(button); else side.insertBefore(button, side.querySelector('[data-toggle]') || null);
       button.addEventListener('click', () => openAsset(asset));
@@ -128,7 +129,7 @@ function detailForm(asset, d) {
     <label>${esc(t('purchaseDate'))}<input type="date" name="purchaseDate" value="${esc(d?.purchaseDate || '')}"></label><label>${esc(t('purchasePrice'))}<input type="number" min="0" step="0.01" name="purchasePrice" value="${esc(d?.purchasePrice ?? '')}"></label>
     <label>${esc(t('currency'))}<input name="purchaseCurrency" maxlength="3" value="${esc(d?.purchaseCurrency || asset.currency || 'EUR')}"></label><label>${esc(t('insuredValue'))}<input type="number" min="0" step="0.01" name="insuredValue" value="${esc(d?.insuredValue ?? '')}"></label>
     <label>${esc(t('appraisedValue'))}<input type="number" min="0" step="0.01" name="appraisedValue" value="${esc(d?.appraisedValue ?? '')}"></label><label>${esc(t('appraisedAt'))}<input type="date" name="appraisedAt" value="${esc(d?.appraisedAt || '')}"></label>
-    <label class="span-2">${esc(t('provenance'))}<textarea name="provenanceNotes" maxlength="4000">${esc(d?.provenanceNotes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+    <label class="span-2">${esc(t('provenance'))}<textarea name="provenanceNotes" maxlength="4000">${esc(d?.provenanceNotes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 
   if (asset.kind === 'receivable') return `<form data-detail-form class="specialized-asset-section"><div class="specialized-asset-grid">
     <label>${esc(t('counterparty'))}<input type="${privacy() ? 'password' : 'text'}" name="counterpartyDisplayLabel" maxlength="200" value="${esc(d?.counterpartyDisplayLabel || '')}" required></label>
@@ -137,14 +138,14 @@ function detailForm(asset, d) {
     <label>${esc(t('startDate'))}<input type="date" name="startDate" value="${esc(d?.startDate || '')}"></label><label>${esc(t('dueDate'))}<input type="date" name="dueDate" value="${esc(d?.dueDate || '')}"></label>
     <label>${esc(t('paymentCycle'))}<select name="paymentCycle"><option value=""></option>${opts(['weekly','monthly','quarterly','yearly','one_time','other'], d?.paymentCycle || '')}</select></label><label>${esc(t('expectedPayment'))}<input type="number" min="0" step="0.01" name="expectedPayment" value="${esc(d?.expectedPayment ?? '')}"></label>
     <label>${esc(t('status'))}<select name="status">${opts(['active','overdue','settled','written_off'], d?.status || 'active')}</select></label><label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="2000">${esc(d?.notes || '')}</textarea></label>
-    </div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+    </div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 
   if (asset.kind === 'business_interest') return `<form data-detail-form class="specialized-asset-section"><div class="specialized-asset-grid">
     <label>${esc(t('company'))}<input name="companyDisplayName" maxlength="240" value="${esc(d?.companyDisplayName || '')}" required></label><label>${esc(t('legalForm'))}<input name="legalForm" maxlength="80" value="${esc(d?.legalForm || '')}"></label>
     <label>${esc(t('ownership'))}<input type="number" min="0" max="100" step="0.0001" name="ownershipPercent" value="${esc(d?.ownershipPercent ?? '')}"></label><label>${esc(t('acquisitionDate'))}<input type="date" name="acquisitionDate" value="${esc(d?.acquisitionDate || '')}"></label>
     <label>${esc(t('investedCapital'))}<input type="number" min="0" step="0.01" name="investedCapital" value="${esc(d?.investedCapital ?? '')}"></label><label>${esc(t('currency'))}<input name="investedCurrency" maxlength="3" value="${esc(d?.investedCurrency || asset.currency || 'EUR')}"></label>
     <label>${esc(t('valuationMethod'))}<select name="valuationMethod"><option value=""></option>${opts(['manual','last_financing','earnings_multiple','book_value','external_appraisal','other'], d?.valuationMethod || '')}</select></label><label>${esc(t('lastDistribution'))}<input type="date" name="lastDistributionDate" value="${esc(d?.lastDistributionDate || '')}"></label>
-    <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="3000">${esc(d?.notes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+    <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="3000">${esc(d?.notes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 
   return `<form data-detail-form class="specialized-asset-section"><div class="specialized-asset-grid">
     <label>${esc(t('provider'))}<input name="providerName" maxlength="200" value="${esc(d?.providerName || '')}"></label><label>${esc(t('product'))}<input name="productName" maxlength="200" value="${esc(d?.productName || '')}"></label>
@@ -152,15 +153,15 @@ function detailForm(asset, d) {
     <label>${esc(t('startDate'))}<input type="date" name="startDate" value="${esc(d?.startDate || '')}"></label><label>${esc(t('maturityDate'))}<input type="date" name="maturityDate" value="${esc(d?.maturityDate || '')}"></label>
     <label>${esc(t('contribution'))}<input type="number" min="0" step="0.01" name="regularContribution" value="${esc(d?.regularContribution ?? '')}"></label><label>${esc(t('contributionCycle'))}<select name="contributionCycle"><option value=""></option>${opts(['weekly','monthly','quarterly','yearly','other'], d?.contributionCycle || '')}</select></label>
     <label>${esc(t('guaranteedValue'))}<input type="number" min="0" step="0.01" name="guaranteedValue" value="${esc(d?.guaranteedValue ?? '')}"></label><label>${esc(t('guaranteedDate'))}<input type="date" name="guaranteedValueDate" value="${esc(d?.guaranteedValueDate || '')}"></label>
-    <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="3000">${esc(d?.notes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit">${esc(t('save'))}</button></div></form>`;
+    <label class="span-2">${esc(t('notes'))}<textarea name="notes" maxlength="3000">${esc(d?.notes || '')}</textarea></label></div><p class="row-sub">${esc(t('referenceOnly'))}</p><div class="specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('save'))}</button></div></form>`;
 }
 
 function valuationPanel(asset, d) {
   const appraisal = asset.kind === 'collectible' && d?.appraisedValue != null
-    ? `<div class="specialized-asset-section"><div class="specialized-debt-row"><div class="specialized-debt-main"><div class="specialized-debt-title">${esc(t('appraisedValue'))}</div><div class="specialized-debt-sub">${money(d.appraisedValue, d.purchaseCurrency || asset.currency)} · ${fmtDate(d.appraisedAt)}</div></div><button type="button" data-accept-appraisal>${esc(t('acceptAppraisal'))}</button></div></div>` : '';
+    ? `<div class="specialized-asset-section"><div class="specialized-debt-row"><div class="specialized-debt-main"><div class="specialized-debt-title">${esc(t('appraisedValue'))}</div><div class="specialized-debt-sub">${money(d.appraisedValue, d.purchaseCurrency || asset.currency)} · ${fmtDate(d.appraisedAt)}</div></div><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-accept-appraisal>${esc(t('acceptAppraisal'))}</button></div></div>` : '';
   return `<div class="specialized-asset-section"><h3>${esc(t('manualValue'))}</h3><form data-manual-valuation class="specialized-asset-grid">
     <label>${esc(t('amount'))}<input type="number" min="0" step="0.01" name="amount" value="${esc(asset.currentValue ?? '')}" required></label><label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label>
-    <label>${esc(t('date'))}<input type="date" name="valuedAt" value="${today()}" required></label><div class="span-2 specialized-form-actions"><button type="submit">${esc(t('accept'))}</button></div></form></div>${appraisal}<p class="row-sub">${esc(t('referenceOnly'))}</p>`;
+    <label>${esc(t('date'))}<input type="date" name="valuedAt" value="${today()}" required></label><div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('accept'))}</button></div></form></div>${appraisal}<p class="row-sub">${esc(t('referenceOnly'))}</p>`;
 }
 
 // A valuation's date is either one somebody stated or the day the row was recorded. Printing the
@@ -181,11 +182,11 @@ function activityPanel(asset, activity) {
     return `<div class="specialized-asset-section"><div data-payment-list>${rows}</div></div><div class="specialized-asset-section"><h3>${esc(t('recordPayment'))}</h3><form data-payment-form class="specialized-asset-grid">
       <label>${esc(t('transaction'))}<select name="transactionId"><option value="">${esc(t('manualPayment'))}</option>${txOptions}</select></label><label>${esc(t('date'))}<input type="date" name="date" value="${today()}" required></label>
       <label>${esc(t('principal'))}<input type="number" min="0" step="0.01" name="principalAmount" value="0" required></label><label>${esc(t('interest'))}<input type="number" min="0" step="0.01" name="interestAmount" value="0" required></label>
-      <label>${esc(t('currency'))}<input name="currency" maxlength="3" value="EUR" required></label><label class="span-2">${esc(t('notes'))}<input name="notes" maxlength="1000"></label><div class="span-2 specialized-form-actions"><button type="submit">${esc(t('add'))}</button></div></form></div>
-      <div class="specialized-asset-section"><h3>${esc(t('writeDown'))}</h3><form data-write-down class="specialized-asset-grid"><label>${esc(t('recoverable'))}<input type="number" min="0" step="0.01" name="recoverableAmount" required></label><label class="check"><input type="checkbox" name="confirmed" required><span>${esc(t('confirmWriteDown'))}</span></label><div class="span-2 specialized-form-actions"><button type="submit">${esc(t('writeDownButton'))}</button></div></form></div>`;
+      <label>${esc(t('currency'))}<input name="currency" maxlength="3" value="EUR" required></label><label class="span-2">${esc(t('notes'))}<input name="notes" maxlength="1000"></label><div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('add'))}</button></div></form></div>
+      <div class="specialized-asset-section"><h3>${esc(t('writeDown'))}</h3><form data-write-down class="specialized-asset-grid"><label>${esc(t('recoverable'))}<input type="number" min="0" step="0.01" name="recoverableAmount" required></label><label class="check"><input type="checkbox" name="confirmed" required><span>${esc(t('confirmWriteDown'))}</span></label><div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Danger)}">${esc(t('writeDownButton'))}</button></div></form></div>`;
   }
   const rows = (activity || []).filter(x => x.type === 'distribution').map(x => `<div class="specialized-history-row"><div class="specialized-history-main"><div class="specialized-history-title">${esc(fmtDate(x.date))} · ${money(x.amount, x.currency)}</div><div class="specialized-history-sub">${esc(x.transactionCounterparty || x.notes || 'distribution')}</div></div></div>`).join('') || `<div class="specialized-empty">${esc(t('noDistributions'))}</div>`;
-  return `<div class="specialized-asset-section">${rows}</div><div class="specialized-asset-section"><h3>${esc(t('addDistribution'))}</h3><form data-distribution-form class="specialized-asset-grid"><label>${esc(t('date'))}<input type="date" name="date" value="${today()}" required></label><label>${esc(t('amount'))}<input type="number" min="0.01" step="0.01" name="amount" required></label><label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label><label class="span-2">${esc(t('notes'))}<input name="notes" maxlength="1000"></label><div class="span-2 specialized-form-actions"><button type="submit">${esc(t('add'))}</button></div></form></div>`;
+  return `<div class="specialized-asset-section">${rows}</div><div class="specialized-asset-section"><h3>${esc(t('addDistribution'))}</h3><form data-distribution-form class="specialized-asset-grid"><label>${esc(t('date'))}<input type="date" name="date" value="${today()}" required></label><label>${esc(t('amount'))}<input type="number" min="0.01" step="0.01" name="amount" required></label><label>${esc(t('currency'))}<input name="currency" maxlength="3" value="${esc(asset.currency || 'EUR')}" required></label><label class="span-2">${esc(t('notes'))}<input name="notes" maxlength="1000"></label><div class="span-2 specialized-form-actions"><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('add'))}</button></div></form></div>`;
 }
 
 function bindDetails(dlg, asset, base) {

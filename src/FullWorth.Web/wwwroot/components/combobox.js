@@ -15,6 +15,8 @@
  * phone's own wheel, type-ahead and zero code beat a custom dialog every time.
  */
 
+import { ButtonRole, buttonClass } from './buttons.js';
+
 /**
  * `iconHtml` ist fertiges Markup und wird roh eingesetzt, `icon` ist Text und wird escaped.
  * Der Unterschied ist Absicht: dieses Modul darf nicht wissen, was eine Kategorie ist, also rendert
@@ -56,7 +58,7 @@ export function attachCombobox(ctx, selectEl, options = {}) {
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'icon-button combobox-trigger';
+  button.className = buttonClass(ButtonRole.Icon, 'combobox-trigger');
   button.title = label;
   button.setAttribute('aria-label', label);
   button.textContent = '⌕';

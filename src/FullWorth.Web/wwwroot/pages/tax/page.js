@@ -14,6 +14,7 @@
 import { sectionCard, esc } from '../../features/ux-kit.js';
 import { renderTaxYearPanel, renderAdvancedSettings, wireDocumentUploads } from './review-extra.js';
 import { emptyRow } from '../../components/empty.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 let year = null; // sticky across re-renders (tab switch, decide, analyze) until the user picks another
@@ -104,7 +105,7 @@ function gateHtml(settings, profile, loadError) {
     <p class="tax-setting-copy">${esc(spaceOff ? tr().spaceOff : tr().spaceOn)}</p>
     <label class="check"><input id="tax-personal-enabled" type="checkbox" ${profile?.assistantEnabled ? 'checked' : ''}><span>${esc(tr().personal)}</span></label>
     <div class="tax-setting-copy">${esc(tr().personalHint)}</div>
-    ${spaceOff ? `<button type="button" id="tax-space-enable" class="ghost">${esc(tr().enableSpace)}</button>` : ''}`;
+    ${spaceOff ? `<button type="button" id="tax-space-enable" class="${buttonClass(ButtonRole.Secondary)}">${esc(tr().enableSpace)}</button>` : ''}`;
   return sectionCard(tr().title, body, { className: 'tax-summary tax-gate' });
 }
 
@@ -164,8 +165,8 @@ function viewHtml(reviewOnly) {
         <button type="button" class="${reviewOnly ? 'active' : ''}" data-tax-tab="review">${esc(tr().review)}</button>
       </div>
       <label class="tax-year"><span>${esc(tr().year)}</span><select id="tax-year">${yearOptionsHtml()}</select></label>
-      <button type="button" class="ghost" data-tax-settings>${esc(tr().settingsBtn)}</button>
-      <button type="button" id="tax-analyze" class="primary-action">${esc(tr().analyze)}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-tax-settings>${esc(tr().settingsBtn)}</button>
+      <button type="button" id="tax-analyze" class="${buttonClass(ButtonRole.Primary)}">${esc(tr().analyze)}</button>
     </div>
     <article class="fw-card tax-hero">
       <div class="tax-hero-top">
@@ -290,7 +291,7 @@ function drawCandidates(host, items) {
         ${Number(c.eligiblePercentage) !== 100 ? `<div class="row-sub">${esc(tr().eligible)}: ${esc(c.eligiblePercentage)}% · ${ctx.money(c.grossAmount, c.currency)} → ${ctx.money(c.eligibleAmount, c.currency)}</div>` : ''}
       </div>
       <div class="tax-case-actions">
-        ${!final ? `<button type="button" class="ghost" data-share>${esc(tr().edit)}</button><button type="button" class="ghost" data-reject>${esc(tr().reject)}</button><button type="button" data-confirm>${esc(tr().confirm)}</button>` : ''}
+        ${!final ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-share>${esc(tr().edit)}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-reject>${esc(tr().reject)}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-confirm>${esc(tr().confirm)}</button>` : ''}
       </div>`;
     row.querySelector('[data-confirm]')?.addEventListener('click', () => decide(c.id, 'confirm'));
     row.querySelector('[data-reject]')?.addEventListener('click', () => decide(c.id, 'reject'));
@@ -344,7 +345,7 @@ function openEditShare(c) {
   const dlg = ctx.dialog(`<form class="dialog-card">
     <div class="panel-head"><h2>${esc(tr().amountPrompt)}</h2><button type="button" data-close aria-label="${esc(ctx.get('common.close'))}">×</button></div>
     <label>${esc(tr().percent)}<input name="pct" type="number" min="0" max="100" step="1" value="${esc(c.eligiblePercentage)}" required></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit">${esc(ctx.get('common.save'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(ctx.get('common.save'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();

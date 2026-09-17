@@ -5,6 +5,7 @@ import { refreshPurchaseAdvancedInsights } from './advanced-insights.js';
 import { ensureReceiptImportsLauncher } from './receipt-imports.js';
 import { refreshReceiptImportBatchDetails } from './receipt-import-batch-details.js';
 import { addReceiptScanFiles } from './receipt-scan-set.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let latestContext = null;
 let scanSetCaptureInstalled = false;
@@ -45,7 +46,7 @@ function refreshImportReviewNavigation() {
     if (!actions || reviewCount <= 0 || actions.querySelector('[data-review-import]')) return;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className = buttonClass(ButtonRole.Secondary);
     button.dataset.reviewImport = 'true';
     button.textContent = t('Prüfen', 'Review');
     actions.prepend(button);

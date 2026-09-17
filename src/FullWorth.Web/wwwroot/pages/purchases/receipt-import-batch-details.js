@@ -1,6 +1,7 @@
 import { api as sharedApi, apiClient } from '../../core/services.js';
 import { createDialog } from '../../components/dialog.js';
 import { showToast } from '../../components/toast.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 // Detail explorer for bulk receipt import batches. The core importer owns polling and batch actions;
 // this module only enriches rendered cards and loads details after an explicit user action.
 
@@ -18,7 +19,7 @@ function decorate() {
 
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ghost';
+    button.className = buttonClass(ButtonRole.Secondary);
     button.dataset.importBatchDetails = 'true';
     button.textContent = t('Details', 'Details');
     button.addEventListener('click', () => openDetails(card, button));
@@ -122,7 +123,7 @@ function renderItem(item) {
   // second start would be refused and a button that does nothing is worse than no button.
   const startable = status === 'pending' || status === 'failed';
   const analyse = startable && item.receiptScanJobId
-    ? `<button type="button" class="ghost" data-analyse-item="${esc(item.id)}">${esc(t('Analysieren', 'Analyse'))}</button>`
+    ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-analyse-item="${esc(item.id)}">${esc(t('Analysieren', 'Analyse'))}</button>`
     : '';
 
   return `<div class="receipt-import-batch-item" data-import-batch-item data-status="${esc(status)}" data-source="${esc(source)}">

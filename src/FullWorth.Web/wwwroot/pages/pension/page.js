@@ -23,6 +23,7 @@ import { sectionCard, esc } from '../../features/ux-kit.js';
 import { renderPensionDocuments, resetPensionDocuments } from './documents.js';
 import { renderPensionProjection, resetPensionProjection } from './projection.js';
 import { emptyRow } from '../../components/empty.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 let contracts = [];
@@ -343,7 +344,7 @@ export async function renderPension(context) {
       <div class="pension-tabs" role="tablist">
         ${TABS.map(item => `<button type="button" role="tab" aria-selected="${item.key === tab}" class="${item.key === tab ? 'active' : ''}" data-pension-tab="${item.key}">${esc(tr()[tabKey(item.key)])}</button>`).join('')}
       </div>
-      <button type="button" class="primary-action" data-pension-add>${esc(tr().add)}</button>
+      <button type="button" class="${buttonClass(ButtonRole.Primary)}" data-pension-add>${esc(tr().add)}</button>
     </div>
     <div class="pension-body">${
       loadError

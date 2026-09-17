@@ -8,6 +8,7 @@ import { keepListPosition } from '../../components/list-position.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
+import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -50,7 +51,7 @@ function updateCoachSelectionBar() {
   const items = [...selectedForCoach.values()];
   const currency = items.every(item => item.currency === items[0]?.currency) ? (items[0]?.currency || '') : '';
   const total = currency ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null;
-  bar.innerHTML = `<span><strong>${selectedForCoach.size}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="ghost" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
+  bar.innerHTML = `<span><strong>${selectedForCoach.size}</strong> ${deLabel('Buchungen ausgewählt','transactions selected')}</span><div><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-selection-clear>${deLabel('Auswahl aufheben','Clear')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-selection-coach>${deLabel('Coach fragen','Ask Coach')}</button></div>`;
   bar.querySelector('[data-selection-clear]').onclick = () => {
     selectedForCoach.clear();
     document.querySelectorAll('#transactions-body [data-tx-select]').forEach(input => { input.checked = false; });
@@ -219,7 +220,7 @@ async function showTransferCandidates() {
     ? ctx.get('transactions.transferCandidateOne')
     : ctx.get('transactions.transferCandidates').replace('{count}', count);
   hint.innerHTML = `<span class="tx-transfer-hint-text"><span aria-hidden="true">⟳</span> ${ctx.esc(label)}</span>` +
-    `<button type="button" class="ghost" data-review>${ctx.esc(ctx.get('transactions.review'))}</button>`;
+    `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-review>${ctx.esc(ctx.get('transactions.review'))}</button>`;
   hint.hidden = false;
   hint.querySelector('[data-review]').onclick = () => detectTransfers();
 }
@@ -448,7 +449,7 @@ async function openBookingDialog(preselectedAccountId = '') {
     <label>${ctx.esc(ctx.get('transactions.counterparty'))}<input name="counterparty" required maxlength="200" placeholder="${ctx.esc(ctx.get('transactions.counterpartyPlaceholder'))}"></label>
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label>${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500"></label>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit">${ctx.esc(ctx.get('common.create'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.create'))}</button></div>
   </form>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -745,7 +746,7 @@ async function detectTransfers() {
     <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.detectTitle'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
     <p class="row-sub">${ctx.esc(ctx.get('transactions.detectHint'))}</p>
     <div class="refund-candidates">${rows}</div>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-confirm>${ctx.esc(ctx.get('transactions.detectConfirm'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-confirm>${ctx.esc(ctx.get('transactions.detectConfirm'))}</button></div>
   </div>`);
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
@@ -816,7 +817,7 @@ async function openDetail(listItem) {
   const purposeOpts = ['', 'savings', 'vacation', 'reserve', 'other'].map(p => `<option value="${p}"${(t.transferPurpose || '') === p ? ' selected' : ''}>${p === '' ? ctx.esc(ctx.get('transactions.purposeNone')) : ctx.esc(ctx.get('transactions.purpose_' + p))}</option>`).join('');
   // Inside the transfer block: a tappable Von→An counter-booking when linked, else a "choose" button.
   const transferInner = counterpart
-    ? `${counterpart.id ? `<button type="button" class="tx-vonan" data-open-counterpart><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('Von', 'From'))}</span><span class="tx-vonan-acct">${ctx.esc(vonAcct)}</span></span><span class="tx-vonan-arrow" aria-hidden="true">→</span><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('An', 'To'))}</span><span class="tx-vonan-acct">${ctx.esc(anAcct)}</span></span><span class="tx-vonan-go" aria-hidden="true">›</span></button>` : ''}<button type="button" class="ghost danger tx-transfer-unpair" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>`
+    ? `${counterpart.id ? `<button type="button" class="tx-vonan" data-open-counterpart><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('Von', 'From'))}</span><span class="tx-vonan-acct">${ctx.esc(vonAcct)}</span></span><span class="tx-vonan-arrow" aria-hidden="true">→</span><span class="tx-vonan-leg"><span class="tx-vonan-label">${ctx.esc(deLabel('An', 'To'))}</span><span class="tx-vonan-acct">${ctx.esc(anAcct)}</span></span><span class="tx-vonan-go" aria-hidden="true">›</span></button>` : ''}<button type="button" class="${buttonClass(ButtonRole.Danger, 'tx-transfer-unpair')}" data-transfer-unpair>${ctx.esc(ctx.get('transactions.unpair'))}</button>`
     : `<button type="button" class="tx-choose-counter" data-transfer-link>${ctx.esc(deLabel('Gegenbuchung wählen', 'Choose counter-booking'))}</button>`;
   const statusLabel = status => status === 'PDNG'
     ? ctx.get('transactions.statusPending')
@@ -836,12 +837,12 @@ async function openDetail(listItem) {
     ${t.description ? `<div class="row-sub tx-detail-desc">${ctx.esc(t.description)}</div>` : ''}
     ${(t.firstSeenAt || t.updatedAt) ? `<div class="row-sub tx-detail-timestamps">${t.firstSeenAt ? `${ctx.esc(ctx.get('transactions.firstSeenAt'))}: ${ctx.esc(ctx.dateTime(t.firstSeenAt))}` : ''}${t.firstSeenAt && t.updatedAt ? ' · ' : ''}${t.updatedAt ? `${ctx.esc(ctx.get('transactions.updatedAt'))}: ${ctx.esc(ctx.dateTime(t.updatedAt))}` : ''}</div>` : ''}
     ${statusHistoryHtml}
-    ${t.hasProviderDetails ? `<div class="tx-provider-details"><button type="button" class="ghost" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
+    ${t.hasProviderDetails ? `<div class="tx-provider-details"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-bank-details>${ctx.esc(ctx.get('transactions.bankDetails'))}</button><div data-bank-details-body class="row-sub" hidden></div></div>` : ''}
     <label>${ctx.esc(ctx.get('transactions.category'))}<span class="field-inline"><select name="category"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.excludeFromStats'))}</span><span class="fw-toggle"><input type="checkbox" name="ignored" ${t.isIgnored ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <label class="fw-toggle-row"><span>${ctx.esc(ctx.get('transactions.markTransfer'))}</span><span class="fw-toggle"><input type="checkbox" name="transfer" ${t.isTransfer ? 'checked' : ''}><span class="fw-toggle-track"></span></span></label>
     <div class="tx-transfer"${t.isTransfer ? '' : ' hidden'}><label class="tx-purpose">${ctx.esc(ctx.get('transactions.transferPurpose'))}<select name="purpose">${purposeOpts}</select></label>${transferInner}</div>
-    ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="ghost" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="ghost" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
+    ${t.amount > 0 ? `<div class="tx-refund"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.refund'))}</div><div class="row-sub">${t.refundOfTransactionId ? ctx.esc(ctx.get(t.refundCategoryId ? 'transactions.refundLinkedItem' : 'transactions.refundLinked')) : ctx.esc(ctx.get('transactions.refundHint'))}</div></div><div class="row-side"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-refund-link>${ctx.esc(ctx.get('transactions.refundLink'))}</button>${t.refundOfTransactionId ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-refund-clear>${ctx.esc(ctx.get('transactions.refundClear'))}</button>` : ''}</div></div>` : ''}
     ${receiptPurchase ? `<a class="row settings-link" href="${ctx.bffUrl(`api/purchases/${receiptPurchase.id}/receipt`)}" target="_blank" rel="noopener"><div class="row-main"><div class="row-title">${ctx.esc(ctx.get('transactions.viewReceipt'))}</div></div><span aria-hidden="true">↗</span></a>` : ''}
     <label class="tx-note">${ctx.esc(ctx.get('transactions.note'))}<input name="note" maxlength="500" value="${ctx.esc(t.userNote || '')}"></label>
     <!-- "Coach fragen" and "Teilen" are navigations, not decisions about this drawer, so they sit as
@@ -1001,9 +1002,9 @@ async function openSplitDialog(t) {
     <div class="row-sub">${ctx.esc(ctx.get('transactions.total'))}: ${ctx.money(t.amount, t.currency)}</div>
     ${articleRows.length ? `<div class="row-sub">${ctx.esc(articleHint)}</div>` : ''}
     <div class="split-lines" data-lines></div>
-    <button type="button" class="ghost" data-add-line>${ctx.esc(ctx.get('transactions.addLine'))}</button>
+    <button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-add-line>${ctx.esc(ctx.get('transactions.addLine'))}</button>
     <div class="split-remaining" data-remaining></div>
-    <div class="dialog-actions"><button type="button" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   dlg.classList.add('drawer');
   const linesBox = dlg.querySelector('[data-lines]');
@@ -1037,7 +1038,7 @@ async function openSplitDialog(t) {
       <input class="split-amt" type="number" step="0.01" inputmode="decimal" value="${line.amount ?? ''}" aria-label="${ctx.esc(ctx.get('transactions.amount'))}">
       <select class="split-cat" aria-label="${ctx.esc(ctx.get('transactions.category'))}"><option value="">${ctx.esc(ctx.get('common.uncategorized'))}</option>${options}</select>
       <input class="split-note" maxlength="500" value="${ctx.esc(line.note || '')}" aria-label="${ctx.esc(ctx.get('transactions.note'))}">
-      <button type="button" class="icon-button" data-remove aria-label="${ctx.esc(ctx.get('dashboard.remove'))}">×</button>`;
+      <button type="button" class="${buttonClass(ButtonRole.Icon)}" data-remove aria-label="${ctx.esc(ctx.get('dashboard.remove'))}">×</button>`;
     const articleSelect = row.querySelector('.split-article');
     const category = row.querySelector('.split-cat');
     category.value = line.categoryId || '';
