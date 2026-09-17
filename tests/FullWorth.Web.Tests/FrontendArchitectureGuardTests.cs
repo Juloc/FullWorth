@@ -100,8 +100,11 @@ public sealed class FrontendArchitectureGuardTests
         {
             // Shared infrastructure observers are explicitly reviewed and scoped.
             "components/accessibility-release.js",
-            "app/appearance.js",
             "app/motion.js"
+            // app/appearance.js used to be here: it rebuilt the "Farben" settings panel via DOM
+            // injection and kept it in sync with a MutationObserver (Issue #149). The panel is now
+            // static markup in pages/settings/page.html, wired once like every other settings
+            // control - nothing left in appearance.js observes the DOM any more.
         };
 
         AssertNoNewViolations(

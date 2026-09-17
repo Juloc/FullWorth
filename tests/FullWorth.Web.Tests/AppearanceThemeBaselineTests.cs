@@ -118,13 +118,17 @@ public sealed class AppearanceThemeBaselineTests : IClassFixture<FullWorthWebFac
         // The mark is recoloured by swapping the source; a CSS mask would flatten its three bars.
         Assert.Contains("tintBrandMark", themeEngine);
 
-        Assert.Contains("BRAND_PRESETS", appearance);
+        // BRAND_PRESETS (mono/ink/forest/plum/copper) was the old five-entry list; issue #149 §8
+        // replaced it with six literal quick-pick seeds (white/grey/black/blue/purple/green), and the
+        // rename to APPEARANCE_PRESETS makes the constant's new meaning ("plain seed values, no brand
+        // naming") visible at the call site rather than pinning the old name for its own sake.
+        Assert.Contains("APPEARANCE_PRESETS", appearance);
         // The settings panel no longer touches storage keys directly - it only ever calls into the
         // engine (readThemeState/writeThemeState/applyTheme), so the legacy key string does not need to
         // live here any more; it lives exactly once, inside the engine's own migration.
         Assert.DoesNotContain("finance.color.tintLogo", appearance);
 
-        Assert.DoesNotContain("mask-image", css.Substring(css.IndexOf(".appearance-colors", StringComparison.Ordinal)));
+        Assert.DoesNotContain("mask-image", css.Substring(css.IndexOf(".appearance-panel", StringComparison.Ordinal)));
         Assert.Contains(".appearance-preset", css);
     }
 

@@ -119,7 +119,7 @@ function handleConnectRedirect(){
   return'accounts';
 }
 async function loadMessages(){await i18n.load(state.lang);renderTranslations();renderPageHeader()}
-function renderTranslations(){i18n.apply(document);const lr=$('#layout-reset');if(lr){lr.querySelector('span').textContent=state.lang==='de'?'Layout zurücksetzen':'Reset layout';lr.querySelector('small').textContent=state.lang==='de'?'Seitenleisten, Breiten und Panel-Zustand':'Sidebars, widths and panel state'};
+function renderTranslations(){i18n.apply(document);
   // Collapsed sidebar shows icons only — carry each nav label as a tooltip + accessible name.
   $$('.nav-item[data-entry]').forEach(b=>{const t=b.querySelector('span')?.textContent||'';if(t){b.title=t;b.setAttribute('aria-label',t)}})}
 function renderPageHeader(){

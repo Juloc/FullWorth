@@ -15,27 +15,65 @@
 /* --- Einstellungen: privacy setting as a full-width toggle row under the selects --- */
 .settings-grid .settings-toggle{grid-column:1/-1;margin-top:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line);text-transform:none;letter-spacing:normal;font-size:var(--font-size-sm);color:var(--text)}
 
-/* Resizable app chrome polish */
-.settings-layout-reset{display:grid;gap:2px;text-align:left;justify-items:start;padding:10px 12px}
+/* Resizable app chrome polish. Der Knopf selbst ist jetzt eine normale .btn-secondary (Rollen-API,
+   components/buttons.js) statt einer eigenen, zweizeiligen Kachel - der Hinweistext steht als
+   eigenes <small> DANEBEN, nicht mehr IM Knopf, sonst waechst die Klickflaeche wieder auf Kachelgroesse. */
+.settings-layout-reset-row{display:grid;gap:4px;justify-items:start}
 
-.settings-layout-reset small{color:var(--muted);font-weight:400}
+.settings-layout-reset-row small{color:var(--muted);font-weight:400;font-size:var(--font-size-xs)}
 
-/* Appearance: the one seed colour (app/theme.js derives the rest). Replaced the cute visual theme -
-   one design, one chosen seed. The preset swatch falls back to the live --cta token when a preset has
-   no seed of its own (the monochrome preset), so it shows what is actually in effect instead of an
-   empty square. */
-.appearance-colors{display:grid;gap:var(--s3)}
+/* Appearance (Issue #149 #10/#166): der eine Sitz treibt Knoepfe, Links, Fokus, Diagramme UND jetzt
+   eine echte Live-Vorschau - alles aus app/theme.js abgeleitet, nichts davon hier neu gerechnet.
+   Das ganze Darstellung-Bloeckchen ist EIN durchgehender voller Bereich (grid-column:1/-1, genau wie
+   .settings-toggle es schon vormacht), damit .settings-grid's auto-fit-Spalten (minmax(200px,1fr))
+   es nicht in schmale Saeulen quetschen und deutsche Beschriftungen zeichenweise umbrechen (Issue
+   #149 - der eigentliche Grund fuer diese Slice). */
+.appearance-panel{grid-column:1/-1;display:grid;gap:var(--s3);margin-top:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line)}
+
+.appearance-color-row{display:flex;align-items:flex-end;gap:var(--s3);flex-wrap:wrap}
 
 .appearance-color-field{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:var(--font-size-xs);text-transform:uppercase;letter-spacing:.06em}
 
-.appearance-color-field input[type=color]{width:100%;height:38px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface);cursor:pointer}
+.appearance-color-field input[type=color]{width:64px;height:38px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface);cursor:pointer}
 
 .appearance-presets{display:flex;flex-wrap:wrap;gap:var(--s2)}
 
-.appearance-preset:hover{background:var(--surface-2)}
+/* Jede Schnellwahl ist nur ein gespeicherter Sitz, kein zweites Preset-System (Issue #149 §8): der
+   Klick ruft denselben applyAppearance()-Pfad wie das Farbfeld selbst, nur mit einem vorgegebenen
+   statt einem eingetippten Hex-Wert. Die Chip-Farbe steht als style="background:#..." direkt im
+   Markup (sechs feste Werte, keine zweite, hier dupliziert gepflegte Farbliste) statt als eigene
+   Custom Property - die gaebe es sonst nirgends deklariert ausser inline. */
+.appearance-preset{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid var(--line);cursor:pointer}
 
-.appearance-preset.active{border-color:var(--accent)}
+.appearance-preset:hover{border-color:var(--muted)}
 
-.appearance-preset-name{font-size:var(--font-size-xs);white-space:nowrap}
+.appearance-preset.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 
-.appearance-swatch{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);background:var(--cta)}
+.appearance-logo-row{max-width:420px}
+
+/* Live-Vorschau: kein eigener Render-Mechanismus. Es sind dieselben Klassen/Tokens wie ueberall
+   sonst in der App (.btn-primary/.btn-secondary/.btn-danger, --data-1..6, --accent) in einer kleinen
+   Karte - jede applyTheme()-Aenderung trifft sie also automatisch ueber die CSS-Kaskade, ohne dass
+   die Vorschau selbst ein einziges Mal per JS neu gezeichnet werden muesste. Genau deshalb "kein
+   Seiten-Neuladen, kein Async-Umweg": es gibt nichts zu laden, nur bereits gesetzte Custom Properties,
+   die sich sofort neu einfaerben. */
+.appearance-preview{display:grid;grid-template-columns:1fr auto;gap:var(--s4);align-items:center;padding:var(--s3);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card)}
+
+.appearance-preview-card{display:grid;gap:var(--s2);align-content:center;justify-items:start}
+
+.appearance-preview-heading{margin:0;font-weight:700;color:var(--text)}
+
+.appearance-preview-muted{margin:0;color:var(--muted);font-size:var(--font-size-sm)}
+
+.appearance-preview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+
+.appearance-preview-link{color:var(--accent);font-size:var(--font-size-sm);text-decoration:underline}
+
+.appearance-preview-chart{width:200px;max-width:100%;height:auto}
+
+/* Mobil: eine Spalte, kein horizontales Ueberlaufen (Issue #149 §11) - die Vorschau-Karte steht ueber
+   dem Diagramm statt daneben, und das Diagramm skaliert auf die volle Breite statt sie zu sprengen. */
+@media(max-width:640px){
+  .appearance-preview{grid-template-columns:1fr}
+  .appearance-preview-chart{width:100%;justify-self:start}
+}
