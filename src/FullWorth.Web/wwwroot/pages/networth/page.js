@@ -1260,13 +1260,23 @@ async function openEmergencyFundDialog() {
   dlg.showModal();
 }
 
-/* ---- Card 4: optional portfolio panel (ids preserved for parity/import enhancement modules) --- */
+/* ---- Card 4: optional portfolio panel (ids preserved for investment-consolidation.js) --- */
 
 function investmentsCardMarkup() {
-  // Kept `.panel-head` so feature-parity-ui.js / investment-import-ui.js / parity-final-ui.js can still
-  // inject their manage/import buttons, and #nw-investments / #nw-investments-list so their content and
-  // wealth-investment-consolidation.js keep their targets.
-  return `<article id="nw-investments" class="fw-card nw-invest" hidden><div class="panel-head fw-card-head"><h2 class="fw-card-title">${ctx.esc(t('investments'))}</h2></div><div id="nw-investments-list" class="rows"></div></article>`;
+  // War `class="fw-card nw-invest"` mit `class="panel-head fw-card-head"` im Kopf - zwei Klassen-
+  // systeme auf demselben Element (Scheibe 11 Teil 2, Issue #157/#162). `.panel-head` gehoert zu
+  // `.dialog-card` (Dialogkopf mit zentrierten Items) und wird auf dieser Seite so auch in jedem
+  // Dialog benutzt (siehe openEmergencyFundDialog, real-estate-*.js, specialized-assets*.js) - aber
+  // diese Karte hier ist kein Dialog, sondern ein ganz normaler Abschnitt wie Hero/Allokation/Notgroschen,
+  // die alle nur `.fw-card-head` tragen. `.panel-head` war hier ueberfluessig: kein Modul liest es an
+  // dieser Stelle mehr. Der alte Kommentar nannte feature-parity-ui.js / investment-import-ui.js /
+  // parity-final-ui.js als Grund fuer den Erhalt - alle drei Dateien gibt es seit dem Repo-Split nicht
+  // mehr, investment-consolidation.js liest heute nur noch #nw-investments-list direkt. Und
+  // `.nw-invest` hatte nie eine eigene CSS-Regel - ebenfalls totes Gewicht. Jetzt nur noch EIN
+  // Klassensystem, wie jede andere Karte dieser Seite (inkl. <h3> statt <h2>, wie sectionCard() es
+  // auch erzeugt). #nw-investments / #nw-investments-list bleiben - die liest renderInvestments()
+  // bzw. investment-consolidation.js tatsaechlich.
+  return `<article id="nw-investments" class="fw-card" hidden><div class="fw-card-head"><h3 class="fw-card-title">${ctx.esc(t('investments'))}</h3></div><div id="nw-investments-list" class="rows"></div></article>`;
 }
 
 /* ---- Card 5: Details / Verwalten (management surfaces one level down) -------------------------- */

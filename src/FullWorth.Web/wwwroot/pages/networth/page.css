@@ -10,19 +10,27 @@
 
 .nw-hero-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
 
+/* Die groesste Zahl der ganzen Seite (das Nettovermoegen) hat keine passende Rolle - amount-lg liegt
+   bei 24px, hier stehen bewusst 34px als Blickfang. Gleiche Begruendung wie beim Dashboard-Pendant
+   (36px, siehe pages/dashboard/page.css) - beide bleiben Rohwert, weil die Rolle sie schrumpfen wuerde. */
 .nw-hero .fw-summary-value{font-size:34px}
 
 .nw-hero-trend{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
 
 .nw-trend-desc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
 
-.nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px}
+/* Betrag neben dem Trend-Prozentwert, aber bewusst kleiner als ein normaler Betrag (--text-amount) -
+   sie steht neben der grossen Kennzahl, nicht anstelle von ihr. --text-metadata trifft die Groesse
+   einer sekundaeren Zeile am besten (Scheibe 11 Teil 2: erste Uebernahme der Rollen-Token hier). */
+.nw-delta{font-weight:600;font-variant-numeric:tabular-nums;font-size:var(--text-metadata-size)}
 
 .nw-delta.positive{color:var(--positive)}
 
 .nw-delta.negative{color:var(--negative)}
 
-.nw-window-label{color:var(--muted);font-size:11px}
+/* War 11px - keine bewusste Stufe, sondern Drift wie beim Dashboard-Gruppenkopf. --text-caption
+   ist die passende Fussnoten-Rolle fuer eine sekundaere Zeile neben dem Betrag. */
+.nw-window-label{color:var(--muted);font-size:var(--text-caption-size)}
 
 .nw-windows{margin:var(--s3) 0;max-width:100%;overflow-x:auto;scrollbar-width:none}
 
@@ -58,11 +66,16 @@
 
 .nw-hero-metrics{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s3)}
 
-.nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:16px}
+/* War ein blosses <strong> ohne eigenes font-weight - der Browser machte daraus 700 (fett), waehrend
+   jeder andere Betrag im Haus (.amount, .nw-legend-amt, ...) bei 600 steht. --text-amount trifft
+   Groesse (16px, unveraendert) UND Gewicht zugleich - keine Drift mehr zwischen "Vermoegenswerte"/
+   "Schulden" hier und einem Betrag in einer Zeile darunter. */
+.nw-hero-metrics strong{display:block;font-variant-numeric:tabular-nums;font-size:var(--text-amount-size);font-weight:var(--text-amount-weight)}
 
 .nw-hero-metrics strong.negative{color:var(--negative)}
 
-.nw-metric-label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+/* War 11px, wie .nw-window-label Drift statt Absicht - dieselbe Fussnoten-Rolle. */
+.nw-metric-label{display:block;color:var(--muted);font-size:var(--text-caption-size);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 
 .nw-fx{margin:var(--s3) 0 0;color:var(--warning);font-size:12px}
 
@@ -146,7 +159,9 @@
 
 .nw-alloc-block{margin:var(--s2) 0 var(--s3)}
 
-.nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:var(--s3)}
+/* Stand schon bei 12px, exakt --text-caption - jetzt auch so benannt statt einer Zufallszahl, die
+   sich zufaellig mit der Rolle deckt. */
+.nw-alloc-cap{margin:0 0 4px;color:var(--muted);font-size:var(--text-caption-size);display:flex;justify-content:space-between;gap:var(--s3)}
 
 .nw-alloc-cap strong{color:var(--text);font-variant-numeric:tabular-nums}
 
@@ -180,9 +195,20 @@
 
 .nw-manage-body{padding:0 var(--s4) var(--s4)}
 
-.nw-manage-body .fw-card{box-shadow:none;border:1px solid var(--line)}
+/* Fuenf Unterabschnitte (Notgroschen/Konten/Werte/Schulden/Kredite) sind keine eigene fachliche
+   Einheit, sondern eine Gliederung INNERHALB der einen Einheit "Verwalten" - das <details
+   class="nw-manage"> traegt schon Rahmen, Rundung und Flaeche fuer sich. Vorher bekam jeder
+   Unterabschnitt trotzdem seinen EIGENEN Rahmen (nur der Schatten war schon per box-shadow:none
+   entfernt) - zwei Rahmen mit sichtbarem Zwischenraum um denselben Block, ein Kaestchen im
+   Kaestchen. Jetzt traegt nur die Aussenkarte einen Rahmen; die Abschnitte selbst sind eine
+   schlichte, durch Trennlinien gegliederte Liste statt eigener Kaesten - genau Issue #162 §2:
+   eine Karte nur fuer eine echte fachliche Einheit, nicht automatisch fuer jede Unterebene.
+   Das seitliche Polster kommt jetzt allein von .nw-manage-body (das den Innenabstand der
+   Aussenkarte schon traegt) statt ein zweites Mal von der Karte selbst - sonst waere der Text
+   doppelt eingerueckt gewesen. */
+.nw-manage-body .fw-card{background:transparent;border:0;border-radius:0;box-shadow:none;padding:0}
 
-.nw-manage-body .fw-card+.fw-card{margin-top:var(--s3)}
+.nw-manage-body .fw-card+.fw-card{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line)}
 
 .nw-item.nw-excluded{opacity:.6}
 
@@ -241,7 +267,9 @@
 
 .nw-allocation .nw-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;pointer-events:none}
 
-.nw-allocation .nw-donut-value{font-size:22px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.15}
+/* Die zweitgroesste Zahl der Seite (die Summe im Ring) - war 22px/700, --text-amount-lg (24px/700)
+   ist die naechstgelegene Rolle und beansprucht das Gewicht ohnehin schon exakt. */
+.nw-allocation .nw-donut-value{font-size:var(--text-amount-lg-size);font-weight:var(--text-amount-lg-weight);color:var(--text);font-variant-numeric:tabular-nums;line-height:1.15}
 
 .nw-allocation .nw-donut-label{font-size:12px;color:var(--muted)}
 
