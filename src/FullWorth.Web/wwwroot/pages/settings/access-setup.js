@@ -10,8 +10,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
     body: JSON.stringify(data)
   });
 
-  // /auth/admin/instance-settings lebt auf dem Web-Host selbst, nicht hinter /bff/backend - `api()`
-  // wuerde es also am falschen Ort suchen. secureFetch reicht hier: der Aufruf braucht kein
+  // /auth/admin/instance-settings lebt auf dem Web-Host selbst, nicht hinter dem BFF-Backend-Pfad -
+  // `api()` wuerde es also am falschen Ort suchen. secureFetch reicht hier: der Aufruf braucht kein
   // Space-Routing wie apiClient, nur Antiforgery fuer PUT, die secureFetch selbst ergaenzt.
   async function instanceSettingsApi(path, options) {
     const response = await secureFetch(path, options);

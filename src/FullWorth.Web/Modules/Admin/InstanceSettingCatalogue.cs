@@ -1,5 +1,3 @@
-using FullWorth.Backend.Modules.Portfolio;
-
 namespace FullWorth.Web.Modules.Admin;
 
 public enum InstanceSettingKind
@@ -65,6 +63,13 @@ public static class InstanceSettingCatalogue
 
     private static readonly string[] LogLevels =
         ["Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"];
+
+    // Eigene, kleine Liste statt die Vorlagen-Voreinstellungen aus dem Backend-Modul zu importieren:
+    // Web darf Backend-Domaenentypen nur aus der Kompositionswurzel heraus kennen, alles andere geht
+    // ueber die BFF-Route (siehe die Architekturwaechter-Tests fuer Web). Die drei Schluessel sind
+    // hier deshalb kein Risiko: das Backend prueft "none"/"yahoo"/"custom" ohnehin selbst explizit,
+    // eine vierte Voreinstellung braucht dort sowieso eigenen Code.
+    private static readonly string[] MarketDataProviderChoices = ["none", "yahoo", "custom"];
 
     /// <summary>
     /// What an administrator may change from the browser.
@@ -238,12 +243,9 @@ public static class InstanceSettingCatalogue
         // --- Kursquelle -------------------------------------------------------------------------
         //
         // Genau wie FinTS oben: welcher Kursquelle man vertraut, ist eine Entscheidung des Betreibers,
-        // kein Systemwert - deshalb hier und nicht fest in appsettings.json. Choices kommt direkt aus
-        // MarketDataPresets.Choices statt aus einer eigenen Kopie, weil eine zweite Liste irgendwann
-        // von der echten abweicht und dann eine Voreinstellung anbietet, die MarketDataOptions.Resolve
-        // gar nicht kennt.
+        // kein Systemwert - deshalb hier und nicht fest in appsettings.json.
         new("MarketData:Provider", SectionMarketData, InstanceSettingKind.Choice,
-            Choices: MarketDataPresets.Choices)
+            Choices: MarketDataProviderChoices)
         {
             Label = "Kursquelle",
             Hint = "\"none\" ist der Ausgangszustand: keine Kurse, keine erfundene Zahl. \"yahoo\" braucht keinen Schlüssel. \"custom\" liest die Felder darunter."
