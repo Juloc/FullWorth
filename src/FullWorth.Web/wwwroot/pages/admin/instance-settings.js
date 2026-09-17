@@ -18,7 +18,8 @@ const SECTION_LABELS = {
   banking: 'FinTS',
   sync: 'Bank-Synchronisierung',
   registration: 'Registrierung',
-  logging: 'Protokollierung'
+  logging: 'Protokollierung',
+  marketData: 'Marktdaten'
 };
 
 const SOURCE_NOTES = {
@@ -52,6 +53,17 @@ export function createInstanceSettingsPanel({ request, esc, toast }) {
     if (setting.kind === 'boolean') {
       const checked = String(setting.value ?? '').toLowerCase() === 'true' ? ' checked' : '';
       return '<input id="' + id + '" type="checkbox" data-setting="' + esc(setting.key) + '"' + checked + disabled + '>';
+    }
+
+    if (setting.kind === 'secret') {
+      // A secret never travels back from the server (see InstanceConfigurationService.ListAsync), so
+      // `value` is always null here - even when one is stored. Leaving the field blank in that case
+      // would look identical to "nothing configured", which is indistinguishable from a secret that
+      // silently got lost. `stored` is the only signal that survives the trip; it is what tells the
+      // two apart.
+      const placeholder = setting.stored ? 'gesetzt' : '';
+      return '<input id="' + id + '" type="password" value="" placeholder="' + esc(placeholder) +
+        '" data-setting="' + esc(setting.key) + '"' + disabled + '>';
     }
 
     const type = setting.kind === 'integer' ? 'number' : 'text';

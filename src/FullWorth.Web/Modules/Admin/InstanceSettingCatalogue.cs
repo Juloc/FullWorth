@@ -1,3 +1,5 @@
+using FullWorth.Backend.Modules.Portfolio;
+
 namespace FullWorth.Web.Modules.Admin;
 
 public enum InstanceSettingKind
@@ -59,6 +61,7 @@ public static class InstanceSettingCatalogue
     public const string SectionSync = "sync";
     public const string SectionRegistration = "registration";
     public const string SectionLogging = "logging";
+    public const string SectionMarketData = "marketData";
 
     private static readonly string[] LogLevels =
         ["Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"];
@@ -230,6 +233,64 @@ public static class InstanceSettingCatalogue
         {
             Label = "Protokollstufe · Datenbank",
             Hint = "Ab Debug steht jede SQL-Anweisung samt Parametern im Container-Log."
+        },
+
+        // --- Kursquelle -------------------------------------------------------------------------
+        //
+        // Genau wie FinTS oben: welcher Kursquelle man vertraut, ist eine Entscheidung des Betreibers,
+        // kein Systemwert - deshalb hier und nicht fest in appsettings.json. Choices kommt direkt aus
+        // MarketDataPresets.Choices statt aus einer eigenen Kopie, weil eine zweite Liste irgendwann
+        // von der echten abweicht und dann eine Voreinstellung anbietet, die MarketDataOptions.Resolve
+        // gar nicht kennt.
+        new("MarketData:Provider", SectionMarketData, InstanceSettingKind.Choice,
+            Choices: MarketDataPresets.Choices)
+        {
+            Label = "Kursquelle",
+            Hint = "\"none\" ist der Ausgangszustand: keine Kurse, keine erfundene Zahl. \"yahoo\" braucht keinen Schlüssel. \"custom\" liest die Felder darunter."
+        },
+        // Die folgenden sechs Felder gelten nur bei Kursquelle "custom" - bei einer Voreinstellung wie
+        // "yahoo" gewinnt deren eigene, feste Vorlage (siehe MarketDataOptions.Resolve). Trotzdem immer
+        // sichtbar: das generische Formular kennt keine Abhängigkeit zwischen zwei Feldern, und ein
+        // Feld, das nur manchmal auftaucht, wäre neue Formularlogik statt eines Katalogeintrags.
+        new("MarketData:PriceUrl", SectionMarketData, InstanceSettingKind.Url, MaxLength: 500)
+        {
+            Label = "Kurs-Adresse (eigene Vorlage)",
+            Hint = "Nur bei Kursquelle \"custom\" gelesen. Platzhalter: {symbol}, {isin}, {wkn}, {from}, {to}, {apiKey}."
+        },
+        new("MarketData:DatePath", SectionMarketData)
+        {
+            Label = "Pfad zu den Zeitpunkten",
+            Hint = "Punktpfad in die Antwort der Kurs-Adresse, etwa chart.result[0].timestamp."
+        },
+        new("MarketData:ValuePath", SectionMarketData)
+        {
+            Label = "Pfad zu den Kursen",
+            Hint = "Punktpfad in die Antwort, eine Zahl je Zeitpunkt - nebeneinanderliegend zu den Zeitpunkten."
+        },
+        new("MarketData:CurrencyPath", SectionMarketData)
+        {
+            Label = "Pfad zur Währung",
+            Hint = "Optional. Fehlt er, bleibt die Währung des Kurses unbekannt statt geraten."
+        },
+        new("MarketData:SearchUrl", SectionMarketData, MaxLength: 500)
+        {
+            Label = "Such-Adresse (eigene Vorlage)",
+            Hint = "Optional. Findet ein Papier über ISIN oder WKN, statt das Symbol von Hand einzutragen."
+        },
+        new("MarketData:SearchSymbolPath", SectionMarketData)
+        {
+            Label = "Pfad zum gefundenen Symbol",
+            Hint = "Punktpfad in die Antwort der Such-Adresse."
+        },
+        new("MarketData:ApiKey", SectionMarketData, InstanceSettingKind.Secret)
+        {
+            Label = "API-Schlüssel",
+            Hint = "Ersetzt {apiKey} in den Vorlagen. Nur nötig, wenn die gewählte Quelle einen verlangt."
+        },
+        new("MarketData:BackfillDays", SectionMarketData, InstanceSettingKind.Integer, Minimum: 30, Maximum: 3650)
+        {
+            Label = "Rückwirkende Befüllung (Tage)",
+            Hint = "Wie weit ein einmaliger Kurs-Rückfüllauf zurückreicht."
         }
     ];
 
