@@ -134,7 +134,10 @@ function renderPageHeader(){
   const action=PRIMARY_ACTION[state.view];const btn=$('#primary-action');
   if(action){btn.hidden=false;setPrimaryAction(btn,get(action[0]),action[2]||'add');btn.onclick=action[1]}else{btn.hidden=true;btn.onclick=null}
 }
-function applyTheme(){const actual=state.theme==='system'?(media.matches?'dark':'light'):state.theme;document.documentElement.dataset.theme=actual;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',actual==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
+// Modus UND abgeleitete Farben kommen aus derselben Engine (app/theme.js, als klassisches <script>
+// schon vor diesem Modul geladen - siehe index.html) statt aus einer eigenen Kopie hier: ein
+// Hell/Dunkel-Wechsel muss die ganze Akzent-/Neutral-/Datenpalette neu rechnen, nicht nur dataset.theme.
+function applyTheme(){const persisted=window.FullWorthTheme.readThemeState();const applied=window.FullWorthTheme.applyTheme({mode:state.theme,seed:persisted.seed,logoMode:persisted.logoMode});const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',applied.mode==='dark'?'#121416':'#f5f6f7');updateThemeToggle()}
 function updateThemeToggle(){const b=$('#theme-toggle');if(b)b.dataset.themePref=state.theme}
 async function loadSpaces(){
   const spaces=await api('api/fullworth-spaces');state.spaces=spaces||[];
@@ -154,9 +157,9 @@ function renderUserBlock(){
 function bind(){
   bindIdentityIcons();
   $('#language').addEventListener('change',async e=>{state.lang=e.target.value;localStorage.setItem('finance.language',state.lang);setMoneyLocale(state.lang);await loadMessages();await loadCurrent()});
-  $('#theme').addEventListener('change',e=>{state.theme=e.target.value;localStorage.setItem('finance.theme',state.theme);applyTheme()});
+  $('#theme').addEventListener('change',e=>{state.theme=e.target.value;window.FullWorthTheme.writeThemeState({mode:state.theme});applyTheme()});
   // Sidebar theme toggle: cycles System -> Hell -> Dunkel (same behaviour as the login screen) and keeps the Settings select in sync.
-  $('#theme-toggle')?.addEventListener('click',()=>{const order=['system','light','dark'];state.theme=order[(order.indexOf(state.theme)+1)%order.length]||'system';localStorage.setItem('finance.theme',state.theme);applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
+  $('#theme-toggle')?.addEventListener('click',()=>{const order=['system','light','dark'];state.theme=order[(order.indexOf(state.theme)+1)%order.length]||'system';window.FullWorthTheme.writeThemeState({mode:state.theme});applyTheme();const sel=$('#theme');if(sel)sel.value=state.theme});
   media.addEventListener('change',()=>{if(state.theme==='system')applyTheme()});
   // Jeder Eintrag ist ein echter Link auf seine Adresse. Der Klick wird abgefangen, damit die Seite
   // nicht neu lädt - mit Strg/Cmd oder Mittelklick bleibt er ein Link und öffnet einen neuen Tab.

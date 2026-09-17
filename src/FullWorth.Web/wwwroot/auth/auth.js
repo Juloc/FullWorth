@@ -1,9 +1,14 @@
 import { initializePasskeyLogin } from '../passkeys/passkeys.js';
 import { enhancePasswordInputs } from '../components/password-toggle.js';
 
+// Die Anmeldeseite ist ein eigenes Dokument, ohne app/boot.js und ohne app.js - sie kann sich nicht auf
+// deren Kette verlassen und ruft die eine Theme-Engine (app/theme.js, klassisch VOR diesem Modul in
+// auth/index.html geladen) darum selbst auf, statt Modus/Farben ein drittes Mal selbst zu berechnen.
+const theme = window.FullWorthTheme;
+
 const preferences = {
   language: localStorage.getItem('finance.language') || ((navigator.language || 'de').startsWith('de') ? 'de' : 'en'),
-  theme: localStorage.getItem('finance.theme') || 'system'
+  ...theme.readThemeState()
 };
 
 const endpoints = Object.freeze({
@@ -184,10 +189,7 @@ function updateDocumentTitle() {
 }
 
 function applyTheme() {
-  const actual = preferences.theme === 'system'
-    ? (media.matches ? 'dark' : 'light')
-    : preferences.theme;
-  document.documentElement.dataset.theme = actual;
+  theme.applyTheme(preferences);
 }
 
 function updateLanguageButton() {
@@ -197,7 +199,7 @@ function updateLanguageButton() {
 
 function updateThemeButton() {
   const button = document.getElementById('auth-theme');
-  if (button) button.dataset.themePref = preferences.theme;
+  if (button) button.dataset.themePref = preferences.mode;
 }
 
 function bind() {
@@ -211,8 +213,8 @@ function bind() {
 
   $('#auth-theme').addEventListener('click', () => {
     const order = ['system', 'light', 'dark'];
-    preferences.theme = order[(order.indexOf(preferences.theme) + 1) % order.length] ?? 'system';
-    localStorage.setItem('finance.theme', preferences.theme);
+    preferences.mode = order[(order.indexOf(preferences.mode) + 1) % order.length] ?? 'system';
+    theme.writeThemeState({ mode: preferences.mode });
     applyTheme();
     updateThemeButton();
   });

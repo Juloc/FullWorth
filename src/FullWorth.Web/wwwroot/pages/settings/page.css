@@ -20,9 +20,10 @@
 
 .settings-layout-reset small{color:var(--muted);font-weight:400}
 
-/* Appearance: the two brand colours. Replaced the cute visual theme - one design, two chosen colours.
-   The preset swatches fall back to the live tokens, so the monochrome preset shows what is actually in
-   effect instead of an empty square. */
+/* Appearance: the one seed colour (app/theme.js derives the rest). Replaced the cute visual theme -
+   one design, one chosen seed. The preset swatch falls back to the live --cta token when a preset has
+   no seed of its own (the monochrome preset), so it shows what is actually in effect instead of an
+   empty square. */
 .appearance-colors{display:grid;gap:var(--s3)}
 
 .appearance-color-field{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:var(--font-size-xs);text-transform:uppercase;letter-spacing:.06em}
@@ -38,5 +39,3 @@
 .appearance-preset-name{font-size:var(--font-size-xs);white-space:nowrap}
 
 .appearance-swatch{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);background:var(--cta)}
-
-.appearance-swatch[data-preset-slot="--preset-b"]{background:var(--accent)}

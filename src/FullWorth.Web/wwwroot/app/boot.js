@@ -3,6 +3,13 @@
 //
 // Regel: hierher gehört nur, was sonst einen Sprung verursacht - Theme, Farben, die Breite der
 // Seitenleiste und welche Menügruppen zu sind. Typografie kommt ausschließlich aus tokens.css/reset.css.
+//
+// Die Farbmathematik selbst steht nicht mehr hier - sie steht genau einmal in app/theme.js, geladen
+// als klassisches <script> VOR diesem hier (siehe index.html). Ein <script type="module"> waere hier
+// keine Option gewesen: der Browser behandelt Module wie "defer" und wuerde das Parsen NICHT blocken,
+// also genau die Vor-dem-ersten-Bild-Garantie verlieren, die dieser ganze Block hat. Ein klassisches
+// Script dagegen laeuft synchron und VOR jedem Modul - window.FullWorthTheme steht darum hier
+// garantiert schon bereit, ohne dass diese Datei die Formeln ein zweites Mal mitbringen muesste.
 
 function applyThemeChrome(theme) {
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -10,38 +17,9 @@ function applyThemeChrome(theme) {
 }
 
 try {
-  const theme = localStorage.getItem('finance.theme') || 'system';
-  const actualTheme = theme === 'system'
-    ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
-  document.documentElement.dataset.theme = actualTheme;
-  applyThemeChrome(actualTheme);
-
-  // The two brand colours, applied before first paint for the same reason the theme is: setting them
-  // later means a visible flash of the default colour on every page load. Only well-formed hex is
-  // accepted, and an empty value removes nothing - the property is simply never set, which leaves
-  // tokens.css in charge. Contrast for the button label is derived here too, so a light primary does
-  // not briefly render white-on-white. Keep in sync with app/appearance.js.
-  const hex = value => /^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? value.trim().toLowerCase() : '';
-  const primary = hex(localStorage.getItem('finance.color.primary'));
-  const secondary = hex(localStorage.getItem('finance.color.secondary'));
-  if (primary) {
-    const channel = index => {
-      const value = parseInt(primary.slice(1 + index * 2, 3 + index * 2), 16) / 255;
-      return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
-    };
-    const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
-    document.documentElement.style.setProperty('--brand-primary', primary);
-    document.documentElement.style.setProperty('--cta', primary);
-    document.documentElement.style.setProperty('--cta-text', luminance > 0.42 ? '#151719' : '#ffffff');
-  }
-  if (secondary) {
-    document.documentElement.style.setProperty('--brand-secondary', secondary);
-    document.documentElement.style.setProperty('--accent', secondary);
-    document.documentElement.style.setProperty('--accent-soft', `color-mix(in srgb, ${secondary} 12%, transparent)`);
-  }
-  document.documentElement.dataset.brandTint =
-    primary && localStorage.getItem('finance.color.tintLogo') === 'true' ? 'on' : 'off';
+  const state = window.FullWorthTheme.readThemeState();
+  const applied = window.FullWorthTheme.applyTheme(state);
+  applyThemeChrome(applied.mode);
 } catch {
   const actualTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.theme = actualTheme;

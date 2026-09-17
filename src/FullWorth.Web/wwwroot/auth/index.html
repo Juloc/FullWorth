@@ -25,6 +25,11 @@
   <link rel="stylesheet" href="/styles/components.css">
   <link rel="stylesheet" href="/styles/app.css">
   <link rel="stylesheet" href="/auth/auth.css">
+  <!-- Die Anmeldeseite ist ein eigenes Dokument ohne app/boot.js - sie laedt die Engine hier direkt,
+       klassisch (nicht als Modul), damit auth.js (ein Modul, laeuft ohnehin erst spaeter) beim Start
+       denselben, schon initialisierten window.FullWorthTheme vorfindet statt eine eigene Kopie der
+       Farbmathematik mitzubringen. -->
+  <script src="/app/theme.js"></script>
   <script src="/pwa/register-sw.js"></script>
 </head>
 <body class="auth-body">

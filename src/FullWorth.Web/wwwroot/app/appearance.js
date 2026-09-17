@@ -1,8 +1,8 @@
-const STORAGE = Object.freeze({
-  primary: 'finance.color.primary',
-  secondary: 'finance.color.secondary',
-  tintLogo: 'finance.color.tintLogo'
-});
+// Baut das "Farben"-Panel in den Einstellungen und haelt es synchron. Die Farbmathematik selbst -
+// Sitz -> Akzent-/Neutral-/Datenpalette, Kontrast, Logo-Einfaerbung - steht nicht mehr hier, sondern
+// genau einmal in app/theme.js (window.FullWorthTheme, klassisch schon vor app/boot.js geladen). Diese
+// Datei bleibt bewusst nur die UI-Schicht: das Panel selbst neu zu gestalten ist eine spaetere Slice.
+const theme = window.FullWorthTheme;
 
 const LEGACY_TYPOGRAPHY_KEYS = Object.freeze([
   'finance.font',
@@ -12,32 +12,28 @@ const LEGACY_TYPOGRAPHY_KEYS = Object.freeze([
   'finance.typography.lineHeight'
 ]);
 
-// Empty means "leave the monochrome tokens alone", which is not the same as a colour that happens to
-// equal the default: it keeps tokens.css in charge, so light and dark each keep their own value.
-const BRAND_DEFAULTS = Object.freeze({ primary: '', secondary: '', tintLogo: false });
+// Ein leerer Sitz heisst "tokens.css bleibt zustaendig", nicht "ein Farbwert, der zufaellig dem
+// Standard gleicht" - siehe applyTheme in theme.js.
+const APPEARANCE_DEFAULTS = Object.freeze({ seed: '', logoMode: 'standard' });
 
+// Vorschlaege im Panel: EIN Sitz pro Eintrag statt vorher zwei unabhaengiger Farben (Issue #149 §3
+// diskontinuiert die zweite Farbe - der Sitz leitet Waschung/Rand/Volltext/Hover/Text selbst her).
 const BRAND_PRESETS = Object.freeze([
-  { key: 'mono', primary: '', secondary: '' },
-  { key: 'ink', primary: '#1d4ed8', secondary: '#0ea5e9' },
-  { key: 'forest', primary: '#15803d', secondary: '#65a30d' },
-  { key: 'plum', primary: '#6d28d9', secondary: '#db2777' },
-  { key: 'copper', primary: '#b45309', secondary: '#0f766e' }
+  { key: 'mono', seed: '' },
+  { key: 'ink', seed: '#1d4ed8' },
+  { key: 'forest', seed: '#15803d' },
+  { key: 'plum', seed: '#6d28d9' },
+  { key: 'copper', seed: '#b45309' }
 ]);
-
-const HEX = /^#[0-9a-f]{6}$/i;
-const BRAND_MARK_URL = '/branding/fullworth-logo.svg';
-const BRAND_MARK_GREYS = Object.freeze(['#C9CDD1', '#A5AAAF', '#878D92', '#2D3235']);
-const BRAND_MARK_MIX = Object.freeze([0.55, 0.35, 0.18, 0]);
 
 const COPY = Object.freeze({
   de: {
     colors: 'Farben',
-    colorsHint: 'Primärfarbe für Aktionen, Sekundärfarbe für Links, Fokus und Diagramme',
-    primary: 'Primärfarbe',
-    secondary: 'Sekundärfarbe',
+    colorsHint: 'Ein Farbton für Knöpfe, Links, Fokus und Diagramme',
+    color: 'Farbe',
     presets: 'Vorschläge',
     tintLogo: 'Logo mitfärben',
-    colorReset: 'Farben zurücksetzen',
+    colorReset: 'Farbe zurücksetzen',
     presetNames: {
       mono: 'Monochrom',
       ink: 'Tiefblau',
@@ -48,12 +44,11 @@ const COPY = Object.freeze({
   },
   en: {
     colors: 'Colours',
-    colorsHint: 'Primary drives actions, secondary drives links, focus and charts',
-    primary: 'Primary',
-    secondary: 'Secondary',
+    colorsHint: 'One colour drives buttons, links, focus and charts',
+    color: 'Colour',
     presets: 'Suggestions',
     tintLogo: 'Tint the logo too',
-    colorReset: 'Reset colours',
+    colorReset: 'Reset colour',
     presetNames: {
       mono: 'Monochrome',
       ink: 'Deep blue',
@@ -70,103 +65,31 @@ function language() {
     .startsWith('de') ? 'de' : 'en';
 }
 
-function normalizeColor(value) {
-  const text = String(value ?? '').trim();
-  return HEX.test(text) ? text.toLowerCase() : '';
-}
-
-function readableTextOn(hex) {
-  const channel = index => {
-    const value = parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
-    return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
-  };
-  const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
-  return luminance > 0.42 ? '#151719' : '#ffffff';
-}
-
-function mixHex(from, to, amount) {
-  const part = index => {
-    const a = parseInt(from.slice(1 + index * 2, 3 + index * 2), 16);
-    const b = parseInt(to.slice(1 + index * 2, 3 + index * 2), 16);
-    return Math.round(a + (b - a) * amount).toString(16).padStart(2, '0');
-  };
-  return `#${part(0)}${part(1)}${part(2)}`;
-}
-
-function pageBackdrop() {
-  return document.documentElement.dataset.theme === 'dark' ? '#121416' : '#ffffff';
-}
-
 export function getAppearance() {
-  return {
-    primary: normalizeColor(localStorage.getItem(STORAGE.primary)),
-    secondary: normalizeColor(localStorage.getItem(STORAGE.secondary)),
-    tintLogo: localStorage.getItem(STORAGE.tintLogo) === 'true'
-  };
+  const { seed, logoMode } = theme.readThemeState();
+  return { seed, logoMode };
 }
 
-function applyBrandVariables(appearance) {
-  const root = document.documentElement;
-  const set = (name, value) => value ? root.style.setProperty(name, value) : root.style.removeProperty(name);
-
-  set('--brand-primary', appearance.primary);
-  set('--cta', appearance.primary);
-  set('--cta-text', appearance.primary ? readableTextOn(appearance.primary) : '');
-  set('--brand-secondary', appearance.secondary);
-  set('--accent', appearance.secondary);
-  set('--accent-soft', appearance.secondary ? `color-mix(in srgb, ${appearance.secondary} 12%, transparent)` : '');
-  root.dataset.brandTint = appearance.tintLogo && appearance.primary ? 'on' : 'off';
-}
-
-let brandMarkSource = null;
-async function tintBrandMark(appearance) {
-  const marks = document.querySelectorAll('.brand-logo');
-  if (!marks.length) return;
-  const tint = appearance.tintLogo && appearance.primary;
-
-  if (!tint) {
-    marks.forEach(mark => { if (mark.dataset.brandOriginal) mark.src = mark.dataset.brandOriginal; });
-    return;
-  }
-
-  if (brandMarkSource === null) {
-    try { brandMarkSource = await (await fetch(BRAND_MARK_URL)).text(); }
-    catch { brandMarkSource = ''; }
-  }
-  if (!brandMarkSource) return;
-
-  const backdrop = pageBackdrop();
-  let svg = brandMarkSource;
-  BRAND_MARK_GREYS.forEach((grey, index) => {
-    svg = svg.replaceAll(grey, mixHex(appearance.primary, backdrop, BRAND_MARK_MIX[index]));
-  });
-  svg = svg.replace(/@media \(prefers-color-scheme: dark\)[^}]*}[^}]*}/, '');
-  const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  marks.forEach(mark => {
-    if (!mark.dataset.brandOriginal) mark.dataset.brandOriginal = mark.getAttribute('src') || BRAND_MARK_URL;
-    mark.src = url;
-  });
+function currentMode() {
+  // Der Modus selbst ist app.js'/auth.js' Sache (state.theme); hier wird nur der schon aufgeloeste
+  // Wert gelesen, den applyTheme zuletzt auf <html> geschrieben hat.
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 
 export function applyAppearance(next = {}, options = {}) {
   const current = getAppearance();
-  const appearance = {
-    primary: normalizeColor(next.primary ?? current.primary),
-    secondary: normalizeColor(next.secondary ?? current.secondary),
-    tintLogo: Boolean(next.tintLogo ?? current.tintLogo)
+  // Normalisierung (gueltiges Hex ja/nein) passiert einzig in theme.js - hier kein zweites Hex-Parsing.
+  const merged = {
+    seed: next.seed !== undefined ? next.seed : current.seed,
+    logoMode: next.logoMode !== undefined ? next.logoMode : current.logoMode
   };
 
-  if (options.persist !== false) {
-    localStorage.setItem(STORAGE.primary, appearance.primary);
-    localStorage.setItem(STORAGE.secondary, appearance.secondary);
-    localStorage.setItem(STORAGE.tintLogo, String(appearance.tintLogo));
-  }
+  if (options.persist !== false) theme.writeThemeState(merged);
 
-  applyBrandVariables(appearance);
-  void tintBrandMark(appearance);
+  const applied = theme.applyTheme({ mode: currentMode(), ...merged });
   refreshAppearanceUi();
-  window.dispatchEvent(new CustomEvent('fullworth:appearancechange', { detail: appearance }));
-  return appearance;
+  window.dispatchEvent(new CustomEvent('fullworth:appearancechange', { detail: applied }));
+  return applied;
 }
 
 function makeColorField(id, labelText, value, onChange) {
@@ -201,14 +124,13 @@ function makeColorControls(copy, appearance) {
   reset.type = 'button';
   reset.className = 'btn btn-secondary';
   reset.textContent = copy.colorReset;
-  reset.addEventListener('click', () => applyAppearance({ ...BRAND_DEFAULTS }));
+  reset.addEventListener('click', () => applyAppearance({ ...APPEARANCE_DEFAULTS }));
   head.append(headText, reset);
 
   const fields = document.createElement('div');
   fields.className = 'appearance-color-fields';
   fields.append(
-    makeColorField('brand-primary', copy.primary, appearance.primary, value => applyAppearance({ primary: value })),
-    makeColorField('brand-secondary', copy.secondary, appearance.secondary, value => applyAppearance({ secondary: value }))
+    makeColorField('brand-seed', copy.color, appearance.seed, value => applyAppearance({ seed: value }))
   );
 
   const presetsLabel = document.createElement('p');
@@ -223,18 +145,15 @@ function makeColorControls(copy, appearance) {
     button.dataset.brandPreset = preset.key;
     button.title = copy.presetNames[preset.key] || preset.key;
     button.setAttribute('aria-label', button.title);
-    for (const [colorVar, color] of [['--preset-a', preset.primary], ['--preset-b', preset.secondary]]) {
-      const swatch = document.createElement('span');
-      swatch.className = 'appearance-swatch';
-      swatch.dataset.presetSlot = colorVar;
-      if (color) swatch.style.backgroundColor = color;
-      button.appendChild(swatch);
-    }
+    const swatch = document.createElement('span');
+    swatch.className = 'appearance-swatch';
+    if (preset.seed) swatch.style.backgroundColor = preset.seed;
+    button.appendChild(swatch);
     const name = document.createElement('span');
     name.className = 'appearance-preset-name';
     name.textContent = button.title;
     button.appendChild(name);
-    button.addEventListener('click', () => applyAppearance({ primary: preset.primary, secondary: preset.secondary }));
+    button.addEventListener('click', () => applyAppearance({ seed: preset.seed }));
     presets.appendChild(button);
   }
 
@@ -243,9 +162,9 @@ function makeColorControls(copy, appearance) {
   const tintInput = document.createElement('input');
   tintInput.type = 'checkbox';
   tintInput.id = 'brand-tint-logo';
-  tintInput.checked = appearance.tintLogo;
-  tintInput.disabled = !appearance.primary;
-  tintInput.addEventListener('change', () => applyAppearance({ tintLogo: tintInput.checked }));
+  tintInput.checked = appearance.logoMode === 'themed';
+  tintInput.disabled = !appearance.seed;
+  tintInput.addEventListener('change', () => applyAppearance({ logoMode: tintInput.checked ? 'themed' : 'standard' }));
   const tintText = document.createElement('span');
   tintText.textContent = copy.tintLogo;
   tint.append(tintInput, tintText);
@@ -268,18 +187,16 @@ function ensureSettingsControls(forceRebuild = false) {
 function refreshSettingsValues() {
   const appearance = getAppearance();
   const effective = getComputedStyle(document.documentElement);
-  const primary = document.querySelector('#brand-primary');
-  const secondary = document.querySelector('#brand-secondary');
-  if (primary) primary.value = appearance.primary || normalizeColor(effective.getPropertyValue('--cta').trim()) || '#272727';
-  if (secondary) secondary.value = appearance.secondary || normalizeColor(effective.getPropertyValue('--accent').trim()) || '#272727';
+  const seedField = document.querySelector('#brand-seed');
+  if (seedField) seedField.value = appearance.seed || effective.getPropertyValue('--cta').trim() || '#272727';
   const tint = document.querySelector('#brand-tint-logo');
   if (tint) {
-    tint.checked = appearance.tintLogo;
-    tint.disabled = !appearance.primary;
+    tint.checked = appearance.logoMode === 'themed';
+    tint.disabled = !appearance.seed;
   }
   for (const button of document.querySelectorAll('[data-brand-preset]')) {
     const preset = BRAND_PRESETS.find(entry => entry.key === button.dataset.brandPreset);
-    const active = Boolean(preset) && preset.primary === appearance.primary && preset.secondary === appearance.secondary;
+    const active = Boolean(preset) && preset.seed === appearance.seed;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   }
@@ -303,6 +220,10 @@ function scheduleRefresh() {
 
 export function initAppearance() {
   for (const key of LEGACY_TYPOGRAPHY_KEYS) localStorage.removeItem(key);
+
+  // Modus + Sitz sind schon vor dem ersten Bild angewendet (app/boot.js ruft dieselbe Engine
+  // synchron auf); dieser Aufruf hier ist der Nach-DOMContentLoaded-Abgleich fuer den Fall, dass sich
+  // seit dem pre-paint-Aufruf etwas geaendert hat (z.B. ein anderer Tab), plus das Panel selbst.
   applyAppearance(getAppearance(), { persist: false });
   ensureSettingsControls();
 
@@ -313,7 +234,10 @@ export function initAppearance() {
   langObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
   window.addEventListener('storage', event => {
-    if (Object.values(STORAGE).includes(event.key)) applyAppearance(getAppearance(), { persist: false });
+    // Die Schluesselnamen stehen nur einmal, in theme.js - kein zweites Mal hier abgeschrieben.
+    if (event.key === theme.STORAGE_KEYS.seed || event.key === theme.STORAGE_KEYS.logoMode) {
+      applyAppearance(getAppearance(), { persist: false });
+    }
   });
 
   refreshAppearanceUi();

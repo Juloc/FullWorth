@@ -141,11 +141,19 @@ public sealed class AuthUiTests : IClassFixture<FullWorthWebFactory>
     {
         var html = await GetAsync("/auth/index.html");
         var js = await GetAsync("/auth/auth.js");
+        var themeEngine = await GetAsync("/app/theme.js");
 
         Assert.Contains("data-theme-icon=\"system\"", html);
         Assert.Contains("data-theme-icon=\"light\"", html);
         Assert.Contains("data-theme-icon=\"dark\"", html);
-        Assert.Contains("finance.theme", js);
+        // The mode key itself now lives in exactly one place, app/theme.js (design-system slice 3:
+        // one engine instead of four copies) - auth.js calls into it (readThemeState/writeThemeState)
+        // rather than reading localStorage.getItem('finance.theme') itself. The auth document loads the
+        // engine as a classic <script> before this module, same reason app/boot.js does.
+        Assert.Contains("finance.theme", themeEngine);
+        Assert.Contains("<script src=\"/app/theme.js\"></script>", html);
+        Assert.Contains("theme.readThemeState()", js);
+        Assert.Contains("theme.writeThemeState(", js);
         Assert.Contains("finance.language", js);
         Assert.Contains("prefers-color-scheme: dark", js);
     }
