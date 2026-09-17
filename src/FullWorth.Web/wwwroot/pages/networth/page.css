@@ -1267,12 +1267,15 @@
   vector-effect: non-scaling-stroke
 }
 
+/* Portfolio-Performance (Hauptserie) und Benchmark-Vergleich sind zwei echte Datenreihen ohne
+   Identitaetsbedeutung - sie bekommen zwei unterscheidbare Datenpalettenfarben statt UI-Akzent bzw.
+   ein zufaelliges Grau zu leihen (Issue #149 §7). */
 .ip-line-main {
-  stroke: var(--accent)
+  stroke: var(--data-1)
 }
 
 .ip-line-benchmark {
-  stroke: var(--muted-fg,#777);
+  stroke: var(--data-2);
   stroke-dasharray: 8 5
 }
 
@@ -1300,12 +1303,13 @@
   border-radius: 2px
 }
 
+/* Legenden-Farben muessen zu .ip-line-main / .ip-line-benchmark passen. */
 .ip-chart-legend i.main {
-  background: var(--accent)
+  background: var(--data-1)
 }
 
 .ip-chart-legend i.benchmark {
-  background: var(--muted-fg,#777)
+  background: var(--data-2)
 }
 
 .ip-bars {

@@ -1112,12 +1112,18 @@ function buildAllocationCard() {
   const otherAssets = manualTotal - realEstate - pension;
   const liabilities = num(overview.totalLiabilities);
 
+  // Diese fuenf Vermoegensarten sind KEINE Kategorie-Identitaet im Sinne von --cat-* (das waere z.B.
+  // "Lebensmittel" behaelt seine Farbe ueberall im Produkt) - "Konten"/"Investments"/... tauchen an
+  // keiner anderen Stelle mit demselben Farbversprechen wieder auf, dieser Ring ist die einzige Stelle,
+  // die diese fuenf Segmente ueberhaupt zeichnet. Es sind fuenf beliebige Kreissegmente ohne
+  // wiedererkennbare Bedeutung ausserhalb dieses einen Diagramms - genau der Fall, fuer den die
+  // Datenpalette gedacht ist (Issue #149 §7). Deshalb --data-* statt --cat-*.
   const categories = [
-    { label: t('accounts'), amount: accounts, color: 'var(--cat-2)' },
-    { label: t('investments'), amount: investments, color: 'var(--cat-1)' },
-    { label: t('realEstate'), amount: realEstate, color: 'var(--cat-3)' },
-    { label: t('pensionAssets'), amount: pension, color: 'var(--cat-5)' },
-    { label: t('otherValues'), amount: otherAssets, color: 'var(--cat-4)' }
+    { label: t('accounts'), amount: accounts, color: 'var(--data-1)' },
+    { label: t('investments'), amount: investments, color: 'var(--data-2)' },
+    { label: t('realEstate'), amount: realEstate, color: 'var(--data-3)' },
+    { label: t('pensionAssets'), amount: pension, color: 'var(--data-4)' },
+    { label: t('otherValues'), amount: otherAssets, color: 'var(--data-5)' }
   ];
   // A donut cannot draw a negative slice, so a category that nets negative (e.g. an overdrawn account
   // with no offsetting positive one) is left out of the ring - it is not added back in as a positive

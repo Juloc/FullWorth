@@ -36,8 +36,11 @@ public sealed class PensionWealthUiBaselineTests : IClassFixture<FullWorthWebFac
         Assert.Contains("not available", js);
         // Never a "0,00 € gebunden" row.
         Assert.Contains("if (tied <= 0.005) return '';", js);
-        // The allocation slice is a palette token, never a colour.
-        Assert.Contains("t('pensionAssets'), amount: pension, color: 'var(--cat-5)'", js);
+        // The allocation slice is a palette token, never a colour. Design-system slice 5 (Issue #149
+        // §7) moved the wealth-breakdown ring from the category-identity palette (--cat-*) to the
+        // chart data palette (--data-*): these five wealth types have no cross-page colour identity,
+        // they are five arbitrary segments this one ring draws.
+        Assert.Contains("t('pensionAssets'), amount: pension, color: 'var(--data-4)'", js);
     }
 
     /// <summary>

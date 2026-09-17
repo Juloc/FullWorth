@@ -62,8 +62,9 @@
 .dash-nw-change.negative{color:var(--negative)}
 .dash-nw-change.muted{color:var(--muted)}
 .dash-nw-spark{width:100%;height:40px;display:block}
-.dash-nw-spark-line{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
-.dash-nw-spark-fill{fill:var(--accent);opacity:.08;stroke:none}
+/* Sparkline bekommt eine eigene Datenfarbe statt den UI-Akzent zu leihen (Issue #149 §7). */
+.dash-nw-spark-line{fill:none;stroke:var(--data-1);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.dash-nw-spark-fill{fill:var(--data-1);opacity:.08;stroke:none}
 .dash-accounts{display:grid;gap:var(--s5)}
 .dash-group{display:grid}
 .dash-group-rows{display:grid}

@@ -14,7 +14,11 @@
 
 .an-chart{display:block;width:100%;height:auto}
 
-.an-line-expense{stroke:var(--accent);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
+/* Ausgaben-Linie ist eine von drei ueberlagerten Zeitreihen (Ausgaben/Vermoegen/Sparplan) in diesem
+   Chart, keine feste UI-Farbe - sie bekommt ihre eigene Datenpalettenfarbe (--data-1) statt --accent
+   zu leihen (Issue #149 §7). tokens.css deklariert einen Startwert, app/theme.js ersetzt ihn ab einem
+   gewaehlten Sitz live - kein Fallback in dieser Regel noetig. */
+.an-line-expense{stroke:var(--data-1);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke}
 
 .an-card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s3);margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);flex-wrap:wrap}
 
@@ -87,7 +91,8 @@
 
 .an-legend .lg-income::before{background:var(--positive)}
 
-.an-legend .lg-expense::before{background:var(--accent)}
+/* Legenden-Punkt muss dieselbe Farbe zeigen wie .an-line-expense (--data-1), sonst passt Legende nicht zur Linie. */
+.an-legend .lg-expense::before{background:var(--data-1)}
 
 .an-axis{fill:var(--muted);font-size:12px}
 
@@ -104,21 +109,26 @@
 
 .an-chart .an-line-expense{stroke-linecap:round;stroke-linejoin:round}
 
-.an-chart .an-line-networth{stroke:var(--k2);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+/* Zweite Zeitreihe im selben Chart (Vermoegen) - eigene Datenpalettenfarbe (--data-2), damit sie sich
+   von der Ausgaben-Linie unterscheidet statt zufaellig denselben UI-Token (--k2) zu teilen. */
+.an-chart .an-line-networth{stroke:var(--data-2);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
 
-.an-chart .an-line-builder{stroke:var(--cta);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+/* Dritte Zeitreihe (Sparplan-Hochrechnung) - dritte Datenpalettenfarbe (--data-3). */
+.an-chart .an-line-builder{stroke:var(--data-3);stroke-width:2.4;fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
 
-.an-g-neg-0{stop-color:var(--accent);stop-opacity:.18}
+/* Flaechen-Gradienten leiten sich weiterhin aus der jeweiligen Linienfarbe ab (Issue #149 §7 erlaubt
+   das ausdruecklich) - nur die Basisfarbe kommt jetzt aus der Datenpalette statt aus einem UI-Token. */
+.an-g-neg-0{stop-color:var(--data-1);stop-opacity:.18}
 
-.an-g-neg-1{stop-color:var(--accent);stop-opacity:0}
+.an-g-neg-1{stop-color:var(--data-1);stop-opacity:0}
 
-.an-g-nw-0{stop-color:var(--k2);stop-opacity:.16}
+.an-g-nw-0{stop-color:var(--data-2);stop-opacity:.16}
 
-.an-g-nw-1{stop-color:var(--k2);stop-opacity:0}
+.an-g-nw-1{stop-color:var(--data-2);stop-opacity:0}
 
-.an-g-line-0{stop-color:var(--cta);stop-opacity:.12}
+.an-g-line-0{stop-color:var(--data-3);stop-opacity:.12}
 
-.an-g-line-1{stop-color:var(--cta);stop-opacity:0}
+.an-g-line-1{stop-color:var(--data-3);stop-opacity:0}
 
 .an-donut{position:relative;width:180px;max-width:60vw;margin:0 auto var(--s5);aspect-ratio:1/1}
 

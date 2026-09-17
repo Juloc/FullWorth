@@ -106,6 +106,13 @@
   --cat-1:#5b47e0;--cat-2:#1878f0;--cat-3:#10c7a5;--cat-4:#ff8a0f;--cat-5:#e23fa8;--cat-6:#ffc91e;--cat-7:#66c61c;--cat-8:#8b95a6;
   /* interactive: a single dark-grey call-to-action colour, no accent hue */
   --cta:#272727;--cta-text:#ffffff;--accent:#272727;--accent-soft:#f7f7f7;
+  /* Datenpalette (Issue #149 §7): sechs Diagrammfarben fuer echte Mehrserien-Charts (Zeitreihen,
+     Kreissegmente ohne Kategorie-Identitaet). app/theme.js schreibt hier ab einem gewaehlten Sitz
+     eigene, aus dem Sitz abgeleitete Werte drueber (root.style.setProperty) - diese Zeile ist nur der
+     Startwert, bevor je ein Sitz gewaehlt wurde, und ist bewusst genau die Farbfolge, die theme.js auch
+     fuer einen GRAUEN Sitz waehlt (dataPalette() mit isMonochrome==true): ein Diagramm braucht auch
+     ohne Sitz-Entscheidung sechs unterscheidbare, bunte Farben, keine erfundene Extra-Definition. */
+  --data-1:#006ef0;--data-2:#00a327;--data-3:#da4433;--data-4:#b43fbd;--data-5:#00a1a4;--data-6:#c67800;
   /* semantic tokens (§4.3) with matching soft backgrounds */
   --positive:#17b45c;--positive-soft:#e6f8ec;--negative:#e03131;--negative-soft:#fdeaea;--warning:#f9891f;--warning-soft:#fdf1e3;
   /* Vollständige Rollenfamilien (Issue #149 §6): soft/border/solid/hover/on-* pro Bedeutung - dieselbe
@@ -136,6 +143,8 @@ html[data-theme="dark"]{
   --bg:#121416;--surface:#191b1e;--surface-2:#22252a;--surface-3:#2d3137;--text:#f3f4f5;--muted:#aeb3ba;--line:#30343a;
   --k1:#f3f4f5;--k2:#d2d5d9;--k3:#aeb3ba;--k4:#7e858d;--k5:#50565e;
   --cta:#dfe2e5;--cta-text:#151719;--accent:#dfe2e5;--accent-soft:#25282d;
+  /* Gleiche Herleitung wie im Hell-Block oben, nur mit den L-Werten von dataPalette()'s Dunkel-Skala. */
+  --data-1:#27a3ff;--data-2:#49d158;--data-3:#ff735e;--data-4:#e770ef;--data-5:#00d2d4;--data-6:#f5a400;
   --positive:#55df8e;--positive-soft:#163523;--negative:#ff756a;--negative-soft:#351d1d;--warning:#ffb866;--warning-soft:#372716;
   /* -soft/-solid/-border brauchen hier keine eigene Zeile: sie zeigen im :root-Block auf --negative/
      --positive/--warning, und var() löst diese Verweise anhand des Werts auf, den das Element gerade
