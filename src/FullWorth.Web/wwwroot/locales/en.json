@@ -884,7 +884,13 @@
     "copyReport": "Copy for an issue",
     "reportCopied": "Error report copied.",
     "rediscoverAccounts": "Re-read accounts",
-    "rediscoverAccountsHint": "Asks the bank for all accounts again, including new ones. This needs your PIN."
+    "rediscoverAccountsHint": "Asks the bank for all accounts again, including new ones. This needs your PIN.",
+    "rawResponses": "Raw bank responses",
+    "rawResponsesHint": "The most recent responses, exactly as the bank sent them.",
+    "rawResponsesEmpty": "No response stored yet. The next retrieval creates one.",
+    "rawResponseCopy": "Copy response",
+    "rawResponseBack": "Back to the list",
+    "rawResponseChars": "characters"
   },
   "a11y": {
     "skipToContent": "Skip to content"

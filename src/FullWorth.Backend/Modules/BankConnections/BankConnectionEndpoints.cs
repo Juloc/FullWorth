@@ -31,6 +31,31 @@ public static class BankConnectionEndpoints
             return items is null ? Results.NotFound() : Results.Ok(items);
         });
 
+        // Was die Bank zuletzt geschickt hat. Der Eigentuemer darf seine eigene Antwort sehen -
+        // ohne sie bleibt jede Frage nach einem fehlenden Wertpapier ein Ratespiel mit Release.
+        group.MapGet("/{id:guid}/raw-responses", async (
+            Guid id,
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FinTsRawResponseStore store,
+            CancellationToken ct) =>
+        {
+            var items = await store.ListForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, ct);
+            return items is null ? Results.NotFound() : Results.Ok(items);
+        });
+
+        group.MapGet("/{id:guid}/raw-responses/{rawId:guid}", async (
+            Guid id,
+            Guid rawId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            FinTsRawResponseStore store,
+            CancellationToken ct) =>
+        {
+            var item = await store.GetForUserAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, rawId, ct);
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        });
+
         // No public mutation endpoint here. Disconnect must pass through FullWorth.Banking so the
         // provider session/consent is closed before local data is destroyed.
 
@@ -51,6 +76,13 @@ public static class BankConnectionEndpoints
             await store.RecordSyncHistoryAsync(id, request, ct)
                 ? Results.NoContent()
                 : Results.NotFound());
+        internalGroup.MapPost("/{id:guid}/raw-responses", async (
+            Guid id,
+            FinTsRawResponseWrite request,
+            FinTsRawResponseStore store,
+            CancellationToken ct) =>
+            await store.RecordAsync(id, request, ct) ? Results.NoContent() : Results.NotFound());
+
         // One-time atomic state consumption (replaces the replayable read-only by-state lookup).
         internalGroup.MapPost("/consume-state", async (ConsumeStateRequest request, BankConnectionStore store, CancellationToken ct) =>
         {

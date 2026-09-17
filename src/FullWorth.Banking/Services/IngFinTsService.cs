@@ -566,6 +566,7 @@ public sealed class IngFinTsService(
     {
         var holdings = new List<FinTsHolding>();
         var shapes = new List<string>();
+        var rawStatements = new List<string>();
         string? touchdown = null;
         for (var page = 0; page < Math.Max(1, _options.CurrentValue.MaxPages); page++)
         {
@@ -575,6 +576,7 @@ public sealed class IngFinTsService(
             // Je Seite eine eigene Form. Sonst ueberschreibt die letzte Seite die Spur der ersten,
             // und bei einem mehrseitigen Depot stuende genau die Seite nicht im Log, auf der etwas fehlt.
             shapes.Add(finTs.LastPortfolioShape);
+            rawStatements.AddRange(finTs.LastPortfolioRaw);
             touchdown = result.Touchdown;
             if (string.IsNullOrWhiteSpace(touchdown)) break;
         }
@@ -587,6 +589,15 @@ public sealed class IngFinTsService(
         logger.Log(holdings.Count == 0 ? LogLevel.Warning : LogLevel.Information,
             "ING FinTS depot read {Count} holdings. Response={Shape}",
             holdings.Count, string.Join(" || ", shapes));
+
+        // Und die Antwort selbst - verschluesselt in die Datenbank, nie ins Log.
+        //
+        // Vier Fehler hintereinander kosteten je einen vollen Umlauf aus Vermutung, Release, Abruf
+        // und Logzeile, obwohl die Antwort jedes Mal vorlag. Der Parser liest acht Feldkennungen und
+        // verwirft den Rest; danach war die Frage nur noch durch erneutes Fragen der Bank zu klaeren.
+        foreach (var raw in rawStatements)
+            await backend.RecordRawResponseAsync(connection.Id,
+                new("mt535", depot.ProductName, raw), ct);
 
         var depotKey = AccountHash(depot);
         var depotName = depot.ProductName ?? "ING Direkt-Depot";

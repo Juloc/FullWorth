@@ -77,6 +77,13 @@ public sealed record CloseConnectionBody(Guid FullWorthSpaceId);
 public sealed record TransactionProviderPointer(Guid ConnectionId, string ProviderAccountId, string? ProviderTransactionId);
 public sealed record BankSyncHistoryWrite(DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string Result, string? ErrorCode);
 
+/// <summary>
+/// Eine Antwort der Bank fuer den verschluesselten Rohspeicher. Von Hand gespiegelt aus
+/// FullWorth.Backend.Modules.BankConnections - zwischen den Projekten gibt es keine Kopplung, die
+/// eine Umbenennung auffangen wuerde.
+/// </summary>
+public sealed record FinTsRawResponseWrite(string Kind, string? Label, string Payload);
+
 public sealed record EnableBankingProfileDto(
     Guid Id,
     Guid UserId,
@@ -191,6 +198,20 @@ public sealed class FullWorthBackendClient(HttpClient http, IOptions<BackendOpti
         using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/sync-history", body);
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Legt eine Antwort der Bank im verschluesselten Rohspeicher ab.
+    ///
+    /// Absichtlich OHNE EnsureSuccessStatusCode: das hier ist ein Hilfsmittel zum Nachsehen. Ein
+    /// Abruf, der Daten gebracht hat, darf nicht daran scheitern, dass sein Andenken nicht
+    /// gespeichert werden konnte.
+    /// </summary>
+    public async Task RecordRawResponseAsync(Guid connectionId, FinTsRawResponseWrite body, CancellationToken ct)
+    {
+        using var request = Create(HttpMethod.Post, $"/internal/banking/connections/{connectionId:D}/raw-responses", body);
+        using var response = await http.SendAsync(request, ct);
+        _ = response.StatusCode;
     }
 
     /// <summary>Was FullWorth von den Konten dieser Verbindung schon kennt.</summary>

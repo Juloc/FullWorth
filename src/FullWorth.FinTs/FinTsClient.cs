@@ -132,6 +132,7 @@ public sealed class FinTsClient(IFinTsTransport transport)
         response.ThrowOnError(lastSentShape);
         var holdings = FinTsResponseParser.Holdings(response);
         LastPortfolioShape = FinTsResponseParser.HoldingsShape(response, holdings.Count);
+        LastPortfolioRaw = FinTsResponseParser.HoldingsRaw(response);
         return holdings.Count == 0 && response.Touchdown is null
             ? FinTsResult<IReadOnlyList<FinTsHolding>>.Empty(next)
             : FinTsResult<IReadOnlyList<FinTsHolding>>.Success(holdings, next, response.Touchdown);
@@ -206,6 +207,12 @@ public sealed class FinTsClient(IFinTsTransport transport)
     /// eines Vermoegens. Die FORM zu beschreiben verraet davon nichts.
     /// </summary>
     public string LastPortfolioShape { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Die letzte Depotantwort im Klartext. Gehoert in den verschluesselten Rohspeicher und
+    /// NIRGENDWO sonst hin - sie enthaelt Namen, Kennnummern und Betraege des Eigentuemers.
+    /// </summary>
+    public IReadOnlyList<string> LastPortfolioRaw { get; private set; } = [];
 
     private IReadOnlyList<FinTsSegmentShape> lastSentShape = [];
 

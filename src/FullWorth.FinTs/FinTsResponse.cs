@@ -298,6 +298,16 @@ internal static class FinTsResponseParser
     }
 
     /// <summary>Die MT535-Aufstellung des Segments - als Binaerfeld oder, seltener, als Text.</summary>
+    /// <summary>
+    /// Die MT535-Aufstellungen einer Antwort im Klartext - fuer den verschluesselten Rohspeicher.
+    ///
+    /// Dieselbe Quelle, aus der HoldingsShape seine Form baut. Der Unterschied ist das ZIEL: die
+    /// Form geht ins Log, der Text ausschliesslich in die Datenbank. Ein Aufrufer, der das hier in
+    /// ein Log gibt, umgeht die Regel - sie gilt dem Log, nicht dem Speicher.
+    /// </summary>
+    public static IReadOnlyList<string> HoldingsRaw(FinTsResponse response) =>
+        response.FindAll("HIWPD").Select(Mt535Text).OfType<string>().ToArray();
+
     private static string? Mt535Text(FinTsSegment segment)
     {
         foreach (var group in segment.Groups)

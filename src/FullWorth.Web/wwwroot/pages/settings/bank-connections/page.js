@@ -28,6 +28,46 @@ const jsonBody = (...args) => ctx.jsonBody(...args);
 const dialog = (html, options = {}) => ctx.dialog(html, options);
 const empty = (el, message) => ctx.empty(el, message);
 
+// Was die Bank geschickt hat, im Wortlaut.
+//
+// Vier FinTS-Fehler hintereinander kosteten je einen vollen Umlauf aus Vermutung, Release, Abruf
+// und Logzeile - obwohl die Antwort jedes Mal vorlag. Der Parser liest acht Feldkennungen und
+// verwirft den Rest. Wer hinterher wissen will, was wirklich ankam, musste die Bank erneut fragen.
+//
+// Es sind die Bestaende des Eigentuemers: sie stehen hier, in seiner eigenen Oberflaeche, und
+// nirgendwo sonst. Der Fehlerbericht daneben laesst sie bewusst aus, weil er in ein oeffentliches
+// Repository wandert.
+async function openRawResponses(connection){
+  let items;
+  try{
+    items=await api('api/bank-connections/'+encodeURIComponent(connection.id)+'/raw-responses');
+  }catch(err){toast(err.message||get('common.error'));return}
+
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(get('accounts.rawResponses'))}</h2><div class="row-sub">${esc(connection.institutionName||'')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div data-raw-body></div></div>`);
+  const body=dlg.querySelector('[data-raw-body]');
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+
+  const showList=()=>{
+    const rows=(items||[]).map(item=>`<div class="row is-drillable" data-raw-id="${esc(item.id)}"><div class="row-main"><div class="row-title">${esc(item.label||item.kind)}</div><div class="row-sub">${esc(dateTime(item.capturedAt))} · ${esc(item.kind)} · ${esc(String(item.payloadLength))} ${esc(get('accounts.rawResponseChars'))}</div></div></div>`).join('');
+    body.innerHTML=`<p class="row-sub">${esc(get('accounts.rawResponsesHint'))}</p><div class="rows">${rows||emptyRow(get('accounts.rawResponsesEmpty'))}</div>`;
+    for(const row of body.querySelectorAll('[data-raw-id]'))
+      row.onclick=()=>{void showOne(row.dataset.rawId);};
+  };
+
+  const showOne=async id=>{
+    let detail;
+    try{
+      detail=await api('api/bank-connections/'+encodeURIComponent(connection.id)+'/raw-responses/'+encodeURIComponent(id));
+    }catch(err){toast(err.message||get('common.error'));return}
+    body.innerHTML=`<p class="row-sub">${esc(detail.label||detail.kind)} · ${esc(dateTime(detail.capturedAt))}</p><textarea class="report-text" data-raw-text rows="16" readonly></textarea><div class="dialog-actions"><button type="button" class="ghost" data-raw-back>${esc(get('accounts.rawResponseBack'))}</button><button type="button" data-raw-copy>${esc(get('accounts.rawResponseCopy'))}</button></div>`;
+    // Ueber value, nicht ueber das Markup: der Wortlaut der Bank darf nirgends als HTML landen.
+    body.querySelector('[data-raw-text]').value=detail.payload||'';
+    body.querySelector('[data-raw-back]').onclick=()=>showList();
+    body.querySelector('[data-raw-copy]').onclick=ev=>copyText(detail.payload||'',ev.currentTarget);
+  };
+
+  showList();dlg.showModal();
+}
 // Die Nebenhandlungen einer Verbindung, gesammelt hinter dem Auslassungszeichen - so wie die
 // Kontenzeile es seit #125 macht. In der Zeile blieb damit genau eine sichtbare Handlung: die,
 // die der Zustand gerade verlangt.
@@ -45,6 +85,7 @@ function openConnectionActionsDialog(connection){
   const actions=[
     ['reconnect',get(isFinTs?'accounts.rediscoverAccounts':'accounts.reconnect'),false,isFinTs?get('accounts.rediscoverAccountsHint'):''],
     ['history',get('accounts.syncHistory'),false],
+    ...(isFinTs?[['raw',get('accounts.rawResponses'),false,get('accounts.rawResponsesHint')]]:[]),
     ['disconnect',get('accounts.disconnect'),true],
   ];
   const dlg=dialog(`<div class="dialog-card more-sheet connection-actions-sheet"><div class="panel-head"><div><h2>${esc(connection.institutionName)}</h2><div class="row-sub">${esc(get('accounts.health_'+(connection.healthStatus||'authorized')))}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="more-list">${actions.map(([key,label,danger,hint])=>`<button type="button" data-connection-action="${key}" class="${danger?'danger':''}"><span>${esc(label)}${hint?`<span class="row-sub">${esc(hint)}</span>`:''}</span></button>`).join('')}</div></div>`,{mobileMode:'sheet'});
@@ -54,6 +95,7 @@ function openConnectionActionsDialog(connection){
     dlg.close();
     if(action==='reconnect')reconnectConnection(connection);
     else if(action==='history')openSyncHistory(connection);
+    else if(action==='raw')openRawResponses(connection);
     else if(action==='disconnect')disconnectConnection(connection);
   });
   dlg.showModal();
@@ -150,6 +192,18 @@ function connectionReport(connection,history){
     runs.length?'Letzte Laeufe:':null,
     ...runs
   ].filter(Boolean).join('\n');
+}
+
+// Kopieren, und wenn die Zwischenablage verwehrt ist, wenigstens markieren: dann tut Strg+C den
+// Rest. Eine Fehlermeldung waere hier die schlechtere Antwort - der Text steht ja da.
+async function copyText(text,button){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast(get('accounts.reportCopied'));
+  }catch{
+    const box=button.closest('.dialog-card')?.querySelector('[data-raw-text],[data-report-text]');
+    if(box){box.hidden=false;box.value=text;box.select();}
+  }
 }
 
 async function copyReport(connection,history,button){

@@ -884,7 +884,13 @@
     "copyReport": "Für ein Issue kopieren",
     "reportCopied": "Fehlerbericht kopiert.",
     "rediscoverAccounts": "Konten neu einlesen",
-    "rediscoverAccountsHint": "Fragt die Bank erneut nach allen Konten – auch nach neuen. Dafür brauchst du deine PIN."
+    "rediscoverAccountsHint": "Fragt die Bank erneut nach allen Konten – auch nach neuen. Dafür brauchst du deine PIN.",
+    "rawResponses": "Rohdaten der Bank",
+    "rawResponsesHint": "Die letzten Antworten, genau so wie die Bank sie geschickt hat.",
+    "rawResponsesEmpty": "Noch keine Antwort gespeichert. Die nächste entsteht beim nächsten Abruf.",
+    "rawResponseCopy": "Antwort kopieren",
+    "rawResponseBack": "Zurück zur Liste",
+    "rawResponseChars": "Zeichen"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

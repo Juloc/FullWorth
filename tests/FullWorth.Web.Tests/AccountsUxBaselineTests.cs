@@ -406,4 +406,33 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         // Ein Blatt, das niemand oeffnet, ist keine Handlung.
         Assert.Contains("dlg.showModal()", js);
     }
+
+    /// <summary>
+    /// Die Antwort der Bank bleibt nachlesbar - und bleibt, wo sie hingehoert.
+    ///
+    /// Vier FinTS-Fehler hintereinander kosteten je einen vollen Umlauf aus Vermutung, Release,
+    /// Abruf und Logzeile, obwohl die Antwort jedes Mal vorlag. Der Parser liest acht Feldkennungen
+    /// und verwirft den Rest; hinterher war die Frage nur durch erneutes Fragen der Bank zu klaeren.
+    ///
+    /// Zwei Grenzen gelten weiter, und dieser Test haelt beide:
+    /// <list type="number">
+    ///   <item>Der Wortlaut geht ueber value, nie ueber Markup - er kommt von aussen.</item>
+    ///   <item>Der Fehlerbericht wandert in ein oeffentliches Repository und darf ihn nicht kennen.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public async Task TheRawBankResponseIsReadableInTheAppAndAbsentFromTheIssueReport()
+    {
+        var js = await GetAsync("/pages/settings/bank-connections/page.js");
+
+        Assert.Contains("function openRawResponses", js);
+        Assert.Contains("raw-responses", js);
+        // Fremder Text gehoert nie ins Markup.
+        Assert.Contains("[data-raw-text]').value=detail.payload", js);
+        // Und der Bericht kennt ihn nicht: er baut sich aus benannten Feldern, nicht aus der Antwort.
+        var report = js[js.IndexOf("function connectionReport", StringComparison.Ordinal)..];
+        report = report[..report.IndexOf("filter(Boolean).join", StringComparison.Ordinal)];
+        Assert.DoesNotContain("payload", report, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("raw", report, StringComparison.OrdinalIgnoreCase);
+    }
 }
