@@ -541,6 +541,39 @@
       ],
       stalePrices: []
     },
+    // Freigeschaltet, damit die Depot-Oberflaeche (investment-performance-ui.js) ihre
+    // verwaltenden Knoepfe UND den neuen "Erkannte Kaeufe"-Tab zeigt - ohne das faehrt die Harness
+    // sonst nur den Lesemodus des reichen Dialogs vor.
+    'access/effective': { capabilities: { 'investments.manage': true } },
+    // Der Performance-Tab (TWR/XIRR/Benchmark + Verlaufskurve). Ein Punkt traegt incomplete:true UND
+    // der Wochentotal traegt seinerseits reasons - beide Warnkaesten (Kopf und Kurve) lassen sich so
+    // ansehen, nicht nur behaupten.
+    'investments/portfolios/p1/performance': {
+      twr: 0.0812, xirr: 0.0745, benchmarkReturn: 0.0623, marketValue: 3218.42, currency: 'EUR',
+      effectiveFrom: '2025-09-17', to: '2026-09-17', incomplete: true,
+      reasons: ['Kurs fuer AIS-AMUN.STEUR600 U.ETF A ist 13 Tage alt.'],
+      points: [
+        { date: '2025-09-17', value: 2850.10, portfolioReturn: 0, benchmarkReturn: 0, incomplete: false },
+        { date: '2025-12-17', value: 2960.40, portfolioReturn: 0.0387, benchmarkReturn: 0.0290, incomplete: false },
+        { date: '2026-03-17', value: 3040.75, portfolioReturn: 0.0669, benchmarkReturn: 0.0410, incomplete: false },
+        { date: '2026-06-17', value: 3125.90, portfolioReturn: 0.0968, benchmarkReturn: 0.0520, incomplete: true },
+        { date: '2026-09-17', value: 3218.42, portfolioReturn: 0.1291, benchmarkReturn: 0.0623, incomplete: false }
+      ]
+    },
+    // Erkannte Kaeufe (Teil B des Buchungs-Abgleichs): s5 ist ein neues Wertpapier, dessen zwei
+    // Kontobuchungen beide sicher genug sind, um vorausgewaehlt zu werden; s2 haelt das Depot schon,
+    // aber die dritte Buchung ist unsicher (keine erkennbare Stueckzahl) und braucht ein Auge darauf.
+    'reconciliation/securities-bookings': {
+      matches: [
+        { transactionId: 'tx1', securityId: 's5', name: 'ISHARES CORE S&P 500 UCITS ETF', date: '2026-08-04', gross: 1500.00, currency: 'EUR', quantity: 3.021, quantityEstimated: false, confident: true },
+        { transactionId: 'tx2', securityId: 's5', name: 'ISHARES CORE S&P 500 UCITS ETF', date: '2026-08-18', gross: 500.00, currency: 'EUR', quantity: 1.007, quantityEstimated: true, confident: true },
+        { transactionId: 'tx3', securityId: 's2', name: 'AMUNDI CORE MSCI WLD UE A', date: '2026-07-22', gross: 300.00, currency: 'EUR', quantity: null, quantityEstimated: false, confident: false }
+      ],
+      summaries: [
+        { securityId: 's5', name: 'ISHARES CORE S&P 500 UCITS ETF', q: 0, p: null, sumGross: 2000.00, sumQuantity: 4.028, matches: 2, confident: true },
+        { securityId: 's2', name: 'AMUNDI CORE MSCI WLD UE A', q: 11.48992, p: 141.9, sumGross: 300.00, sumQuantity: null, matches: 1, confident: false }
+      ]
+    },
     'insights': [],
 
     // ---- Altersvorsorge (bAV) ----

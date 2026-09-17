@@ -1345,6 +1345,43 @@
   max-width: none
 }
 
+/* Erkannte Kaeufe (Tab "bookings") und der Leerzustand, den die Performance-Tab dorthin verlinkt. */
+.ip-empty-cta {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px dashed var(--border,#d8d8d8);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  justify-items: start
+}
+
+.ip-booking-card {
+  margin-top: 12px
+}
+
+.ip-booking-card.ip-confident {
+  border-color: var(--positive);
+  background: var(--positive-soft)
+}
+
+.ip-booking-row {
+  cursor: pointer
+}
+
+.ip-booking-row input[type="checkbox"] {
+  margin-right: 12px
+}
+
+.ip-badge {
+  font-size: .78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--positive-soft);
+  border: 1px solid var(--positive);
+  color: var(--positive)
+}
+
 .ip-form {
   display: grid;
   gap: 14px

@@ -214,6 +214,66 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.DoesNotContain("linear-gradient", css);
     }
 
+    /// <summary>
+    /// Teil B des Buchungs-Abgleichs (GET/apply/dismiss <c>api/reconciliation/securities-bookings</c>)
+    /// hatte bislang keine Oberflaeche. Sie lebt als eigener Tab im schon vorhandenen, reichen
+    /// Depot-Dialog - kein zweiter, konkurrierender Dialog - und "sicher" heisst dort vorausgewaehlt,
+    /// nie automatisch geschrieben: uebernommen wird erst mit einem Klick auf "Uebernehmen"/"Ablehnen".
+    /// </summary>
+    [Fact]
+    public async Task DetectedPurchasesGetTheirOwnTabAndNeverApplyWithoutAClick()
+    {
+        var js = await GetAsync("/pages/networth/investment-performance-ui.js");
+
+        Assert.Contains("api/reconciliation/securities-bookings?portfolioId=", js);
+        Assert.Contains("api/reconciliation/securities-bookings/${path}", js);
+        Assert.Contains("run(button,'apply'", js);
+        Assert.Contains("run(button,'dismiss'", js);
+        // tabButton() generates the data-ip-tab attribute at render time from its `key` argument, so
+        // the literal source only ever carries the key, never the rendered attribute string.
+        Assert.Contains("canManage?tabButton('bookings'", js);
+        Assert.Contains("if(state.tab==='bookings')return await renderBookings(state,container);", js);
+
+        // Checkboxen tragen die transactionId, und beide Aktionsknoepfe lesen nur die ANGEHAKTEN -
+        // kein automatisches Schreiben, auch nicht fuer confident:true.
+        Assert.Contains("data-ip-booking-check", js);
+        Assert.Contains("[data-ip-booking-check]:checked", js);
+        Assert.Contains("data-ip-booking-apply", js);
+        Assert.Contains("data-ip-booking-dismiss", js);
+        // Vorausgewaehlt (checked), aber nur der spaetere Klick auf den Knopf loest apply/dismiss aus -
+        // renderBookings selbst ruft die Endpunkte nirgends direkt auf.
+        Assert.Contains("match.confident?'checked':''", js);
+        Assert.Contains("button.onclick=run(button,'apply'", js);
+        Assert.Contains("button.onclick=run(button,'dismiss'", js);
+        Assert.Contains("ip-confident", js);
+
+        // Der Leerzustand der Performance-Tab verlinkt dorthin statt nur zu sagen, dass Daten fehlen.
+        Assert.Contains("data-ip-goto-bookings", js);
+        Assert.Contains("state.tab='bookings'", js);
+
+        // Eine Buchung ohne Stueckzahl erfindet keine - sie sagt, dass von Hand nachgetragen wird.
+        Assert.Contains("match.quantity==null", js);
+    }
+
+    /// <summary>
+    /// <c>$()</c> is <c>querySelector</c> - ONE element, not a list - and calling <c>.forEach</c> on it
+    /// throws. That throw travelled up into <c>renderTab</c>'s try/catch, whose catch block replaces
+    /// the ENTIRE tab content with the error message. So opening the Performance tab did not just leave
+    /// five of six period buttons unresponsive - it always discarded the metrics, the warning box and
+    /// the chart it had just rendered, the moment it tried to wire the period buttons. Found while
+    /// building the new "detected purchases" tab in the same function and fixed alongside it rather
+    /// than left for someone else to trip over.
+    /// </summary>
+    [Fact]
+    public async Task PerformanceTabSurvivesWiringItsPeriodButtonsInsteadOfErroringOutOnEveryOpen()
+    {
+        var js = await GetAsync("/pages/networth/investment-performance-ui.js");
+        // "$$(...)" contains "$(...)" as a literal substring, so a DoesNotContain check on the single-$
+        // call would be a false negative here - regex anchors on the character right before the call.
+        Assert.Contains("$$('[data-ip-period]',container).forEach(button=>button.onclick=", js);
+        Assert.DoesNotMatch(@"(?<!\$)\$\('\[data-ip-period\]',container\)\.forEach\(", js);
+    }
+
     [Fact]
     public async Task PortabilityUsesCompleteZipBackupWithoutCachingFinancialData()
     {

@@ -897,6 +897,7 @@
     "depotGain": "Gewinn",
     "depotNoCostBasis": "Kein Einstand hinterlegt. Trag deine Käufe ein – dann rechnet FullWorth Gewinn und Prozent.",
     "depotAddTrade": "Kauf eintragen",
+    "depotHistory": "Kursverlauf & Performance",
     "depotNoPortfolio": "Zu diesem Depot gehört noch kein Bestand. Er entsteht beim ersten Abruf.",
     "tradeSecurity": "Wertpapier",
     "tradeDate": "Kaufdatum",

@@ -59,6 +59,7 @@ async function renderShell(state){
   if(!state.dialog?.open)return;
   const root=$('[data-ip-root]',state.dialog);
   const subtitle=$('[data-ip-subtitle]',state.dialog);
+  const canManage=!!state.access?.capabilities?.['investments.manage'];
   subtitle.textContent=`${state.portfolio.currency}${state.portfolio.isArchived?` · ${text('Archiviert','Archived')}`:''}`;
   root.innerHTML=`<div class="ip-tabs" role="tablist">
     ${tabButton('overview',text('Übersicht','Overview'),state)}
@@ -66,6 +67,7 @@ async function renderShell(state){
     ${tabButton('transactions',text('Transaktionen','Transactions'),state)}
     ${tabButton('performance',text('Performance','Performance'),state)}
     ${tabButton('income',text('Erträge','Income'),state)}
+    ${canManage?tabButton('bookings',text('Erkannte Käufe','Detected purchases'),state):''}
   </div><div data-ip-content class="ip-content"><div class="ip-loading">${esc(text('Laden…','Loading…'))}</div></div>`;
   $$('[data-ip-tab]',root).forEach(button=>button.onclick=()=>{state.tab=button.dataset.ipTab;renderShell(state)});
   await renderTab(state,$('[data-ip-content]',root));
@@ -79,6 +81,7 @@ async function renderTab(state,container){
     if(state.tab==='transactions')return await renderTransactions(state,container);
     if(state.tab==='performance')return await renderPerformance(state,container);
     if(state.tab==='income')return await renderIncome(state,container);
+    if(state.tab==='bookings')return await renderBookings(state,container);
   }catch(error){container.innerHTML=`<div class="ip-error">${esc(error.message)}</div>`}
 }
 
@@ -148,6 +151,13 @@ async function renderPerformance(state,container){
   const trades=await api(`api/investments/portfolios/${state.portfolio.id}/trades`);
   const range=periodRange(state.period,trades);
   const perf=await api(`api/investments/portfolios/${state.portfolio.id}/performance?from=${range.from}&to=${range.to}`);
+  const canManage=!!state.access?.capabilities?.['investments.manage'];
+  const points=perf.points||[];
+  // Weniger als zwei bewertete Punkte ergeben keine Kurve - das ist meistens kein fehlender Kurs,
+  // sondern ein fehlender Kauf: ohne Transaktion kennt PortfolioValuationService keinen Bestand, den
+  // es bewerten koennte. Der Hinweis fuehrt deshalb direkt zu den erkannten Kaeufen statt nur zu sagen,
+  // dass Daten fehlen.
+  const chartHasData=points.filter(p=>p.portfolioReturn!=null).length>=2;
   container.innerHTML=`<div class="ip-periods">${['1m','3m','ytd','1y','3y','all'].map(key=>`<button type="button" data-ip-period="${key}" class="${state.period===key?'active':''}">${key==='ytd'?'YTD':key.toUpperCase()}</button>`).join('')}</div>
   <div class="ip-metrics">
     ${metric('TWR',pct(perf.twr))}
@@ -156,9 +166,16 @@ async function renderPerformance(state,container){
     ${metric(text('Endwert','Ending value'),amount(perf.marketValue,perf.currency))}
   </div>
   ${perf.incomplete?`<div class="ip-warning"><strong>${esc(text('Unvollständige Bewertungsdaten','Incomplete valuation data'))}</strong><div>${esc((perf.reasons||[]).join(', '))}</div></div>`:''}
-  <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Performance-Verlauf','Performance history'))}</h3><span>${esc(dateText(perf.effectiveFrom))} – ${esc(dateText(perf.to))}</span></div>${performanceChart(perf.points||[])}</section>`;
-  bindPerformanceScrubber(container,perf.points||[]);
-  $('[data-ip-period]',container).forEach(button=>button.onclick=()=>{state.period=button.dataset.ipPeriod;renderPerformance(state,container)});
+  <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Performance-Verlauf','Performance history'))}</h3><span>${esc(dateText(perf.effectiveFrom))} – ${esc(dateText(perf.to))}</span></div>${performanceChart(points)}
+  ${!chartHasData&&canManage?`<div class="ip-empty-cta"><p>${esc(text('Noch keine Historie? FullWorth findet Käufe oft direkt in den Kontobuchungen.','No history yet? FullWorth can often find purchases directly in your account bookings.'))}</p><button type="button" data-ip-goto-bookings>${esc(text('Käufe aus Buchungen suchen','Search purchases from bookings'))}</button></div>`:''}
+  </section>`;
+  bindPerformanceScrubber(container,points);
+  // War $() (querySelector, EIN Element) statt $$(): .forEach existiert darauf nicht, der Wurf lief
+  // ins try/catch von renderTab, und dessen catch ERSETZT den ganzen Tab-Inhalt durch die
+  // Fehlermeldung - Metriken, Warnbox und Chart waren also bei jedem Oeffnen der Performance-Tab weg,
+  // nicht nur die Zeitraum-Knoepfe.
+  $$('[data-ip-period]',container).forEach(button=>button.onclick=()=>{state.period=button.dataset.ipPeriod;renderPerformance(state,container)});
+  $('[data-ip-goto-bookings]',container)?.addEventListener('click',()=>{state.tab='bookings';renderShell(state)});
 }
 function performanceChart(points){
   const valid=points.filter(p=>p.portfolioReturn!=null);
@@ -217,6 +234,77 @@ async function renderIncome(state,container){
   container.innerHTML=`<div class="ip-metrics">${metric(`${text('Dividenden','Dividends')} ${year}`,amount(response.total||0,state.portfolio.currency))}${metric(text('Zahlungen','Payments'),String(items.length))}</div>
   <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Monatlich','Monthly'))}</h3></div><div class="ip-bars">${months.map(row=>`<div class="ip-bar-row"><span>${new Intl.DateTimeFormat(lang()==='en'?'en-US':'de-DE',{month:'short'}).format(new Date(year,row.month,1))}</span><div><i style="width:${max?Math.max(2,(row.total/max)*100):0}%"></i></div><strong>${amount(row.total,state.portfolio.currency)}</strong></div>`).join('')}</div></section>
   <section class="ip-section"><div class="ip-section-head"><h3>${esc(text('Zahlungen','Payments'))}</h3></div><div class="ip-list">${items.map(item=>`<div class="ip-row"><div><strong>${esc(item.security||text('Dividende','Dividend'))}</strong><div class="fp-muted">${esc(dateText(item.date))}</div></div><div class="ip-row-value"><strong>${amount(item.amount,item.currency)}</strong>${Number(item.taxes||0)?`<span>${esc(text('Steuern','Tax'))}: ${amount(item.taxes,item.currency)}</span>`:''}</div></div>`).join('')||`<div class="fp-muted">${esc(text('Keine Dividenden im gewählten Jahr.','No dividends in the selected year.'))}</div>`}</div></section>`;
+}
+
+// Erkannte Kaeufe (Teil B des Buchungs-Abgleichs). ComputeSuggestionsAsync gleicht bei jedem Aufruf
+// frisch ab - hier wird deshalb genauso wenig zwischengespeichert wie im Endpoint selbst. "Sicher"
+// heisst hier vorausgewaehlt und leicht mit einem Klick zu uebernehmen, NIE automatisch geschrieben:
+// das entscheidet immer ein Klick auf "Übernehmen", auch wenn confident=true ist.
+async function loadBookingSuggestions(state){return api(`api/reconciliation/securities-bookings?portfolioId=${encodeURIComponent(state.portfolio.id)}`)}
+
+async function renderBookings(state,container){
+  const data=await loadBookingSuggestions(state);
+  const summaries=data.summaries||[];
+  const matches=data.matches||[];
+  if(!summaries.length){
+    container.innerHTML=`<div class="ip-empty-cta"><p>${esc(text('Keine erkannten Käufe. FullWorth vergleicht Kontobuchungen mit den Positionen dieses Depots und schlägt nur vor, was zusammenpasst - übernommen wird nichts von selbst.','No detected purchases. FullWorth compares account bookings against this portfolio\'s positions and only suggests a match - nothing is applied on its own.'))}</p></div>`;
+    return;
+  }
+  const bySecurity=new Map(summaries.map(summary=>[summary.securityId,matches.filter(match=>match.securityId===summary.securityId)]));
+  container.innerHTML=`<div class="ip-empty-cta"><p>${esc(text('Vorschläge aus Kontobuchungen. Sichere Treffer sind vorausgewählt - übernommen wird erst mit einem Klick auf "Übernehmen".','Suggestions from account bookings. Confident matches are pre-selected - nothing is applied until you click "Apply".'))}</p></div>
+  ${summaries.map(summary=>bookingSummaryCard(summary,bySecurity.get(summary.securityId)||[],state.portfolio.currency)).join('')}`;
+  bindBookingActions(state,container);
+}
+
+function bookingSummaryCard(summary,matches,portfolioCurrency){
+  const currency=matches[0]?.currency||portfolioCurrency;
+  return `<section class="ip-section ip-booking-card${summary.confident?' ip-confident':''}" data-ip-booking-security="${esc(summary.securityId)}">
+    <div class="ip-section-head">
+      <h3>${esc(summary.name||text('Unbekanntes Wertpapier','Unknown security'))}</h3>
+      <span>${summary.confident?esc(text('Sicher','Confident')):esc(text('Bitte prüfen','Please review'))}</span>
+    </div>
+    <div class="ip-metrics">
+      ${metric(text('Aktueller Bestand','Current holding'),summary.q==null?'—':String(summary.q))}
+      ${metric(text('Gefunden: Stück','Found: quantity'),summary.sumQuantity==null?'—':String(summary.sumQuantity))}
+      ${metric(text('Gefunden: Betrag','Found: amount'),amount(summary.sumGross,currency))}
+      ${metric(text('Buchungen','Bookings'),String(summary.matches||0))}
+    </div>
+    <div class="ip-list">${matches.map(match=>bookingMatchRow(match)).join('')}</div>
+    <div class="ip-actions">
+      <button type="button" data-ip-booking-apply>${esc(text('Übernehmen','Apply'))}</button>
+      <button type="button" class="ghost" data-ip-booking-dismiss>${esc(text('Ablehnen','Dismiss'))}</button>
+    </div>
+  </section>`;
+}
+
+function bookingMatchRow(match){
+  // Eine Buchung ohne Stueckzahl entstand aus einem Betrag ohne erkennbaren Kurs - der Bestand stimmt
+  // trotzdem nur, wenn jemand die Stueckzahl von Hand ergaenzt. Das steht hier, statt eine Zahl zu
+  // erfinden.
+  const quantityText=match.quantity==null
+    ?text('Stückzahl fehlt – manuell nachtragen','Quantity missing – add manually')
+    :`${String(match.quantity)}${match.quantityEstimated?` (${esc(text('geschätzt','estimated'))})`:''}`;
+  return `<label class="ip-row ip-booking-row">
+    <input type="checkbox" data-ip-booking-check value="${esc(match.transactionId)}" ${match.confident?'checked':''}>
+    <div class="row-main"><strong>${esc(dateText(match.date))}</strong><div class="fp-muted">${esc(quantityText)}</div></div>
+    <div class="ip-row-value"><strong>${amount(match.gross,match.currency)}</strong>${match.confident?`<span class="ip-badge">${esc(text('sicher','confident'))}</span>`:''}</div>
+  </label>`;
+}
+
+function bindBookingActions(state,container){
+  const run=(button,path,confirmMessageText)=>async()=>{
+    const card=button.closest('[data-ip-booking-security]');
+    const ids=$$('[data-ip-booking-check]:checked',card).map(input=>input.value);
+    if(!ids.length){toast(text('Bitte mindestens eine Buchung auswählen.','Select at least one booking.'));return}
+    button.disabled=true;
+    try{
+      await api(`api/reconciliation/securities-bookings/${path}`,json('POST',{portfolioId:state.portfolio.id,transactionIds:ids}));
+      toast(confirmMessageText);
+      await renderShell(state);
+    }catch(error){toast(error.message);button.disabled=false}
+  };
+  $$('[data-ip-booking-apply]',container).forEach(button=>button.onclick=run(button,'apply',text('Käufe übernommen.','Purchases applied.')));
+  $$('[data-ip-booking-dismiss]',container).forEach(button=>button.onclick=run(button,'dismiss',text('Buchungen ausgeblendet.','Bookings dismissed.')));
 }
 
 async function openTradeDialog(state){

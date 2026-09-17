@@ -897,6 +897,7 @@
     "depotGain": "Gain",
     "depotNoCostBasis": "No cost basis on file. Enter your purchases and FullWorth works out the gain and the percentage.",
     "depotAddTrade": "Add purchase",
+    "depotHistory": "Price history & performance",
     "depotNoPortfolio": "This securities account has no holdings yet. They appear after the first retrieval.",
     "tradeSecurity": "Security",
     "tradeDate": "Purchase date",
