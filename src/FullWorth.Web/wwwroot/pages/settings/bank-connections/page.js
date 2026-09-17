@@ -9,6 +9,7 @@
 import { state } from '../../../core/state.js';
 import { emptyRow } from '../../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../../components/buttons.js';
+import { createWizard } from '../../../components/wizard.js';
 
 let ctx = null;
 
@@ -315,8 +316,9 @@ function openEnableBankingWizard(initialStatus,options={}){
   let status=initialStatus;
   let autoPoll=null;
   let autoRegistrationId=null;
-  const dlg=dialog('<div class="dialog-card banking-setup"><div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div><div data-step></div></div>');
-  const step=dlg.querySelector('[data-step]');
+  const dlg=dialog('<div class="dialog-card banking-setup"><div class="panel-head"><h2></h2></div></div>');
+  const wizard=createWizard(dlg);
+  const step=wizard.body;
   dlg.querySelector('h2').textContent=get('bankingSetup.title');
   const stopAutoPoll=()=>{if(autoPoll){clearTimeout(autoPoll);autoPoll=null}};
   const cancelAutoRegistration=()=>{
@@ -325,7 +327,6 @@ function openEnableBankingWizard(initialStatus,options={}){
     autoRegistrationId=null;
     if(id)bankApi(`api/banking/profile/register/${encodeURIComponent(id)}`,{method:'DELETE'}).catch(()=>{});
   };
-  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
   dlg.addEventListener('close',()=>{cancelAutoRegistration();options.onClose?.()},{once:true});
 
   const showIntro=()=>{
@@ -365,22 +366,22 @@ function openEnableBankingWizard(initialStatus,options={}){
     </form>`;
     const form=step.querySelector('form');
     step.querySelector('[data-back]').onclick=showSetupChoice;
-    form.onsubmit=async e=>{
+    form.onsubmit=e=>{
       e.preventDefault();
       const button=form.querySelector('[type="submit"]');
       const fd=new FormData(form);
-      button.disabled=true;
-      try{
-        const started=await bankApi('api/banking/profile/register/start',jsonBody({
-          email:String(fd.get('email')||'').trim(),
-          environment:String(fd.get('environment')||'PRODUCTION')
-        }));
-        autoRegistrationId=started.id;
-        showAutomaticWaiting(started);
-      }catch(err){
-        toast(err.message||get('common.error'));
-        button.disabled=false;
-      }
+      return wizard.busy(button,async()=>{
+        try{
+          const started=await bankApi('api/banking/profile/register/start',jsonBody({
+            email:String(fd.get('email')||'').trim(),
+            environment:String(fd.get('environment')||'PRODUCTION')
+          }));
+          autoRegistrationId=started.id;
+          showAutomaticWaiting(started);
+        }catch(err){
+          toast(err.message||get('common.error'));
+        }
+      });
     };
   };
 
@@ -400,8 +401,7 @@ function openEnableBankingWizard(initialStatus,options={}){
       <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-manual>${esc(get('bankingSetup.useManual'))}</button>${retry}</div>`;
     step.querySelector('[data-manual]').onclick=()=>{cancelAutoRegistration();showCredentials()};
     step.querySelector('[data-again]')?.addEventListener('click',()=>{cancelAutoRegistration();showAutomatic()});
-    step.querySelector('[data-retry]')?.addEventListener('click',async e=>{
-      e.currentTarget.disabled=true;
+    step.querySelector('[data-retry]')?.addEventListener('click',e=>wizard.busy(e.currentTarget,async()=>{
       try{
         const next=await bankApi(`api/banking/profile/register/${encodeURIComponent(autoRegistrationId)}/retry`,jsonBody({}));
         if(next.status==='completed'){
@@ -412,8 +412,8 @@ function openEnableBankingWizard(initialStatus,options={}){
           return;
         }
         showAutomaticFailure(next);
-      }catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
-    });
+      }catch(err){toast(err.message||get('common.error'))}
+    }));
   };
 
   const pollAutomatic=async id=>{
@@ -466,17 +466,18 @@ function openEnableBankingWizard(initialStatus,options={}){
       <p class="row-sub">${esc(get('bankingSetup.keyHint'))}</p>
       <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-back>${esc(get('onboarding.back'))}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-verify>${esc(get('bankingSetup.verify'))}</button></div>`;
     step.querySelector('[data-back]').onclick=showSetupChoice;
-    step.querySelector('[data-verify]').onclick=async e=>{
+    step.querySelector('[data-verify]').onclick=e=>{
       const button=e.currentTarget,appId=step.querySelector('[data-app-id]').value.trim(),file=step.querySelector('[data-key]').files?.[0];
       if(!appId||!file){toast(get('bankingSetup.missingCredentials'));return}
-      button.disabled=true;
-      try{
-        const privateKeyPem=await file.text();
-        await bankApi('api/banking/profile/verify',jsonBody({applicationId:appId,privateKeyPem}));
-        status=await bankApi('api/banking/status');
-        showProfile();
-        await renderEnableBankingSettings();
-      }catch(err){toast(err.message||get('common.error'));button.disabled=false}
+      return wizard.busy(button,async()=>{
+        try{
+          const privateKeyPem=await file.text();
+          await bankApi('api/banking/profile/verify',jsonBody({applicationId:appId,privateKeyPem}));
+          status=await bankApi('api/banking/status');
+          showProfile();
+          await renderEnableBankingSettings();
+        }catch(err){toast(err.message||get('common.error'))}
+      });
     };
   };
 
@@ -492,16 +493,16 @@ function openEnableBankingWizard(initialStatus,options={}){
       ${!ready&&p.environment==='PRODUCTION'?`<p><a href="${ENABLE_BANKING_APPS}" target="_blank" rel="noopener">${esc(get('bankingSetup.activateAccounts'))} ↗</a> · <a href="${ENABLE_BANKING_LINKED}" target="_blank" rel="noopener">${esc(get('bankingSetup.instructions'))} ↗</a></p>`:''}
       <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-remove>${esc(get('bankingSetup.remove'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-recheck>${esc(get('bankingSetup.recheck'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-done>${esc(get('common.close'))}</button></div>`;
     step.querySelector('[data-done]').onclick=()=>dlg.close();
-    step.querySelector('[data-recheck]').onclick=async e=>{
-      e.currentTarget.disabled=true;
+    step.querySelector('[data-recheck]').onclick=e=>wizard.busy(e.currentTarget,async()=>{
       try{await bankApi('api/banking/profile/recheck',jsonBody({}));status=await bankApi('api/banking/status');showProfile();await renderEnableBankingSettings()}
-      catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
-    };
+      catch(err){toast(err.message||get('common.error'))}
+    });
     step.querySelector('[data-remove]').onclick=async e=>{
       if(!await confirmDialog(ctx,get('bankingSetup.removeConfirm'),{destructive:true,confirmLabel:get('bankingSetup.remove')}))return;
-      e.currentTarget.disabled=true;
-      try{await bankApi('api/banking/profile',{method:'DELETE'});status=await bankApi('api/banking/status');showIntro();await renderEnableBankingSettings()}
-      catch(err){toast(err.message||get('common.error'));e.currentTarget.disabled=false}
+      await wizard.busy(e.currentTarget,async()=>{
+        try{await bankApi('api/banking/profile',{method:'DELETE'});status=await bankApi('api/banking/status');showIntro();await renderEnableBankingSettings()}
+        catch(err){toast(err.message||get('common.error'))}
+      });
     };
   };
 
@@ -765,8 +766,8 @@ function openIngSelection(initial){
   let current=initial;
   // Der Kopf gehoert in die Karte, nicht in den Schritt: createDialog stellt das Schliessen-Kreuz,
   // und ein Schritt, der seinen eigenen Kopf mitbraechte, bekaeme ein zweites daneben.
-  const dlg=dialog('<div class="dialog-card"><div class="panel-head"><h2 data-title></h2></div><div data-step></div></div>');
-  const step=dlg.querySelector('[data-step]');
+  const dlg=dialog('<div class="dialog-card"><div class="panel-head"><h2 data-title></h2></div></div>');
+  const step=createWizard(dlg).body;
   const title=dlg.querySelector('[data-title]');
   const hidden=new Set((current.discovered||[]).filter(a=>a.visible===false).map(a=>a.key));
 

@@ -9,6 +9,7 @@ import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalo
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { createWizard } from '../../components/wizard.js';
 
 let ctx = null;
 let currentItemsById = new Map();
@@ -1104,11 +1105,9 @@ async function openRefundPicker(t) {
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
 
   const dlg = ctx.dialog(`<div class="dialog-card drawer">
-    <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.refundLink'))}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
-    <div data-step></div>
+    <div class="panel-head"><h2>${ctx.esc(ctx.get('transactions.refundLink'))}</h2></div>
   </div>`);
-  const step = dlg.querySelector('[data-step]');
-  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  const step = createWizard(dlg).body;
 
   const link = async (originalId, categoryId) => {
     try { await setRefund(t.id, originalId, categoryId); dlg.close(); ctx.toast(ctx.get('common.saved')); await refreshList(t.id); }

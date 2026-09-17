@@ -1,5 +1,6 @@
 import { TRASH_ICON } from '../../components/icons.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { createWizard } from '../../components/wizard.js';
 import { openRealEstateDetail, refreshWealthExtensions } from './real-estate.js';
 import { sectionCard, trendBadge, esc, identityIcon } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
@@ -1467,8 +1468,15 @@ const nwNumber = value => new Intl.NumberFormat(isDe() ? 'de-DE' : 'en-US', { ma
 /* ---- Add / edit / delete dialogs (unchanged) ------------------------------------------------- */
 
 function openAssetWizard() {
-  const dlg = ctx.dialog(`<form method="dialog" class="dialog-card wealth-wizard"><div class="panel-head"><div><h2>${ctx.esc(t('addValue'))}</h2><div class="row-sub">${ctx.esc(t('chooseTypeHint'))}</div></div><button value="cancel" aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div><div class="wealth-type-grid" role="list" aria-label="${ctx.esc(t('chooseType'))}">${ASSET_KINDS.map(kind => `<button type="button" class="wealth-type" data-kind="${kind}" role="listitem"><strong>${ctx.esc(t(kind))}</strong></button>`).join('')}</div><div class="wealth-investment-hint">${ctx.esc(t('investmentHint'))}</div></form>`);
-  dlg.querySelectorAll('[data-kind]').forEach(button => button.onclick = () => { const kind = button.dataset.kind; dlg.close(); openAssetForm(kind); });
+  const dlg = ctx.dialog(`<form method="dialog" class="dialog-card wealth-wizard"><div class="panel-head"><div><h2>${ctx.esc(t('addValue'))}</h2><div class="row-sub">${ctx.esc(t('chooseTypeHint'))}</div></div><button value="cancel" aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div></form>`);
+  // Nur ein einziger Schritt (die Typwahl) - der zweite "Schritt" ist bewusst ein eigener Dialog
+  // (openAssetForm ueber components/form-dialog.js), nicht ein zweiter Wizard-Schritt in diesem
+  // Dialog: die Werteingabe hat ihre eigene, schon bestehende Form-Komponente, die hier nicht
+  // verdoppelt werden soll. Trotzdem liegt die Typwahl im gemeinsamen Baustein - keine Zaehlung
+  // noetig, aber dieselbe Koerper-Mechanik wie bei den anderen Assistenten.
+  const wizard = createWizard(dlg);
+  wizard.render(`<div class="wealth-type-grid" role="list" aria-label="${ctx.esc(t('chooseType'))}">${ASSET_KINDS.map(kind => `<button type="button" class="wealth-type" data-kind="${kind}" role="listitem"><strong>${ctx.esc(t(kind))}</strong></button>`).join('')}</div><div class="wealth-investment-hint">${ctx.esc(t('investmentHint'))}</div>`);
+  wizard.body.querySelectorAll('[data-kind]').forEach(button => button.onclick = () => { const kind = button.dataset.kind; dlg.close(); openAssetForm(kind); });
   dlg.showModal();
 }
 

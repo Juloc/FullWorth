@@ -1,5 +1,6 @@
 import { secureFetch } from '../../security/secure-fetch.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { createWizard, withBusyButtons } from '../../components/wizard.js';
 
 export function createAccessSetup(ctx, openBankingWizard) {
   const { api, bankApi, get, esc, toast, dialog, confirm: confirmAction, jsonBody } = ctx;
@@ -54,8 +55,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       if (note) note.textContent = 'Modell-Liste nicht verfügbar — Freitext nutzen.';
     }
 
-    save.onclick = async () => {
-      save.disabled = true;
+    save.onclick = () => withBusyButtons(save, async () => {
       try {
         const model = String(custom.value || '').trim() || String(select.value || '');
         const saved = await api('api/intelligence/access/codex/model', putJson({ model: model || null }));
@@ -63,10 +63,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
         toast('Modell gespeichert.');
       } catch (error) {
         if (note) note.textContent = error?.message || 'Modell konnte nicht gespeichert werden.';
-      } finally {
-        save.disabled = false;
       }
-    };
+    });
   }
 
   // The bridge returns `codex debug models` output, whose exact shape depends on the CLI version.
@@ -124,11 +122,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
     const dlg = dialog(
       '<div class="dialog-card banking-setup ai-access-setup">' +
-      '<div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div>' +
-      '<div data-step></div></div>');
-    const step = dlg.querySelector('[data-step]');
+      '<div class="panel-head"><h2></h2></div></div>');
+    const wizard = createWizard(dlg);
+    const step = wizard.body;
     dlg.querySelector('h2').textContent = get('aiAccess.title');
-    dlg.querySelector('[data-close]').onclick = () => dlg.close();
     dlg.addEventListener('close', () => {
       closed = true;
       if (activeAiPoll) {
@@ -203,35 +200,30 @@ export function createAccessSetup(ctx, openBankingWizard) {
       step.querySelector('[data-done]').onclick = () => dlg.close();
       step.querySelector('[data-change]').onclick = showChoices;
       if (status.mode === 'codex') wireCodexModel(step, status);
-      step.querySelector('[data-test]').onclick = async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
+      step.querySelector('[data-test]').onclick = event => wizard.busy(event.currentTarget, async () => {
         try {
           await api('api/intelligence/access/test', jsonBody({}));
           toast(get('aiAccess.testSuccess'));
         } catch (error) {
           toast(error.message || get('aiAccess.testFailed'));
-        } finally {
-          button.disabled = false;
         }
-      };
+      });
       step.querySelector('[data-remove]').onclick = async event => {
         if (!await confirmAction(get('aiAccess.removeConfirm'), {
           destructive: true,
           confirmLabel: get('aiAccess.remove')
         })) return;
 
-        const button = event.currentTarget;
-        button.disabled = true;
-        try {
-          await api('api/intelligence/access', { method: 'DELETE' });
-          await refresh();
-          showChoices();
-          toast(get('aiAccess.removed'));
-        } catch (error) {
-          toast(error.message || get('common.error'));
-          button.disabled = false;
-        }
+        await wizard.busy(event.currentTarget, async () => {
+          try {
+            await api('api/intelligence/access', { method: 'DELETE' });
+            await refresh();
+            showChoices();
+            toast(get('aiAccess.removed'));
+          } catch (error) {
+            toast(error.message || get('common.error'));
+          }
+        });
       };
     };
 
@@ -245,24 +237,24 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
       const form = step.querySelector('form');
       step.querySelector('[data-back]').onclick = showChoices;
-      form.onsubmit = async event => {
+      form.onsubmit = event => {
         event.preventDefault();
         const values = new FormData(form);
         const button = form.querySelector('[type="submit"]');
-        button.disabled = true;
-        try {
-          await api('api/intelligence/access/api-key', putJson({
-            apiKey: String(values.get('apiKey') || ''),
-            textModel: String(values.get('textModel') || '') || null,
-            visionModel: String(values.get('visionModel') || '') || null
-          }));
-          await refresh();
-          showCurrent();
-          toast(get('aiAccess.saved'));
-        } catch (error) {
-          toast(error.message || get('aiAccess.testFailed'));
-          button.disabled = false;
-        }
+        return wizard.busy(button, async () => {
+          try {
+            await api('api/intelligence/access/api-key', putJson({
+              apiKey: String(values.get('apiKey') || ''),
+              textModel: String(values.get('textModel') || '') || null,
+              visionModel: String(values.get('visionModel') || '') || null
+            }));
+            await refresh();
+            showCurrent();
+            toast(get('aiAccess.saved'));
+          } catch (error) {
+            toast(error.message || get('aiAccess.testFailed'));
+          }
+        });
       };
     };
 
@@ -294,27 +286,27 @@ export function createAccessSetup(ctx, openBankingWizard) {
       syncAuth();
 
       step.querySelector('[data-back]').onclick = showChoices;
-      form.onsubmit = async event => {
+      form.onsubmit = event => {
         event.preventDefault();
         const values = new FormData(form);
         const button = form.querySelector('[type="submit"]');
-        button.disabled = true;
-        try {
-          await api('api/intelligence/access/custom', putJson({
-            baseUrl: String(values.get('baseUrl') || ''),
-            authType: String(values.get('authType') || 'bearer'),
-            username: String(values.get('username') || '') || null,
-            secret: String(values.get('secret') || '') || null,
-            textModel: String(values.get('textModel') || '') || null,
-            visionModel: String(values.get('visionModel') || '') || null
-          }));
-          await refresh();
-          showCurrent();
-          toast(get('aiAccess.saved'));
-        } catch (error) {
-          toast(error.message || get('aiAccess.testFailed'));
-          button.disabled = false;
-        }
+        return wizard.busy(button, async () => {
+          try {
+            await api('api/intelligence/access/custom', putJson({
+              baseUrl: String(values.get('baseUrl') || ''),
+              authType: String(values.get('authType') || 'bearer'),
+              username: String(values.get('username') || '') || null,
+              secret: String(values.get('secret') || '') || null,
+              textModel: String(values.get('textModel') || '') || null,
+              visionModel: String(values.get('visionModel') || '') || null
+            }));
+            await refresh();
+            showCurrent();
+            toast(get('aiAccess.saved'));
+          } catch (error) {
+            toast(error.message || get('aiAccess.testFailed'));
+          }
+        });
       };
     };
 
@@ -442,11 +434,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
     let status = initialStatus;
     const dlg = dialog(
       '<div class="dialog-card banking-setup cloud-intelligence-setup">' +
-      '<div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div>' +
-      '<div data-step></div></div>');
-    const step = dlg.querySelector('[data-step]');
+      '<div class="panel-head"><h2></h2></div></div>');
+    const wizard = createWizard(dlg);
+    const step = wizard.body;
     dlg.querySelector('h2').textContent = get('cloudIntelligence.title');
-    dlg.querySelector('[data-close]').onclick = () => dlg.close();
     dlg.addEventListener('close', () => options.onClose?.(), { once: true });
 
     const draw = () => {
@@ -464,9 +455,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-save>' + esc(get('common.save')) + '</button></div>';
 
       step.querySelector('[data-cancel]').onclick = () => dlg.close();
-      step.querySelector('[data-save]').onclick = async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
+      step.querySelector('[data-save]').onclick = event => wizard.busy(event.currentTarget, async () => {
         const enabled = step.querySelector('[data-enabled]').checked;
         try {
           if (enabled) {
@@ -483,9 +472,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
           toast(get(enabled ? 'cloudIntelligence.savedEnabled' : 'cloudIntelligence.savedDisabled'));
         } catch (error) {
           toast(error.message || get('common.error'));
-          button.disabled = false;
         }
-      };
+      });
     };
 
     dlg.showModal();
@@ -500,11 +488,10 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
     const dlg = dialog(
       '<div class="dialog-card onboarding-dialog">' +
-      '<div class="panel-head"><h2></h2><button type="button" data-close aria-label="Close">×</button></div>' +
-      '<div data-step></div></div>');
-    const step = dlg.querySelector('[data-step]');
+      '<div class="panel-head"><h2></h2></div></div>');
+    const wizard = createWizard(dlg);
+    const step = wizard.body;
     dlg.querySelector('h2').textContent = get('onboarding.title');
-    dlg.querySelector('[data-close]').onclick = () => dlg.close();
 
     const welcome = () => {
       step.innerHTML =
@@ -530,24 +517,24 @@ export function createAccessSetup(ctx, openBankingWizard) {
         (current === language ? ' checked' : '') + (state?.canChange ? '' : ' disabled') + '> ' +
         esc(get(language === 'de' ? 'onboarding.categoriesGerman' : 'onboarding.categoriesEnglish')) + '</label>';
 
-      step.innerHTML =
-        '<div class="setup-progress">1 / 5</div>' +
+      wizard.render(
         '<h3>' + esc(get('onboarding.categoriesTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.categoriesText')) + '</p>' +
         choice('de') + choice('en') +
         (state?.canChange ? '' : '<p class="row-sub">' + esc(get('onboarding.categoriesLocked')) + '</p>') +
         '<div class="dialog-actions">' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
-        '</div>';
+        '</div>',
+        { step: 1, total: 5 });
 
-      step.querySelector('[data-next]').onclick = async event => {
-        const button = event.currentTarget;
+      step.querySelector('[data-next]').onclick = event => {
         const picked = step.querySelector('[name="category-language"]:checked')?.value || current;
-        if (!state?.canChange || picked === current) { await aiStep(); return; }
-        button.disabled = true;
-        try { await api('api/categories/language', jsonBody({ language: picked }, 'PUT')); }
-        catch (error) { toast(error.message || get('common.error')); }
-        await aiStep();
+        if (!state?.canChange || picked === current) return aiStep();
+        return wizard.busy(event.currentTarget, async () => {
+          try { await api('api/categories/language', jsonBody({ language: picked }, 'PUT')); }
+          catch (error) { toast(error.message || get('common.error')); }
+          await aiStep();
+        });
       };
     };
 
@@ -555,8 +542,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       let ai = null;
       try { ai = await api('api/intelligence/access'); } catch {}
 
-      step.innerHTML =
-        '<div class="setup-progress">2 / 5</div>' +
+      wizard.render(
         '<h3>' + esc(get('onboarding.aiTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.aiText')) + '</p>' +
         '<div class="row-sub">' +
@@ -569,7 +555,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
             esc(ai?.configured ? get('aiAccess.change') : get('onboarding.configure')) +
           '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
-        '</div>';
+        '</div>',
+        { step: 2, total: 5 });
 
       step.querySelector('[data-setup]').onclick =
         () => openAiAccessWizard(ai, { onClose: aiStep });
@@ -581,8 +568,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       try { bank = await bankApi('api/banking/status'); } catch {}
       const configured = Boolean(bank?.profile);
 
-      step.innerHTML =
-        '<div class="setup-progress">3 / 5</div>' +
+      wizard.render(
         '<h3>' + esc(get('onboarding.bankTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.bankText')) + '</p>' +
         '<p class="row-sub">' + esc(get('onboarding.bankHow')) + '</p>' +
@@ -599,7 +585,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
             esc(configured ? get('bankingSetup.manage') : get('onboarding.configure')) +
           '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
-        '</div>';
+        '</div>',
+        { step: 3, total: 5 });
 
       step.querySelector('[data-back]').onclick = aiStep;
       step.querySelector('[data-setup]').onclick =
@@ -628,8 +615,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         (current === value ? ' checked' : '') + '> ' + esc(get(labelKey)) + '</label>' +
         (hintKey ? '<p class="row-sub">' + esc(get(hintKey)) + '</p>' : '');
 
-      step.innerHTML =
-        '<div class="setup-progress">4 / 5</div>' +
+      wizard.render(
         '<h3>' + esc(get('onboarding.marketDataTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.marketDataText')) + '</p>' +
         option('none', 'onboarding.marketDataNone') +
@@ -638,23 +624,23 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<div class="dialog-actions">' +
           '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
-        '</div>';
+        '</div>',
+        { step: 4, total: 5 });
 
       step.querySelector('[data-back]').onclick = bankStep;
-      step.querySelector('[data-next]').onclick = async event => {
-        const button = event.currentTarget;
+      step.querySelector('[data-next]').onclick = event => {
         const picked = step.querySelector('[name="market-data-provider"]:checked')?.value || current;
-        if (picked === current) { await cloudStep(); return; }
-        button.disabled = true;
-        try {
-          await instanceSettingsApi(
-            '/auth/admin/instance-settings',
-            jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT'));
-          await cloudStep();
-        } catch (error) {
-          toast(error.message || get('common.error'));
-          button.disabled = false;
-        }
+        if (picked === current) return cloudStep();
+        return wizard.busy(event.currentTarget, async () => {
+          try {
+            await instanceSettingsApi(
+              '/auth/admin/instance-settings',
+              jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT'));
+            await cloudStep();
+          } catch (error) {
+            toast(error.message || get('common.error'));
+          }
+        });
       };
     };
 
@@ -667,8 +653,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       }
 
       const checked = cloud.requiresSetupDecision ? true : cloud.mode === 'enabled';
-      step.innerHTML =
-        '<div class="setup-progress">5 / 5</div>' +
+      wizard.render(
         '<h3>' + esc(get('onboarding.cloudTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.cloudText')) + '</p>' +
         '<label class="check"><input type="checkbox" data-cloud ' + (checked ? 'checked' : '') + '> ' +
@@ -677,12 +662,11 @@ export function createAccessSetup(ctx, openBankingWizard) {
         '<div class="dialog-actions">' +
           '<button type="button" class="' + buttonClass(ButtonRole.Secondary) + '" data-back>' + esc(get('onboarding.back')) + '</button>' +
           '<button type="button" class="' + buttonClass(ButtonRole.Primary) + '" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
-        '</div>';
+        '</div>',
+        { step: 5, total: 5 });
 
       step.querySelector('[data-back]').onclick = marketDataStep;
-      step.querySelector('[data-finish]').onclick = async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
+      step.querySelector('[data-finish]').onclick = event => wizard.busy(event.currentTarget, async () => {
         try {
           if (step.querySelector('[data-cloud]').checked) {
             await api('api/intelligence/admin/cloud/enable', jsonBody({
@@ -696,9 +680,8 @@ export function createAccessSetup(ctx, openBankingWizard) {
           await finish();
         } catch (error) {
           toast(error.message || get('common.error'));
-          button.disabled = false;
         }
-      };
+      });
     };
 
     const finish = async () => {

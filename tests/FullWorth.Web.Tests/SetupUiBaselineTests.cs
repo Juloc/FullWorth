@@ -129,10 +129,12 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("api/categories/language", wizard);
         Assert.Contains("categoryStep", wizard);
         Assert.Contains("[data-start]').onclick = categoryStep", wizard);
-        Assert.Contains("1 / 5", wizard);
-        Assert.Contains("2 / 5", wizard);
-        Assert.Contains("3 / 5", wizard);
-        Assert.DoesNotContain("/ 4</div>", wizard);
+        // Die Zaehlung ist seit components/wizard.js kein literaler String im Schritt-Markup mehr,
+        // sondern ein {step, total}-Paar, das der gemeinsame Baustein selbst zu "N / M" rendert.
+        Assert.Contains("{ step: 1, total: 5 }", wizard);
+        Assert.Contains("{ step: 2, total: 5 }", wizard);
+        Assert.Contains("{ step: 3, total: 5 }", wizard);
+        Assert.DoesNotContain("setup-progress", wizard);
 
         // Gesperrt heisst gesperrt: keine Auswahl, keine Anfrage, aber eine Begruendung.
         Assert.Contains("state?.canChange", wizard);
@@ -164,8 +166,9 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("marketDataStep", wizard);
         Assert.Contains("/auth/admin/instance-settings", wizard);
         Assert.Contains("MarketData:Provider", wizard);
-        Assert.Contains("4 / 5", wizard);
-        Assert.Contains("5 / 5", wizard);
+        // Wie oben: das Zaehl-Paar statt eines literalen "N / 5"-Strings.
+        Assert.Contains("{ step: 4, total: 5 }", wizard);
+        Assert.Contains("{ step: 5, total: 5 }", wizard);
 
         // bankStep fuehrt jetzt in den neuen Schritt, der neue Schritt in cloudStep - nicht mehr direkt
         // von bankStep zu cloudStep.
@@ -180,7 +183,7 @@ public sealed class SetupUiBaselineTests
 
         // Gespeichert wird nur bei einer Aenderung, per PUT - keine eigene Vorlage in diesem Dialog.
         Assert.Contains("jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT')", wizard);
-        Assert.Contains("if (picked === current) { await cloudStep(); return; }", wizard);
+        Assert.Contains("if (picked === current) return cloudStep();", wizard);
 
         foreach (var key in new[]
                  {
