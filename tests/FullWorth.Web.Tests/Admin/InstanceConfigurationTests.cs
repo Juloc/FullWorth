@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FullWorth.Web.Modules.Admin;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -244,5 +245,23 @@ public sealed class InstanceConfigurationTests
         Assert.Equal(
             InstanceSettingCatalogue.All.Count,
             InstanceSettingCatalogue.All.Select(d => d.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    /// <summary>
+    /// instance-settings.js renders a section heading with <c>SECTION_LABELS[section] || section</c> -
+    /// a section id the map does not know falls through and shows up on screen as a raw identifier
+    /// like "marketData" instead of a German heading. Nothing caught that for the Secret input either
+    /// (see below), so this pins the map against the one list that can drift out from under it.
+    /// </summary>
+    [Fact]
+    public void Every_section_in_the_catalogue_has_a_label_in_the_admin_page()
+    {
+        using var factory = new FullWorthWebFactory();
+        using var client = factory.CreateClient();
+        var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
+        var script = File.ReadAllText(Path.Combine(environment.WebRootPath, "pages", "admin", "instance-settings.js"));
+
+        var sections = InstanceSettingCatalogue.All.Select(descriptor => descriptor.Section).Distinct();
+        Assert.All(sections, section => Assert.Contains(section + ":", script));
     }
 }
