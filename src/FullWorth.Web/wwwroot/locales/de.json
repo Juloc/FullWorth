@@ -1280,7 +1280,14 @@
     "categoriesText": "In welcher Sprache sollen die mitgelieferten Kategorien heißen? Die automatische Zuordnung hängt am Schlüssel, nicht am Namen – du kannst jede Kategorie später umbenennen, ohne dass etwas kaputtgeht.",
     "categoriesGerman": "Deutsch (Lebensmittel, Wohnen, Verkehr …)",
     "categoriesEnglish": "Englisch (Groceries, Housing, Transport …)",
-    "categoriesLocked": "Du hast bereits eine Standardkategorie umbenannt – die Sprache wird deshalb nicht mehr automatisch umgestellt."
+    "categoriesLocked": "Du hast bereits eine Standardkategorie umbenannt – die Sprache wird deshalb nicht mehr automatisch umgestellt.",
+    "marketDataTitle": "Kursdaten",
+    "marketDataText": "Für Depots und Wertpapiere kann FullWorth aktuelle Kurse automatisch nachladen. Kursdaten sind optional – ohne Quelle trägst du Werte weiterhin selbst ein.",
+    "marketDataNone": "Keine Kursquelle",
+    "marketDataYahoo": "Yahoo Finance",
+    "marketDataYahooHint": "Ohne Schlüssel. Findet Papiere über die ISIN. Inoffiziell und für den privaten Gebrauch.",
+    "marketDataCustom": "Eigene Vorlage",
+    "marketDataCustomHint": "Weitere Angaben (URL, Pfade, Schlüssel) in den Einstellungen unter Marktdaten."
   },
   "cloudIntelligence": {
     "diagnostics": "Verbindungsdiagnose öffnen (Endpunkt, Warteschlange)",

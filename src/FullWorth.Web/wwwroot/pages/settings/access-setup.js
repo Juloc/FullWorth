@@ -1,3 +1,5 @@
+import { secureFetch } from '../../security/secure-fetch.js';
+
 export function createAccessSetup(ctx, openBankingWizard) {
   const { api, bankApi, get, esc, toast, dialog, confirm: confirmAction, jsonBody } = ctx;
   let activeAiPoll = null;
@@ -7,6 +9,21 @@ export function createAccessSetup(ctx, openBankingWizard) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
+
+  // /auth/admin/instance-settings lebt auf dem Web-Host selbst, nicht hinter /bff/backend - `api()`
+  // wuerde es also am falschen Ort suchen. secureFetch reicht hier: der Aufruf braucht kein
+  // Space-Routing wie apiClient, nur Antiforgery fuer PUT, die secureFetch selbst ergaenzt.
+  async function instanceSettingsApi(path, options) {
+    const response = await secureFetch(path, options);
+    if (!response.ok) {
+      let message = String(response.status);
+      try { message = (await response.json()).error || message; } catch {}
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    return response.status === 204 ? null : response.json();
+  }
 
   const modeLabel = mode =>
     get('aiAccess.mode_' + String(mode || 'none').replaceAll('-', '_'));
@@ -513,7 +530,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
         esc(get(language === 'de' ? 'onboarding.categoriesGerman' : 'onboarding.categoriesEnglish')) + '</label>';
 
       step.innerHTML =
-        '<div class="setup-progress">1 / 4</div>' +
+        '<div class="setup-progress">1 / 5</div>' +
         '<h3>' + esc(get('onboarding.categoriesTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.categoriesText')) + '</p>' +
         choice('de') + choice('en') +
@@ -538,7 +555,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       try { ai = await api('api/intelligence/access'); } catch {}
 
       step.innerHTML =
-        '<div class="setup-progress">2 / 4</div>' +
+        '<div class="setup-progress">2 / 5</div>' +
         '<h3>' + esc(get('onboarding.aiTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.aiText')) + '</p>' +
         '<div class="row-sub">' +
@@ -564,7 +581,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
       const configured = Boolean(bank?.profile);
 
       step.innerHTML =
-        '<div class="setup-progress">3 / 4</div>' +
+        '<div class="setup-progress">3 / 5</div>' +
         '<h3>' + esc(get('onboarding.bankTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.bankText')) + '</p>' +
         '<p class="row-sub">' + esc(get('onboarding.bankHow')) + '</p>' +
@@ -587,7 +604,57 @@ export function createAccessSetup(ctx, openBankingWizard) {
       step.querySelector('[data-setup]').onclick =
         () => openBankingWizard(bank, { onClose: bankStep });
       step.querySelector('[data-finish]').textContent = get('onboarding.continueOrSkip');
-      step.querySelector('[data-finish]').onclick = cloudStep;
+      step.querySelector('[data-finish]').onclick = marketDataStep;
+    };
+
+    // Marktdaten-Voreinstellung waehlen. Nur fuer Administratoren sichtbar: der Assistent laeuft fuer
+    // jede neu registrierte Person, aber GET /auth/admin/instance-settings ist admin-only und
+    // antwortet Nicht-Admins mit 403 - genau wie categoryStep und cloudStep das schon fuer ihre
+    // eigenen admin-only Aufrufe behandeln, wird das hier zum stillen Uebergang zum naechsten Schritt,
+    // statt einen leeren oder kaputten Schritt zu zeigen.
+    const marketDataStep = async () => {
+      let settings = null;
+      try { settings = await instanceSettingsApi('/auth/admin/instance-settings'); }
+      catch { await cloudStep(); return; }
+
+      const current = settings.find(setting => setting.key === 'MarketData:Provider')?.value || 'none';
+
+      // Nur die Voreinstellung, keine eigene Vorlage: die volle Custom-Konfiguration (PriceUrl,
+      // DatePath, ValuePath, ...) gehoert den Einstellungen, die sie schon abbilden - eine zweite,
+      // verkuerzte Kopie hier wuerde nur auseinanderlaufen.
+      const option = (value, labelKey, hintKey) =>
+        '<label class="check"><input type="radio" name="market-data-provider" value="' + value + '"' +
+        (current === value ? ' checked' : '') + '> ' + esc(get(labelKey)) + '</label>' +
+        (hintKey ? '<p class="row-sub">' + esc(get(hintKey)) + '</p>' : '');
+
+      step.innerHTML =
+        '<div class="setup-progress">4 / 5</div>' +
+        '<h3>' + esc(get('onboarding.marketDataTitle')) + '</h3>' +
+        '<p>' + esc(get('onboarding.marketDataText')) + '</p>' +
+        option('none', 'onboarding.marketDataNone') +
+        option('yahoo', 'onboarding.marketDataYahoo', 'onboarding.marketDataYahooHint') +
+        option('custom', 'onboarding.marketDataCustom', 'onboarding.marketDataCustomHint') +
+        '<div class="dialog-actions">' +
+          '<button type="button" data-back>' + esc(get('onboarding.back')) + '</button>' +
+          '<button type="button" data-next>' + esc(get('onboarding.continueOrSkip')) + '</button>' +
+        '</div>';
+
+      step.querySelector('[data-back]').onclick = bankStep;
+      step.querySelector('[data-next]').onclick = async event => {
+        const button = event.currentTarget;
+        const picked = step.querySelector('[name="market-data-provider"]:checked')?.value || current;
+        if (picked === current) { await cloudStep(); return; }
+        button.disabled = true;
+        try {
+          await instanceSettingsApi(
+            '/auth/admin/instance-settings',
+            jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT'));
+          await cloudStep();
+        } catch (error) {
+          toast(error.message || get('common.error'));
+          button.disabled = false;
+        }
+      };
     };
 
     const cloudStep = async () => {
@@ -600,7 +667,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
 
       const checked = cloud.requiresSetupDecision ? true : cloud.mode === 'enabled';
       step.innerHTML =
-        '<div class="setup-progress">4 / 4</div>' +
+        '<div class="setup-progress">5 / 5</div>' +
         '<h3>' + esc(get('onboarding.cloudTitle')) + '</h3>' +
         '<p>' + esc(get('onboarding.cloudText')) + '</p>' +
         '<label class="check"><input type="checkbox" data-cloud ' + (checked ? 'checked' : '') + '> ' +
@@ -611,7 +678,7 @@ export function createAccessSetup(ctx, openBankingWizard) {
           '<button type="button" data-finish>' + esc(get('onboarding.finish')) + '</button>' +
         '</div>';
 
-      step.querySelector('[data-back]').onclick = bankStep;
+      step.querySelector('[data-back]').onclick = marketDataStep;
       step.querySelector('[data-finish]').onclick = async event => {
         const button = event.currentTarget;
         button.disabled = true;
