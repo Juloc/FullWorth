@@ -1280,7 +1280,14 @@
     "categoriesText": "Which language should the built-in categories use? Automatic categorisation keys off the identifier, not the name - you can rename any category later without breaking it.",
     "categoriesGerman": "German (Lebensmittel, Wohnen, Verkehr …)",
     "categoriesEnglish": "English (Groceries, Housing, Transport …)",
-    "categoriesLocked": "You already renamed a default category, so the language is no longer switched automatically."
+    "categoriesLocked": "You already renamed a default category, so the language is no longer switched automatically.",
+    "marketDataTitle": "Market data",
+    "marketDataText": "For portfolios and securities, FullWorth can fetch current prices automatically. Market data is optional – without a source you can still enter values yourself.",
+    "marketDataNone": "No price source",
+    "marketDataYahoo": "Yahoo Finance",
+    "marketDataYahooHint": "No key needed. Finds securities by ISIN. Unofficial, and for private use.",
+    "marketDataCustom": "Custom template",
+    "marketDataCustomHint": "Further details (URL, paths, key) are in Settings under Market data."
   },
   "cloudIntelligence": {
     "diagnostics": "Open connection diagnostics (endpoint, queue)",

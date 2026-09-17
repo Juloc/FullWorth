@@ -129,11 +129,10 @@ public sealed class SetupUiBaselineTests
         Assert.Contains("api/categories/language", wizard);
         Assert.Contains("categoryStep", wizard);
         Assert.Contains("[data-start]').onclick = categoryStep", wizard);
-        Assert.Contains("1 / 4", wizard);
-        Assert.Contains("2 / 4", wizard);
-        Assert.Contains("3 / 4", wizard);
-        Assert.Contains("4 / 4", wizard);
-        Assert.DoesNotContain("/ 3</div>", wizard);
+        Assert.Contains("1 / 5", wizard);
+        Assert.Contains("2 / 5", wizard);
+        Assert.Contains("3 / 5", wizard);
+        Assert.DoesNotContain("/ 4</div>", wizard);
 
         // Gesperrt heisst gesperrt: keine Auswahl, keine Anfrage, aber eine Begruendung.
         Assert.Contains("state?.canChange", wizard);
@@ -142,6 +141,52 @@ public sealed class SetupUiBaselineTests
 
         foreach (var key in new[]
                  { "categoriesTitle", "categoriesText", "categoriesGerman", "categoriesEnglish", "categoriesLocked" })
+        {
+            Assert.True(de.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"de.json: onboarding.{key}");
+            Assert.True(en.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"en.json: onboarding.{key}");
+        }
+    }
+
+    /// <summary>
+    /// Kursdaten sind der neue vierte Schritt zwischen Bank- und Cloud-Zugang (5 statt 4 insgesamt).
+    /// GET /auth/admin/instance-settings ist admin-only, laeuft aber fuer jede neu registrierte
+    /// Person - eine Nicht-Admin-Person bekommt 403 und darf nie einen leeren/kaputten Schritt sehen,
+    /// sondern muss direkt bei cloudStep landen, exakt wie categoryStep und cloudStep das schon fuer
+    /// ihre eigenen admin-only Aufrufe machen.
+    /// </summary>
+    [Fact]
+    public void TheSetupWizardOffersAMarketDataStepBetweenBankAndCloud()
+    {
+        var wizard = ReadSource(Path.Combine("pages", "settings", "access-setup.js"));
+        var de = JsonDocument.Parse(ReadSource(Path.Combine("locales", "de.json")));
+        var en = JsonDocument.Parse(ReadSource(Path.Combine("locales", "en.json")));
+
+        Assert.Contains("marketDataStep", wizard);
+        Assert.Contains("/auth/admin/instance-settings", wizard);
+        Assert.Contains("MarketData:Provider", wizard);
+        Assert.Contains("4 / 5", wizard);
+        Assert.Contains("5 / 5", wizard);
+
+        // bankStep fuehrt jetzt in den neuen Schritt, der neue Schritt in cloudStep - nicht mehr direkt
+        // von bankStep zu cloudStep.
+        Assert.Contains("step.querySelector('[data-finish]').onclick = marketDataStep;", wizard);
+        Assert.Contains("step.querySelector('[data-back]').onclick = marketDataStep;", wizard);
+
+        // 403 (oder jeder andere Fehler) auf GET ueberspringt den Schritt still, statt ihn leer zu zeigen.
+        Assert.Contains(
+            "try { settings = await instanceSettingsApi('/auth/admin/instance-settings'); }\n" +
+            "      catch { await cloudStep(); return; }",
+            wizard.Replace("\r\n", "\n"));
+
+        // Gespeichert wird nur bei einer Aenderung, per PUT - keine eigene Vorlage in diesem Dialog.
+        Assert.Contains("jsonBody({ key: 'MarketData:Provider', value: picked }, 'PUT')", wizard);
+        Assert.Contains("if (picked === current) { await cloudStep(); return; }", wizard);
+
+        foreach (var key in new[]
+                 {
+                     "marketDataTitle", "marketDataText", "marketDataNone",
+                     "marketDataYahoo", "marketDataYahooHint", "marketDataCustom", "marketDataCustomHint"
+                 })
         {
             Assert.True(de.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"de.json: onboarding.{key}");
             Assert.True(en.RootElement.GetProperty("onboarding").TryGetProperty(key, out _), $"en.json: onboarding.{key}");
