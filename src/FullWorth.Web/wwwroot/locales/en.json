@@ -890,7 +890,22 @@
     "rawResponsesEmpty": "No response stored yet. The next retrieval creates one.",
     "rawResponseCopy": "Copy response",
     "rawResponseBack": "Back to the list",
-    "rawResponseChars": "characters"
+    "rawResponseChars": "characters",
+    "depotPositions": "Positions",
+    "depotEmpty": "No positions yet. The next retrieval fetches them.",
+    "depotTotal": "Portfolio value",
+    "depotGain": "Gain",
+    "depotNoCostBasis": "No cost basis on file. Enter your purchases and FullWorth works out the gain and the percentage.",
+    "depotAddTrade": "Add purchase",
+    "depotNoPortfolio": "This securities account has no holdings yet. They appear after the first retrieval.",
+    "tradeSecurity": "Security",
+    "tradeDate": "Purchase date",
+    "tradeQuantity": "Quantity",
+    "tradePrice": "Price per unit",
+    "tradeFees": "Fees",
+    "tradeTotal": "Total cost",
+    "tradeSaved": "Purchase saved",
+    "depotGainUnknown": "No cost basis"
   },
   "a11y": {
     "skipToContent": "Skip to content"

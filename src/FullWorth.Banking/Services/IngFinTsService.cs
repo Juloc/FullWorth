@@ -157,6 +157,15 @@ public sealed class IngFinTsService(
             "fints-pin-tan",
             "[]"), ct);
 
+        // Was die Bank ueber sich ankuendigt, aufgehoben statt nur protokolliert.
+        //
+        // "Gibt FinTS mehr her als die Depotaufstellung?" ist eine Frage an genau diese Liste. Sie
+        // stand bisher nur im Containerlog - also musste man den Server aufmachen, um sie zu lesen,
+        // und nach einem Neustart war sie weg. Es sind Faehigkeiten der Bank: keine Zugangsdaten,
+        // keine Konten, keine Betraege.
+        await backend.RecordRawResponseAsync(connection.Id,
+            new("capabilities", bank.Name, Capabilities(opened.Session.Parameters)), ct);
+
         return new(connection.Id, connection.Status, opened.Challenge,
             await DescribeAsync(connection, opened.Session.Parameters.Accounts, ct));
     }
@@ -659,6 +668,28 @@ public sealed class IngFinTsService(
     ///
     /// Es sind Faehigkeiten der Bank, keine Zugangsdaten: kein Benutzername, keine PIN, keine Konten.
     /// </summary>
+    /// <summary>
+    /// Dieselben Angaben als Text zum Nachlesen - eine Zeile je Punkt, damit man sie ueberfliegen
+    /// kann, ohne sie zu entziffern.
+    /// </summary>
+    private static string Capabilities(FinTsBankParameters parameters) => string.Join(Environment.NewLine,
+    [
+        "Sicherheitsfunktion: " + parameters.SecurityFunction,
+        "BPD-Version: " + parameters.BpdVersion,
+        "UPD-Version: " + parameters.UpdVersion,
+        string.Empty,
+        "TAN-Verfahren:",
+        .. parameters.TanMethods.Select(x =>
+            $"  {x.SecurityFunction}  v{x.SegmentVersion}  {x.Name}"
+            + (x.IsDecoupled ? "  entkoppelt" : string.Empty)
+            + (x.NeedsTanMedium ? "  Medium noetig" : string.Empty)),
+        string.Empty,
+        "Geschaeftsvorfaelle (Antwortsegment = hoechste Version):",
+        .. parameters.SegmentVersions.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"  {x.Key} = {x.Value}"),
+        string.Empty,
+        "Konten: " + Shape(parameters.Accounts),
+    ]);
+
     private void LogAnnouncedCapabilities(FinTsBankParameters parameters)
         => logger.LogInformation(
             "ING FinTS announced. SecurityFunction={SecurityFunction}, TanMethods={TanMethods}, SegmentVersions={SegmentVersions}, Accounts={Accounts}",

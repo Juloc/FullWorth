@@ -355,22 +355,31 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
     }
 
     /// <summary>
-    /// Ein Klick auf ein Depot fuehrt zur Vermoegensansicht, nicht in die Buchungen.
+    /// Ein Klick auf ein Depot fuehrt NICHT in die Buchungen.
     ///
     /// "Wenn ich draufklicke will ich meine ETF und den Verlauf sehen" - stattdessen kam eine leere
     /// Liste. Kein Zufall und kein Datenfehler: ein Depot HAT keine Buchungen. Die Bank liefert dafuer
     /// eine Bestandsaufstellung (HKWPD), keine Umsaetze; Kaeufe waeren ein eigener Geschaeftsvorfall.
     /// Die leere Liste war also technisch korrekt und trotzdem die falsche Antwort auf den Klick.
+    ///
+    /// Das Ziel war zuerst die Vermoegensseite. Die war weniger falsch, aber nicht richtig: sie nennt
+    /// Depots beim Namen und sonst nichts. Seit dem Depot-Dialog fuehrt der Klick dorthin, wo die
+    /// Papiere stehen - was dieser Test weiter festhaelt, ist die Grenze: kein Depot in der
+    /// Buchungsliste, und jedes andere Konto unveraendert dort hinein.
     /// </summary>
     [Fact]
-    public async Task ClickingADepotOpensTheWealthViewInsteadOfAnEmptyBookingList()
+    public async Task ClickingADepotNeverEndsInAnEmptyBookingList()
     {
         var js = await GetAsync("/pages/accounts/page.js");
 
         Assert.Contains("x.accountType==='securities'", js);
-        Assert.Contains("ctx.showView('networth')", js);
         // Und jedes andere Konto geht weiterhin in seine Buchungen.
         Assert.Contains("ctx.showView('transactions',{query:'accountId='", js);
+
+        // Die Verzweigung entscheidet es: der Wertpapier-Zweig fuehrt nicht in die Buchungen.
+        var branch = js[js.IndexOf("const target=x.accountType==='securities'", StringComparison.Ordinal)..];
+        branch = branch[..branch.IndexOf("const drill=", StringComparison.Ordinal)];
+        Assert.Contains("openDepotDialog", branch);
     }
 
     private async Task<string> GetAsync(string path)
@@ -434,5 +443,54 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         report = report[..report.IndexOf("filter(Boolean).join", StringComparison.Ordinal)];
         Assert.DoesNotContain("payload", report, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("raw", report, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Ein Klick aufs Depot zeigt das Depot - nicht die Vermoegensseite.
+    ///
+    /// Gemeldet als "wenn ich drauf klicke will ich meine ETF und den Verlauf sehen". Das Ziel war
+    /// die Vermoegensseite, und die nennt Depots beim NAMEN und sonst nichts: keine Position, kein
+    /// Kurs, kein Gewinn. Davor stand die Buchungsliste, die bei einem Depot leer bleiben MUSS - ein
+    /// Depot hat keine Umsaetze, die Bank liefert eine Bestandsaufstellung.
+    ///
+    /// Gerechnet wird dafuer nichts Neues: PortfolioValuationService kennt Einstand, Marktwert und
+    /// unrealisiertes Ergebnis je Position laengst.
+    /// </summary>
+    [Fact]
+    public async Task ClickingASecuritiesAccountOpensThatDepotWithItsPositions()
+    {
+        var js = await GetAsync("/pages/accounts/page.js");
+
+        Assert.Contains("function openDepotDialog", js);
+        Assert.Contains("openDepotDialog(x)", js);
+        // Das Depot findet sein Portfolio ueber das verknuepfte Konto, nicht ueber seinen Namen.
+        Assert.Contains("item.accountId===account.id", js);
+        Assert.Contains("/overview", js);
+        // Und landet nicht mehr pauschal auf der Vermoegensseite.
+        Assert.DoesNotContain("ctx.showView('networth')", js);
+    }
+
+    /// <summary>
+    /// Ein fehlender Einstand ist kein Gewinn von null.
+    ///
+    /// HKWPD ist eine Momentaufnahme: was heute im Depot liegt und was es heute wert ist. Was es
+    /// gekostet hat, liefert die Bank nicht - auch nicht rueckwirkend. Eine Position ohne Einstand
+    /// darf deshalb weder "0 %" behaupten noch stumm bleiben; sie sagt, dass der Einstand fehlt, und
+    /// daneben steht der Weg, ihn zu ergaenzen.
+    ///
+    /// Dieselbe Regel wie beim Depotstand, der ohne Bestaende keine 0,00 EUR mehr behauptet.
+    /// </summary>
+    [Fact]
+    public async Task APositionWithoutACostBasisSaysSoInsteadOfClaimingZeroGain()
+    {
+        var js = await GetAsync("/pages/accounts/page.js");
+
+        // Der Gewinn entsteht nur, wenn ein Einstand groesser null dasteht.
+        Assert.Contains("item.costBasis!=null&&Number(item.costBasis)>0", js);
+        Assert.Contains("accounts.depotGainUnknown", js);
+        // Und der Weg dorthin: die Kaeufe kennt der Eigentuemer von seinem Girokonto.
+        Assert.Contains("function openTradeDialog", js);
+        Assert.Contains("tradeType:'buy'", js);
+        Assert.Contains("/trades", js);
     }
 }

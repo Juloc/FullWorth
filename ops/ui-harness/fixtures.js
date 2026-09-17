@@ -513,7 +513,32 @@
     'preferences/wealth.projection': { value: {} },
     'preferences/wealth.emergencyFund': { value: {} },
     'liabilities': [],
-    'investments/portfolios': [],
+    // Das Depot des Girokontos a9. Drei Positionen tragen einen Einstand und damit einen Gewinn,
+    // die vierte nicht: so sieht ein Depot aus, in das die Bank Bestaende liefert und der
+    // Eigentuemer seine Kaeufe noch nicht eingetragen hat.
+    'investments/portfolios': [
+      { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9', isArchived: false, isManual: false }
+    ],
+    'investments/portfolios/p1/overview': {
+      portfolio: { id: 'p1', name: 'Direkt-Depot', currency: 'EUR', accountId: 'a9' },
+      asOf: '2026-09-17', marketValue: 3218.42, cash: 0, totalValue: 3218.42,
+      realizedResult: 0, dividends: 0, incomplete: false,
+      positions: [
+        { securityId: 's1', name: 'ISHSIII-MSCI EM USD(ACC)', assetType: 'etf', quantity: 0.43761,
+          costBasis: 21.06, price: 55.394, priceCurrency: 'EUR', priceDate: '2026-09-16',
+          priceState: 'current', marketValue: 24.24, unrealizedResult: 3.18, costBasisIncomplete: false },
+        { securityId: 's2', name: 'AMUNDI CORE MSCI WLD UE A', assetType: 'etf', quantity: 11.48992,
+          costBasis: 1630.12, price: 158.215, priceCurrency: 'EUR', priceDate: '2026-09-16',
+          priceState: 'current', marketValue: 1817.74, unrealizedResult: 187.62, costBasisIncomplete: false },
+        { securityId: 's3', name: 'AIS-AMUN.STEUR600 U.ETF A', assetType: 'etf', quantity: 2.07808,
+          costBasis: 668.40, price: 313.75, priceCurrency: 'EUR', priceDate: '2026-09-16',
+          priceState: 'current', marketValue: 651.99, unrealizedResult: -16.41, costBasisIncomplete: false },
+        { securityId: 's4', name: 'XTR.MSCI WORLD MOMENTUM', assetType: 'etf', quantity: 10,
+          costBasis: null, price: 72.445, priceCurrency: 'EUR', priceDate: '2026-09-16',
+          priceState: 'current', marketValue: 724.45, unrealizedResult: null, costBasisIncomplete: true }
+      ],
+      stalePrices: []
+    },
     'insights': [],
 
     // ---- Altersvorsorge (bAV) ----

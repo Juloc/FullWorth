@@ -890,7 +890,22 @@
     "rawResponsesEmpty": "Noch keine Antwort gespeichert. Die nächste entsteht beim nächsten Abruf.",
     "rawResponseCopy": "Antwort kopieren",
     "rawResponseBack": "Zurück zur Liste",
-    "rawResponseChars": "Zeichen"
+    "rawResponseChars": "Zeichen",
+    "depotPositions": "Positionen",
+    "depotEmpty": "Noch keine Positionen. Der nächste Abruf holt sie.",
+    "depotTotal": "Depotwert",
+    "depotGain": "Gewinn",
+    "depotNoCostBasis": "Kein Einstand hinterlegt. Trag deine Käufe ein – dann rechnet FullWorth Gewinn und Prozent.",
+    "depotAddTrade": "Kauf eintragen",
+    "depotNoPortfolio": "Zu diesem Depot gehört noch kein Bestand. Er entsteht beim ersten Abruf.",
+    "tradeSecurity": "Wertpapier",
+    "tradeDate": "Kaufdatum",
+    "tradeQuantity": "Stück",
+    "tradePrice": "Kurs je Stück",
+    "tradeFees": "Gebühren",
+    "tradeTotal": "Kaufpreis",
+    "tradeSaved": "Kauf gespeichert",
+    "depotGainUnknown": "Einstand fehlt"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

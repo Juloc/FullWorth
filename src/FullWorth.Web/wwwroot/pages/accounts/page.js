@@ -174,12 +174,120 @@ function accountRow(x,groups){
   // Positionen und ihr Verlauf.
   row.dataset.accountId=x.id;row.classList.add('is-drillable');row.setAttribute('role','button');row.tabIndex=0;
   const target=x.accountType==='securities'
-    ? ()=>ctx.showView('networth')
+    ? ()=>{void openDepotDialog(x);}
     : ()=>ctx.showView('transactions',{query:'accountId='+encodeURIComponent(x.id)});
   const drill=e=>{if(e.target.closest('button,a,input,select'))return;target()};
   row.addEventListener('click',drill);
   row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();drill(e)}});
   return row;
+}
+// Das Depot von innen: die Papiere, ihr Wert, und - sobald ein Einstand da ist - der Gewinn.
+//
+// Ein Klick aufs Depot landete auf der Vermoegensseite. Die nennt Depots beim NAMEN und sonst
+// nichts: keine Position, kein Kurs, kein Gewinn. Wer sehen wollte, was drin liegt, hatte keinen Weg.
+//
+// Gerechnet wird hier nichts. PortfolioValuationService kennt Einstand, Marktwert und
+// unrealisiertes Ergebnis je Position laengst - es hat nur nie jemand danach gefragt.
+async function openDepotDialog(account){
+  let portfolios;
+  try{ portfolios=await api('api/investments/portfolios'); }
+  catch(err){ toast(err.message||get('common.error')); return; }
+
+  const portfolio=(portfolios||[]).find(item=>item.accountId===account.id);
+  if(!portfolio){ toast(get('accounts.depotNoPortfolio')); return; }
+
+  const dlg=dialog(`<div class="dialog-card"><div class="panel-head"><div><h2>${esc(account.displayName||account.institutionName)}</h2><div class="row-sub">${esc(portfolio.name)}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div data-depot-body></div></div>`);
+  const body=dlg.querySelector('[data-depot-body]');
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+
+  const show=async()=>{
+    let overview;
+    try{ overview=await api('api/investments/portfolios/'+encodeURIComponent(portfolio.id)+'/overview'); }
+    catch(err){ toast(err.message||get('common.error')); return; }
+
+    const currency=overview.portfolio?.currency||account.currency||'EUR';
+    const positions=overview.positions||[];
+    // Ein fehlender Einstand ist keine Null. Er wird benannt, nicht als 0 % ausgegeben.
+    const anyCost=positions.some(item=>item.costBasis!=null&&Number(item.costBasis)>0);
+
+    const rows=positions.map(item=>{
+      const value=item.marketValue!=null?money(Number(item.marketValue),item.priceCurrency||currency):'—';
+      const unit=[item.quantity!=null?nf(item.quantity)+' ×':null,
+        item.price!=null?money(Number(item.price),item.priceCurrency||currency):null].filter(Boolean).join(' ');
+      const gain=item.unrealizedResult!=null&&item.costBasis!=null&&Number(item.costBasis)>0
+        ? gainLine(Number(item.unrealizedResult),Number(item.costBasis),item.priceCurrency||currency)
+        // Kein Einstand heisst NICHT "kein Gewinn": es heisst unbekannt, und das gehoert hingeschrieben.
+        : `<div class="row-sub">${esc(get('accounts.depotGainUnknown'))}</div>`;
+      return `<div class="row"><div class="row-main"><div class="row-title">${esc(item.name)}</div><div class="row-sub">${esc(unit)}</div></div><div class="row-end"><div class="amount-stack"><div class="amount">${value}</div>${gain}</div></div></div>`;
+    }).join('');
+
+    body.innerHTML=`<div class="row"><div class="row-main"><div class="row-title">${esc(get('accounts.depotTotal'))}</div><div class="row-sub">${esc(get('accounts.depotPositions'))}: ${positions.length}</div></div><div class="amount">${money(Number(overview.totalValue||0),currency)}</div></div><div class="rows">${rows||emptyRow(get('accounts.depotEmpty'))}</div>${anyCost?'':`<p class="row-sub">${esc(get('accounts.depotNoCostBasis'))}</p>`}<div class="dialog-actions"><button type="button" data-add-trade${positions.length?'':' disabled'}>${esc(get('accounts.depotAddTrade'))}</button></div>`;
+
+    body.querySelector('[data-add-trade]').onclick=()=>openTradeDialog(portfolio,positions,currency,show);
+  };
+
+  await show();dlg.showModal();
+}
+
+// Gewinn UND Prozent - die Prozentzahl ist die, nach der eigentlich gefragt wird.
+function gainLine(result,cost,currency){
+  const sign=result>0?'+':'';
+  const tone=result>0?' positive':result<0?' negative':'';
+  const percent=cost>0?' · '+sign+nf((result/cost)*100)+' %':'';
+  return `<div class="row-sub${tone}">${esc(get('accounts.depotGain'))}: ${sign}${money(result,currency)}${esc(percent)}</div>`;
+}
+
+const nf=value=>new Intl.NumberFormat(state.lang==='de'?'de-DE':'en-US',{maximumFractionDigits:2}).format(Number(value)||0);
+
+// Der Kauf, den die Bank nicht liefert.
+//
+// HKWPD ist eine Momentaufnahme: was heute im Depot liegt und was es heute wert ist. Was es
+// GEKOSTET hat, steht nirgends - und ohne Einstand gibt es keinen Gewinn und keine Prozentzahl.
+// Rueckwirkend liefert die Bank das auch nicht nach; der Eigentuemer kennt seine Kaeufe aber von
+// seinem Girokonto.
+//
+// Die Auswahl kommt aus den POSITIONEN dieses Depots, nicht aus allen Wertpapieren: gekauft wurde,
+// was drinliegt, und damit steht die Wertpapierkennung von vornherein richtig.
+function openTradeDialog(portfolio,positions,currency,done){
+  const today=new Date().toISOString().slice(0,10);
+  const dlg=dialog(`<form class="dialog-card"><div class="panel-head"><h2>${esc(get('accounts.depotAddTrade'))}</h2><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><label><span>${esc(get('accounts.tradeSecurity'))}</span><select name="security" required>${positions.map(item=>`<option value="${esc(item.securityId)}">${esc(item.name)}</option>`).join('')}</select></label><label><span>${esc(get('accounts.tradeDate'))}</span><input type="date" name="date" value="${today}" max="${today}" required></label><label><span>${esc(get('accounts.tradeQuantity'))}</span><input type="number" name="quantity" step="0.00001" min="0.00001" required></label><label><span>${esc(get('accounts.tradePrice'))}</span><input type="number" name="price" step="0.0001" min="0" required></label><label><span>${esc(get('accounts.tradeFees'))}</span><input type="number" name="fees" step="0.01" min="0" value="0"></label><p class="row-sub" data-trade-total></p><div class="dialog-actions"><button type="button" class="ghost" data-cancel>${esc(get('common.cancel'))}</button><button type="submit">${esc(get('common.save'))}</button></div></form>`);
+
+  const form=dlg.querySelector('form');
+  const total=dlg.querySelector('[data-trade-total]');
+  const amount=()=>{
+    const fd=new FormData(form);
+    const quantity=Number(fd.get('quantity'))||0;
+    const price=Number(fd.get('price'))||0;
+    const fees=Number(fd.get('fees'))||0;
+    return Math.round((quantity*price+fees)*100)/100;
+  };
+  const refresh=()=>{ total.textContent=get('accounts.tradeTotal')+': '+money(amount(),currency); };
+  form.oninput=refresh;refresh();
+
+  dlg.querySelector('[data-close]').onclick=()=>dlg.close();
+  dlg.querySelector('[data-cancel]').onclick=()=>dlg.close();
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    if(!form.reportValidity())return;
+    const submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    const fd=new FormData(form);
+    try{
+      await api('api/investments/portfolios/'+encodeURIComponent(portfolio.id)+'/trades',jsonBody({
+        securityId:String(fd.get('security')),
+        tradeType:'buy',
+        tradeDate:String(fd.get('date')),
+        quantity:Number(fd.get('quantity')),
+        price:Number(fd.get('price')),
+        amount:amount(),
+        currency,
+        fees:Number(fd.get('fees'))||0
+      }));
+      dlg.close();
+      toast(get('accounts.tradeSaved'));
+      await done();
+    }catch(err){ submit.disabled=false; toast(err.message||get('common.error')); }
+  };
+  dlg.showModal();
 }
 // Woran die Suche misst. Der Anbietername gehoert dazu, auch wo er nicht sichtbar ist: wer sein Konto
 // umbenannt hat, sucht es trotzdem manchmal unter dem Namen, den die Bank ihm gab.
