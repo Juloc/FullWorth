@@ -5,6 +5,7 @@
 import { money, converted, maskIdentifier, incompleteMarker } from '../../components/money.js';
 import { balanceMeaningLine } from '../../components/balance-meaning.js';
 import { isPrivate } from '../../components/privacy.js';
+import { emptyRow } from '../../components/empty.js';
 import { identityIcon, ensureOfficialBrandCatalog, cycleWindow } from '../../features/ux-kit.js';
 import { bindChartScrubber } from '../../components/chart-scrubber.js';
 import { loadFinanzguruCompleteness, finanzguruCompletenessNotice } from '../../features/data-completeness.js';
@@ -313,8 +314,9 @@ function bindDrill(ctx, el, queryFn) {
   el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
 }
 
-function errorState(ctx) { return `<div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get('common.error'))}</div></div>`; }
-function emptyState(ctx, key) { return `<div class="state-empty"><div class="row-sub">${ctx.esc(ctx.get(key || 'common.empty'))}</div></div>`; }
+// Delegates to the shared components/empty.js row instead of a local copy of its markup - see #162 §11.
+function errorState(ctx) { return emptyRow(ctx.get('common.error')); }
+function emptyState(ctx, key) { return emptyRow(ctx.get(key || 'common.empty')); }
 
 // A wallet-per-currency account (PayPal, Wise, Revolut) holds money in more than one currency; the
 // amount above is one of them, so the rest is named here instead of being invisible.

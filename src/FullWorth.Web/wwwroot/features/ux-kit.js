@@ -119,7 +119,7 @@ export function identityIcon(name, opts = {}) {
     const fallback = (String(name || '?').trim()[0] || '?').toUpperCase();
     return `<span class="fw-ident fw-ident-stack fw-monogram" style="--ident-h:${monogramHue(name)}" aria-hidden="true">` +
       `<span class="fw-ident-initial">${esc(fallback)}</span>` +
-      `<img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" loading="lazy">` +
+      `<img class="fw-ident-logo${inferredBrandLogo ? ' fw-ident-brand-logo' : ''}" src="${esc(logoAssetPath)}" alt="" width="38" height="38" loading="lazy">` +
       `</span>`;
   }
   const iconKey = opts.categoryIconKey;
