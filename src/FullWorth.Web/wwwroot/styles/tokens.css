@@ -6,6 +6,10 @@
    Fremd-URL hier ohnehin, und mit font-display:optional gibt es kein Nachtausch-Reflow - die Schrift
    steht beim ersten Zeichnen fest oder wird für dieses Laden gar nicht verwendet, nie dazwischen. */
 @font-face{font-family:'Nunito';font-style:normal;font-weight:200 1000;font-display:optional;src:url("/fonts/nunito-variable.woff2") format("woff2-variations")}
+/* Breakpoint-Leiter (Design-System-Plan, Slice 13 vereinheitlicht die ~20 abweichenden Werte, die
+   heute in @media-Queries verstreut sind): phone <768px, tablet 768-1023px, desktop >=1024px. Das ist
+   reine Dokumentation - Custom Properties funktionieren nicht innerhalb von @media (max-width: ...),
+   also kann diese Leiter kein Token sein. Keine @media-Regel in dieser Datei ändert sich dafür. */
 :root{
   /* Typography: Nunito is the single application font. Compatibility aliases keep existing components
      on the same family while old specialised font roles are phased out. */
@@ -36,11 +40,37 @@
   --line-height-normal:normal;
   --line-height-relaxed:normal;
 
+  /* Typografie-Rollen (Issue #162 §5): setzen nur die vorhandene Größen-/Gewichtsskala zusammen, keine
+     neuen Rohwerte. Zeilenhöhe/Laufweite fehlen bewusst pro Rolle - --line-height-* ist heute für jede
+     Stufe "normal", es gäbe also nichts, wovon eine Rolle abweichen könnte; das nachzutragen wäre eine
+     Dopplung ohne Wirkung. Seiten migrieren in dieser Slice nicht auf diese Rollen. */
+  --text-page-title-size:var(--font-size-2xl);--text-page-title-weight:700;
+  --text-section-title-size:var(--font-size-lg);--text-section-title-weight:600;
+  --text-body-size:var(--font-size-base);--text-body-weight:var(--font-weight-base);
+  --text-body-strong-size:var(--font-size-base);--text-body-strong-weight:600;
+  --text-metadata-size:var(--font-size-sm);--text-metadata-weight:var(--font-weight-base);
+  --text-caption-size:var(--font-size-xs);--text-caption-weight:var(--font-weight-base);
+  --text-amount-lg-size:var(--font-size-2xl);--text-amount-lg-weight:700;
+  --text-amount-size:var(--font-size-base);--text-amount-weight:600;
+
   color-scheme:light;
   /* spacing scale (§4.1) */
   --topbar-h:64px;
-  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:18px;--s6:24px;--s8:32px;
-  --radius-card:12px;--radius-input:10px;--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
+  /* Kanonische Space-Skala 4·8·12·16·24·32·48. Die alten --s*-Namen bleiben als Aliase erhalten, damit
+     keine der bestehenden Nutzstellen angefasst werden muss; einzige Ausnahme --s5, das mit 18px nie
+     eine bewusste Stufe war, sondern Drift - es rückt auf --space-4 (16px) und wird damit 2px kleiner. */
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;
+  --s1:var(--space-1);--s2:var(--space-2);--s3:var(--space-3);--s4:var(--space-4);--s5:var(--space-4);--s6:var(--space-5);--s8:var(--space-6);
+  /* Radius-Rollen (Issue #149: small ~8-10px / medium ~12-14px / large ~16-18px). --radius-card lag mit
+     12px zwischen sm und md - wie --s5 keine bewusste dritte Stufe, sondern Drift - und wird hier Alias
+     auf --radius-md (14px, +2px), damit dauerhaft nur drei Radius-Rollen bestehen statt einer vierten
+     Ad-hoc-Familie neben ihnen; --radius-input trifft --radius-sm exakt und ändert sich nicht. */
+  --radius-sm:10px;--radius-md:14px;--radius-lg:18px;
+  --radius-input:var(--radius-sm);--radius-card:var(--radius-md);--radius-pill:999px;--sidebar-w:clamp(190px,22vw,228px);--sidebar-w-collapsed:72px;
+  /* Bewegungsdauern (Issue #162 §12: Hover/Press ~100-150ms, Expand/Collapse ~150-200ms, Dialog/Sheet
+     ~180-220ms). Nur die Dauer gehört hierher - die Kurve --fw-ease bleibt bewusst in design-depth.css,
+     wo sie schon steht; das hier zu duplizieren wäre die zweite Quelle für dieselbe Sache. */
+  --motion-fast:120ms;--motion-base:180ms;--motion-slow:200ms;
   /* Upper bound for the main content column so ultrawide/1440p screens keep a readable measure
      instead of stretching cards and tables across the whole width; centered inside the shell column. */
   --content-max:1520px;
@@ -80,6 +110,12 @@
   --positive:#17b45c;--positive-soft:#e6f8ec;--negative:#e03131;--negative-soft:#fdeaea;--warning:#f9891f;--warning-soft:#fdf1e3;
   /* the neutral surface is flat (no shadow); shadow is reserved for things that float ABOVE it */
   --shadow:none;--shadow-menu:0 8px 20px rgba(0,0,0,.16);--shadow-float:0 4px 14px rgba(0,0,0,.22);--shadow-drag:0 12px 28px rgba(0,0,0,.22);
+  /* Elevation-Stufen benennen bestehende Schatten nach Zweck statt Herkunft - keine neue Schatten-Rezeptur.
+     --shadow ist heute "none" (die flache Fläche selbst schwebt nicht); --shadow-float hat von den
+     schwebenden Werten den kleinsten Versatz/Weichzeichner (Popover, Menü, freischwebendes Control);
+     --shadow-menu ist größer und markanter (Dialog). --shadow-drag bleibt eigenständig für Drag-Feedback,
+     das ist keine Elevation-Stufe der Ruhelage. */
+  --elevation-0:none;--elevation-1:var(--shadow-float);--elevation-2:var(--shadow-menu);
 }
 html[data-theme="dark"]{
   color-scheme:dark;
