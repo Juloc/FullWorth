@@ -2,6 +2,7 @@ import { api as sharedApi } from '../../../core/services.js';
 import { snapshotUploadFile } from '../../../security/secure-fetch.js';
 import { confirmMessage } from '../../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../../components/buttons.js';
+import { createSelectionList } from '../../../components/selection-list.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const t={
   de:{subtitle:'Buchungen und Depots aus anderen Apps übernehmen.',back:'Zurück',space:'FullWorth Space',txHint:'Für Bank- und App-Exporte. CSV und XLSX werden zuerst analysiert; du bestätigst Spalten und Zielkonten vor dem Import.',invHint:'Für Parqet, Finanzfluss und andere Depot-Exporte. Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden geprüft.',analyse:'Datei analysieren',review:'Import prüfen',import:'Importieren',importDepot:'Depot importieren',mapping:'Spalten zuordnen',targets:'Konten zuordnen',targetsHint:'Jedes in der Datei gefundene Konto bekommt ein Zielkonto in FullWorth.',securities:'Wertpapiere prüfen',working:'Wird verarbeitet …',needFile:'Bitte zuerst eine CSV- oder XLSX-Datei wählen.',needMapping:'Datum und Betrag müssen zugeordnet sein.',needInvestmentMapping:'Handelsdatum und Transaktionsart müssen zugeordnet sein.',needAccount:'Bitte alle Quellkonten einem Zielkonto zuordnen.',needPortfolio:'Bitte ein Zieldepot wählen.',done:'Import abgeschlossen.',error:'Import fehlgeschlagen.',rows:'Zeilen',ready:'Bereit',errors:'Fehler',imported:'Importiert',duplicates:'Duplikate',newPortfolio:'Neues Import-Depot anlegen',none:'Nicht zuordnen',autoNew:'Automatisch / neu anlegen',matched:'Automatisch erkannt',willCreate:'Wird neu angelegt',noAccounts:'Keine beschreibbaren Konten gefunden.',noPortfolios:'Noch kein Depot vorhanden.',historyEmpty:'Noch keine Depotimporte.',rollback:'Import rückgängig machen',rollbackConfirm:'Diesen Depotimport wirklich rückgängig machen? Spätere abhängige Buchungen schützen den Rollback automatisch.',rolledBack:'Import wurde rückgängig gemacht.',healthy:'Plausibel',checkWarnings:'Hinweise',cash:'Cash',positions:'Positionen',rowsTitle:'Buchungen prüfen',rowsHint:'Wähle ab, was nicht importiert werden soll. Zeilen mit Fehlern sind nicht auswählbar.',selectAll:'Alle auswählen',selectedOf:'{n} von {total} ausgewählt',errorsTitle:'Zeile nicht importierbar',notImportable:'nicht importierbar',noRows:'Keine Zeilen gefunden.',showing:'Angezeigt werden die ersten {n} von {total} Zeilen. Die Auswahl gilt für alle.',noneSelected:'Bitte mindestens eine Buchung auswählen.',duplicate:'Schon vorhanden',dupInFile:'kommt in dieser Datei doppelt vor',dupExternalKey:'Buchungs-ID wurde schon importiert',dupExisting:'gleiches Datum, gleicher Betrag, gleicher Empfänger schon gebucht',dupHint:'{n} Buchungen sind schon vorhanden und deshalb abgewählt.',dupChecking:'Duplikate werden geprüft …',txHistory:'Letzte Buchungsimporte',txHistoryEmpty:'Noch keine Buchungsimporte.',txRollback:'Import rückgängig machen',txRollbackConfirm:'Diesen Import wirklich rückgängig machen? Buchungen, die du danach geteilt, verschlagwortet, geprüft oder mit einem Vertrag verknüpft hast, bleiben erhalten.',txRolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusCancelled:'Abgebrochen',statusFailed:'Fehlgeschlagen',statusRolledBack:'Rückgängig gemacht',categoryTargets:'Kategorien zuordnen',categoryTargetsHint:'Jede Kategorie aus der Datei bekommt eine FullWorth-Kategorie. „Automatisch" nimmt eine gleichnamige Kategorie oder überlässt es den Regeln.',autoCategory:'Automatisch',noCategoriesFound:'Die Datei enthält keine Kategoriespalte.',needStatementFile:'Bitte zuerst eine MT940- oder CAMT-Datei wählen.',needStatementAccount:'Bitte ein Konto wählen.',newAccount:'Neues Konto anlegen',newAccountName:'Name des neuen Kontos',newAccountDefault:'Importiertes Konto',needAccountName:'Bitte einen Namen für das neue Konto angeben.',stmtHint:'Für Konten, die FullWorth nicht direkt verbinden kann: MT940- oder CAMT-Datei hochladen und das bestehende Konto wählen, zu dem sie gehört.',stmtAccountFromFile:'Konto laut Datei: {account}',stmtNoAccountInFile:'Die Datei nennt kein Konto.',stmtRowsFound:'{n} Buchungen gefunden',stmtBalanceLine:'Schlussstand laut Datei: {amount} zum {date}',stmtNoBalance:'Die Datei enthält keinen Kontostand.',stmtRowsHint:'Wähle ab, was nicht importiert werden soll.',stmtNoRows:'Diese Datei enthält keine Buchungen – nur einen Kontostand.',importStatement:'Kontoauszug importieren',stmtBalanceApplied:'Kontostand übernommen: {amount} zum {date}.',stmtBalanceSkippedNewerProvider:'Kontostand nicht übernommen: die Bank hat für diesen Tag oder später schon einen Stand gemeldet.',stmtBalanceSkippedNewerManual:'Kontostand nicht übernommen: für diesen Tag oder später gibt es schon einen von Hand erfassten Stand.',stmtBalanceSkippedCurrency:'Kontostand nicht übernommen: die Datei nennt eine andere Währung als das Konto.'},
@@ -11,7 +12,17 @@ document.documentElement.lang=lang;
 
 const $=id=>document.getElementById(id);
 const NEW_ACCOUNT='__new__';
-const state={space:null,accounts:[],categories:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],selected:new Set(),duplicates:new Map(),history:[]},inv:{file:null,detect:null,jobId:null,summary:null,staged:null,duplicatePreview:null,history:[]},stmt:{file:null,upload:null,jobId:null,candidates:[],selected:new Set(),presetAccountId:null}};
+const state={space:null,accounts:[],categories:[],portfolios:[],securities:[],tx:{file:null,detect:null,jobId:null,summary:null,candidates:[],duplicates:new Map(),history:[]},inv:{file:null,detect:null,jobId:null,summary:null,staged:null,duplicatePreview:null,history:[]},stmt:{file:null,upload:null,jobId:null,candidates:[],presetAccountId:null}};
+
+// Die Buchungs- und Kontoauszugs-Mehrfachauswahl liefen frueher als zwei getrennt von Hand gepflegte
+// Sets (state.tx.selected / state.stmt.selected) mitsamt eigenem "Alle auswaehlen"-indeterminate und
+// eigenem Zaehler - dieselbe Logik, zweimal eingetippt, in derselben Datei. components/selection-list.js
+// (Issue #157) ist genau fuer diesen Fall gebaut: eine Tabelle mit eigenen Zeilen, jede traegt schon
+// eine Checkbox (bindRow(), nicht die Markup-Kurzform mount()/selectionListHtml() - das statische
+// page.html hier bringt seine Checkboxen und Kopfzeilen-Ids schon mit, siehe #tx-select-all /
+// #stmt-select-all in page.html).
+const txSelection = createSelectionList({ onChange: refreshTxSelectionUi });
+const stmtSelection = createSelectionList({ onChange: refreshStmtSelectionUi });
 
 function setText(id,value){const el=$(id);if(el)el.textContent=value}
 setText('page-subtitle',t.subtitle);setText('back-link',t.back);setText('space-label',t.space);setText('tx-hint',t.txHint);setText('inv-hint',t.invHint);
@@ -139,10 +150,10 @@ function candidateRow(candidate) {
   box.dataset.candidate = candidate.id;
   box.checked = ready && !duplicateReason;
   box.disabled = !ready;
-  box.addEventListener('change', () => {
-    if (box.checked) state.tx.selected.add(candidate.id); else state.tx.selected.delete(candidate.id);
-    updateSelectedCount();
-  });
+  // Nicht waehlbare Zeilen bleiben aussen vor - genau wie createSelectionList().mount()s eigener
+  // ':not(:disabled)'-Filter, sonst zeigte "Alle auswaehlen" nie "alles ausgewaehlt", solange auch nur
+  // eine Fehlerzeile in der Liste stand.
+  if (ready) txSelection.bindRow(box, candidate.id);
 
   const main = document.createElement('span');
   main.className = 'row-main';
@@ -165,22 +176,27 @@ function candidateRow(candidate) {
   return row;
 }
 
-function updateSelectedCount() {
-  const ready = (state.tx.candidates || []).filter(candidateReady).length;
-  setText('tx-selected-count', fill(t.selectedOf, { n: state.tx.selected.size, total: ready }));
+// onChange-Abonnent von txSelection (siehe deren Erzeugung oben) - dieselbe Kopfzeilen-Aktualisierung,
+// die createSelectionList().mount() intern selbst betreibt, nur gegen die Ids aus dem statischen
+// page.html statt gegen [data-select-all]/[data-selection-count].
+function refreshTxSelectionUi({ count, total }) {
+  setText('tx-selected-count', fill(t.selectedOf, { n: count, total }));
   const master = $('tx-select-all');
   if (!master) return;
-  master.checked = ready > 0 && state.tx.selected.size === ready;
-  master.indeterminate = state.tx.selected.size > 0 && state.tx.selected.size < ready;
+  master.checked = total > 0 && count === total;
+  master.indeterminate = count > 0 && count < total;
 }
 
 function renderTransactionCandidates() {
   const list = $('tx-candidates');
   if (!list) return;
   const all = state.tx.candidates || [];
+  // Neuaufbau der Tabelle: Bestand und Auswahl leeren, bevor die Zeilen (und mit ihnen die neuen
+  // bindRow()-Aufrufe) entstehen - sonst haengt eine Id aus der alten Seite in der total-Zaehlung der
+  // neuen (siehe createSelectionList().reset()).
+  txSelection.reset();
   // Duplicates stay visible but unchecked: importing them a second time is almost never what you
   // want, and hiding them would make the row count disagree with the file you picked.
-  state.tx.selected = new Set(all.filter(c => candidateReady(c) && !state.tx.duplicates.has(c.id)).map(c => c.id));
   const duplicateCount = all.filter(c => candidateReady(c) && state.tx.duplicates.has(c.id)).length;
   const duplicateHint = $('tx-duplicate-hint');
   if (duplicateHint) {
@@ -219,7 +235,7 @@ function renderTransactionCandidates() {
     empty.className = 'row-sub ic-empty';
     empty.textContent = t.noRows;
     list.appendChild(empty);
-    updateSelectedCount();
+    refreshTxSelectionUi({ count: txSelection.count, total: txSelection.total });
     return;
   }
   for (const candidate of all.slice(0, MAX_RENDERED_CANDIDATES)) list.appendChild(candidateRow(candidate));
@@ -229,7 +245,10 @@ function renderTransactionCandidates() {
     note.textContent = fill(t.showing, { n: MAX_RENDERED_CANDIDATES, total: all.length });
     list.appendChild(note);
   }
-  updateSelectedCount();
+  // bindRow() (in candidateRow(), oben) meldet keine Aenderung von sich aus - anders als reset() oder
+  // selectAll() - darum hier einmalig genau wie mount()s abschliessendes notify(): informiert Kopfzeile
+  // UND jeden aeusseren Abonnenten ueber den frisch gebundenen Bestand.
+  refreshTxSelectionUi({ count: txSelection.count, total: txSelection.total });
 }
 // Zwei Antworten je Quellkonto: ein bestehendes Konto, oder ein neues samt Namen. Frueher gab es nur
 // die erste, und eine Datei zu einem Konto, das es hier noch nicht gab, liess sich gar nicht
@@ -283,7 +302,7 @@ async function refreshDuplicatePreview() {
   renderTransactionCandidates();
 }
 
-async function commitTransactions(){try{if(!state.tx.selected.size)throw new Error(t.noneSelected);const mappings=collectAccountMappings();status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings.mappings,newAccountNames:mappings.newNames,defaultAccountId:null,categoryMappings:collectCategoryMappings(),createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:[...state.tx.selected]})});renderResult('tx',result);await loadTransactionHistory();status('tx',t.done)}catch(err){error('tx',err)}}
+async function commitTransactions(){try{if(!txSelection.count)throw new Error(t.noneSelected);const mappings=collectAccountMappings();status('tx',t.working);const result=await api(`api/import-mapping/jobs/${state.tx.jobId}/commit?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceAccountMappings:mappings.mappings,newAccountNames:mappings.newNames,defaultAccountId:null,categoryMappings:collectCategoryMappings(),createMissingCategories:$('tx-create-categories').checked,runFullWorthCategorization:$('tx-run-rules').checked,candidateIds:txSelection.getSelectedIds()})});renderResult('tx',result);await loadTransactionHistory();status('tx',t.done)}catch(err){error('tx',err)}}
 
 async function detectInvestments(){const file=currentFile('inv');if(!file){status('inv',t.needFile);return}state.inv.file=file;state.inv.jobId=null;state.inv.staged=null;state.inv.duplicatePreview=null;status('inv',t.working);$('inv-review-section').hidden=true;$('inv-result').hidden=true;try{state.inv.detect=await api(`api/investment-import/detect?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body:await formWithFile(file)});if(isTradeRepublicExport(state.inv.detect)){$('inv-preset').value='traderepublic';$('inv-new-portfolio-name').value='Trade Republic';$('inv-new-portfolio-currency').value=detectedCurrency(state.inv.detect);const matches=state.portfolios.filter(p=>!p.isArchived&&String(p.name||'').toLowerCase().includes('trade republic'));$('inv-portfolio').value=matches.length===1?matches[0].id:'__new__';syncPortfolioTarget()}renderMapping('inv',invFields);status('inv',`${state.inv.detect.rowCount} ${t.rows}.`)}catch(err){error('inv',err)}}
 async function stageInvestments(){try{const mapping=collectMapping('inv',invFields);if($('inv-preset')?.value==='traderepublic')mapping.sourceProvider='trade_republic';status('inv',t.working);const body=await formWithFile(state.inv.file);body.append('mapping',JSON.stringify(mapping));const staged=await api(`api/investment-import/upload?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`,{method:'POST',body});state.inv.jobId=staged.jobId;state.inv.staged=staged;state.inv.duplicatePreview=null;state.inv.summary=await api(`api/investment-import/jobs/${staged.jobId}/summary?fullWorthSpaceId=${encodeURIComponent(state.space.id)}`);renderInvestmentReview(state.inv.summary,staged);$('inv-review-section').hidden=false;await refreshInvestmentDuplicatePreview();status('inv','')}catch(err){error('inv',err)}}
@@ -543,10 +562,7 @@ function stmtCandidateRow(candidate) {
   box.type = 'checkbox';
   box.dataset.candidate = candidate.id;
   box.checked = true;
-  box.addEventListener('change', () => {
-    if (box.checked) state.stmt.selected.add(candidate.id); else state.stmt.selected.delete(candidate.id);
-    updateStmtSelectedCount();
-  });
+  stmtSelection.bindRow(box, candidate.id);
   const main = document.createElement('span');
   main.className = 'row-main';
   const title = document.createElement('span');
@@ -565,20 +581,20 @@ function stmtCandidateRow(candidate) {
   return row;
 }
 
-function updateStmtSelectedCount() {
-  const total = (state.stmt.candidates || []).length;
-  setText('stmt-selected-count', fill(t.selectedOf, { n: state.stmt.selected.size, total }));
+// onChange-Abonnent von stmtSelection (siehe deren Erzeugung oben).
+function refreshStmtSelectionUi({ count, total }) {
+  setText('stmt-selected-count', fill(t.selectedOf, { n: count, total }));
   const master = $('stmt-select-all');
   if (!master) return;
-  master.checked = total > 0 && state.stmt.selected.size === total;
-  master.indeterminate = state.stmt.selected.size > 0 && state.stmt.selected.size < total;
+  master.checked = total > 0 && count === total;
+  master.indeterminate = count > 0 && count < total;
 }
 
 function renderStatementCandidates() {
   const list = $('stmt-candidates');
   if (!list) return;
   const all = state.stmt.candidates || [];
-  state.stmt.selected = new Set(all.map(c => c.id));
+  stmtSelection.reset();
   const noRows = $('stmt-no-rows');
   const wrap = $('stmt-rows-wrap');
   // A statement that states only a balance and no bookings is legitimate (see the backend
@@ -588,7 +604,8 @@ function renderStatementCandidates() {
   if (wrap) wrap.hidden = all.length === 0;
   list.innerHTML = '';
   for (const candidate of all) list.appendChild(stmtCandidateRow(candidate));
-  updateStmtSelectedCount();
+  // bindRow() meldet keine Aenderung von sich aus, siehe dieselbe Anmerkung bei renderTransactionCandidates().
+  refreshStmtSelectionUi({ count: stmtSelection.count, total: stmtSelection.total });
 }
 
 async function detectStatement() {
@@ -666,7 +683,7 @@ async function commitStatement() {
       body: JSON.stringify({
         accountId: chosen === NEW_ACCOUNT ? null : chosen,
         newAccountName: newName || null,
-        candidateIds: [...state.stmt.selected]
+        candidateIds: stmtSelection.getSelectedIds()
       })
     });
     renderStatementResult(result);
@@ -704,20 +721,13 @@ $('tx-preset').addEventListener('change',()=>{if(state.tx.detect)renderMapping('
 $('tx-detect').addEventListener('click',detectTransactions);$('tx-stage').addEventListener('click',stageTransactions);$('tx-commit').addEventListener('click',commitTransactions);$('inv-detect').addEventListener('click',detectInvestments);$('inv-stage').addEventListener('click',stageInvestments);$('inv-commit').addEventListener('click',commitInvestments);
 $('stmt-detect').addEventListener('click',detectStatement);$('stmt-commit').addEventListener('click',commitStatement);
 $('stmt-select-all')?.addEventListener('change',()=>{
-  const on=$('stmt-select-all').checked;
-  const all=state.stmt.candidates||[];
-  state.stmt.selected=on?new Set(all.map(c=>c.id)):new Set();
-  for(const box of $('stmt-candidates').querySelectorAll('input[data-candidate]')) box.checked=on;
-  updateStmtSelectedCount();
+  stmtSelection.selectAll($('stmt-select-all').checked);
 });
 // Select-all covers every candidate, not just the rendered slice, so a capped list still commits
-// exactly what the count promises.
+// exactly what the count promises. createSelectionList().selectAll() already only touches its bound
+// (i.e. ready/enabled) rows, so the disabled-row exclusion here disappears with the manual loop.
 $('tx-select-all')?.addEventListener('change',()=>{
-  const on=$('tx-select-all').checked;
-  const all=state.tx.candidates||[];
-  state.tx.selected=on?new Set(all.filter(candidateReady).map(c=>c.id)):new Set();
-  for(const box of $('tx-candidates').querySelectorAll('input[data-candidate]')) if(!box.disabled) box.checked=on;
-  updateSelectedCount();
+  txSelection.selectAll($('tx-select-all').checked);
 });
 // Delegated: the account selects are created per source account, so they do not exist yet at boot.
 $('tx-account-mapping')?.addEventListener('change',event=>{if(event.target?.matches('select'))refreshDuplicatePreview()});

@@ -26,12 +26,12 @@ async function openDeleteAccountDialog(ctx) {
       </div>
       <p id="delete-account-error" class="row-sub" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="ghost" data-close>${ctx.get('common.cancel')}</button>
+        <button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-cancel>${ctx.get('common.cancel')}</button>
         <button type="submit" class="${buttonClass(ButtonRole.Danger)}">${ctx.get('settings.deleteAccountAction')}</button>
       </div>
     </form>`);
   const form = dlg.querySelector('#delete-account-form');
-  dlg.querySelectorAll('[data-close]').forEach(button =>
+  dlg.querySelectorAll('[data-cancel]').forEach(button =>
     button.addEventListener('click', () => { if (dlg.open) dlg.close('cancel'); }));
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -83,9 +83,9 @@ async function openTwoFactorDialog(ctx) {
         <div class="panel-head"><h2>${ctx.get('twoFactor.title')}</h2></div>
         <p class="row-sub">${ctx.get('twoFactor.enabled')}</p>
         <label><span>${ctx.get('twoFactor.code')}</span><input id="two-factor-disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-        <div class="dialog-actions"><button type="button" class="ghost" data-close>${ctx.get('common.cancel')}</button><button type="submit" class="${buttonClass(ButtonRole.Danger)}">${ctx.get('twoFactor.disable')}</button></div>
+        <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-cancel>${ctx.get('common.cancel')}</button><button type="submit" class="${buttonClass(ButtonRole.Danger)}">${ctx.get('twoFactor.disable')}</button></div>
       </form>`);
-    dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());
+    dlg.querySelector('[data-cancel]')?.addEventListener('click', () => dlg.close());
     dlg.querySelector('form').addEventListener('submit', async event => {
       event.preventDefault();
       const code = dlg.querySelector('#two-factor-disable-code').value;
@@ -122,9 +122,9 @@ async function openTwoFactorDialog(ctx) {
       <p class="row-sub">${ctx.get('twoFactor.setupHelp')}</p>
       <div class="row"><div class="row-main"><div class="row-title">${ctx.get('twoFactor.sharedKey')}</div><div class="row-sub"><code class="two-factor-key">${ctx.esc(setup.sharedKey)}</code></div></div></div>
       <label><span>${ctx.get('twoFactor.code')}</span><input id="two-factor-enable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
-      <div class="dialog-actions"><button type="button" class="ghost" data-close>${ctx.get('common.cancel')}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.get('twoFactor.enable')}</button></div>
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Quiet)}" data-cancel>${ctx.get('common.cancel')}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.get('twoFactor.enable')}</button></div>
     </form>`);
-  dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());
+  dlg.querySelector('[data-cancel]')?.addEventListener('click', () => dlg.close());
   dlg.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
     const code = dlg.querySelector('#two-factor-enable-code').value;
