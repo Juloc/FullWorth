@@ -3,8 +3,13 @@
 .account-detail-head{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) 0}
 .account-detail-head .account-identity-icon{flex:none}
 .account-detail-names{min-width:0;flex:1}
-.account-detail-name{font-weight:600;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.account-detail-provider{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* War 17px - keine bewusste Stufe, sondern Drift wie beim Dashboard-Gruppenkopf: der Kontoname ist
+   die einzige Ueberschrift dieser Seite (kein h2/h3 im Markup), also --text-section-title (18px/600,
+   Scheibe 11 Teil 2) statt einer Zahl, die zufaellig knapp daneben lag. */
+.account-detail-name{font-weight:var(--text-section-title-weight);font-size:var(--text-section-title-size);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Metadaten-Zeile unter dem Kontonamen - war 13px, dieselbe Drift wie bei .nw-delta. --text-metadata
+   (14px/400) ist die passende Rolle dafuer. */
+.account-detail-provider{color:var(--muted);font-size:var(--text-metadata-size);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-detail-amount{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 /* Feld links, Wert rechts - und der Wert darf umbrechen, der Feldname nicht. */
 #account-detail-info .row{align-items:flex-start}

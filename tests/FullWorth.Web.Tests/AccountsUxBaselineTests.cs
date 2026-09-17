@@ -219,9 +219,11 @@ public sealed class AccountsUxBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("else openIngSelection(result);", js);
         Assert.Contains("function openIngSelection", js);
         Assert.DoesNotContain("toast(get('bankingSetup.ingConnected'));await ctx.reload()", js);
-        // Uebernommen wird erst auf Zuruf, mit den abgewaehlten Schluesseln im Rumpf.
+        // Uebernommen wird erst auf Zuruf, mit den abgewaehlten Schluesseln im Rumpf. Seit der
+        // gemeinsamen Auswahlliste (components/selection-list.js) kommt "hidden" schon als Array aus
+        // der Komponente - kein Spread mehr noetig, das war nur fuer das alte Set von Hand.
         Assert.Contains("/import'", js);
-        Assert.Contains("jsonBody({hidden:[...hidden]})", js);
+        Assert.Contains("jsonBody({hidden})", js);
         // Eine abgebrochene Auswahl bleibt erreichbar, ohne die Bank erneut zu fragen.
         Assert.Contains("data-finish-selection", js);
         Assert.Contains("health==='selection_pending'", js);

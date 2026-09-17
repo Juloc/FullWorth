@@ -638,6 +638,10 @@ button:hover,
   font-weight: 600;
 }
 
+/* Bewusst 1px ueber --text-amount (16px): eine Gruppen-Summe traegt schon dessen Groesse (sie erbt
+   sie nur, ohne eigene Regel), und "Gesamt" soll sich sichtbar davon abheben, ohne wie eine grosse
+   Kennzahl (--text-amount-lg, 24px) zu wirken - dieselbe Begruendung wie bei den 34px/36px-
+   Vermoegenszahlen (Scheibe 11 Teil 2): keine vorhandene Rolle trifft genau diese Zwischenstufe. */
 .accounts-total .amount {
   font-size: 17px;
 }
