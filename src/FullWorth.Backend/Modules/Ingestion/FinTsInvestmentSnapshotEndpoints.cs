@@ -52,12 +52,20 @@ public static class FinTsInvestmentSnapshotEndpoints
                 "FinTS depot snapshot kept {Kept} of {Sent} holdings. WithoutQuantity={NoQuantity}, WithoutIdentity={NoIdentity}",
                 outcome.Positions, request.Holdings.Count,
                 outcome.SkippedWithoutQuantity, outcome.SkippedWithoutIdentity);
+        // Ueber-erklaert heisst: aus Buchungen wurde mehr Kauf erkannt, als die Bank heute haelt - ein
+        // Hinweis auf einen nicht erkannten Verkauf, eigens geloggt statt im "Explained"-Zaehler unterzugehen.
+        if (outcome.PositionsOverExplained > 0)
+            logger.LogWarning(
+                "FinTS depot snapshot: {Count} Position(en) durch Buchungen ueber-erklaert (mehr Kauf erkannt als gemeldeter Bestand).",
+                outcome.PositionsOverExplained);
         return Results.Ok(new
         {
             portfolioId = outcome.PortfolioId,
             positions = outcome.Positions,
             skippedWithoutQuantity = outcome.SkippedWithoutQuantity,
             skippedWithoutIdentity = outcome.SkippedWithoutIdentity,
+            positionsExplained = outcome.PositionsExplained,
+            positionsOverExplained = outcome.PositionsOverExplained,
         });
     }
 }

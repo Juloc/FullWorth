@@ -271,7 +271,7 @@ public static class InvestmentPortfolioEndpoints
 
     private static string NormalizeSource(string? source) => string.IsNullOrWhiteSpace(source) ? "manual" : source.Trim().ToLowerInvariant() switch
     {
-        "manual" => "manual", "import" => "import", "provider" => "provider", _ => "manual"
+        "manual" => "manual", "import" => "import", "provider" => "provider", "bank_booking" => "bank_booking", _ => "manual"
     };
     private static bool ValidCurrency(string? value) => value is { Length: 3 } && value.All(char.IsLetter);
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

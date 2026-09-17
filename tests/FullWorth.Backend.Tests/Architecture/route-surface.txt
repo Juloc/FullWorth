@@ -289,6 +289,7 @@ GET              /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/ex
 GET              /api/purchases/{purchaseId:guid}/receipt-sources
 GET              /api/push/subscriptions
 GET              /api/push/vapid-public-key
+GET              /api/reconciliation/securities-bookings
 GET              /api/saved-analyses/
 GET              /api/spending-reviews/reasons
 GET              /api/spending-reviews/recent
@@ -517,6 +518,8 @@ POST             /api/purchases/{purchaseId:guid}/discounts/
 POST             /api/purchases/{purchaseId:guid}/documents/
 POST             /api/purchases/{purchaseId:guid}/documents/{documentId:guid}/extract
 POST             /api/push/subscriptions
+POST             /api/reconciliation/securities-bookings/apply
+POST             /api/reconciliation/securities-bookings/dismiss
 POST             /api/saved-analyses/
 POST             /api/tags/
 POST             /api/tax/analyze

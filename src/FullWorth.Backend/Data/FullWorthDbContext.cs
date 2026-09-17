@@ -12,6 +12,7 @@ using FullWorth.Backend.Modules.Loans;
 using FullWorth.Backend.Modules.Pension;
 using FullWorth.Backend.Modules.Portfolio;
 using FullWorth.Backend.Modules.Purchases;
+using FullWorth.Backend.Modules.Reconciliation;
 using FullWorth.Backend.Modules.Notifications;
 using FullWorth.Backend.Modules.Push;
 using FullWorth.Backend.Modules.Tax;
@@ -63,6 +64,7 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
     public DbSet<Merchant> Merchants => Set<Merchant>();
     public DbSet<MerchantAlias> MerchantAliases => Set<MerchantAlias>();
     public DbSet<DismissedContractCandidate> DismissedContractCandidates => Set<DismissedContractCandidate>();
+    public DbSet<DismissedSecuritiesBooking> DismissedSecuritiesBookings => Set<DismissedSecuritiesBooking>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<NotificationDedup> NotificationDedups => Set<NotificationDedup>();
     public DbSet<TaxSettings> TaxSettings => Set<TaxSettings>();
@@ -304,6 +306,12 @@ public sealed class FullWorthDbContext(DbContextOptions<FullWorthDbContext> opti
             e.HasIndex(x => new { x.FullWorthSpaceId, x.Counterparty, x.Currency }).IsUnique();
             e.Property(x => x.Counterparty).HasMaxLength(512);
             e.Property(x => x.Currency).HasMaxLength(3);
+            e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<DismissedSecuritiesBooking>(e =>
+        {
+            e.HasIndex(x => new { x.FullWorthSpaceId, x.TransactionId }).IsUnique();
             e.HasOne<FullWorthSpace>().WithMany().HasForeignKey(x => x.FullWorthSpaceId).OnDelete(DeleteBehavior.Restrict);
         });
 
