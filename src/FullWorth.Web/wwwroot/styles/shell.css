@@ -82,8 +82,6 @@ main:focus{outline:none}
 #privacy-toggle .pv-on{display:none}
 #privacy-toggle.active .pv-on{display:block}
 #privacy-toggle.active .pv-off{display:none}
-.primary-action{border:0;background:var(--cta);color:var(--cta-text);border-radius:var(--radius-pill);padding:0 var(--s4);height:36px;font-weight:600;cursor:pointer}
-.primary-action:hover{opacity:.9}
 
 /* Eine Regel statt zwei, und sie gewinnt.
    Vorher hieß es .view{display:none} plus .view.active{display:block}. Beide haben die

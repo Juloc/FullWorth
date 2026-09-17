@@ -192,6 +192,11 @@ body.locked{overflow:hidden}
 .more-sheet .more-list button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
 .more-sheet .more-list button.active{background:var(--surface-2);color:var(--text)}
 .more-sheet .more-list button.active svg{color:var(--text)}
+/* Destruktive Aktion im Overflow-Menü (Konto löschen, Verbindung trennen): nur die Textfarbe
+   ändert sich, keine Fläche/kein Rand - ersetzt das frühere globale button.danger, das nach der
+   Rollen-Migration sonst niemand mehr referenziert. */
+.more-sheet .more-list button.more-list-danger{color:var(--negative)}
+.more-sheet .more-list button.more-list-danger:hover{background:var(--surface-2)}
 .search-dialog{width:min(560px,94vw)}
 .search-dialog input[type=search]{width:100%;margin-bottom:var(--s2)}
 .search-group{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:var(--s2)}
@@ -217,8 +222,6 @@ body.locked{overflow:hidden}
 
 /* Mobile only: below 768px the desktop sidebars give way to the app-style bottom navigation. */
 /* Rules (§11) */
-.ghost{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:var(--radius-pill);font-weight:600}
-.ghost:hover{background:var(--surface-2)}
 
 /* Unscoped on purpose. This looked like the shared two-column primitive and is used as one in four
    dialogs, but the rule was scoped under .rule-dialog - so everywhere else a .rule-grid was
@@ -233,9 +236,6 @@ body.locked{overflow:hidden}
 .preview-row .preview-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .preview-row .preview-amt{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* Contracts (§13) */
-/* Destructive actions are text-only, never a filled surface or even an outline (Design System §06). */
-button.danger{border-color:transparent;color:var(--negative);background:transparent}
-button.danger:hover{background:var(--surface-2)}
 .contract-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 
 .row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}

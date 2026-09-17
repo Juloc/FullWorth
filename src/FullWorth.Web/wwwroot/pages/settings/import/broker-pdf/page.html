@@ -7,19 +7,19 @@
           <label class="field"><span id="pdf-portfolio-label">Zieldepot</span><select id="pdf-portfolio"></select></label>
           <label class="field span-2"><span id="pdf-file-label">Broker-Abrechnung als PDF</span><input id="pdf-file" type="file" accept=".pdf,application/pdf"></label>
         </div>
-        <div class="workflow-actions"><button id="pdf-detect" class="primary-action" type="button">PDF analysieren</button></div>
+        <div class="workflow-actions"><button id="pdf-detect" class="btn btn-primary" type="button">PDF analysieren</button></div>
         <div id="pdf-status" class="row-sub import-status" role="status" aria-live="polite"></div>
         <section id="pdf-preview-section" hidden>
           <div id="pdf-detection" class="rows"></div>
           <div class="preview-wrap"><table><thead id="pdf-preview-head"></thead><tbody id="pdf-preview-body"></tbody></table></div>
-          <div class="workflow-actions"><button id="pdf-stage" class="primary-action" type="button">Import prüfen</button></div>
+          <div class="workflow-actions"><button id="pdf-stage" class="btn btn-primary" type="button">Import prüfen</button></div>
         </section>
         <section id="pdf-review-section" hidden>
           <h3 id="pdf-security-title">Wertpapier prüfen</h3>
           <div id="pdf-security-summary" class="rows"></div>
           <label class="check import-option"><input id="pdf-create-securities" type="checkbox" checked><span id="pdf-create-securities-label">Fehlendes Wertpapier automatisch anlegen</span></label>
           <div id="pdf-review-summary" class="metric-grid import-metrics"></div>
-          <div class="workflow-actions"><button id="pdf-commit" class="primary-action" type="button">Ins Depot importieren</button></div>
+          <div class="workflow-actions"><button id="pdf-commit" class="btn btn-primary" type="button">Ins Depot importieren</button></div>
         </section>
         <div id="pdf-result" class="rows" hidden></div>
       </article>

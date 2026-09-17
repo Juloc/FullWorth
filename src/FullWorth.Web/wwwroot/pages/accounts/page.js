@@ -73,7 +73,7 @@ function openAccountActionsDialog(account, groups) {
 
   const dlg = dialog(`<div class="dialog-card more-sheet account-actions-sheet">
     <div class="panel-head"><div><h2>${esc(account.displayName || account.institutionName)}</h2><div class="row-sub">${esc(account.institutionName || '')}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div>
-    <div class="more-list">${actions.map(([key, label, danger]) => `<button type="button" data-account-action="${key}" class="${danger ? 'danger' : ''}"><span>${esc(label)}</span></button>`).join('')}</div>
+    <div class="more-list">${actions.map(([key, label, danger]) => `<button type="button" data-account-action="${key}" class="${danger ? 'more-list-danger' : ''}"><span>${esc(label)}</span></button>`).join('')}</div>
   </div>`, { mobileMode: 'sheet' });
 
   dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());

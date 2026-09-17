@@ -28,14 +28,14 @@
           <label class="field"><span id="tx-preset-label">Quelle</span><select id="tx-preset"><option value="generic">CSV / XLSX</option><option value="finanzfluss">Finanzfluss Copilot</option><option value="outbank">Outbank</option></select></label>
           <label class="field span-2"><span id="tx-file-label">Datei</span><input id="tx-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         </div>
-        <div class="workflow-actions"><button id="tx-detect" class="primary-action" type="button">Datei analysieren</button></div>
+        <div class="workflow-actions"><button id="tx-detect" class="btn btn-primary" type="button">Datei analysieren</button></div>
         <div id="tx-status" class="row-sub import-status" role="status" aria-live="polite"></div>
 
         <section id="tx-mapping-section" hidden>
           <h3 id="tx-mapping-title">Spalten zuordnen</h3>
           <div id="tx-mapping" class="mapping-grid"></div>
           <div class="preview-wrap"><table><thead id="tx-preview-head"></thead><tbody id="tx-preview-body"></tbody></table></div>
-          <div class="workflow-actions"><button id="tx-stage" class="primary-action" type="button">Import prüfen</button></div>
+          <div class="workflow-actions"><button id="tx-stage" class="btn btn-primary" type="button">Import prüfen</button></div>
         </section>
 
         <section id="tx-review-section" hidden>
@@ -61,7 +61,7 @@
             <label class="check"><input id="tx-run-rules" type="checkbox" checked><span id="tx-run-rules-label">FullWorth-Regeln für nicht kategorisierte Buchungen anwenden</span></label>
           </div>
           <div id="tx-review-summary" class="metric-grid import-metrics"></div>
-          <div class="workflow-actions"><button id="tx-commit" class="primary-action" type="button">Importieren</button></div>
+          <div class="workflow-actions"><button id="tx-commit" class="btn btn-primary" type="button">Importieren</button></div>
         </section>
         <div id="tx-result" class="rows" hidden></div>
         <section id="tx-history-section">
@@ -81,14 +81,14 @@
           </div>
           <label class="field span-2"><span id="inv-file-label">Datei</span><input id="inv-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         </div>
-        <div class="workflow-actions"><button id="inv-detect" class="primary-action" type="button">Datei analysieren</button></div>
+        <div class="workflow-actions"><button id="inv-detect" class="btn btn-primary" type="button">Datei analysieren</button></div>
         <div id="inv-status" class="row-sub import-status" role="status" aria-live="polite"></div>
 
         <section id="inv-mapping-section" hidden>
           <h3 id="inv-mapping-title">Spalten zuordnen</h3>
           <div id="inv-mapping" class="mapping-grid"></div>
           <div class="preview-wrap"><table><thead id="inv-preview-head"></thead><tbody id="inv-preview-body"></tbody></table></div>
-          <div class="workflow-actions"><button id="inv-stage" class="primary-action" type="button">Import prüfen</button></div>
+          <div class="workflow-actions"><button id="inv-stage" class="btn btn-primary" type="button">Import prüfen</button></div>
         </section>
 
         <section id="inv-review-section" hidden>
@@ -98,7 +98,7 @@
           <div id="inv-type-summary" class="rows"></div>
           <label class="check import-option"><input id="inv-create-securities" type="checkbox" checked><span id="inv-create-securities-label">Fehlende Wertpapiere automatisch anlegen</span></label>
           <div id="inv-review-summary" class="metric-grid import-metrics"></div>
-          <div class="workflow-actions"><button id="inv-commit" class="primary-action" type="button">Depot importieren</button></div>
+          <div class="workflow-actions"><button id="inv-commit" class="btn btn-primary" type="button">Depot importieren</button></div>
         </section>
         <div id="inv-result" class="rows" hidden></div>
         <section id="inv-reconciliation" hidden>
@@ -117,7 +117,7 @@
         <div class="import-form-grid">
           <label class="field span-2"><span id="stmt-file-label">Datei</span><input id="stmt-file" type="file" accept=".sta,.mt940,.940,.txt,.xml,.camt"></label>
         </div>
-        <div class="workflow-actions"><button id="stmt-detect" class="primary-action" type="button">Datei analysieren</button></div>
+        <div class="workflow-actions"><button id="stmt-detect" class="btn btn-primary" type="button">Datei analysieren</button></div>
         <div id="stmt-status" class="row-sub import-status" role="status" aria-live="polite"></div>
 
         <section id="stmt-found-section" hidden>
@@ -139,7 +139,7 @@
             <div id="stmt-candidates" class="rows ic-candidates"></div>
           </div>
 
-          <div class="workflow-actions"><button id="stmt-commit" class="primary-action" type="button">Kontoauszug importieren</button></div>
+          <div class="workflow-actions"><button id="stmt-commit" class="btn btn-primary" type="button">Kontoauszug importieren</button></div>
         </section>
         <div id="stmt-result" class="rows" hidden></div>
       </article>

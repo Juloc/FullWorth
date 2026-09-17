@@ -115,7 +115,7 @@ function renderItem(item) {
   const reference = item.sourceReference ? ` · ${item.sourceReference}` : '';
   const error = item.error ? `<div class="receipt-import-item-error">${esc(item.error)}</div>` : '';
   const receipt = item.purchaseId
-    ? `<a class="ghost receipt-import-item-open" href="${esc(receiptUrl(item.purchaseId))}" target="_blank" rel="noopener noreferrer">${esc(t('Beleg öffnen', 'Open receipt'))}</a>`
+    ? `<a class="${buttonClass(ButtonRole.Secondary, 'receipt-import-item-open')}" href="${esc(receiptUrl(item.purchaseId))}" target="_blank" rel="noopener noreferrer">${esc(t('Beleg öffnen', 'Open receipt'))}</a>`
     : '';
 
   // Analysing one receipt is offered exactly where it is useful: something that was never started, or

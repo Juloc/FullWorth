@@ -1,3 +1,5 @@
+import { ButtonRole, buttonClass } from '../components/buttons.js';
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -126,6 +128,6 @@ export function finanzguruCompletenessNotice(state, options = {}) {
 
   return `<div class="data-completeness-warning" role="status">
     <div class="data-completeness-copy"><strong>${esc(title)}</strong><span>${esc(body)}</span></div>
-    <a class="ghost data-completeness-action" href="${href}">${esc(action)}</a>
+    <a class="${buttonClass(ButtonRole.Secondary, 'data-completeness-action')}" href="${href}">${esc(action)}</a>
   </div>`;
 }

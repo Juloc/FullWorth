@@ -89,7 +89,7 @@ function openConnectionActionsDialog(connection){
     ...(isFinTs?[['raw',get('accounts.rawResponses'),false,get('accounts.rawResponsesHint')]]:[]),
     ['disconnect',get('accounts.disconnect'),true],
   ];
-  const dlg=dialog(`<div class="dialog-card more-sheet connection-actions-sheet"><div class="panel-head"><div><h2>${esc(connection.institutionName)}</h2><div class="row-sub">${esc(get('accounts.health_'+(connection.healthStatus||'authorized')))}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="more-list">${actions.map(([key,label,danger,hint])=>`<button type="button" data-connection-action="${key}" class="${danger?'danger':''}"><span>${esc(label)}${hint?`<span class="row-sub">${esc(hint)}</span>`:''}</span></button>`).join('')}</div></div>`,{mobileMode:'sheet'});
+  const dlg=dialog(`<div class="dialog-card more-sheet connection-actions-sheet"><div class="panel-head"><div><h2>${esc(connection.institutionName)}</h2><div class="row-sub">${esc(get('accounts.health_'+(connection.healthStatus||'authorized')))}</div></div><button type="button" data-close aria-label="${esc(get('common.close'))}">×</button></div><div class="more-list">${actions.map(([key,label,danger,hint])=>`<button type="button" data-connection-action="${key}" class="${danger?'more-list-danger':''}"><span>${esc(label)}${hint?`<span class="row-sub">${esc(hint)}</span>`:''}</span></button>`).join('')}</div></div>`,{mobileMode:'sheet'});
   dlg.querySelector('[data-close]')?.addEventListener('click',()=>dlg.close());
   for(const button of dlg.querySelectorAll('[data-connection-action]'))button.addEventListener('click',()=>{
     const action=button.dataset.connectionAction;

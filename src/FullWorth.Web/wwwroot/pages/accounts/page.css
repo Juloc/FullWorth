@@ -66,8 +66,8 @@ button,
 .sidebar button,
 #bottom-nav button,
 .icon-button,
-.primary-action,
-.ghost,
+.btn-primary,
+.btn-secondary,
 .btn-small,
 .icon-mini {
   transition-property: color, background-color, border-color, box-shadow, opacity !important;
@@ -82,8 +82,8 @@ button:hover,
 .sidebar button:hover,
 #bottom-nav button:hover,
 .icon-button:hover,
-.primary-action:hover,
-.ghost:hover,
+.btn-primary:hover,
+.btn-secondary:hover,
 .btn-small:hover,
 .icon-mini:hover {
   transform: none !important;

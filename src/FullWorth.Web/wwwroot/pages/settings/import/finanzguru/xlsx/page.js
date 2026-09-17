@@ -1,6 +1,7 @@
 import { api as sharedApi, jsonBody } from '../../../../../core/services.js';
 import { snapshotUploadFile } from '../../../../../security/secure-fetch.js';
 import { confirmMessage } from '../../../../../components/confirm.js';
+import { ButtonRole, buttonClass } from '../../../../../components/buttons.js';
 const lang=(localStorage.getItem('finance.language')||'de').startsWith('en')?'en':'de';
 const text={
   de:{
@@ -131,7 +132,7 @@ function actionSummary(data,targetId,successText){
   const line=node('div','import-link-success',successText);
   const details=node('div','row-sub',
     `${data.transactionsMoved??0} ${text.moved} · ${data.transactionsMerged??0} ${text.merged} · ${data.transactionsTrustedForHistory??0} ${text.trusted}`);
-  const add=node('a','ghost import-add-missing',text.addMissing);
+  const add=node('a',buttonClass(ButtonRole.Secondary,'import-add-missing'),text.addMissing);
   add.href=`/transactions?accountId=${encodeURIComponent(targetId)}`;
   linkStatus.append(line,details,add);
 }
@@ -207,7 +208,7 @@ function buildImportLinkCard(item){
   const balanceHint=node('span','row-sub import-balance-hint','');
   balanceField.append(balance,balanceHint);
 
-  const button=node('button','primary-action',text.link);
+  const button=node('button',buttonClass(ButtonRole.Primary),text.link);
   button.type='button';
 
   // Was das Zuordnen tun wird, BEVOR es etwas tut. Vorher war "Verbinden" ein Knopf, nach dem
@@ -320,7 +321,7 @@ function buildAttachedHistoryCard(item){
   balanceField.classList.toggle('required-balance',!item.hasCurrentBalance);
   balanceField.append(balance,hint);
 
-  const button=node('button','primary-action',text.confirmHistory);
+  const button=node('button',buttonClass(ButtonRole.Primary),text.confirmHistory);
   button.type='button';
   button.addEventListener('click',async()=>{
     const raw=balance.value.trim();

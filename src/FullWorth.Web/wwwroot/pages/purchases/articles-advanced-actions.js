@@ -55,7 +55,7 @@ export function mountExportAndWarrantyActions(panel, { api, esc, makeDialog, mon
   };
 
   actions.querySelector('[data-pa-export]').onclick = () => {
-    const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('Käufe exportieren', 'Export purchases'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Der Export respektiert private Käufe und deine FullWorth-Space-Berechtigungen.', 'The export respects private purchases and your FullWorth Space permissions.'))}</p><div class="pa-export-actions"><a class="button ghost" data-format="json">JSON</a><a class="button ghost" data-format="csv">CSV</a><a class="button ghost" data-format="xlsx">XLSX</a><a class="button" data-format="zip">ZIP + ${esc(text('Dokumente', 'documents'))}</a></div></div>`);
+    const dlg = makeDialog(`<div class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('Käufe exportieren', 'Export purchases'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Der Export respektiert private Käufe und deine FullWorth-Space-Berechtigungen.', 'The export respects private purchases and your FullWorth Space permissions.'))}</p><div class="pa-export-actions"><a class="button ${buttonClass(ButtonRole.Secondary)}" data-format="json">JSON</a><a class="button ${buttonClass(ButtonRole.Secondary)}" data-format="csv">CSV</a><a class="button ${buttonClass(ButtonRole.Secondary)}" data-format="xlsx">XLSX</a><a class="button" data-format="zip">ZIP + ${esc(text('Dokumente', 'documents'))}</a></div></div>`);
     dlg.querySelector('[data-close]').onclick = () => dlg.close();
     dlg.querySelectorAll('[data-format]').forEach(link => {
       const format = link.dataset.format;
