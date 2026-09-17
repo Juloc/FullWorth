@@ -57,6 +57,30 @@ public static class Mt535Parser
     public static IReadOnlyList<string> FieldShape(string statement) =>
         Blocks(statement).Select(block => string.Join("+", block.Keys.Order(StringComparer.Ordinal))).ToArray();
 
+    /// <summary>
+    /// Der Fliesstext der Bloecke (:70E:) - mit MASKIERTEN Ziffern.
+    ///
+    /// Ein Bestand sagt, was er heute wert ist. Er sagt nicht, was er gekostet hat - und ohne den
+    /// Einstand gibt es keinen Gewinn und keine Prozentzahl. Genau die zeigen andere Apps.
+    ///
+    /// :70E: ist das Feld, in dem die deutsche Auspraegung von MT535 zusaetzliche Angaben
+    /// unterbringt, und die ING schickt es in JEDEM Block mit. Gelesen hat es hier noch nie jemand.
+    /// Steht der Einstandskurs dort, ist er die ganze Zeit schon da gewesen.
+    ///
+    /// Was fehlt, ist nur die Kenntnis des Aufbaus - und die steckt in den BESCHRIFTUNGEN, nicht in
+    /// den Zahlen. Deshalb bleiben die Woerter stehen und jede Ziffer wird zu '#': "Einstandskurs
+    /// EUR ###,##" beantwortet die Frage vollstaendig und verraet keinen Betrag. Ein Depotbestand
+    /// gehoert seinem Eigentuemer und hat in keinem Log etwas verloren.
+    /// </summary>
+    public static IReadOnlyList<string> NarrativeShape(string statement) =>
+        Blocks(statement)
+            .Select(block => block.TryGetValue("70E", out var values) ? string.Join(" ¦ ", values) : string.Empty)
+            .Select(Masked)
+            .ToArray();
+
+    /// <summary>Jede Ziffer wird '#', jeder Zeilenumbruch '·'. Der Aufbau bleibt, der Inhalt geht.</summary>
+    private static string Masked(string text) =>
+        text.Length == 0 ? "-" : string.Concat(text.Select(c => char.IsDigit(c) ? '#' : c == '\n' ? '·' : c));
     /// <summary>Die Bestaende der Aufstellung, in der Reihenfolge, in der sie dastehen.</summary>
     public static IReadOnlyList<FinTsHolding> Parse(string statement) =>
         Blocks(statement).Select(Build).OfType<FinTsHolding>().ToArray();
