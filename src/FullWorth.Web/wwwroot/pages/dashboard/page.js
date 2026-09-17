@@ -58,11 +58,18 @@ function widgetTitle(ctx, meta) {
   const translated = ctx.get(meta.title);
   return (meta.copy && translated === meta.title) ? pensionCopy(meta.copy) : translated;
 }
+// Reihenfolge folgt der Ziel-Hierarchie der Übersicht (Issue #162, Design-System-Plan Scheibe 11 Teil
+// 2): Hero (Nettovermögen) -> kompakte Kennzahlen -> Konten -> Buchungen als Liste -> Budgets kompakt
+// -> Demnächst (anstehende Fälligkeiten). Vorsorge steht in diesem Zielbild nicht drin und bleibt am
+// Ende, wo sie am wenigsten stört. Das ändert nur das Standardlayout (Erststart/Zurücksetzen) - ein
+// bereits gespeichertes, vom Nutzer selbst geordnetes Layout wird dadurch nicht verändert.
 const DEFAULT_LAYOUT = [
-  { id: 'w1', type: 'net-worth' }, { id: 'w2', type: 'available' },
+  { id: 'w1', type: 'net-worth' },
+  { id: 'w2', type: 'available' }, { id: 'w4', type: 'income-expense' },
   { id: 'w3', type: 'accounts' },
-  { id: 'w4', type: 'income-expense' }, { id: 'w5', type: 'budget-focus' },
-  { id: 'w6', type: 'upcoming' }, { id: 'w7', type: 'recent-tx' },
+  { id: 'w7', type: 'recent-tx' },
+  { id: 'w5', type: 'budget-focus' },
+  { id: 'w6', type: 'upcoming' },
   { id: 'w8', type: 'pension' },
 ];
 

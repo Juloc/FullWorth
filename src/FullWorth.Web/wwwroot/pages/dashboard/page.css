@@ -30,8 +30,16 @@
 .widget{grid-column:span 12;min-width:0}
 .widget.span-4{grid-column:span 4}.widget.span-6{grid-column:span 6}.widget.span-8{grid-column:span 8}.widget.span-12{grid-column:span 12}
 .widget .widget-body{display:grid;min-width:0}
+/* Ein Widget-Titel ("Nettovermögen", "Konten", ...) IST die Abschnittsüberschrift der Übersicht - die
+   passende Rolle statt der Fixgröße 15px, die components.css für jeden .panel-head h2 seitenweit setzt.
+   Nur im Dashboard-Raster überschrieben, damit kein anderes Panel im Haus mitgeändert wird. */
+#dashboard-grid .panel-head h2{font-size:var(--text-section-title-size);font-weight:var(--text-section-title-weight)}
+/* Die grosse Kennzahl (Nettovermögen, Verfügbar, Altersvorsorge) hat keine passende Rolle - amount-lg
+   liegt bei 24px, hier stehen bewusst 36px als Blickfang der Seite. Bleibt deshalb Rohwert. */
 .widget-metric strong{font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
-.widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:13px;margin-top:6px;flex-wrap:wrap}
+/* Metadaten-Zeile unter der Kennzahl (Vermögenswerte/Schulden, Hinweistexte) - Rollen-Token statt der
+   bisherigen Festgroesse 13px (Issue #162 §5, erste Seite, die die Typo-Rollen tatsaechlich benutzt). */
+.widget-split{display:flex;gap:var(--s4);color:var(--muted);font-size:var(--text-metadata-size);margin-top:6px;flex-wrap:wrap}
 .widget-split.big{gap:var(--s6)}.widget-split.big strong{font-size:20px}
 /* Inline monthly bar chart inside a configurable income/expense widget. */
 .widget-chart{width:100%;height:96px;display:block}
@@ -52,8 +60,15 @@
 .widget-metric.dash-metric{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
 .widget-metric.dash-metric strong{line-height:1.05;letter-spacing:-.01em;overflow-wrap:anywhere}
 .widget-split.dash-metric-split{margin-top:var(--s2)}
-/* Overview net-worth preview: value + change inline, a compact history sparkline, taps through to Wealth. */
-.dash-nw{display:grid;gap:8px;cursor:pointer;border-radius:var(--radius-card);margin:calc(var(--s1) * -1);padding:var(--s1);transition:background .12s}
+/* Overview net-worth preview: value + change inline, a compact history sparkline, taps through to Wealth.
+
+   War: margin:calc(var(--s1) * -1) plus padding:var(--s1) - ein negativer Rand, der exakt durch das
+   Innenpolster aufgehoben wurde, nur damit der Hover-Hintergrund bis an den Kartenrand reicht. Optisch
+   eine zweite, flach an den Rand gezogene Karte IN der Widget-Karte (Issue #162, Design-System-Plan
+   Scheibe 11 Teil 2 - genau der Kaesteli-in-Kaesteli-Trick, den die Seite loswerden soll). Jetzt bekommt
+   der klickbare Bereich sein Innenpolster ehrlich, ohne den Rand, der es wieder zunichte macht - wie
+   .fw-row es fuer Zeilen schon immer tut. */
+.dash-nw{display:grid;gap:8px;cursor:pointer;border-radius:var(--radius-card);padding:var(--s1);transition:background .12s}
 .dash-nw:hover{background:var(--surface-2)}
 .dash-nw .widget-metric.dash-metric{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:var(--s2)}
 .dash-nw .widget-split.dash-metric-split{margin-top:0}
@@ -69,9 +84,13 @@
 .dash-group{display:grid}
 .dash-group-rows{display:grid}
 .dash-group-head{padding-top:2px;padding-bottom:var(--s3)}
-.dash-group-head .fw-row-title{font-size:15px}
-.dash-group-head .fw-row-sub{font-size:11px}
-.dash-group-head .fw-row-amt{font-size:15px}
+/* Gruppenkopf-Zeile war 1px kleiner als eine normale Kontozeile (15px/11px statt 16px/12px) - keine
+   bewusste Stufe, sondern Drift. Jetzt die passenden Rollen-Token: Titel wie fetter Fliesstext, Betrag
+   wie ein Betrag, Untertext wie eine Fussnotiz - und die Gruppensumme steht damit gleich gross neben
+   den Kontozeilen darunter statt knapp kleiner. */
+.dash-group-head .fw-row-title{font-size:var(--text-body-strong-size)}
+.dash-group-head .fw-row-sub{font-size:var(--text-caption-size)}
+.dash-group-head .fw-row-amt{font-size:var(--text-amount-size)}
 .dash-drill-chevron{display:inline-grid;place-items:center;width:16px;height:16px;flex:0 0 auto;color:var(--muted)}
 .dash-drill-chevron svg{width:16px;height:16px;display:block}
 .dash-group-head:hover .dash-drill-chevron,.dash-group-head:focus-visible .dash-drill-chevron{color:var(--text)}
