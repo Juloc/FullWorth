@@ -12,16 +12,16 @@
 /* Budget cards (§12) */
 .budget-wizard{min-width:min(520px,92vw)}
 
+/* .budget-wizard-section und .budget-cycle-fields trafen kein Markup mehr (geprueft: weder page.js
+   noch form-dialog.js schreiben diese Klassen) - Reste aus der Zeit vor der openFormDialog-Umstellung,
+   die eigene Abschnitts-<div>s brauchte. openFormDialog gruppiert heute selbst (.fw-field-row,
+   .fw-dialog-section), also totes Gewicht statt einer zweiten Quelle (Scheibe 11 Teil 2, "Nothing
+   unnecessary"). */
 
-
-
-.budget-wizard-section{display:grid;gap:var(--s3);padding:var(--s3) 0;border-bottom:1px solid var(--line)}
-
-.budget-wizard-section:last-of-type{border-bottom:0}
-
-.budget-cycle-fields>[hidden]{display:none}
-
-.budget-rollover-summary{margin-top:4px}
+/* Der Uebertrag-Hinweis im Detaildialog zeigt zwei Betraege (Basisbetrag, Uebertrag) - tabellarisch
+   wie jeder andere Betrag im Haus; hatte das bisher nicht, weil er in einer normalen .row-sub-Zeile
+   mitlief statt in einem .amount-Element (Scheibe 11 Teil 2, Amounts-Punkt der Vorgabe). */
+.budget-rollover-summary{margin-top:4px;font-variant-numeric:tabular-nums}
 
 .budget-cards{display:grid;gap:var(--s3)}
 
@@ -31,7 +31,9 @@
 
 .budget-card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:6px}
 
-.budget-card-foot{display:flex;justify-content:space-between;gap:var(--s2);color:var(--muted);font-size:12px;margin-top:6px;flex-wrap:wrap}
+/* War 12px - exakt --text-caption. Beide Zeilen zeigen Betraege (ausgegeben/Limit, verfuegbar),
+   deshalb zusaetzlich tabellarisch wie jeder andere Betrag im Haus (Scheibe 11 Teil 2). */
+.budget-card-foot{display:flex;justify-content:space-between;gap:var(--s2);color:var(--muted);font-size:var(--text-caption-size);margin-top:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 
 /* A status pill signals with a coloured dot AND the word — never colour alone (Design System §10). */
 .budget-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:0 0 auto}
@@ -53,7 +55,10 @@
 
 .budget-detail .kv{display:flex;flex-direction:column;gap:2px}
 
-.budget-detail .kv span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* War 11px - keine bewusste Stufe, sondern Drift wie bei den 11px-Resten in Dashboard/Vermoegens-/
+   Vertragsseite; --text-caption ist die Fussnoten-Rolle fuer eine Grossbuchstaben-Beschriftung wie
+   diese (Scheibe 11 Teil 2). */
+.budget-detail .kv span{font-size:var(--text-caption-size);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
 .budget-detail-trend{display:flex;align-items:center;gap:var(--s2);margin-top:8px;font-size:13px}
 
