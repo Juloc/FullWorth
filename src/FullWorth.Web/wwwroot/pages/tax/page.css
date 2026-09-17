@@ -23,8 +23,13 @@
 
 .tax-hero-side>div{display:flex;flex-direction:column;gap:2px;min-width:0}
 
-.tax-hero-side dt{color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+/* War 11px - Drift wie die 11px-Reste bei Dashboard/Vermoegens-/Vertrags-/Budgetseite; --text-caption
+   ist die Fussnoten-Rolle fuer eine Grossbuchstaben-Beschriftung wie diese (Scheibe 11 Teil 2). Das
+   eigene font-weight:500 bleibt roh, dieselbe Begruendung wie bei abweichenden Gewichten anderswo. */
+.tax-hero-side dt{color:var(--muted);font-size:var(--text-caption-size);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
 
+/* 18px passt in keine vorhandene Rolle (zwischen --text-amount und --text-amount-lg) - dieselbe Lage
+   wie beim Donut-Zentrum der Vertrags-/Analyseseite, bleibt daher roh (Scheibe 11 Teil 2). */
 .tax-hero-side dd{margin:0;font-size:18px}
 
 .tax-hero .tax-pos{color:var(--positive)}
@@ -99,6 +104,9 @@
   box-shadow: 0 1px 3px rgb(0 0 0/.08)
 }
 
+/* .82rem (~13.1px) liegt zwischen --text-caption (12px) und --text-metadata (14px) - keine
+   vorhandene Rolle trifft diesen Wert sauber, bleibt daher roh (derselbe Fall wie die 13px-Reste
+   bei Vertraegen/Budgets, Scheibe 11 Teil 2). Gilt fuer alle .82rem/.84rem-Reste dieser Datei. */
 .tax-year {
   display: grid;
   gap: 5px;
@@ -114,9 +122,8 @@
   margin-left: auto
 }
 
-.tax-metrics {
-  margin-bottom: 18px
-}
+/* .tax-metrics traf kein Markup mehr (repoweit geprueft: keine .js/.html referenziert die Klasse) -
+   totes Gewicht aus einer frueheren Fassung der Seite (Scheibe 11 Teil 2). */
 
 .tax-review-list {
   display: grid;
@@ -158,8 +165,10 @@
   margin: 9px 0
 }
 
+/* .76rem entsprach ~12.16px - praktisch --text-caption (12px), derselbe Drift wie die 11px-Reste
+   anderswo, nur diesmal knapp ueber statt unter der Rollengroesse (Scheibe 11 Teil 2). */
 .tax-badges span {
-  font-size: .76rem;
+  font-size: var(--text-caption-size);
   padding: 4px 7px;
   border-radius: 999px;
   background: var(--surface-2);
@@ -183,8 +192,10 @@
   align-self: center
 }
 
+/* .78rem entsprach ~12.48px - derselbe Drift-Fall wie .tax-badges span oben, --text-caption ist die
+   Fussnoten-Rolle fuer einen Disclaimer-Satz wie diesen. */
 .tax-disclaimer {
-  font-size: .78rem;
+  font-size: var(--text-caption-size);
   color: var(--muted);
   margin: 12px 2px 0
 }
@@ -194,6 +205,7 @@
   border-radius: 12px
 }
 
+/* .84rem (~13.4px) - derselbe 13px-Sonderfall wie bei .tax-year oben, bleibt roh. */
 .tax-setting-copy {
   font-size: .84rem;
   color: var(--muted);
@@ -246,6 +258,8 @@
   .tax-case-top {
     gap: 8px
   }
+  /* Bewusste mobile Verkleinerung des Betrags (16px -> ~15.2px), keine Rollen-Drift - bleibt daher
+     unangetastet (Scheibe 11 Teil 2). */
   .tax-case-top .amount {
     font-size: .95rem
   }
@@ -268,6 +282,7 @@
   gap: 3px
 }
 
+/* Derselbe 13px-Sonderfall wie .tax-year oben - keine Rolle trifft ihn sauber, bleibt roh. */
 .tax-year-review-state {
   font-size: .82rem;
   opacity: .72
@@ -320,6 +335,9 @@
   border-top: 1px solid var(--border)
 }
 
+/* 1rem (16px) trifft numerisch --text-body/-body-strong, aber ohne eigenes font-weight bleibt unklar,
+   welche der beiden Rollen fuer diese Zwischenueberschrift gemeint waere - bleibt daher roh, wie die
+   16px/650-Ueberschrift der Insights-Seite (Scheibe 11 Teil 2). */
 .tax-advanced-settings h3 {
   margin: 0;
   font-size: 1rem
@@ -335,6 +353,7 @@
   min-width: 0
 }
 
+/* Derselbe 13px-Sonderfall wie .tax-year oben - keine Rolle trifft ihn sauber, bleibt roh. */
 .tax-advanced-footer {
   display: flex;
   gap: 12px;

@@ -48,7 +48,7 @@ public sealed class SpacingRatchetTests
         ["pages/settings/import/page.css"] = 26,
         ["pages/settings/intelligence/page.css"] = 56,
         ["pages/settings/page.css"] = 3,
-        ["pages/tax/page.css"] = 43,
+        ["pages/tax/page.css"] = 42,
         ["pages/transactions/page.css"] = 32,
         ["styles/app.css"] = 100,
         ["styles/components.css"] = 20,

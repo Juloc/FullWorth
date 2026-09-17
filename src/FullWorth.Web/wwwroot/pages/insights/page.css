@@ -5,8 +5,12 @@
 .insights-panel{padding:0;overflow:hidden}
 .insights-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);padding:15px 16px;border-bottom:1px solid var(--line)}
 .insights-head>div{display:grid;gap:2px;min-width:0}
+/* 16px/650 trifft keine vorhandene Rolle sauber: die Groesse liegt exakt auf --text-body/-body-strong
+   (16px), das Gewicht (650) aber zwischen deren 400/600 - keine der beiden ist die Ueberschrift hier
+   gemeint hat, bleibt daher roh (Scheibe 11 Teil 2). */
 .insights-head h2{font-size:16px;font-weight:650}
-.insights-head span{font-size:12px;color:var(--muted)}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2, derselbe Drift wie bei den vorigen Seiten). */
+.insights-head span{font-size:var(--text-caption-size);color:var(--muted)}
 .insights-all{min-height:32px;padding:5px 10px;white-space:nowrap}
 .insight-list{display:grid}
 .insight-row{width:100%;min-height:62px;display:grid;grid-template-columns:4px minmax(0,1fr) 18px;align-items:center;gap:12px;padding:11px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);text-align:left;cursor:pointer}
@@ -17,25 +21,34 @@
 .insight-attention .insight-severity{background:var(--warning)}
 .insight-high .insight-severity{background:var(--negative)}
 .insight-copy{display:grid;gap:2px;min-width:0}
+/* 13px liegt zwischen --text-caption (12px) und --text-metadata (14px) - keine vorhandene Rolle
+   trifft den Zeilentitel sauber, bleibt daher roh (derselbe Fall wie die 13px-Reste bei Vertraegen
+   und Budgets, Scheibe 11 Teil 2). */
 .insight-copy strong{font-size:13px;font-weight:550;line-height:1.3}
 .insight-row.is-unread .insight-copy strong{font-weight:700}
-.insight-copy>span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.insight-meta{font-size:11px!important;color:var(--k3)!important}
+.insight-copy>span{font-size:var(--text-caption-size);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* War 11px - Drift wie bei den anderen 11px-Resten (Scheibe 11 Teil 2); !important bleibt, es
+   uebersteuert weiterhin dieselbe hoehere Spezifitaet wie zuvor. */
+.insight-meta{font-size:var(--text-caption-size)!important;color:var(--k3)!important}
 .insight-chevron{font-size:20px;color:var(--muted);line-height:1}
 .insights-empty{display:grid;gap:3px;padding:20px 16px}
+/* Derselbe 13px-Sonderfall wie .insight-copy strong oben - keine Rolle trifft ihn sauber. */
 .insights-empty strong{font-size:13px;font-weight:650}
-.insights-empty span{font-size:12px;color:var(--muted)}
+.insights-empty span{font-size:var(--text-caption-size);color:var(--muted)}
 .insights-tabs{display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
 .insights-tabs button{min-height:42px;padding:0 13px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-weight:550;white-space:nowrap;cursor:pointer}
 .insights-tabs button:hover{color:var(--text)}
 .insights-tabs button.active{color:var(--text);border-bottom-color:var(--text)}
 .insight-detail{gap:0}
+/* Derselbe 13px-Sonderfall wie .insight-copy strong oben - keine Rolle trifft ihn sauber. */
 .insight-detail-summary{margin:0;padding:2px 0 16px;color:var(--muted);font-size:13px}
 .insight-detail-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .insight-detail-meta span{color:var(--muted)}
 .insight-detail-meta strong{font-weight:600}
 .insight-detail-section{display:grid;gap:10px;padding:14px 0;border-bottom:1px solid var(--line)}
-.insight-section-label{font-size:11px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+/* War 11px - Drift wie die anderen 11px-Reste; --text-caption ist die Fussnoten-Rolle fuer eine
+   Grossbuchstaben-Beschriftung wie diese (derselbe Fall wie bei der Budgetseite, Scheibe 11 Teil 2). */
+.insight-section-label{font-size:var(--text-caption-size);font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .insight-detail-actions,.insight-feedback,.insight-snooze{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .insight-snooze select{min-width:120px}
 .insight-feedback button.active{border-color:var(--text);background:var(--surface-2);color:var(--text)}
@@ -58,18 +71,22 @@
 
 .insight-merge-preview{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface-2)}
 .insight-merge-preview-head{display:grid;gap:2px}
+/* Derselbe 13px-Sonderfall wie .insight-copy strong oben - keine Rolle trifft ihn sauber. */
 .insight-merge-preview-head strong{font-size:13px}
-.insight-merge-preview-head span{font-size:11px;color:var(--muted)}
+/* War 11px - Drift wie die anderen 11px-Reste. */
+.insight-merge-preview-head span{font-size:var(--text-caption-size);color:var(--muted)}
 .insight-merge-canonical{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px;padding-top:8px;border-top:1px solid var(--line)}
-.insight-merge-canonical span{color:var(--muted);font-size:12px}
-.insight-merge-canonical strong{text-align:right;font-size:12px;font-weight:650}
-.insight-merge-stats{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:11px}
+.insight-merge-canonical span{color:var(--muted);font-size:var(--text-caption-size)}
+/* Groesse war schon 12px - exakt --text-caption; das eigene font-weight:650 bleibt roh (derselbe
+   Ansatz wie bei den Vertrags-/Kontoseiten-Zeilen mit abweichendem Gewicht, Scheibe 11 Teil 2). */
+.insight-merge-canonical strong{text-align:right;font-size:var(--text-caption-size);font-weight:650}
+.insight-merge-stats{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:var(--text-caption-size)}
 .insight-merge-payments{display:grid;border-top:1px solid var(--line)}
 .insight-merge-payment{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
 .insight-merge-payment:last-child{border-bottom:0}
-.insight-merge-payment span{color:var(--muted);font-size:11px}
-.insight-merge-payment strong{font-size:12px;font-variant-numeric:tabular-nums}
-.insight-merge-warning{padding-top:8px;border-top:1px solid var(--line);color:var(--warning);font-size:11px}
+.insight-merge-payment span{color:var(--muted);font-size:var(--text-caption-size)}
+.insight-merge-payment strong{font-size:var(--text-caption-size);font-variant-numeric:tabular-nums}
+.insight-merge-warning{padding-top:8px;border-top:1px solid var(--line);color:var(--warning);font-size:var(--text-caption-size)}
 @media(max-width:620px){
   .insight-merge-canonical{grid-template-columns:1fr;gap:3px}
   .insight-merge-canonical strong{text-align:left}
@@ -77,6 +94,7 @@
 
 .insight-merge-execute{width:100%;justify-content:center;margin-top:2px}
 .insight-merge-stale{display:grid;gap:8px;padding:12px;border:1px solid var(--warning);border-radius:var(--radius-input);background:var(--warning-soft)}
+/* Derselbe 13px-Sonderfall wie .insight-copy strong oben - keine Rolle trifft ihn sauber. */
 .insight-merge-stale strong{font-size:13px}
-.insight-merge-stale span{font-size:12px;color:var(--muted)}
+.insight-merge-stale span{font-size:var(--text-caption-size);color:var(--muted)}
 .insight-merge-stale button{justify-self:start}

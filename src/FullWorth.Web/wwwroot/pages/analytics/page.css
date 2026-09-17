@@ -24,13 +24,19 @@
 
 .an-kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
 
+/* 19px/700 liegt zwischen --text-amount (16px/600) und --text-amount-lg (24px/700) - keine
+   vorhandene Rolle trifft diese Kartenfuss-Kennzahl, bleibt daher roh (dieselbe Begruendung wie
+   beim Spendenring der Vertragsseite, Scheibe 11 Teil 2). */
 .an-kpi .k{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
 
 .an-kpi .k .positive{color:var(--positive)}
 
 .an-kpi .k .negative{color:var(--negative)}
 
-.an-kpi .l{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+/* War 11px - keine bewusste Stufe, sondern Drift wie bei den anderen 11px-Resten (Dashboard/
+   Vermoegens-/Vertrags-/Budgetseite); --text-caption ist die Fussnoten-Rolle fuer diese
+   KPI-Beschriftung (Scheibe 11 Teil 2). */
+.an-kpi .l{font-size:var(--text-caption-size);color:var(--muted);display:flex;align-items:center;gap:6px}
 
 .an-kpi-group{display:flex;gap:var(--s5);flex-wrap:wrap}
 
@@ -69,6 +75,8 @@
 
 .an-advanced{margin-top:var(--s5)}
 
+/* 15px/600 liegt zwischen --text-metadata (14px) und --text-section-title (18px) - keine
+   vorhandene Rolle trifft diese Zusammenfalt-Ueberschrift, bleibt daher roh. */
 .an-advanced>summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;padding:2px 0}
 
 .an-advanced>summary::-webkit-details-marker{display:none}
@@ -83,7 +91,8 @@
 
 .an-toolbar{margin-bottom:var(--s3)}
 
-.an-legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:6px}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2, derselbe Drift wie bei den vorigen Seiten). */
+.an-legend{display:flex;gap:16px;font-size:var(--text-caption-size);color:var(--muted);margin-bottom:6px}
 
 .an-legend .lg{display:flex;align-items:center;gap:6px}
 
@@ -94,7 +103,8 @@
 /* Legenden-Punkt muss dieselbe Farbe zeigen wie .an-line-expense (--data-1), sonst passt Legende nicht zur Linie. */
 .an-legend .lg-expense::before{background:var(--data-1)}
 
-.an-axis{fill:var(--muted);font-size:12px}
+/* War 12px - exakt --text-caption (Scheibe 11 Teil 2); SVG-Text erbt Custom Properties genauso wie HTML. */
+.an-axis{fill:var(--muted);font-size:var(--text-caption-size)}
 
 .an-zero{stroke:currentColor;opacity:.25}
 
@@ -136,9 +146,12 @@
 
 .an-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;pointer-events:none}
 
+/* 18px/700 passt in keine vorhandene Rolle (zwischen --text-amount und --text-amount-lg) - dieselbe
+   Lage wie beim Donut-Zentrum der Vertragsseite (Scheibe 11 Teil 2), bleibt daher roh. */
 .an-donut-center .k{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1.1}
 
-.an-donut-center .l{font-size:11px;color:var(--muted)}
+/* War 11px - Drift wie bei .an-kpi .l oben, --text-caption ist die Fussnoten-Rolle darunter. */
+.an-donut-center .l{font-size:var(--text-caption-size);color:var(--muted)}
 
 /* Finance UX gap-closure accessibility: chart drill targets are keyboard visible and mobile controls
    keep a 44px touch target without changing the visual hierarchy. */

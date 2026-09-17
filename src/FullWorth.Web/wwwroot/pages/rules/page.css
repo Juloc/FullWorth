@@ -14,7 +14,10 @@
 
 .rule-off{opacity:.6}
 
-.rule-grid>*{min-width:0}
+/* .rule-grid traf auf dieser Seite kein Markup mehr - der Regel-Dialog gruppiert seit der
+   openFormDialog-Umstellung ueber .fw-field-row/.fw-dialog-section, nicht mehr ueber ein eigenes
+   .rule-grid (die Klasse selbst lebt weiter, aber nur noch fuer die Vermoegensseite - hier war sie
+   totes Gewicht, derselbe Fall wie .budget-wizard-section bei den Budgets, Scheibe 11 Teil 2). */
 
 .rule-preview.is-loading{opacity:.6}
 
@@ -25,7 +28,9 @@
 
 #rules-list .rule-row .row-title{font-weight:600}
 
-#rules-list .rule-summary{margin-top:5px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+/* War 12.5px - naeher an --text-caption (12px) als an --text-metadata (14px), derselbe Drift wie
+   die anderen Kommastellen-Reste dieser Seite (Scheibe 11 Teil 2). */
+#rules-list .rule-summary{margin-top:5px;font-size:var(--text-caption-size);line-height:1.55;color:var(--muted)}
 
 #rules-list .rule-summary .rule-when{color:var(--muted)}
 
@@ -35,11 +40,14 @@
 
 #rules-list .rule-summary .rule-arrow{margin:0 7px;color:var(--muted);font-weight:600}
 
-#rules-list .rule-summary .rule-then-tag{display:inline-block;margin:1px 0;padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);font-size:11.5px;font-weight:500;line-height:1.6;vertical-align:baseline}
+/* War 11.5px - Drift wie die anderen 11-12px-Reste; --text-caption ist die Fussnoten-Rolle fuer ein
+   Pillen-Etikett wie dieses. Das eigene font-weight:500 bleibt roh. */
+#rules-list .rule-summary .rule-then-tag{display:inline-block;margin:1px 0;padding:1px 8px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);font-size:var(--text-caption-size);font-weight:500;line-height:1.6;vertical-align:baseline}
 
 #rules-list .rule-summary .rule-then-tag + .rule-then-tag{margin-left:4px}
 
-#rules-list .rule-row .rule-prio{padding:2px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:500;line-height:1.6}
+/* Derselbe 11.5px-Drift wie beim rule-then-tag oben. */
+#rules-list .rule-row .rule-prio{padding:2px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:500;line-height:1.6}
 
 #rules-list .rules-empty{display:block;padding:var(--s6) var(--s4);text-align:center}
 

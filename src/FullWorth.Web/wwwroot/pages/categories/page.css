@@ -25,9 +25,13 @@
 
 .cat-sum-item{display:flex;flex-direction:column;gap:3px}
 
+/* 19px/600 liegt zwischen --text-amount (16px) und --text-amount-lg (24px) - keine vorhandene Rolle
+   trifft diese Kennzahl sauber, derselbe Fall wie bei den Analyse-KPIs (Scheibe 11 Teil 2). */
 .cat-sum-item strong{font-size:19px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
 
-.cat-sum-item span{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+/* War 11px - Drift wie die anderen 11px-Reste; --text-caption ist die Fussnoten-Rolle fuer eine
+   Grossbuchstaben-Beschriftung wie diese. Das eigene font-weight:600 bleibt roh. */
+.cat-sum-item span{color:var(--muted);font-size:var(--text-caption-size);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
 
 .cat-tree .cat-row .cat-dot{width:3px;height:17px;margin:0;border-radius:var(--radius-pill);flex:0 0 auto}
 
