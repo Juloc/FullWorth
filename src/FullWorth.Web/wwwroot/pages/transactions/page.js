@@ -556,7 +556,12 @@ export async function renderTransactions(context) {
   // Bestand, Auswahl UND die Bindungen an die alten (gleich verworfenen) Checkboxen mit.
   coachSelection.reset();
   updateCoachSelectionBar();
-  body.innerHTML = '';
+  // Die Zeilen entstehen abseits des Dokuments und werden erst eingesetzt, wenn die ganze Liste
+  // fertig ist - eine einzige Aenderung an der schon gezeichneten Liste statt vieler. Sonst haengt
+  // .table-panel (das Kartenraster in styles/design-depth.css legt seinen Glanzschimmer per
+  // ::after direkt darueber) an einer wachsenden Liste und kann zwischen dem leeren und dem
+  // fertigen Zustand einen zweiten, sichtbaren Absatz zeichnen.
+  const fragment = document.createDocumentFragment();
   let lastDate = null;
   // Pending entries are not booked yet: the API sorts them ahead of every booked row, and they get
   // their own header so the "today" header below them still means today. Without it a pending row
@@ -568,7 +573,7 @@ export async function renderTransactions(context) {
     if (inPendingGroup && String(x.status || '').toUpperCase() === 'PDNG') {
       if (!pendingHeaderDone) {
         pendingHeaderDone = true;
-        body.appendChild(groupHeaderRow(ctx.get('transactions.pending')));
+        fragment.appendChild(groupHeaderRow(ctx.get('transactions.pending')));
       }
     } else {
       inPendingGroup = false;
@@ -577,43 +582,48 @@ export async function renderTransactions(context) {
       const day = String(transactionDate(x) || '').slice(0, 10);
       if (day !== lastDate) {
         lastDate = day;
-        body.appendChild(groupHeaderRow(dateHeading(day), day));
+        fragment.appendChild(groupHeaderRow(dateHeading(day), day));
       }
     }
     const name = x.merchantDisplayName || x.counterparty || '—';
     const cat = x.categoryName || x.category || ctx.get('common.uncategorized');
     const purpose = transactionListPurpose(x, name, cat);
-    const tr = document.createElement('tr');
-    tr.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '') + (x.isTransfer ? ' tx-is-transfer' : '');
-    tr.tabIndex = 0;
-    tr.dataset.txId = x.id;
-    tr.innerHTML =
+    // Ein Datensatz, keine Tabellenzeile: dasselbe Zeilen-Primitiv wie ueberall sonst in der
+    // Anwendung (Konten, Vertraege) statt einer verkleideten <table> (Scheibe 13). Jedes frühere
+    // <td> ist jetzt ein <div> mit derselben Klasse - styles/transactions/page.css legt die sechs
+    // Spalten per Gitter an, die Feinheiten je Breite stehen in styles/responsive.css.
+    const row = document.createElement('div');
+    row.className = 'tx-row' + (x.isIgnored ? ' tx-ignored' : '') + (x.isTransfer ? ' tx-is-transfer' : '');
+    row.tabIndex = 0;
+    row.dataset.txId = x.id;
+    row.innerHTML =
       // A pending entry often has no booking date yet - the bank publishes the value date first, and
       // that is also what the list is sorted by, so showing an em dash left the row looking broken.
-      `<td class="tx-date-cell">${ctx.date(transactionDate(x))}</td>` +
-      `<td class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span></td>` +
+      `<div class="tx-date-cell">${ctx.date(transactionDate(x))}</div>` +
+      `<div class="tx-cp"><label class="tx-select-wrap" title="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><input type="checkbox" data-tx-select aria-label="${ctx.esc(deLabel('Für Coach auswählen','Select for Coach'))}"><span></span></label><span class="tx-ident-slot">${identityIcon(name, { logoAssetPath: x.logoAssetPath, categoryIconKey: x.categoryIconKey, isTransfer: x.isTransfer })}</span><span class="tx-cp-main"><strong>${ctx.esc(name)}</strong>${markers(x)}${purpose ? `<span class="row-sub tx-list-purpose">${ctx.esc(purpose)}</span>` : ''}<span class="row-sub tx-mobile-category">${ctx.esc(cat)}</span></span></div>` +
       categoryCell(x, cat) +
       accountCell(x) +
-      `<td class="number ${moneyClass(transactionMoneyVariant(x))}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></td>` +
-      `<td class="tx-go"><span class="tx-go-caret" aria-hidden="true">›</span></td>`;
+      `<div class="number ${moneyClass(transactionMoneyVariant(x))}"><span class="tx-amt">${ctx.money(x.amount, x.currency)}</span></div>` +
+      `<div class="tx-go"><span class="tx-go-caret" aria-hidden="true">›</span></div>`;
     // The category chip is an inline control: clicking it edits the category in place, without also
     // opening the row's detail drawer (the row click/keydown ignore events that came from the chip).
-    tr.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
-    const selectBox = tr.querySelector('[data-tx-select]');
+    row.querySelector('[data-cat-edit]')?.addEventListener('click', e => { e.stopPropagation(); quickEditCategory(x); });
+    const selectBox = row.querySelector('[data-tx-select]');
     selectBox?.addEventListener('click', e => e.stopPropagation());
     // bindRow() traegt diese eine Checkbox in den gemeinsamen Auswahlzustand ein (siehe
     // selection-list.js) - alles, was danach noch passieren soll (Zeilenfarbe, die Auswahlleiste), ist
     // Sache dieser Seite und haengt an einem zweiten, eigenen change-Listener auf demselben Element.
     if (selectBox) coachSelection.bindRow(selectBox, String(x.id));
     selectBox?.addEventListener('change', e => {
-      tr.classList.toggle('tx-selected', e.target.checked);
-      tr.setAttribute('aria-selected', String(e.target.checked));
+      row.classList.toggle('tx-selected', e.target.checked);
+      row.setAttribute('aria-selected', String(e.target.checked));
       updateCoachSelectionBar();
     });
-    tr.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
-    tr.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
-    body.appendChild(tr);
+    row.addEventListener('click', e => { if (!e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
+    fragment.appendChild(row);
   }
+  body.replaceChildren(fragment);
   // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
   // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
   // Blaetterung eine andere Zahl (#126).
@@ -633,13 +643,13 @@ export async function renderTransactions(context) {
 // Loading skeleton rows: monochrome shimmer placeholders matching the row layout while the list loads.
 function txSkeletonRows(n = 7) {
   const row =
-    `<tr class="tx-skeleton" aria-hidden="true">` +
-    `<td class="tx-date-cell"><span class="tx-sk-line tx-sk-sm shimmer"></span></td>` +
-    `<td class="tx-cp"><span class="tx-sk-avatar shimmer"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg shimmer"></span><span class="tx-sk-line tx-sk-md shimmer"></span></span></td>` +
-    `<td class="tx-cat"><span class="tx-sk-line tx-sk-md shimmer"></span></td>` +
-    `<td class="tx-acct"><span class="tx-sk-line tx-sk-sm shimmer"></span></td>` +
-    `<td class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt shimmer"></span></td>` +
-    `<td class="tx-go"></td></tr>`;
+    `<div class="tx-skeleton" aria-hidden="true">` +
+    `<div class="tx-date-cell"><span class="tx-sk-line tx-sk-sm shimmer"></span></div>` +
+    `<div class="tx-cp"><span class="tx-sk-avatar shimmer"></span><span class="tx-cp-main"><span class="tx-sk-line tx-sk-lg shimmer"></span><span class="tx-sk-line tx-sk-md shimmer"></span></span></div>` +
+    `<div class="tx-cat"><span class="tx-sk-line tx-sk-md shimmer"></span></div>` +
+    `<div class="tx-acct"><span class="tx-sk-line tx-sk-sm shimmer"></span></div>` +
+    `<div class="number amount"><span class="tx-sk-line tx-sk-sm tx-sk-amt shimmer"></span></div>` +
+    `<div class="tx-go"></div></div>`;
   return row.repeat(n);
 }
 
@@ -652,11 +662,11 @@ function txEmptyState(filtered, reason = 'filters') {
   const hint = filtered
     ? deLabel('Passe Suche oder Filter an.', 'Try adjusting your search or filters.')
     : deLabel('Sobald Buchungen vorliegen, erscheinen sie hier.', 'Bookings show up here once they arrive.');
-  return `<tr><td colspan="6" class="tx-empty"><div class="tx-empty-box">` +
+  return `<div class="tx-empty"><div class="tx-empty-box">` +
     `<span class="tx-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>` +
     `<span class="tx-empty-title">${ctx.esc(title)}</span>` +
     `<span class="tx-empty-hint">${ctx.esc(hint)}</span>` +
-    `</div></td></tr>`;
+    `</div></div>`;
 }
 
 // Desktop table: category shown as an editable chip (tinted icon + name + caret). The icon reuses the
@@ -665,18 +675,18 @@ function categoryCell(x, cat) {
   const idx = (monogramHue(cat) % 8) + 1;
   const inner = categoryIconInner(x.categoryIconKey)
     || `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01"/></svg>`;
-  return `<td class="tx-cat"><button type="button" class="tx-cat-chip" data-cat-edit aria-label="${ctx.esc(deLabel('Kategorie ändern', 'Change category'))}"><span class="tx-cat-ic" data-cat="${idx}">${inner}</span><span class="tx-cat-name">${ctx.esc(cat)}</span><span class="tx-cat-caret" aria-hidden="true">▾</span></button></td>`;
+  return `<div class="tx-cat"><button type="button" class="tx-cat-chip" data-cat-edit aria-label="${ctx.esc(deLabel('Kategorie ändern', 'Change category'))}"><span class="tx-cat-ic" data-cat="${idx}">${inner}</span><span class="tx-cat-name">${ctx.esc(cat)}</span><span class="tx-cat-caret" aria-hidden="true">▾</span></button></div>`;
 }
 
 // Desktop table: account cell with a small type icon (card for credit/cards, a bank mark otherwise).
 function accountCell(x) {
   const name = displayAccountName(x.account || '');
-  if (!name) return `<td class="tx-acct"></td>`;
+  if (!name) return `<div class="tx-acct"></div>`;
   const card = /kredit|card|karte|visa|master|amex/i.test(name);
   const icon = card
     ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>`
     : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 12 4l8 6M5 10v8m4-8v8m6-8v8m4-8v8M3.5 19h17"/></svg>`;
-  return `<td class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></td>`;
+  return `<div class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></div>`;
 }
 
 // Inline category edit from the list chip. The classification PATCH is a full replace, so we read the
@@ -697,11 +707,11 @@ function quickEditCategory(x) {
 }
 
 function groupHeaderRow(label, day = '') {
-  const head = document.createElement('tr');
+  const head = document.createElement('div');
   head.className = 'tx-date-head';
   if (day) head.dataset.day = day;
   head.dataset.label = label;
-  head.innerHTML = `<td colspan="6"><span>${ctx.esc(label)}</span></td>`;
+  head.innerHTML = `<span>${ctx.esc(label)}</span>`;
   return head;
 }
 

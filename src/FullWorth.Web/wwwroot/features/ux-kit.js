@@ -67,20 +67,35 @@ function brandLogoPath(name) {
 // Left identity (UX rework §4): installed cloud/custom brand logo → category icon → category-tinted monogram,
 // with a transfer glyph override. No third-party logo lookup happens from transaction rendering.
 // `opts`: {logoAssetPath, categoryIconKey, isTransfer, isSavings}.
+// Plus- und Stift-Strich fuer #primary-action auf dem Telefon (Scheibe 13): dieselben Pfaddaten wie
+// das "Konto hinzufuegen"-Symbol (pages/accounts/page.html) bzw. der Umbenennen-Knopf in
+// pages/merchants/page.js - keine dritte Symbolzeichnung fuer dieselbe Bedeutung.
+const PRIMARY_ACTION_GLYPH = Object.freeze({
+  add: '<path d="M12 5v14M5 12h14"/>',
+  edit: '<path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/>'
+});
+
 /**
  * Sets the page header's primary action: its label and what KIND of action it is.
  *
- * Mobile renders the two kinds differently (an add glyph versus an edit one), and it used to work
- * that out by running a regular expression over the rendered label - /bearbeit|edit|anpass|customi[sz]/ -
- * from a MutationObserver on the button. Two failure modes that are not worth carrying: a new label or
- * a new language silently falls back to 'add', and reading state out of rendered text is exactly the
- * pattern the frontend architecture guard exists to keep out.
+ * Mobile renders the two kinds differently (an add glyph versus an edit one). This used to work that
+ * out by running a regular expression over the rendered label - /bearbeit|edit|anpass|customi[sz]/ -
+ * from a MutationObserver on the button, and mobile-polish.css then hid the real label
+ * (font-size:0;color:transparent) and faked a CSS ::before glyph on top ('+'/'✎') - a second, parallel
+ * visual implementation of the same button. Neither failure mode is worth carrying: a new label or
+ * a new language silently falling back to 'add', or a button whose visible glyph is not a real icon
+ * but generated CSS content.
  *
- * Every caller already knows which kind it is setting. `kind` is 'add' or 'edit'.
+ * The button now always carries BOTH a text label and a real inline SVG glyph; CSS alone (see
+ * styles/shell.css) decides which one is visible at the current width - text on desktop, the icon in
+ * a circular touch target on mobile, exactly like every other .btn-icon. Every caller already knows
+ * which kind it is setting. `kind` is 'add' or 'edit'.
  */
 export function setPrimaryAction(button, label, kind = 'add') {
   if (!button) return;
-  button.textContent = label;
+  const glyph = PRIMARY_ACTION_GLYPH[kind] || PRIMARY_ACTION_GLYPH.add;
+  button.innerHTML = `<span class="btn-primary-label">${esc(label)}</span>`
+    + `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
   button.dataset.mobileKind = kind;
   // Mobile shows the glyph alone, so the label has to survive as the accessible name.
   if (label) button.setAttribute('aria-label', label);

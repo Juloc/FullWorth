@@ -13,7 +13,6 @@ function applyAccessibilityReleaseFixes() {
   const flags = document.querySelector('#tx-flags');
   if (flags) flags.setAttribute('aria-label', t.flags);
 
-  document.querySelectorAll('#view-transactions thead th').forEach(header => header.setAttribute('scope', 'col'));
   document.querySelectorAll('dialog button[data-close], dialog button[value="cancel"]').forEach(button => {
     if (button.hasAttribute('aria-label')) return;
     const visible = button.textContent?.trim();

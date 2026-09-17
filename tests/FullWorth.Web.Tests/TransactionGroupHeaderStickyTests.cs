@@ -33,7 +33,7 @@ public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthW
     [Fact]
     public async Task The_group_header_sticks_to_the_top_of_the_panel_that_scrolls_it()
     {
-        var rule = await RuleForAsync("/pages/transactions/page.css", ".tx-date-head td");
+        var rule = await RuleForAsync("/pages/transactions/page.css", ".tx-date-head");
 
         Assert.Contains("position:sticky", rule);
 
@@ -56,7 +56,7 @@ public sealed class TransactionGroupHeaderStickyTests : IClassFixture<FullWorthW
         var panel = RuleIn(block, "#view-transactions .table-panel");
         Assert.Equal("visible", Declaration(panel, "overflow"));
 
-        var header = RuleIn(block, "#view-transactions .tx-date-head td");
+        var header = RuleIn(block, "#view-transactions .tx-date-head");
         Assert.Equal("var(--topbar-h)", Declaration(header, "top"));
     }
 

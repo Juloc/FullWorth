@@ -14,14 +14,14 @@
 
 /* Income stands out as a soft-green pill (Finanzguru-style; green = income, on-brand §4.3). Expenses
    stay plain text so colour is reserved for the money statement that matters. */
-.tx-row td.amount .tx-amt{font-variant-numeric:tabular-nums;font-weight:600}
+.tx-row .amount .tx-amt{font-variant-numeric:tabular-nums;font-weight:600}
 
-/* Desktop table: income is clean green text; the soft-green pill is a mobile-card touch (added below). */
-.tx-row td.amount.positive .tx-amt{color:var(--positive)}
+/* Desktop: income is clean green text; the soft-green pill is a mobile-card touch (added below). */
+.tx-row .amount.positive .tx-amt{color:var(--positive)}
 
 /* A transfer moves money between your own accounts — neither income nor expense — so keep both legs
    neutral (no green income pill, no red) and let the ⟳ badge tell the story. */
-.tx-row.tx-is-transfer td.amount .tx-amt{background:transparent;color:var(--muted);padding:0;font-weight:600}
+.tx-row.tx-is-transfer .amount .tx-amt{background:transparent;color:var(--muted);padding:0;font-weight:600}
 
 /* War schon bei 12px - exakt --text-caption (Scheibe 11 Teil 2), jetzt auch so benannt statt einer
    Zufallszahl, die sich zufaellig mit der Rolle deckt (gleiches Vorgehen wie .nw-alloc-cap). */
@@ -39,11 +39,18 @@
 /* Merchant/category identity + booking-date grouping (UX rework §4) */
 .tx-ident-slot{display:inline-flex;vertical-align:middle;margin-right:11px}
 
-.tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0}
+.tx-cp-main{display:inline-flex;flex-direction:column;vertical-align:middle;min-width:0;max-width:100%}
 
 .tx-cp-main strong{font-weight:600}
 
-.tx-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.tx-ident{display:inline-grid;place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+
+/* Groesseres Symbol auf Touchscreens (Scheibe 13: aus styles/mobile-polish.css geloest - dort stand
+   dieselbe Regel neben der von .fw-ident, muss aber NACH dieser Basis hier stehen, sonst gewinnt die
+   Basis wieder, weil beide Regeln dieselbe Spezifitaet haben und diese Datei nach app.css laedt). */
+@media(max-width:767px){
+  .tx-ident{width:44px;height:44px;min-width:44px;min-height:44px}
+}
 
 .tx-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
 
@@ -59,9 +66,9 @@
    overflow:visible and the page scrolls, so responsive.css puts the topbar offset back. */
 /* War 11px - wie schon bei .dash-group-head/.nw-window-label keine bewusste Stufe, sondern Drift.
    --text-caption ist die passende Fussnoten-Rolle fuer eine Gruppen-Kopfzeile (Scheibe 11 Teil 2). */
-.tx-date-head td{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
+.tx-date-head{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--muted);font-size:var(--text-caption-size);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:7px 14px}
 
-.tx-date-head td>span{opacity:.85}
+.tx-date-head>span{opacity:.85}
 
 .tx-filter-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
 
@@ -127,8 +134,6 @@
 .tx-close{padding:0}
 
 .tx-close svg{display:block}
-
-.tx-skeleton td{vertical-align:middle}
 
 .tx-sk-avatar{display:inline-block;vertical-align:middle;width:38px;height:38px;border-radius:50%;margin-right:11px}
 
@@ -202,22 +207,26 @@
 
 .tx-row.tx-selected{background:var(--surface-2)}
 
-/* Feste Spaltenbreiten.
-
-   Mit dem voreingestellten table-layout:auto bemessen sich die Köpfe am eigenen Text, solange der
-   Körper leer ist - und legen sich neu, sobald die erste Zeile ankommt. Gemessen am Schreibtisch:
-   der Empfänger-Kopf sprang von 340 auf 427 Pixel, Kategorie von 187 auf 237, Konto von 138 auf 82.
-   Das war der letzte Sprung dieser Seite.
-
-   Die Prozentwerte sind die Breiten, die sich vorher von selbst eingestellt haben - 98/427/237/82/108/34
-   von 987 bei 1280 Pixeln -, also sieht die Tabelle danach genauso aus, nur schon vor der ersten Zeile. */
-.tx-table{table-layout:fixed}
-.tx-table th:nth-child(1){width:10%}
-.tx-table th:nth-child(2){width:43%}
-.tx-table th:nth-child(3){width:24%}
-.tx-table th:nth-child(4){width:8.5%}
-.tx-table th:nth-child(5){width:11%}
-.tx-table th:nth-child(6){width:3.5%}
+/* Buchungsliste: dasselbe Zeilen-Primitiv wie ueberall sonst (Konten, Vertraege) statt einer
+   Tabelle, die sich am Telefon als Karte verkleidet (Scheibe 13). #transactions-body traegt jetzt
+   .tx-date-head-, .tx-row- und .tx-skeleton-DIVs statt <tr>; jede Zeile ist selbst ein Gitter mit den
+   sechs frueheren Tabellenspalten, damit sich am ersten Bild schon nichts mehr verschiebt (dieselbe
+   Ursache, die frueher table-layout:fixed noetig machte: die Spalten duerfen sich nicht an der ersten
+   ankommenden Zeile neu vermessen). Die Buchungsliste ist eine Reihe von Datensaetzen, keine Tabelle,
+   die spaltenweise gelesen wird - wie jede andere Liste in dieser Anwendung traegt sie deshalb keine
+   role="table"/"row"/"cell"; die Kopfzeile ist aria-hidden, weil sie nur die sichtbaren Spalten
+   beschriftet, keine zusaetzliche Struktur.
+   Die Prozentwerte sind dieselben, die sich vorher am Schreibtisch von selbst eingestellt haben -
+   98/427/237/82/108/34 von 987 bei 1280 Pixeln. */
+.tx-list-head,.tx-row,.tx-skeleton{display:grid;grid-template-columns:10% minmax(0,43%) 24% 8.5% 11% 34px;align-items:center;column-gap:0}
+.tx-list-head{padding:12px 14px;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.tx-list-head .number,.tx-row .number,.tx-skeleton .number{text-align:right}
+.tx-row,.tx-skeleton{border-bottom:1px solid var(--line);padding:13px 14px}
+.tx-row:last-child{border-bottom:0}
+.tx-cp{display:flex;align-items:center;gap:12px;min-width:0}
+.tx-cat{padding-top:6px;padding-bottom:6px}
+.tx-acct{color:var(--muted)}
+.tx-go{display:flex;align-items:center;justify-content:center}
 
 /* --- #126: Kopf, Tagesstand, Umbuchungshinweis, Buchungsknopf --- */
 
@@ -260,4 +269,14 @@
 
 @media (min-width:768px){
   .tx-fab{bottom:var(--s4)}
+}
+
+/* Mobil betritt die Mehrfachauswahl per langem Druck (components/mobile-interactions.js) statt per
+   Kontrollkaesten - die Kaesten aus der Desktop-Kopfzeile blieben ohne diese Regel sichtbar, ohne dass
+   sie am Telefon etwas bedienbar machten (Scheibe 13: aus styles/mobile-polish.css geloest). */
+@media(max-width:767px){
+  #view-transactions .tx-select-wrap{display:none}
+  #view-transactions .tx-row.tx-selected{background:var(--surface-2);box-shadow:inset 0 0 0 2px var(--cta);border-radius:10px}
+  #view-transactions.tx-mobile-selection-mode .tx-row{user-select:none;-webkit-user-select:none}
+  #view-transactions.tx-mobile-selection-mode .tx-row:not(.tx-selected){background:var(--surface)}
 }

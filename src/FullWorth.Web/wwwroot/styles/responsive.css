@@ -1,20 +1,19 @@
 @media(max-width:1023px){
   #view-transactions .table-panel{overflow:visible;border:0;box-shadow:none;background:transparent}
-  /* table-layout:fixed, because width:100% was being ignored. A CSS table cannot be narrower than its
-     min-content, and this one measured 377px inside a 343px panel - so every row hung 34px past its
-     container and the right ~12px of every amount was clipped off a 375px screen ("-12,40 €" ended at
-     387). Nothing is lost: under 1023px the rows are display:flex, so the table columns size nothing. */
-  #view-transactions table{min-width:0;width:100%;table-layout:fixed}
-  #view-transactions thead{display:none}
-  #view-transactions .tx-row{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
-  #view-transactions .tx-row>td{display:none;border:0;padding:0}
-  #view-transactions .tx-row>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
-  #view-transactions .tx-row>td.amount{display:block;flex:0 0 auto;font-size:15px}
+  /* Unter 1023px zeigt jede Zeile nur noch Identitaet und Betrag - dieselbe Karte, die frueher eine
+     verkleidete Tabelle war (Scheibe 13). grid-template-columns:none schaltet das Gitter der Basis-
+     regel ab, weil hier stattdessen Flexbox greift. */
+  #view-transactions .tx-list-head{display:none}
+  #view-transactions .tx-row,#view-transactions .tx-skeleton{display:flex;grid-template-columns:none;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  #view-transactions .tx-row>.tx-date-cell,#view-transactions .tx-row>.tx-cat,#view-transactions .tx-row>.tx-acct,#view-transactions .tx-row>.tx-go,
+  #view-transactions .tx-skeleton>.tx-date-cell,#view-transactions .tx-skeleton>.tx-cat,#view-transactions .tx-skeleton>.tx-acct,#view-transactions .tx-skeleton>.tx-go{display:none}
+  #view-transactions .tx-row>.tx-cp,#view-transactions .tx-skeleton>.tx-cp{flex:1;min-width:0}
+  #view-transactions .tx-row>.number,#view-transactions .tx-skeleton>.number{display:block;flex:0 0 auto;font-size:15px;text-align:right}
   #view-transactions .tx-cp-main{display:flex;min-width:0}
   #view-transactions .tx-cp-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   /* The panel is overflow:visible here, so the PAGE scrolls and the group header has to clear the
      app topbar. Above this width the panel scrolls itself and the offset is 0 - see app.css. */
-  #view-transactions .tx-date-head td{display:block;border-radius:8px;margin:8px 0 2px;top:var(--topbar-h)}
+  #view-transactions .tx-date-head{border-radius:8px;margin:8px 0 2px;top:var(--topbar-h)}
 }
 @media(max-width:900px){.fw-analysis-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.nw-custom-range-fields label{flex:1 1 130px}.nw-custom-range-fields input{width:100%;min-width:0}}
@@ -62,7 +61,8 @@
      bar and the notch ate the page title. In a tab the inset is 0 and nothing moves. The horizontal
      insets matter in landscape, where the notch is at the side. */
   main{padding-left:max(var(--s4),env(safe-area-inset-left,0px));padding-right:max(var(--s4),env(safe-area-inset-right,0px))}
-  html.pwa-standalone .topbar{padding-top:calc(var(--s6) + env(safe-area-inset-top,0px))}
+  /* Der PWA-Zuschlag auf die Kopfleiste selbst steht in shell.css neben ihrer kompakten mobilen Basis
+     (8px statt var(--s6)) - diese Regel hier war seit mobile-polish.css zuletzt lud bereits wirkungslos. */
   html.pwa-standalone #bottom-nav{padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}
   #bottom-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
   #bottom-nav .nav-item{display:flex;text-decoration:none;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:56px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px 2px}
@@ -121,23 +121,20 @@
   .purchase-item{grid-template-columns:1fr 72px 92px}
   .purchase-item .item-category{grid-column:1/-1}
 }
-@media (max-width:768px){.contract-detail .detail-grid{grid-template-columns:1fr}}
-@media (max-width:768px){.reconcile-grid{grid-template-columns:1fr}}
-@media (max-width:768px){.split-line{grid-template-columns:1fr 1fr;gap:6px}.split-line .split-note{grid-column:1/-1}}
-@media (max-width:768px){.loan-detail .detail-grid{grid-template-columns:1fr}}
+@media (max-width:767px){.contract-detail .detail-grid{grid-template-columns:1fr}}
+@media (max-width:767px){.reconcile-grid{grid-template-columns:1fr}}
+@media (max-width:767px){.split-line{grid-template-columns:1fr 1fr;gap:6px}.split-line .split-note{grid-column:1/-1}}
+@media (max-width:767px){.loan-detail .detail-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 @media (max-width:640px){.purchase-summary{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:1fr 1fr}.purchase-stat-v{font-size:18px}}
 @media(max-width:767px){
   #view-transactions .tx-summary{padding:var(--s3)}
-  #view-transactions .tx-skeleton{display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--line)}
-  #view-transactions .tx-skeleton>td{display:none;border:0;padding:0}
-  #view-transactions .tx-skeleton>td.tx-cp{display:flex;flex:1;min-width:0;align-items:center;gap:12px}
-  #view-transactions .tx-skeleton>td.amount{display:block;flex:0 0 auto}
+  /* Die uebrige Karten-Aufteilung fuer .tx-skeleton steckt schon im @media(max-width:1023px)-Block
+     oben, gemeinsam mit .tx-row - eine zweite Kopie hier war Drift, seit beide dieselbe Zeile teilen
+     (Scheibe 13). Nur das Skeleton-eigene Detail bleibt: der Avatar-Platzhalter braucht am Telefon
+     keinen rechten Abstand, weil hier nichts mehr danebensteht. */
   #view-transactions .tx-skeleton .tx-sk-avatar{margin-right:0}
-}
-@media(max-width:767px){
-  #view-transactions .tx-row>td.tx-cat,#view-transactions .tx-row>td.tx-acct,#view-transactions .tx-row>td.tx-go{display:none}
-  #view-transactions .tx-row:not(.tx-is-transfer) td.amount.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
+  #view-transactions .tx-row:not(.tx-is-transfer) .number.positive .tx-amt{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--positive-soft)}
 }
 @media(max-width:760px){.tax-hero{padding:var(--s4) var(--s5)}.tax-hero-top{gap:var(--s4)}.tax-hero .fw-summary-value{font-size:28px}.tax-hero-side{gap:var(--s5)}}
 @media(max-width:640px){.comp-dedu-head{gap:var(--s3)}.comp-donut{width:96px;height:96px}}

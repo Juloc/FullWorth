@@ -41,13 +41,13 @@
    echte Layout-Aenderung, die diese Scheibe ausdruecklich nicht machen soll. Bleiben zwei Primitive. */
 .rows{display:grid;grid-template-columns:minmax(0,1fr)}
 .rows>*{min-width:0}
-.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:11px 0;border-bottom:1px solid var(--line);min-width:0;max-width:100%}
 .row:last-child{border-bottom:0}
-.row-main{min-width:0}
-.row-title{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row-sub{color:var(--muted);font-size:12px;margin-top:3px}
+.row-main{min-width:0;max-width:100%}
+.row-title{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;overflow-wrap:anywhere}
+.row-sub{color:var(--muted);font-size:12px;margin-top:3px;min-width:0;overflow-wrap:anywhere}
 .row-end{display:flex;align-items:center;gap:var(--s2)}
-.amount{font-variant-numeric:tabular-nums;font-weight:600}
+.amount{font-variant-numeric:tabular-nums;font-weight:600;min-width:0}
 /* Normal outflow is not an error (FRONTEND_RESTRUCTURE_HANDOFF): ordinary expense amounts use neutral
    primary text, income keeps a sparing green. Red (--negative) is reserved for genuine problem states
    (overdraft, budget exceeded, failed sync, loss) which use their own selectors, not .amount.negative. */

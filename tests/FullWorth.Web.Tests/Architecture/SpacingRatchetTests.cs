@@ -49,14 +49,13 @@ public sealed class SpacingRatchetTests
         ["pages/settings/intelligence/page.css"] = 58,
         ["pages/settings/page.css"] = 3,
         ["pages/tax/page.css"] = 42,
-        ["pages/transactions/page.css"] = 32,
-        ["styles/app.css"] = 100,
+        ["pages/transactions/page.css"] = 40,
+        ["styles/app.css"] = 95,
         ["styles/components.css"] = 20,
         ["styles/design-depth.css"] = 8,
         ["styles/dialogs.css"] = 30,
-        ["styles/mobile-polish.css"] = 9,
-        ["styles/responsive.css"] = 45,
-        ["styles/shell.css"] = 16
+        ["styles/responsive.css"] = 39,
+        ["styles/shell.css"] = 22
     };
 
     private static readonly Regex PropertyDeclaration = new(

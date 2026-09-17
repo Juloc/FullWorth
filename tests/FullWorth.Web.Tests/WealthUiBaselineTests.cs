@@ -308,7 +308,6 @@ public sealed class WealthUiBaselineTests : IClassFixture<FullWorthWebFactory>
         Assert.Contains("../components/accessibility-release.js", wrapper);
         Assert.Contains("Buchungen durchsuchen", accessibility);
         Assert.Contains("Search transactions", accessibility);
-        Assert.Contains("setAttribute('scope', 'col')", accessibility);
         Assert.Contains("setAttribute('aria-label', t.close)", accessibility);
         Assert.Contains("MutationObserver", accessibility);
         Assert.Contains("'/components/accessibility-release.js'", sw);

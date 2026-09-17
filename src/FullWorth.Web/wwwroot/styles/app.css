@@ -46,17 +46,26 @@ html[data-theme=dark] .tx-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
    Below 1024px the content column (~530px next to the sidebar) cannot fit the 760px table, so the card
    layout applies there too instead of forcing a horizontal scroll inside the panel. */
 /* ---- Shared UX-rework kit (ui/ux-kit.js): identity, cards, trend, period cycle, summary ---- */
-.fw-ident{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
+.fw-ident{display:inline-grid;place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;border-radius:50%;flex:0 0 auto;overflow:hidden;font-weight:600;font-size:15px;background:var(--surface-2);color:var(--muted);line-height:1}
 .fw-monogram{background:hsl(var(--ident-h,220) 42% 92%);color:hsl(var(--ident-h,220) 48% 34%)}
 html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);color:hsl(var(--ident-h,220) 60% 80%)}
 .fw-ident-transfer{background:var(--surface-3);color:var(--text);font-size:17px}
-.fw-ident-logo{width:100%;height:100%;object-fit:cover}
-.fw-ident-brand-logo{box-sizing:border-box;object-fit:contain;padding:7px;background:var(--logo-plate)}
+.fw-ident-logo{display:block;width:100%;height:100%;object-fit:cover}
+.fw-ident-brand-logo{box-sizing:border-box;object-fit:contain;padding:4px;background:var(--logo-plate)}
 /* A logo identity stacks its monogram fallback under the image in the SAME grid cell, so a failed
    image only has to remove itself - nothing has to watch the DOM and fill the empty circle in. */
 .fw-ident-stack>*{grid-area:1/1;width:100%;height:100%;display:grid;place-items:center}
-.fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:18px}
-.fw-ident-cat svg{width:20px;height:20px}
+.fw-ident-cat{background:var(--surface-2);color:var(--muted);font-size:20px}
+.fw-ident-cat svg{width:23px;height:23px}
+/* Groesseres Symbol auf Touchscreens (Scheibe 13: aus styles/mobile-polish.css geloest). .tx-ident hat
+   eine eigene Basis in pages/transactions/page.css und bekommt dort auch ihre eigene mobile Variante -
+   eine hier geschriebene Regel fuer .tx-ident wuerde von jener spaeter geladenen Basis wieder
+   ueberschrieben. */
+@media(max-width:767px){
+  .fw-ident{width:44px;height:44px;min-width:44px;min-height:44px}
+  .fw-ident-brand-logo{padding:3px}
+  .fw-ident-cat svg{width:24px;height:24px}
+}
 /* SectionCard. Flaeche/Rand/Rundung/Schatten stehen seit Scheibe 11 gemeinsam mit .metric/.panel/
    .dialog-card in styles/components.css - hier bleibt nur, was an dieser Karte wirklich eigen ist. */
 .fw-card{padding:var(--space-4)}
@@ -86,13 +95,13 @@ html[data-theme=dark] .fw-monogram{background:hsl(var(--ident-h,220) 26% 22%);co
 /* AnalysisCard grid */
 .fw-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start}
 /* Identity list row (contracts, merchant lists, upcoming widgets) */
-.fw-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.fw-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer;min-width:0;max-width:100%}
 .fw-row:last-child{border-bottom:0}
 .fw-row:hover{background:var(--surface-2)}
-.fw-row-main{flex:1;min-width:0}
-.fw-row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fw-row-sub{color:var(--muted);font-size:12px;margin-top:2px}
-.fw-row-amt{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
+.fw-row-main{flex:1;min-width:0;max-width:100%}
+.fw-row-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;overflow-wrap:anywhere}
+.fw-row-sub{color:var(--muted);font-size:12px;margin-top:2px;min-width:0;overflow-wrap:anywhere}
+.fw-row-amt{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap;min-width:0;flex:0 0 auto}
 .fw-row-amt small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
 /* Segmented filter chips (type/sort) */
 .fw-chips{display:flex;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s3)}
@@ -239,7 +248,7 @@ body.locked{overflow:hidden}
 /* Contracts (§13) */
 .contract-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 
-.row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end}
+.row-side{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end;min-width:0}
 .detected-panel{border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3);margin-bottom:var(--s3);background:var(--surface-2)}
 .detected-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 
@@ -329,18 +338,10 @@ dialog.contracts-sortsheet-dlg{margin:auto auto 0 auto;width:100%;max-width:min(
 #view-transactions .tx-cp-main strong{font-size:14px;line-height:1.25}
 #view-transactions .tx-cp-main .row-sub{font-size:12px;margin-top:1px}
 
-/* ---- Buchungen DESKTOP table (per reference): category chip, account icon, row chevron, airier rows.
-   The mobile card view (≤767px) hides these cells and keeps the compact identity+amount layout. ---- */
-#view-transactions tbody td{padding-top:13px;padding-bottom:13px;vertical-align:middle}
-/* Category shown as an editable chip: tinted icon + name + caret. Clicking edits the category inline. */
-#view-transactions td.tx-cat{padding-top:6px;padding-bottom:6px}
-
-/* Account cell: small type icon (card / bank) + name */
-#view-transactions td.tx-acct{color:var(--muted)}
-
-/* Row chevron: signals the row opens the detail drawer */
-#view-transactions th.tx-go-col{width:34px;padding-left:0;padding-right:8px}
-#view-transactions td.tx-go{width:34px;text-align:center;padding-left:0;padding-right:8px}
+/* Buchungen: category chip, account icon, row chevron, airier rows - jetzt Gitterzeilen statt einer
+   Tabelle, die eigenen Regeln stehen deshalb bei ihrer Basis in pages/transactions/page.css (.tx-cat,
+   .tx-acct, .tx-go). The mobile card view (≤767px) hides these columns and keeps the compact
+   identity+amount layout. */
 
 .tax-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s6);flex-wrap:wrap}
 
@@ -420,9 +421,10 @@ dialog.contracts-analysis-dlg{width:min(680px,calc(100vw - 24px));margin:auto}
 
 .appearance-preset{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface);color:var(--text);cursor:pointer;min-height:36px}
 
-/* Transaction list metadata normalization */
+/* Transaction list metadata normalization. War 760px - derselbe Telefon-Schnitt wie ueberall sonst auf
+   dieser Seite, nur mit einer eigenen Zahl (Scheibe 13, Design-System-Plan Teil 2: 767/768-Drift). */
 #transactions-body .tx-mobile-category { display: none; }
-@media (max-width: 760px) {
+@media (max-width: 767px) {
   #transactions-body .tx-list-purpose { display: none; }
   #transactions-body .tx-mobile-category { display: block; }
 }
