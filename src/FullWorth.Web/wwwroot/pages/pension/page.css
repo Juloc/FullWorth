@@ -40,6 +40,8 @@
 
 .pension-notices { display: grid; gap: var(--s2); margin-bottom: var(--s5); }
 
+/* War .86rem (~13.76px) - derselbe Drift-Fall wie anderswo im Haus, --text-metadata ist die Rolle fuer
+   einen Fliesstext-Hinweis wie diesen (Scheibe 11 Teil 2). */
 .pension-notice {
   padding: var(--s3);
   border-radius: var(--radius-card);
@@ -47,7 +49,7 @@
   background: var(--surface-2);
   color: var(--text);
   line-height: 1.45;
-  font-size: .86rem;
+  font-size: var(--text-metadata-size);
 }
 
 /* A missing exchange rate is the one thing here that makes a total unusable, so it is the only notice
@@ -87,8 +89,10 @@
   margin-top: var(--s2);
 }
 
+/* War .74rem (~11.84px) - derselbe Drift-Fall wie anderswo im Haus, --text-caption ist die
+   Fussnoten-Rolle fuer eine Pill-Beschriftung wie diese (Scheibe 11 Teil 2). */
 .pension-badge {
-  font-size: .74rem;
+  font-size: var(--text-caption-size);
   padding: 3px 7px;
   border-radius: var(--radius-pill);
   background: var(--surface-3);
@@ -106,13 +110,18 @@
 .pension-status-paid_up { background: var(--surface-3); color: var(--text); }
 .pension-status-terminated { opacity: .62; }
 
+/* War .8rem (~12.8px) - dieselbe leise Fussnotiz wie .row-sub (12px, --text-caption) anderswo im Haus,
+   nur mit eigenem Rand statt margin-top (Scheibe 11 Teil 2). */
 .pension-footnote {
-  font-size: .8rem;
+  font-size: var(--text-caption-size);
   color: var(--muted);
   line-height: 1.45;
   margin: var(--s3) 2px 0;
 }
 
+/* 1.15rem (18.4px) passt in keine vorhandene Rolle (zwischen --text-amount, 16px, und --text-amount-lg,
+   24px) - dieselbe Lage wie beim Donut-Zentrum der Analyse-/Vertragsseite, bleibt daher roh
+   (Scheibe 11 Teil 2). */
 .pension-projection-card .pension-projection-value { font-size: 1.15rem; font-weight: 600; }
 .pension-projection p { margin: var(--s2) 0 0; }
 
@@ -130,7 +139,9 @@
 }
 
 .pension-facts > div { display: grid; gap: 2px; min-width: 0; }
-.pension-facts dt { font-size: .78rem; color: var(--muted); }
+/* .78rem entsprach ~12.48px - derselbe Drift-Fall wie tax.css' .tax-disclaimer, --text-caption ist die
+   Fussnoten-Rolle fuer ein Fakten-Label wie dieses (Scheibe 11 Teil 2). */
+.pension-facts dt { font-size: var(--text-caption-size); color: var(--muted); }
 .pension-facts dd { margin: 0; overflow-wrap: anywhere; }
 
 .pension-status-hint { margin: var(--s2) 0 0; }
@@ -142,8 +153,10 @@
   background: var(--surface-2);
 }
 
+/* War .8rem (~12.8px) - derselbe Fall wie .pension-footnote oben, --text-caption ist die passende
+   Fussnoten-Rolle fuer einen Blockkopf wie diesen (Scheibe 11 Teil 2). */
 .pension-value-head {
-  font-size: .8rem;
+  font-size: var(--text-caption-size);
   color: var(--muted);
   margin-bottom: var(--s2);
 }
@@ -183,7 +196,9 @@
 }
 
 .pension-field { display: grid; gap: 4px; min-width: 0; }
-.pension-field > span { font-size: .82rem; color: var(--muted); }
+/* War .82rem (~13.12px) - derselbe Drift-Fall wie anderswo im Haus, --text-metadata ist die Rolle fuer
+   ein Feld-Label wie dieses (Scheibe 11 Teil 2). */
+.pension-field > span { font-size: var(--text-metadata-size); color: var(--muted); }
 .pension-field input, .pension-field select, .pension-field textarea { width: 100%; min-width: 0; }
 .pension-field small { line-height: 1.4; }
 
@@ -201,7 +216,9 @@
   margin: 0;
 }
 
-.pension-fieldset legend { padding: 0 var(--s2); font-size: .85rem; color: var(--text); }
+/* War .85rem (~13.6px) - derselbe Drift-Fall wie anderswo im Haus, --text-metadata ist die Rolle fuer
+   eine Legende wie diese (Scheibe 11 Teil 2). */
+.pension-fieldset legend { padding: 0 var(--s2); font-size: var(--text-metadata-size); color: var(--text); }
 .pension-fieldset > p { grid-column: 1 / -1; margin: 0; }
 
 /* ---- Dokumente: upload, review, commit (features/pension-documents.js) ----
@@ -259,12 +276,16 @@
 }
 
 .pension-doc-head-main { min-width: 0; flex: 1; }
-.pension-doc-head-main h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+/* 1rem war schon exakt --text-body-strong (16px) - jetzt auch so benannt statt eines Rohwerts
+   (Scheibe 11 Teil 2). */
+.pension-doc-head-main h3 { margin: 0; font-size: var(--text-body-strong-size); overflow-wrap: anywhere; }
 
 .pension-doc-review { display: grid; gap: var(--s4); }
 
 /* Rule 1 of the step, in words, once. It is a statement of fact and not a warning, so it gets the
    quiet surface rather than the warning tint. */
+/* War .88rem (~14.08px) - derselbe Drift-Fall wie anderswo im Haus, --text-metadata ist die Rolle fuer
+   einen Fliesstext-Satz wie diesen (Scheibe 11 Teil 2). */
 .pension-doc-unsaved {
   margin: 0;
   padding: var(--s3);
@@ -273,7 +294,7 @@
   border-radius: var(--radius-card);
   background: var(--surface-2);
   line-height: 1.5;
-  font-size: .88rem;
+  font-size: var(--text-metadata-size);
 }
 
 /* An extraction warning is information about what to check, never an alarm - red in this app is
@@ -291,7 +312,9 @@
   gap: var(--s3);
 }
 
-.pension-doc-block legend { padding: 0 var(--s2); font-size: .85rem; color: var(--text); }
+/* Derselbe Drift-Fall wie .pension-fieldset legend oben - --text-metadata statt .85rem (Scheibe 11
+   Teil 2). */
+.pension-doc-block legend { padding: 0 var(--s2); font-size: var(--text-metadata-size); color: var(--text); }
 .pension-doc-block > p { margin: 0; }
 
 .pension-doc-grid {
@@ -320,12 +343,14 @@
 
 /* Every field says where its value came from. The flag carries the one distinction that matters: a
    value off a text layer was READ, a value out of OCR was only RECOGNISED. */
+/* War .72rem (~11.52px) - derselbe Drift-Fall wie anderswo im Haus, --text-caption ist die Rolle fuer
+   eine Herkunftszeile wie diese (Scheibe 11 Teil 2). */
 .pension-doc-origin {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s1);
-  font-size: .72rem;
+  font-size: var(--text-caption-size);
   color: var(--muted);
   line-height: 1.4;
   /* Normal case, and no tracking: .pension-field sets both on its label, and an inherited uppercase
@@ -373,7 +398,9 @@
 
 .pension-doc-total { display: grid; gap: var(--s2); }
 
-.pension-doc-details > summary { cursor: pointer; font-size: .88rem; margin-bottom: var(--s3); }
+/* Derselbe Drift-Fall wie .pension-doc-unsaved oben - --text-metadata statt .88rem (Scheibe 11
+   Teil 2). */
+.pension-doc-details > summary { cursor: pointer; font-size: var(--text-metadata-size); margin-bottom: var(--s3); }
 
 .pension-doc-actions {
   display: flex;
@@ -410,8 +437,11 @@
 /* The scenario picker is a button group and cannot be a <label>, so it carries the same typography
    the shared label role in components.css gives every field label beside it - two labels on one row
    in two different cases reads as a rendering bug. */
+/* 12px war schon exakt --text-caption - jetzt auch so benannt statt eines Rohwerts, wie tax.css'
+   .tax-hero-side dt es fuer dasselbe Muster (eigenes font-weight neben der Rolle) schon vormacht
+   (Scheibe 11 Teil 2). */
 .pension-sim-return-label {
-  font-size: 12px;
+  font-size: var(--text-caption-size);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -444,6 +474,8 @@
 .pension-sim-blocks > * { min-width: 0; }
 .pension-sim-now { background: var(--surface-2); }
 .pension-sim-guarantee { border-left: 3px solid var(--accent); }
+/* Derselbe Fall wie .pension-projection-value oben (Scheibe 11 Teil 2): 1.15rem passt in keine
+   vorhandene Rolle und bleibt roh. */
 .pension-sim-figure { font-size: 1.15rem; font-weight: 600; }
 .pension-value-block > p { margin: var(--s2) 0 0; }
 

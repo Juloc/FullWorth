@@ -13,14 +13,14 @@
 .settings-link{text-decoration:none;color:inherit}
 
 /* --- Einstellungen: privacy setting as a full-width toggle row under the selects --- */
-.settings-grid .settings-toggle{grid-column:1/-1;margin-top:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line);text-transform:none;letter-spacing:normal;font-size:var(--font-size-sm);color:var(--text)}
+.settings-grid .settings-toggle{grid-column:1/-1;margin-top:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line);text-transform:none;letter-spacing:normal;font-size:var(--text-metadata-size);color:var(--text)}
 
 /* Resizable app chrome polish. Der Knopf selbst ist jetzt eine normale .btn-secondary (Rollen-API,
    components/buttons.js) statt einer eigenen, zweizeiligen Kachel - der Hinweistext steht als
    eigenes <small> DANEBEN, nicht mehr IM Knopf, sonst waechst die Klickflaeche wieder auf Kachelgroesse. */
 .settings-layout-reset-row{display:grid;gap:4px;justify-items:start}
 
-.settings-layout-reset-row small{color:var(--muted);font-weight:400;font-size:var(--font-size-xs)}
+.settings-layout-reset-row small{color:var(--muted);font-weight:400;font-size:var(--text-caption-size)}
 
 /* Appearance (Issue #149 #10/#166): der eine Sitz treibt Knoepfe, Links, Fokus, Diagramme UND jetzt
    eine echte Live-Vorschau - alles aus app/theme.js abgeleitet, nichts davon hier neu gerechnet.
@@ -32,7 +32,7 @@
 
 .appearance-color-row{display:flex;align-items:flex-end;gap:var(--s3);flex-wrap:wrap}
 
-.appearance-color-field{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:var(--font-size-xs);text-transform:uppercase;letter-spacing:.06em}
+.appearance-color-field{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:var(--text-caption-size);text-transform:uppercase;letter-spacing:.06em}
 
 .appearance-color-field input[type=color]{width:64px;height:38px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-input);background:var(--surface);cursor:pointer}
 
@@ -40,10 +40,17 @@
 
 /* Jede Schnellwahl ist nur ein gespeicherter Sitz, kein zweites Preset-System (Issue #149 §8): der
    Klick ruft denselben applyAppearance()-Pfad wie das Farbfeld selbst, nur mit einem vorgegebenen
-   statt einem eingetippten Hex-Wert. Die Chip-Farbe steht als style="background:#..." direkt im
-   Markup (sechs feste Werte, keine zweite, hier dupliziert gepflegte Farbliste) statt als eigene
-   Custom Property - die gaebe es sonst nirgends deklariert ausser inline. */
+   statt einem eingetippten Hex-Wert. Die Chip-Farbe haengt am selben data-appearance-preset-Attribut,
+   das appearance.js ohnehin liest (kein zweiter Ort fuer die sechs Werte) - eine Custom Property gaebe
+   es dafuer sonst nirgends, ein style="background:#..." im Markup verletzt aber die CSP-Quellenpruefung. */
 .appearance-preset{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid var(--line);cursor:pointer}
+
+.appearance-preset[data-appearance-preset=white]{background:#fff}
+.appearance-preset[data-appearance-preset=grey]{background:#808080}
+.appearance-preset[data-appearance-preset=black]{background:#000}
+.appearance-preset[data-appearance-preset=blue]{background:#1d4ed8}
+.appearance-preset[data-appearance-preset=purple]{background:#6d28d9}
+.appearance-preset[data-appearance-preset=green]{background:#15803d}
 
 .appearance-preset:hover{border-color:var(--muted)}
 
@@ -63,13 +70,28 @@
 
 .appearance-preview-heading{margin:0;font-weight:700;color:var(--text)}
 
-.appearance-preview-muted{margin:0;color:var(--muted);font-size:var(--font-size-sm)}
+.appearance-preview-muted{margin:0;color:var(--muted);font-size:var(--text-metadata-size)}
 
 .appearance-preview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
 
-.appearance-preview-link{color:var(--accent);font-size:var(--font-size-sm);text-decoration:underline}
+.appearance-preview-link{color:var(--accent);font-size:var(--text-metadata-size);text-decoration:underline}
 
 .appearance-preview-chart{width:200px;max-width:100%;height:auto}
+
+/* Sechs Balken, dieselbe Reihenfolge wie --data-1 bis --data-6 ueberall sonst (Diagramme, Analytics) -
+   die nth-of-type-Bindung ersetzt die vorherigen style-Attribute mit demselben Fill-Token 1:1. */
+.appearance-preview-chart rect:nth-of-type(1){fill:var(--data-1)}
+.appearance-preview-chart rect:nth-of-type(2){fill:var(--data-2)}
+.appearance-preview-chart rect:nth-of-type(3){fill:var(--data-3)}
+.appearance-preview-chart rect:nth-of-type(4){fill:var(--data-4)}
+.appearance-preview-chart rect:nth-of-type(5){fill:var(--data-5)}
+.appearance-preview-chart rect:nth-of-type(6){fill:var(--data-6)}
+
+#appearance-preview-gradient stop{stop-color:var(--data-2)}
+#appearance-preview-gradient stop:nth-of-type(1){stop-opacity:.5}
+#appearance-preview-gradient stop:nth-of-type(2){stop-opacity:0}
+
+.appearance-preview-line{stroke:var(--data-2)}
 
 /* Mobil: eine Spalte, kein horizontales Ueberlaufen (Issue #149 §11) - die Vorschau-Karte steht ueber
    dem Diagramm statt daneben, und das Diagramm skaliert auf die volle Breite statt sie zu sprengen. */

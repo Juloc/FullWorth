@@ -51,8 +51,11 @@ function payslipMarkup(){return `
         <div class="panel-head"><div><h2>Lohnabrechnung analysieren</h2><p>PDF oder Bild wird lokal im Backend verarbeitet. Die Originaldatei wird nicht gespeichert.</p></div></div>
         <div class="upload-row"><input id="payslip-file" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,image/bmp"><button id="payslip-extract" class="btn btn-primary" type="button">Analysieren</button><button id="payslip-extract-batch" class="btn btn-secondary" type="button">Alle analysieren</button></div>
         <div id="payslip-extraction-status" class="extended-note">Eine Datei füllt das Formular unten. Mehrere Dateien werden als Liste zur Prüfung angezeigt. Werte werden erst nach deiner Bestätigung gespeichert.</div>
-        <div id="payslip-batch" class="payslip-batch" hidden></div>
       </article>
+      <!-- Eigenes Element statt im Upload-Artikel: renderBatch() setzt hier eine eigene .panel.comp-card
+           hinein, sobald Ergebnisse da sind - innerhalb des Upload-Artikels waere das Kaesteli-in-Kaesteli
+           (Scheibe 11). -->
+      <div id="payslip-batch" class="payslip-batch" hidden></div>
       <article class="panel comp-card">
         <div class="panel-head"><div><h2>Erkannte Werte prüfen</h2><p>Alle Felder können vor dem Speichern korrigiert werden.</p></div></div>
         <div class="form-grid payslip-fields">

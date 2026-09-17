@@ -4,13 +4,18 @@
    Dialogstilen. Geblieben ist nur das, was diese Seite von den anderen unterscheidet: ihre
    Kennzahlen, ihre Nutzerzeilen und ihr Anbieterformular. Überschrift, Seitenleiste, Melder und
    Rahmen kommen wie überall von der Hülle. Nur Tokens. */
-/* Die Überzeile im Nutzerdialog. Der Rest der Kopfzeile kommt aus der Hülle. */
-.admin-eyebrow{display:block;text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--muted)}
+/* Die Überzeile im Nutzerdialog. Der Rest der Kopfzeile kommt aus der Hülle.
+   War 11px - dieselbe Drift wie .purchase-stat-k (Einkäufe) und .tx-marker (Buchungen); eine
+   Grossbuchstaben-Beschriftung wie diese trägt die Fussnoten-Rolle (Scheibe 11 Teil 2). */
+.admin-eyebrow{display:block;text-transform:uppercase;font-size:var(--text-caption-size);font-weight:800;letter-spacing:.1em;color:var(--muted)}
 
 .admin-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--s2);margin-bottom:var(--s3)}
 .admin-metrics article{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:var(--s3)}
-.admin-metrics span{display:block;font-size:12px;color:var(--muted)}
-.admin-metrics strong{display:block;font-size:24px;margin-top:5px;font-variant-numeric:tabular-nums}
+/* War 12px, dieselbe Drift wie .admin-sub darunter. */
+.admin-metrics span{display:block;font-size:var(--text-caption-size);color:var(--muted)}
+/* War 24px roh - deckt sich exakt mit der Betrags-Rolle, die die Vermögensseite für ihre grosse
+   Kennzahl (.nw-donut-value) schon benutzt. */
+.admin-metrics strong{display:block;font-size:var(--text-amount-lg-size);font-weight:var(--text-amount-lg-weight);margin-top:5px;font-variant-numeric:tabular-nums}
 
 .admin-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:var(--s2);padding:var(--s3);border-bottom:1px solid var(--line)}
 .admin-toolbar input,.admin-toolbar select{min-width:0;width:100%}
@@ -21,7 +26,8 @@
 .admin-user{display:grid;grid-template-columns:minmax(200px,1fr) 120px 130px 130px 24px;gap:var(--s3);align-items:center;width:100%;border:0;border-bottom:1px solid var(--line);padding:var(--s3);text-align:left;background:transparent;color:inherit;cursor:pointer;min-height:44px}
 .admin-user:hover{background:var(--surface-2)}
 .admin-user-email{font-weight:700;overflow:hidden;text-overflow:ellipsis}
-.admin-sub{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis}
+/* War 12px, dieselbe Drift wie .admin-metrics span oben. */
+.admin-sub{font-size:var(--text-caption-size);color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis}
 
 /* Tones on top of the shared .chip (app.css) instead of a private .badge - one less component that
    has to be kept in sync with the app's colours. */
@@ -34,7 +40,8 @@
 
 .admin-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
 .admin-detail-grid div{background:var(--surface-2);border-radius:var(--radius-input);padding:11px;min-width:0}
-.admin-detail-grid span{display:block;font-size:11px;color:var(--muted)}
+/* War 11px, dieselbe Drift wie .admin-eyebrow oben. */
+.admin-detail-grid span{display:block;font-size:var(--text-caption-size);color:var(--muted)}
 .admin-detail-grid strong{display:block;margin-top:3px;overflow-wrap:anywhere}
 .admin-sessions{display:grid;gap:7px}
 .admin-session{padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-input);min-width:0}
@@ -58,14 +65,16 @@
 .admin-providers { display: grid; gap: 18px; }
 .admin-providers fieldset {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  /* War 10px roh - trifft --radius-input (== --radius-sm) exakt. */
+  border-radius: var(--radius-input);
   padding: 14px 16px;
   display: grid;
   gap: 10px;
 }
 .admin-providers legend { padding: 0 6px; font-weight: 600; }
 .admin-providers label { display: grid; gap: 4px; }
-.admin-providers label > span { font-size: 13px; color: var(--muted); }
+/* War 13px, dieselbe Drift wie .setting-section h3 / .vault-group h3 weiter unten. */
+.admin-providers label > span { font-size: var(--text-metadata-size); color: var(--muted); }
 .admin-providers textarea { resize: vertical; font-family: inherit; }
 .admin-providers-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
@@ -73,7 +82,9 @@
    One generic form over a server-side catalogue, so the layout has to work for a text box, a number,
    a checkbox and a select without knowing which is which. */
 .setting-section { margin-bottom: var(--s4) }
-.setting-section h3 { margin: 0 0 var(--s2); font-size: 14px }
+/* War 14px, dieselbe Drift wie .vault-group h3 weiter unten - beide sind Zwischenüberschriften
+   innerhalb eines Panels, keine eigenständigen Abschnittstitel (die Rolle dafür wäre --text-section-title). */
+.setting-section h3 { margin: 0 0 var(--s2); font-size: var(--text-metadata-size) }
 
 .setting-row {
   display: grid;
@@ -86,17 +97,20 @@
 
 .setting-name { display: grid; gap: 2px; min-width: 0 }
 .setting-label { font-weight: 600 }
-.setting-hint { color: var(--muted); font-size: 12px }
+/* War 12px, dieselbe Drift wie .setting-source und .setting-warning weiter unten. */
+.setting-hint { color: var(--muted); font-size: var(--text-caption-size) }
 
 .setting-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  /* War 11px, dieselbe Drift wie .admin-eyebrow / .admin-detail-grid span oben. */
+  font-size: var(--text-caption-size);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 
 .setting-row input[type="checkbox"] { justify-self: start; width: auto }
-.setting-source { color: var(--muted); font-size: 12px; white-space: nowrap }
+/* War 12px, dieselbe Drift wie .setting-hint oben. */
+.setting-source { color: var(--muted); font-size: var(--text-caption-size); white-space: nowrap }
 
 /* A disabled control still has to be readable: this is how a value the environment pinned is shown,
    and "you cannot change this here" must not read as "this is switched off". */
@@ -105,7 +119,8 @@
 .setting-warning {
   grid-column: 1 / -1;
   color: var(--warning);
-  font-size: 12px;
+  /* War 12px, dieselbe Drift wie .setting-hint / .setting-source oben. */
+  font-size: var(--text-caption-size);
 }
 
 @media (max-width: 720px) {
@@ -126,7 +141,8 @@
 }
 
 .vault-group { margin-top: var(--s4) }
-.vault-group h3 { margin: 0 0 var(--s2); font-size: 14px }
+/* War 14px, dieselbe Drift wie .setting-section h3 oben. */
+.vault-group h3 { margin: 0 0 var(--s2); font-size: var(--text-metadata-size) }
 
 .vault-row {
   display: grid;
@@ -147,7 +163,8 @@
   border-radius: var(--radius-input);
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  /* War 12px, dieselbe Drift wie .setting-hint / .setting-source oben. */
+  font-size: var(--text-caption-size);
   /* Wrapped, not clipped, and line breaks preserved: an Apple .p8 key is a whole PEM block. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;

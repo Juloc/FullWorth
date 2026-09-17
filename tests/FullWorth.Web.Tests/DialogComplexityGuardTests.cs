@@ -46,12 +46,16 @@ public sealed class DialogComplexityGuardTests
     ///   <item><c>auth.css</c> / <c>passkeys.css</c>: the sign-in pages' brand gradients. They are
     ///         deliberately outside the theme — the mark and the primary button look the same whichever
     ///         theme the browser asks for, which is what a sign-in page wants.</item>
+    ///   <item><c>settings/page.css</c>: the six appearance-preset swatches (Weiß/Grau/Schwarz/Blau/
+    ///         Violett/Grün). Each one IS a literal, theme-independent colour by definition — it is the
+    ///         seed a user can pick, not a themed surface — so there is no token to point it at.</item>
     /// </list>
     /// </summary>
     private static readonly Dictionary<string, int> KnownRawColours = new()
     {
         ["styles/app.css"] = 1,
         ["pages/purchases/page.css"] = 1,
+        ["pages/settings/page.css"] = 6,
         ["auth/auth.css"] = 5
         // passkeys/passkeys.css stand hier mit 4. Alle vier standen in Kommentaren und waren nie
         // Farben; seit die Zaehlung Kommentare ueberspringt, hat die Datei keine einzige.

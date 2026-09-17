@@ -14,8 +14,6 @@
 /* --- Prüfprotokoll (audit.js): monochrome timeline --- */
 #audit-list .audit-row{grid-template-columns:auto minmax(0,1fr) auto;align-items:start;column-gap:var(--s3);padding:var(--s3) 0;border-bottom:0}
 
-#audit-list .audit-row .row-title{font-weight:500}
-
 #audit-list .audit-row .audit-meta{margin-top:2px}
 
 #audit-list .audit-time{align-self:start;padding-top:1px;font-variant-numeric:tabular-nums;color:var(--muted)}
@@ -32,7 +30,7 @@
 
 #audit-list .audit-day:first-child{padding-top:var(--s1)}
 
-#audit-list .audit-day-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+#audit-list .audit-day-label{font-size:var(--text-caption-size);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 
 #audit-list .audit-day-line{flex:1 1 auto;height:1px;background:var(--line)}
 

@@ -299,7 +299,6 @@ async function deleteScenario(id){
 }
 
 function comparisonCell(label,value){const positive=!String(value).startsWith('−');return `<div class="comparison-cell"><span>${esc(label)}</span><strong class="${positive?'positive':'negative'}">${esc(value)}</strong></div>`}
-function row(label,value){return `<div class="result-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`}
 function compLine(label,value,cls,sub){
   const dot=cls&&cls!=='total'?`<i class="comp-dot comp-dot-${esc(cls)}"></i>`:'';
   const subHtml=sub?`<span class="comp-line-sub">${esc(sub)}</span>`:'';

@@ -77,6 +77,16 @@
 
 .ic-polish .import-metrics .metric{padding:var(--s4)}
 
+/* tx-review-summary/inv-review-summary/inv-reconciliation-summary (und, ueber dieselbe unpraefixierte
+   .import-metrics-Klasse, auch pdf-review-summary in import/broker-pdf/) stehen bereits in einer Karte:
+   .import-workflow ist selbst ein .panel. Jede .metric-Kachel brachte dort trotzdem ihren eigenen
+   Rand/Schatten aus der geteilten Kartenbasis mit (styles/components.css: ".metric,.panel,.fw-card,
+   .dialog-card{border...}" + ".metric,.panel,.fw-card{box-shadow...}") - Kaesteli-in-Kaesteli, dieselbe
+   Klasse wie beim Dashboard-Nettovermoegen und bei den Einkaeufen (Scheibe 11 Teil 2/3). Der Grid-Abstand
+   (--s4 Gap aus der geteilten .metric-grid-Regel) traegt die Trennung der drei/vier Kennzahlen bereits
+   allein - eine zweite Umrandung je Kachel braucht es nicht. */
+.ic-polish .import-metrics .metric{background:none;border-color:transparent;box-shadow:none}
+
 .ic-polish .import-metrics .metric span{margin-bottom:var(--s1)}
 
 .ic-polish .metric.ic-metric-pos strong{color:var(--positive)}
