@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS "InvestmentImportSecurityLinks" (
 );
 """);
 
-    // Aus demselben Grund wie oben, nur fuer die andere Haelfte: diese sieben Tabellen zeigen per
+    // Aus demselben Grund wie oben, nur fuer die andere Haelfte: diese acht Tabellen zeigen per
     // Fremdschluessel auf "Transactions", stehen aber nicht im EF-Modell - sie entstehen in rohen
     // SQL-Migrationen. EnsureCreated baut das Schema aus dem Modell und legt sie darum nie an.
     //
@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS "InvestmentImportSecurityLinks" (
     // (TransactionMergeService): auf PostgreSQL sind alle da, auf diesem SQLite waren sie es nicht,
     // und eine Zusammenfuehrung waere hier mit "no such table" gescheitert - an einer Luecke der
     // Testkulisse, nicht an einem Fehler im Produkt. Die Spalten sind die des echten Schemas.
+    //
+    // "ImportTransactionLinks" kam spaeter dazu (#175): eine Finanzguru-Kontoverknuepfung loescht seither
+    // die Herkunftsverknuepfung einer verschobenen (nicht zusammengefuehrten) Buchung selbst mit -
+    // vorher war das die einzige der acht Tabellen, die dieser Codepfad nie anfasste.
     private static Task CreateRawTransactionTablesAsync(FullWorthDbContext db) =>
         db.Database.ExecuteSqlRawAsync("""
 CREATE TABLE IF NOT EXISTS "AssetCashflowEntries" (
@@ -200,6 +204,13 @@ CREATE TABLE IF NOT EXISTS "SpendingReviews" (
   "CreatedAt" text NOT NULL,
   "UpdatedAt" text NOT NULL,
   UNIQUE ("FullWorthSpaceId","UserId","TransactionId")
+);
+CREATE TABLE IF NOT EXISTS "ImportTransactionLinks" (
+  "ImportJobId" uuid NOT NULL,
+  "TransactionId" uuid NOT NULL,
+  "CreatedAt" text NOT NULL,
+  PRIMARY KEY ("ImportJobId","TransactionId"),
+  UNIQUE ("TransactionId")
 );
 """);
 

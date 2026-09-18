@@ -560,6 +560,7 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
         // eine dieser Zeilen noch auf die Verliererzeile haelt, waere danach veraltet - sie werden
         // darum in derselben Bewegung mitgezogen.
         var tracked = imported.Concat(live).ToList();
+        var connection = await RawSql.OpenAsync(db, ct);
         foreach (var historical in imported)
         {
             var signature = Signature(historical);
@@ -593,6 +594,16 @@ public sealed class FinanzguruAccountReconciliationService(FullWorthDbContext db
                 historical.UseForBalanceHistory = trustMovedHistory;
                 historical.UpdatedAt = DateTimeOffset.UtcNow;
                 moved++;
+
+                // Der Herkunftsnachweis faellt hier bewusst weg: die Buchung lebt jetzt auf einem
+                // echten, aktiv genutzten Konto, und ein Nutzer, der spaeter den urspruenglichen
+                // Finanzguru-Import zurueckrollt, darf diese Buchung nicht mehr verlieren - genau das
+                // haette ohne diese Zeile passieren koennen (#175). Der zusammengefuehrte Zweig oben
+                // bekommt dasselbe Ergebnis bereits ueber die CASCADE der geloeschten Verliererzeile.
+                await using var unlink = RawSql.Command(connection,
+                    "DELETE FROM \"ImportTransactionLinks\" WHERE \"TransactionId\"=@transaction",
+                    ("@transaction", historical.Id));
+                await unlink.ExecuteNonQueryAsync(ct);
             }
         }
 

@@ -51,12 +51,15 @@ public sealed class ImportJobStore(FullWorthDbContext db, AuditService audit, Fi
         return await cmd.ExecuteScalarAsync(ct) is not null;
     }
 
-    public async Task<List<object>> ListJobsAsync(Guid fullWorthSpaceId, Guid userId, CancellationToken ct)
+    public async Task<List<object>> ListJobsAsync(Guid fullWorthSpaceId, Guid userId, CancellationToken ct, string? adapterKey = null)
     {
         var connection = await RawSql.OpenAsync(db, ct);
+        // Ohne den Filter zieht die Finanzguru-Seite jeden Importauftrag des Bereichs mit, auch CSV-
+        // und Kontoauszugsimporte, die dort nichts verloren haben.
+        var filter = string.IsNullOrWhiteSpace(adapterKey) ? "" : " AND \"AdapterKey\"=@adapter";
         await using var cmd = RawSql.Command(connection,
-            $"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid ORDER BY \"CreatedAt\" DESC",
-            ("@space", fullWorthSpaceId), ("@uid", userId));
+            $"SELECT {JobColumns} FROM \"ImportJobs\" j WHERE \"FullWorthSpaceId\"=@space AND \"UserId\"=@uid{filter} ORDER BY \"CreatedAt\" DESC",
+            ("@space", fullWorthSpaceId), ("@uid", userId), ("@adapter", adapterKey));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var rows = new List<object>();
@@ -363,17 +366,24 @@ VALUES (@id,@job,@account,@date,@amount,@currency,@party,@description,@category,
         // einem Kontostand bleibt - dann hat er es inzwischen selbst benutzt.
         // Der Kontostand aus der Auszugsdatei gehoert dem Import und geht mit. Ein von Hand
         // erfasster bleibt - er ist die Arbeit des Nutzers und haelt das Konto am Leben.
+        // Ein Konto ist Ergebnis DIESES Imports entweder ueber die alte Einzelspalte (CSV-/
+        // Auszugsimport, hoechstens ein Konto) oder ueber "ImportJobCreatedAccounts" (Finanzguru, das
+        // je Quellkonto in der Datei eines anlegen kann). Beide Wege zaehlen gleich.
         await using (var importedBalances = RawSql.Command(connection, """
 DELETE FROM "BalanceSnapshots" b
 USING "ImportJobs" j
-WHERE j."Id"=@job AND j."CreatedAccountId"=b."AccountId" AND b."Source"='import'
+WHERE j."Id"=@job AND b."Source"='import'
+  AND (j."CreatedAccountId"=b."AccountId"
+       OR EXISTS (SELECT 1 FROM "ImportJobCreatedAccounts" c WHERE c."ImportJobId"=j."Id" AND c."AccountId"=b."AccountId"))
 """, ("@job", jobId)))
             await importedBalances.ExecuteNonQueryAsync(ct);
 
         await using (var emptyAccount = RawSql.Command(connection, """
 DELETE FROM "Accounts" a
 USING "ImportJobs" j
-WHERE j."Id"=@job AND j."CreatedAccountId"=a."Id"
+WHERE j."Id"=@job
+  AND (j."CreatedAccountId"=a."Id"
+       OR EXISTS (SELECT 1 FROM "ImportJobCreatedAccounts" c WHERE c."ImportJobId"=j."Id" AND c."AccountId"=a."Id"))
   AND NOT EXISTS (SELECT 1 FROM "Transactions" t WHERE t."AccountId"=a."Id")
   AND NOT EXISTS (SELECT 1 FROM "BalanceSnapshots" b WHERE b."AccountId"=a."Id")
 """, ("@job", jobId)))

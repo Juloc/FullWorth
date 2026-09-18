@@ -15,6 +15,13 @@ internal static class ImportTransactionProvenance
     // work with them (a split, a tag, a contract link, a spending review) and the RESTRICT ones would
     // abort the whole rollback. ImportTransactionProvenanceGuardTests compares this list against the
     // live schema, so a new table referencing transactions cannot quietly fall outside it.
+    //
+    // TransactionAllocations is the one exception with its own condition instead of a blanket
+    // NOT EXISTS: Finanzguru writes a transaction's splits (Teilbuchung/Restbetrag) in the SAME import
+    // that creates the transaction, and that is not user work - it is the import's own result, and
+    // must not block the import's own rollback. Only an allocation whose CreatedByImportJobId
+    // disagrees with this link's job (NULL, from a manual split, or a different job entirely) still
+    // blocks, exactly as before.
     internal const string DeleteImportedTransactionsSql = """
 DELETE FROM "Transactions" t
 USING "ImportTransactionLinks" l
@@ -31,7 +38,8 @@ WHERE l."ImportJobId"=@job AND l."TransactionId"=t."Id"
   AND NOT EXISTS (SELECT 1 FROM "RefundSuggestionDismissals" x
                   WHERE x."OriginalTransactionId"=t."Id" OR x."RefundTransactionId"=t."Id")
   AND NOT EXISTS (SELECT 1 FROM "SpendingReviews" x WHERE x."TransactionId"=t."Id")
-  AND NOT EXISTS (SELECT 1 FROM "TransactionAllocations" x WHERE x."TransactionId"=t."Id")
+  AND NOT EXISTS (SELECT 1 FROM "TransactionAllocations" x
+                  WHERE x."TransactionId"=t."Id" AND x."CreatedByImportJobId" IS DISTINCT FROM l."ImportJobId")
   AND NOT EXISTS (SELECT 1 FROM "TransactionReviewStates" x WHERE x."TransactionId"=t."Id")
   AND NOT EXISTS (SELECT 1 FROM "TransactionTags" x WHERE x."TransactionId"=t."Id")
   AND NOT EXISTS (SELECT 1 FROM "Transactions" x WHERE x."RefundOfTransactionId"=t."Id")

@@ -58,14 +58,20 @@ public sealed class FinanzguruImportService(
     private const string AdapterKey = "finanzguru_xlsx";
 
     /// <summary>
-    /// Schreibt den Auftrag, der diesen Import in der gemeinsamen Liste sichtbar und rueckgaengig
-    /// machbar macht. Zeilen (<c>ImportCandidates</c>) legt er keine an: der Finanzguru-Weg hat keine
-    /// Vorschau, bei der man Zeile fuer Zeile entscheidet - er wird in einem Zug festgeschrieben, und
-    /// eine erfundene Vorschau waere eine Behauptung ueber einen Schritt, den es nicht gab.
+    /// Legt den Auftrag an, der diesen Import in der gemeinsamen Liste sichtbar und rueckgaengig
+    /// machbar macht - VOR den Buchungen, nicht danach. "TransactionAllocations.CreatedByImportJobId"
+    /// (Splits, #175) und "ImportJobCreatedAccounts" (Konten) zeigen per Fremdschluessel auf diese
+    /// Zeile, und beide koennen schon waehrend des Imports selbst entstehen - die Zeile muss also
+    /// zuerst da sein. Die Zaehlerspalten bekommen ihren echten Wert erst danach, in
+    /// <see cref="FinalizeImportJobCountsAsync"/>: erst wenn die Schleife durch ist, steht fest, wie
+    /// viele Zeilen neu und wie viele schon vorhanden waren.
+    ///
+    /// Zeilen (<c>ImportCandidates</c>) legt er keine an: der Finanzguru-Weg hat keine Vorschau, bei
+    /// der man Zeile fuer Zeile entscheidet - er wird in einem Zug festgeschrieben, und eine erfundene
+    /// Vorschau waere eine Behauptung ueber einen Schritt, den es nicht gab.
     /// </summary>
-    private async Task WriteImportJobAsync(
-        Guid userId, Guid fullWorthSpaceId, Guid jobId, int sourceRows, int imported, int duplicates,
-        string? fileSha, CancellationToken ct)
+    private async Task CreateImportJobAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid jobId, string? fileSha, CancellationToken ct)
     {
         var connection = await RawSql.OpenAsync(db, ct);
         var now = DateTimeOffset.UtcNow;
@@ -73,13 +79,27 @@ public sealed class FinanzguruImportService(
 INSERT INTO "ImportJobs" ("Id","FullWorthSpaceId","UserId","FileName","FileSha256","AdapterKey","Status",
                           "SourceRowCount","ReadyCount","DuplicateCount","ImportedCount","ErrorCount",
                           "CreatedAt","UpdatedAt","CompletedAt")
-VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@duplicates,@imported,0,@now,@now,@now)
+VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',0,0,0,0,0,@now,@now,@now)
 """,
             ("@id", jobId), ("@space", fullWorthSpaceId), ("@uid", userId),
             // Ohne Datei (der Weg ueber Zeilen, den die Tests nehmen) steht die Auftragskennung dort -
             // nie eine erfundene Pruefsumme, die eine Datei behaupten wuerde, die es nicht gab.
-            ("@name", "finanzguru.xlsx"), ("@sha", fileSha ?? jobId.ToString("N")), ("@adapter", AdapterKey),
-            ("@source", sourceRows), ("@imported", imported), ("@duplicates", duplicates), ("@now", now));
+            ("@name", "finanzguru.xlsx"), ("@sha", fileSha ?? jobId.ToString("N")), ("@adapter", AdapterKey), ("@now", now));
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Traegt nach, wie viele Zeilen neu und wie viele schon vorhanden waren.</summary>
+    private async Task FinalizeImportJobCountsAsync(
+        Guid jobId, int sourceRows, int imported, int duplicates, CancellationToken ct)
+    {
+        var connection = await RawSql.OpenAsync(db, ct);
+        await using var command = RawSql.Command(connection, """
+UPDATE "ImportJobs"
+SET "SourceRowCount"=@source,"ReadyCount"=@imported,"ImportedCount"=@imported,"DuplicateCount"=@duplicates,"UpdatedAt"=@now
+WHERE "Id"=@id
+""",
+            ("@id", jobId), ("@source", sourceRows), ("@imported", imported), ("@duplicates", duplicates),
+            ("@now", DateTimeOffset.UtcNow));
         await command.ExecuteNonQueryAsync(ct);
     }
 
@@ -119,6 +139,11 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
         // Teil (c) des Umbaus und brauchen ihre eigene Migration.
         var jobId = Guid.NewGuid();
         var createdTransactionIds = new List<Guid>();
+
+        // Zuerst die Zeile in "ImportJobs" selbst - "TransactionAllocations.CreatedByImportJobId" und
+        // "ImportJobCreatedAccounts" zeigen per Fremdschluessel darauf und koennen schon in der
+        // Konto- bzw. Buchungsschleife unten entstehen.
+        await CreateImportJobAsync(userId, fullWorthSpaceId, jobId, fileSha, ct);
 
         var accounts = await ResolveAccountsAsync(userId, fullWorthSpaceId, parentRows, ct);
         var categoryResolver = await CategoryResolver.CreateAsync(db, fullWorthSpaceId, role == FullWorthSpaceRoles.Owner, ct);
@@ -219,6 +244,10 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
                             TransactionId = entity.Id,
                             CategoryId = categoryResolver.Resolve(child.MainCategory, child.SubCategory),
                             Amount = child.Amount,
+                            // Diese Aufteilung ist das eigene Ergebnis DIESES Imports, keine
+                            // Nutzerarbeit - eine spaetere Ruecknahme darf nicht daran scheitern. Siehe
+                            // ImportTransactionProvenance.DeleteImportedTransactionsSql.
+                            CreatedByImportJobId = jobId,
                             CreatedAt = now,
                             UpdatedAt = now
                         });
@@ -232,9 +261,11 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
         audit.Record(fullWorthSpaceId, userId, "finanzguru.imported", "FullWorthSpace", fullWorthSpaceId);
         await db.SaveChangesAsync(ct);
 
-        // Erst jetzt, weil die Verknuepfung die Kennungen der eben geschriebenen Buchungen braucht.
-        await WriteImportJobAsync(userId, fullWorthSpaceId, jobId, rows.Count, imported, alreadyImported, fileSha, ct);
+        // Erst jetzt stehen die echten Zahlen fest - wie viele Zeilen neu waren und wie viele schon
+        // vorhanden. Die Verknuepfung braucht ausserdem die Kennungen der eben geschriebenen Buchungen.
+        await FinalizeImportJobCountsAsync(jobId, rows.Count, imported, alreadyImported, ct);
         await ImportTransactionProvenance.LinkAsync(db, jobId, createdTransactionIds, ct);
+        await ImportJobAccountProvenance.LinkCreatedAccountsAsync(db, jobId, accounts.CreatedAccountIds, ct);
 
         await transaction.CommitAsync(ct);
 
@@ -268,6 +299,7 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
         var bySourceKey = new Dictionary<string, ResolvedAccount>(StringComparer.Ordinal);
         var matched = 0;
         var created = 0;
+        var createdAccountIds = new List<Guid>();
         var now = DateTimeOffset.UtcNow;
 
         foreach (var group in sourceGroups)
@@ -335,11 +367,12 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
                 ibanLast4), ct);
             importAccounts[hash] = account;
             bySourceKey[sourceKey] = new(account, false);
+            createdAccountIds.Add(account.Id);
             created++;
         }
 
         await db.SaveChangesAsync(ct);
-        return new AccountResolution(bySourceKey, matched, created);
+        return new AccountResolution(bySourceKey, matched, created, createdAccountIds);
     }
 
     private static void ValidateSplits(IReadOnlyList<FinanzguruRow> rows)
@@ -410,7 +443,8 @@ VALUES (@id,@space,@uid,@name,@sha,@adapter,'completed',@source,@imported,@dupli
 
     private sealed record TransactionSignature(DateOnly? Date, decimal Amount, string Currency, string? Party);
     private sealed record ResolvedAccount(FinanceAccount Account, bool MatchedLiveAccount);
-    private sealed record AccountResolution(Dictionary<string, ResolvedAccount> BySourceKey, int Matched, int Created);
+    private sealed record AccountResolution(
+        Dictionary<string, ResolvedAccount> BySourceKey, int Matched, int Created, IReadOnlyList<Guid> CreatedAccountIds);
 
     private sealed class CategoryResolver(FullWorthDbContext db, Guid fullWorthSpaceId, bool canCreate, List<FinanceCategory> categories)
     {

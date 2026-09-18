@@ -124,11 +124,13 @@ public static class ImportJobEndpoints
                 }
         });
     }
-    private static async Task<IResult> ListJobs(Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
+    // adapterKey is optional and scopes the list to one importer - the Finanzguru page uses it so its
+    // own history does not pull in every CSV or statement import of the space alongside it.
+    private static async Task<IResult> ListJobs(Guid fullWorthSpaceId,string? adapterKey,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {
         var uid=currentUser.RequireUserId();
         if(!await space.IsMemberAsync(uid,fullWorthSpaceId,ct))return Results.NotFound();
-        return Results.Ok(await store.ListJobsAsync(fullWorthSpaceId,uid,ct));
+        return Results.Ok(await store.ListJobsAsync(fullWorthSpaceId,uid,ct,adapterKey));
     }
     private static async Task<IResult> GetJob(Guid id,Guid fullWorthSpaceId,CurrentUserContext currentUser,SpaceAccess space,ImportJobStore store,CancellationToken ct)
     {

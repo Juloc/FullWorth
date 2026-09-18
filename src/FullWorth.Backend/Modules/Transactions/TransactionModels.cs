@@ -50,6 +50,11 @@ public sealed class TransactionAllocation
     public decimal Amount { get; set; }
     public string? Note { get; set; }
     public Guid? PurchaseItemId { get; set; }
+    // Gesetzt nur, wenn DERSELBE Import diese Zeile UND ihre Buchung angelegt hat (Finanzguru-Splits).
+    // Eine Ruecknahme dieses Imports darf daran nicht scheitern - es ist sein eigenes Ergebnis, keine
+    // Nutzerarbeit. Jede andere Aufteilung (von Hand, oder aus einem anderen Import) laesst dieses Feld
+    // NULL, und NULL blockiert den Rollback weiterhin wie zuvor. Siehe ImportTransactionProvenance.
+    public Guid? CreatedByImportJobId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

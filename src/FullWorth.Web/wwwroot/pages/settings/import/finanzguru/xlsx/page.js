@@ -28,7 +28,11 @@ const text={
     movedHint:'{n} weitere Buchungen ziehen unverändert mit um.',
     winner:'Welche Fassung behalten?',winnerTarget:'Die des Zielkontos',winnerImport:'Die importierte',
     winnerHint:'Betrifft Kategorie, Aufteilung und Notiz. Die Buchung des Zielkontos bleibt in jedem Fall bestehen - sie trägt den Schlüssel, an dem die Bank sie wiedererkennt.',
-    loadingMatches:'Treffer werden geprüft …'
+    loadingMatches:'Treffer werden geprüft …',
+    historyHeading:'Frühere Importe',historyEmpty:'Noch keine Finanzguru-Importe.',
+    rollback:'Import rückgängig machen',
+    rollbackConfirm:'Diesen Finanzguru-Import wirklich rückgängig machen? Buchungen, die du seither verlinkt, geteilt, verschlagwortet, geprüft oder mit einem Vertrag verknüpft hast, bleiben erhalten.',
+    rolledBack:'{removed} entfernt, {kept} behalten.',statusCompleted:'Abgeschlossen',statusRolledBack:'Rückgängig gemacht'
   },
   en:{
     subtitle:'Import historical transactions from Finanzguru.',back:'Back',heading:'Import all transactions',
@@ -54,7 +58,11 @@ const text={
     movedHint:'{n} further bookings move across unchanged.',
     winner:'Which version to keep?',winnerTarget:'The target account’s',winnerImport:'The imported one',
     winnerHint:'Affects category, split and note. The target account’s booking always survives — it carries the key the bank recognises it by.',
-    loadingMatches:'Checking matches …'
+    loadingMatches:'Checking matches …',
+    historyHeading:'Previous imports',historyEmpty:'No Finanzguru imports yet.',
+    rollback:'Roll back import',
+    rollbackConfirm:'Really roll back this Finanzguru import? Bookings you have since linked, split, tagged, reviewed or linked to a contract are kept.',
+    rolledBack:'{removed} removed, {kept} kept.',statusCompleted:'Completed',statusRolledBack:'Rolled back'
   }
 }[lang];
 
@@ -62,7 +70,8 @@ document.documentElement.lang=lang;
 for(const [id,key] of Object.entries({
   'import-subtitle':'subtitle','import-back':'back','import-heading':'heading','import-hint':'hint','import-space-label':'space',
   'import-safety-title':'safetyTitle','import-safety':'safety','import-file-label':'file','finanzguru-submit':'submit',
-  'import-link-heading':'linkHeading','import-link-hint':'linkHint','import-link-accounts':'manageAccounts'
+  'import-link-heading':'linkHeading','import-link-hint':'linkHint','import-link-accounts':'manageAccounts',
+  'import-history-heading':'historyHeading'
 })){
   const node=document.getElementById(id);
   if(node)node.textContent=text[key];
@@ -75,8 +84,13 @@ const status=document.getElementById('import-status');
 const result=document.getElementById('import-result');
 const linkStatus=document.getElementById('import-link-status');
 const linkList=document.getElementById('import-link-list');
+const historyList=document.getElementById('import-history');
 let space=null;
 let linkOptions={importAccounts:[],targetAccounts:[],attachedHistory:[]};
+let history=[];
+
+const fill=(template,values)=>Object.entries(values).reduce((s,[k,v])=>s.replaceAll(`{${k}}`,v),template);
+const jobStatusLabel=jobStatus=>({completed:text.statusCompleted,rolled_back:text.statusRolledBack})[jobStatus]||jobStatus;
 
 function node(tag,className,textValue){
   const el=document.createElement(tag);
@@ -347,12 +361,57 @@ function buildAttachedHistoryCard(item){
   return card;
 }
 
+// Dieselbe Liste wie auf der allgemeinen Import-Seite (api/import-jobs), nur auf Finanzguru
+// eingegrenzt: sonst zoege jeder CSV- und Kontoauszugsimport des Bereichs hier mit hinein.
+function renderHistory(){
+  if(!historyList)return;
+  historyList.replaceChildren();
+  if(!history.length){
+    historyList.append(node('div','row-sub',text.historyEmpty));
+    return;
+  }
+  for(const item of history){
+    const row=node('div','row');
+    const main=node('div','row-main');
+    main.append(node('div','row-title',item.fileName||'Finanzguru'));
+    const when=item.createdAt?new Date(item.createdAt).toLocaleString(lang==='de'?'de-DE':'en-US'):'';
+    main.append(node('div','row-sub',[when,`${item.importedCount||0} ${text.imported.toLowerCase()}`,jobStatusLabel(item.status)].filter(Boolean).join(' · ')));
+    row.append(main);
+    if(item.rollbackAvailable){
+      const button=node('button',buttonClass(ButtonRole.Secondary),text.rollback);
+      button.type='button';
+      button.addEventListener('click',()=>rollbackImport(item.id));
+      row.append(button);
+    }
+    historyList.append(row);
+  }
+}
+
+async function loadHistory(){
+  if(!space)return;
+  history=await sharedApi(`api/import-jobs?fullWorthSpaceId=${encodeURIComponent(space.id)}&adapterKey=finanzguru_xlsx`).catch(()=>[]);
+  renderHistory();
+}
+
+async function rollbackImport(jobId){
+  if(!await confirmMessage({message:text.rollbackConfirm,title:text.rollback,confirmLabel:text.rollback,cancelLabel:text.cancel,destructive:true}))return;
+  try{
+    status.textContent=text.working;
+    const result=await sharedApi(`api/import-jobs/${encodeURIComponent(jobId)}/rollback?fullWorthSpaceId=${encodeURIComponent(space.id)}`,{method:'POST'});
+    await Promise.all([loadHistory(),renderLinkOptions()]);
+    status.textContent=fill(text.rolledBack,{removed:result.removed??0,kept:result.kept??0});
+  }catch(error){
+    console.error(error);
+    status.textContent=`${text.error} ${error.message||''}`.trim();
+  }
+}
+
 try{
   const spaces=await sharedApi('api/fullworth-spaces');
   const saved=localStorage.getItem('finance.space');
   space=spaces.find(item=>item.id===saved)||spaces[0]||null;
   document.getElementById('import-space').textContent=space?.name||'—';
-  if(space)await renderLinkOptions();
+  if(space)await Promise.all([renderLinkOptions(),loadHistory()]);
 }catch(error){
   console.error(error);
   status.textContent=text.error;
@@ -382,7 +441,7 @@ form.addEventListener('submit',async event=>{
       result.appendChild(row);
     }
     result.hidden=false;status.textContent=text.done;
-    await renderLinkOptions();
+    await Promise.all([renderLinkOptions(),loadHistory()]);
   }catch(error){
     console.error(error);status.textContent=`${text.error} ${error.message||''}`.trim();
   }finally{
