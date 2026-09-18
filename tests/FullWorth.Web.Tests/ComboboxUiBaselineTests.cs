@@ -72,31 +72,38 @@ public sealed class ComboboxUiBaselineTests
     }
 
     /// <summary>
-    /// Scheibe 9 of #157: the remaining long category selects (dozens of options, hierarchical
-    /// "A › B › C" labels) that still had a bare &lt;select&gt; get the same treatment, one way or the
-    /// other - a dialog built with components/form-dialog.js only needs `searchable: true` on the
-    /// field plus a `comboboxCtx`, a hand-built dialog wires `attachCombobox` directly.
+    /// #121: the remaining long category selects (dozens of options, hierarchical "A › B › C" labels)
+    /// that still opened as a select-plus-search-button-plus-drawer are now anchored fields - the
+    /// popover opens AT the field, shows the current value and its icon closed, and the six sites all
+    /// feed it through the one shared transformer instead of each keeping its own path-building copy.
     /// </summary>
     [Fact]
-    public void The_remaining_long_category_selects_are_searchable()
+    public void The_remaining_long_category_selects_are_anchored()
     {
+        // A dialog built with components/form-dialog.js only needs `anchored: true` plus
+        // `comboboxItems` on the field spec (and still `comboboxCtx` to opt the dialog in at all).
         foreach (var file in new[] { Path.Combine("pages", "rules", "page.js"), Path.Combine("pages", "budgets", "page.js") })
         {
             var source = ReadSource(file);
             Assert.Contains("comboboxCtx: ctx", source, StringComparison.Ordinal);
-            Assert.Contains("searchable: true", source, StringComparison.Ordinal);
+            Assert.Contains("anchored: true", source, StringComparison.Ordinal);
+            Assert.Contains("comboboxItems:", source, StringComparison.Ordinal);
         }
 
         // The booking filter's category field is one of six fields on the visible row, not behind
-        // "Mehr Filter" - the worst offender in the original census (docs/UI_AUDIT.md) is also searchable now.
+        // "Mehr Filter" - the worst offender in the original census (docs/UI_AUDIT.md) is also anchored now.
         var transactions = ReadSource(Path.Combine("pages", "transactions", "page.js"));
         Assert.Contains("comboboxCtx: ctx", transactions, StringComparison.Ordinal);
+        Assert.Contains("anchored: true", transactions, StringComparison.Ordinal);
+        Assert.Contains("comboboxItems:", transactions, StringComparison.Ordinal);
 
         // Hand-built dialogs (no components/form-dialog.js involved) wire attachCombobox directly on
-        // their own category <select>, the same way the account pickers above do it via anchored mode.
+        // their own category <select> with `anchored: true` in the options object.
         foreach (var file in new[] { Path.Combine("pages", "categories", "page.js"), Path.Combine("pages", "purchases", "page.js") })
         {
-            Assert.Contains("attachCombobox", ReadSource(file), StringComparison.Ordinal);
+            var source = ReadSource(file);
+            Assert.Contains("attachCombobox", source, StringComparison.Ordinal);
+            Assert.Contains("anchored: true", source, StringComparison.Ordinal);
         }
 
         // These two modules deliberately have no app `ctx` (own esc/api/makeDialog, see their own file
@@ -106,7 +113,69 @@ public sealed class ComboboxUiBaselineTests
             var source = ReadSource(file);
             Assert.Contains("function comboboxCtx(", source, StringComparison.Ordinal);
             Assert.Contains("attachCombobox(comboboxCtx(", source, StringComparison.Ordinal);
+            Assert.Contains("anchored: true", source, StringComparison.Ordinal);
         }
+
+        // Every one of the six sites feeds the shared transformer - not a seventh copy of the
+        // path-building it replaces.
+        foreach (var file in new[]
+        {
+            Path.Combine("pages", "rules", "page.js"), Path.Combine("pages", "budgets", "page.js"),
+            Path.Combine("pages", "transactions", "page.js"), Path.Combine("pages", "categories", "page.js"),
+            Path.Combine("pages", "purchases", "page.js"), Path.Combine("pages", "purchases", "articles-advanced-actions.js"),
+            Path.Combine("pages", "purchases", "articles-workspace.js")
+        })
+        {
+            Assert.Contains("categoryComboboxItems(", ReadSource(file), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Opt-in stays opt-in even as `anchored` spreads: the account pickers (six dialogs) are
+    /// deliberately still a select next to a search button, not a field popover, and nothing here
+    /// should quietly promote them just because they sit next to `searchable: true`.
+    /// </summary>
+    [Fact]
+    public void The_account_pickers_stay_unanchored()
+    {
+        foreach (var file in new[] { Path.Combine("pages", "contracts", "page.js"), Path.Combine("pages", "networth", "loans.js") })
+        {
+            var source = ReadSource(file);
+            Assert.Contains("searchable: true", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("anchored: true", source, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The path-building (full path as `hint`, indentation, icon inheritance) that used to be the
+    /// category picker's own now lives in one shared, page-blind transformer - so every other category
+    /// select can reuse it instead of copying it a sixth or seventh time.
+    /// </summary>
+    [Fact]
+    public void The_category_path_logic_lives_in_one_shared_component()
+    {
+        var component = ReadSource(Path.Combine("components", "category-combobox.js"));
+        Assert.Contains("export function categoryComboboxItems", component, StringComparison.Ordinal);
+
+        var picker = ReadSource(Path.Combine("pages", "transactions", "category-picker.js"));
+        Assert.Contains("import { categoryComboboxItems } from '../../components/category-combobox.js';", picker, StringComparison.Ordinal);
+
+        // No leftover second copy of the path-building it replaced.
+        Assert.DoesNotContain("function chainOf", picker, StringComparison.Ordinal);
+        Assert.DoesNotContain("function inheritedIcon", picker, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #121's other fix: the row already chosen had no visual sign of it in the open list at all.
+    /// </summary>
+    [Fact]
+    public void The_open_list_marks_the_current_row()
+    {
+        var combobox = ReadSource(Path.Combine("components", "combobox.js"));
+        Assert.Contains("aria-selected", combobox, StringComparison.Ordinal);
+        Assert.Contains(".selected", combobox, StringComparison.Ordinal);
+
+        Assert.Contains(".candidate-row.selected", ReadSource(Path.Combine("styles", "components.css")), StringComparison.Ordinal);
     }
 
     private static string ReadSource(string relativePath)

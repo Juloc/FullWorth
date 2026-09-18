@@ -4,6 +4,7 @@ import { categoryIconInner, categoryIconPicker, selectedIconKey } from '../../co
 // Der "Übergeordnet"-Select trägt hier denselben Baum wie überall sonst (#157) - ohne Suche musste man
 // ihn beim Anlegen/Verschieben einer Unterkategorie in einem tief verschachtelten Baum durchscrollen.
 import { attachCombobox } from '../../components/combobox.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 // Category tree (UI_UX_SPEC §10). Hierarchical view with expand/collapse; each node can be renamed,
 // re-iconed and MOVED to another parent (accessible explicit Move via the edit dialog, §10.2), or
 // archived (§10.4). Archived categories stay on history and are hidden unless "Show archived" is on.
@@ -20,9 +21,9 @@ export function bindCategories(context) {
 
 export async function newCategory(context) {
   ctx = context;
-  let options;
+  let options, categories;
   try {
-    options = await ctx.categoryOptions();
+    [options, categories] = await Promise.all([ctx.categoryOptions(), ctx.api('api/categories')]);
   } catch (error) {
     ctx.toast(error.message || ctx.get('common.error'));
     return;
@@ -43,7 +44,11 @@ export async function newCategory(context) {
 
   const iconPicker = categoryIconPicker(null, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
-  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), { title: ctx.get('categories.parent') });
+  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), {
+    title: ctx.get('categories.parent'),
+    anchored: true,
+    items: () => categoryComboboxItems(categories)
+  });
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
@@ -139,15 +144,23 @@ function renderNode(node, byParent, parent, depth, all, catIndex) {
   if (!isCollapsed) for (const child of children) renderNode(child, byParent, parent, depth + 1, all, catIndex);
 }
 
-// Parent options exclude the node itself and its descendants (can't move under its own subtree).
-function parentOptions(node, all, selected) {
+// Parent candidates exclude the node itself, its descendants (can't move under its own subtree) and
+// archived categories (not a valid new parent). Shared by the <select> markup and the combobox items
+// so the two never drift into showing different choices.
+function bannedParents(node, all) {
   const banned = new Set([node.id]);
   let grew = true;
   while (grew) {
     grew = false;
     for (const c of all) if (c.parentId && banned.has(c.parentId) && !banned.has(c.id)) { banned.add(c.id); grew = true; }
   }
-  return all.filter(c => !banned.has(c.id) && !c.isArchived)
+  for (const c of all) if (c.isArchived) banned.add(c.id);
+  return banned;
+}
+
+function parentOptions(node, all, selected) {
+  const banned = bannedParents(node, all);
+  return all.filter(c => !banned.has(c.id))
     .map(c => `<option value="${c.id}"${selected === c.id ? ' selected' : ''}>${ctx.esc(c.name)}</option>`).join('');
 }
 
@@ -159,7 +172,11 @@ function openEdit(node, all) {
     <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${ctx.esc(ctx.get('common.cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${ctx.esc(ctx.get('common.apply'))}</button></div></form>`);
   const iconPicker = categoryIconPicker(node.icon, { none: ctx.get('categories.iconNone') });
   dlg.querySelector('[data-icon-picker]').replaceWith(iconPicker);
-  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), { title: ctx.get('categories.parent') });
+  attachCombobox(ctx, dlg.querySelector('select[name="parent"]'), {
+    title: ctx.get('categories.parent'),
+    anchored: true,
+    items: () => categoryComboboxItems(all, { exclude: bannedParents(node, all) })
+  });
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
   dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async e => {

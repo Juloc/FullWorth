@@ -206,6 +206,7 @@ td.number,th.number{text-align:right;font-variant-numeric:tabular-nums}
 /* Die Kategorie-Auswahl zeigt den Baum: Einrückung je Ebene, Symbol vor dem Namen.
    Vorher stand dort der volle Pfad als eine Zeile Text und als Symbol der blanke Schlüssel. */
 .candidate-row{--combobox-depth:0;padding-left:calc(var(--s3) + var(--combobox-depth) * var(--s4))}
+.candidate-row.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 .combobox-icon{display:inline-flex;width:18px;height:18px;margin-right:var(--s2);vertical-align:-3px;color:var(--text-muted)}
 .combobox-icon svg{width:100%;height:100%}
 

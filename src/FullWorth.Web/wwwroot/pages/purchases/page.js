@@ -4,6 +4,7 @@ import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 
 // Purchases & receipts (UI_UX_SPEC §16). Amazon orders use the same Purchase/PurchaseItem model as
 // scanned receipts. The Amazon connector only supplies source data; review, categories and bank
@@ -154,10 +155,11 @@ async function scanReceipt() {
 }
 
 async function openDetail(id) {
-  let purchase, options, reconciliation, amazon = null;
+  let purchase, options, categories, reconciliation, amazon = null;
   try {
     purchase = await ctx.api(`api/purchases/${id}`);
     options = await ctx.categoryOptions();
+    categories = await ctx.api('api/categories');
     reconciliation = await ctx.api(`api/purchases/${id}/reconciliation`).catch(() => null);
     if (purchase.source === 'amazon') amazon = await ctx.api(`api/purchases/${id}/amazon-details`).catch(() => null);
   } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
@@ -183,7 +185,11 @@ async function openDetail(id) {
     <div class="dialog-actions"><button type="button" data-save>${ctx.esc(ctx.get('common.apply'))}</button></div>
   </form>`);
   (purchase.items || []).forEach((i, index) => { const s = dlg.querySelector(`.purchase-item[data-index="${index}"] .item-category`); if (s && i.categoryId) s.value = i.categoryId; });
-  dlg.querySelectorAll('.item-category').forEach(select => attachCombobox(ctx, select, { title: ctx.get('transactions.category') }));
+  dlg.querySelectorAll('.item-category').forEach(select => attachCombobox(ctx, select, {
+    title: ctx.get('transactions.category'),
+    anchored: true,
+    items: () => categoryComboboxItems(categories, { allLabel: ctx.get('common.uncategorized') })
+  }));
 
   renderReconcile(dlg.querySelector('[data-reconcile]'), purchase, reconciliation, dlg);
   if (amazon) bindAmazonDetails(dlg, purchase, amazon);

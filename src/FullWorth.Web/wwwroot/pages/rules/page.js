@@ -7,6 +7,7 @@
 
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 
 let ctx = null;
 
@@ -127,9 +128,15 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 // keeps its net-worth switch: it decides whether the rule does anything at all, and a default-on
 // switch behind "Mehr" is a switch nobody knows they have.
 async function openRuleDialog(existing) {
-  let options;
-  try { options = await ctx.categoryOptions(); } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
+  let options, categories;
   const r = existing || {};
+  try {
+    // The <select> keeps its own already-selected option (categoryId, when editing) so the field's
+    // closed state shows the right value the moment it exists - #121 made this the field itself
+    // rather than a select next to a search button, so a value applied only after the fact would
+    // otherwise stay invisible until reopened.
+    [options, categories] = await Promise.all([ctx.categoryOptions(r.categoryId || undefined), ctx.api('api/categories')]);
+  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); return; }
   const choice = (list, prefix) => list.map(v => ({ value: v, label: ctx.get(prefix + v) }));
 
   const handles = openFormDialog({
@@ -147,7 +154,8 @@ async function openRuleDialog(existing) {
       { name: 'field', kind: FieldKind.Select, label: ctx.get('rules.field'), group: 'match', options: choice(FIELDS, 'rules.field_') },
       { name: 'mode', kind: FieldKind.Select, label: ctx.get('rules.mode'), group: 'match', options: choice(MODES, 'rules.mode_') },
       { name: 'pattern', kind: FieldKind.Text, label: ctx.get('rules.pattern'), maxLength: 200 },
-      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), required: true, rawOptions: options, searchable: true },
+      { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), required: true, rawOptions: options, searchable: true,
+        anchored: true, comboboxItems: () => categoryComboboxItems(categories) },
       { name: 'priority', kind: FieldKind.Number, label: ctx.get('rules.priority'), required: true },
       { name: 'isEnabled', kind: FieldKind.Check, label: ctx.get('rules.enabled') },
       // emptyValue: 'any' means "no restriction", so an untouched direction does not count towards

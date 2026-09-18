@@ -10,7 +10,7 @@
 // 'change', so every existing form (FormData reads, plain sel.value reads) keeps working unchanged.
 
 import { attachCombobox, openCombobox } from '../../components/combobox.js';
-import { categoryIconInner } from '../../components/icons.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 
 export function attachCategoryPicker(ctx, selectEl) {
@@ -25,48 +25,16 @@ export function attachCategoryPicker(ctx, selectEl) {
   });
 }
 
-function chainOf(category, byId) {
-  const chain = [];
-  let current = category;
-  while (current) {
-    chain.unshift(current);
-    current = current.parentId ? byId.get(current.parentId) : null;
-  }
-  return chain;
-}
-
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
 }
 
-// Die Liste steht als Baum: sortiert nach dem vollen Pfad, angezeigt nur mit dem eigenen Namen und
-// einer Einrueckung. Der volle Pfad bleibt als `hint` erhalten - danach wird auch gesucht, sonst
-// fände "Supermarkt" die Unterkategorie von "Lebensmittel" nicht mehr, sobald man nach dem Elternteil
-// sucht. Das Symbol kommt fertig gerendert herein; die Combobox weiß nichts von Kategorien.
+// The path-building (full path as `hint`, indentation, icon inheritance) now lives in
+// components/category-combobox.js so every other category select can use it too - this stays a thin
+// wrapper that only knows the one route.
 async function loadItems(ctx) {
   const categories = await ctx.api('api/categories');
-  const byId = new Map(categories.map(category => [category.id, category]));
-  return categories
-    .map(category => {
-      const chain = chainOf(category, byId);
-      const path = chain.map(node => node.name).join(' › ');
-      return {
-        id: category.id,
-        label: category.name,
-        hint: chain.length > 1 ? path : null,
-        depth: chain.length - 1,
-        iconHtml: categoryIconInner(category.icon || inheritedIcon(chain)),
-        sortKey: path,
-      };
-    })
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-}
-
-// Eine Unterkategorie ohne eigenes Symbol zeigt das ihres Elternteils, statt gar keines - sonst
-// stehen in einem Baum lauter leere Stellen neben genau einem Symbol ganz oben.
-function inheritedIcon(chain) {
-  for (let index = chain.length - 1; index >= 0; index--) if (chain[index].icon) return chain[index].icon;
-  return null;
+  return categoryComboboxItems(categories);
 }
 
 /** The inline "create a category" form, as the combobox's caller-supplied slot. */
@@ -103,13 +71,15 @@ function createSlot(ctx) {
 
 // Opens the picker and calls onSelect(categoryId) with the chosen (or freshly created) id. `selectEl`
 // is optional and only used to append a newly-created <option> when the picker layers over a <select>;
-// callers without a select (e.g. the transactions list category chip) just pass a callback.
-export async function openCategoryPicker(ctx, onSelect, selectEl = null) {
+// callers without a select (e.g. the transactions list category chip) just pass a callback and, so the
+// open list can still highlight today's value, the id it already has via `selectedId`.
+export async function openCategoryPicker(ctx, onSelect, selectEl = null, selectedId = null) {
   return openCombobox(ctx, {
     title: ctx.get('categories.pick'),
     searchPlaceholder: ctx.get('categories.pickSearch'),
     items: () => loadItems(ctx),
     selectEl,
+    selectedId,
     onSelect,
     extra: createSlot(ctx)
   });

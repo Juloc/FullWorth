@@ -3,6 +3,7 @@ import { createDialog } from '../../components/dialog.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { attachCombobox } from '../../components/combobox.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { showToast } from '../../components/toast.js';
 // Advanced purchases/articles UI. It is loaded as a side effect by gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
@@ -195,9 +196,10 @@ async function openManualPurchase() {
     <label>${esc(t('merchant'))}<input name="merchant" required></label>
     <div class="pa-form-grid"><label>${esc(t('date'))}<input name="date" type="date"></label><label>${esc(t('total'))}<input name="total" type="number" step="0.01" min="0" required></label><label>${esc(t('currency'))}<input name="currency" maxlength="3" value="EUR" required></label><label>${esc(t('visibility'))}<select name="visibility"><option value="space">${esc(t('shared'))}</option><option value="private">${esc(t('private'))}</option></select></label></div>
     <label>${esc(t('notes'))}<textarea name="notes" rows="3"></textarea></label>
-    <div class="dialog-actions"><button type="button" data-close>${esc(t('close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('create'))}</button></div>
+    <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(t('close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('create'))}</button></div>
   </form>`);
-  dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
+  dlg.querySelector('[data-close]').onclick = () => dlg.close();
+  dlg.querySelector('[data-cancel]').onclick = () => dlg.close();
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
@@ -265,7 +267,7 @@ export async function openPurchaseWorkspace(id) {
   </div>`);
 
   dlg.querySelector('[data-close]').onclick = () => dlg.close();
-  bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable);
+  bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable, categories);
   if (writable) {
     dlg.querySelector('[data-save-summary]').onclick = () => savePurchaseSummary(dlg, purchase).then(() => refreshWorkspace(dlg, id)).catch(error => showDialogError(dlg, error.message));
     dlg.querySelector('[data-add-item]').onclick = () => addBlankItem(dlg, id, purchase.currency, categoryOptions);
@@ -310,7 +312,7 @@ function itemEditor(item, categoryOptions, writable) {
   </div>`;
 }
 
-function bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable) {
+function bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable, categories) {
   (purchase.items || []).forEach(item => {
     const row = dlg.querySelector(`[data-item-id="${item.id}"]`);
     if (!row) return;
@@ -319,7 +321,12 @@ function bindWorkspaceItemActions(dlg, purchase, categoryOptions, writable) {
     if (!writable) return;
     // Derselbe lange Kategoriebaum wie ueberall sonst (#157) - nur suchbar, wenn das Feld auch
     // bearbeitbar ist; ein deaktiviertes Select braucht keinen Sucheinstieg, der nirgendwo speichert.
-    if (category) attachCombobox(comboboxCtx(), category, { title: t('category') });
+    // Anchored (#121): das Feld selbst ist die Auswahl, mit Icon und aktuellem Wert statt Select+Lupe.
+    if (category) attachCombobox(comboboxCtx(), category, {
+      title: t('category'),
+      anchored: true,
+      items: () => categoryComboboxItems(categories)
+    });
     row.querySelector('[data-save-item]').onclick = async () => {
       try { await api(`api/purchases/${purchase.id}/items/${item.id}`, json('PATCH', itemPayload(row, item, purchase.currency))); await refreshWorkspace(dlg, purchase.id); }
       catch (error) { showDialogError(dlg, error.message); }
@@ -515,9 +522,13 @@ async function renderProducts() {
 
 async function openProductCreate(onSaved) {
   const categories = await api('api/categories').catch(() => []);
-  const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(t('newProduct'))}</h2><button type="button" data-close>×</button></div><label>${esc(t('name'))}<input name="name" required></label><label>${esc(t('brand'))}<input name="brand"></label><label>${esc(t('category'))}<select name="category"><option value="">—</option>${categoryOptionsHtml(categories)}</select></label><div class="pa-form-grid"><label>${esc(t('unit'))}<input name="unit" placeholder="piece / kg / l"></label><label>Packungsmenge<input name="packageQuantity" type="number" step="0.001"></label><label>Packungseinheit<input name="packageUnit" placeholder="g / ml / piece"></label></div><label>${esc(t('notes'))}<textarea name="notes"></textarea></label><div class="dialog-actions"><button type="button" data-close>${esc(t('close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('create'))}</button></div></form>`);
-  attachCombobox(comboboxCtx(), dlg.querySelector('select[name="category"]'), { title: t('category') });
-  dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
+  const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(t('newProduct'))}</h2><button type="button" data-close>×</button></div><label>${esc(t('name'))}<input name="name" required></label><label>${esc(t('brand'))}<input name="brand"></label><label>${esc(t('category'))}<select name="category"><option value="">—</option>${categoryOptionsHtml(categories)}</select></label><div class="pa-form-grid"><label>${esc(t('unit'))}<input name="unit" placeholder="piece / kg / l"></label><label>Packungsmenge<input name="packageQuantity" type="number" step="0.001"></label><label>Packungseinheit<input name="packageUnit" placeholder="g / ml / piece"></label></div><label>${esc(t('notes'))}<textarea name="notes"></textarea></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(t('close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(t('create'))}</button></div></form>`);
+  attachCombobox(comboboxCtx(), dlg.querySelector('select[name="category"]'), {
+    title: t('category'),
+    anchored: true,
+    items: () => categoryComboboxItems(categories)
+  });
+  dlg.querySelectorAll('[data-close],[data-cancel]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
     try {

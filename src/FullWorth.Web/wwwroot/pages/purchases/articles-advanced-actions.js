@@ -4,6 +4,7 @@
 
 import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
 import { attachCombobox } from '../../components/combobox.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { showToast } from '../../components/toast.js';
 
 const lang = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
@@ -31,7 +32,7 @@ function comboboxCtx({ esc, makeDialog }) {
 
 function promptText({ makeDialog, esc, title, label }) {
   return new Promise(resolve => {
-    const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(title)}</h2><button type="button" data-close>×</button></div><label>${esc(label)}<input name="value" required autofocus></label><div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen','Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Anlegen','Create'))}</button></div></form>`);
+    const dlg = makeDialog(`<form class="pa-dialog-card pa-small-form"><div class="panel-head"><h2>${esc(title)}</h2><button type="button" data-close>×</button></div><label>${esc(label)}<input name="value" required autofocus></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(text('Abbrechen','Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Anlegen','Create'))}</button></div></form>`);
     let settled = false;
     const finish = value => {
       if (settled) return;
@@ -39,7 +40,7 @@ function promptText({ makeDialog, esc, title, label }) {
       resolve(value);
       if (dlg.open) dlg.close();
     };
-    dlg.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => finish(null)));
+    dlg.querySelectorAll('[data-close],[data-cancel]').forEach(button => button.addEventListener('click', () => finish(null)));
     dlg.querySelector('form').addEventListener('submit', event => {
       event.preventDefault();
       const value = String(new FormData(event.currentTarget).get('value') || '').trim();
@@ -166,8 +167,8 @@ async function openReturnsDialog({ parent, purchase, item, api, esc, makeDialog,
   const dlg = makeDialog(`<form class="pa-dialog-card pa-picker"><div class="panel-head"><div><h2>${esc(text('Retoure / Erstattung', 'Return / refund'))}</h2><div class="row-sub">${esc(item.name)} · ${esc(text('Noch verfügbar', 'Remaining'))}: ${remaining}</div></div><button type="button" data-close>×</button></div>
     <div class="pa-list" data-return-list>${(returns || []).map(row => `<div class="pa-history-row"><div><strong>${row.quantity}× · ${esc(money(row.amount, row.currency))}</strong><span>${esc(fmtDate(row.createdAt))}${row.note ? ` · ${esc(row.note)}` : ''}</span></div><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-delete-return="${row.id}">${esc(text('Entfernen', 'Remove'))}</button></div>`).join('') || `<div class="state-empty">${esc(text('Noch keine Retoure.', 'No return recorded yet.'))}</div>`}</div>
     <div class="pa-form-grid"><label>${esc(text('Menge', 'Quantity'))}<input name="quantity" type="number" step="0.001" min="0.001" max="${remaining}" value="${remaining > 0 ? Math.min(1, remaining) : 0}" required></label><label>${esc(text('Erstattungsbetrag', 'Refund amount'))}<input name="amount" type="number" step="0.01" min="0" value="0" required></label><label>${esc(text('Währung', 'Currency'))}<input name="currency" maxlength="3" value="${esc(item.currency || purchase.currency)}" required></label><label>${esc(text('Erstattungsbuchung', 'Refund transaction'))}<select name="refundTransaction"><option value="">${esc(text('Keine / später', 'None / later'))}</option>${income.map(tx => `<option value="${tx.id}">${esc(fmtDate(tx.bookingDate))} · ${esc(tx.counterparty || '—')} · ${esc(money(tx.amount, tx.currency))}</option>`).join('')}</select></label></div>
-    <label>${esc(text('Notiz', 'Note'))}<input name="note"></label><div class="dialog-actions"><button type="button" data-close>${esc(text('Schließen', 'Close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}" ${remaining <= 0 ? 'disabled' : ''}>${esc(text('Retoure speichern', 'Save return'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
-  dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
+    <label>${esc(text('Notiz', 'Note'))}<input name="note"></label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(text('Schließen', 'Close'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}" ${remaining <= 0 ? 'disabled' : ''}>${esc(text('Retoure speichern', 'Save return'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
+  dlg.querySelectorAll('[data-close],[data-cancel]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelectorAll('[data-delete-return]').forEach(button => button.onclick = async () => {
     if (!await confirmAction(text('Retoure entfernen? Eine verknüpfte Refund-Zuordnung wird ebenfalls gelöst.', 'Remove return? A linked refund mapping will also be cleared.'))) return;
     try {
@@ -257,8 +258,8 @@ async function openExtractionRuns({ parent, purchase, doc, writable, api, esc, m
 }
 
 function openApplyExtraction({ runsDialog, parent, purchase, runId, api, esc, makeDialog, showError, refresh }) {
-  const dlg = makeDialog(`<form class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('OCR-Ergebnis übernehmen', 'Apply OCR result'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Manuell korrigierte Artikeldaten werden nur ersetzt, wenn du „Artikel ersetzen“ ausdrücklich aktivierst. Finanzielle Allocations verlieren dabei nie ihren Betrag; Artikelbezüge werden vor dem Ersetzen gelöst.', 'Manually corrected items are only replaced when you explicitly enable “Replace items”. Financial allocations keep their amount; item links are detached before replacement.'))}</p><label class="check"><input type="checkbox" name="merchant" checked> ${esc(text('Händler', 'Merchant'))}</label><label class="check"><input type="checkbox" name="date" checked> ${esc(text('Datum', 'Date'))}</label><label class="check"><input type="checkbox" name="total" checked> ${esc(text('Gesamtsumme', 'Total'))}</label><label class="check"><input type="checkbox" name="currency"> ${esc(text('Währung', 'Currency'))}</label><label class="check"><input type="checkbox" name="items"> ${esc(text('Artikel ersetzen', 'Replace items'))}</label><div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Übernehmen', 'Apply'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
-  dlg.querySelectorAll('[data-close]').forEach(x => x.onclick = () => dlg.close());
+  const dlg = makeDialog(`<form class="pa-dialog-card pa-picker"><div class="panel-head"><h2>${esc(text('OCR-Ergebnis übernehmen', 'Apply OCR result'))}</h2><button type="button" data-close>×</button></div><p class="row-sub">${esc(text('Manuell korrigierte Artikeldaten werden nur ersetzt, wenn du „Artikel ersetzen“ ausdrücklich aktivierst. Finanzielle Allocations verlieren dabei nie ihren Betrag; Artikelbezüge werden vor dem Ersetzen gelöst.', 'Manually corrected items are only replaced when you explicitly enable “Replace items”. Financial allocations keep their amount; item links are detached before replacement.'))}</p><label class="check"><input type="checkbox" name="merchant" checked> ${esc(text('Händler', 'Merchant'))}</label><label class="check"><input type="checkbox" name="date" checked> ${esc(text('Datum', 'Date'))}</label><label class="check"><input type="checkbox" name="total" checked> ${esc(text('Gesamtsumme', 'Total'))}</label><label class="check"><input type="checkbox" name="currency"> ${esc(text('Währung', 'Currency'))}</label><label class="check"><input type="checkbox" name="items"> ${esc(text('Artikel ersetzen', 'Replace items'))}</label><div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Übernehmen', 'Apply'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
+  dlg.querySelectorAll('[data-close],[data-cancel]').forEach(x => x.onclick = () => dlg.close());
   dlg.querySelector('form').onsubmit = async event => {
     event.preventDefault();
     try {
@@ -287,7 +288,11 @@ export async function mountProductAdvancedActions({ dlg, product, api, esc, make
   card.className = 'pa-card pa-product-admin';
   card.innerHTML = `<div class="pa-card-head"><h3>${esc(text('Produkt bearbeiten', 'Edit product'))}</h3></div><div class="pa-form-grid"><label>${esc(text('Name', 'Name'))}<input data-pf="name" value="${esc(product.canonicalName)}"></label><label>${esc(text('Marke', 'Brand'))}<input data-pf="brand" value="${esc(product.brand || '')}"></label><label>${esc(text('Kategorie', 'Category'))}<select data-pf="category">${categoryOptions}</select></label><label>${esc(text('Standardeinheit', 'Default unit'))}<input data-pf="unit" value="${esc(product.defaultQuantityUnit || '')}" placeholder="piece / kg / l"></label><label>${esc(text('Packungsmenge', 'Package quantity'))}<input data-pf="packageQuantity" type="number" step="0.001" value="${esc(product.defaultPackageQuantity ?? '')}"></label><label>${esc(text('Packungseinheit', 'Package unit'))}<input data-pf="packageUnit" value="${esc(product.defaultPackageUnit || '')}" placeholder="g / ml / piece"></label></div><label>${esc(text('Notizen', 'Notes'))}<textarea data-pf="notes">${esc(product.notes || '')}</textarea></label><div class="pa-inline-actions"><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-product-save>${esc(text('Speichern', 'Save'))}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-product-merge>${esc(text('Zusammenführen', 'Merge'))}</button><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-product-archive>${esc(product.isArchived ? text('Wiederherstellen', 'Restore') : text('Archivieren', 'Archive'))}</button></div>`;
   root.appendChild(card);
-  attachCombobox(comboboxCtx({ esc, makeDialog }), card.querySelector('[data-pf="category"]'), { title: text('Kategorie wählen', 'Choose category') });
+  attachCombobox(comboboxCtx({ esc, makeDialog }), card.querySelector('[data-pf="category"]'), {
+    title: text('Kategorie wählen', 'Choose category'),
+    anchored: true,
+    items: () => categoryComboboxItems(categories)
+  });
 
   const aliases = document.createElement('div');
   aliases.className = 'pa-card';

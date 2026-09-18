@@ -3,6 +3,7 @@ import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { MoneyVariant, moneyClass } from '../../components/money.js';
 import { openFormDialog, FieldKind } from '../../components/form-dialog.js';
 import { emptyRow } from '../../components/empty.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 
 // The disclosure label is new with the form-dialog conversion and has no i18n key yet.
 function lang() { return !document.documentElement.lang || !document.documentElement.lang.startsWith('en'); }
@@ -237,9 +238,12 @@ export async function newBudget(context) {
 
 async function openBudgetDialog(existing) {
   const currency = existing?.currency || state.space?.baseCurrency || 'EUR';
-  let options;
+  let options, categories;
   try {
-    options = await ctx.categoryOptions(existing?.categoryId || undefined);
+    [options, categories] = await Promise.all([
+      ctx.categoryOptions(existing?.categoryId || undefined),
+      ctx.api('api/categories')
+    ]);
   } catch (error) {
     ctx.toast(error.message || ctx.get('common.error'));
     return;
@@ -290,7 +294,8 @@ async function openBudgetDialog(existing) {
       { name: 'currency', kind: FieldKind.Text, label: ctx.get('purchases.currency'), required: true, minLength: 3, maxLength: 3, group: 'sum' },
       { name: 'period', kind: FieldKind.Select, label: ctx.get('budgets.period'), rawOptions: periods },
       { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), searchable: true,
-        rawOptions: `<option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}` },
+        rawOptions: `<option value="">${ctx.esc(ctx.get('common.all'))}</option>${options}`,
+        anchored: true, comboboxItems: () => categoryComboboxItems(categories, { allLabel: ctx.get('common.all') }) },
       { name: 'startDate', kind: FieldKind.Date, label: ctx.get('budgets.anchorDate'), advanced: true, group: 'cycle',
         hint: ctx.get('budgets.anchorHint_week') },
       { name: 'endDate', kind: FieldKind.Date, label: ctx.get('budgets.endDate'), advanced: true, group: 'cycle' },

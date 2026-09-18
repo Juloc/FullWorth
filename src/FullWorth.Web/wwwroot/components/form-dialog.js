@@ -237,7 +237,13 @@ export function createFormDialog({
   if (comboboxCtx) {
     for (const spec of fields.filter(f => f.searchable && f.kind === FieldKind.Select)) {
       const select = form.querySelector(`select[name="${CSS.escape(spec.name)}"]`);
-      if (select) attachCombobox(comboboxCtx, select, { title: spec.searchTitle || spec.label });
+      // `anchored`/`comboboxItems` are opt-in per field, never a global default (#121) - the account
+      // pickers (contracts/loans) stay a select-plus-drawer until they ask for the field treatment too.
+      if (select) attachCombobox(comboboxCtx, select, {
+        title: spec.searchTitle || spec.label,
+        anchored: spec.anchored,
+        items: spec.comboboxItems ? () => spec.comboboxItems(comboboxCtx) : undefined
+      });
     }
   }
 

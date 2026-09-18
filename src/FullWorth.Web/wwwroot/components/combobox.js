@@ -126,6 +126,7 @@ export async function openCombobox(ctx, {
   searchPlaceholder,
   items,
   selectEl = null,
+  selectedId = null,
   onSelect,
   extra = null,
   anchorTo = null,
@@ -139,6 +140,11 @@ export async function openCombobox(ctx, {
     return;
   }
   onItems?.(list);
+
+  // Without an explicit selectedId (the transactions-list chip has no <select> to read), fall back to
+  // the select's own current value - so the row already chosen is not the only one in the list with
+  // no visual sign that anything is picked at all.
+  const currentId = selectedId ?? (selectEl ? selectEl.value : null);
 
   const heading = title || ctx.get('combobox.pick');
   const inner = `<div class="panel-head"><h2>${ctx.esc(heading)}</h2><button type="button" data-close aria-label="${ctx.esc(ctx.get('common.close'))}">×</button></div>
@@ -172,12 +178,15 @@ export async function openCombobox(ctx, {
       ? list.filter(item => `${item.label} ${item.hint || ''}`.toLowerCase().includes(needle))
       : list;
     rows.innerHTML = shown.length
-      ? shown.map((item, index) => `<button type="button" class="row candidate-row" role="option" data-id="${ctx.esc(item.id)}" data-index="${index}"${item.depth ? ` style="--combobox-depth:${item.depth}"` : ''}>`
-        + `<div class="row-main"><div class="row-title">`
-        + (item.iconHtml ? `<span class="combobox-icon" aria-hidden="true">${item.iconHtml}</span>` : item.icon ? ctx.esc(item.icon) + ' ' : '')
-        + `${ctx.esc(item.label)}</div>`
-        + (item.hint ? `<div class="row-sub">${ctx.esc(item.hint)}</div>` : '')
-        + `</div></button>`).join('')
+      ? shown.map((item, index) => {
+        const isSelected = currentId != null && String(item.id) === String(currentId);
+        return `<button type="button" class="row candidate-row${isSelected ? ' selected' : ''}" role="option" aria-selected="${isSelected}" data-id="${ctx.esc(item.id)}" data-index="${index}"${item.depth ? ` style="--combobox-depth:${item.depth}"` : ''}>`
+          + `<div class="row-main"><div class="row-title">`
+          + (item.iconHtml ? `<span class="combobox-icon" aria-hidden="true">${item.iconHtml}</span>` : item.icon ? ctx.esc(item.icon) + ' ' : '')
+          + `${ctx.esc(item.label)}</div>`
+          + (item.hint ? `<div class="row-sub">${ctx.esc(item.hint)}</div>` : '')
+          + `</div></button>`;
+      }).join('')
       : `<div class="row-sub">${ctx.esc(ctx.get('common.empty'))}</div>`;
     rows.querySelectorAll('[data-id]').forEach(row =>
       row.addEventListener('click', () => choose(row.dataset.id)));

@@ -4,6 +4,7 @@
 // and links to a receipt when a purchase is attached.
 
 import { attachCategoryPicker, openCategoryPicker } from './category-picker.js';
+import { categoryComboboxItems } from '../../components/category-combobox.js';
 import { keepListPosition } from '../../components/list-position.js';
 import { identityIcon, categoryIconInner, monogramHue, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { MoneyVariant, moneyClass } from '../../components/money.js';
@@ -319,10 +320,11 @@ function updateFilterBadge(f) {
 // emptyValue.
 async function openFilterSheet() {
   const params = new URLSearchParams(location.search);
-  let catOptions = '', accounts = [], groups = [], merchants = [];
+  let catOptions = '', categories = [], accounts = [], groups = [], merchants = [];
   try {
-    [catOptions, accounts, groups, merchants] = await Promise.all([
+    [catOptions, categories, accounts, groups, merchants] = await Promise.all([
       ctx.categoryOptions(params.get('categoryId') || undefined).catch(() => ''),
+      ctx.api('api/categories').catch(() => []),
       ctx.api('api/accounts').catch(() => []),
       ctx.api('api/account-groups').catch(() => []),
       ctx.api('api/merchants').catch(() => [])
@@ -357,7 +359,8 @@ async function openFilterSheet() {
       { name: 'from', kind: FieldKind.Date, label: deLabel('Von', 'From'), group: 'range' },
       { name: 'to', kind: FieldKind.Date, label: deLabel('Bis', 'To'), group: 'range' },
       { name: 'category', kind: FieldKind.Select, label: ctx.get('transactions.category'), emptyValue: '', searchable: true,
-        rawOptions: '<option value="">' + ctx.esc(all) + '</option>' + catOptions },
+        rawOptions: '<option value="">' + ctx.esc(all) + '</option>' + catOptions,
+        anchored: true, comboboxItems: () => categoryComboboxItems(categories, { allLabel: all }) },
 
       { name: 'status', kind: FieldKind.Select, label: deLabel('Status', 'Status'), advanced: true, emptyValue: '',
         options: [{ value: '', label: all },
@@ -703,7 +706,7 @@ function quickEditCategory(x) {
       ctx.toast(ctx.get('common.saved'));
       await refreshList(x.id);
     } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
-  });
+  }, null, x.categoryId);
 }
 
 function groupHeaderRow(label, day = '') {
