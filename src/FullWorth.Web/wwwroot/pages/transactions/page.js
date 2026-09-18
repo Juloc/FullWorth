@@ -548,10 +548,22 @@ export async function renderTransactions(context) {
   if (fromDate) q.set('from', fromDate);
   if (toDate) q.set('to', toDate);
   updateFilterBadge({ direction: dir, from: fromDate, to: toDate, categoryId, accountId, groupId, merchant, merchantId, minAmount, maxAmount, status, transfersOnly, ignoredOnly, refundOnly, hasReceipt });
+  // Zukunfts-Timeline (#139): der Forecast passt nur zur EINFACHEN Konto-/Gruppen-/Alle-Konten-Sicht.
+  // Sobald irgendein anderer Filter aktiv ist, wuerde eine erwartete Vertragsbuchung neben gefilterten
+  // echten Buchungen stehen, die selbst gar nicht zu diesem Filter gehoert (sie hat ja noch keine
+  // Kategorie, keinen Haendler, keinen Betrag im gesuchten Bereich) - deshalb dann einfach keine.
+  const forecastEligible = !(text || dir || status || merchant || merchantId || minAmount || maxAmount ||
+    transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate);
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
-  const data = await ctx.api(`api/transactions?${q}`);
+  const forecastQuery = new URLSearchParams();
+  if (accountId) forecastQuery.set('accountId', accountId);
+  else if (groupId) forecastQuery.set('groupId', groupId);
+  const [data, forecast] = await Promise.all([
+    ctx.api(`api/transactions?${q}`),
+    forecastEligible ? ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null) : Promise.resolve(null)
+  ]);
   const items = data.items || [];
 
   currentItemsById = new Map(items.map(item => [String(item.id), item]));
@@ -626,6 +638,15 @@ export async function renderTransactions(context) {
     row.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     fragment.appendChild(row);
   }
+  // Zukunfts-Timeline (#139), Teil 1: erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt
+  // NACH allem oben (die Liste sortiert weiterhin absteigend - das "Ende" ist die aelteste Buchung, die
+  // Prognose steht also vorerst darunter statt wirklich "nach Heute". Die Sortierumkehr, die sie an die
+  // richtige Stelle bringt, ist ein eigener, spaeterer Schritt).
+  const forecastItems = forecast?.items || [];
+  if (forecastItems.length) {
+    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected')));
+    for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
+  }
   body.replaceChildren(fragment);
   // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
   // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
@@ -690,6 +711,36 @@ function accountCell(x) {
     ? `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>`
     : `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10 12 4l8 6M5 10v8m4-8v8m6-8v8m4-8v8M3.5 19h17"/></svg>`;
   return `<div class="tx-acct"><span class="tx-acct-ic" aria-hidden="true">${icon}</span><span class="tx-acct-name">${ctx.esc(name)}</span></div>`;
+}
+
+// Zukunfts-Timeline (#139): eine Prognose-Zeile - dieselben sechs Gitterspalten wie .tx-row, aber ohne
+// Checkbox (nichts zum Fuer-Coach-auswaehlen) und ohne Klick (nichts zum Oeffnen: es gibt keine
+// Buchung dahinter). Kategorie- und Kontoname bleiben leer statt eine zweite Datenquelle nachzuladen,
+// nur um sie zu fuellen - Datum, Name, Kennzeichnung und Betrag sind die Information, die zaehlt.
+function forecastKindLabel(entry) {
+  if (entry.kind === 'contract') return deLabel('Erwartet · Vertrag', 'Expected · Contract');
+  if (entry.kind === 'income') return deLabel('Erwartet · Eingang', 'Expected · Income');
+  return deLabel('Budget', 'Budget');
+}
+function forecastRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'tx-row tx-row-forecast' + (entry.kind === 'budget-period' ? ' tx-row-forecast-budget' : '');
+  const label = entry.label || '—';
+  const sub = [entry.subLabel, forecastKindLabel(entry), entry.isEstimate ? deLabel('Schätzung', 'Estimate') : '']
+    .filter(Boolean).join(' · ');
+  const hasAmount = entry.amount !== null && entry.amount !== undefined;
+  const variant = hasAmount ? transactionMoneyVariant({ amount: entry.amount }) : MoneyVariant.Neutral;
+  const amountHtml = hasAmount
+    ? `<span class="tx-amt">${ctx.money(entry.amount, entry.currency)}</span>`
+    : `<span class="tx-amt" title="${ctx.esc(deLabel('Betrag unbekannt', 'Amount unknown'))}">—</span>`;
+  row.innerHTML =
+    `<div class="tx-date-cell">${ctx.date(entry.date)}</div>` +
+    `<div class="tx-cp"><span class="tx-ident-slot">${identityIcon(label, { categoryIconKey: entry.categoryIconKey })}</span><span class="tx-cp-main"><strong>${ctx.esc(label)}</strong>${sub ? `<span class="row-sub">${ctx.esc(sub)}</span>` : ''}</span></div>` +
+    `<div class="tx-cat"></div>` +
+    `<div class="tx-acct"></div>` +
+    `<div class="number ${moneyClass(variant)}">${amountHtml}</div>` +
+    `<div class="tx-go"></div>`;
+  return row;
 }
 
 // Inline category edit from the list chip. The classification PATCH is a full replace, so we read the

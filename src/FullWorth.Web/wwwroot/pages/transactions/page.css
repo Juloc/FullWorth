@@ -135,7 +135,14 @@
 
 .tx-close svg{display:block}
 
-.tx-sk-avatar{display:inline-block;vertical-align:middle;width:38px;height:38px;border-radius:50%;margin-right:11px}
+/* Matches .fw-ident (styles/app.css) exactly, base and mobile breakpoint both - a skeleton avatar
+   smaller than the real identity icon it stands in for made every row a few px shorter than its real
+   self, which is exactly the layout shift LayoutStabilityTests measures. */
+.tx-sk-avatar{display:inline-block;vertical-align:middle;width:42px;height:42px;border-radius:50%;margin-right:11px}
+
+@media(max-width:767px){
+  .tx-sk-avatar{width:44px;height:44px}
+}
 
 .tx-skeleton .tx-cp-main{gap:6px}
 
@@ -280,3 +287,10 @@
   #view-transactions.tx-mobile-selection-mode .tx-row{user-select:none;-webkit-user-select:none}
   #view-transactions.tx-mobile-selection-mode .tx-row:not(.tx-selected){background:var(--surface)}
 }
+
+/* Zukunfts-Timeline (#139): eine Prognose-Zeile darf nie wie eine echte Buchung wirken - drei
+   redundante, farbunabhaengige Signale (gestrichelte Trennlinie, reduzierte Deckkraft, kursiver
+   Betrag) statt einer eigenen Farbe, die in Graustufen oder fuer Farbenblindheit verschwindet. */
+.tx-row-forecast{opacity:.72;border-top:1px dashed var(--line)}
+.tx-row-forecast .tx-amt{font-style:italic}
+.tx-row-forecast .tx-cp-main strong{color:var(--muted)}

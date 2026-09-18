@@ -2,6 +2,8 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Budgets.CarryOver;
 using FullWorth.Backend.Modules.Budgets.Cycles;
+using FullWorth.Backend.Modules.Contracts;
+using FullWorth.Backend.Modules.Reconciliation;
 using Microsoft.EntityFrameworkCore;
 
 namespace FullWorth.Backend.Modules.Analytics;
@@ -25,6 +27,26 @@ public sealed record BudgetStatusItem(Guid Id, string Name, Guid? CategoryId, st
     public bool CarryOverOverspend { get; init; }
 }
 public sealed record ForecastPoint(DateOnly Date, decimal EstimatedNetWorth, decimal AverageHistoricalNet, decimal RecurringMonthly);
+/// <summary>
+/// Ein einzelner Eintrag der durchgehenden Zukunfts-Timeline (#139) - eine erwartete Vertragsbuchung,
+/// ein erwarteter Eingang, oder eine Budgetperiode. <c>Amount</c> steht in der ORIGINALWAEHRUNG des
+/// Vertrags/Eingangs (Geldregel: eine Basiswaehrungs-Umrechnung ueberschreibt nie den Originalwert) -
+/// ausgehend negativ, eingehend positiv, genau wie bei einer echten Buchung. <c>Amount=null</c> heisst:
+/// kein erfundener Betrag, weil keiner bekannt ist.
+/// </summary>
+public sealed record ForecastEntry(
+    string Kind,
+    Guid? SourceId,
+    DateOnly Date,
+    string Label,
+    string? SubLabel,
+    decimal? Amount,
+    string Currency,
+    bool IsEstimate,
+    Guid? AccountId,
+    Guid? CategoryId,
+    string? CategoryIconKey);
+public sealed record ForecastTimelineResult(DateOnly From, DateOnly To, bool Incomplete, IReadOnlyList<ForecastEntry> Items);
 public sealed record ExpenseAllocation(Guid TransactionId, Guid? CategoryId, decimal Amount, bool FromPurchaseItem);
 // Guided chart builder (§15.2). A bounded measure×dimension query over the same FX-aware aggregation.
 public sealed record ChartPoint(string? Key, string Label, decimal Value);
@@ -33,7 +55,10 @@ public sealed record ChartResult(string Currency, string Measure, string Dimensi
 public sealed class AnalyticsService(
     FullWorthDbContext db,
     FullWorth.Backend.Modules.Fx.CurrencyConverter fx,
-    FullWorth.Backend.Modules.Portfolio.InvestmentNetWorthService investments)
+    FullWorth.Backend.Modules.Portfolio.InvestmentNetWorthService investments,
+    CashflowStore cashflow,
+    FinancialReconciliationService reconciliation,
+    ContractLinkStore contractLinks)
 {
     public Task<object?> OverviewForUserAsync(
         Guid userId, Guid fullWorthSpaceId, DateOnly? from, DateOnly? to, string? currency, CancellationToken ct) =>
@@ -332,6 +357,18 @@ public sealed class AnalyticsService(
     /// </summary>
     public async Task<object?> BudgetStatusForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string? currency, CancellationToken ct)
     {
+        var result = await BudgetStatusItemsForUserAsync(userId, fullWorthSpaceId, year, month, currency, ct);
+        return result is null ? null : new { year, month, currency = result.Value.Currency, items = result.Value.Items, incomplete = result.Value.Incomplete };
+    }
+
+    /// <summary>
+    /// Dieselbe Berechnung wie <see cref="BudgetStatusForUserAsync"/>, nur mit dem tatsaechlichen Typ
+    /// statt dem anonymen Rueckgabeobjekt - fuer die Zukunfts-Timeline (#139), die die einzelnen
+    /// <see cref="BudgetStatusItem"/>s braucht statt nur ihrer JSON-Form. Der oeffentliche Endpunkt
+    /// bleibt byte-identisch: er baut sein anonymes Objekt weiterhin aus genau diesen Werten.
+    /// </summary>
+    private async Task<(string Currency, List<BudgetStatusItem> Items, bool Incomplete)?> BudgetStatusItemsForUserAsync(Guid userId, Guid fullWorthSpaceId, int year, int month, string? currency, CancellationToken ct)
+    {
         if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
         currency = await ResolveCurrencyAsync(fullWorthSpaceId, currency, ct);
 
@@ -447,7 +484,7 @@ public sealed class AnalyticsService(
             });
         }
 
-        return new { year, month, currency, items, incomplete };
+        return (currency, items, incomplete);
     }
 
     private static List<BudgetCyclePeriod> PriorBudgetPeriods(
@@ -515,6 +552,168 @@ public sealed class AnalyticsService(
             points,
             incomplete = forecastAcc.Incomplete || dashboard.Incomplete
         };
+    }
+
+    /// <summary>
+    /// #139: die durchgehende Zukunfts-Timeline hinter der Buchungsseite - erwartete
+    /// Vertragsbuchungen, erwartete Eingaenge und Budgetperioden fuer den angegebenen Konto-/
+    /// Gruppen-/Alle-Konten-Bereich, ohne eine zweite Kalender-, Vertrags- oder Budgetlogik: die
+    /// Terminmathematik bleibt bei <see cref="ContractCycle"/>, der Budgetstatus bei
+    /// <see cref="BudgetStatusItemsForUserAsync"/>, und die Dedup-Regel gegen bereits gebuchte
+    /// Vertraege/Eingaenge bei <see cref="ForecastDedup"/> (derselbe Mechanismus wie
+    /// <c>/api/cashflow/available</c>).
+    ///
+    /// Nur die NAECHSTE Faelligkeit je Vertrag/Eingang wird gegen echte Buchungen geprueft - jede
+    /// weitere liegt per Konstruktion weiter in der Zukunft als irgendetwas, das schon gebucht sein
+    /// koennte.
+    /// </summary>
+    public async Task<ForecastTimelineResult?> ForecastTimelineAsync(
+        Guid userId, Guid fullWorthSpaceId, Guid? accountId, Guid? groupId, int? horizonDays, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(userId, fullWorthSpaceId, ct)) return null;
+
+        var days = Math.Clamp(horizonDays ?? 90, 1, 180);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var to = today.AddDays(days);
+        var currency = await ResolveCurrencyAsync(fullWorthSpaceId, null, ct);
+
+        var visible = await RawSql.VisibleAccountIdsAsync(db, userId, fullWorthSpaceId, ct);
+        HashSet<Guid> scopeAccountIds;
+        if (accountId.HasValue)
+        {
+            scopeAccountIds = visible.Contains(accountId.Value) ? [accountId.Value] : [];
+        }
+        else if (groupId.HasValue)
+        {
+            var groupAccountIds = await db.Accounts.AsNoTracking()
+                .Where(account => account.FullWorthSpaceId == fullWorthSpaceId && account.GroupId == groupId.Value)
+                .Select(account => account.Id)
+                .ToListAsync(ct);
+            scopeAccountIds = visible.Intersect(groupAccountIds).ToHashSet();
+        }
+        else
+        {
+            scopeAccountIds = visible;
+        }
+
+        var entries = new List<ForecastEntry>();
+        var incomplete = false;
+
+        // Dedup-Grundlage: dieselben kanonischen Beitraege wie /api/cashflow/available, nur ueber den
+        // vollen Horizont statt nur bis zum naechsten Einkommen, und auf den angefragten Bereich
+        // beschraenkt statt auf alle sichtbaren Konten.
+        var futureContributions = await reconciliation.LoadAsync(
+            userId, fullWorthSpaceId, today, to, currency, scopeAccountIds,
+            includeTransfers: false, includePending: true, includeIgnored: false, refundMode: "reverse", ct);
+        if (futureContributions?.IncompleteFx == true) incomplete = true;
+        var alreadyLinkedContracts = ForecastDedup.AlreadyLinkedContracts(futureContributions);
+
+        var pendingIncomeRows = await db.Transactions.AsNoTracking()
+            .Where(transaction => scopeAccountIds.Contains(transaction.AccountId) && transaction.Amount > 0 &&
+                !transaction.IsIgnored && !transaction.IsTransfer && transaction.Status == "PDNG" &&
+                (transaction.BookingDate ?? transaction.ValueDate) >= today &&
+                (transaction.BookingDate ?? transaction.ValueDate) <= to)
+            .Select(transaction => new { transaction.NormalizedCounterparty, transaction.Counterparty })
+            .ToListAsync(ct);
+        var pendingIncomeParties = ForecastDedup.PendingIncomeParties(
+            pendingIncomeRows.Select(row => (row.NormalizedCounterparty, row.Counterparty)));
+
+        // Verträge: NICHT nach CountsAsFixedCost gefiltert - das steuert nur die Cashflow-Arithmetik,
+        // nicht "hat dieser Vertrag eine echte künftige Buchung, die auf der Seite auftauchen soll."
+        var contractsQuery = VisibleContracts(userId, fullWorthSpaceId)
+            .Where(contract => contract.IsActive && contract.NextDueDate != null);
+        if (accountId.HasValue)
+            contractsQuery = contractsQuery.Where(contract => contract.AccountId == accountId.Value);
+        else if (groupId.HasValue)
+        {
+            var gId = groupId.Value;
+            contractsQuery = contractsQuery.Where(contract => contract.AccountId != null &&
+                db.Accounts.Any(account => account.Id == contract.AccountId && account.FullWorthSpaceId == fullWorthSpaceId && account.GroupId == gId));
+        }
+        var contracts = await contractsQuery.ToListAsync(ct);
+
+        var categoryIcons = await db.Categories.AsNoTracking()
+            .Where(category => category.FullWorthSpaceId == fullWorthSpaceId)
+            .ToDictionaryAsync(category => category.Id, category => string.IsNullOrEmpty(category.Icon) ? category.Key : category.Icon, ct);
+
+        foreach (var contract in contracts)
+        {
+            var links = await contractLinks.LinksOfContractAsync(contract.Id, fullWorthSpaceId, ct);
+            var recentAmounts = links.Take(3).Select(link => Math.Abs(link.TransactionAmount)).ToList();
+            var isEstimate = recentAmounts.Count >= 2 && recentAmounts.Max() - recentAmounts.Min() > 0.01m;
+            var categoryIcon = contract.CategoryId.HasValue ? categoryIcons.GetValueOrDefault(contract.CategoryId.Value) : null;
+
+            var occurrence = ContractCycle.NextOnOrAfter(contract.NextDueDate!.Value, contract.BillingCycle, contract.Interval, today);
+            var isFirstOccurrence = true;
+            for (var i = 0; i < 8 && occurrence <= to; i++)
+            {
+                if (!(isFirstOccurrence && alreadyLinkedContracts.Contains(contract.Id)))
+                    entries.Add(new ForecastEntry(
+                        "contract", contract.Id, occurrence, contract.Name, contract.ProviderName,
+                        -contract.Amount, contract.Currency, isEstimate, contract.AccountId, contract.CategoryId, categoryIcon));
+                isFirstOccurrence = false;
+                occurrence = ContractCycle.Next(occurrence, contract.BillingCycle, contract.Interval);
+            }
+        }
+
+        // Eingaenge (IncomeSchedules) - das zweite, einnahme-eigene wiederkehrende Modell parallel zu
+        // RecurringContract, hier nur mitgelesen statt ersetzt.
+        var schedules = await cashflow.LoadActiveSchedules(fullWorthSpaceId, visible, ct);
+        IEnumerable<ScheduleRow> scopedSchedules = schedules;
+        if (accountId.HasValue)
+            scopedSchedules = schedules.Where(schedule => schedule.AccountId == accountId.Value);
+        else if (groupId.HasValue)
+        {
+            var groupAccountIds = scopeAccountIds;
+            scopedSchedules = schedules.Where(schedule => schedule.AccountId.HasValue && groupAccountIds.Contains(schedule.AccountId.Value));
+        }
+
+        foreach (var schedule in scopedSchedules.Where(schedule => schedule.NextDate.HasValue))
+        {
+            var isFirstOccurrence = true;
+            var occurrence = ContractCycle.NextOnOrAfter(schedule.NextDate!.Value, schedule.Cycle, schedule.Interval, today);
+            for (var i = 0; i < 8 && occurrence <= to; i++)
+            {
+                var suppressed = isFirstOccurrence && !string.IsNullOrWhiteSpace(schedule.NormalizedCounterparty) &&
+                    pendingIncomeParties.Contains(schedule.NormalizedCounterparty);
+                if (!suppressed)
+                {
+                    var isEstimate = schedule.ValueMode == "average" || schedule.Amount is null;
+                    entries.Add(new ForecastEntry(
+                        "income", schedule.Id, occurrence, schedule.Name, null,
+                        schedule.Amount, schedule.Currency, isEstimate, schedule.AccountId, null, null));
+                }
+                isFirstOccurrence = false;
+                occurrence = ContractCycle.Next(occurrence, schedule.Cycle, schedule.Interval);
+            }
+        }
+
+        // Budgets: dieselbe CarryOver-korrekte Berechnung wie die Budget-Ansicht selbst, monatsweise
+        // ueber den Horizont gelaufen (jede Budgetperiode wird ueber ihr eigenes PeriodStart/-Ende
+        // dedupliziert, weil ein wöchentliches/individuelles Budget innerhalb eines Monats mehrfach
+        // vorkommen kann und ein Monatsaufruf davon nur die Periode zeigt, die den Monatsersten enthält).
+        var seenBudgetPeriods = new HashSet<(Guid Id, DateOnly PeriodStart)>();
+        var cursor = new DateOnly(today.Year, today.Month, 1);
+        var lastMonth = new DateOnly(to.Year, to.Month, 1);
+        while (cursor <= lastMonth)
+        {
+            var monthStatus = await BudgetStatusItemsForUserAsync(userId, fullWorthSpaceId, cursor.Year, cursor.Month, null, ct);
+            if (monthStatus is not null)
+            {
+                if (monthStatus.Value.Incomplete) incomplete = true;
+                foreach (var item in monthStatus.Value.Items)
+                {
+                    if (item.PeriodEnd < today || item.PeriodEnd > to) continue;
+                    if (!seenBudgetPeriods.Add((item.Id, item.PeriodStart))) continue;
+                    entries.Add(new ForecastEntry(
+                        "budget-period", item.Id, item.PeriodEnd, item.Name, null,
+                        item.Remaining, monthStatus.Value.Currency, false, null, item.CategoryId, null));
+                }
+            }
+            cursor = cursor.AddMonths(1);
+        }
+
+        return new ForecastTimelineResult(today, to, incomplete, entries.OrderBy(entry => entry.Date).ToList());
     }
 
     // Guided chart builder (§15.2): a bounded measure×dimension query reusing the same FX-aware

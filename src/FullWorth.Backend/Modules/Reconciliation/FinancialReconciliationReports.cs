@@ -219,7 +219,8 @@ public sealed class FinancialReconciliationReportService(
             ? await db.Transactions.AsNoTracking().Where(t => visible.Contains(t.AccountId) && t.Amount > 0 && !t.IsIgnored && !t.IsTransfer && t.Status == "PDNG" && (t.BookingDate ?? t.ValueDate) >= day && (t.BookingDate ?? t.ValueDate) <= horizon).ToListAsync(ct)
             : [];
         decimal expectedIncome = 0m;
-        var pendingParties = pendingIncomeTransactions.Select(t => MerchantNormalization.Normalize(t.NormalizedCounterparty ?? t.Counterparty)).Where(x => x is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var pendingParties = ForecastDedup.PendingIncomeParties(
+            pendingIncomeTransactions.Select(t => (t.NormalizedCounterparty, t.Counterparty)));
         foreach (var pending in pendingIncomeTransactions)
         {
             var date = pending.BookingDate ?? pending.ValueDate ?? day;
@@ -238,7 +239,7 @@ public sealed class FinancialReconciliationReportService(
         var futureContributions = await reconciliation.LoadAsync(
             userId, fullWorthSpaceId, day, horizon, space.BaseCurrency, visible,
             includeTransfers: false, includePending: true, includeIgnored: false, refundMode: "reverse", ct);
-        var alreadyLinkedContracts = futureContributions?.Items.SelectMany(item => item.ContractIds).ToHashSet() ?? [];
+        var alreadyLinkedContracts = ForecastDedup.AlreadyLinkedContracts(futureContributions);
 
         var contracts = await db.Contracts.AsNoTracking().Where(c =>
             c.FullWorthSpaceId == fullWorthSpaceId &&

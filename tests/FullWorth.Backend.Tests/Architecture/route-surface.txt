@@ -307,6 +307,7 @@ GET              /api/tax/years/{year:int}/export
 GET              /api/tax/years/{year:int}/review
 GET              /api/tax/years/{year:int}/summary
 GET              /api/transactions/
+GET              /api/transactions/forecast
 GET              /api/transactions/{id:guid}
 GET              /api/transactions/{id:guid}/allocations
 GET              /api/transactions/{refundId:guid}/refund-candidates

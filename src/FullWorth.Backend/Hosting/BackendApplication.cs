@@ -523,6 +523,7 @@ public static class BackendApplication
         endpoints.MapAmazonIntegrationEndpoints();
         
         endpoints.MapAnalyticsEndpoints();
+        endpoints.MapForecastEndpoints();
         endpoints.MapCategoryAnalyticsEndpoints();
         endpoints.MapMerchantAnalyticsEndpoints();
         endpoints.MapPushEndpoints();
