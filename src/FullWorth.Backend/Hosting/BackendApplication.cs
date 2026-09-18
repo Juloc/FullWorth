@@ -277,6 +277,9 @@ public static class BackendApplication
         builder.Services.AddScoped<ImportMappingStore>();
         builder.Services.AddScoped<ImportMappingCommitService>();
         builder.Services.AddScoped<ImportJobStore>();
+        builder.Services.Configure<ImportStagingRetentionOptions>(builder.Configuration.GetSection(ImportStagingRetentionOptions.SectionName));
+        builder.Services.AddScoped<ImportStagingCleanupService>();
+        builder.Services.AddHostedService<ImportStagingCleanupWorker>();
         builder.Services.AddScoped<CashflowStore>();
         builder.Services.AddScoped<UserOnboardingStore>();
         
