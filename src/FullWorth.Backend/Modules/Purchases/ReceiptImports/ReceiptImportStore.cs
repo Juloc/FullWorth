@@ -180,7 +180,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportBatchProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "SourceType", "SourceName", "Currency", "Status", "AutoStart",
-                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt"
+                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt", "RolledBackAt"
             FROM "ReceiptImportBatches"
             WHERE "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
             ORDER BY "CreatedAt" DESC
@@ -403,12 +403,55 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
     {
         var rows = await db.Database.SqlQuery<ReceiptImportBatchProjection>($"""
             SELECT "Id", "FullWorthSpaceId", "UserId", "SourceType", "SourceName", "Currency", "Status", "AutoStart",
-                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt"
+                   "CreatedAt", "UpdatedAt", "CompletedAt", "PausedAt", "RolledBackAt"
             FROM "ReceiptImportBatches"
             WHERE "Id" = {batchId} AND "FullWorthSpaceId" = {fullWorthSpaceId} AND "UserId" = {userId}
             LIMIT 1
             """).ToListAsync(ct);
         return rows.Count == 0 ? null : ToRow(rows[0]);
+    }
+
+    /// <summary>How many purchases this batch is on record for having created (#141).</summary>
+    public Task<int> ImportLinkCountAsync(Guid batchId, CancellationToken ct) =>
+        PurchaseImportProvenance.LinkCountAsync(db, batchId, ct);
+
+    /// <summary>
+    /// Nimmt die Kaeufe zurueck, die dieser Belegimport-Stapel angelegt hat. Ein Kauf, an dem der Nutzer
+    /// seither gearbeitet hat, bleibt stehen - was das heisst, steht im SQL von PurchaseImportProvenance.
+    ///
+    /// Gibt die Dateipfade der tatsaechlich entfernten Kaeufe zurueck, statt sie selbst zu loeschen: das
+    /// ist Dateisystemzugriff, und der gehoert in den Service, der auch den PurchaseStorage-Pfad kennt.
+    /// Belegdatei-lose Zeilen in "ReceiptImportItems" verlieren ihren Zeiger auf den geloeschten Kauf,
+    /// statt auf eine nicht mehr existierende Zeile zu zeigen - die Spalte hat ohnehin keinen Fremdschluessel.
+    /// </summary>
+    public async Task<(int Removed, IReadOnlyList<string> FilePaths)> RollbackBatchAsync(Guid batchId, CancellationToken ct)
+    {
+        var linkedIds = await PurchaseImportProvenance.LinkedPurchaseIdsAsync(db, batchId, ct);
+        var documentPaths = await PurchaseImportProvenance.DocumentPathsAsync(db, linkedIds, ct);
+
+        var removed = await PurchaseImportProvenance.DeleteAsync(db, batchId, PurchaseImportSources.Receipt, ct);
+        var removedIds = removed.Select(x => x.PurchaseId).ToHashSet();
+        var filePaths = documentPaths
+            .Where(x => removedIds.Contains(x.PurchaseId))
+            .Select(x => x.StoragePath)
+            .Concat(removed.Select(x => x.ReceiptImagePath).Where(path => !string.IsNullOrWhiteSpace(path))!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (removedIds.Count > 0)
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "ReceiptImportItems" SET "PurchaseId" = NULL, "UpdatedAt" = {DateTimeOffset.UtcNow}
+                WHERE "PurchaseId" = ANY({removedIds.ToArray()})
+                """, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ReceiptImportBatches"
+            SET "Status" = {ReceiptImportStatuses.RolledBack}, "RolledBackAt" = {now}, "UpdatedAt" = {now}
+            WHERE "Id" = {batchId}
+            """, ct);
+
+        return (removed.Count, filePaths);
     }
 
     /// <summary>
@@ -542,7 +585,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
             x.LastError, x.CreatedAt, x.UpdatedAt);
 
     private static ReceiptImportBatchRow ToRow(ReceiptImportBatchProjection x) =>
-        new(x.Id, x.FullWorthSpaceId, x.UserId, x.SourceType, x.SourceName, x.Currency, x.Status, x.AutoStart, x.CreatedAt, x.UpdatedAt, x.CompletedAt, x.PausedAt);
+        new(x.Id, x.FullWorthSpaceId, x.UserId, x.SourceType, x.SourceName, x.Currency, x.Status, x.AutoStart, x.CreatedAt, x.UpdatedAt, x.CompletedAt, x.PausedAt, x.RolledBackAt);
 
     private static ReceiptImportItemRow ToRow(ReceiptImportItemProjection x) =>
         new(x.Id, x.BatchId, x.FullWorthSpaceId, x.SourceType, x.ExternalKey, x.DisplayName, x.SourceReference,
@@ -573,6 +616,7 @@ public sealed class ReceiptImportStore(FullWorthDbContext db)
         public DateTimeOffset UpdatedAt { get; set; }
         public DateTimeOffset? CompletedAt { get; set; }
         public DateTimeOffset? PausedAt { get; set; }
+        public DateTimeOffset? RolledBackAt { get; set; }
     }
 
     private sealed class ReceiptImportItemProjection

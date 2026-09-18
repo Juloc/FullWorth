@@ -140,6 +140,43 @@ public static class AmazonIntegrationEndpoints
             await service.UnlinkRefundAsync(currentUser.RequireUserId(), fullWorthSpaceId, id, refundId, ct)
                 ? Results.NoContent() : Results.NotFound()).WithTags("Purchases");
 
+        group.MapGet("/sync-runs", async (
+            Guid fullWorthSpaceId,
+            int? limit,
+            CurrentUserContext currentUser,
+            PurchaseAuthorizationStore authorization,
+            AmazonOrderSyncService service,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            return Results.Ok(await service.ListSyncRunsAsync(fullWorthSpaceId, limit ?? 20, ct));
+        });
+
+        // Undo, not just "delete these purchases": an order the owner already worked on (paid, returned,
+        // confirmed) is kept, and an order a LATER sync merely updated stays that later run's - see
+        // AmazonOrderSyncService.RollbackSyncRunAsync.
+        group.MapPost("/sync-runs/{runId:guid}/rollback", async (
+            Guid runId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext currentUser,
+            SpaceAccess space,
+            AmazonOrderSyncService service,
+            CancellationToken ct) =>
+        {
+            var userId = currentUser.RequireUserId();
+            if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var outcome = await service.RollbackSyncRunAsync(userId, fullWorthSpaceId, runId, ct);
+            return outcome.State switch
+            {
+                AmazonRollbackState.Success => Results.Ok(new { runId, removed = outcome.Removed, kept = outcome.Kept }),
+                AmazonRollbackState.NotFound => Results.NotFound(),
+                AmazonRollbackState.AlreadyRolledBack => Results.BadRequest(new { error = "This Amazon sync has already been rolled back." }),
+                _ => Results.BadRequest(new { error = "This Amazon sync predates rollback tracking, or created no purchases, so automatic rollback is not available." })
+            };
+        });
+
         app.MapGet("/api/purchases/{id:guid}/amazon-details", async (
             Guid id,
             Guid fullWorthSpaceId,

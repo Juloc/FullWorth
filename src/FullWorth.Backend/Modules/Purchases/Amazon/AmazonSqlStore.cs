@@ -187,6 +187,73 @@ public sealed class AmazonSqlStore(FullWorthDbContext db)
 
     public Task<List<Guid>> ListAllLinkedRefundTransactionIdsAsync(CancellationToken ct) =>
         db.Database.SqlQuery<Guid>($"SELECT \"TransactionId\" AS \"Value\" FROM \"PurchaseRefunds\" WHERE \"TransactionId\" IS NOT NULL").ToListAsync(ct);
+
+    // --- Sync runs (#141) ---------------------------------------------------------------------
+
+    public async Task<Guid> StartSyncRunAsync(Guid userId, Guid fullWorthSpaceId, DateTimeOffset startedAt, CancellationToken ct)
+    {
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "AmazonSyncRuns"
+                ("Id", "FullWorthSpaceId", "UserId", "StartedAt", "Status", "OrdersRead", "PurchasesCreated")
+            VALUES ({id}, {fullWorthSpaceId}, {userId}, {startedAt}, {"running"}, 0, 0)
+            """, ct);
+        return id;
+    }
+
+    public Task<int> CompleteSyncRunAsync(Guid runId, string status, int ordersRead, int purchasesCreated, DateTimeOffset completedAt, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "AmazonSyncRuns"
+            SET "Status" = {status}, "OrdersRead" = {ordersRead}, "PurchasesCreated" = {purchasesCreated}, "CompletedAt" = {completedAt}
+            WHERE "Id" = {runId}
+            """, ct);
+
+    public Task<List<AmazonSyncRun>> ListSyncRunsAsync(Guid fullWorthSpaceId, int limit, CancellationToken ct) =>
+        db.Database.SqlQuery<AmazonSyncRun>($"""
+            SELECT "Id", "FullWorthSpaceId", "UserId", "StartedAt", "CompletedAt", "Status", "OrdersRead", "PurchasesCreated", "RolledBackAt"
+            FROM "AmazonSyncRuns"
+            WHERE "FullWorthSpaceId" = {fullWorthSpaceId}
+            ORDER BY "StartedAt" DESC
+            LIMIT {Math.Clamp(limit, 1, 100)}
+            """).ToListAsync(ct);
+
+    public Task<AmazonSyncRun?> GetSyncRunAsync(Guid fullWorthSpaceId, Guid runId, CancellationToken ct) =>
+        db.Database.SqlQuery<AmazonSyncRun>($"""
+            SELECT "Id", "FullWorthSpaceId", "UserId", "StartedAt", "CompletedAt", "Status", "OrdersRead", "PurchasesCreated", "RolledBackAt"
+            FROM "AmazonSyncRuns"
+            WHERE "Id" = {runId} AND "FullWorthSpaceId" = {fullWorthSpaceId}
+            """).SingleOrDefaultAsync(ct);
+
+    /// <summary>How many purchases this sync run is on record for having created (#141).</summary>
+    public Task<int> ImportLinkCountAsync(Guid runId, CancellationToken ct) =>
+        PurchaseImportProvenance.LinkCountAsync(db, runId, ct);
+
+    /// <summary>
+    /// Nimmt die Kaeufe zurueck, die dieser Sync-Lauf angelegt hat - nicht welche er nur aktualisiert
+    /// hat, siehe AmazonOrderSyncService.UpsertAmazonOrderAsync fuer diese Unterscheidung. Gibt die
+    /// Dateipfade der tatsaechlich entfernten Kaeufe zurueck; das Loeschen selbst ist Dateisystemzugriff
+    /// und gehoert in den Service.
+    /// </summary>
+    public async Task<(int Removed, IReadOnlyList<string> FilePaths)> RollbackSyncRunAsync(Guid runId, CancellationToken ct)
+    {
+        var linkedIds = await PurchaseImportProvenance.LinkedPurchaseIdsAsync(db, runId, ct);
+        var documentPaths = await PurchaseImportProvenance.DocumentPathsAsync(db, linkedIds, ct);
+
+        var removed = await PurchaseImportProvenance.DeleteAsync(db, runId, PurchaseImportSources.Amazon, ct);
+        var removedIds = removed.Select(x => x.PurchaseId).ToHashSet();
+        var filePaths = documentPaths
+            .Where(x => removedIds.Contains(x.PurchaseId))
+            .Select(x => x.StoragePath)
+            .Concat(removed.Select(x => x.ReceiptImagePath).Where(path => !string.IsNullOrWhiteSpace(path))!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "AmazonSyncRuns" SET "RolledBackAt" = {DateTimeOffset.UtcNow} WHERE "Id" = {runId}
+            """, ct);
+
+        return (removed.Count, filePaths);
+    }
 }
 
 public sealed class AmazonConnectionDueRow

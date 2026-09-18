@@ -16,6 +16,7 @@ public static class ReceiptImportStatuses
     public const string Completed = "completed";
     public const string CompletedWithErrors = "completed_with_errors";
     public const string Failed = "failed";
+    public const string RolledBack = "rolled_back";
 }
 
 public static class ReceiptImportItemStatuses
@@ -75,10 +76,16 @@ public sealed record ReceiptImportBatchRow(
     DateTimeOffset? CompletedAt,
     // Trailing and nullable: a batch that was never paused is indistinguishable from one from
     // before the column existed, which is what a backfill-free migration has to mean.
-    DateTimeOffset? PausedAt = null)
+    DateTimeOffset? PausedAt = null,
+    // Same reasoning as PausedAt (#141): a batch from before rollback tracking existed simply has none.
+    DateTimeOffset? RolledBackAt = null)
 {
     public bool IsPaused => PausedAt.HasValue;
+    public bool IsRolledBack => RolledBackAt.HasValue;
 }
+
+/// <summary>The result of rolling back one receipt import batch - see ReceiptImportService.RollbackBatchAsync.</summary>
+public sealed record ReceiptImportRollbackResult(int Removed, int Kept);
 
 /// <summary>
 /// Was die Quelle ueber einen Beleg weiss (#128). Ein Datensatz fuer alle Quellen - Paperless, Datei,

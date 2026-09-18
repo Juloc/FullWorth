@@ -50,6 +50,33 @@ public sealed class PurchaseTransactionLink
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// One <c>SyncAsync</c> run (#141). Exists so a sync has a queryable identity at all - before this, a
+/// sync's only trace was the purchases it touched, indistinguishable from any other sync's - and so a
+/// run can be rolled back on its own without undoing an earlier or later one.
+/// </summary>
+public sealed class AmazonSyncRun
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FullWorthSpaceId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string Status { get; set; } = "running";
+    public int OrdersRead { get; set; }
+    public int PurchasesCreated { get; set; }
+    public DateTimeOffset? RolledBackAt { get; set; }
+}
+
+public sealed record AmazonSyncRunView(
+    Guid Id,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string Status,
+    int OrdersRead,
+    int PurchasesCreated,
+    DateTimeOffset? RolledBackAt);
+
 public sealed class PurchaseRefund
 {
     public Guid Id { get; set; } = Guid.NewGuid();

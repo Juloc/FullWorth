@@ -2,6 +2,7 @@ import { initializePurchaseEnhancements, tryGptReceiptScan } from './gpt-normal.
 import { identityIcon, ensureOfficialBrandCatalog } from '../../features/ux-kit.js';
 import { emptyRow } from '../../components/empty.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
+import { confirmDialog } from '../../components/confirm.js';
 // Jede Position hat ihr eigenes Kategorie-Select (derselbe lange Baum, #157) - eins pro Zeile suchbar.
 import { attachCombobox } from '../../components/combobox.js';
 import { categoryComboboxItems } from '../../components/category-combobox.js';
@@ -479,12 +480,14 @@ function renderAmazonConnectionBody(dlg, status) {
     const last = status.lastSuccessfulSyncAt ? new Date(status.lastSuccessfulSyncAt).toLocaleString() : t('Noch nie', 'Never');
     body.innerHTML = `<div class="row-sub">${t('Verbunden. Letzte erfolgreiche Synchronisierung:', 'Connected. Last successful sync:')} ${ctx.esc(last)}</div>
       ${status.lastError ? `<div class="row-sub negative">${ctx.esc(status.lastError)}</div>` : ''}
-      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-disconnect>${t('Trennen', 'Disconnect')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-sync-days="365">${t('1 Jahr', '1 year')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-sync-days="36500">${t('Alle', 'All')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-sync-days="90">${t('90 Tage synchronisieren', 'Sync 90 days')}</button></div>`;
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-disconnect>${t('Trennen', 'Disconnect')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-sync-days="365">${t('1 Jahr', '1 year')}</button><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-sync-days="36500">${t('Alle', 'All')}</button><button type="button" class="${buttonClass(ButtonRole.Primary)}" data-sync-days="90">${t('90 Tage synchronisieren', 'Sync 90 days')}</button></div>
+      <div class="amazon-sync-history" data-amazon-history></div>`;
     body.querySelectorAll('[data-sync-days]').forEach(button => button.addEventListener('click', () => runAmazonSync(dlg, Number(button.dataset.syncDays))));
     body.querySelector('[data-disconnect]').addEventListener('click', async () => {
       try { await ctx.api('api/purchases/amazon/connection', { method: 'DELETE' }); dlg.close(); await refreshAmazonButton(); }
       catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
     });
+    loadAmazonSyncHistory(dlg);
     return;
   }
 
@@ -550,6 +553,40 @@ async function runAmazonSync(dlg, historyDays) {
     try { status = await ctx.api('api/purchases/amazon/status'); } catch { }
     renderAmazonConnectionBody(dlg, status || { connected: false, lastError: err.message || ctx.get('common.error') });
   }
+}
+
+async function loadAmazonSyncHistory(dlg) {
+  const host = dlg.querySelector('[data-amazon-history]');
+  if (!host) return;
+  try {
+    const runs = await ctx.api('api/purchases/amazon/sync-runs?limit=10');
+    if (!runs?.length) { host.innerHTML = ''; return; }
+    host.innerHTML = `<div class="row-group">${ctx.esc(t('Sync-Verlauf', 'Sync history'))}</div>` + runs.map(run => `
+      <div class="row" data-run-id="${ctx.esc(run.id)}">
+        <div class="row-main">
+          <div class="row-title">${ctx.esc(new Date(run.startedAt).toLocaleString())}</div>
+          <div class="row-sub">${run.purchasesCreated} ${ctx.esc(t('neu', 'new'))} · ${ctx.esc(run.status)}${run.rolledBackAt ? ` · ${ctx.esc(t('rückgängig gemacht', 'rolled back'))}` : ''}</div>
+        </div>
+        ${!run.rolledBackAt && run.purchasesCreated > 0 ? `<div class="row-side"><button type="button" class="${buttonClass(ButtonRole.Danger)}" data-rollback-run>${ctx.esc(t('Rückgängig', 'Undo'))}</button></div>` : ''}
+      </div>`).join('');
+    host.querySelectorAll('[data-rollback-run]').forEach(button => button.addEventListener('click', () => rollbackAmazonSyncRun(dlg, button)));
+  } catch { host.innerHTML = ''; }
+}
+
+async function rollbackAmazonSyncRun(dlg, button) {
+  const runId = button.closest('[data-run-id]')?.dataset.runId;
+  if (!runId) return;
+  const confirmed = await confirmDialog(ctx,
+    t('Dieser Amazon-Sync wird rückgängig gemacht. Bestellungen, an denen seither nichts geändert wurde, werden gelöscht - inklusive gespeicherter Belegdatei. Bereits bezahlte, zurückgegebene oder bestätigte Bestellungen bleiben erhalten.',
+      'This Amazon sync will be undone. Orders nobody has touched since are deleted, including their stored receipt file. Orders already paid, returned or confirmed are kept.'),
+    { title: t('Sync rückgängig machen', 'Undo sync'), confirmLabel: t('Rückgängig machen', 'Undo'), destructive: true });
+  if (!confirmed) return;
+  try {
+    const result = await ctx.api(`api/purchases/amazon/sync-runs/${runId}/rollback`, { method: 'POST' });
+    ctx.toast(t(`${result.removed} Bestellungen entfernt, ${result.kept} behalten`, `${result.removed} orders removed, ${result.kept} kept`));
+    await loadAmazonSyncHistory(dlg);
+    await renderPurchases(ctx);
+  } catch (err) { ctx.toast(err.message || ctx.get('common.error')); }
 }
 
 function setAmazonBusy(dlg, text) {

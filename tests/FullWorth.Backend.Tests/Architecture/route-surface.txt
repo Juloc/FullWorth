@@ -256,6 +256,7 @@ GET              /api/purchase-analytics/savings
 GET              /api/purchase-review/{purchaseId:guid}
 GET              /api/purchases/
 GET              /api/purchases/amazon/status
+GET              /api/purchases/amazon/sync-runs
 GET              /api/purchases/discount-analytics
 GET              /api/purchases/export
 GET              /api/purchases/paged
@@ -480,12 +481,14 @@ POST             /api/purchases/
 POST             /api/purchases/amazon/connect/start
 POST             /api/purchases/amazon/connect/{challengeId:guid}/complete
 POST             /api/purchases/amazon/sync
+POST             /api/purchases/amazon/sync-runs/{runId:guid}/rollback
 POST             /api/purchases/import/amazon
 POST             /api/purchases/manual
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/items/{itemId:guid}/start
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/pause
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/resume
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/retry-failed
+POST             /api/purchases/receipt-imports/batches/{batchId:guid}/rollback
 POST             /api/purchases/receipt-imports/batches/{batchId:guid}/start-pending
 POST             /api/purchases/receipt-imports/folder/import
 POST             /api/purchases/receipt-imports/folder/preview

@@ -797,6 +797,7 @@ async function refreshBatches() {
     el.querySelectorAll('[data-retry-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.retryBatch, 'retry-failed'));
     el.querySelectorAll('[data-pause-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.pauseBatch, 'pause'));
     el.querySelectorAll('[data-resume-batch]').forEach(button => button.onclick = () => batchAction(button.dataset.resumeBatch, 'resume'));
+    el.querySelectorAll('[data-rollback-batch]').forEach(button => button.onclick = () => rollbackBatch(button.dataset.rollbackBatch));
     document.dispatchEvent(new CustomEvent('fullworth:receipt-imports-rendered', { detail:{dialog} }));
   } catch (error) { el.innerHTML = `<div class="row-sub">${esc(error.message)}</div>`; }
 }
@@ -813,18 +814,45 @@ function renderBatch(batch) {
   const b = batch.batch || {};
   const source = b.sourceType === 'paperless' ? 'Paperless-ngx' : b.sourceType === 'folder' ? t('Importordner', 'Import folder') : t('Dateien', 'Files');
   const paused = Boolean(b.pausedAt);
+  const rolledBack = Boolean(b.rolledBackAt);
   const pending = countByStatus(batch, 'pending');
   const inFlight = countByStatus(batch, 'queued') + (batch.processing || 0);
+  // Undoing only makes sense once the batch is done with itself - offering it mid-run would race the
+  // very jobs it is meant to remove, and a batch that never created a purchase has nothing to undo.
+  const canRollback = !rolledBack && !paused && !inFlight && !pending &&
+    (b.status === 'completed' || b.status === 'completed_with_errors');
   return `<div class="receipt-import-batch" data-batch-id="${esc(b.id)}">
-    <div class="receipt-import-batch-main"><strong>${esc(source)}</strong><span>${formatDate(b.createdAt)}</span>${paused ? `<span class="receipt-import-paused">${esc(t('pausiert', 'paused'))}</span>` : ''}</div>
+    <div class="receipt-import-batch-main"><strong>${esc(source)}</strong><span>${formatDate(b.createdAt)}</span>${paused ? `<span class="receipt-import-paused">${esc(t('pausiert', 'paused'))}</span>` : ''}${rolledBack ? `<span class="receipt-import-paused">${esc(t('rückgängig gemacht', 'rolled back'))}</span>` : ''}</div>
     <div class="receipt-import-stats"><span>${batch.total || 0} ${esc(t('gesamt', 'total'))}</span><span>${batch.processing || 0} ${esc(t('läuft', 'processing'))}</span><span>${batch.completed || 0} ${esc(t('fertig', 'done'))}</span><span>${batch.needsReview || 0} ${esc(t('prüfen', 'review'))}</span><span>${batch.skippedDuplicates || 0} ${esc(t('Duplikate', 'duplicates'))}</span><span>${batch.failed || 0} ${esc(t('Fehler', 'failed'))}</span></div>
-    <div class="receipt-import-actions compact">${paused ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-resume-batch="${b.id}">${esc(t('Fortsetzen', 'Resume'))}</button>` : inFlight ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-pause-batch="${b.id}">${esc(t('Pause', 'Pause'))}</button>` : ''}${pending && !paused ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}</div>
+    <div class="receipt-import-actions compact">${paused ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-resume-batch="${b.id}">${esc(t('Fortsetzen', 'Resume'))}</button>` : inFlight ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-pause-batch="${b.id}">${esc(t('Pause', 'Pause'))}</button>` : ''}${pending && !paused ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-start-batch="${b.id}">${esc(t('Ausstehende starten', 'Start pending'))}</button>` : ''}${batch.failed ? `<button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-retry-batch="${b.id}">${esc(t('Fehler erneut', 'Retry failed'))}</button>` : ''}${canRollback ? `<button type="button" class="${buttonClass(ButtonRole.Danger)}" data-rollback-batch="${b.id}">${esc(t('Rückgängig machen', 'Undo import'))}</button>` : ''}</div>
   </div>`;
 }
 
 async function batchAction(id, action) {
   try { await api(`api/purchases/receipt-imports/batches/${id}/${action}`, { method: 'POST' }); await refreshBatches(); }
   catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function rollbackBatch(id) {
+  const confirmed = await confirmMessage({
+    message: t(
+      'Dieser Import wird rückgängig gemacht. Käufe, an denen seither nichts geändert wurde, werden gelöscht - inklusive gespeicherter Belegdatei. Käufe, die bereits bezahlt, zurückgegeben oder bestätigt wurden, bleiben erhalten.',
+      'This import will be undone. Purchases nobody has touched since are deleted, including their stored receipt file. Purchases already paid, returned or confirmed are kept.'),
+    title: t('Import rückgängig machen', 'Undo import'),
+    confirmLabel: t('Rückgängig machen', 'Undo'),
+    cancelLabel: t('Abbrechen', 'Cancel'),
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    const result = await api(`api/purchases/receipt-imports/batches/${id}/rollback`, { method: 'POST' });
+    showToast(t(
+      `${result.removed} Käufe entfernt, ${result.kept} behalten`,
+      `${result.removed} purchases removed, ${result.kept} kept`));
+    await refreshBatches();
+  } catch (error) {
     showToast(error.message);
   }
 }

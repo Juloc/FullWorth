@@ -126,6 +126,31 @@ public static class ReceiptImportEndpoints
             }
         });
 
+        // Undo, not just "delete these purchases": a purchase the owner already worked on (paid,
+        // returned, confirmed) is kept - see PurchaseImportProvenance for exactly what that means.
+        group.MapPost("/batches/{batchId:guid}/rollback", async (
+            Guid batchId,
+            Guid fullWorthSpaceId,
+            CurrentUserContext user,
+            PurchaseAuthorizationStore authorization,
+            SpaceAccess space,
+            ReceiptImportService service,
+            CancellationToken ct) =>
+        {
+            var userId = user.RequireUserId();
+            if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct)) return Results.NotFound();
+            if (!await space.HasCapabilityAsync(userId, fullWorthSpaceId, "purchases.manage", ct))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            try
+            {
+                var outcome = await service.RollbackBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+                return outcome is null
+                    ? Results.NotFound()
+                    : Results.Ok(new { batchId, removed = outcome.Removed, kept = outcome.Kept });
+            }
+            catch (ReceiptImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
         group.MapPost("/batches/{batchId:guid}/retry-failed", async (
             Guid batchId,
             Guid fullWorthSpaceId,

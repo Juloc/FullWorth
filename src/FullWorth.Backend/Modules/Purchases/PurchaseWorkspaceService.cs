@@ -2,6 +2,7 @@ using FullWorth.Backend.Data;
 using FullWorth.Backend.Modules.Accounts;
 using FullWorth.Backend.Modules.Transactions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FullWorth.Backend.Modules.Purchases;
 
@@ -21,8 +22,11 @@ public sealed record PurchaseAllocationImportRequest(string Mode = "replace", Gu
 public sealed record PurchaseVisibilityWrite(string Visibility);
 public sealed record PurchaseReturnWrite(decimal Quantity, decimal Amount, string Currency, Guid? RefundTransactionId, string? Note);
 
-public sealed class PurchaseWorkspaceService(FullWorthDbContext db)
+public sealed class PurchaseWorkspaceService(FullWorthDbContext db, IOptions<PurchaseStorageOptions> purchaseStorage)
 {
+    private readonly PurchaseStorageOptions storage = purchaseStorage.Value;
+
+
     public async Task<object?> GetWorkspaceAsync(Guid userId, Guid fullWorthSpaceId, Guid purchaseId, CancellationToken ct)
     {
         var purchase = await VisiblePurchases(userId, fullWorthSpaceId)
@@ -224,13 +228,18 @@ public sealed class PurchaseWorkspaceService(FullWorthDbContext db)
     {
         var access = await WriteAccessAsync(userId, fullWorthSpaceId, purchaseId, ct);
         if (access != PurchaseMutationResult.Success) return access;
-        var purchase = await db.Purchases.Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == purchaseId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
+        var purchase = await db.Purchases.Include(x => x.Items).Include(x => x.Documents)
+            .SingleOrDefaultAsync(x => x.Id == purchaseId && x.FullWorthSpaceId == fullWorthSpaceId, ct);
         if (purchase is null) return PurchaseMutationResult.NotFound;
         var itemIds = purchase.Items.Select(x => x.Id).ToArray();
         var allocations = await db.TransactionAllocations.Where(x => x.PurchaseItemId.HasValue && itemIds.Contains(x.PurchaseItemId.Value)).ToListAsync(ct);
         foreach (var allocation in allocations) allocation.PurchaseItemId = null;
+        // Collect the stored files before the cascade removes the PurchaseDocuments rows that name
+        // them - otherwise the row disappears and the file never does (#141).
+        var filePaths = purchase.Documents.Select(x => x.StoragePath).Append(purchase.ReceiptImagePath).ToList();
         db.Purchases.Remove(purchase);
         await db.SaveChangesAsync(ct);
+        PurchaseStorageFiles.Delete(storage, filePaths);
         return PurchaseMutationResult.Success;
     }
 

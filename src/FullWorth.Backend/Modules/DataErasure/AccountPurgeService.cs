@@ -336,26 +336,7 @@ public sealed class AccountPurgeService(
             .Select(x => x.ReceiptImagePath!)
             .ToListAsync(ct);
 
-        foreach (var path in paths.Concat(legacyPaths).Distinct(StringComparer.Ordinal))
-        {
-            var absolute = SafeStoragePath(path);
-            if (absolute is null)
-                throw new InvalidOperationException("Stored receipt path escaped the configured purchase root.");
-            if (File.Exists(absolute))
-                File.Delete(absolute);
-        }
-    }
-
-    private string? SafeStoragePath(string storedPath)
-    {
-        if (string.IsNullOrWhiteSpace(storedPath)) return null;
-        var root = Path.GetFullPath(storage.RootPath);
-        var candidate = Path.IsPathRooted(storedPath)
-            ? Path.GetFullPath(storedPath)
-            : Path.GetFullPath(Path.Combine(root, storedPath));
-        var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
-        return candidate.StartsWith(prefix, StringComparison.Ordinal) ? candidate : null;
+        PurchaseStorageFiles.Delete(storage, paths.Concat(legacyPaths));
     }
 
     private static IReadOnlyList<PurgeEntityDescriptor> OrderForDelete(

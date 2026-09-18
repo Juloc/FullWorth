@@ -581,6 +581,28 @@ public sealed class ReceiptImportService(
         return await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
     }
 
+    /// <summary>
+    /// Nimmt einen abgeschlossenen Belegimport-Stapel zurueck (#141): Kaeufe, die dieser Stapel angelegt
+    /// hat und an denen der Nutzer seither nicht weitergearbeitet hat, verschwinden wieder - samt ihrer
+    /// gespeicherten Belegdatei. Ein Kauf, der inzwischen bezahlt, zurueckgegeben oder bestaetigt wurde,
+    /// bleibt stehen; siehe PurchaseImportProvenance fuer was genau als "weitergearbeitet" zaehlt.
+    /// </summary>
+    public async Task<ReceiptImportRollbackResult?> RollbackBatchAsync(Guid userId, Guid fullWorthSpaceId, Guid batchId, CancellationToken ct)
+    {
+        var view = await store.GetBatchAsync(userId, fullWorthSpaceId, batchId, ct);
+        if (view is null) return null;
+        if (view.Batch.IsRolledBack)
+            throw new ReceiptImportException("This import has already been rolled back.");
+
+        var linked = await store.ImportLinkCountAsync(batchId, ct);
+        if (linked == 0)
+            throw new ReceiptImportException("This import predates rollback tracking, or created no purchases, so automatic rollback is not available.");
+
+        var (removed, filePaths) = await store.RollbackBatchAsync(batchId, ct);
+        PurchaseStorageFiles.Delete(receiptStorage, filePaths);
+        return new ReceiptImportRollbackResult(removed, linked - removed);
+    }
+
     private async Task RetryImportStageAsync(
         Guid userId,
         Guid fullWorthSpaceId,

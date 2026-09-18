@@ -9,6 +9,9 @@ namespace FullWorth.Backend.Modules.Purchases.Amazon;
 public enum AmazonSyncState { Success, NotConnected, ReauthenticationRequired, Failed }
 public sealed record AmazonSyncOutcome(AmazonSyncState State, AmazonSyncResult? Result = null, string? Error = null);
 
+public enum AmazonRollbackState { Success, NotFound, AlreadyRolledBack, NothingToRollBack }
+public sealed record AmazonRollbackOutcome(AmazonRollbackState State, int Removed = 0, int Kept = 0);
+
 public sealed class AmazonOrderSyncService(
     FullWorthDbContext db,
     FieldCipher cipher,
@@ -18,9 +21,11 @@ public sealed class AmazonOrderSyncService(
     AmazonLoginChallengeStore loginChallenges,
     AmazonSqlStore amazonStore,
     IOptions<AmazonIntegrationOptions> options,
+    IOptions<PurchaseStorageOptions> purchaseStorage,
     ILogger<AmazonOrderSyncService> logger)
 {
     private readonly AmazonIntegrationOptions _options = options.Value;
+    private readonly PurchaseStorageOptions storage = purchaseStorage.Value;
 
     public async Task<AmazonConnectionStatus> GetStatusAsync(Guid userId, Guid fullWorthSpaceId, CancellationToken ct)
     {
@@ -58,6 +63,12 @@ public sealed class AmazonOrderSyncService(
 
         var now = DateTimeOffset.UtcNow;
         await amazonStore.MarkSyncStartedAsync(userId, fullWorthSpaceId, now, ct);
+        // A run's own identity (#141): without it, rolling back one sync could only mean "undo
+        // everything Amazon has ever produced", and a re-sync that merely updates an already-imported
+        // purchase must not make a LATER rollback delete work an EARLIER run is responsible for.
+        var runId = await amazonStore.StartSyncRunAsync(userId, fullWorthSpaceId, now, ct);
+        var ordersRead = 0;
+        var newlyCreatedIds = new List<Guid>();
 
         try
         {
@@ -66,6 +77,7 @@ public sealed class AmazonOrderSyncService(
             var days = Math.Clamp(requestedHistoryDays ?? _options.InitialHistoryDays, 1, Math.Max(1, _options.MaxHistoryDays));
             var since = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-days));
             var read = await browser.ReadOrdersAsync(state, since, Math.Max(1, _options.MaxOrdersPerSync), ct);
+            ordersRead = read.Orders.Count;
             await SaveConnectionAsync(userId, fullWorthSpaceId, read.StorageState, ct);
 
             var imported = 0;
@@ -75,10 +87,11 @@ public sealed class AmazonOrderSyncService(
             foreach (var order in read.Orders)
             {
                 ct.ThrowIfCancellationRequested();
-                var purchaseId = await UpsertAmazonOrderAsync(userId, fullWorthSpaceId, order, ct);
+                var (purchaseId, isNew) = await UpsertAmazonOrderAsync(userId, fullWorthSpaceId, order, ct);
                 if (!purchaseId.HasValue) continue;
                 imported++;
                 importedIds.Add(purchaseId.Value);
+                if (isNew) newlyCreatedIds.Add(purchaseId.Value);
 
                 await amazonStore.UpsertOrderMetadataAsync(purchaseId.Value, order.ExternalStatus, order.NonBankPaymentAmount, DateTimeOffset.UtcNow, ct);
                 await amazonStore.UpsertRefundsAsync(purchaseId.Value, order.Refunds, ct);
@@ -86,15 +99,20 @@ public sealed class AmazonOrderSyncService(
                 refundsLinked += await matching.TryMatchRefundsAsync(userId, fullWorthSpaceId, purchaseId.Value, ct);
             }
             paymentsLinked += await matching.TryMatchCombinedPaymentsAsync(userId, fullWorthSpaceId, importedIds, ct);
+            // Only the CREATE branch links to this run - an order this sync merely updated was created
+            // by an earlier run (or predates rollback tracking) and must stay that run's responsibility.
+            await PurchaseImportProvenance.LinkAsync(db, runId, PurchaseImportSources.Amazon, newlyCreatedIds, ct);
 
             var completedAt = DateTimeOffset.UtcNow;
             await amazonStore.MarkSyncSuccessAsync(userId, fullWorthSpaceId, completedAt, ct);
+            await amazonStore.CompleteSyncRunAsync(runId, "success", ordersRead, newlyCreatedIds.Count, completedAt, ct);
             return new(AmazonSyncState.Success, new(read.Orders.Count, imported, paymentsLinked, refundsLinked, completedAt));
         }
         catch (AmazonReauthenticationRequiredException ex)
         {
             const string error = "Amazon login expired or Amazon requested verification.";
             await amazonStore.MarkSyncFailureAsync(userId, fullWorthSpaceId, "requires_reauth", error, DateTimeOffset.UtcNow, ct);
+            await amazonStore.CompleteSyncRunAsync(runId, "requires_reauth", ordersRead, newlyCreatedIds.Count, DateTimeOffset.UtcNow, ct);
             logger.LogInformation("Amazon session requires reauthentication for connection {ConnectionId}: {Reason}", connection.Id, ex.Message);
             return new(AmazonSyncState.ReauthenticationRequired, Error: error);
         }
@@ -102,6 +120,7 @@ public sealed class AmazonOrderSyncService(
         {
             var error = $"Amazon sync reached the configured safety limit of {ex.Limit} orders. Increase AmazonIntegration:MaxOrdersPerSync and retry.";
             await amazonStore.MarkSyncFailureAsync(userId, fullWorthSpaceId, "error", error, DateTimeOffset.UtcNow, ct);
+            await amazonStore.CompleteSyncRunAsync(runId, "error", ordersRead, newlyCreatedIds.Count, DateTimeOffset.UtcNow, ct);
             logger.LogWarning("Amazon sync hit the order limit for connection {ConnectionId}: {Limit}", connection.Id, ex.Limit);
             return new(AmazonSyncState.Failed, Error: error);
         }
@@ -109,14 +128,22 @@ public sealed class AmazonOrderSyncService(
         {
             var error = $"Amazon order {ex.OrderId} could not be read reliably. No partial import was accepted; retry after checking the Amazon order page.";
             await amazonStore.MarkSyncFailureAsync(userId, fullWorthSpaceId, "error", error, DateTimeOffset.UtcNow, ct);
+            await amazonStore.CompleteSyncRunAsync(runId, "error", ordersRead, newlyCreatedIds.Count, DateTimeOffset.UtcNow, ct);
             logger.LogWarning("Amazon sync stopped on an unreadable order for connection {ConnectionId}: {OrderId}", connection.Id, ex.OrderId);
             return new(AmazonSyncState.Failed, Error: error);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException)
+        {
+            // ct itself is the reason this branch is running - using it here would just throw again
+            // before the run can be marked, leaving it "running" forever.
+            await amazonStore.CompleteSyncRunAsync(runId, "cancelled", ordersRead, newlyCreatedIds.Count, DateTimeOffset.UtcNow, CancellationToken.None);
+            throw;
+        }
         catch (Exception ex)
         {
             const string error = "Amazon sync failed. Retry the sync; reconnect Amazon only if FullWorth explicitly asks for reauthentication.";
             await amazonStore.MarkSyncFailureAsync(userId, fullWorthSpaceId, "error", error, DateTimeOffset.UtcNow, ct);
+            await amazonStore.CompleteSyncRunAsync(runId, "error", ordersRead, newlyCreatedIds.Count, DateTimeOffset.UtcNow, ct);
             logger.LogWarning("Amazon sync failed for connection {ConnectionId}: {Type}", connection.Id, ex.GetType().Name);
             return new(AmazonSyncState.Failed, Error: error);
         }
@@ -315,7 +342,7 @@ public sealed class AmazonOrderSyncService(
         return new(metadata?.ExternalStatus, metadata?.NonBankPaymentAmount ?? 0m, metadata?.NonBankPaymentSource ?? "amazon", payments, refunds);
     }
 
-    private async Task<Guid?> UpsertAmazonOrderAsync(Guid userId, Guid fullWorthSpaceId, AmazonOrderSnapshot order, CancellationToken ct)
+    private async Task<(Guid? PurchaseId, bool IsNew)> UpsertAmazonOrderAsync(Guid userId, Guid fullWorthSpaceId, AmazonOrderSnapshot order, CancellationToken ct)
     {
         var existingPurchaseId = await db.Purchases.AsNoTracking()
             .Where(x => x.FullWorthSpaceId == fullWorthSpaceId && x.Source == "amazon" && x.ExternalOrderId == order.OrderId)
@@ -323,7 +350,7 @@ public sealed class AmazonOrderSyncService(
             .SingleOrDefaultAsync(ct);
         if (existingPurchaseId.HasValue &&
             await authorization.GetAccessAsync(userId, fullWorthSpaceId, existingPurchaseId.Value, ct) != PurchaseAccessLevel.Write)
-            return null;
+            return (null, false);
 
         var oldItems = existingPurchaseId.HasValue
             ? await db.PurchaseItems.AsNoTracking().Where(x => x.PurchaseId == existingPurchaseId.Value).OrderBy(x => x.SortOrder).ThenBy(x => x.CreatedAt).ToListAsync(ct)
@@ -395,7 +422,7 @@ public sealed class AmazonOrderSyncService(
             if (itemOutcome.Result != PurchaseMutationResult.Success)
             {
                 await transaction.RollbackAsync(ct);
-                return null;
+                return (null, false);
             }
         }
 
@@ -416,8 +443,39 @@ public sealed class AmazonOrderSyncService(
         await discountService.ReplaceSourceDiscountsAsync(fullWorthSpaceId, purchaseId, "amazon", imports, ct);
 
         await transaction.CommitAsync(ct);
-        return purchaseId;
+        return (purchaseId, isNew);
     }
+
+    /// <summary>Recent Amazon sync runs for this space, newest first (#141).</summary>
+    public async Task<IReadOnlyList<AmazonSyncRunView>> ListSyncRunsAsync(Guid fullWorthSpaceId, int limit, CancellationToken ct) =>
+        (await amazonStore.ListSyncRunsAsync(fullWorthSpaceId, limit, ct))
+        .Select(ToRunView)
+        .ToList();
+
+    /// <summary>
+    /// Nimmt einen Amazon-Sync-Lauf zurueck: Bestellungen, die DIESER Lauf angelegt hat und an denen der
+    /// Nutzer seither nicht weitergearbeitet hat, verschwinden wieder - samt gespeicherter Belegdatei.
+    /// Eine Bestellung, die ein spaeterer Lauf nur aktualisiert hat, gehoert weiterhin dem Lauf, der sie
+    /// angelegt hat, und bleibt unberuehrt (siehe UpsertAmazonOrderAsync).
+    /// </summary>
+    public async Task<AmazonRollbackOutcome> RollbackSyncRunAsync(Guid userId, Guid fullWorthSpaceId, Guid runId, CancellationToken ct)
+    {
+        if (!await authorization.IsFullWorthSpaceMemberAsync(userId, fullWorthSpaceId, ct))
+            return new(AmazonRollbackState.NotFound);
+        var run = await amazonStore.GetSyncRunAsync(fullWorthSpaceId, runId, ct);
+        if (run is null) return new(AmazonRollbackState.NotFound);
+        if (run.RolledBackAt.HasValue) return new(AmazonRollbackState.AlreadyRolledBack);
+
+        var linked = await amazonStore.ImportLinkCountAsync(runId, ct);
+        if (linked == 0) return new(AmazonRollbackState.NothingToRollBack);
+
+        var (removed, filePaths) = await amazonStore.RollbackSyncRunAsync(runId, ct);
+        PurchaseStorageFiles.Delete(storage, filePaths);
+        return new(AmazonRollbackState.Success, removed, linked - removed);
+    }
+
+    private static AmazonSyncRunView ToRunView(AmazonSyncRun run) =>
+        new(run.Id, run.StartedAt, run.CompletedAt, run.Status, run.OrdersRead, run.PurchasesCreated, run.RolledBackAt);
 
     private async Task ReconcilePaymentStatusAsync(Purchase purchase, CancellationToken ct)
     {
