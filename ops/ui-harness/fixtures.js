@@ -264,6 +264,23 @@
       ],
       total: 6, page: 1, pageSize: 50
     },
+    // #139: a dedicated key, not a sub-path of 'transactions' - match()'s generic "return the parent
+    // object for anything below it" fallback only applies to a plain ARRAY fixture (see its own
+    // comment); 'transactions' above is an object, so without this own, longer key the forecast
+    // request silently got the whole transaction list back, unrelated to what it actually asked for.
+    // Dates fall inside the horizon of 'today' (2026-09-18) the same fixtures assume everywhere else,
+    // and the two contract entries reuse k1/k2 from the 'contracts' fixture below rather than inventing
+    // unrelated ones, so a look at both screens shows the same two contracts.
+    'transactions/forecast': {
+      from: iso('2026-09-18'), to: iso('2026-12-17'), incomplete: false,
+      items: [
+        { kind: 'contract', sourceId: 'k2', date: iso('2026-09-20'), label: 'Mobilfunk', subLabel: 'Telekom', amount: -29.99, currency: 'EUR', isEstimate: false, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
+        { kind: 'income', sourceId: 'is1', date: iso('2026-09-27'), label: 'Gehalt', subLabel: null, amount: 2810.44, currency: 'EUR', isEstimate: false, accountId: 'a1', categoryId: null, categoryIconKey: null },
+        { kind: 'contract', sourceId: 'k1', date: iso('2026-10-01'), label: 'Stromvertrag', subLabel: 'Stadtwerke', amount: -78.5, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
+        { kind: 'budget-period', sourceId: 'b1', date: iso('2026-09-30'), label: 'Lebensmittel', subLabel: null, amount: 120.5, currency: 'EUR', isEstimate: false, accountId: null, categoryId: 'c1', categoryIconKey: null },
+        { kind: 'income', sourceId: 'is1', date: iso('2026-10-27'), label: 'Gehalt', subLabel: null, amount: null, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: null, categoryIconKey: null }
+      ]
+    },
     // The real /api/contracts shape (amount + billingCycle + server-computed monthlyEquivalent /
     // annualizedAmount), not a hand-made "monthlyAmount". The last three rows are the reported merge
     // case: ONE utility contract that changed its paying account twice, so three rows exist - and the
@@ -1185,7 +1202,35 @@
     // Writes succeed with an echo so confirm/save paths can be walked without a backend.
     const write = method === 'GET' ? null : writeAnswer(method, url.pathname, init);
     const status = write?.status ?? 200;
-    const body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    let body = method === 'GET' ? (match(url.pathname) ?? []) : (write?.body ?? { id: 'stub', ok: true });
+    // #139: order=asc is the one query parameter this harness cannot ignore, because match() drops the
+    // whole query string before matching (it answers by path only) - every OTHER parameter (filters,
+    // scope) is fine to ignore since the fixture is small enough to show unfiltered, but the sort
+    // direction changes which group (Vorgemerkt leading vs. trailing) is even meant to be first, which
+    // no amount of "same data, different query" can paper over. Real backend rule, copied exactly:
+    // TransactionStore.SearchForUserAsync sorts pending as one contiguous group AFTER every booked row
+    // under order=asc (ascending overall), leading under the default descending order.
+    if (method === 'GET' && /\/api\/transactions$/.test(url.pathname) && url.searchParams.get('order') === 'asc' && Array.isArray(body?.items)) {
+      const sorted = [...body.items].sort((a, b) => {
+        const aPending = a.status === 'PDNG', bPending = b.status === 'PDNG';
+        if (aPending !== bPending) return aPending ? 1 : -1;
+        const aDate = a.bookingDate || a.valueDate || '';
+        const bDate = b.bookingDate || b.valueDate || '';
+        return aDate < bDate ? -1 : aDate > bDate ? 1 : 0;
+      });
+      body = { ...body, items: sorted };
+    }
+    // #139 Teil 3 (Nachladen): die Fixture selbst kennt keinen Horizont, sie liefert immer dieselben
+    // fuenf Eintraege bis 2026-10-27. Ohne diesen Zusatz wuerde "Weiter laden" im Harness zwar feuern,
+    // aber sichtbar nichts anhaengen - nicht kaputt, nur nicht vorfuehrbar. horizonDays=180 haengt zwei
+    // weitere, um einen Monatszyklus verschobene Eintraege an (derselbe Vertrag/dieselbe Einnahme wie
+    // oben, naechste Faelligkeit), damit das Verhalten sich tatsaechlich beobachten laesst.
+    if (method === 'GET' && /\/api\/transactions\/forecast$/.test(url.pathname) && url.searchParams.get('horizonDays') === '180' && Array.isArray(body?.items)) {
+      body = { ...body, items: [...body.items,
+        { kind: 'contract', sourceId: 'k1', date: iso('2026-11-01'), label: 'Stromvertrag', subLabel: 'Stadtwerke', amount: -78.5, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
+        { kind: 'income', sourceId: 'is1', date: iso('2026-11-27'), label: 'Gehalt', subLabel: null, amount: null, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: null, categoryIconKey: null }
+      ] };
+    }
     window.__harnessCalls = window.__harnessCalls || [];
     window.__harnessCalls.push(`${method} ${url.pathname}`);
     // secure-fetch.js captures globalThis.fetch at module load, and this stub is installed before it -
