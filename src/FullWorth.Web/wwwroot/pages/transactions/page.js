@@ -162,6 +162,8 @@ let forecastHorizonDays = FORECAST_INITIAL_HORIZON_DAYS;
 let forecastLatestDate = null;
 let forecastObserver = null;
 let forecastLoadingMore = false;
+let forecastArmHost = null;
+let forecastArmListener = null;
 
 async function loadDayBalances(scope, days) {
   dayBalances = new Map();
@@ -615,6 +617,9 @@ export async function renderTransactions(context, opts = {}) {
   forecastLatestDate = null;
   forecastObserver?.disconnect();
   forecastObserver = null;
+  forecastArmHost?.removeEventListener('scroll', forecastArmListener);
+  forecastArmHost = null;
+  forecastArmListener = null;
   const forecastQuery = new URLSearchParams();
   if (accountId) forecastQuery.set('accountId', accountId);
   else if (groupId) forecastQuery.set('groupId', groupId);
@@ -844,16 +849,26 @@ function forecastSentinel() {
   return sentinel;
 }
 
-// Ein IntersectionObserver statt eines Scroll-Listeners: er feuert unabhaengig davon, ob window oder
-// .table-panel (Desktop, siehe scrollHost()) der tatsaechliche Rollbehaelter ist, ohne dass diese
-// Stelle wissen muesste, welcher der beiden es gerade ist.
+// Ein IntersectionObserver statt Scroll-Positions-Mathematik zur Erkennung selbst: er feuert
+// unabhaengig davon, ob window oder .table-panel (Desktop, siehe scrollHost()) der tatsaechliche
+// Rollbehaelter ist, ohne dass diese Stelle das selbst wissen muesste. Beobachtet wird aber erst ab
+// dem ersten scroll-Ereignis, nicht sofort: eine kurze Liste zeigt den Anker schon beim allerersten
+// Zeichnen im sichtbaren Bereich, und ein IntersectionObserver meldet genau das sofort beim ersten
+// observe() - das Nachladen liefe dann augenblicklich nach dem ersten Bild und waere ein von der
+// Seite selbst ausgeloester, nicht vom Nutzer verursachter Sprung (Regel 1). Ein einmaliger
+// scroll-Listener ist hier nur das Wartesignal "der Nutzer hat tatsaechlich etwas getan", die
+// eigentliche Sichtbarkeitspruefung bleibt beim Observer.
 function observeForecastSentinel(accountId, groupId) {
   const sentinel = ctx.$('.tx-forecast-sentinel');
   if (!sentinel) return;
-  forecastObserver = new IntersectionObserver(entries => {
-    if (entries.some(entry => entry.isIntersecting)) loadMoreForecast(accountId, groupId);
-  }, { rootMargin: '400px' });
-  forecastObserver.observe(sentinel);
+  forecastArmHost = scrollHost();
+  forecastArmListener = () => {
+    forecastObserver = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) loadMoreForecast(accountId, groupId);
+    }, { rootMargin: '400px' });
+    forecastObserver.observe(sentinel);
+  };
+  forecastArmHost.addEventListener('scroll', forecastArmListener, { once: true, passive: true });
 }
 
 // Haengt weitere Prognose-Zeilen an, ohne die schon gezeichnete Liste (Buchungen, Tagesanker,

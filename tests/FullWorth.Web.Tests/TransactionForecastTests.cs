@@ -148,13 +148,14 @@ public sealed class TransactionForecastTests
     }
 
     /// <summary>
-    /// #139, part 3 (load more on scroll): an <c>IntersectionObserver</c> on an end-of-list sentinel,
-    /// not a scroll listener - it fires correctly whether <c>scrollHost()</c> is <c>window</c> (mobile)
-    /// or the <c>.table-panel</c> element (desktop), without this code needing to know which one is
-    /// live for the current viewport.
+    /// #139, part 3 (load more on scroll): visibility is decided by an <c>IntersectionObserver</c> on
+    /// an end-of-list sentinel - it fires correctly whether <c>scrollHost()</c> is <c>window</c>
+    /// (mobile) or the <c>.table-panel</c> element (desktop), without this code needing to know which
+    /// one is live for the current viewport. No manual scroll-position math (<c>scrollTop</c>,
+    /// <c>getBoundingClientRect</c> inside a scroll handler) may reimplement that detection.
     /// </summary>
     [Fact]
-    public void LoadMore_uses_an_intersection_observer_not_a_scroll_listener()
+    public void LoadMore_uses_an_intersection_observer_not_manual_scroll_math()
     {
         var js = PageJs();
         var match = Regex.Match(js, @"function observeForecastSentinel\([^)]*\)\s*\{", RegexOptions.Singleline);
@@ -172,7 +173,36 @@ public sealed class TransactionForecastTests
         var body = js[start..end];
 
         Assert.Contains("new IntersectionObserver", body);
-        Assert.DoesNotContain("addEventListener", body);
+        Assert.DoesNotContain("scrollTop", body);
+        Assert.DoesNotContain("getBoundingClientRect", body);
+    }
+
+    /// <summary>
+    /// A short forecast list can already show the sentinel on the very first paint - starting the
+    /// observer immediately would then fire a load right after the page settled, an unprompted shift
+    /// the page itself caused rather than the user (frontend rule 1). The observer must only arm after
+    /// the user's own first scroll.
+    /// </summary>
+    [Fact]
+    public void LoadMore_only_arms_after_the_users_first_scroll()
+    {
+        var js = PageJs();
+        var match = Regex.Match(js, @"function observeForecastSentinel\([^)]*\)\s*\{", RegexOptions.Singleline);
+        Assert.True(match.Success, "observeForecastSentinel(...) was not found.");
+
+        var start = match.Index + match.Length;
+        var depth = 1;
+        var end = start;
+        while (depth > 0 && end < js.Length)
+        {
+            if (js[end] == '{') depth++;
+            else if (js[end] == '}') depth--;
+            end++;
+        }
+        var body = js[start..end];
+
+        Assert.Contains("addEventListener('scroll',", body);
+        Assert.Contains("{ once: true", body);
     }
 
     /// <summary>
