@@ -1077,6 +1077,32 @@
   for (const view of FIXTURES['purchases/receipt-imports/batches'])
     FIXTURES[`purchases/receipt-imports/batches/${view.batch.id}`] = view;
 
+  // openDetail() reads { contract, snapshots, contributions, costs, allocations }, a shape the list
+  // fixture doesn't carry - without a dedicated key here match()'s generic "find by id" fallback
+  // returns the bare list entry instead, and detail.contract is undefined. Derived from the list's own
+  // currentSnapshot/currentContribution rather than duplicated, so the two can't drift apart.
+  for (const contract of FIXTURES['pension/contracts']) {
+    FIXTURES[`pension/contracts/${contract.id}`] = {
+      contract,
+      snapshots: contract.currentSnapshot ? [contract.currentSnapshot] : [],
+      contributions: contract.currentContribution ? [contract.currentContribution] : [],
+      costs: [],
+      allocations: []
+    };
+  }
+  // bav1 is the one meant to show a fully populated detail dialog: a cost row and two fund allocations.
+  FIXTURES['pension/contracts/bav1'].costs = [
+    { kind: 'administration_on_capital', basis: 'percent_of_capital', percent: 1.2, amount: null,
+      currency: 'EUR', timing: 'ongoing', isEstimated: true,
+      estimateBasis: 'Aus der letzten Standmitteilung abgeleitet.', continuesWhenPaidUp: true }
+  ];
+  FIXTURES['pension/contracts/bav1'].allocations = [
+    { fundName: 'Allianz Global Aktienfonds', assetClass: 'equity', isin: 'DE0008474511',
+      weightPercent: 65, amount: null, currency: 'EUR', ongoingChargesPercent: 1.1, ongoingChargesEstimated: false },
+    { fundName: 'Allianz Rentenfonds', assetClass: 'bond', isin: 'DE0008474503',
+      weightPercent: 35, amount: null, currency: 'EUR', ongoingChargesPercent: 0.6, ongoingChargesEstimated: true }
+  ];
+
   const KEYS = Object.keys(FIXTURES);
 
   function match(pathname) {
