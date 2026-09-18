@@ -70,8 +70,9 @@ export async function mountPurchaseDiscountActions({ dlg, purchase, writable, ap
       <label>${esc(text('Bezeichnung', 'Label'))}<input name="label" maxlength="250" value="${esc(row?.label || '')}" placeholder="${esc(text('z. B. App-Coupon 2 €', 'e.g. App coupon €2'))}"></label>
       <div class="pa-form-grid"><label>${esc(text('Coupon-Code (optional)', 'Coupon code (optional)'))}<input name="couponCode" maxlength="120" value="${esc(row?.couponCode || '')}"></label><label>${esc(text('Quelltext (optional)', 'Raw source text (optional)'))}<input name="rawText" maxlength="1000" value="${esc(row?.rawText || '')}"></label></div>
       ${row ? `<div class="row-sub">${esc(text('Beim Speichern wird eine automatisch erkannte/importierte Zeile bewusst zu einer manuellen Korrektur; ihre AI-Confidence wird entfernt.', 'Saving intentionally promotes an extracted/imported row to a manual correction and clears its AI confidence.'))}</div>` : ''}
-      <div class="dialog-actions"><button type="button" data-close>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Speichern', 'Save'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
-    editor.querySelectorAll('[data-close]').forEach(button => button.onclick = () => editor.close());
+      <div class="dialog-actions"><button type="button" class="${buttonClass(ButtonRole.Secondary)}" data-cancel>${esc(text('Abbrechen', 'Cancel'))}</button><button type="submit" class="${buttonClass(ButtonRole.Primary)}">${esc(text('Speichern', 'Save'))}</button></div><div class="pa-dialog-error" data-error hidden></div></form>`);
+    editor.querySelector('[data-close]').onclick = () => editor.close();
+    editor.querySelector('[data-cancel]').onclick = () => editor.close();
     editor.querySelector('form').onsubmit = async event => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
