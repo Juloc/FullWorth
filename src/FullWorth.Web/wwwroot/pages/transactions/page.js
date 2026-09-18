@@ -152,6 +152,16 @@ let dayBarFrame = 0;
 // nicht mehr Listenanfang, und Klick/Selbstpruefung der Leiste muessen den echten Heute-Ankerpunkt
 // suchen statt Index 0.
 let ascendingTimeline = false;
+// Nachladen am Ende der Zukunfts-Timeline: der Standard-Horizont (90 Tage) haelt den ersten Aufruf
+// schnell, ForecastTimelineAsync erlaubt aber bis zu 180 - kein zweiter, hoeherer Deckel hier, nur
+// derselbe. "Unendliches" Scrollen gibt es deshalb nicht wirklich: einmal bei 180 angekommen, ist der
+// Rest, was der Server fuer diesen Bereich liefert, kein technisches Limit dieser Seite.
+const FORECAST_INITIAL_HORIZON_DAYS = 90;
+const FORECAST_MAX_HORIZON_DAYS = 180;
+let forecastHorizonDays = FORECAST_INITIAL_HORIZON_DAYS;
+let forecastLatestDate = null;
+let forecastObserver = null;
+let forecastLoadingMore = false;
 
 async function loadDayBalances(scope, days) {
   dayBalances = new Map();
@@ -599,9 +609,16 @@ export async function renderTransactions(context, opts = {}) {
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
+  // Ein frischer Aufbau der Seite beginnt immer wieder beim kurzen Standardhorizont - nur
+  // loadMoreForecast() (Scroll ans Ende) erweitert ihn, nie ein normales Neuzeichnen.
+  forecastHorizonDays = FORECAST_INITIAL_HORIZON_DAYS;
+  forecastLatestDate = null;
+  forecastObserver?.disconnect();
+  forecastObserver = null;
   const forecastQuery = new URLSearchParams();
   if (accountId) forecastQuery.set('accountId', accountId);
   else if (groupId) forecastQuery.set('groupId', groupId);
+  forecastQuery.set('horizonDays', String(forecastHorizonDays));
   const [data, forecast] = await Promise.all([
     ctx.api(`api/transactions?${q}`),
     forecastEligible ? ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null) : Promise.resolve(null)
@@ -696,6 +713,12 @@ export async function renderTransactions(context, opts = {}) {
   if (forecastItems.length) {
     fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
     for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
+    forecastLatestDate = forecastItems.reduce((max, entry) => entry.date > max ? entry.date : max, forecastItems[0].date);
+  }
+  // Nachlade-Ankerpunkt: nur wenn diese Sicht ueberhaupt Prognose zeigt und der 180-Tage-Deckel noch
+  // nicht erreicht ist - sonst gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
+  if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {
+    fragment.appendChild(forecastSentinel());
   }
   body.replaceChildren(fragment);
   // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
@@ -722,6 +745,7 @@ export async function renderTransactions(context, opts = {}) {
   }
   await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day).filter(Boolean));
   trackDayBar();
+  observeForecastSentinel(accountId, groupId);
   await showTransferCandidates();
   await updateBookingAction(accountId);
 
@@ -808,6 +832,60 @@ function forecastRow(entry) {
     `<div class="number ${moneyClass(variant)}">${amountHtml}</div>` +
     `<div class="tx-go"></div>`;
   return row;
+}
+
+// Unsichtbarer Ankerpunkt am Ende der Zukunfts-Timeline: kommt er ins Bild, ist noch Horizont bis 180
+// Tage uebrig, den loadMoreForecast() dann nachlaedt. Kein eigener Text/Knopf noetig - das Nachladen
+// selbst dauert nur einen Blick lang, ein sichtbarer "Mehr laden"-Schritt waere hier nur ein Umweg.
+function forecastSentinel() {
+  const sentinel = document.createElement('div');
+  sentinel.className = 'tx-forecast-sentinel';
+  sentinel.setAttribute('aria-hidden', 'true');
+  return sentinel;
+}
+
+// Ein IntersectionObserver statt eines Scroll-Listeners: er feuert unabhaengig davon, ob window oder
+// .table-panel (Desktop, siehe scrollHost()) der tatsaechliche Rollbehaelter ist, ohne dass diese
+// Stelle wissen muesste, welcher der beiden es gerade ist.
+function observeForecastSentinel(accountId, groupId) {
+  const sentinel = ctx.$('.tx-forecast-sentinel');
+  if (!sentinel) return;
+  forecastObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) loadMoreForecast(accountId, groupId);
+  }, { rootMargin: '400px' });
+  forecastObserver.observe(sentinel);
+}
+
+// Haengt weitere Prognose-Zeilen an, ohne die schon gezeichnete Liste (Buchungen, Tagesanker,
+// Scrollposition) anzutasten - anders als renderTransactions() selbst, das immer bei Null anfaengt.
+// Der Horizont waechst in einem Sprung auf den vollen, vom Server erlaubten Wert (180 Tage) statt in
+// vielen kleinen Schritten: ein zweiter Zwischenschritt haette nur eine zweite Wartezeit gekostet, ohne
+// dass der Nutzer je "mehr als einmal nachladen" gesehen haette, solange FORECAST_MAX_HORIZON_DAYS bei
+// 180 steht.
+async function loadMoreForecast(accountId, groupId) {
+  if (forecastLoadingMore || forecastHorizonDays >= FORECAST_MAX_HORIZON_DAYS) return;
+  forecastLoadingMore = true;
+  forecastObserver?.disconnect();
+  try {
+    forecastHorizonDays = FORECAST_MAX_HORIZON_DAYS;
+    const forecastQuery = new URLSearchParams();
+    if (accountId) forecastQuery.set('accountId', accountId);
+    else if (groupId) forecastQuery.set('groupId', groupId);
+    forecastQuery.set('horizonDays', String(forecastHorizonDays));
+    const forecast = await ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null);
+    const items = (forecast?.items || []).filter(entry => !forecastLatestDate || entry.date > forecastLatestDate);
+    if (!items.length) return;
+    const body = ctx.$('#transactions-body');
+    const sentinel = body?.querySelector('.tx-forecast-sentinel');
+    const fragment = document.createDocumentFragment();
+    for (const entry of items) fragment.appendChild(forecastRow(entry));
+    forecastLatestDate = items.reduce((max, entry) => entry.date > max ? entry.date : max, forecastLatestDate);
+    if (sentinel) sentinel.replaceWith(fragment);
+    else body?.appendChild(fragment);
+  } finally {
+    forecastLoadingMore = false;
+    // Der 180-Tage-Deckel ist erreicht - kein weiterer Ankerpunkt, kein weiterer Beobachter.
+  }
 }
 
 // Inline category edit from the list chip. The classification PATCH is a full replace, so we read the

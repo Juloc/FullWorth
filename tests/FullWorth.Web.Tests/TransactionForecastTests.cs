@@ -146,4 +146,74 @@ public sealed class TransactionForecastTests
         Assert.Contains("todayAnchor", body);
         Assert.Contains("ascendingTimeline", body);
     }
+
+    /// <summary>
+    /// #139, part 3 (load more on scroll): an <c>IntersectionObserver</c> on an end-of-list sentinel,
+    /// not a scroll listener - it fires correctly whether <c>scrollHost()</c> is <c>window</c> (mobile)
+    /// or the <c>.table-panel</c> element (desktop), without this code needing to know which one is
+    /// live for the current viewport.
+    /// </summary>
+    [Fact]
+    public void LoadMore_uses_an_intersection_observer_not_a_scroll_listener()
+    {
+        var js = PageJs();
+        var match = Regex.Match(js, @"function observeForecastSentinel\([^)]*\)\s*\{", RegexOptions.Singleline);
+        Assert.True(match.Success, "observeForecastSentinel(...) was not found.");
+
+        var start = match.Index + match.Length;
+        var depth = 1;
+        var end = start;
+        while (depth > 0 && end < js.Length)
+        {
+            if (js[end] == '{') depth++;
+            else if (js[end] == '}') depth--;
+            end++;
+        }
+        var body = js[start..end];
+
+        Assert.Contains("new IntersectionObserver", body);
+        Assert.DoesNotContain("addEventListener", body);
+    }
+
+    /// <summary>
+    /// The backend's <c>ForecastTimelineAsync</c> clamps <c>horizonDays</c> to [1, 180]
+    /// (<c>AnalyticsService.cs</c>) - there is no third, larger step to grow into. Once the sentinel has
+    /// triggered a load at the max horizon, the sentinel must not be re-added, or the observer would sit
+    /// there forever re-requesting a horizon the server can never grow past.
+    /// </summary>
+    [Fact]
+    public void LoadMore_never_requests_past_the_backend_180_day_cap()
+    {
+        var js = PageJs();
+
+        Assert.Contains("FORECAST_MAX_HORIZON_DAYS = 180", js);
+        Assert.Contains("if (forecastLoadingMore || forecastHorizonDays >= FORECAST_MAX_HORIZON_DAYS) return;", js);
+        Assert.Contains("if (forecastEligible && forecastHorizonDays < FORECAST_MAX_HORIZON_DAYS) {", js);
+    }
+
+    /// <summary>
+    /// A wider-horizon refetch returns the same leading entries again (same <c>from</c> date) - appending
+    /// the raw response a second time would duplicate every row already on screen. Only entries dated
+    /// after the latest one already rendered may be appended.
+    /// </summary>
+    [Fact]
+    public void LoadMore_filters_out_entries_already_rendered()
+    {
+        var js = PageJs();
+        var match = Regex.Match(js, @"async function loadMoreForecast\([^)]*\)\s*\{", RegexOptions.Singleline);
+        Assert.True(match.Success, "loadMoreForecast(...) was not found.");
+
+        var start = match.Index + match.Length;
+        var depth = 1;
+        var end = start;
+        while (depth > 0 && end < js.Length)
+        {
+            if (js[end] == '{') depth++;
+            else if (js[end] == '}') depth--;
+            end++;
+        }
+        var body = js[start..end];
+
+        Assert.Contains("entry.date > forecastLatestDate", body);
+    }
 }
