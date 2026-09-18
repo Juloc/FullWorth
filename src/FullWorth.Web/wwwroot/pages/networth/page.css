@@ -212,10 +212,6 @@
 
 .nw-item.nw-excluded{opacity:.6}
 
-#nw-change.positive{color:var(--positive)}
-
-#nw-change.negative{color:var(--negative)}
-
 .loan-detail .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2) var(--s3);margin:var(--s3) 0}
 
 .loan-split{margin:var(--s3) 0}
@@ -325,38 +321,6 @@
 /* Vermögen. Die sieben Stylesheets seiner Module standen als sieben eigene <link> im Dokument;
    sie gehören zu dieser einen Seite und stehen jetzt hier. */
 /* Aus styles/features/wealth-assets.css. */
-.wealth-composition {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin: 4px 0 18px;
-}
-
-.wealth-composition-item {
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.wealth-composition-item span,
-.wealth-composition-item strong {
-  display: block;
-}
-
-.wealth-composition-item span {
-  color: var(--muted);
-  font-size: .86rem;
-}
-
-.wealth-composition-item strong {
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .wealth-chart svg {
   width: 100%;
   min-height: 180px;
@@ -444,10 +408,6 @@
 }
 
 @media (max-width: 760px) {
-  .wealth-composition {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .wealth-type-grid {
     grid-template-columns: 1fr;
   }

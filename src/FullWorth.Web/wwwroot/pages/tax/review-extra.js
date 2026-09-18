@@ -41,14 +41,16 @@ const copy = {
 function t(key) { return copy[lang()][key] || key; }
 
 // ---- year-review checklist panel + CSV/JSON export (tax.js's toolbar hosts the tab/year controls;
-// this fills the `[data-tax-year-panel]` slot that tax.js renders below the hero card). ----
+// this fills the `[data-tax-year-panel]` slot that tax.js renders below the hero card). Takes the
+// already-fetched review, rather than fetching it itself: page.js's loadData() used to await this
+// panel's own fetch after its Promise.all for summary/candidates had already resolved and painted,
+// so the review checklist reliably landed a frame late and measured as real layout shift. Folding
+// the fetch into that same Promise.all and keeping this a synchronous render fixed it. ----
 
-export async function renderTaxYearPanel(ctx, host, year) {
+export function renderTaxYearPanel(ctx, host, year, review) {
   const slot = host.querySelector('[data-tax-year-panel]');
   if (!slot) return;
-  let review;
-  try { review = await ctx.api(`api/tax/years/${year}/review`); }
-  catch { slot.hidden = true; slot.innerHTML = ''; return; }
+  if (!review) { slot.hidden = true; slot.innerHTML = ''; return; }
 
   const checks = review?.checks || [];
   slot.hidden = false;

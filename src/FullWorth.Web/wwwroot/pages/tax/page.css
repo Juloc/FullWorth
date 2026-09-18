@@ -322,6 +322,11 @@
   opacity: .78
 }
 
+.tax-review-warning {
+  border-color: var(--warning);
+  background: var(--warning-soft)
+}
+
 .tax-review-error {
   font-weight: 500
 }

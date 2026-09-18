@@ -64,7 +64,22 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         //                 desktop  mobile      gemessen        was sich noch bewegt
         ("/",                0.0,    0.0), // 0.000 / 0.000   nichts
         ("/accounts",        0.0,    0.0), // 0.000 / 0.003   Beschriftung der zwei Kopfknöpfe
-        ("/transactions",    0.0,    0.0), // 0.001 / 0.003   Beschriftung des Aktionsknopfs
+        // War hier als "0.001 / 0.003, Beschriftung des Aktionsknopfs" notiert; das stimmt nicht mehr -
+        // nachgemessen (53 Läufe: 23 vor einer CSS-Korrektur, 30 danach) zeigt der Sprung nur noch am
+        // Telefon, bimodal zwischen 0,000 (haeufiger) und immer genau 0,007 (nie ein anderer Wert). Der
+        // wirkliche Verursacher, aus den Quellen des Browsers selbst: .table-panel::after (der
+        // Glanzschimmer aus styles/design-depth.css, der der Kartenliste in der Groesse folgt) wuchs von
+        // 469 auf 607px Hoehe, weil txSkeletonRows() sieben gleich hohe Platzhalterzeilen zeichnet, die
+        // echte Liste aber Zeilen UND eigene Tagesueberschriften hat - eine andere Form, nicht nur eine
+        // andere Zahl. Eine echte Teilursache war behoben: .tx-sk-avatar in page.css stand auf 38px,
+        // obwohl das echte Symbol (.fw-ident, styles/app.css) 42px bzw. 44px unter 768px misst - jede
+        // Zeile war dadurch ein paar Pixel niedriger als sie sein wuerde. Behoben (jetzt 42/44px), aber
+        // der Rest der Luecke - eine Zeile mit Tagesueberschriften ist einfach eine andere Form als
+        // sieben gleiche Platzhalter - bleibt: dieselbe Klasse Eigenschaft wie bei /admin und /tax oben,
+        // nicht vorab wissbar, bevor die Antwort da ist. Die zweite, kleinere, unveraenderte Quelle ist
+        // die untere Navigationsleiste beim Sprachwechsel Deutsch->en-US (dieselbe wie beim allgemeinen
+        // 1,4e-5-Fund oben, hier nur zwei Zellen breiter als anderswo).
+        ("/transactions",    0.0,    0.007),
         ("/contracts",       0.0,    0.0), // 0.000 / 0.000   nichts
         ("/settings",        0.0,    0.0), // 0.000 / 0.003   Überschrift bricht am Telefon um
         // Scheibe 14 gab /coach zum ersten Mal eine echte Fixture (Konversation, Ausgaben-Review) statt
@@ -75,20 +90,31 @@ public sealed class LayoutStabilityTests(UiHarness harness)
         ("/coach",           0.03,   0.04), // 0.000-0.020 / 0.000-0.028   Chat-Antwort + Review-Karte
         // Ab hier neu in Scheibe 14: erst mit echten Fixtures (ops/ui-harness/fixtures.js) gemessen,
         // vorher zeigte die Harness hier nur den Leerzustand und ein Sprung dort hätte nichts bedeutet.
-        // admin: über 13 Läufe stabil bimodal - entweder 0,000 oder genau der Wert unten, nie dazwischen
-        // und nie darüber (die fünf parallelen Aufrufe von refresh() landen mal im selben, mal im
-        // nächsten Bild).
-        ("/admin",           0.102,  0.095), // 0.000/0.102 · immer 0.095   Nutzerliste + Instanzeinstellungen laden parallel
+        // admin: über 23 Läufen (13 davon vor dieser Zeile, 10 danach zur Gegenprobe) stabil bimodal -
+        // entweder 0,000 oder genau der Wert unten, nie dazwischen und nie darüber. Nachgemessen mit
+        // einem MutationObserver: refresh()s fünf parallele Aufrufe (loadOverview, loadUsers,
+        // loadProviders, instanceSettings.load, vault.load) sind bereits alle gleichzeitig unterwegs -
+        // das Bimodale kommt davon, ob ihre Antworten alle noch vor dem ersten Bild ankommen oder nicht,
+        // nicht von einem Fehler im Code. Nichts hier zu beheben, nur zu messen.
+        ("/admin",           0.102,  0.095), // 0.000/0.102 · 0.000/0.095   fünf parallele Ladevorgänge
         ("/audit",           0.0,    0.0),   // 0.000 / 0.000   nichts
         ("/merchants",       0.0,    0.0),   // 0.000 / 0.000   nichts
         ("/rules",           0.0,    0.0),   // 0.000 / 0.000   nichts
-        // tax: die unruhigste Messung hier. Übersicht, Jahresprüfung und Kandidatenliste laden parallel;
-        // über 13 Läufen lag der Sprung zwischen 0,000, ~0,057 (ein Bild verzögert) und einmal 0,420 /
-        // zweimal ~0,380 (mehrere der parallelen Anzeigen fielen in ein späteres Bild). Das ist kein
-        // Ergebnis dieser Fixtures, sondern eine bestehende Eigenschaft der Seite - Budget bewusst mit
-        // Reserve über dem schlechtesten gemessenen Wert eingefroren statt die Ursache hier zu jagen
-        // (das wäre Scheibe 11-13-Arbeit); siehe Abnahmebericht für den Befund.
-        ("/tax",             0.46,   0.42)
+        // tax: war die unruhigste Messung hier - über 13 Läufen lag der Sprung zwischen 0,000, ~0,057
+        // (ein Bild verzögert) und einmal 0,420 / zweimal ~0,380. Der Fehler war real: page.js's
+        // loadData() lud Übersicht und Kandidatenliste parallel, wartete deren Promise.all ab, malte sie
+        // - und erst DANACH, in einem eigenen await, holte review-extra.js's renderTaxYearPanel() noch
+        // den Jahresprüfungs-Block per eigenem Fetch nach. Der kam garantiert einen Schritt zu spät, weil
+        // er erst startete, wenn der Rest schon gezeichnet und angezeigt war - das war die ~0,057-Stufe.
+        // Behoben, indem der dritte Abruf ins selbe Promise.all wandert und renderTaxYearPanel() nur noch
+        // die schon geladenen Daten zeichnet, synchron mit dem Rest. Gegenprobe über 15 Läufe danach: die
+        // 0,057-Stufe kam kein einziges Mal wieder, übrig blieb nur noch 0,000 oder genau 0,392 / 0,380 -
+        // derselbe bimodale Rest wie bei admin (Übersicht + Aufschlüsselung + Jahres-Check + Liste sind
+        // grosse, anfangs leere Flächen; kommen sie nach dem ersten Bild, verschiebt sich viel auf
+        // einmal). Das zu beseitigen hiesse, für all das im Skelett schon Platz zu reservieren, ohne zu
+        // wissen, wie viel echte Daten am Ende brauchen - eine echte Weiterentwicklung, kein Bugfix mehr.
+        ("/tax",             0.395,   0.385),
+        ("/networth",        0.0,    0.0)
     ];
 
     public static TheoryData<string, bool> Pages()

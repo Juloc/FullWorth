@@ -210,9 +210,10 @@ function switchTab(tab) {
 async function loadData(host, reviewOnly) {
   const list = host.querySelector('#tax-candidate-list');
   try {
-    const [summary, rows] = await Promise.all([
+    const [summary, rows, review] = await Promise.all([
       ctx.api(`api/tax/years/${year}/summary`),
-      ctx.api(`api/tax/candidates?year=${year}`)
+      ctx.api(`api/tax/candidates?year=${year}`),
+      ctx.api(`api/tax/years/${year}/review`).catch(() => null)
     ]);
     candidates = rows || [];
     const currency = candidates[0]?.currency || 'EUR';
@@ -231,7 +232,7 @@ async function loadData(host, reviewOnly) {
       ? candidates.filter(c => ['needs_review', 'detected', 'needs_document', 'incomplete'].includes(c.status))
       : candidates;
     drawCandidates(host, visible);
-    await renderTaxYearPanel(ctx, host, year);
+    renderTaxYearPanel(ctx, host, year, review);
     wireDocumentUploads(ctx, host, visible, { onUploaded: () => renderTax(ctx) });
   } catch (err) {
     const breakdownCard = host.querySelector('#tax-breakdown-card');

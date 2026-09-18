@@ -665,9 +665,9 @@
     'tax/years/2026/review': {
       ready: false,
       checks: [
-        { severity: 'warn', count: 2, message: 'Zwei Hinweise warten noch auf eine Entscheidung.' },
-        { severity: 'warn', count: 1, message: 'Ein bestätigter Hinweis hat noch keinen Beleg.' },
-        { severity: 'ok', count: 1, message: 'Ein Hinweis ist bestätigt und vollständig.' }
+        { severity: 'warning', count: 2, message: 'Zwei Hinweise warten noch auf eine Entscheidung.' },
+        { severity: 'warning', count: 1, message: 'Ein bestätigter Hinweis hat noch keinen Beleg.' },
+        { severity: 'success', count: 1, message: 'Ein Hinweis ist bestätigt und vollständig.' }
       ]
     },
     // Four candidates covering the states the row and the badges branch on: confirmed with a document,
