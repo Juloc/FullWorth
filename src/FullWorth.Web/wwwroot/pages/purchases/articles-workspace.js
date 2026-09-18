@@ -3,7 +3,7 @@ import { createDialog } from '../../components/dialog.js';
 import { confirmMessage } from '../../components/confirm.js';
 import { ButtonRole, buttonClass } from '../../components/buttons.js';
 import { attachCombobox } from '../../components/combobox.js';
-import { createToast } from '../../components/toast.js';
+import { showToast } from '../../components/toast.js';
 // Advanced purchases/articles UI. It is loaded as a side effect by gpt-normal.js so the
 // existing compact receipt/Amazon flow can stay untouched. The module only augments #view-purchases:
 // Receipts remains the default, while Articles, Products and Analytics use the new API families.
@@ -86,16 +86,18 @@ function fmtDate(value) {
 }
 
 // components/combobox.js erwartet ein ctx mit .esc/.get/.dialog/.toast; dieses Modul hat bewusst kein
-// eigenes ctx (eigenes esc/t()/makeDialog statt App-ctx, siehe Dateikopf). Der Toast nutzt denselben
-// Singleton-Controller wie app.js (createToast ist pro Element idempotent). Die vier Schluessel sind
-// genau die, die combobox.js selbst zieht, wenn Titel/Platzhalter nicht mitgegeben werden.
+// eigenes ctx (eigenes esc/t()/makeDialog statt App-ctx, siehe Dateikopf). Der Toast geht ueber
+// showToast() (components/toast.js), denselben Singleton-Controller wie app.js - kein eigenes
+// document.getElementById('toast') hier (ToastVisibilityTests.Nothing_drives_the_toast_element_by_hand
+// verbietet das ausserhalb der Controller-Datei selbst). Die vier Schluessel sind genau die, die
+// combobox.js selbst zieht, wenn Titel/Platzhalter nicht mitgegeben werden.
 function comboboxCtx() {
   const strings = { 'combobox.pick': t('chooseProduct'), 'combobox.search': t('search'), 'common.close': t('close'), 'common.empty': t('noData') };
   return {
     esc,
     dialog: makeDialog,
     get: key => strings[key] || key,
-    toast: message => createToast(document.getElementById('toast')).show(message)
+    toast: message => showToast(message)
   };
 }
 

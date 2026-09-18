@@ -4,7 +4,7 @@
 
 import { ButtonRole, buttonClass, applyButtonRole } from '../../components/buttons.js';
 import { attachCombobox } from '../../components/combobox.js';
-import { createToast } from '../../components/toast.js';
+import { showToast } from '../../components/toast.js';
 
 const lang = () => (document.documentElement.lang || 'de').toLowerCase().startsWith('de') ? 'de' : 'en';
 const text = (de, en) => lang() === 'de' ? de : en;
@@ -13,7 +13,9 @@ const json = (method, body) => ({ method, headers: { 'Content-Type': 'applicatio
 // components/combobox.js erwartet ein ctx mit .esc/.get/.dialog/.toast - dieses Modul hat bewusst kein
 // eigenes ctx (siehe Kopfkommentar in articles-advanced.js: eigenes esc/api/makeDialog statt App-ctx).
 // Die vier Schluessel sind genau die, die combobox.js selbst zieht, wenn Titel/Platzhalter fehlen; der
-// Toast nutzt denselben Singleton-Controller wie app.js (createToast ist pro Element idempotent).
+// Toast geht ueber showToast() (components/toast.js), denselben Singleton-Controller wie app.js -
+// kein eigenes document.getElementById('toast') hier (ToastVisibilityTests.Nothing_drives_the_toast_-
+// element_by_hand verbietet das ausserhalb der Controller-Datei selbst).
 function comboboxCtx({ esc, makeDialog }) {
   const strings = {
     'combobox.pick': text('Auswählen', 'Choose'), 'combobox.search': text('Suchen…', 'Search…'),
@@ -23,7 +25,7 @@ function comboboxCtx({ esc, makeDialog }) {
     esc,
     dialog: makeDialog,
     get: key => strings[key] || key,
-    toast: message => createToast(document.getElementById('toast')).show(message)
+    toast: message => showToast(message)
   };
 }
 
