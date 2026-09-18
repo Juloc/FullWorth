@@ -88,4 +88,62 @@ public sealed class TransactionForecastTests
         Assert.DoesNotContain("rgba(", declarations, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("var(--", declarations);
     }
+
+    /// <summary>
+    /// #139, part 2: the sort reversal. The forecast-eligible (plain, unfiltered/lightly-scoped) view
+    /// must ask the backend for ascending order - <c>TransactionStore.SearchForUserAsync</c> already
+    /// puts pending rows into one contiguous group AFTER every booked row under <c>order=asc</c>, which
+    /// is what finally lets "today" sit in the middle of the list instead of forcing the forecast to be
+    /// appended below the oldest transaction. Every other (filtered) view must keep the old descending
+    /// default untouched.
+    /// </summary>
+    [Fact]
+    public void ForecastEligible_view_requests_ascending_order()
+    {
+        var js = PageJs();
+
+        Assert.Contains("if (forecastEligible) q.set('order', 'asc');", js);
+    }
+
+    /// <summary>
+    /// The grouping loop's pending-detection flag has to start in the state that matches which end of
+    /// the list is pending: descending still leads with it (unchanged), ascending now trails it. A flag
+    /// hardcoded to <c>true</c> here would silently misgroup real transactions under ascending order -
+    /// the exact regression this test exists to catch.
+    /// </summary>
+    [Fact]
+    public void Grouping_loop_starts_pending_detection_in_the_state_matching_ascending_order()
+    {
+        var js = PageJs();
+
+        Assert.Contains("let inPendingGroup = !forecastEligible", js);
+    }
+
+    /// <summary>
+    /// The "Heute" button used to mean "scroll to the literal top", which was true only because the list
+    /// was always descending. Under ascending order the list top is the OLDEST transaction, so the
+    /// handler must consult the real today-anchor first and only fall back to the literal top for the
+    /// (unchanged) descending/filtered case.
+    /// </summary>
+    [Fact]
+    public void TodayButton_no_longer_unconditionally_scrolls_to_the_literal_top()
+    {
+        var js = PageJs();
+        var match = Regex.Match(js, @"#tx-daybar-today'\)\.addEventListener\('click',\s*\(\)\s*=>\s*\{", RegexOptions.Singleline);
+        Assert.True(match.Success, "#tx-daybar-today click handler was not found.");
+
+        var start = match.Index + match.Length;
+        var depth = 1;
+        var end = start;
+        while (depth > 0 && end < js.Length)
+        {
+            if (js[end] == '{') depth++;
+            else if (js[end] == '}') depth--;
+            end++;
+        }
+        var body = js[start..end];
+
+        Assert.Contains("todayAnchor", body);
+        Assert.Contains("ascendingTimeline", body);
+    }
 }

@@ -106,6 +106,11 @@ export function bindTransactions(context) {
   ctx.$('#tx-filter')?.addEventListener('click', openFilterSheet);
   ctx.$('#tx-add').addEventListener('click', () => openBookingDialog(ctx.$('#tx-add').dataset.accountId || ''));
   ctx.$('#tx-daybar-today').addEventListener('click', () => {
+    // Aufsteigend bedeutet Listenanfang nicht mehr heute (#139, Teil 2) - erst der echte
+    // Heute-Ankerpunkt, derselbe wie beim ersten Zeichnen; nur ohne ihn (oder in der unveraendert
+    // absteigenden/gefilterten Sicht) bleibt der literale Listenanfang das Ziel.
+    const anchor = ascendingTimeline ? todayAnchor() : null;
+    if (anchor) { todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     const host = scrollHost();
     if (host === window) window.scrollTo({ top: 0, behavior: 'smooth' });
     else host.scrollTo({ top: 0, behavior: 'smooth' });
@@ -143,6 +148,10 @@ function scrollHost() {
 let dayBalances = new Map();
 let dayAnchors = [];
 let dayBarFrame = 0;
+// Ob die aktuell gezeichnete Liste aufsteigend sortiert ist (#139, Teil 2) - nur dann bedeutet "heute"
+// nicht mehr Listenanfang, und Klick/Selbstpruefung der Leiste muessen den echten Heute-Ankerpunkt
+// suchen statt Index 0.
+let ascendingTimeline = false;
 
 async function loadDayBalances(scope, days) {
   dayBalances = new Map();
@@ -157,6 +166,28 @@ async function loadDayBalances(scope, days) {
   } catch {
     // Kein Stand ist besser als ein falscher: die Leiste zeigt dann nur das Datum.
   }
+}
+
+// Der "Heute"-Ankerpunkt unter aufsteigender Sortierung (#139, Teil 2): das echte Datums-Element fuer
+// heute, wenn heute etwas gebucht oder vorgemerkt ist, sonst der Vorgemerkt-Kopf, sonst der
+// Erwartet-Kopf, sonst nichts (z.B. ein Konto ganz ohne Buchungen und ohne Prognose - dann bleibt die
+// Seite, wo sie ist). Vom ersten Zeichnen, dem Klick auf "Heute" und paintDayBar()s eigener
+// Ist-schon-oben-Pruefung gemeinsam benutzt, statt "was heisst heute" ein drittes Mal zu definieren.
+function todayAnchor() {
+  const today = new Date().toISOString().slice(0, 10);
+  return dayAnchors.find(anchor => anchor.day === today)
+      || dayAnchors.find(anchor => anchor.kind === 'pending')
+      || dayAnchors.find(anchor => anchor.kind === 'forecast')
+      || null;
+}
+
+// Der Kopf eines Ankers ist "position:sticky" und meldet dadurch fast immer eine Position innerhalb
+// des sichtbaren Bereichs, auch wenn seine Gruppe laengst vorbeigescrollt ist - scrollIntoView haelt
+// ihn dann faelschlich fuer schon sichtbar und scrollt gar nicht (gemessen: mit dem Kopf selbst blieb
+// ein Klick auf "Heute" nach dem Herunterscrollen wirkungslos). Die erste echte Zeile direkt danach hat
+// dieses Problem nicht - sie ist Teil des normalen Fluss und ihre Position stimmt immer.
+function todayScrollTarget(anchor) {
+  return anchor.element.nextElementSibling || anchor.element;
 }
 
 function paintDayBar() {
@@ -188,7 +219,9 @@ function paintDayBar() {
   }
 
   const today = ctx.$('#tx-daybar-today');
-  const atTop = current === dayAnchors[0];
+  // Aufsteigend ist Index 0 die AELTESTE Buchung, nicht mehr heute (#139, Teil 2) - dieselbe
+  // Heute-Suche wie beim Klick und beim ersten Zeichnen entscheidet hier mit.
+  const atTop = ascendingTimeline ? current === todayAnchor() : current === dayAnchors[0];
   today.disabled = atTop;
   today.setAttribute('aria-disabled', String(atTop));
 }
@@ -498,10 +531,13 @@ async function openBookingDialog(preselectedAccountId = '') {
 // Nach einer Aenderung neu zeichnen, ohne den Benutzer an den Listenanfang zu werfen.
 // Die bearbeitete Zeile ist der Anker: existiert sie noch, bleibt sie sichtbar.
 async function refreshList(anchorId) {
-  await keepListPosition(() => renderTransactions(ctx), anchorId ? { anchor: `[data-tx-id="${anchorId}"]` } : {});
+  // #139 Teil 2: kein Sprung zu "heute" nach einem Speichern - keepListPosition haelt die Stelle, an
+  // der der Benutzer war (oder den bearbeiteten Datensatz), fest; ein zusaetzlicher Heute-Sprung wuerde
+  // das sofort wieder aufheben.
+  await keepListPosition(() => renderTransactions(ctx, { skipTodayScroll: true }), anchorId ? { anchor: `[data-tx-id="${anchorId}"]` } : {});
 }
 
-export async function renderTransactions(context) {
+export async function renderTransactions(context, opts = {}) {
   ctx = context;
   await ensureOfficialBrandCatalog(ctx.api);
   const body = ctx.$('#transactions-body');
@@ -554,6 +590,12 @@ export async function renderTransactions(context) {
   // Kategorie, keinen Haendler, keinen Betrag im gesuchten Bereich) - deshalb dann einfach keine.
   const forecastEligible = !(text || dir || status || merchant || merchantId || minAmount || maxAmount ||
     transfersOnly || ignoredOnly || refundOnly || hasReceipt || categoryId || fromDate || toDate);
+  ascendingTimeline = forecastEligible;
+  // Zukunfts-Timeline (#139), Teil 2: nur in dieser einfachen Sicht aufsteigend sortieren - der
+  // Backend-Store gruppiert vorgemerkte Buchungen bei order=asc bereits automatisch als EINE
+  // zusammenhaengende Gruppe NACH allen gebuchten (TransactionStore.SearchForUserAsync), keine eigene
+  // Nacharbeit hier noetig. Jede andere Sicht bleibt absteigend wie bisher.
+  if (forecastEligible) q.set('order', 'asc');
   // Show a skeleton immediately so the list area doesn't sit on stale rows while the fetch runs.
   body.innerHTML = txSkeletonRows();
   await renderScope({ accountId, groupId, categoryId, query: urlQuery });
@@ -578,22 +620,30 @@ export async function renderTransactions(context) {
   // fertigen Zustand einen zweiten, sichtbaren Absatz zeichnen.
   const fragment = document.createDocumentFragment();
   let lastDate = null;
-  // Pending entries are not booked yet: the API sorts them ahead of every booked row, and they get
-  // their own header so the "today" header below them still means today. Without it a pending row
-  // dated today sat under the today header among real bookings, and one with no booking date at all
-  // opened an unlabelled group above it. Only the leading run is grouped this way - a pending row
-  // further down (non-date sort) stays in its date group.
-  let inPendingGroup = true, pendingHeaderDone = false;
+  // Pending entries are not booked yet: the API sorts them into one contiguous run (leading when
+  // descending, trailing when ascending - see below), and they get their own header so a date header
+  // next to them still means only booked rows. Without it a pending row dated today sat under the
+  // today header among real bookings, and one with no booking date at all opened an unlabelled group.
+  // Descending (any incompatible filter active): pending is the LEADING group, exactly as before -
+  // inPendingGroup starts true and the loop leaves that state for good the moment the first booked row
+  // shows up. Ascending (forecastEligible, order=asc requested above): the backend now puts pending as
+  // the TRAILING group instead (TransactionStore.SearchForUserAsync), so grouping starts in date-mode
+  // and switches into the pending header the moment the first pending row appears - and, since that run
+  // is guaranteed contiguous either way, never switches back.
+  let inPendingGroup = !forecastEligible, pendingHeaderDone = false;
   for (const x of items) {
-    if (inPendingGroup && String(x.status || '').toUpperCase() === 'PDNG') {
+    const isPending = String(x.status || '').toUpperCase() === 'PDNG';
+    if (forecastEligible && isPending) inPendingGroup = true;
+    if (inPendingGroup && isPending) {
       if (!pendingHeaderDone) {
         pendingHeaderDone = true;
-        fragment.appendChild(groupHeaderRow(ctx.get('transactions.pending')));
+        fragment.appendChild(groupHeaderRow(ctx.get('transactions.pending'), '', 'pending'));
       }
     } else {
       inPendingGroup = false;
       // Date-grouped rows with a lightweight sticky header (UX rework §4); on mobile the table collapses
-      // to identity cards via CSS. Items arrive newest-first, so a header opens each new booking day.
+      // to identity cards via CSS. Descending: items arrive newest-first, a header opens each new
+      // booking day going back in time. Ascending: the same headers open oldest-first going forward.
       const day = String(transactionDate(x) || '').slice(0, 10);
       if (day !== lastDate) {
         lastDate = day;
@@ -638,22 +688,39 @@ export async function renderTransactions(context) {
     row.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('[data-cat-edit],[data-tx-select]')) openDetail(x); });
     fragment.appendChild(row);
   }
-  // Zukunfts-Timeline (#139), Teil 1: erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt
-  // NACH allem oben (die Liste sortiert weiterhin absteigend - das "Ende" ist die aelteste Buchung, die
-  // Prognose steht also vorerst darunter statt wirklich "nach Heute". Die Sortierumkehr, die sie an die
-  // richtige Stelle bringt, ist ein eigener, spaeterer Schritt).
+  // Zukunfts-Timeline (#139): erwartete Vertragsbuchungen/Eingaenge/Budgetperioden, angehaengt NACH
+  // allem oben. Ascending (Teil 2, forecastEligible): das ist jetzt die echte Zukunft, direkt nach der
+  // (nun trailing) Vorgemerkt-Gruppe. Descending (unveraendert, jede andere Sicht): der Forecast wird
+  // dort erst gar nicht geladen (forecastEligible ist dann false, siehe der Promise.all oben).
   const forecastItems = forecast?.items || [];
   if (forecastItems.length) {
-    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected')));
+    fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
     for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
   }
   body.replaceChildren(fragment);
   // Der Tagesendstand kommt vom Server und folgt dem KONTEN-Bereich - nicht der Suche, nicht der
   // Kategorie. Er darf nicht aus den gerade geladenen Zeilen entstehen, sonst zeigt jede Seite der
   // Blaetterung eine andere Zahl (#126).
-  dayAnchors = [...body.querySelectorAll('.tx-date-head[data-day]')]
-    .map(element => ({ element, day: element.dataset.day, label: element.dataset.label }));
-  await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day));
+  // paintDayBar()s Suche nach der massgeblichen Gruppe setzt voraus, dass dayAnchors in echter
+  // DOM-Reihenfolge steht (sie bricht beim ersten Kopf ab, der nicht mehr oben ist) - ein Filtern nach
+  // [data-day] und separates Anhaengen der uebrigen Koepfe wuerde den (in Wahrheit FUEHRENDEN)
+  // Vorgemerkt-Kopf ans Ende der Liste setzen und die Suche falsch abbrechen lassen. Ein einziger
+  // Durchlauf ueber ALLE Koepfe in ihrer wirklichen Reihenfolge, danach gefiltert, vermeidet das.
+  // Absteigend/gefiltert bleibt unveraendert: dort bleibt der (fuehrende) Vorgemerkt-Kopf kein Anker,
+  // genau wie vor dieser Aenderung. Aufsteigend (#139 Teil 2) zaehlen auch der (nun nachgestellte)
+  // Vorgemerkt- und der Erwartet-Kopf mit, damit die Leiste dort weiterhin etwas zeigt statt auf dem
+  // letzten echten Datum einzufrieren, waehrend jemand tief in die Zukunft gescrollt ist.
+  dayAnchors = [...body.querySelectorAll('.tx-date-head')]
+    .filter(element => forecastEligible || element.dataset.day)
+    .map(element => ({ element, day: element.dataset.day || '', label: element.dataset.label, kind: element.dataset.kind }));
+  // Initialer Sprung zu "heute" (#139 Teil 2) - nur beim ersten Zeichnen dieser Sicht, nie nach
+  // refreshList()s keepListPosition (siehe dort). Ohne echten Heute-Anker (z.B. ein Konto ganz ohne
+  // Buchungen und ohne Prognose) bleibt die natuerliche Scrollposition unangetastet.
+  if (ascendingTimeline && !opts.skipTodayScroll) {
+    const anchor = todayAnchor();
+    if (anchor) todayScrollTarget(anchor).scrollIntoView({ block: 'start', behavior: 'instant' });
+  }
+  await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day).filter(Boolean));
   trackDayBar();
   await showTransferCandidates();
   await updateBookingAction(accountId);
@@ -760,11 +827,12 @@ function quickEditCategory(x) {
   }, null, x.categoryId);
 }
 
-function groupHeaderRow(label, day = '') {
+function groupHeaderRow(label, day = '', kind = 'date') {
   const head = document.createElement('div');
   head.className = 'tx-date-head';
   if (day) head.dataset.day = day;
   head.dataset.label = label;
+  head.dataset.kind = kind;
   head.innerHTML = `<span>${ctx.esc(label)}</span>`;
   return head;
 }
