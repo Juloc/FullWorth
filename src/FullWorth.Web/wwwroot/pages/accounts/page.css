@@ -532,6 +532,21 @@ button:hover,
     min-width: 0;
   }
 
+  /* .row-end's own column is "auto", so it is sized to whatever its widest line needs - and a
+     depot's gain line ("+174,39 € · +7,52 % (unvollständig)") needs more than half the row. The
+     name column had a minmax(0,1fr) but nothing left to actually receive: it shrank to a few
+     pixels while row-end stayed at full max-content width. Capped as a share of the row, the
+     gain line wraps onto its own second line instead of pushing the name off-screen. */
+  #accounts-view-list .row:has(> .account-identity-icon) {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 42%);
+  }
+
+  #accounts-view-list .row:not(.group-head) .amount-meaning,
+  #accounts-view-list .row:not(.group-head) .amount-converted,
+  #accounts-view-list .row:not(.group-head) .amount-wallets {
+    overflow-wrap: anywhere;
+  }
+
   #accounts-view-list .row:not(.group-head) .account-performance {
     font-size: .74rem;
     padding-inline: 6px;
