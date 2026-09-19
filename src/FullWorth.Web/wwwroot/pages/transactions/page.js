@@ -164,6 +164,11 @@ let forecastObserver = null;
 let forecastLoadingMore = false;
 let forecastArmHost = null;
 let forecastArmListener = null;
+// Wird pro renderTransactions()-Aufruf erhoeht, bevor irgendein await passiert - loadMoreForecast()
+// haelt seine eigene Nummer und prueft sie nach dem Abruf gegen den aktuellen Stand. Ohne das koennte
+// ein schneller Konto-/Gruppenwechsel waehrend eine Nachlade-Anfrage noch unterwegs ist deren Antwort
+// in die inzwischen laengst andere, angezeigte Liste splicen (fremdes Konto, falscher Anker).
+let forecastRenderId = 0;
 
 async function loadDayBalances(scope, days) {
   dayBalances = new Map();
@@ -551,6 +556,10 @@ async function refreshList(anchorId) {
 
 export async function renderTransactions(context, opts = {}) {
   ctx = context;
+  // Vor jedem await erhoeht, damit ein spaeter noch aufloesendes loadMoreForecast() aus einem
+  // inzwischen ueberholten Aufruf (schneller Konto-/Gruppenwechsel) sich selbst erkennt und nichts
+  // mehr in die laengst andere, gerade angezeigte Liste schreibt.
+  const renderId = ++forecastRenderId;
   await ensureOfficialBrandCatalog(ctx.api);
   const body = ctx.$('#transactions-body');
   // URL scope (UX rework §3): ?accountId= one account, ?groupId= every account in that group. The
@@ -718,7 +727,7 @@ export async function renderTransactions(context, opts = {}) {
   if (forecastItems.length) {
     fragment.appendChild(groupHeaderRow(deLabel('Erwartet', 'Expected'), '', 'forecast'));
     for (const entry of forecastItems) fragment.appendChild(forecastRow(entry));
-    forecastLatestDate = forecastItems.reduce((max, entry) => entry.date > max ? entry.date : max, forecastItems[0].date);
+    forecastLatestDate = forecastItems[forecastItems.length - 1].date;
   }
   // Nachlade-Ankerpunkt: nur wenn diese Sicht ueberhaupt Prognose zeigt und der 180-Tage-Deckel noch
   // nicht erreicht ist - sonst gaebe es nichts Weiteres zu holen, ein Beobachter darauf liefe ins Leere.
@@ -750,7 +759,7 @@ export async function renderTransactions(context, opts = {}) {
   }
   await loadDayBalances({ accountId, groupId }, dayAnchors.map(anchor => anchor.day).filter(Boolean));
   trackDayBar();
-  observeForecastSentinel(accountId, groupId);
+  observeForecastSentinel(accountId, groupId, renderId);
   await showTransferCandidates();
   await updateBookingAction(accountId);
 
@@ -858,13 +867,13 @@ function forecastSentinel() {
 // Seite selbst ausgeloester, nicht vom Nutzer verursachter Sprung (Regel 1). Ein einmaliger
 // scroll-Listener ist hier nur das Wartesignal "der Nutzer hat tatsaechlich etwas getan", die
 // eigentliche Sichtbarkeitspruefung bleibt beim Observer.
-function observeForecastSentinel(accountId, groupId) {
+function observeForecastSentinel(accountId, groupId, renderId) {
   const sentinel = ctx.$('.tx-forecast-sentinel');
   if (!sentinel) return;
   forecastArmHost = scrollHost();
   forecastArmListener = () => {
     forecastObserver = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) loadMoreForecast(accountId, groupId);
+      if (entries[0]?.isIntersecting) loadMoreForecast(accountId, groupId, renderId);
     }, { rootMargin: '400px' });
     forecastObserver.observe(sentinel);
   };
@@ -877,7 +886,7 @@ function observeForecastSentinel(accountId, groupId) {
 // vielen kleinen Schritten: ein zweiter Zwischenschritt haette nur eine zweite Wartezeit gekostet, ohne
 // dass der Nutzer je "mehr als einmal nachladen" gesehen haette, solange FORECAST_MAX_HORIZON_DAYS bei
 // 180 steht.
-async function loadMoreForecast(accountId, groupId) {
+async function loadMoreForecast(accountId, groupId, renderId) {
   if (forecastLoadingMore || forecastHorizonDays >= FORECAST_MAX_HORIZON_DAYS) return;
   forecastLoadingMore = true;
   forecastObserver?.disconnect();
@@ -888,13 +897,17 @@ async function loadMoreForecast(accountId, groupId) {
     else if (groupId) forecastQuery.set('groupId', groupId);
     forecastQuery.set('horizonDays', String(forecastHorizonDays));
     const forecast = await ctx.api(`api/transactions/forecast?${forecastQuery}`).catch(() => null);
+    // Ein schneller Konto-/Gruppenwechsel waehrend dieser Abruf unterwegs war, hat laengst eine neue
+    // renderTransactions() gestartet (und damit forecastRenderId weitergezaehlt) - ohne diese Wache
+    // wuerde die veraltete Antwort in die inzwischen ganz andere, gerade angezeigte Liste gespleisst.
+    if (renderId !== forecastRenderId) return;
     const items = (forecast?.items || []).filter(entry => !forecastLatestDate || entry.date > forecastLatestDate);
-    if (!items.length) return;
     const body = ctx.$('#transactions-body');
     const sentinel = body?.querySelector('.tx-forecast-sentinel');
+    if (!items.length) { sentinel?.remove(); return; }
     const fragment = document.createDocumentFragment();
     for (const entry of items) fragment.appendChild(forecastRow(entry));
-    forecastLatestDate = items.reduce((max, entry) => entry.date > max ? entry.date : max, forecastLatestDate);
+    forecastLatestDate = items[items.length - 1].date;
     if (sentinel) sentinel.replaceWith(fragment);
     else body?.appendChild(fragment);
   } finally {

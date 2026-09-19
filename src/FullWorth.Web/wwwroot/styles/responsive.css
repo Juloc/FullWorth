@@ -62,6 +62,14 @@
   .sidebar{position:static;height:auto;display:flex;flex-direction:row;align-items:center;padding:var(--s2) var(--s4);border-right:0;border-bottom:1px solid var(--line)}
   .sidebar #nav,.sidebar .sidebar-foot,.sidebar .sidebar-resizer,#nav-collapse{display:none}
   .brand{padding:0}
+  /* nav-collapsed/nav-auto-collapsed (shell.css) sind ein reines Desktop-Konzept - sie schrumpfen die
+     volle Sidebar auf eine schmale Icon-Spalte, was hier ohnehin keine Rolle mehr spielt (#nav ist am
+     Telefon schon immer ausgeblendet). Ohne diese Ruecknahme wuerde ein von Desktop persistierter
+     nav-collapsed-Zustand (localStorage) denselben Marken-Streifen wieder auf Name/Badge-los reduzieren,
+     den #171 gerade erst repariert hat. */
+  html.nav-collapsed .brand,html.nav-auto-collapsed .brand{flex-direction:row;padding-bottom:0}
+  html.nav-collapsed .brand strong,html.nav-auto-collapsed .brand strong{display:inline}
+  html.nav-collapsed .brand-name,html.nav-auto-collapsed .brand-name{display:inline-flex}
   main{width:100%;min-width:0;padding:0 var(--s4) calc(84px + env(safe-area-inset-bottom,0px));max-width:none}
   /* Installed, there is no browser chrome above the page, so the sticky topbar sat under the status
      bar and the notch ate the page title. In a tab the inset is 0 and nothing moves. The horizontal

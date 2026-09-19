@@ -273,11 +273,15 @@
     // unrelated ones, so a look at both screens shows the same two contracts.
     'transactions/forecast': {
       from: iso('2026-09-18'), to: iso('2026-12-17'), incomplete: false,
+      // Aufsteigend nach date - so wie AnalyticsService.ForecastTimelineAsync sie wirklich liefert
+      // (OrderBy(entry => entry.Date)). page.js verlaesst sich inzwischen selbst darauf (letztes Element
+      // = spaetestes Datum statt eines eigenen Max-Scans), die Fixture muss diese Zusicherung also auch
+      // einhalten, nicht nur zufaellig auf die gleiche Reihenfolge kommen.
       items: [
         { kind: 'contract', sourceId: 'k2', date: iso('2026-09-20'), label: 'Mobilfunk', subLabel: 'Telekom', amount: -29.99, currency: 'EUR', isEstimate: false, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
         { kind: 'income', sourceId: 'is1', date: iso('2026-09-27'), label: 'Gehalt', subLabel: null, amount: 2810.44, currency: 'EUR', isEstimate: false, accountId: 'a1', categoryId: null, categoryIconKey: null },
-        { kind: 'contract', sourceId: 'k1', date: iso('2026-10-01'), label: 'Stromvertrag', subLabel: 'Stadtwerke', amount: -78.5, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
         { kind: 'budget-period', sourceId: 'b1', date: iso('2026-09-30'), label: 'Lebensmittel', subLabel: null, amount: 120.5, currency: 'EUR', isEstimate: false, accountId: null, categoryId: 'c1', categoryIconKey: null },
+        { kind: 'contract', sourceId: 'k1', date: iso('2026-10-01'), label: 'Stromvertrag', subLabel: 'Stadtwerke', amount: -78.5, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: 'c1', categoryIconKey: null },
         { kind: 'income', sourceId: 'is1', date: iso('2026-10-27'), label: 'Gehalt', subLabel: null, amount: null, currency: 'EUR', isEstimate: true, accountId: 'a1', categoryId: null, categoryIconKey: null }
       ]
     },

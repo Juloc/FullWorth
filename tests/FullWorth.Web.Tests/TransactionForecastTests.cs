@@ -246,4 +246,44 @@ public sealed class TransactionForecastTests
 
         Assert.Contains("entry.date > forecastLatestDate", body);
     }
+
+    /// <summary>
+    /// A fast account/group switch starts a new renderTransactions() call while a previous
+    /// loadMoreForecast() fetch (triggered by a scroll on the OLD view) is still in flight. Without a
+    /// generation guard, that stale fetch resolves after the new view is already on screen and splices
+    /// the wrong account's forecast rows into it via the new view's own sentinel. renderTransactions()
+    /// must stamp a render id before any await, thread it through to loadMoreForecast(), and
+    /// loadMoreForecast() must bail out once that id no longer matches the current one.
+    /// </summary>
+    [Fact]
+    public void LoadMoreForecast_ignores_a_stale_response_from_a_superseded_render()
+    {
+        var js = PageJs();
+
+        Assert.Contains("const renderId = ++forecastRenderId;", js);
+        Assert.Contains("observeForecastSentinel(accountId, groupId, renderId);", js);
+
+        var match = Regex.Match(js, @"async function loadMoreForecast\([^)]*\)\s*\{", RegexOptions.Singleline);
+        Assert.True(match.Success, "loadMoreForecast(...) was not found.");
+        var start = match.Index + match.Length;
+        var depth = 1;
+        var end = start;
+        while (depth > 0 && end < js.Length)
+        {
+            if (js[end] == '{') depth++;
+            else if (js[end] == '}') depth--;
+            end++;
+        }
+        var body = js[start..end];
+
+        Assert.Contains("if (renderId !== forecastRenderId) return;", body);
+        // The guard must run AFTER the await (it exists to catch a response that arrives late) and
+        // BEFORE any DOM mutation or state write, or a stale response could still slip a partial change
+        // through before being caught.
+        var guardIndex = body.IndexOf("if (renderId !== forecastRenderId) return;", StringComparison.Ordinal);
+        var awaitIndex = body.IndexOf("await ctx.api(", StringComparison.Ordinal);
+        var mutationIndex = body.IndexOf("forecastLatestDate = items", StringComparison.Ordinal);
+        Assert.True(awaitIndex >= 0 && guardIndex > awaitIndex, "The guard must run after the awaited fetch.");
+        Assert.True(mutationIndex < 0 || guardIndex < mutationIndex, "The guard must run before state/DOM is touched.");
+    }
 }

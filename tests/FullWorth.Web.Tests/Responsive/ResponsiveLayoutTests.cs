@@ -108,6 +108,27 @@ public sealed class ResponsiveLayoutTests
         Assert.DoesNotContain(".brand{display:none", mobile);
     }
 
+    /// <summary>
+    /// Regression found while verifying #171 live: shell.css's `html.nav-collapsed .brand strong` and
+    /// `.brand-name` rules hide the name/badge to make the desktop sidebar a narrow icon column - and
+    /// that class is set unconditionally from a `localStorage` flag (`app/boot.js`) before first paint,
+    /// with no viewport check. A user who ever collapsed the sidebar on desktop carries `nav-collapsed`
+    /// into mobile too, which silently re-broke the #171 fix (logo visible, name and "Alpha" badge gone
+    /// again) without touching `.sidebar{display:none}` at all - the assertions above alone don't catch
+    /// this, because they only look at the plain (non-collapsed) mobile rule.
+    /// </summary>
+    [Fact]
+    public void MobileBrandSurvivesAPersistedDesktopNavCollapsedState()
+    {
+        var css = ReadCss();
+        var start = css.IndexOf("@media(max-width:767px)", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var mobile = css[start..];
+
+        Assert.Matches(@"html\.nav-collapsed \.brand strong,html\.nav-auto-collapsed \.brand strong\{display:(?!none)", mobile);
+        Assert.Matches(@"html\.nav-collapsed \.brand-name,html\.nav-auto-collapsed \.brand-name\{display:(?!none)", mobile);
+    }
+
     [Fact]
     public void BottomNavHasExactlyFivePrimaryDestinations()
     {
